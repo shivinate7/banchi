@@ -34,6 +34,7 @@ from harness.tests import (  # noqa: E402
     t6_geometry,
     t7_store_and_seams,
     t8_codes,
+    t9_traces,
 )
 
 # Explicit and ordered. No discovery magic: a test that silently stops being collected is
@@ -47,6 +48,7 @@ TESTS = [
     t6_geometry,
     t7_store_and_seams,
     t8_codes,
+    t9_traces,
 ]
 
 

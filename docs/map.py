@@ -752,14 +752,53 @@ COMPONENTS = [
     {
         "path": "harness/",
         "status": "built",
-        "does": "T1-T7. The Stop hook runs it at every turn end; the pre-commit hook does not.",
-        "governed_by": ["D2", "D12", "D15"],
-        "note": "the contract is docs/GATES.md; every threshold there is a number, not an adjective",
+        "does": "T1-T9. The Stop hook runs it at every turn end; the pre-commit hook does not.",
+        "governed_by": ["D2", "D12", "D15", "D81"],
+        "note": "The contract is docs/GATES.md; every threshold there is a number, not an "
+                "adjective. THIS LINE SAID T1-T7 UNTIL 2026-08-31 while the registry held "
+                "eight, which is the same disease the route count has — a published count "
+                "with no reader. Recount from `run.py`'s TESTS list, never increment.\n\n"
+                "T9 CHANGED WHAT THE HARNESS TAKES AS INPUT, and it is the second widening "
+                "of this contract after T7's. T1-T8 all supply their own inputs — fixtures "
+                "they wrote, QR symbols their own encoder drew, composites they rendered — "
+                "which is what makes their answer keys exact and is also a ceiling on what "
+                "they can catch. T9 reads RECORDINGS OF THE RIG from `harness/traces/`, "
+                "because both Playwright specs over the motion trigger were green through "
+                "two versions of a gate that was silently refusing real cards: a test that "
+                "draws its own frames can only prove the machine agrees with the test. "
+                "D81 carries the argument.",
         "modules": {
             "run.py": {"does": "the explicit ordered TESTS registry — no discovery magic", "governed_by": ["D1"]},
-            # T7 lives under harness/tests/ like its siblings; the orphan rule does not
-            # scan that far, so this list stays the six-plus-one it always was.
+            # The tests themselves live under harness/tests/ and the orphan rule does not
+            # scan that far, so they are not listed one by one. `traces/` is listed because
+            # it is DATA rather than a test, and tracked data with no entry is how a
+            # directory ends up in the tree with nobody able to say what it is for.
         },
+    },
+    {
+        "path": "harness/traces/",
+        "status": "built",
+        "does": "five armed motion sessions saved from the capture screen's HUD between "
+                "2026-08-23 and 2026-09-01, across four rig states. Each carries every "
+                "frame's (t, d, luma) and the exact watch-region pixels of every verdict, "
+                "which is what makes a refusal re-scorable a year later. T9's input, and the "
+                "only real-rig evidence in this repo for the motion trigger. Ground truth in "
+                "`fixtures/`'s sense: never modified.",
+        "governed_by": ["D19", "D81"],
+        "tested_by": ["T9"],
+        "note": "NO CARD IS IDENTIFIABLE AND NO CODE CARD IS PRESENT. A stored frame is 1,064 "
+                "luma cells at 38x28 — the watch region, quantised — which cannot carry a "
+                "readable QR, and every session here is the singles feeder. T8's rule that no "
+                "code-card photograph may ever be tracked is untouched.\n\n"
+                "HERE RATHER THAN UNDER `fixtures/` because `.claude/settings.json` denies "
+                "session writes to that directory, and a standing deny the owner checked in "
+                "is not a thing to route around. `harness/` is where the test that reads them "
+                "lives anyway, and its two gitignored neighbours (`images`, `.cache`) are "
+                "named individually in .gitignore, so this one is tracked by default.\n\n"
+                "No per-file entries: this component declares no source_suffixes, so the "
+                "orphan rule does not scan it — the same arrangement `fixtures/` uses, for "
+                "the same reason. A sixth trace is added by copying it in, never by editing "
+                "one of these.",
     },
     {
         "path": "scripts/",
@@ -1150,6 +1189,29 @@ COMPONENTS = [
                 # tunnel case that entry already names.
                 "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70"],
                 "status": "built",
+            },
+            "score-trace.py": {
+                "does": "`scripts/score-trace.py summary|presence|sweep|contact` — re-scores a "
+                        "saved motion trace offline, which is docs/specs/motion-trigger.md §4 "
+                        "step 5's standing promise written down. `summary` says what the "
+                        "machine did live and what today's adaptive form would do; `presence` "
+                        "re-runs the card-present gate over each verdict's own pixels; `sweep` "
+                        "scores the stillness thresholds across a grid over every trace at "
+                        "once; `contact` writes the verdict frames out as a labelled PNG.",
+                "governed_by": ["D18", "D19", "D81"],
+                "note": "WRITTEN BECAUSE THE SAME PASS HAD BEEN DONE BY HAND THREE TIMES AND "
+                        "THE SECOND ONE GOT IT WRONG, 2026-08-31. The 2026-08-29 presence fix "
+                        "derived its 'empty stand' brightness from twenty frames that were "
+                        "photographs of real cards — a refusal was read as evidence of what "
+                        "was on the stand — and the mistake survived because nobody rendered "
+                        "them. `contact` exists for that and for nothing else: the only thing "
+                        "that settles what a frame contains is looking at it. Stdlib for "
+                        "`summary`, `presence` and `sweep`, because a tuning instrument that "
+                        "needs a venv on a plain checkout is one nobody runs; Pillow only for "
+                        "`contact`, which says so rather than failing obscurely. D18 governs "
+                        "it because it WRITES NOTHING that gates anything and is never on the "
+                        "commit path — the traces it reads live in the operator's Downloads "
+                        "folder and are not in this tree.",
             },
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
@@ -1791,25 +1853,43 @@ COMPONENTS = [
                                        "which is armed except by the name it renders.",
                                "governed_by": ["D13"]},
             "src/trace.ts": {"does": "D19's Tier-1 tuning instrument: records every frame's "
-                                     "(t, d, luma) plus the watch-region pixels at each gate "
-                                     "verdict and once a second, and downloads the armed "
+                                     "(t, d, dBase, luma) plus the watch-region pixels at each "
+                                     "gate verdict and once a second, and downloads the armed "
                                      "session as one self-describing JSON from the HUD. The "
                                      "trigger records nothing itself — this hangs off "
                                      "motion.ts's optional onFrame callback. Built 2026-08-22 "
                                      "when the rig session asked for speed data, the exact "
-                                     "condition D19 reserved it for.",
-                             "governed_by": ["D19"]},
+                                     "condition D19 reserved it for. VERSION 2 SINCE 2026-08-31 "
+                                     "(D81): a v1 row is [t, d, luma] and a v2 row carries "
+                                     "dBase, the number the presence gate now decides on — a "
+                                     "trace that cannot show why a card was refused cannot "
+                                     "re-score that refusal. scripts/score-trace.py branches on "
+                                     "the version field, so a scorer cannot read a v2 trace as "
+                                     "a rig with no light in it.",
+                             "governed_by": ["D19", "D81"]},
             "src/motion.ts": {"does": "Gate C's auto-capture: a pure MotionMachine (settle, "
-                                      "novelty, card-present luma, deferring refractory) under "
-                                      "a thin DOM sampler that feeds it one 64x36 luma grid per "
-                                      "decoded frame. Parameters derived from Gate B's measured "
-                                      "cadence and SNR — see docs/specs/motion-trigger.md. "
-                                      "BUILT 2026-08-22 and TUNED AT THE RIG 2026-08-23 off "
-                                      "the first 86-cycle feeder trace (tLo 3.0 -> 4.5, tHi 6.0 "
-                                      "-> 8.0, recovering 14 silently-missed cards), then "
+                                      "novelty, card presence, deferring refractory) under a "
+                                      "thin DOM sampler that feeds it one 64x36 luma grid per "
+                                      "decoded frame. BUILT 2026-08-22, TUNED AT THE RIG "
+                                      "2026-08-23 off the first 86-cycle feeder trace, "
                                       "confirmed live at 85/85 on box 95. The trigger half of "
-                                      "Gate C is confirmed; the pipeline half is not.",
-                              "governed_by": ["D13", "D19"]},
+                                      "Gate C is confirmed; the pipeline half is not. "
+                                      "EVERY THRESHOLD IS A MULTIPLE OF A SESSION MEASUREMENT "
+                                      "SINCE 2026-08-31 (D81), which is a change of kind: the "
+                                      "presence gate was a brightness compared against the "
+                                      "constant 90, and across the four saved traces an empty "
+                                      "stand reads 57 while a card on another rig reads 61 — so "
+                                      "no constant separates them and that one refused 38 real "
+                                      "cards silently across three sessions, 18 of them "
+                                      "still refused after the 2026-08-29 quantile change. "
+                                      "Presence is now distance from the "
+                                      "session's own baseline (empty stand 1.1-1.4, cards "
+                                      "17-167), and tLo/tHi ride the median still-frame "
+                                      "difference. The seed reproduces the hand-tuned 4.50/8.00 "
+                                      "exactly, so the 85/85 run is not re-litigated. "
+                                      "tNovel, refractoryMs and maxMoveMs stay absolute, each "
+                                      "for a stated reason.",
+                              "governed_by": ["D13", "D19", "D81"]},
 
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen, rebuilt 2026-08-23 to the owner-approved Pass D: "
@@ -1858,7 +1938,7 @@ COMPONENTS = [
                     "times, because D10 lets undo reach the newest capture in a box and "
                     "nothing else. The count is drawn on the row, the list is capped and "
                     "scrolled, and a walk stops at the first refusal and says how far it got.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D65"]},
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D65", "D81"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -2598,8 +2678,14 @@ COMPONENTS = [
                         "answer key: settle fires once, the novelty gate refuses the same "
                         "card, an empty stand is suppressed, a jam stalls without firing, "
                         "the refractory defers instead of dropping, and a reused mutated "
-                        "buffer cannot zero the diff. Run by `make design-check`.",
-                "governed_by": ["D19"],
+                        "buffer cannot zero the diff. Since D81 it also pins what the machine "
+                        "measures for itself: every sequence arms on an EMPTY STAND because "
+                        "that is where the baseline comes from, a dim card on an under-lit rig "
+                        "fires where no brightness constant could admit it, a run of no-card "
+                        "verdicts is counted consecutively, `rebaseline` moves the reference, "
+                        "and the thresholds climb off a noisy session's own floor without "
+                        "following a burst up. Run by `make design-check`.",
+                "governed_by": ["D19", "D81"],
                 "note": "NOT a harness test, same as its siblings. Pure arithmetic — no page, "
                         "no server: the machine takes (nowMs, cells) and that is the whole "
                         "reason it is a class apart from the DOM wrapper.",
@@ -2608,9 +2694,13 @@ COMPONENTS = [
                 "does": "the DOM half in a real browser against the real capture screen: the "
                         "mode toggle arms the machine, a canvas stream stands in for the Cam "
                         "Link, a settle becomes a fire, and a fire with no box selected is "
-                        "COUNTED as dropped rather than silently eaten. Run by "
-                        "`make design-check`.",
-                "governed_by": ["D5", "D13", "D19"],
+                        "COUNTED as dropped rather than silently eaten. The synthetic scene "
+                        "is injected at the feeder's dark GAP since D81, because the machine "
+                        "is armed over it and that is what the session will call nothing; the "
+                        "spec also pins that the seeded thresholds are Gate C's hand-tuned "
+                        "4.50/8.00 to two places, and that the saved trace is version 2. Run "
+                        "by `make design-check`.",
+                "governed_by": ["D5", "D13", "D19", "D81"],
                 "note": "No box is ever selected in this spec, deliberately: with one, the "
                         "fire would POST /capture into a real store. The dropped counter IS "
                         "the assertion.",

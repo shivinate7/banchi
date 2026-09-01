@@ -62,6 +62,14 @@ import type { Page } from '@playwright/test'
  * this flake in a shape nobody would recognise. */
 const CARD_A = 170
 const CARD_B = 110
+
+/* THE FEEDER'S DARK GAP, AND SINCE D81 ALSO THE SESSION'S BASELINE. The scene is injected
+   at this level and the machine is armed over it, which is the tuning protocol's own
+   instruction — arm on an empty stand — expressed as a driver. Everything downstream reads
+   from that: a gap frame is zero distance from the baseline and can only ever reach `empty`,
+   and a card is 90 or 150 luma levels away from it and can only ever reach a fire or a
+   novelty suppression. The old driver injected CARD_A first, which under the distance gate
+   would have made a card the definition of "nothing". */
 const GAP_LUMA = 20
 
 /* Only has to DISCRIMINATE: the nearest scene pair is 110/170 at 60 apart, and the historical
@@ -100,7 +108,7 @@ async function injectScene(page: Page): Promise<void> {
     ;(window as unknown as { __scene: typeof scene }).__scene = scene
     video.srcObject = canvas.captureStream(30)
     void video.play()
-  }, CARD_A)
+  }, GAP_LUMA)
 }
 
 async function setScene(page: Page, base: number): Promise<void> {
@@ -116,7 +124,11 @@ function hud(page: Page) {
 type Hud = {
   phase: string
   d: number
-  luma: number
+  dbase: number
+  floor: number
+  tlo: number
+  thi: number
+  typ: number
   fires: number
   same: number
   empty: number
@@ -142,7 +154,11 @@ async function hudSnapshot(page: Page): Promise<Hud> {
   const snapshot: Hud = {
     phase: (spans[0] ?? '').trim(),
     d: read.d ?? NaN,
-    luma: read.luma ?? NaN,
+    dbase: read.dbase ?? NaN,
+    floor: read.floor ?? NaN,
+    tlo: read.tlo ?? NaN,
+    thi: read.thi ?? NaN,
+    typ: read.typ ?? NaN,
     fires: read.fires ?? NaN,
     same: read.same ?? NaN,
     empty: read.empty ?? NaN,
@@ -159,10 +175,16 @@ async function hudSnapshot(page: Page): Promise<Hud> {
 
 /** The snapshot plus the one derived fact the assertions want: is the scene the machine is
  *  reading the card this test just put in front of it? Asserting that in the SAME sample as
- *  `fires` is what stops a fire reached on some other frame from satisfying a count. */
+ *  `fires` is what stops a fire reached on some other frame from satisfying a count.
+ *
+ *  IT READS `dbase` NOW RATHER THAN `luma`, because that is the number the gate decides on
+ *  (D81) and the HUD no longer carries the one it does not. For a flat synthetic scene the
+ *  distance from the baseline IS the luma distance from the gap, so this still names the
+ *  exact scene — via the statistic the machine actually used to judge it. */
 async function settledAt(page: Page, base: number): Promise<Hud & { atBase: boolean }> {
   const snapshot = await hudSnapshot(page)
-  return { ...snapshot, atBase: Math.abs(snapshot.luma - base) <= LUMA_TOLERANCE }
+  const expected = Math.abs(base - GAP_LUMA)
+  return { ...snapshot, atBase: Math.abs(snapshot.dbase - expected) <= LUMA_TOLERANCE }
 }
 
 /** Present a card: the feeder's dark gap, then the card. Each step waits on the machine's own
@@ -203,7 +225,18 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await injectScene(page)
   await expect(hud(page)).toBeVisible({ timeout: 5_000 })
 
-  /* A bright card sits settled at the lens: exactly one fire — and with no box selected the
+  /* THE EMPTY STAND AT ARM TIME IS THE BASELINE (D81), and the machine says so on the way
+     past: one `empty` verdict, no fire, and the seeded thresholds are Gate C's hand-tuned
+     pair to the last digit — which is the claim that the adaptive form did not move the
+     numbers the 85/85 run was confirmed on, asserted rather than promised. */
+  await expect
+    .poll(() => hudSnapshot(page), { timeout: 5_000 })
+    .toMatchObject({ phase: 'watching', fires: 0, empty: 1, same: 0, stall: 0 })
+  const seeded = await hudSnapshot(page)
+  expect(seeded.tlo).toBeCloseTo(4.5, 2)
+  expect(seeded.thi).toBeCloseTo(8.0, 2)
+
+  /* A bright card is placed at the lens: exactly one fire — and with no box selected the
      screen declines it for a stated reason and COUNTS it. One fire, one drop, nothing written
      anywhere.
 
@@ -211,6 +244,7 @@ test('arming motion is visible, and the machine fires on a settled card', async 
      `toContainText('dropped 1')` is two renders, so it cannot say the counter and the frame it
      was reached on agree — which is exactly how `fires 2` used to pass on a mid-swap frame.
      `atBase` pins the verdict to the scene this test put up. */
+  await setScene(page, CARD_A)
   await expect
     .poll(() => settledAt(page, CARD_A), { timeout: 5_000 })
     .toMatchObject({ phase: 'watching', atBase: true, fires: 1, same: 0, dropped: 1, stall: 0 })
@@ -245,16 +279,21 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   const savedTo = await download.path()
   const trace = JSON.parse(readFileSync(savedTo, 'utf8')) as {
     kind: string
-    params: { tHi: number; cardLumaFloor: number }
+    version: number
+    params: { moveK: number; presenceMin: number }
     grid: { w: number; h: number; roi: number[] }
     truncated: boolean
-    frames: Array<[number, number, number]>
+    frames: Array<[number, number, number, number]>
     events: Array<{ t: number; event: string; frame: string }>
     keyframes: Array<{ t: number; frame: string }>
   }
   expect(trace.kind).toBe('pkmnscan-motion-trace')
+  /* THE VERSION IS LOAD-BEARING, not decoration: a v1 row is [t, d, luma] and a v2 row is
+     [t, d, dBase, luma], so a scorer that read the third column as brightness would read a
+     v2 trace as a rig with no light in it. `scripts/score-trace.py` branches on this. */
+  expect(trace.version).toBe(2)
   expect(trace.truncated).toBe(false)
-  expect(trace.params.tHi).toBeGreaterThan(0)
+  expect(trace.params.moveK).toBeGreaterThan(0)
   /* No frame-RATE assertion on purpose: headless frame delivery swings from ~10 to 60
    * fps with CPU load, and a bound tuned to one machine's idle speed flakes on the next.
    * What must hold at any rate: the trace saw at least every frame a verdict was reached
@@ -271,8 +310,8 @@ test('arming motion is visible, and the machine fires on a settled card', async 
      their mean IS the luma the gates decided against.
 
      THIS DOES NOT CLOSE THE WRONG-REASON PASS ON ITS OWN, and the division of labour is worth
-     stating: the driver closes it structurally (a gap frame is under `cardLumaFloor` and can
-     only ever reach `empty`), the HUD's `atBase` fails fast, and this localises a future DRIVER
+     stating: the driver closes it structurally (a gap frame IS the baseline and can only ever
+     reach `empty`), the HUD's `atBase` fails fast, and this localises a future DRIVER
      regression that the counters alone would not see. */
   const lumaOf = (frame: string): number => {
     const bytes = Buffer.from(frame, 'base64')
@@ -282,18 +321,19 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   }
   const verdicts = trace.events.map((e) => ({ event: e.event, luma: lumaOf(e.frame) }))
 
-  /* D19 calls these constants rig-tunable, so if `cardLumaFloor` is ever moved under the gap
-     this names the cause instead of leaving a mysterious red four lines down. */
-  expect(GAP_LUMA).toBeLessThan(trace.params.cardLumaFloor)
+  /* EVERY `empty` VERDICT WAS REACHED ON THE GAP, asserted against the gap's own luma rather
+     than against a threshold. That is a stronger claim than the old one — which only said the
+     frame was under `cardLumaFloor` — and it survives the constant it used to name being
+     deleted. */
   const gaps = verdicts.filter((v) => v.event === 'suppressed:no-card')
-  for (const gap of gaps) expect(gap.luma).toBeLessThan(trace.params.cardLumaFloor)
+  for (const gap of gaps) expect(Math.abs(gap.luma - GAP_LUMA)).toBeLessThanOrEqual(LUMA_TOLERANCE)
 
-  /* BOUNDED, not merely filtered: two feeds give two, and three or more leading black frames
-     before the canvas reaches the stream give a third. Measured — 0, 1 or 2 black frames give
-     2; 3 or 10 give 3. Unbounded would be the one place a real extra verdict could hide, in a
-     repo whose hard rule is never to drop a card silently. */
-  expect(gaps.length).toBeGreaterThanOrEqual(2)
-  expect(gaps.length).toBeLessThanOrEqual(3)
+  /* BOUNDED, not merely filtered: the arm-time settle on the empty stand gives one, two feeds
+     give two more, and leading black frames before the canvas reaches the stream can give one
+     further. Unbounded would be the one place a real extra verdict could hide, in a repo whose
+     hard rule is never to drop a card silently. */
+  expect(gaps.length).toBeGreaterThanOrEqual(3)
+  expect(gaps.length).toBeLessThanOrEqual(4)
 
   /* `toEqual` on a fixed array SUBSUMES the two assertions this replaces: it says the fire
      count, the order, AND which frame each verdict was reached on, where

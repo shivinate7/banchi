@@ -21,7 +21,7 @@ import { resolveSetHint } from './setHint'
 import type { HintVerdict, SetOption } from './setHint'
 import { manualTrigger } from './trigger'
 import { motionTrigger } from './motion'
-import type { MotionDiagnostics } from './motion'
+import type { MotionControls, MotionDiagnostics } from './motion'
 import { MotionTrace } from './trace'
 import { DEFAULT_PARAMS } from './motion'
 import { useCamera, PIPELINE_LONG_EDGE, ROTATIONS } from './useCamera'
@@ -1080,6 +1080,10 @@ export function CaptureScreen() {
    * nothing re-renders on its account — the HUD's frame counter already moves via the
    * throttled diagnostics. */
   const traceRef = useRef<MotionTrace | null>(null)
+
+  /* The armed machine's own control surface — today only `rebaseline`. Null whenever motion
+   * is not armed, which is exactly when the control below must not render. */
+  const motionControls = useRef<MotionControls | null>(null)
 
   // Read synchronously inside the capture path. React state cannot serve here: two fires in
   // one tick — a key repeat, or a focused button activated by the same press — would both
@@ -2278,10 +2282,16 @@ export function CaptureScreen() {
     // `camera.videoRef` is a stable ref object, so this is built once; each arm builds a
     // fresh machine, so counters restart when the mode is toggled — which reads correctly,
     // because toggling into motion is starting a run. The onFrame lambda reads the trace
-    // through the ref, so a fresh recording per arm needs no re-memoisation.
+    // through the ref, so a fresh recording per arm needs no re-memoisation. `motionControls`
+    // is filled in by the armed machine and nulled on teardown, which is what makes the
+    // Re-baseline control render only while there is a machine to ask.
     () =>
-      motionTrigger(camera.videoRef, setMotionDiag, DEFAULT_PARAMS, (t, d, luma, event, cells) =>
-        traceRef.current?.record(t, d, luma, event, cells),
+      motionTrigger(
+        camera.videoRef,
+        setMotionDiag,
+        DEFAULT_PARAMS,
+        (t, d, dBase, luma, event, cells) => traceRef.current?.record(t, d, dBase, luma, event, cells),
+        motionControls,
       ),
     [camera.videoRef],
   )
@@ -3560,10 +3570,17 @@ export function CaptureScreen() {
                   it is the Trigger field's own machine string now, beside the control it
                   describes. Same class, same text, one field up the column. */}
 
-              {/* The machine's own vitals, only while it is the armed trigger. `d` is the
-                  live frame-difference every threshold in motion.ts is set against, on
-                  screen so the rig session TUNES against a number it can see: an empty
-                  still scene should read well under 1, a card swap should spike past 6.
+              {/* The machine's own vitals, only while it is the armed trigger, and every
+                  number on this row is now one the machine actually decides on — D81's
+                  rule, learned the hard way: the row carried `luma` for two rig sessions
+                  while the gate read a different statistic, and a HUD showing a number
+                  nothing branches on is how a rig gets debugged against the wrong one.
+
+                  `d` is the live frame-difference and `t` is the pair of thresholds it is
+                  judged against, which MOVE now — they are multiples of `typ`, this
+                  session's own measured typical difference, so the operator can see the
+                  machine adapt instead of taking it on faith. `Δbase` is how far the scene
+                  is from the baseline and `≥` is what it must beat to count as a card.
                   Mono, uppercase-free machine words — this is metadata, owner-side. */}
               {triggerMode !== 'motion' ? null : motionDiag === null ? (
                 <p className="capture-quiet">
@@ -3574,7 +3591,20 @@ export function CaptureScreen() {
                 <p className="capture-motion-hud">
                   <span>{motionDiag.phase}</span>
                   <span>d {motionDiag.d.toFixed(2)}</span>
-                  <span>luma {Math.round(motionDiag.luma)}</span>
+                  {/* The stillness band and the measurement it is a multiple of. Every one
+                      of these is `name value` with a single space, which is the shape
+                      motion-live.spec.ts parses the row by — a HUD that grows a slash or a
+                      unit stops being readable by the test that pins it. */}
+                  <span>tlo {motionDiag.tLo.toFixed(2)}</span>
+                  <span>thi {motionDiag.tHi.toFixed(2)}</span>
+                  <span>typ {motionDiag.dTypical.toFixed(2)}</span>
+                  {/* The presence decision, both halves: how far the scene is from the
+                      session's baseline, and what it has to beat to count as a card. */}
+                  <span>dbase {motionDiag.dBase.toFixed(2)}</span>
+                  <span>floor {motionDiag.presenceFloor.toFixed(2)}</span>
+                  {motionDiag.hasBaseline ? null : (
+                    <span className="capture-refused">baseline pending</span>
+                  )}
                   <span>fires {motionDiag.fires}</span>
                   <span>same {motionDiag.suppressedUnchanged}</span>
                   <span>empty {motionDiag.suppressedNoCard}</span>
@@ -3588,6 +3618,37 @@ export function CaptureScreen() {
                   )}
                 </p>
               )}
+
+              {/* THE SENTENCE THE OLD MACHINE OWED AND NEVER SAID. On 2026-08-29 twenty
+                  settles in a row were refused as an empty stand while a box was fed
+                  through the lens, and the only trace of it on screen was a counter going
+                  up beside six other counters. A RUN of refusals has exactly one likely
+                  cause — the baseline was taken with something on the stand — and it has
+                  exactly one remedy, which is the button under it. Three in a row rather
+                  than one, because one refusal is the arm-time scene reporting itself and
+                  is correct. */}
+              {triggerMode === 'motion' && (motionDiag?.noCardRun ?? 0) >= 3 ? (
+                <p className="capture-refused">
+                  {motionDiag?.noCardRun} settles in a row read as an empty stand. If cards are
+                  going past the lens, the baseline was taken with something on the stand —
+                  clear it and re-baseline. Those cards were not photographed.
+                </p>
+              ) : null}
+
+              {/* A CONTROL, NOT A LETTER. Every act on this screen that costs a key press —
+                  the shutter, the undo, the divider — happens at feeder pace with both hands
+                  on cards. Re-baselining does not: it is performed after clearing the stand,
+                  with a hand already off the keyboard, and the letter it would want (`b`) is
+                  the box field's. Rendered only while a machine is armed to receive it. */}
+              {triggerMode === 'motion' && motionDiag !== null ? (
+                <button
+                  type="button"
+                  className="capture-go"
+                  onClick={() => motionControls.current?.rebaseline()}
+                >
+                  Re-baseline · stand must be empty
+                </button>
+              ) : null}
               {/* D19's Tier-1 instrument, one press: the whole armed session's timing signal
                   plus the exact watch-region pixels each gate decided on, as a JSON download.
                   One feeder pass with this file is the tuning data — period, jitter, how

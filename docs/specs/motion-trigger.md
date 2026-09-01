@@ -4,33 +4,39 @@ Written 2026-08-22, the day it was built. D19 is the decision; this file is the 
 the derivations, and the protocol for the part no computer can do — tuning at the rig.
 `docs/GATES.md`'s Gate C section carries the measurements every number here leans on.
 
-## STATUS — CONFIRMED LIVE: 85/85 ON THE SECOND FEEDER RUN
+## STATUS — CONFIRMED LIVE AT 85/85, AND REBUILT ON MEASUREMENTS 2026-08-31
 
 The trigger exists: `app/src/motion.ts` behind `app/src/trigger.ts`'s seam, armed from a
-mode toggle on the capture screen, with a live HUD and a swallowed-fire counter. Two specs
-cover it — `app/tests/motion.spec.ts` proves the machine's arithmetic against an exact
-answer key, and `app/tests/motion-live.spec.ts` drives the real screen in a real browser
-with a synthetic camera stream, from arming through firing to the dropped-fire count. Both
-run in `make design-check`.
+mode toggle on the capture screen, with a live HUD, a swallowed-fire counter and a
+`Re-baseline` control. Two specs cover it — `app/tests/motion.spec.ts` proves the machine's
+arithmetic against an exact answer key, and `app/tests/motion-live.spec.ts` drives the real
+screen in a real browser with a synthetic camera stream, from arming through firing to the
+dropped-fire count. Both run in `make design-check`.
 
-**The first feeder trace arrived 2026-08-23 — 86 cycles, 65.3 s — and retuned the one
-constant it convicted.** The feeder's measured rhythm: period 623 ms burst-to-burst, each
-card ~217 ms moving and ~400 ms still (min still gap 132 ms), frames delivered at ~25 fps.
-The conviction: the LIVE feed's still-phase noise is median 2.51, p99 4.07 — eleven times
-the 0.35 floor measured off Gate B's stored JPEGs, because the preview stream never went
-through a JPEG encode — so the first `tLo` of 3.0 sat inside the noise and 14 of 86 cards
-(16%) passed without reaching a verdict, silently, exactly as the owner reported. The
-offline replay reproduced the live run frame-perfectly (72 fires, zero suppressions),
-and the swept retune (`tLo` 3.0 → 4.5, `tHi` 6.0 → 8.0) scores **86/86 with zero
-double-fires** across the whole tLo 4.0–5.0 plateau.
+**The 85/85 feeder run stands and is not being re-litigated.** 2026-08-23, 72.5 s at a
+620 ms period, 85 of 85 cycles fired with zero doubles and zero misses, one designed
+`no-card` suppression at arm time, captured into a real box (95) through the full path. That
+clears the 50-card bar for the trigger half of Gate C; the gate still owes the pipeline half
+(identify → join → emit → reconcile on a feeder-paced box) and foil under this lamp.
 
-**The second feeder run confirmed it live, same day: 85 of 85 cycles fired, zero doubles,
-zero misses** — 72.5 s at the same 620 ms period, one designed `no-card` suppression at arm
-time, captured into a real box (95) through the full path. That clears the 50-card bar for
-the trigger half of Gate C; the gate still owes the pipeline half (identify → join → emit →
-reconcile on a feeder-paced box) and foil under this lamp. The thinnest margin in the
-system is the noise floor — still-noise p99 measured 4.07 and 4.13 across the two runs
-against tLo 4.5 — and §6 names its watchdog.
+**EVERY THRESHOLD IS NOW A MULTIPLE OF SOMETHING THE SESSION MEASURED (D81), and the reason
+is that the constants were portable to exactly one rig.** Four saved traces re-scored with
+`scripts/score-trace.py` say it plainly. The card-present gate was a brightness against the
+constant 90; an empty stand on the reference rig reads 57 and a real card on the under-lit
+rig reads 61, so **no constant separates those populations**, and that one refused **38 real
+cards as an empty stand, silently** — 20 of 20 on 2026-08-29 21:34, 13 of 15 on 21:38, 5 of
+24 on 2026-09-01 — against one correct refusal in the whole corpus. Presence is now the
+distance from the watch region as it stood when the trigger was armed: an empty stand sits
+1.10–1.38 from its own baseline and every card of every session sits 17.4–167.4, a 43× gap
+where brightness gave 1.07×. `tLo` and `tHi` ride the median frame-to-frame difference of
+the last 8 s of frames the machine already called still, and score **86, 86, 20, 15, 24**
+across the five traces where the hand-tuned constants scored 72, 86, 20, 15, 24. The seed
+reproduces 4.50 and 8.00 to the last digit.
+
+**§4's protocol changed shape because of it.** The parameters are no longer what a rig
+session tunes; the rig session now reads whether the machine's own measurements are sane and
+whether the baseline was taken on an empty stand. Read §4 before treating any number here as
+something to edit.
 
 ## 1. The two halves
 
@@ -49,24 +55,74 @@ themselves and fires at half the configured settle time with no symptom.
 
 Phases: watching → moving → settling → (verdict) → watching, with a deferring refractory.
 
-| parameter | value | derivation |
+| parameter | value | what it is a multiple of, and where the number came from |
 |---|---|---|
 | grid | 64×36 | each cell averages ~3,600 sensor pixels; noise attenuates ~60× |
-| watch region | centre, inset 20% x / 10% y | 15 of 53 Gate B frames carry a second card in the feed path; card placement repeats to ~30 px | 
-| `tHi` | 8.0 | retuned 2026-08-23: burst peaks measured ≥ 9.6, still phase ≤ 4.56 — 8.0 splits the populations. The first guess (6.0, from Gate B stills) also worked live |
-| `tLo` | 4.5 | retuned 2026-08-23, the constant the trace convicted: live still-noise p99 is 4.07, eleven times the stored-JPEG floor the first guess (3.0) was derived from. Replay: 86/86 at 4.0–5.0, vs 72/86 live at 3.0 |
-| `stillFrames` | 2 (67 ms) | fire latency (stillFrames+1)·f = 100 ms = 22% of the 458 ms worst observed cycle. The first guess — 6 frames + a blinding 400 ms cooldown — summed past the *mean* cycle: 619.7 − 233 − 400 = −13 ms |
-| refractory | 250 ms, deferring | sized to the <250 ms capture round trip, not the card cycle; a settle inside the window fires at expiry instead of being dropped |
-| `tNovel` | 4.0 | ~11× noise, ~3.5× under the weakest same-card repeat across the Gate B duplicate pairs |
-| `cardLumaFloor` | 90 | card region measures ~172, empty desk/backdrop 30–65. **Read as the ROI's bright QUANTILE since 2026-08-29, not its mean — see below.** |
-| `maxMoveMs` | 1250 | ~2× the feeder period; a jam surfaces as `stalled` and does NOT fire (D19 carries both sides of that argument) |
+| watch region | centre, inset 20% x / 10% y | 15 of 53 Gate B frames carry a second card in the feed path; card placement repeats to ~30 px |
+| `stillK` | 2.0 | `tLo` = this × the session's median STILL-frame difference. Swept over all five traces at q 0.5–0.95 and k 1.4–2.5: 2.0–2.5 is a plateau where every trace meets or beats what the constants scored live. 2.0 is chosen for the middle of it rather than the edge of a peak — the failure mode of the 2026-08-23 retune, which swept one run |
+| `moveK` | 3.556 | `tHi` = this × the same measurement. 2.0 × 16/9, which holds `tHi`/`tLo` at the 1.78 the hand-tuned 4.5/8.0 pair had. The band is a ratio, not a difference: a fixed 3.5-wide band is wide on a quiet rig and absent on a noisy one |
+| `dSeed` | 2.25 | what the still-frame difference is taken to be until 25 still frames have been seen. Chosen so the seeded thresholds are **4.50 and 8.00 exactly** — Gate C's own pair, so the machine boots on the confirmed run's numbers |
+| `dFloor` | 1.0 | floor under the measurement, so a rock-steady mount cannot drive `tLo` toward zero. Sits under every session measured (1.75–3.22) without touching any |
+| `noiseWindowMs` | 8000 | ~200 frames at the observed 25 fps and a dozen feeder cycles. **Only frames already judged still go in** — see below |
+| `stillFrames` | 2 (67 ms) | fire latency (stillFrames+1)·f = 100 ms = 22% of the 458 ms worst observed cycle |
+| `refractoryMs` | 250, deferring | sized to the <250 ms capture round trip, not the card cycle. A time, not a light level |
+| `tNovel` | 4.0 | **deliberately still absolute.** Across all five traces and 217 verdicts the `suppressed:unchanged` count is zero, so there is no measurement to take a multiple of; and scaling it to session noise would push it DOWN on a quiet rig, making suppression more likely — the wrong direction, since a false pass is a duplicate `U` fixes and a false suppression is a silent §5.5 loss |
+| `presenceK` | 3.0 | the presence floor is this × the session's still-frame difference. Against its own baseline an empty stand reads 1.10–1.38 and every card of every session reads 17.4–167.4; 3.0 puts the threshold at 5.5–9.7, four to seven times over the empty stand and three to ten times under the dimmest card |
+| `presenceMin` | 8.0 | absolute floor, **set by illumination DRIFT rather than by noise**: a static scene walks up to 7.94 from a baseline 3.4 s old with nothing having moved. Every value from 6 to 10 gives byte-identical verdicts on all five traces; 8.0 is the middle of that gap |
+| `maxMoveMs` | 1250 | ~2× the feeder period; a jam surfaces as `stalled` and does NOT fire. A time, like the refractory |
+
+### The measurement only admits frames it already called still, and that is the whole safety argument
+
+This file used to say the thresholds were "fixed rather than adaptive" because "an EMA floor
+that learns during slow motion is a way to go blind". That objection was right about a moving
+average and
+right about admitting motion, and it is answered rather than ignored: **a frame only enters
+the window if `d < tLo`.** A hand resting half in frame, a jammed feeder, a card creeping —
+every one of those sits above `tLo`, never reaches the estimate, and cannot teach the machine
+that hovering is what quiet looks like. The estimate moves only on frames already judged
+still, and the multiplier is what lets it climb: a session whose still noise reads 3.5 lands
+`tLo` at 7.0, well clear of it.
+
+**The one thing this cannot recover from is a session whose noise is entirely above the
+seeded 4.5.** No frame is ever still, nothing enters the window, nothing adapts. That failure
+is LOUD — not one capture is taken and the HUD sits in `moving` — which is the opposite of
+the 2026-08-23 failure, where 14 of 86 cards vanished while everything looked normal. A
+median over a window that admitted motion would have been quieter and wronger.
+
+### The presence gate is a distance, and this is the third attempt at it
+
+**Attempt one** compared the watch region's MEAN brightness against 90. **Attempt two**
+(2026-08-29) compared its bright QUANTILE against 90, and its own table of "empty stand"
+brightnesses was derived from twenty frames that were photographs of real cards — a refusal
+had been read as evidence of what was on the stand, and nobody rendered them. **Attempt
+three** compares nothing to a brightness at all.
+
+| scene | rig / session | bright quantile |
+|---|---|---|
+| **empty stand** | reference rig, 2026-08-23 | **57** |
+| card | under-lit rig, 2026-08-29 21:34 | **61**–134 |
+| card | 2026-09-01 | 77–171 |
+| card | reference rig, 2026-08-23 | 196–244 |
+
+That table is why there is no fourth constant to try. `scripts/score-trace.py contact` draws
+every verdict's frame as a labelled sheet, and it exists because the only thing that settles
+what a frame contains is looking at it.
+
+**What the change gives up, deliberately:** a card already at the lens when the trigger is
+armed becomes the baseline and is refused rather than captured. That is forced rather than
+chosen — the old machine captured it only because the card was bright and 90 sat under it —
+and the loss is one photograph at the top of a run, ANNOUNCED: `noCardRun` counts consecutive
+refusals and the screen renders three in a row as the sentence it means, with the
+`Re-baseline` control under it.
 
 Three gates on a fire, one verdict per settle episode: stillness (synchronisation — fire
 once per card, not mid-swap; the sharpness justification was tested against the real
 frames and failed an anisotropy test), novelty against the last-fired frame (the gate that
-actually prevents double-captures), and the luma floor (card present — deliberately NOT
-`geometry/detect.py`'s tone segmentation, which measured 0/53 on this rig; a brightness
-floor over a fixed region needs none of that method's premises).
+actually prevents double-captures), and presence — distance from the session's baseline.
+All three are now statements about CHANGE and none is a statement about brightness, which
+is also why `geometry/detect.py`'s tone segmentation is still not wanted here: it measured
+0/53 on this rig, and a distance from a reference needs none of that method's premises
+either.
 
 **The buffer-copy rule is load-bearing**: the sampler reuses its arrays, so the machine
 copies everything it keeps. Holding a reference makes prev and current the same array, d
@@ -87,9 +143,24 @@ resets all of them, and a resume clears the halted count the banner just spent.
 How the operator knows it is on, threefold, all on the capture screen: the pressed chip
 (`key` / `motion`), the machine string under the capture button (`manual:C` → `motion` —
 the line trigger.ts always promised), and the HUD, which exists only while the machine is
-armed and shows `phase · d · luma · fires · same · empty · stall · dropped`. `d` is the
-live number every threshold is set against, on screen precisely so §4 can tune against a
-value the operator can see. Arming is session-only (D19): every reload starts manual.
+armed and shows
+`phase · d · tlo · thi · typ · dbase · floor · fires · same · empty · stall · dropped`.
+
+**Every number on that row is one the machine decides on, and that is a rule the row earned.**
+It carried `luma` for two rig sessions while the presence gate read a different statistic,
+which is how a rig gets debugged against the wrong number; the bright quantile survives in
+the trace, as evidence about lighting, and gates nothing. `d` is the live difference,
+`typ` is what the session measured, `tlo`/`thi` are the multiples of it, and `dbase`/`floor`
+are the presence decision's two halves. Arming is session-only (D19): every reload starts
+manual.
+
+**A run of refusals is a sentence, not a counter.** `empty` is a total and totals do not say
+"this is happening right now" — on 2026-08-29 twenty settles in a row were refused while a
+box went through the lens and the only sign was that total climbing beside six others.
+Three consecutive refusals render as what they mean, naming the likely cause (a baseline
+taken with something on the stand) and the remedy under it. **`Re-baseline` is a button
+rather than a letter**: it is performed after clearing the stand, with a hand already off the
+keyboard, and the letter it would want (`b`) is the box field's.
 
 The C key is genuinely disarmed in motion mode — one trigger behind the seam at a time —
 and its `kbd` chip leaves the capture button. The button itself stays live in both modes:
@@ -105,87 +176,78 @@ the id exists to resolve.
 
 ## 4. Rig-tuning protocol — the part that needs a person
 
-Cost: ~30 minutes at the rig, one box of expendable commons, before the 50-card
-confirmation run. Order matters; each step isolates one parameter family.
+**THIS IS NO LONGER A PARAMETER-TUNING PROTOCOL.** It was, and the reason it stopped is that
+the tuning it asked for was portable to exactly one rig: the 2026-08-23 session swept one
+trace, landed on `tLo` 4.5 and `tHi` 8.0, and the presence constant beside them then refused
+38 real cards on two other rigs — 18 of which the 2026-08-29 "fix" left refused (§2). The machine takes its own measurements now. What a person still has to
+do is **check that the measurements are sane and that the baseline is honest** — neither of
+which any amount of arithmetic can decide from inside the frame.
 
-1. **Noise floor first, nothing moving.** Arm motion with the rig lit and the stand empty.
-   `d` should idle near **2.5, and under ~4.1** — the live feed's measured floor, NOT the
-   "far below 1" this step first predicted from Gate B's stored JPEGs; the preview stream
-   is ~11× noisier because it never went through a JPEG encode, and that misprediction is
-   what cost 14 cards in the first feeder run. Reading well above 4: mains flicker (pin
-   the shutter to a multiple of the mains period — §10.0's list) or an unstable lamp.
-   Expect one `empty` suppression at arm time and silence after.
-2. **Card-present floor.** Place one card by hand. `luma` should sit near 170 against an
-   empty-stand reading near 50; `cardLumaFloor: 90` should split them with margin on both
-   sides. A sleeved or dark-art card that reads low is a floor problem — lower it before
+Cost: ~10 minutes at the rig, one box of expendable commons, before the 50-card
+confirmation run.
 
-### `cardLumaFloor` READS A QUANTILE, NOT A MEAN — and a second rig is what proved it
-
-**The mean is a statement about the whole watch region; the gate needs a statement about
-whether a card is IN it.** Those coincide only while the card fills the region, which is what
-the rig this was tuned against happened to do. Point a differently-framed camera at the same
-feeder and the card occupies part of the region against a dark surround: the mean is dominated
-by background and collapses under the floor while the card is plainly there.
-
-**Measured on the owner's second rig, 2026-08-29, from two saved traces** — the instrument this
-spec's §6 exists for, re-scored offline with no rig trip:
-
-| | mean | bright quantile (p90) |
-|---|---|---|
-| empty stand | 27–30 | 62–69 |
-| settled card | 62–86 | 125–236 |
-
-**The floor of 90 sat ABOVE BOTH MEANS.** The gate could not fire at any brightness, and no
-amount of relighting would have fixed it — the failure is geometric, not photographic. One
-session settled twenty cards correctly and refused every one as an empty stand; a second
-settled fifteen and fired twice, both on a static frame before the feeder started.
-
-**The constant does not move.** 69 against 125 leaves 90 exactly where it was, now with a real
-gap either side, and it stays backward-compatible with the rig it was derived from: a card
-filling the region has a bright quantile at least as high as its mean, so ~172 still passes.
-Re-scored through the fix, the two traces go 2 fires to **15 of 15**, and 0 to 7 on the
-under-lit one, with the empty-stand keyframes still correctly refused.
-
-**`CARD_QUANTILE` is 0.9 rather than the maximum** because a specular highlight off a sleeve, a
-lamp clipping into frame or a single hot pixel all carry a maximum and none of them is a card.
-Asking that roughly a tenth of the watched cells are card-bright is a claim about an object
-being there.
-
-**What this does NOT change**: `tHi`, `tLo`, `stillFrames`, `refractoryMs`, `tNovel` and
-`maxMoveMs` are untouched, and so is every measurement behind them. Motion and settle detection
-were never at fault — both traces show the machine finding every card at the feeder's cadence.
-Only the presence gate was reading the wrong statistic.
-
-**The tuning protocol above gains one step**: read the HUD's `luma` with a card under the lens
-AND with the stand empty, and check the gap rather than the absolute. The HUD now reports the
-quantile, because a screen showing a statistic the machine does not use is how a rig gets
-debugged against the wrong number for two sessions.
-   blaming anything else.
-3. **Swap signal.** Hand-swap cards at feeder-ish pace. Every swap should spike `d` past
-   `tHi` and every settle should fire exactly once; `same` should stay at zero unless you
+1. **Arm on an EMPTY STAND. This is the one step that cannot be got wrong.** The watch
+   region as it stands when you arm is what the whole session will call "nothing". Expect
+   exactly one `empty` verdict at arm and silence after. **If a card is on the stand when
+   you arm, it becomes the baseline** and the machine will refuse it and every card that
+   looks like it — which it says out loud, three refusals in a row, with the `Re-baseline`
+   control under the sentence. Clear the stand and press it.
+2. **Read the machine's own measurement, nothing moving.** `typ` is this session's median
+   still-frame difference and `tlo`/`thi` are 2.0× and 3.556× it. On the reference rig `typ`
+   idles near 2.2 and the pair lands near 4.5/8.0; the sessions traced since read 1.75–3.22.
+   **A `typ` above ~4 is a rig problem, not a parameter problem** — mains flicker (pin the
+   shutter to a multiple of the mains period, §10.0's list), an unstable lamp, or a mount
+   that moves. Fix the rig; the thresholds will follow it on their own.
+3. **Read the gap, not the absolute.** Place one card by hand and watch `dbase` against
+   `floor`. A card should read tens; the empty stand reads under 1.5. Traced across four
+   rigs the separation is 17.4 against 1.38 at worst. **A card that reads close to `floor`
+   is a framing problem** — the card is barely inside the watch region — not a number to
+   lower.
+4. **Swap signal.** Hand-swap cards at feeder-ish pace. Every swap should spike `d` past
+   `thi` and every settle should fire exactly once; `same` should stay at zero unless you
    re-present the same card, and then it should count exactly once per re-present.
-4. **The feeder, empty run.** Feeder running, no captures consumed (no box selected —
+5. **The feeder, empty run.** Feeder running, no captures consumed (no box selected —
    fires land in `dropped`, which is the point: count feeder cycles against `fires`).
    Agreement within one or two over a hopper is the pass. Watch `stall`: the feeder's own
    motion profile has never been measured, and if its advance reads as continuous motion
-   longer than 1250 ms, `maxMoveMs` is the constant to raise.
-5. **Save the trace before disarming — every step above, and this one, is in the file.**
+   longer than 1250 ms, `maxMoveMs` is the one constant here still worth raising by hand.
+6. **Save the trace before disarming — every step above, and this one, is in the file.**
    The `Save trace` button under the HUD downloads the whole armed session: every frame's
-   `(t, d, luma)`, plus the exact watch-region pixels each fire/suppression/stall was
-   decided on, plus once-a-second keyframes. It is self-describing (the thresholds travel
+   `(t, d, dBase, luma)`, plus the exact watch-region pixels each fire/suppression/stall was
+   decided on, plus once-a-second keyframes. It is self-describing (the parameters travel
    with the evidence) and lands in the browser's Downloads folder as
-   `motion-trace-<timestamp>.json`. Hand that file to a session and the tuning happens
-   offline: period, jitter, t_move/t_still measured rather than derived, and the gates
-   re-scorable against different thresholds without another rig trip. A trace survives
-   disarming — it resets only when motion is armed again — so save late rather than early.
-
-6. **The 50-card run** (Gate C's own bar), box selected, milliseconds now on every
+   `motion-trace-<timestamp>.json`. A trace survives disarming — it resets only when motion
+   is armed again — so save late rather than early.
+7. **The 50-card run** (Gate C's own bar), box selected, milliseconds now on every
    `captured_at`: reconcile `fires` against records, `dropped` against the halt story, and
    the cadence against the trace. Then a full box.
 
-Tuning is editing the constants in `app/src/motion.ts` under Vite's hot reload — they are
-named, documented, and in one block. If the rig session finds itself wanting live sliders,
-that is UI surface to argue for afterwards with numbers in hand, not to build on spec.
+### Scoring a trace offline — `scripts/score-trace.py`
+
+The promise that a saved trace makes another rig trip unnecessary was made in 2026-08-23 and
+kept by hand three times, and **the second of those got it wrong**: the 2026-08-29 presence
+fix derived its "empty stand" brightnesses from twenty frames that were photographs of real
+cards, because a refusal was read as evidence of what was on the stand and nobody rendered
+them. The pass is written down now.
+
+```
+scripts/score-trace.py summary  <trace.json> [more.json ...]
+scripts/score-trace.py presence <trace.json>
+scripts/score-trace.py sweep    <trace.json> [more.json ...]
+scripts/score-trace.py contact  <trace.json> <out.png>
+```
+
+`summary` says what the machine did live and what today's form would do; `presence` re-runs
+the card-present gate over each verdict's own pixels; `sweep` scores the stillness
+thresholds across a grid **over every trace at once**, because one trace cannot choose a
+parameter and choosing one from a single run is the mistake §2's table is a receipt for; and
+`contact` writes the verdict frames out as a labelled PNG. **Look at the contact sheet before
+believing any claim about what was on the stand.** `summary`, `presence` and `sweep` are
+stdlib only; `contact` needs Pillow and says so.
+
+A parameter that a sweep says should move is a decision entry, not an edit: the constants in
+`app/src/motion.ts` are now ratios with derivations attached, and moving one without moving
+its argument is how the file got into the state D81 found it in.
 
 ## 5. Known limits, and what this deliberately does not do
 
@@ -235,10 +297,16 @@ one of two physical walls, both of which announce themselves:
   stretches past `maxMoveMs` 1250, which is a jam or a dying mechanism, and it surfaces as
   `stall` on the HUD rather than firing.
 
-What DOES need a re-trace is anything that changes the **picture**: a new lamp, a nudged
-camera, changed exposure or ISO, a different backdrop, sleeved cards. Those move the noise
-floor and the luma levels — and the noise floor is the thinnest margin in the system
-(still-noise p99 measured 4.07/4.13 against tLo 4.5). The watchdog is free and always on
-screen: the HUD's `d` idling near 2.5 with nothing moving is healthy; creeping toward 4 is
-the cue to run one 60-second trace *before* it costs cards, exactly the ritual that caught
-and fixed the first miscalibration.
+What DOES need attention is anything that changes the **picture**: a new lamp, a nudged
+camera, changed exposure or ISO, a different backdrop, sleeved cards.
+
+**Since D81 those no longer need a re-trace to fix — but they do need one to notice.** The
+noise floor and the presence threshold both follow the session now, so a dimmer lamp or a
+re-framed camera moves the thresholds with it rather than silently invalidating them; that
+is the entire point of the change, and it is what the four saved traces demonstrate. What
+adaptation cannot do is tell you the baseline was taken with a card on the stand, or that the
+card has drifted half out of the watch region. **The two watchdogs are free and always on
+screen**: `typ` idling near 2.2 with nothing moving is healthy and creeping past 4 is a rig
+fault, and `dbase` reading tens with a card under the lens against under 1.5 with the stand
+empty is the separation the presence gate lives on. Either one going wrong is the cue to run
+one 60-second trace and score it — `scripts/score-trace.py`, §4 — *before* it costs cards.

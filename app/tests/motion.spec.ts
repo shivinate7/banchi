@@ -8,20 +8,33 @@ import type { MotionEvent } from '../src/motion'
  * proves the arithmetic is self-consistent, NOT that the trigger works at the rig. The
  * rig half (sampling a real <video>, real lighting, the real feeder rhythm) is exactly
  * the part a browserless test cannot reach, and docs/specs/motion-trigger.md's tuning
- * protocol is what covers it.
+ * protocol is what covers it. What DOES speak for the rig is `scripts/score-trace.py`,
+ * which re-scores the owner's four saved traces offline; the numbers quoted below come
+ * from it rather than from anybody's intuition.
  *
  * No page, no server: MotionMachine is pure — `step(nowMs, cells)` in, event out — which
  * is the whole reason it is a class apart from the DOM wrapper. Frames are small arrays
  * (the machine takes any length) built by `still()` with deterministic sub-threshold
  * noise, so every run of this file sees identical inputs.
  *
+ * EVERY SEQUENCE HERE ARMS ON AN EMPTY STAND, and that is the contract rather than a
+ * fixture convention (D81). The machine takes its BASELINE from the first still run after
+ * arming and judges presence as distance from it, so what is on the stand at arm time is
+ * what the session will call "nothing". The tuning protocol asks the operator for an empty
+ * stand at arm for exactly this reason, and `armEmpty` below is that instruction in code.
+ *
  * The clock is hand-fed at 30fps. Every threshold crossed below is crossed by a value
- * derived from the Gate B measurements the parameters came from: noise ~0.35, swaps
- * 14-92, card luma ~172 against an empty stand's 30-65.
+ * derived from real measurements: still noise well under tLo, swaps of 50-140 luma levels
+ * against a tHi of 8.0, and card-versus-empty distances of 90-140 against a presence floor
+ * of 8.0.
  */
 
 const F = 1000 / 30 // one frame at 30fps, ms
 const CELLS = 128
+
+/** The empty stand these sequences arm against. Dark, like the real one: the reference
+ *  rig's empty region measured a mean of 38 and the under-lit rig's 27-30. */
+const EMPTY = 30
 
 /** A still scene at `base` luma with deterministic noise well under tLo. `phase` varies
  *  the noise pattern so two calls with the same base are the same SCENE but not the same
@@ -35,9 +48,18 @@ function still(base: number, phase: number): Float32Array {
   return cells
 }
 
+/** The four frames every sequence starts with: an empty stand, still, at arm time. The
+ *  machine takes its baseline on the second of them and judges that first episode against
+ *  itself, so these four are worth exactly one `suppressed:no-card` — the same single
+ *  verdict an empty stand at arm has always been worth. */
+const ARM_FRAMES = 4
+function armEmpty(): number[] {
+  return Array<number>(ARM_FRAMES).fill(EMPTY)
+}
+
 /** Run a sequence through a fresh machine, returning every non-null event with its frame
- *  index. `frames` are (base, isCard-irrelevant) luma levels; motion is just consecutive
- *  frames whose bases differ by more than the thresholds. */
+ *  index. `frames` are luma levels; motion is just consecutive frames whose bases differ
+ *  by more than the thresholds. */
 function run(
   machine: MotionMachine,
   bases: number[],
@@ -53,102 +75,180 @@ function run(
 
 test('a still empty scene is judged empty exactly once, then stays silent', () => {
   const machine = new MotionMachine()
-  // 100 frames of dark desk. Below cardLumaFloor, but no-card suppression requires a
-  // settle EPISODE to judge — and an empty scene at arm time is judged exactly once.
-  const events = run(machine, Array<number>(100).fill(40))
+  /* 100 frames of dark desk. The verdict is not "this is dark" any more — it is "this is
+     indistinguishable from the baseline I just took", which is the same claim about the
+     same scene reached without a constant. One verdict per settle episode, and nothing
+     opens a new one. */
+  const events = run(machine, Array<number>(100).fill(EMPTY))
   expect(events).toEqual([{ at: 2, event: 'suppressed:no-card' }])
   expect(machine.diag.fires).toBe(0)
+  expect(machine.diag.hasBaseline).toBe(true)
 })
 
-test('a card already at the lens when the trigger is armed is captured once', () => {
+test('a card already at the lens when the trigger is armed BECOMES the baseline', () => {
+  /* THE ONE BEHAVIOUR D81 TOOK AWAY, recorded here so it cannot be lost by accident and
+     re-argued if it is ever wanted back.
+
+     The old machine captured a card that was already at the lens when motion was armed,
+     on the reasoning that arming the trigger is starting the run. It could only do that
+     because the card was BRIGHT and the presence floor happened to sit under it — which is
+     the exact mechanism the four saved traces convict, where an empty stand read 57 and a
+     real card on another rig read 61. Nothing in a single frame distinguishes "the stand as
+     it normally looks" from "the stand with a card on it"; that distinction needs a
+     reference, and at arm time the reference is what is being established.
+
+     So the arm-time scene is now the baseline whatever it is, and a card sitting in it is
+     refused rather than captured. The cost is one photograph at the top of a run, and it is
+     ANNOUNCED — `noCardRun` climbs and the screen renders the sentence. The old cost was
+     twenty cards mid-run and silence. */
   const machine = new MotionMachine()
-  // Frame 0 seeds prev; frames 1-2 are the still run (stillFrames = 2); the verdict lands
-  // on frame 2 and never re-fires while the card sits.
   const events = run(machine, Array<number>(60).fill(170))
-  expect(events).toEqual([{ at: 2, event: 'fire' }])
+  expect(events).toEqual([{ at: 2, event: 'suppressed:no-card' }])
+  expect(machine.diag.fires).toBe(0)
 })
 
 test('swap, settle, fire — and the same card settling again is suppressed', () => {
   const machine = new MotionMachine()
   const events = run(machine, [
-    // card A settles and fires (frame 2)
-    170, 170, 170, 170, 170, 170, 170, 170, 170, 170,
+    ...armEmpty(),
+    // card A arrives, settles and fires
+    170, 170, 170, 170, 170, 170, 170, 170,
     // the feeder bumps the tray: motion, then card A settles AGAIN — same picture,
     // so the novelty gate suppresses instead of double-capturing
     60, 190, 55, 185, 170, 170, 170, 170, 170, 170,
     // card B arrives: motion, then a genuinely different picture — fires
     60, 200, 50, 210, 120, 120, 120, 120, 120, 120,
   ])
-  expect(events.map((e) => e.event)).toEqual(['fire', 'suppressed:unchanged', 'fire'])
+  expect(events.map((e) => e.event)).toEqual([
+    'suppressed:no-card',
+    'fire',
+    'suppressed:unchanged',
+    'fire',
+  ])
   expect(machine.diag.fires).toBe(2)
   expect(machine.diag.suppressedUnchanged).toBe(1)
 })
 
-test('motion that settles on an empty stand is suppressed as no-card', () => {
+test('motion that settles back onto the empty stand is suppressed as no-card', () => {
   const machine = new MotionMachine()
   const events = run(machine, [
-    170, 170, 170, 170, 170, // card fires at frame 2
+    ...armEmpty(),
+    170, 170, 170, 170, 170, // card arrives and fires
     60, 200, 50, 210, // card pulled out: motion...
-    40, 40, 40, 40, 40, // ...and the empty stand settles
+    EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, // ...and the stand settles empty
   ])
-  expect(events.map((e) => e.event)).toEqual(['fire', 'suppressed:no-card'])
+  expect(events.map((e) => e.event)).toEqual(['suppressed:no-card', 'fire', 'suppressed:no-card'])
 })
 
-/** A card that fills only PART of the watch region, against a dark surround. `fraction` of
- *  the cells are card-bright and the rest are desk; the noise is `still`'s so d behaves
- *  exactly as it does everywhere else in this file. */
-function partial(cardLuma: number, deskLuma: number, fraction: number, phase: number): Float32Array {
-  const cells = still(deskLuma, phase)
-  const bright = Math.round(CELLS * fraction)
-  for (let i = 0; i < bright; i += 1) cells[i] = cardLuma + (((i * 31 + phase * 17) % 7) - 3) * 0.2
-  return cells
-}
+test('a dim card on an under-lit rig is a card — no brightness floor could say so', () => {
+  /* THE BUG THIS IS THE RECEIPT FOR, AND IT COST TWO REAL SESSIONS. The presence gate was a
+     brightness compared against the constant 90. Scored over the owner's four saved traces
+     (`scripts/score-trace.py`), the watch region's bright quantile reads:
 
-test('a card filling part of the watch region is a card — the mean says otherwise', () => {
-  /* THE BUG THIS IS THE RECEIPT FOR, AND IT COST A REAL RUN. The presence gate read the MEAN
-     ROI luma, which is a statement about the whole region rather than about whether a card is
-     in it. On the rig it was tuned against the card FILLED the region, so the mean read ~172
-     and a floor of 90 sat comfortably between card and desk. Point a differently-framed camera
-     at the same feeder and the card occupies part of the region against a dark surround: the
-     mean is then dominated by background and collapses under the floor while the card is
-     plainly there.
+         EMPTY STAND, reference rig  2026-08-23             57
+         CARD,        under-lit rig  2026-08-29 21:34    61-134
+         CARD,                       2026-09-01          77-171
+         CARD,        reference rig  2026-08-23         196-244
 
-     Measured on the owner's second rig from two saved traces — the instrument D19 built for
-     exactly this — an empty stand read mean 27-30 / p90 62-69 and a settled card read mean
-     62-86 / p90 125-236. The floor of 90 sat ABOVE BOTH MEANS, so the gate could not fire at
-     any brightness: twenty cards settled correctly in one session and every one was refused as
-     an empty stand. No amount of relighting would have fixed it, because the failure is
-     geometric rather than photographic.
+     An empty stand at 57 and a real card at 61: four luma levels apart, on different days.
+     No constant separates those populations, and the one in the file cut through the middle
+     of three of them — 20 of 20 cards refused on 2026-08-29 21:34, 13 of 15 on 21:38, 5 of
+     24 on 2026-09-01. 38 real cards called an empty stand, silently, by TWO versions of the
+     gate — and 18 of them were still refused by the version that replaced the mean with the
+     bright quantile, which is why this is not a fourth constant.
 
-     THE NUMBERS HERE ARE THAT RIG'S. A third of the region at card brightness against a dark
-     desk gives a mean well under the floor and a bright quantile well over it — which is the
-     whole of the fix, and the reason the constant did not have to move. */
+     THE NUMBERS BELOW ARE THE UNDER-LIT RIG'S. A card at 61 against a desk at 27 is a card
+     the old gate could not fire on at any exposure, and the distance form fires on it
+     without knowing anything about lamps. */
   const machine = new MotionMachine()
-  const events: MotionEvent[] = []
-  const push = (event: MotionEvent | null) => { if (event !== null) events.push(event) }
+  const events = run(machine, [
+    27, 27, 27, 27, // the under-lit empty stand, at arm
+    45, // the swap: motion
+    61, 61, 61, 61, 61, 61, 61, // a dim card, settled
+  ])
 
-  // Dark desk, then a swap, then a card covering a third of the region.
-  for (let i = 0; i < 4; i += 1) push(machine.step(i * F, still(30, i)))
-  push(machine.step(4 * F, still(150, 4))) // the swap: motion above tHi
-  for (let i = 5; i < 12; i += 1) push(machine.step(i * F, partial(200, 30, 1 / 3, i)))
+  /* The premise, asserted so a later reader does not have to trust the prose: this card is
+     DARKER than the empty stand the old floor was tuned against (57), so a brightness gate
+     with any constant that admits it also admits that empty stand. If the fixture ever
+     drifts so the card is brighter than 57, the case below stops testing anything. */
+  expect(61).toBeLessThan(90)
+  expect(events.map((e) => e.event)).toEqual(['suppressed:no-card', 'fire'])
+})
 
-  const frame = partial(200, 30, 1 / 3, 5)
-  const mean = frame.reduce((a, b) => a + b, 0) / frame.length
-  const sorted = Array.from(frame).sort((a, b) => a - b)
-  const p90 = sorted[Math.floor((sorted.length - 1) * 0.9)] as number
+test('a run of no-card verdicts is counted consecutively, and a fire clears it', () => {
+  /* `noCardRun` is the counter the 2026-08-29 sessions needed and did not have: twenty
+     settles refused in a row while a box went through the lens, with nothing on screen but
+     a total climbing beside six other totals. The screen renders three-in-a-row as the
+     sentence it means. A TOTAL cannot say this — only a run can — which is why this is the
+     one counter here that goes back down. */
+  const machine = new MotionMachine()
+  run(machine, [
+    ...armEmpty(),
+    // three swaps that each settle back onto the empty stand: nothing was ever presented
+    60, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY,
+    60, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY,
+  ])
+  expect(machine.diag.noCardRun).toBe(3)
+  expect(machine.diag.suppressedNoCard).toBe(3)
 
-  /* The premise, asserted so a later reader does not have to trust the prose: this frame is
-     one the MEAN rejects and the quantile accepts. If the fixture ever drifts so that both
-     agree, the case below stops testing anything and this fails first. */
-  expect(mean).toBeLessThan(DEFAULT_PARAMS.cardLumaFloor)
-  expect(p90).toBeGreaterThan(DEFAULT_PARAMS.cardLumaFloor)
+  run(machine, [60, 170, 170, 170, 170, 170, 170, 170], 40 * F)
+  expect(machine.diag.fires).toBe(1)
+  expect(machine.diag.noCardRun).toBe(0)
+})
 
-  /* THE WHOLE SEQUENCE, because the order is the claim. The four dark-desk frames at the top
-     ARE an empty stand and are correctly judged so once — that is this file's first case —
-     and what must follow is a FIRE on the partial card rather than a second empty verdict.
-     Asserting the array rather than `toContain('fire')` is what stops the case passing on a
-     machine that fires for some other reason later in the sequence. */
-  expect(events).toEqual(['suppressed:no-card', 'fire'])
+test('rebaseline moves the session baseline to whatever is on the stand now', () => {
+  /* The remedy the HUD's sentence points at. Arm on a card by mistake — the case above —
+     then clear the stand and press it: the machine forgets, re-takes on the next still run,
+     and the next real card fires. Without this the only cure for a bad baseline is
+     disarming and re-arming, which throws away the trace and every counter with it. */
+  const machine = new MotionMachine()
+  const armedOnACard = run(machine, Array<number>(10).fill(170))
+  expect(armedOnACard.map((e) => e.event)).toEqual(['suppressed:no-card'])
+
+  machine.rebaseline()
+  expect(machine.diag.hasBaseline).toBe(false)
+
+  // The stand, now cleared, becomes the baseline; the card that follows is a card.
+  const after = run(machine, [...armEmpty(), 90, 170, 170, 170, 170, 170, 170], 10 * F)
+  expect(after.map((e) => e.event)).toEqual(['suppressed:no-card', 'fire'])
+  expect(machine.diag.fires).toBe(1)
+})
+
+test('the thresholds are multiples of what THIS session measures, not constants', () => {
+  /* THE OTHER HALF OF D81, and the receipt is the repo's own history. The 2026-08-23 retune
+     (tLo 3.0 -> 4.5) was a person at a rig discovering that the live preview's noise floor is
+     eleven times the stored JPEGs' one — after 14 of 86 cards had gone past the lens without
+     ever reaching a verdict, silently. That is a measurement the machine can take in eight
+     seconds, and now does: replayed against that same trace it reaches 86 of 86.
+
+     THE SEED IS GATE C'S OWN PAIR, to the last digit, so nothing about the confirmed 85/85
+     run is being re-litigated — the machine boots on it and adapts away from it. */
+  const machine = new MotionMachine()
+  expect(machine.diag.tLo).toBeCloseTo(4.5, 5)
+  expect(machine.diag.tHi).toBeCloseTo(8.0, 5)
+
+  /* A rig noisier than the one the constants came from: an empty stand whose frame-to-frame
+     difference idles at ~3.5 rather than the reference rig's ~2.2. Under a constant tLo of
+     4.5 that leaves barely a luma level of headroom, which is exactly the condition where a
+     settle is reached late or not at all. The floor must climb off it by itself. */
+  let ms = 0
+  for (let i = 0; i < 150; i += 1) {
+    machine.step(ms, still(i % 2 === 0 ? EMPTY : EMPTY + 3.5, i))
+    ms += F
+  }
+  expect(machine.diag.dTypical).toBeGreaterThan(3)
+  expect(machine.diag.tLo).toBeGreaterThan(6)
+  expect(machine.diag.tHi).toBeGreaterThan(machine.diag.tLo)
+
+  /* ONLY FRAMES ALREADY JUDGED STILL FEED THE ESTIMATE, which is what stops it learning
+     that motion is quiet. Drive a burst well above tHi for longer than the window and the
+     thresholds must not follow it up. */
+  const before = machine.diag.tHi
+  for (let i = 0; i < 60; i += 1) {
+    machine.step(ms, still(i % 2 === 0 ? 40 : 200, 300 + i))
+    ms += F
+  }
+  expect(machine.diag.tHi).toBeLessThanOrEqual(before)
 })
 
 test('continuous motion past maxMoveMs reports stalled exactly once, and never fires', () => {
@@ -188,21 +288,24 @@ test('the refractory defers a fast settle instead of dropping it', () => {
     const event = machine.step(ms, still(base, phase))
     if (event !== null) events.push({ ms, event })
   }
-  // Card A: seed, two stills — fires at ~67ms. Refractory runs to ~317ms.
-  feed(0, 170, 0)
-  feed(F, 170, 1)
-  feed(2 * F, 170, 2)
-  // Card B arrives IMMEDIATELY: motion at 100ms, settled from 133ms. The settle
-  // completes inside the refractory window — the fire must arrive after the window
-  // expires, not never.
-  feed(3 * F, 60, 3)
-  feed(4 * F, 120, 4)
-  feed(5 * F, 120, 5)
-  feed(6 * F, 120, 6) // still run complete at 200ms, refractory holds it
-  feed(7 * F, 120, 7)
+  // The empty stand at arm, which is where the baseline comes from (D81).
+  for (let i = 0; i < ARM_FRAMES; i += 1) feed(i * F, EMPTY, i)
+  // Card A: motion, then two stills — fires. Refractory runs 250ms from there.
+  feed(4 * F, 170, 4)
+  feed(5 * F, 170, 5)
+  feed(6 * F, 170, 6)
+  // Card B arrives IMMEDIATELY. Its settle completes inside the refractory window — the
+  // fire must arrive after the window expires, not never.
+  feed(7 * F, 60, 7)
   feed(8 * F, 120, 8)
   feed(9 * F, 120, 9)
-  feed(10 * F, 120, 10) // 333ms — past the refractory: the held fire lands here
+  feed(10 * F, 120, 10) // still run complete, refractory holds it
+  feed(11 * F, 120, 11)
+  feed(12 * F, 120, 12)
+  feed(13 * F, 120, 13)
+  feed(14 * F, 120, 14)
+  feed(15 * F, 120, 15)
+  feed(16 * F, 120, 16) // past the refractory: the held fire lands here
   const fires = events.filter((e) => e.event === 'fire')
   expect(fires).toHaveLength(2)
   const second = fires[1]
@@ -229,8 +332,12 @@ test('the machine copies what it keeps — a reused, mutated buffer cannot zero 
     const event = machine.step(ms, buffer)
     if (event !== null) events.push(event)
   }
-  feed(0, 170, 0)
-  feed(F, 170, 1)
-  feed(2 * F, 170, 2)
-  expect(events).toEqual(['fire'])
+  let at = 0
+  for (let i = 0; i < ARM_FRAMES; i += 1, at += 1) feed(at * F, EMPTY, at)
+  feed(at * F, 170, at)
+  at += 1
+  feed(at * F, 170, at)
+  at += 1
+  feed(at * F, 170, at)
+  expect(events).toEqual(['suppressed:no-card', 'fire'])
 })
