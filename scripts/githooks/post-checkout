@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# post-merge's sibling for the other way scripts/githooks/ moves under you: switching
+# branches. Same reasoning lives there; this file states only what differs.
+#
+# Git calls this on every checkout, file or branch — $3 is 1 only for a branch move, which
+# is the only case scripts/githooks/ can meaningfully differ across. A file-level checkout
+# (`git checkout -- path`) passes 0 and is silent here, correctly: it cannot touch a
+# tracked file outside the paths named on its own command line.
+#
+# Git passes $1 = previous HEAD, $2 = new HEAD, $3 = 1 for a branch checkout, 0 otherwise.
+set -uo pipefail
+
+old="${1:-}"; new="${2:-}"; branch_move="${3:-0}"
+[ "$branch_move" = "1" ] || exit 0
+[ -n "$old" ] && [ -n "$new" ] && [ "$old" != "$new" ] || exit 0
+
+if git diff --name-only "$old" "$new" -- scripts/githooks 2>/dev/null | grep -q .; then
+  echo "" >&2
+  echo "scripts/githooks/ differs on this branch — the installed copy may now be stale." >&2
+  echo "  Fix: make hooks" >&2
+  echo "" >&2
+fi
+
+exit 0
