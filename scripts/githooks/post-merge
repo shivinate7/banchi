@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Reminds you to re-arm the hooks the moment a merge is the thing that made them stale.
+#
+# WHY THIS EXISTS. `make hooks` installs a COPY of scripts/githooks/* into the git common
+# dir (D42); editing the tracked files — locally, or by pulling someone else's change —
+# does not change what git actually runs until `make hooks` runs again.
+# `scripts/status.py:hooks()` already reports that drift by comparing bytes, but only if
+# you happen to run `make status` afterward. This says so at the moment the drift is
+# created, which is also the moment it is easiest to forget, because nothing else about a
+# merge draws your attention to scripts/githooks/.
+#
+# NON-BLOCKING, ON PURPOSE. This is a report, not a gate (D18): it never fails the merge,
+# it only prints. Git also does not act on this hook's exit status, so there is no gate to
+# accidentally build here even by mistake.
+#
+# Git passes $1 = 1 if the merge was a squash merge; irrelevant to what changed on disk.
+set -uo pipefail
+
+old="$(git rev-parse -q --verify ORIG_HEAD 2>/dev/null || true)"
+new="$(git rev-parse -q --verify HEAD 2>/dev/null || true)"
+[ -n "$old" ] && [ -n "$new" ] && [ "$old" != "$new" ] || exit 0
+
+if git diff --name-only "$old" "$new" -- scripts/githooks 2>/dev/null | grep -q .; then
+  echo "" >&2
+  echo "scripts/githooks/ changed in this merge — the installed copy is now stale." >&2
+  echo "  Fix: make hooks" >&2
+  echo "" >&2
+fi
+
+exit 0

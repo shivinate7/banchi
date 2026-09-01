@@ -20,7 +20,12 @@ tree.** What was retired is the gate as a *control*: the blocking, the sequencin
 ## Commands
 
 ```
-make hooks          # arm the three git hooks. Once per clone — core.hooksPath never travels.
+make hooks          # arm the git hooks (glob-installed from scripts/githooks/, so this line
+                    #   never has to be recounted). Once per clone — core.hooksPath never
+                    #   travels. post-merge/post-checkout print a `make hooks` reminder the
+                    #   moment a pull or branch switch makes the installed copy stale — before
+                    #   this, that was visible only in `make status`, easy to miss right when
+                    #   it happens.
 make worktree-setup # in a fresh git worktree, FIRST. venv + T1's banked cache; neither
                     #   is tracked, so neither travels. Skipping it fails T1/T6/T7 with
                     #   three errors that never mention the worktree. The Browser pane's
