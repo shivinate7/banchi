@@ -139,9 +139,9 @@ const PRESETS: { key: string; label: string; rule: string; basis: string; says: 
 /** The four columns a letter key snaps the price to, in the order they are drawn. */
 const SNAPS: { key: string; field: keyof PricingSku['snap']; label: string }[] = [
   { key: 'm', field: 'market', label: 'MARKET' },
-  { key: 'd', field: 'direct_low', label: 'DIRECT' },
   { key: 'l', field: 'low', label: 'LOW' },
   { key: 's', field: 'low_with_shipping', label: '+SHIP' },
+  { key: 'd', field: 'direct_low', label: 'DIRECT' },
 ]
 
 const SECTIONS: { bucket: PricingSku['bucket']; title: string; note: string }[] = [
@@ -1575,7 +1575,15 @@ export function Pricing() {
             <p className="pricing-section-note">{section.note}</p>
 
             <div className="pricing-caption" aria-hidden="true">
-              <span>Card</span>
+              {/* Two empty cells, for the two 32px controls at the front of every row — the
+                  history and the hold. The caption reads the SAME `--pricing-cols` template
+                  the rows do, so a cell missing here does not merely lose a heading: it
+                  leaves the row with an item the grid has no column for, which wraps into an
+                  implicit row and breaks the height invariant below. */}
+              <span />
+              <span />
+              <span>Qty</span>
+              <span className="pricing-caption-card">Card</span>
               {/* ONE LABEL PER RANGE, HERE AND NOT ON THE ROW — the same argument the snap
                   keys beside it make: the two ranges are the same two on every row, so the
                   name belongs where the eye already is when reading the column. `RANGE_LABEL`
@@ -1586,21 +1594,12 @@ export function Pricing() {
                   <span key={range}>{RANGE_LABEL[range] ?? range}</span>
                 ))}
               </span>
+              <span>Lists at</span>
               {SNAPS.map((column) => (
                 <span key={column.key} className="pricing-caption-ref">
                   {column.label} <kbd>{column.key}</kbd>
                 </span>
               ))}
-              <span>Id</span>
-              <span>Qty</span>
-              <span>Lists at</span>
-              {/* Two empty cells, for the two 32px controls at the end of every row — the
-                  hold and the history. The caption reads the SAME `--pricing-cols` template
-                  the rows do, so a cell missing here does not merely lose a heading: it
-                  leaves the row with an item the grid has no column for, which wraps into an
-                  implicit row and breaks the height invariant below. */}
-              <span />
-              <span />
             </div>
 
             <div className="pricing-list">
@@ -1662,6 +1661,47 @@ export function Pricing() {
                     data-cap={sku.at_cap ? 'full' : 'room'}
                     data-dim={filterHeld && !withheld ? 'true' : undefined}
                   >
+                    {/* THE PIN, NOT THE PANEL. `aria-pressed` is this control's own state,
+                        and a `t` held over the row draws the panel without this button having
+                        been pressed at all — reporting that as pressed would announce a state
+                        to a screen reader that nothing on the page is in. */}
+                    <button
+                      type="button"
+                      className="pricing-history"
+                      aria-pressed={pinned === sku.sku}
+                      aria-label={`Price history for ${sku.name}`}
+                      /* THE CLICK IS THE PIN, AND IT IS THE ONLY WAY TO ONE. Holding `t` is
+                         the glance; this is the panel that stays — which is what a refusal's
+                         `Try again`, a scroll through both ranges, and reading while typing a
+                         price all need, none of which can be done with a key held down. */
+                      onClick={() => (pinned === sku.sku ? unpin() : pinHistory(sku))}
+                    >
+                      T
+                    </button>
+
+                    {/* BESIDE THE HISTORY, BECAUSE IT IS THE FACT THE HOLD WAS MISSING. D49
+                        records that `bullish` and `watch_above` are set against the
+                        operator's memory of what a card used to cost; the reading beside it
+                        replaces the memory, so the two sit together.
+
+                        A BUTTON AND NOT ONLY A KEY. docs/DESIGN.md: "every choice shows its
+                        key" — and the converse, from D51, is that a binding nothing
+                        advertises is one only the person who asked for it will ever press.
+                        The letter IS the label here, the same way `T` is on the history. */}
+                    <button
+                      type="button"
+                      className="pricing-hold"
+                      aria-pressed={withheld}
+                      aria-label={withheld ? `Release ${sku.name}` : `Hold ${sku.name}`}
+                      onClick={() => toggleHold(sku)}
+                    >
+                      H
+                    </button>
+
+                    <span className="pricing-qty">
+                      {sku.add_to_quantity} of {sku.copies}
+                    </span>
+
                     <div className="pricing-id">
                       <span className="pricing-name" title={sku.name}>
                         {sku.name}
@@ -1678,30 +1718,6 @@ export function Pricing() {
                         bound muted beneath it. `undefined` draws an empty cell, which is the
                         honest rendering of a row nobody has asked about. */}
                     <TrendCell read={trends[sku.sku]} />
-
-                    {SNAPS.map((column) => (
-                      <span
-                        key={column.key}
-                        className={`pricing-ref${column.field === 'market' ? ' pricing-ref-market' : ''}`}
-                        title={sku.row[
-                          column.field === 'market'
-                            ? 'TCG Market Price'
-                            : column.field === 'direct_low'
-                              ? 'TCG Direct Low'
-                              : column.field === 'low'
-                                ? 'TCG Low Price'
-                                : 'TCG Low Price With Shipping'
-                        ]}
-                      >
-                        {sku.snap[column.field] === null ? '—' : `$${sku.snap[column.field]}`}
-                      </span>
-                    ))}
-
-                    <span className="pricing-sku">{sku.sku}</span>
-
-                    <span className="pricing-qty">
-                      {sku.add_to_quantity} of {sku.copies}
-                    </span>
 
                     {/* THE HUMAN LABEL HERE, THE MACHINE STRING ON THE ROW'S SECOND LINE —
                         and the split is arithmetic rather than taste. This column is 120px
@@ -1755,42 +1771,23 @@ export function Pricing() {
                       />
                     )}
 
-                    <button
-                      type="button"
-                      className="pricing-hold"
-                      aria-pressed={withheld}
-                      aria-label={withheld ? `Release ${sku.name}` : `Hold ${sku.name}`}
-                      onClick={() => toggleHold(sku)}
-                    >
-                      H
-                    </button>
-
-                    {/* BESIDE THE HOLD, BECAUSE IT IS THE FACT THE HOLD WAS MISSING. D49
-                        records that `bullish` and `watch_above` are set against the
-                        operator's memory of what a card used to cost; this is the reading
-                        that replaces the memory, so it sits against the control it informs.
-
-                        A BUTTON AND NOT ONLY A KEY. docs/DESIGN.md: "every choice shows its
-                        key" — and the converse, from D51, is that a binding nothing
-                        advertises is one only the person who asked for it will ever press.
-                        The letter IS the label here, the same way `H` is on the hold. */}
-                    <button
-                      type="button"
-                      className="pricing-history"
-                      /* THE PIN, NOT THE PANEL. `aria-pressed` is this control's own state,
-                         and a `t` held over the row draws the panel without this button having
-                         been pressed at all — reporting that as pressed would announce a state
-                         to a screen reader that nothing on the page is in. */
-                      aria-pressed={pinned === sku.sku}
-                      aria-label={`Price history for ${sku.name}`}
-                      /* THE CLICK IS THE PIN, AND IT IS THE ONLY WAY TO ONE. Holding `t` is
-                         the glance; this is the panel that stays — which is what a refusal's
-                         `Try again`, a scroll through both ranges, and reading while typing a
-                         price all need, none of which can be done with a key held down. */
-                      onClick={() => (pinned === sku.sku ? unpin() : pinHistory(sku))}
-                    >
-                      T
-                    </button>
+                    {SNAPS.map((column) => (
+                      <span
+                        key={column.key}
+                        className={`pricing-ref${column.field === 'market' ? ' pricing-ref-market' : ''}`}
+                        title={sku.row[
+                          column.field === 'market'
+                            ? 'TCG Market Price'
+                            : column.field === 'direct_low'
+                              ? 'TCG Direct Low'
+                              : column.field === 'low'
+                                ? 'TCG Low Price'
+                                : 'TCG Low Price With Shipping'
+                        ]}
+                      >
+                        {sku.snap[column.field] === null ? '—' : `$${sku.snap[column.field]}`}
+                      </span>
+                    ))}
 
                     {/* WHAT THIS ROW ALONE HOLDS. The run's reason for adding nothing is
                         the group's heading above these rows — `groupOf` carries why — so what

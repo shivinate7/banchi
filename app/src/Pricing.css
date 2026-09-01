@@ -325,17 +325,16 @@
    templates and caught it. */
 .pricing-section {
   --pricing-cols:
+    32px /* history (D62)                  */
+    32px /* hold                           */
+    76px /* quantity                       */
     minmax(0, 1fr) /* the card                       */
     168px /* the trend strip (D79)          */
+    120px /* the price being set            */
     76px /* MARKET   max $4400.00          */
-    76px /* DIRECT   max $1974.74          */
     84px /* LOW      max $49000.00         */
     84px /* +SHIP    max $49000.00         */
-    64px /* TCGplayer Id                   */
-    76px /* quantity                       */
-    120px /* the price being set            */
-    32px /* hold                           */
-    32px; /* history (D62)                  */
+    76px; /* DIRECT   max $1974.74          */
   margin-top: var(--s5);
 }
 
@@ -359,6 +358,19 @@
 
 .pricing-caption > span:not(:first-child) {
   text-align: right;
+}
+
+/* THE ONE HEADER THAT IS NOT A NUMBER. Every other caption right-aligns to match the
+   right-aligned, decimal-aligned data beneath it (D41) — Qty, the price field and the four
+   export references all read that way. The card's NAME is the one column whose data is set
+   flush LEFT (`.pricing-name`), and it used to be column 1, which `:not(:first-child)` above
+   exempted for free. Moving the T, H and Qty controls ahead of it in the reorder cost it that
+   exemption — the header still right-aligned, floating at the FAR edge of a 500px column
+   while every card name it labels sits flush against the left edge of the same column, which
+   is the mismatch the owner reported as "alignment is off". Named rather than positional, so
+   a future column move cannot silently reopen it the same way. */
+.pricing-caption > span.pricing-caption-card {
+  text-align: left;
 }
 
 /* THE SNAP KEYS LIVE HERE, ONCE PER COLUMN, AND NOT ONCE PER ROW. docs/DESIGN.md's
@@ -458,8 +470,19 @@
   opacity: 0.4;
 }
 
+/* EXPLICIT COLUMN, NOT JUST AN EXPLICIT ROW, AND GETTING THAT WRONG IS INVISIBLE UNTIL YOU
+   MEASURE IT. Grid auto-placement runs in PASSES: an item pinned to a row but auto on its
+   column is placed in an earlier pass than an item auto on BOTH axes, so `.pricing-id` and
+   `.pricetrend` — the only two rows-spanning cells (D79 gave the trend strip the same
+   `grid-row: 1 / 3` for the same reason) — always claimed columns 1 and 2 first, regardless
+   of where they sat in the markup relative to T, H and Qty. Moving those three ahead of the
+   card in the DOM (this reorder) changed nothing about that: the card and the trend strip
+   kept jumping the queue back to the front, and every fully-auto cell — including the
+   buttons that were supposed to be leftmost — landed wherever was left over. Pinning the
+   column here is what makes source order and drawn order agree again. */
 .pricing-id {
   grid-row: 1 / 3;
+  grid-column: 4;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -501,7 +524,6 @@
    and no guessed breakpoint anywhere. `letter-spacing: 0` because Martian Mono is
    fixed-advance and tracking a figure destroys the property it was chosen for (D41). */
 .pricing-ref,
-.pricing-sku,
 .pricing-qty {
   font-family: var(--util);
   font-size: 13px;
@@ -514,7 +536,6 @@
   white-space: nowrap;
 }
 
-.pricing-sku,
 .pricing-qty {
   font-size: 11px;
 }
@@ -603,6 +624,14 @@
   border: 1px solid var(--line);
   border-radius: var(--r);
   cursor: pointer;
+  /* ABOVE THE FIXED CORNER PANELS, DELIBERATELY. These two buttons are the leftmost thing on
+     the row and `.pricehistory`/`.pricing-photo` are fixed to that same bottom-left corner
+     (see `PriceHistory.css`) — so a panel open on ANY row would otherwise sit on top of every
+     other row's T and H the moment that row scrolls under it, and the control that opens and
+     closes a panel would be the one thing it makes unreachable. `position: relative` is what
+     makes the raised `z-index` take effect at all; nothing else on the row needs either. */
+  position: relative;
+  z-index: 21;
 }
 
 /* The only control on this screen that did not answer the pointer. `.pricing-plain`,
@@ -641,16 +670,17 @@
    next field, which is the reflow D28 forbids.
 
    THE COLUMN NUMBER IS COUNTED OFF `--pricing-cols` AND IS THE ONE THING HERE THAT BREAKS
-   WHEN A COLUMN IS ADDED. It read `2` — the card, then everything after it — until D79 put
-   the trend strip in at 2 and moved the reference block to 3. The symptom is worth writing
-   down because it does not look like this line: the note takes column 2 row 2, so
-   `.pricetrend`, which spans BOTH rows, can no longer fit there and is pushed into an
-   IMPLICIT twelfth column off the right edge — and every figure on the row slides one column
+   WHEN A COLUMN IS ADDED OR REORDERED. The note excludes the history and hold buttons, the
+   quantity, the card and the trend strip — none of them carry a note or a held token — and
+   spans everything after: the price field and the four export references. The symptom is
+   worth writing down because it does not look like this line: get the start column wrong and
+   `.pricetrend`, which spans BOTH rows, can no longer fit where it is placed and is pushed
+   into an IMPLICIT column off the right edge — and every figure on the row slides one column
    left, on the rows carrying a note and not on the rows without. The caption stays put, so it
    reads as the reference block having come unaligned from its own headings. A future column
    moves this number again. */
 .pricing-row-note {
-  grid-column: 3 / -1;
+  grid-column: 6 / -1;
   grid-row: 2;
   display: flex;
   justify-content: flex-end;
