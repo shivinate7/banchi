@@ -778,13 +778,18 @@ COMPONENTS = [
     {
         "path": "harness/traces/",
         "status": "built",
-        "does": "five armed motion sessions saved from the capture screen's HUD between "
-                "2026-08-23 and 2026-09-01, across four rig states. Each carries every "
-                "frame's (t, d, luma) and the exact watch-region pixels of every verdict, "
-                "which is what makes a refusal re-scorable a year later. T9's input, and the "
-                "only real-rig evidence in this repo for the motion trigger. Ground truth in "
-                "`fixtures/`'s sense: never modified.",
-        "governed_by": ["D19", "D81"],
+        "does": "eight armed motion sessions saved from the capture screen's HUD between "
+                "2026-08-23 and 2026-09-01 — FIVE recorded under the brightness floor D81 "
+                "replaced, and THREE recorded 2026-09-01 under the distance gate that "
+                "replaced it, which are the sessions D84 was derived from. Each carries every "
+                "frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of "
+                "every verdict, which is what makes a refusal re-scorable a year later. T9's "
+                "input, and the only real-rig evidence in this repo for the motion trigger. "
+                "Ground truth in `fixtures/`'s sense: never modified. THE TWO CORPORA ARE "
+                "NAMED IN T9 AND NEVER SUMMED: `38 real cards were refused live` is a receipt "
+                "for what the brightness floor cost, and adding the later three sessions "
+                "would turn a fixed number into one that grows whenever a trace is banked.",
+        "governed_by": ["D19", "D81", "D84"],
         "tested_by": ["T9"],
         "note": "NO CARD IS IDENTIFIABLE AND NO CODE CARD IS PRESENT. A stored frame is 1,064 "
                 "luma cells at 38x28 — the watch region, quantised — which cannot carry a "
@@ -1079,7 +1084,7 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
-                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D76", "D3", "D8", "D64", "D65", "D80"],
+                "governed_by": ["D2", "D6", "D7", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D67", "D69", "D70", "D72", "D76", "D3", "D8", "D64", "D65", "D80", "D81", "D84"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1250,8 +1255,12 @@ COMPONENTS = [
                         "machine did live and what today's adaptive form would do; `presence` "
                         "re-runs the card-present gate over each verdict's own pixels; `sweep` "
                         "scores the stillness thresholds across a grid over every trace at "
-                        "once; `contact` writes the verdict frames out as a labelled PNG.",
-                "governed_by": ["D18", "D19", "D81"],
+                        "once; `contact` writes the verdict frames out as a labelled PNG. "
+                        "ITS CONSTANTS MIRROR motion.ts's DEFAULT_PARAMS and are reconciled "
+                        "against them by scripts/docs-audit.py's `motion params` row, which "
+                        "D84 built after finding the row had been CLAIMED in this file's own "
+                        "header since D81 and never written.",
+                "governed_by": ["D18", "D19", "D81", "D84"],
                 "note": "WRITTEN BECAUSE THE SAME PASS HAD BEEN DONE BY HAND THREE TIMES AND "
                         "THE SECOND ONE GOT IT WRONG, 2026-08-31. The 2026-08-29 presence fix "
                         "derived its 'empty stand' brightness from twenty frames that were "
@@ -1976,8 +1985,20 @@ COMPONENTS = [
                                       "difference. The seed reproduces the hand-tuned 4.50/8.00 "
                                       "exactly, so the 85/85 run is not re-litigated. "
                                       "tNovel, refractoryMs and maxMoveMs stay absolute, each "
-                                      "for a stated reason.",
-                              "governed_by": ["D13", "D19", "D81"]},
+                                      "for a stated reason. "
+                                      "D84 (2026-09-01) MOVED THREE THINGS AND ONE OF THEM "
+                                      "BACK TOWARDS A CONSTANT: a settle is stillFrames of the "
+                                      "last stillWindow rather than a consecutive run, because "
+                                      "a two-frame alternation defeats a run absolutely and "
+                                      "cost four cards; the stall clock is cleared by a "
+                                      "COMPLETED settle rather than by any quiet frame, which "
+                                      "is why `stalled` never fired across those four; and "
+                                      "presenceMin is 16.0, sized to a HAND arriving with the "
+                                      "first card (worst approach 11.15, quietest card 32.5) "
+                                      "rather than to lamp drift. That floor now BINDS over "
+                                      "presenceK x dTypical on this rig, which D84 records as "
+                                      "a debt rather than a design.",
+                              "governed_by": ["D13", "D19", "D81", "D84"]},
 
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen, rebuilt 2026-08-23 to the owner-approved Pass D: "
@@ -2777,8 +2798,12 @@ COMPONENTS = [
                         "fires where no brightness constant could admit it, a run of no-card "
                         "verdicts is counted consecutively, `rebaseline` moves the reference, "
                         "and the thresholds climb off a noisy session's own floor without "
-                        "following a burst up. Run by `make design-check`.",
-                "governed_by": ["D19", "D81"],
+                        "following a burst up. Run by `make design-check`. Since D84 it also "
+                        "pins the two defects that entry is about: a card whose every other "
+                        "frame lands in the Schmitt band still settles and fires, and a scene "
+                        "that never completes a settle is STALLED however quiet its odd "
+                        "frame. Both fail on the code that preceded D84.",
+                "governed_by": ["D19", "D81", "D84"],
                 "note": "NOT a harness test, same as its siblings. Pure arithmetic — no page, "
                         "no server: the machine takes (nowMs, cells) and that is the whole "
                         "reason it is a class apart from the DOM wrapper.",
@@ -2793,7 +2818,7 @@ COMPONENTS = [
                         "spec also pins that the seeded thresholds are Gate C's hand-tuned "
                         "4.50/8.00 to two places, and that the saved trace is version 2. Run "
                         "by `make design-check`.",
-                "governed_by": ["D5", "D13", "D19", "D81"],
+                "governed_by": ["D5", "D13", "D19", "D81", "D84"],
                 "note": "No box is ever selected in this spec, deliberately: with one, the "
                         "fire would POST /capture into a real store. The dropped counter IS "
                         "the assertion.",
