@@ -86,12 +86,22 @@ import './BoxOps.css'
  * place in this app that gates: see its own header for why typing the box number beats an "are
  * you sure".
  *
- * The fifth control is `ClaimEditor` — retroactive capture claims over a whole box or over a
+ * That fifth control is `ClaimEditor` — retroactive capture claims over a whole box or over a
  * selection of it, `PUT /inventory/<box>`. It is not one of D20's four because it is not about
  * the box at all: it is about the cards in it, reached through the box because that is the unit
  * the route takes. It sits here because the SCOPE is a box, and because the same editor is what
  * `BoxBrowse.tsx` draws to correct one card — one form, two scopes, one enumeration of the
  * store's `CAPTURE_CLAIM_FIELDS` on this side.
+ *
+ * AND A SIXTH ARRIVED THE SAME WAY, WHICH IS WHY NO PARAGRAPH IN THIS FILE COUNTS THEM ANY
+ * MORE. D83's `Move to box` is the other control here that acts on cards rather than on the
+ * box, and it landed on 2026-09-01 touching no file under `app/tests/` — which broke
+ * `app/tests/inventory.spec.ts`'s `toHaveCount(4)` on main, since `make design-check` is
+ * deliberately not on the commit path (docs/GATES.md step 7). The count is gone from the prose
+ * here and from `BoxOps.css`, and the spec pins the ROSTER by label instead: a control added or
+ * renamed now fails a test that names it. Both cards controls are conditional — `Set claims` on
+ * `record.cards`, `Move to box` on `record.on_hand` — so there was never a fixed number for a
+ * sentence to carry.
  *
  * BOTH EXISTED AS ROUTES WITH NO CONTROL, WHICH IS THE FAILURE `CLAUDE.md` NOW HAS A HARD RULE
  * ABOUT: a route is not a feature, and nothing is built until it is reachable from a screen.
@@ -428,12 +438,12 @@ function reached(record: BoxRecord, from: number): { sections: number[]; cards: 
  * a component that is gone — see the delete's placement argument, which used to lean on
  * "nothing below it inside `BoxOps`" and on this control being what sat under it. */
 
-/* One box: what it holds, how it is divided, and the four things that can be done to it.
+/* One box: what it holds, how it is divided, and the things that can be done to it.
  *
  * DRAWN ONTO THE HEADER OF THAT BOX'S OWN WALK (D31). What is always visible is the reading —
  * number, name, lid, the fill or the frozen capacity, and the track — because those are what a
  * person glancing at the top of a list of cards wants to know. The layout table, the store's
- * own field names and all four controls sit inside one disclosure beneath it.
+ * own field names and every control sit inside one disclosure beneath it.
  *
  * THE DISCLOSURE IS A DENSITY DECISION AND IT HAS A MEASUREMENT BEHIND IT. On `#/boxes` this
  * panel drew every box at once, 304-355px each, so four boxes made 1744px of scroll — 1.9
@@ -1928,8 +1938,14 @@ function DeleteBox({
          palette allows, and it was being spent where attention already was.
 
          A BAR, AND IT IS THE ONLY BORDERED THING IN THE BOX'S OPERATIONS (2026-08-26). The
-         four settings above are borderless rows now, so an ink-outlined full-measure control
-         under them is a bigger step than it was when it sat as one bordered chip among six.
+         settings above are borderless rows now, so an ink-outlined full-measure control under
+         them is a bigger step than it was when it sat as one bordered chip among six. THE
+         COUNT CAME OFF THIS SENTENCE ON 2026-09-01 — it read "the four settings" while five
+         were drawn, and there is no fixed number to correct it to: `Set claims` and `Move to
+         box` are each conditional on what the box holds, so an empty box draws three rows and
+         a box with nothing on hand draws four. What the argument needs is that none of them is
+         bordered, which is what `.boxops-op` guarantees and what
+         `app/tests/inventory.spec.ts` sweeps.
          Full measure rather than shrink-to-fit for the reason the detail supplies: `no undo`
          is right-aligned against the far edge, so the bar is a line of information rather than
          a 121px label with 220px of white beside it — which is the look `.browse-list` refuses
