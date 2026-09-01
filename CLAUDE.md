@@ -542,6 +542,7 @@ D79  The reading goes on every row, because the operator answered D62's own meas
 D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 D81  The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
 D82  Ruff is adopted on the slice this session measured, not on what it enables by default
+D83  A card leaves a box through a third door: moved, not sold or retired
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

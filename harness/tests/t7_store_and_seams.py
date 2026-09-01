@@ -4145,10 +4145,13 @@ def check_retire(checks: Checks) -> None:
     )
     checks.equal(
         master.TERMINAL_STATES,
-        (master.SOLD, master.RETIRED),
-        "and the two doors out are exactly the two terminal states — `copies_on_hand` "
-        "filters on this tuple, so a third door added without joining it would be "
-        "counted as still in the box",
+        (master.SOLD, master.RETIRED, master.MOVED),
+        "and the three doors out are exactly the three terminal states — `copies_on_hand` "
+        "filters on this tuple, so a fourth door added without joining it would be "
+        "counted as still in the box. `moved` (D83) joined it deliberately: a moved "
+        "card is gone from THIS position exactly as a sold or retired one is, even "
+        "though — unlike its two siblings — the card itself is still on hand, just "
+        "under a different key",
     )
     checks.ok(
         capture_server._RETIRE_RE.match("/inventory/3/17/retire") is not None
@@ -13658,8 +13661,11 @@ def check_order_ledger(checks: Checks) -> None:
         # that logged an order state would make a sale's reversal restore a card to it.
         checks.equal(
             sorted(master.STATES),
-            sorted([master.CAPTURED, master.IDENTIFIED, master.SOLD, master.RETIRED]),
-            "the state tuple is still the four — the ledger adds none",
+            sorted([
+                master.CAPTURED, master.IDENTIFIED, master.SOLD, master.RETIRED, master.MOVED,
+            ]),
+            "the state tuple is still the five (D83 added `moved`, deliberately, at "
+            "the store layer) — the ledger adds none",
         )
         capture_server.do_mark_sold(3, 2, {})
         sold_at = store.read()
