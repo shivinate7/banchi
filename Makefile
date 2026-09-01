@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map harness check ignore-check docs-audit vale audit-self-test githooks-selftest port-agreement set-hint-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -41,6 +41,8 @@ help:
 	@echo
 	@echo "  make status       where you are: next step, T1 score, branch. Derived."
 	@echo "  make map          docs/map.py, rendered. ARGS=<package|path|D<n>|--stale>"
+	@echo "  make explain      what \`make check\` runs, and what each row is worth."
+	@echo "                    ARGS=<target> for one entry in full."
 	@echo "  make venv         .venv + requirements.txt   (before the first harness run, and"
 	@echo "                    again whenever requirements.txt changes — safe to re-run)"
 	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
@@ -52,12 +54,16 @@ help:
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
+	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
-	@echo "  make check        harness + docs-audit + the self-tests + lint + typecheck"
+	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
+	@echo "                    merge-selftest + port-agreement + set-hint-agreement +"
+	@echo "                    screen-freshness +"
+	@echo "                    ignore-check + lint + vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -65,6 +71,8 @@ help:
 	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
 	@echo "  make up           BOTH servers, detached, and the capture server reloads itself"
 	@echo "                    when you edit Python. Prints the link. Start here."
+	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
+	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
 	@echo "  make down         stop them.  make restart  stop and start."
 	@echo "  make launch-agent start at login, so the link is always live. Main tree only."
 	@echo "                    ARGS=--remove to undo it."
@@ -272,6 +280,25 @@ status:
 map:
 	@python3 scripts/map-view.py $(ARGS)
 
+# THE COMPOSITION OF `check` BELOW, AS DATA WITH A READER. The recipe is eleven lines of
+# `$(MAKE)`, and everything a session needs to know about them — which are on the commit path,
+# which write, which need node, which can never fail — was argued in ~120 lines of comment
+# spread through this file and readable only by opening it. `make help`'s one-line summary was
+# the compressed version and it WAS WRONG: it said `harness + docs-audit + the self-tests +
+# lint + typecheck` while five more targets ran, and had said so since those five landed.
+#
+# scripts/checks.py is a PARALLEL DECLARATION and deliberately does not drive the recipe.
+# A registry that drove the suite could silently stop running a check; this one can only lie,
+# and `make docs-audit` has three rows that catch it lying — `check registry` against the
+# recipe, `check census` against the published prose, and `commit path writes`, which asserts
+# D18 mechanically by refusing any writing check on the commit path.
+#
+# python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
+# tool. Same rule as `status`, `map` and `docs-audit`.
+explain:
+	@python3 scripts/checks.py $(ARGS)
+
+
 harness:
 	$(VENV_GUARD)
 	@$(PYTHON) harness/run.py
@@ -309,6 +336,7 @@ check:
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
+	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -334,6 +362,28 @@ audit-self-test:
 # refusing its own commits.
 githooks-selftest:
 	@bash scripts/githooks-selftest.sh
+
+# THE HALF NOBODY CAN REMEMBER, DONE BY A MACHINE. D42 settles that a session performs both
+# halves of a merge on the owner's word — `gh pr merge`, then the local fast-forward — and the
+# local half has TWO correct forms chosen by whether any worktree holds main. Pick wrong and it
+# does not error: `git -C <main tree> pull --ff-only` fast-forwards whatever branch that tree is
+# standing on, moves no protected ref, and trips no hook.
+#
+# THIS DOES NOT REOPEN D42'S "no make target that picks for you". That rejection is about
+# WHETHER TO MERGE, which stays the owner's: a bare `make merge` refuses, `ARGS=<n>` is a free
+# preview that presses nothing, and only `ARGS="<n> --confirm"` acts. What is automated is the
+# state lookup. See D42's amendment.
+#
+# It never sets PKMNSCAN_MAIN and no refusal it prints suggests it — a session typing that
+# variable is doing something else (D42).
+merge:
+	@$(PYTHON) scripts/merge-pr.py $(ARGS)
+
+# HERE AND NOT IN THE GIT HOOK, for githooks-selftest's two reasons exactly: D18, because it
+# writes a bare repo, a clone and a linked worktree; and because it drives the thing that moves
+# main, so a version on the commit path would be exercising that against the real one.
+merge-selftest:
+	@bash scripts/merge-selftest.sh
 
 # HERE BECAUSE TWO LANGUAGES HOLD ONE ALGORITHM AND NEITHER CAN IMPORT THE OTHER (D43).
 # Python serves the capture port, TypeScript addresses it, and a disagreement is silent and
