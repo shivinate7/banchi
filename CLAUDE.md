@@ -33,9 +33,14 @@ make map            # docs/map.py RENDERED — the file is 2,700 lines and had n
                     #   sat wrong for three weeks. ARGS=<package|path|D<n>|--stale>;
                     #   `--stale` ranks entries whose FILE has moved since the prose about
                     #   it did, which is the one drift no audit row can decide.
-make harness        # all EIGHT verification tests; the Stop hook runs it at turn end. It said
+make harness        # all NINE verification tests; the Stop hook runs it at turn end. It said
                     #   seven until 2026-08-31 — `t8_codes.py` landed with the code-card track
                     #   and nothing counts these either (see the route-count warning below).
+                    #   T9 landed the same day: the first test here whose inputs are
+                    #   RECORDINGS OF THE RIG (`harness/traces/`) rather than frames a test
+                    #   drew for itself. It exists because both Playwright specs over the
+                    #   motion trigger stayed green while 38 real cards were refused as an
+                    #   empty stand (D81). RECOUNT from `harness/run.py`'s TESTS list.
 make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
                     #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/ codes/.
                     #   The SUPERVISOR reloads itself too, by re-exec, when one of the four
@@ -500,6 +505,7 @@ D77  The pipeline's rows can be the wrong card, so the export is reachable from 
 D78  A run's reason for adding nothing is a heading, the rows under it sink, and a hold sinks on the reopening
 D79  The reading goes on every row, because the operator answered D62's own measurement
 D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
+D81  The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
@@ -546,12 +552,28 @@ D80  A section with no reader is deleted or given one, the build order stops pre
   view against a real order, and the review screen's price-banded hierarchy against a
   mixed-value lot — that run's queue was uniformly sub-threshold, $0.04 to $0.40.
 - `docs/specs/motion-trigger.md` — Gate C's auto-capture: built and self-tested 2026-08-22,
-  and **Tuned at the rig on 2026-08-23** off the first 86-cycle feeder trace (`tLo` 3.0 → 4.5,
-  `tHi` 6.0 → 8.0, which recovered 14 silently-missed cards), then confirmed live at 85/85 on
-  box 95. Its §4 is the rig-tuning protocol; D19 is the decision. Read its STATUS before
-  treating a green `make design-check` as evidence about the feeder — the TRIGGER half of
-  Gate C is confirmed and the PIPELINE half is not: box 95's 85 records are all still
-  `captured`, and no run directory exists for that box.
+  tuned at the rig 2026-08-23, confirmed live at 85/85 on box 95, and **rebuilt on
+  measurements 2026-08-31 (D81)**. Its §4 is the rig protocol; D19 and D81 are the decisions.
+  Read its STATUS before treating a green `make design-check` as evidence about the feeder —
+  the TRIGGER half of Gate C is confirmed and the PIPELINE half is not: box 95's 85 records
+  are all still `captured`, and no run directory exists for that box.
+
+  **EVERY THRESHOLD IS A MULTIPLE OF SOMETHING THE SESSION MEASURED, and the constants that
+  preceded them were portable to exactly one rig.** The card-present gate was a brightness
+  against the constant 90; across four saved traces an empty stand reads 57 and a real card
+  on another rig reads 61, so no constant separates them, and that one **refused 38 real
+  cards as an empty stand, silently** across three sessions — 18 of them still refused after
+  the 2026-08-29 "fix", which changed which brightness statistic the constant was compared
+  against and rescued one session of three. Presence is the distance from the watch region as it
+  stood when the trigger was armed — empty stand 1.1–1.4, cards 17–167 — and `tLo`/`tHi` ride
+  the session's own median still-frame difference. The seed reproduces the hand-tuned
+  4.50/8.00 exactly, so the 85/85 run is not re-litigated.
+
+  **`scripts/score-trace.py` is how a trace is scored, and it is not optional reading before
+  changing a number here.** `summary`, `presence`, `sweep` and `contact` — the last one draws
+  every verdict's frame, because the 2026-08-29 fix derived its "empty stand" brightnesses
+  from twenty photographs of real cards nobody had looked at. **Arm on an empty stand**: what
+  is in the watch region at arm time is what the session will call nothing.
 - docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

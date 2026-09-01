@@ -9,9 +9,12 @@
  *
  * WHAT IS RECORDED, AND WHY EXACTLY THIS:
  *
- *   frames     [t, d, luma] for every frame the machine saw. The full timing signal —
- *              period, jitter, t_move/t_still all fall out of it — at ~20 bytes a frame
- *              instead of the ~2 KB the grid itself would cost.
+ *   frames     [t, d, dBase, luma] for every frame the machine saw. The full timing
+ *              signal — period, jitter, t_move/t_still all fall out of it — at ~26 bytes a
+ *              frame instead of the ~2 KB the grid itself would cost. `dBase` joined it on
+ *              2026-08-31 (D81) because it is now the number the presence gate decides on,
+ *              and a trace that cannot show why a card was refused cannot re-score that
+ *              refusal. `luma` stays as evidence about the LIGHTING and gates nothing.
  *   events     every fire/suppression/stall, WITH the quantised watch-region pixels of
  *              the frame that triggered it. The novelty and luma gates decided on those
  *              exact pixels, so an offline re-run of the gates against different
@@ -59,7 +62,7 @@ type TraceKeyframe = { t: number; frame: string }
 
 export class MotionTrace {
   private readonly params: MotionParams
-  private frames: Array<[number, number, number]> = []
+  private frames: Array<[number, number, number, number]> = []
   private events: TraceEvent[] = []
   private keyframes: TraceKeyframe[] = []
   private firstAt: number | null = null
@@ -80,6 +83,7 @@ export class MotionTrace {
   record(
     tMs: number,
     d: number,
+    dBase: number,
     luma: number,
     event: MotionEvent | null,
     cells: Float32Array,
@@ -91,7 +95,12 @@ export class MotionTrace {
     }
     if (this.firstAt === null) this.firstAt = tMs
     const t = Math.round((tMs - this.firstAt) * 10) / 10
-    this.frames.push([t, Math.round(d * 100) / 100, Math.round(luma * 10) / 10])
+    this.frames.push([
+      t,
+      Math.round(d * 100) / 100,
+      Math.round(dBase * 100) / 100,
+      Math.round(luma * 10) / 10,
+    ])
     if (event !== null) {
       this.events.push({ t, event, frame: toBase64(quantise(cells)) })
     } else if (t - this.lastKeyframeAt >= 1000) {
@@ -104,7 +113,11 @@ export class MotionTrace {
    *  the evidence, so a trace can never be scored against the wrong parameters. */
   toJSON(): string {
     return JSON.stringify({
-      version: 1,
+      /* 2 SINCE 2026-08-31 (D81), AND THE BUMP IS LOAD-BEARING: a v1 row is
+         [t, d, luma] and a v2 row is [t, d, dBase, luma], so a scorer that read the third
+         column as brightness would read a v2 trace as a rig with no light in it.
+         `scripts/score-trace.py` branches on this field. */
+      version: 2,
       kind: 'pkmnscan-motion-trace',
       recorded_at: new Date().toISOString(),
       params: this.params,

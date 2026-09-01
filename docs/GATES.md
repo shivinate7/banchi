@@ -36,6 +36,14 @@ this contract, argued on the grounds that `store/`, `server/` and `cli/` held ab
 product code with nothing checking any of it, and that build-order step 7 was about to add
 writers to all three.
 
+T9 widened it a second time, 2026-08-31, and the argument is the same shape. **Every test
+above this line supplies its own inputs** — fixtures it wrote, symbols its own encoder drew,
+composites it rendered — which is what makes their answer keys exact and is also a ceiling
+on what they can catch. T9 is the first one whose inputs are **recordings of the physical
+rig**, and it exists because the two Playwright specs over the motion trigger were green
+through all three versions of a card-present gate, including the two that were silently
+dropping cards. They could not have failed: both draw their own frames. See D81.
+
 Every threshold below is a number, not an adjective. `ID_ACCURACY_FLOOR=0.95` is a spec;
 "about 95%" is an opinion an agent can talk itself past.
 
@@ -713,6 +721,46 @@ chosen on a benchmark of 1600 px frames, and the choice **reversed completely** 
 re-run at the rig's real resolution — opencv fell from a plausible 96% to 72.7%, including 0
 of 8 on a card filling a quarter of the frame. A test at the wrong resolution would have
 locked that mistake in.
+
+### T9 — Motion trigger against five recorded rig sessions
+
+New 2026-08-31 with D81. **Pass: on every saved trace an empty stand sits within 2 of its own
+baseline and every card sits 17 or more away; the dimmest card on one rig is dimmer than the
+empty stand on another, so no brightness constant separates them; and the adaptive thresholds
+reach at least as many verdicts as the hand-tuned constants did live on all five.**
+
+**The inputs are `harness/traces/` — five armed sessions across four rig states**, saved from
+the capture screen's HUD by the owner between 2026-08-23 and 2026-09-01. Each carries every
+frame's `(t, d, luma)` and the exact watch-region pixels of every verdict, which is what makes
+a refusal re-scorable a year later. They are ground truth in `fixtures/`'s sense and are never
+modified.
+
+**Why it exists.** The card-present gate was rebuilt three times. Through the first two, both
+Playwright specs over the motion machine stayed green — they draw their own frames, so they
+can only prove the machine agrees with the test's idea of a card. Meanwhile the constant in
+the tree refused **38 real cards as an empty stand across three live sessions**, silently. T9
+is the first test in this repo that could have failed.
+
+**Two kinds of assertion, and they are not equally valuable.** The *separation* — empty stand
+within 2 of its baseline, cards 17 or more away — is a claim about photographs, and if it
+fails something physical changed. The *counts* are a claim about the replay's arithmetic: a
+tripwire for a constant moved without re-scoring, legitimately updatable as a decision with
+the sweep re-run, never as a reflex.
+
+**The answer key is written down, not inferred**, and that is the point rather than a
+convenience. The 2026-08-29 fix derived its "empty stand" brightness table from twenty frames
+that were photographs of real cards, because a refusal was read as evidence about what was on
+the stand. Every verdict frame was rendered and inspected before the labels in
+`t9_traces.py` were written; `scripts/score-trace.py contact` is how.
+
+**WHAT A GREEN T9 DOES NOT MEAN.** It does not mean the trigger works at the rig today —
+these are five recordings of four rig states, and a sixth can differ from all of them. Same
+limit T6 and T8 carry. What it means is that the machine still tells a card from an empty
+stand on every session anybody has recorded.
+
+**No card is identifiable and no code card is present.** A stored frame is 1,064 luma cells
+at 38x28 — the watch region, quantised — which cannot carry a readable QR, and every session
+here is the singles feeder. T8's rule stands untouched.
 
 ## Gates
 
