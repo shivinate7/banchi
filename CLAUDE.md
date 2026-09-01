@@ -59,9 +59,18 @@ make server         # Python capture server. :8000 in the main tree, its own por
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
-make check          # harness + docs-audit + both self-tests + port-agreement +
-                    #   set-hint-agreement + screen-freshness + ignore-check + lint +
-                    #   vale + typecheck. The line above said five of them for months.
+make check          # harness + docs-audit + audit-self-test + githooks-selftest +
+                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   ignore-check + lint + vale + typecheck. THIS LIST IS CHECKED NOW —
+                    #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
+                    #   against the recipe, and it earned the row: help said five of these
+                    #   for months while this line said eleven, and nothing compared them.
+                    #   `make explain` is the same list with what each row is worth.
+make explain        # what `make check` runs: gates, commit path, writes, toolchain.
+                    #   ARGS=<target> for one entry in full. A parallel declaration in
+                    #   `scripts/checks.py`, deliberately NOT the driver — a registry that
+                    #   drove the suite could silently stop running a check; this one can
+                    #   only lie, and three audit rows catch it lying.
 make screen-freshness # every server write in app/src has a way back: a re-read, an
                     #   invalidation signal, or a reason in the code why none is owed.
                     #   Needs node, so it is in `check` and never in the git hook.

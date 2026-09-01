@@ -1235,6 +1235,41 @@ COMPONENTS = [
                         "outlive a refactor is not a defect, so this ranks suspicion and "
                         "never fails.",
             },
+            "checks.py": {
+                "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
+                        "own renderer, one entry per target in the recipe: what it asserts, "
+                        "what toolchain it needs, whether it writes, whether it is on the "
+                        "commit path and why not, whether a finding gates. Stdlib only, and "
+                        "the audit reads it with ast.literal_eval rather than importing it, "
+                        "for the reason every other declarative literal here is read that way.",
+                # THE LONG TAIL IS NOT DECORATION. Every decision a CHECKS entry cites is one
+                # this file's content depends on: D43 is why port-agreement exists at all, D65
+                # and D76 the same for set-hint-agreement, D47 for ignore-check, D60 and D74
+                # for vale. Change one and the entry describing that check goes stale with it,
+                # which is exactly what `governed_by` is for — so they are listed rather than
+                # allowlisted away.
+                "governed_by": ["D16", "D17", "D18", "D43", "D47", "D60", "D65", "D74",
+                                "D76", "D80"],
+                "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
+                        "the whole shape. A registry that drove `make check` could not "
+                        "disagree with the recipe — and could silently stop running a check, "
+                        "the failure this repo has paid for more than any other. One that "
+                        "merely describes it can only lie, and a lie is catchable: `check "
+                        "registry` reconciles it against the recipe both ways and in order, "
+                        "`check census` reconciles the published prose in the Makefile and "
+                        "CLAUDE.md against it, and `commit path` asserts D18 MECHANICALLY for "
+                        "the first time — nothing that writes may be on the path that decides "
+                        "whether a commit proceeds, a rule cited in five Makefile comments and "
+                        "two decisions and enforced until now by nobody. IT HAD A LIVE "
+                        "DEFENDANT: `make help` said `harness + docs-audit + the self-tests + "
+                        "lint + typecheck` from the day port-agreement landed, five targets "
+                        "running and invisible from the front door, while CLAUDE.md carried "
+                        "the full eleven and noted that the help line had said five of them "
+                        "for months. Nothing compared the two, so the note aged into a "
+                        "description of a defect that was still there. D80 governs the field "
+                        "list: every field is rendered by `make explain`, and the NEEDS "
+                        "vocabulary is checked for a token no entry uses.",
+            },
             "status.py": {
                 "does": "`make status`. Holds no fact about the project: the step and the "
                         "gate come from this file, the T1 score from harness/results/, the "
