@@ -511,6 +511,7 @@ D78  A run's reason for adding nothing is a heading, the rows under it sink, and
 D79  The reading goes on every row, because the operator answered D62's own measurement
 D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 D81  The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
+D82  A card leaves a box through a third door: moved, not sold or retired
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

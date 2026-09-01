@@ -611,6 +611,41 @@ export type RemoveResult = {
   next_index: number
 }
 
+/** What `POST /inventory/<box>/<index>/move` answers — D82's third door.
+ *
+ *  Unlike `RemoveResult`, nothing here EVER renumbers a neighbour: the source position
+ *  becomes a permanent tombstone (same shape as a sale or a retirement) and the card is
+ *  recorded fresh at `new_box`/`new_index`. `card` is the transplant as it now reads —
+ *  the same shape `GET /inventory` rows carry — so the screen can redraw it without a
+ *  second read. Undo is not a separate result shape: moving the transplant back is this
+ *  same call again, in the other direction. */
+export type MoveResult = {
+  moved: string
+  to: string
+  box: number
+  index: number
+  new_box: number
+  new_index: number
+  photo_moved: boolean
+  sidecar_moved: boolean
+  review_moved: boolean
+  parked_moved: boolean
+  cache_moved: boolean
+  card: InventoryCard
+}
+
+/** What `POST /inventory/<box>/move` answers — D82's batched move: a ticked selection, a
+ *  section, or (via `indices: null`) a whole box, which is what a merge is from the
+ *  caller's side. `cards` carries one row per card in the same shape `MoveResult` uses,
+ *  minus its own `card` field — the screen already knows what moved without re-fetching
+ *  each one. */
+export type MoveCardsResult = {
+  box: number
+  to_box: number
+  moved: number
+  cards: Omit<MoveResult, 'card'>[]
+}
+
 /** What `DELETE /boxes/<box>` answers — D10 ruling 3's whole-box delete.
  *
  *  Counts per kind rather than booleans, because a box holds many of each, and these
@@ -1247,6 +1282,12 @@ export type BoxRecord = {
    *  apart. `listed` counts CARDS, not SKUs and not copies: it is the number the refusal
    *  itself would name. */
   retired: number
+
+  /** Cards moved OUT of this box to another one (D82) — `retired`'s sibling on the same
+   *  panel. A box left holding only these after a merge stays undeletable exactly as a
+   *  box holding sold or retired cards does, and this is what lets the delete panel say
+   *  so before the press rather than after the refusal. */
+  moved: number
   listed: number
   sections_detail: SectionDetail[]
 }

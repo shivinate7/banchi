@@ -65,9 +65,9 @@ is rather than as coverage of everything below.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 VERSION = 2
 
@@ -89,6 +89,21 @@ SOLD = "sold"
 # the state gets its own word.
 RETIRED = "retired"
 
+# A card's third door out of a box (D82): it did not sell and it did not leave inventory —
+# it is still on hand, just at a different address. `retired` was built for a departure and
+# every reader of `TERMINAL_STATES` treats that tuple as "gone from this box, permanently, for
+# a reason worth recording" — which is exactly what a move is, and exactly why it is not
+# spelled as a fifth `RETIRE_REASONS` member. A reason there says the card left INVENTORY;
+# `MOVED` says the opposite; overloading the vocabulary would make every `copies_on_hand`/
+# `copies_not_sold` caller reason about a "retirement" that leaves the card fully sellable at
+# a new key.
+#
+# Named `moved` and not `relocated` for the same reason `retired` is not `removed` (see the
+# comment on that name above): T7 asserts no event name collides with a state name, and this
+# module's own `_log` writes the state name as the event name at every other transition —
+# reusing that convention here rather than minting a second word for one fact.
+MOVED = "moved"
+
 # A POSITION'S STATE DESCRIBES ONE PHYSICAL CARD AND NOTHING ELSE (D7, amended).
 #
 # `pushed`, `staged` and `live` used to live in this tuple, and a card wore one of them the
@@ -97,14 +112,21 @@ RETIRED = "retired"
 # no physical reason at all. The owner's ruling is that copies of one SKU are fungible — "if
 # i have 15 of one copy and mark 3 as live, it's any 3 are live, not 3 specific locations are
 # live". So the three moved off the card and onto the SKU, below, as counts.
-STATES = (CAPTURED, IDENTIFIED, SOLD, RETIRED)
+STATES = (CAPTURED, IDENTIFIED, SOLD, RETIRED, MOVED)
 
-# The two ways a card leaves inventory, by different doors: a sale, or D26's retirement.
-# Both keep the record and leave a permanent gap; neither copy is on hand, sellable, or
-# countable as backstock. `copies_on_hand` filters on this tuple rather than on `SOLD`
-# alone, which is what keeps a retired copy out of D7's refill arithmetic — an emit that
-# still counted it would list a card that is no longer in the box.
-TERMINAL_STATES = (SOLD, RETIRED)
+# The three ways a POSITION becomes permanently vacant: a sale, D26's retirement, or D82's
+# move to another box. All three keep the record and leave a permanent gap at this key;
+# `copies_on_hand` filters on this tuple rather than on `SOLD` alone, which is what keeps a
+# retired OR moved copy out of D7's refill arithmetic here — an emit that still counted a
+# tombstone would double-list a card that is now sellable under a different key.
+#
+# `MOVED` belongs here even though the card itself has NOT left inventory, unlike its two
+# siblings — this tuple is about the POSITION, not the card. D82's move primitive clears
+# `sku`/`condition` off the tombstone specifically so `copies_not_sold`/`positions_for_sku`
+# (which filter on `sku`, not on this tuple) never see the tombstone at all; membership here
+# is what lets D58's occupancy rendering (`pipeline/join.py:Position`/`BoxView`) close the
+# gap over a moved card for free, the same way it already closes over a sold or retired one.
+TERMINAL_STATES = (SOLD, RETIRED, MOVED)
 
 # Why a retired card left (D26). Required of every retirement and never inferred: it is the
 # one fact about the departure the record cannot re-derive later, and the four are a closed
@@ -156,6 +178,20 @@ class DuplicateCaptureId(ValueError):
 
 class UnknownRetireReason(ValueError):
     """A retire reason outside `RETIRE_REASONS`. Never coerced, never defaulted."""
+
+
+class CardNotFound(ValueError):
+    """`move_card` was asked to move a position holding no record."""
+
+
+class CardDeparted(ValueError):
+    """`move_card` was asked to move a card already sold, retired, or moved.
+
+    A card that left through one door cannot leave again through another — the same
+    argument `do_remove_card`'s target-state refusal already makes for delete, applied to
+    the third door (D82). A card already `MOVED` names where it went, so this refusal is
+    not a dead end: the operator moves the TRANSPLANT at that key instead.
+    """
 
 
 def check_state(state: str) -> str:
@@ -313,6 +349,13 @@ class Card:
     # capture that could write it would retire a card by photographing it, and a re-record
     # by `identify` or `emit` must neither resurrect nor clear it (D26).
     retire_reason: Optional[str] = None
+    # The key this card was transplanted TO, set only when `state == MOVED` — `retire_reason`'s
+    # sibling for the third door (D82). Cleared by nothing: unlike a retirement, a move has no
+    # reversal route that restores the tombstone, because the transplant is a normal, live
+    # record a caller can move again in either direction. NOT a capture claim, for the same
+    # reason `retire_reason` is not: a re-record by `identify`/`emit` must neither invent this
+    # nor clear it.
+    moved_to: Optional[str] = None
     run: Optional[str] = None
 
     @property
@@ -497,6 +540,14 @@ class Box:
     box: int
     name: Optional[str] = None
     sections: List[int] = field(default_factory=list)
+    # A divider's optional label, keyed by the STRINGIFIED divider index it starts at — string
+    # for the same JSON-round-trip reason `Inventory.cards`/`boxes` are string-keyed dicts
+    # rather than int-keyed ones (D82). Pure decoration, unlike `name`: nothing addresses a
+    # section BY this the way the capture screen addresses a box by `name` (D20 amended), so
+    # it carries none of `BoxNameTaken`'s uniqueness machinery. A divider index absent here has
+    # no name, same as a box absent from `Box.name` has none. `move_cards` carries a moved
+    # section's name to the fresh divider it opens at the destination.
+    section_names: Dict[str, str] = field(default_factory=dict)
     state: str = BOX_OPEN
     capacity: Optional[int] = None
     created_at: Optional[str] = None
@@ -985,6 +1036,110 @@ class Inventory:
         card.state_at = now()
         self._log(RETIRED, key, sku=card.sku, run=card.run, reason=reason)
         return True
+
+    def move_card(self, key: str, to_box) -> Tuple[Card, Card]:
+        """Move one card to a fresh index in another box. Returns `(tombstone, transplant)`.
+
+        D82. A card leaving box A for box B is the same KIND of event as a sale or a
+        retirement — the position at `key` becomes permanently vacant — and not the same
+        kind of event as `do_remove_card`'s mid-box delete, which cascades every higher
+        card down one slot. D58 already re-argued and rejected moving the stored index for
+        exactly this class of change, building an entire rendering layer so stored indices
+        can stay put forever while displayed ranks close up over gaps; this reuses that
+        wall's third door rather than reopening it. Concretely: nothing here shifts a single
+        OTHER card. `key` becomes a tombstone in place, and a full transplant is recorded at
+        a freshly allocated index in `to_box` — the ordinary `next_index` mechanism, not a
+        slide.
+
+        A NAIVE IN-PLACE REKEY WOULD BE WRONG, and this is why the shape below is a copy
+        rather than a mutation-and-reinsert. `next_index` is a raw high-water scan over
+        EVERY card in a box regardless of state — that is exactly how D10/D26 guarantee an
+        index is never reissued. Deleting `key` outright (rather than tombstoning it) would
+        let a future `next_index(box A)` recompute downward if this card held the box's
+        current high mark, and the next capture into A would silently reuse an index that
+        used to belong to a different physical card — worse than the one case D10 already
+        restricts index reuse to (an undo of the newest, still-`captured` record).
+
+        THE TOMBSTONE CLEARS `sku`, `condition`, `capture_id` AND `photo` — the sharpest
+        correctness requirement here, not decoration. `copies_not_sold` (D59's per-SKU shelf
+        cap) and `positions_for_sku` both filter on `sku` alone, with no state exclusion; a
+        tombstone that kept its SKU would be counted alongside its own transplant forever,
+        double-billing every cap and every copies-of-this-SKU list. `capture_id` is cleared
+        for the same reason `card_by_capture_id` exists: two cards sharing one id raises
+        `DuplicateCaptureId`, so the id lives on the transplant — the photograph, not the
+        vacated slot, is what the id anchors. Descriptive fields (name, number, game,
+        confidence, etc.) are LEFT on the tombstone, exactly as `retire()` leaves them, so a
+        person looking at the old slot's history still sees what card used to be there.
+
+        `photo` ON THE TRANSPLANT IS `None`, deliberately not carried over. The path is not
+        knowable until the destination index is allocated — same reason `allocate_capture`
+        never receives `photo` as a claim — so the caller (the one place that also moves the
+        file on disk) sets it after this returns, inside the same write lock.
+
+        UNDO IS NOT A SEPARATE OPERATION. The transplant is not itself terminal; moving it
+        back is calling this method again in the other direction. It lands at a NEW index in
+        the original box — the tombstoned key is never reclaimed, the same permanent-gap
+        behavior every other terminal state already has.
+
+        Refuses `CardNotFound` if `key` holds no record, `CardDeparted` if it is already
+        sold, retired, or moved (a card that left through one door cannot leave again
+        through another — move the transplant instead), and `BoxClosed` if `to_box` is
+        sealed (the same refusal `allocate_capture` makes: a sealed box takes no more
+        cards, and an arrival is exactly that).
+        """
+        to_box = _as_position_int(to_box, "to_box")
+        card = self.cards.get(key)
+        if card is None:
+            raise CardNotFound(f"no card at {key!r}")
+        if card.state in TERMINAL_STATES:
+            where = f" to {card.moved_to}" if card.state == MOVED and card.moved_to else ""
+            raise CardDeparted(f"{key} is already {card.state}{where}")
+
+        registered = self.boxes.get(str(to_box))
+        if registered is not None and registered.closed:
+            raise BoxClosed(
+                f"box {to_box} is sealed at {registered.capacity} cards. "
+                "Re-open it on the Boxes screen, or move into another box."
+            )
+        self.ensure_box(to_box)
+
+        new_index = self.next_index(to_box)
+        new_key = position_key(to_box, new_index)
+        if new_key in self.cards:
+            raise PositionOccupied(
+                f"move_card computed {new_key}, which already holds a card. "
+                "The high-water scan and this check disagree, which means the inventory "
+                "was mutated outside the lock."
+            )
+
+        transplant = replace(card, box=to_box, index=new_index, photo=None)
+        self.cards[new_key] = transplant
+
+        card.state = MOVED
+        card.state_at = now()
+        card.moved_to = new_key
+        card.sku = None
+        card.condition = None
+        card.capture_id = None
+        card.photo = None
+
+        self._log(MOVED, key, moved_to=new_key, run=card.run)
+        self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
+        return card, transplant
+
+    def move_cards(self, keys: Sequence[str], to_box) -> List[Tuple[Card, Card]]:
+        """Move several cards to fresh, contiguous indices in `to_box`, in the given order.
+
+        D82. A thin loop over `move_card`, called inside one `store.session.Store.write()`
+        by convention (not enforced here — this class has no lock of its own) so a whole
+        section, split, or merge lands atomically rather than half-migrated on a crash.
+        Order-preserving placement at the destination is not separate bookkeeping: each
+        call consumes the next `next_index(to_box)` in turn, so cards handed in ascending
+        source-index order land contiguously in that same order. Callers select `keys`
+        from the box's live, on-hand rendering (D58) and skip anything already departed —
+        there is nothing to move for a card that is already a permanent gap.
+        """
+        return [self.move_card(key, to_box) for key in keys]
 
     def _log(self, event: str, key: Optional[str], **extra) -> None:
         # `position` is dropped rather than written null for a box-level event: a box is not

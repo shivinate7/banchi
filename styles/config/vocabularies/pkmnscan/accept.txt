@@ -207,6 +207,9 @@ Thievuls
 [Tt]CGplayer
 [Tt]extarea
 [Tt]ickable
+[Tt]ombstone
+[Tt]ombstoned
+[Tt]ombstones
 [Tt]oolchain
 [Tt]oploader
 [Tt]raceback

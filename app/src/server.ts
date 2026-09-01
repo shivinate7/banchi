@@ -27,6 +27,8 @@ import type {
   ServerStatus,
   BoxClaimResult,
   RemoveResult,
+  MoveResult,
+  MoveCardsResult,
   BoxDeleteResult,
   BoxListingPlan,
   ListingReleaseResult,
@@ -1455,6 +1457,61 @@ export async function removeCardInPlace(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ capture_id: captureId }),
   })) as RemoveResult
+}
+
+/**
+ * Move one card to a fresh index in another box (D82) — the third door out of a box, and
+ * not a shift: unlike `removeCardInPlace`, nothing else in either box renumbers. The
+ * source position becomes a permanent tombstone, the same shape a sale or a retirement
+ * leaves, and the card is recorded fresh at the answer's `new_box`/`new_index`.
+ *
+ * `captureId` IS THE AIM, exactly as `removeCardInPlace` takes it and for the identical
+ * reason: a replayed or stale request must refuse (`capture_id_mismatch`) rather than
+ * move whatever card now happens to sit at this position — which, after a first
+ * successful move, is nothing at all. Pass the target's own `capture_id`, or `null` for
+ * a record written before capture ids existed.
+ *
+ * No listing-hold guard: a card carrying an active listing stage is free to move (D7 —
+ * which physical copy backs a stage is deliberately unrecorded, so a box change cannot
+ * disagree with it). Undo is this same call again, aimed at the transplant, in the other
+ * direction — it lands at a fresh index in the original box rather than reclaiming the
+ * tombstoned one.
+ */
+export async function moveCard(
+  box: number,
+  index: number,
+  captureId: string | null,
+  toBox: number,
+): Promise<MoveResult> {
+  return (await request(`/inventory/${box}/${index}/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ capture_id: captureId, to_box: toBox }),
+  })) as MoveResult
+}
+
+/**
+ * Move several cards from one box to another in one write (D82). `indices: null` moves
+ * every on-hand card — a whole-box move, which is what a merge is from this call's side;
+ * there is no separate merge endpoint. Pass an explicit list for a ticked selection or a
+ * section (computed from the box's own `sections_detail`, the same source the dividers
+ * editor reads).
+ *
+ * One write for the whole list: a refusal partway through — a card already sold, retired
+ * or moved by another session — discards every earlier card's move in the same request
+ * rather than leaving it half migrated. Order is preserved at the destination: cards
+ * arrive in the order their indices were sent, landing contiguously.
+ */
+export async function moveCards(
+  box: number,
+  indices: number[] | null,
+  toBox: number,
+): Promise<MoveCardsResult> {
+  return (await request(`/inventory/${box}/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ indices, to_box: toBox }),
+  })) as MoveCardsResult
 }
 
 /**
