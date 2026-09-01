@@ -25,21 +25,36 @@ import type { Page } from '@playwright/test'
  */
 
 /* THE SCENE IS PIECEWISE CONSTANT AND CHANGES ONLY ON COMMAND. Three values, and the gap
- * between two cards is DARK — below motion.ts's `cardLumaFloor`, so the machine settles on
- * it and answers `suppressed:no-card`. That is what makes the gap a WAYPOINT this file can
- * WAIT for, and that is the whole fix.
+ * between two cards is the level the scene is INJECTED at, which is the level the machine is
+ * ARMED over — so a settled gap frame is the arm-time baseline judged against itself, `dBase`
+ * at zero, under the presence floor, and the only verdict it can reach is
+ * `suppressed:no-card`. That is what makes the gap a WAYPOINT this file can WAIT for, and
+ * that is the whole fix. `GAP_LUMA` below carries the rest of that argument.
+ *
+ * THAT IS THE MACHINE AS IT IS. AS IT WAS, the gap earned the same verdict by being DARK —
+ * under motion.ts's `cardLumaFloor`, a brightness constant D81 deleted on 2026-08-31 in
+ * favour of the distance from the arm-time baseline (`presenceK`/`presenceMin`, `diag.dBase`).
+ * The waypoint survived the change and so did every assertion below; what moved is which
+ * property of the gap earns it, from "dark enough" to "no distance from the baseline".
  *
  * WHAT THE RACE WAS. `swapTo` alternated the whole frame 40/220 ten times, each dwell held
  * by `waitForTimeout(30)` over a CDP round trip. A timeout is a FLOOR, not a period, and
  * the round trip is unbounded — so under design-check's parallel workers one dwell spans
  * three DELIVERED frames instead of one. `stillFrames` was 2 CONSECUTIVE then, so three
- * identical delivered frames ARE a settle: `d` reads 0, the episode is judged MID-SWAP,
- * the frame clears
- * `cardLumaFloor`, it is novel, and the machine FIRES. `fires 2` then passed for the wrong
- * reason, `lastFired` held the swap frame, the real settle was genuinely novel and fired a
- * THIRD time, and `same 1` became unreachable — which is why step 4 burned its timeout.
- * Reproduced two ways: deterministically by lengthening one dwell to 120ms, and under 24
- * background spinners at 1 of 3 full-suite rounds, signature `fires 3 ... empty 1`.
+ * identical delivered frames ARE a settle: `d` reads 0, the episode is judged MID-SWAP, the
+ * frame passes the card-present gate, it is novel, and the machine FIRES. `fires 2` then
+ * passed for the wrong reason, `lastFired` held the swap frame, the real settle was genuinely
+ * novel and fired a THIRD time, and `same 1` became unreachable — which is why step 4 burned
+ * its timeout. Reproduced two ways: deterministically by lengthening one dwell to 120ms, and
+ * under 24 background spinners at 1 of 3 full-suite rounds, signature `fires 3 ... empty 1`.
+ *
+ * THE GATE IT PASSED THEN WAS `cardLumaFloor`, AND THE RACE NEVER DEPENDED ON IT. The machine
+ * of that day called the mid-swap frame a card because 220 cleared a brightness constant of
+ * 90; today's calls it a card because a full-jump frame sits 180 luma levels from whichever
+ * end of the alternation the baseline was taken at, and 180 clears the presence floor from
+ * either end. Both gates say "card". The race is a property of the DRIVER's timing rather
+ * than of the presence rule, which is why replacing the rule retired neither it nor the
+ * invariant below.
  *
  * WHY THIS SHAPE CANNOT HAVE IT. Delivered frames are a SUBSET of drawn frames — a canvas
  * `captureStream` pushes on draw and never re-emits one — and each stage is a flat fill, so
