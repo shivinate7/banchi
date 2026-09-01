@@ -28,7 +28,6 @@ No real code card has ever been through this pipeline.
 
 from __future__ import annotations
 
-import io
 import json
 import random
 import tempfile
@@ -177,7 +176,7 @@ def run() -> Result:
          "the tier flag separates the ~46x populations C11 turns on")
 
     # ------------------------------------------------------------------- 3. the ledger
-    a, b, d = _a_code(rng), _a_code(rng), _a_code(rng)
+    a, b, _d = _a_code(rng), _a_code(rng), _a_code(rng)
     entries, counts = ledger.merge([], [
         ledger.Entry(code=a, box=9, index=1, product="booster"),
         ledger.Entry(code=b, box=9, index=2, product="pc_etb"),

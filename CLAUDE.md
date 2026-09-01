@@ -63,10 +63,22 @@ make server         # Python capture server. :8000 in the main tree, its own por
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
-make lint           # eslint over app/: the guards a bug earned — see app/eslint.config.js. JS only.
-make check          # harness + docs-audit + both self-tests + port-agreement +
-                    #   set-hint-agreement + screen-freshness + ignore-check + lint +
-                    #   vale + typecheck. The line above said five of them for months.
+make lint           # eslint over app/ (guards a bug earned, see app/eslint.config.js) plus ruff over
+                    #   the Python packages, scoped to a slice measured against this tree (D82) —
+                    #   never ruff's own defaults, never --fix. Config: ruff.toml.
+make check          # harness + docs-audit + audit-self-test + githooks-selftest +
+                    #   merge-selftest + port-agreement + set-hint-agreement +
+                    #   screen-freshness + ignore-check + lint + vale + typecheck.
+                    #   THIS LIST IS CHECKED NOW —
+                    #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
+                    #   against the recipe, and it earned the row: help said five of these
+                    #   for months while this line said eleven, and nothing compared them.
+                    #   `make explain` is the same list with what each row is worth.
+make explain        # what `make check` runs: gates, commit path, writes, toolchain.
+                    #   ARGS=<target> for one entry in full. A parallel declaration in
+                    #   `scripts/checks.py`, deliberately NOT the driver — a registry that
+                    #   drove the suite could silently stop running a check; this one can
+                    #   only lie, and three audit rows catch it lying.
 make screen-freshness # every server write in app/src has a way back: a re-read, an
                     #   invalidation signal, or a reason in the code why none is owed.
                     #   Needs node, so it is in `check` and never in the git hook.
@@ -75,6 +87,13 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
+make merge-selftest # the merge wrapper's local half, against a throwaway origin, clone and
+                    #   worktree. Its FOOTGUN case is the one that matters: main checked out
+                    #   nowhere while another tree sits on a branch BEHIND its upstream, where
+                    #   the wrong command advances that branch and no hook says a word.
+make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   ARGS=<n> previews and presses nothing; ARGS="<n> --confirm" performs it.
+                    #   A bare `make merge` refuses: there is no default PR and will not be one.
 
 ./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY. Read the QR codes into the ledger.
                                    #   FREE — no model call, no network. The QR IS the code.
@@ -322,6 +341,17 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   then the local fast-forward. If the second half fails, report it as an incomplete operation
   rather than re-asking for permission.
 
+  **`make merge ARGS="<n> --confirm"` is that whole operation**, and `ARGS=<n>` alone previews
+  it and presses nothing (D42, amended 2026-09-01). It does the GitHub half, fetches origin,
+  asserts the merged commit is on `origin/main` — allow rule 3, checked BEFORE anything moves
+  rather than discovered when the hook refuses — and then picks between the two local forms
+  below by asking git rather than by remembering. **It automates the lookup and never the
+  decision**: a bare `make merge` refuses, and the word is still yours.
+
+  **The two commands stay written out here on purpose.** A wrapper that becomes the only way
+  anybody knows the answer is a worse outcome than the one it fixed, and when it is not what
+  you want, this is what you type.
+
   **The local half is two states, and one question tells them apart.** Ask which working tree,
   if any, holds main — a clone running several worktrees is in either state on any given day,
   and the command that is right in one is refused in the other:
@@ -511,6 +541,8 @@ D78  A run's reason for adding nothing is a heading, the rows under it sink, and
 D79  The reading goes on every row, because the operator answered D62's own measurement
 D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
 D81  The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
+D82  Ruff is adopted on the slice this session measured, not on what it enables by default
+D83  A card leaves a box through a third door: moved, not sold or retired
 D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 ```
 

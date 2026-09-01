@@ -169,6 +169,7 @@ from __future__ import annotations
 import ast
 import base64
 import codecs
+import contextlib
 import csv
 import io
 import json
@@ -189,6 +190,7 @@ from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
+from typing import Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -4143,10 +4145,13 @@ def check_retire(checks: Checks) -> None:
     )
     checks.equal(
         master.TERMINAL_STATES,
-        (master.SOLD, master.RETIRED),
-        "and the two doors out are exactly the two terminal states — `copies_on_hand` "
-        "filters on this tuple, so a third door added without joining it would be "
-        "counted as still in the box",
+        (master.SOLD, master.RETIRED, master.MOVED),
+        "and the three doors out are exactly the three terminal states — `copies_on_hand` "
+        "filters on this tuple, so a fourth door added without joining it would be "
+        "counted as still in the box. `moved` (D83) joined it deliberately: a moved "
+        "card is gone from THIS position exactly as a sold or retired one is, even "
+        "though — unlike its two siblings — the card itself is still on hand, just "
+        "under a different key",
     )
     checks.ok(
         capture_server._RETIRE_RE.match("/inventory/3/17/retire") is not None
@@ -5190,19 +5195,18 @@ def check_capture_claim_chain(checks: Checks) -> None:
     # A misspelled claim refuses BY NAME and burns no index, which is what the tuple buys
     # over four named keyword arguments — `TypeError` from a `Card` constructor two frames
     # down would name neither the claim nor the position it cost.
-    with isolated_home():
-        with Store().write() as snapshot:
-            checks.raises(
-                master.UnknownClaim,
-                lambda: snapshot.inventory.allocate_capture(7, set_hnit="sv9"),
-                "an unrecognised claim refuses as UnknownClaim rather than raising from a "
-                "constructor two frames down",
-            )
-            checks.equal(
-                snapshot.inventory.next_index(7),
-                1,
-                "and the refusal burned no index — it is checked before one is allocated",
-            )
+    with isolated_home(), Store().write() as snapshot:
+        checks.raises(
+            master.UnknownClaim,
+            lambda: snapshot.inventory.allocate_capture(7, set_hnit="sv9"),
+            "an unrecognised claim refuses as UnknownClaim rather than raising from a "
+            "constructor two frames down",
+        )
+        checks.equal(
+            snapshot.inventory.next_index(7),
+            1,
+            "and the refusal burned no index — it is checked before one is allocated",
+        )
 
 
 # ----------------------------------------------------------------- game and note claims
@@ -5916,7 +5920,7 @@ def check_box_claims(checks: Checks) -> None:
     checks.note("BOX-LEVEL CLAIMS — PUT /inventory/<box>")
 
     with isolated_home():
-        for i in range(1, 6):
+        for _i in range(1, 6):
             capture_server.do_capture(capture_payload(6))
         with Store().write() as snapshot:
             snapshot.inventory.set_state("6/2", master.IDENTIFIED)
@@ -6098,9 +6102,10 @@ def check_box_claims(checks: Checks) -> None:
             "and neither is a card number below one",
         )
 
-        hints = lambda: [
-            Store().read().inventory.cards[f"8/{i}"].set_hint for i in range(1, 6)
-        ]
+        def hints():
+            return [
+                Store().read().inventory.cards[f"8/{i}"].set_hint for i in range(1, 6)
+            ]
         before = hints()
         refusal(
             checks,
@@ -6656,9 +6661,11 @@ def check_concurrency(checks: Checks) -> None:
                             method="POST",
                         )
                         with urllib.request.urlopen(request, timeout=30) as response:
-                            results.append(json.loads(response.read()))
+                            # `one` is started and joined within this same iteration,
+                            # before `results`/`errors` rebind on the next one.
+                            results.append(json.loads(response.read()))  # noqa: B023
                     except Exception as exc:  # noqa: BLE001
-                        errors.append(exc)
+                        errors.append(exc)  # noqa: B023
 
                 workers = [threading.Thread(target=one) for _ in range(count)]
                 for worker in workers:
@@ -9444,7 +9451,7 @@ def check_withholding(checks: Checks) -> None:
         )
 
         inventory = Store().read().inventory
-        held_card = inventory.get(f"3/2")
+        held_card = inventory.get("3/2")
         checks.equal(
             (held_card.state, held_card.sku, held_card.condition),
             (master.IDENTIFIED, ARTICUNO_SKU, "Near Mint Holofoil"),
@@ -10231,7 +10238,7 @@ def check_listing_commands(checks: Checks) -> None:
     with isolated_home():
         six = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 7)]
         run_dir, _ = seam_run(checks, six)
-        first = command(checks, "emit", str(run_dir.directory))
+        command(checks, "emit", str(run_dir.directory))
         checks.equal(
             Store().read().inventory.listing_for(DUNSPARCE_SKU).pushed,
             4,
@@ -12994,7 +13001,7 @@ def check_history_route(checks: Checks) -> None:
     # endpoint's business and `check_price_history` owns the arithmetic over them.
     annual = json.loads(PRICE_HISTORY.read_text("utf-8"))
 
-    with isolated_home() as home:
+    with isolated_home():
         run_dir = runs.create("t7-history")
         for _ in range(1):
             capture_server.do_capture(capture_payload(7, game="riftbound"))
@@ -13654,8 +13661,11 @@ def check_order_ledger(checks: Checks) -> None:
         # that logged an order state would make a sale's reversal restore a card to it.
         checks.equal(
             sorted(master.STATES),
-            sorted([master.CAPTURED, master.IDENTIFIED, master.SOLD, master.RETIRED]),
-            "the state tuple is still the four — the ledger adds none",
+            sorted([
+                master.CAPTURED, master.IDENTIFIED, master.SOLD, master.RETIRED, master.MOVED,
+            ]),
+            "the state tuple is still the five (D83 added `moved`, deliberately, at "
+            "the store layer) — the ledger adds none",
         )
         capture_server.do_mark_sold(3, 2, {})
         sold_at = store.read()
@@ -15727,10 +15737,8 @@ def check_shipping_routes(checks: Checks) -> None:
             "a table that emptied itself",
         )
         for spare in ids:
-            try:
+            with contextlib.suppress(shipping_routes.ShippingRefusal):
                 shipping_routes.do_shipping_forget(spare)
-            except shipping_routes.ShippingRefusal:
-                pass
 
         after = sorted(str(path.relative_to(home)) for path in home.rglob("*"))
         checks.equal(

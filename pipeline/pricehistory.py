@@ -158,13 +158,14 @@ harness asserts the join against a committed fixture and never against a live fe
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -810,10 +811,8 @@ def fetch_json(url: str, timeout: float = REQUEST_TIMEOUT_SECONDS) -> Dict:
             body = response.read()
     except urllib.error.HTTPError as exc:
         detail = ""
-        try:
+        with contextlib.suppress(Exception):  # a body we cannot read is not the interesting fault
             detail = exc.read().decode("utf-8", "replace")[:200]
-        except Exception:  # noqa: BLE001 - a body we cannot read is not the interesting fault
-            pass
         raise Unreachable(f"{url} answered HTTP {exc.code}: {detail}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         raise Unreachable(f"{url} could not be reached: {exc}") from exc

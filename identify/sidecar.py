@@ -49,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
-from pipeline import games, variant
+from pipeline import games
 
 PHOTO_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
 SIDECAR_SUFFIX = ".json"

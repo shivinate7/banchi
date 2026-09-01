@@ -838,13 +838,16 @@ def dict_keys_from_assign(source: str, name: str) -> Optional[List[str]]:
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == name:
-                if isinstance(node.value, ast.Dict):
-                    keys = []
-                    for key in node.value.keys:
-                        if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                            keys.append(key.value)
-                    return keys
+            if (
+                isinstance(target, ast.Name)
+                and target.id == name
+                and isinstance(node.value, ast.Dict)
+            ):
+                keys = []
+                for key in node.value.keys:
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                        keys.append(key.value)
+                return keys
     return None
 
 
@@ -914,13 +917,16 @@ def list_names_from_assign(source: str, name: str) -> Optional[List[str]]:
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == name:
-                if isinstance(node.value, (ast.List, ast.Tuple)):
-                    return [
-                        element.id
-                        for element in node.value.elts
-                        if isinstance(element, ast.Name)
-                    ]
+            if (
+                isinstance(target, ast.Name)
+                and target.id == name
+                and isinstance(node.value, (ast.List, ast.Tuple))
+            ):
+                return [
+                    element.id
+                    for element in node.value.elts
+                    if isinstance(element, ast.Name)
+                ]
     return None
 
 
@@ -4000,9 +4006,13 @@ def string_literals(source: str) -> Set[str]:
         body = getattr(node, "body", None)
         if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             continue
-        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-            if isinstance(body[0].value.value, str):
-                docstrings.add(id(body[0].value))
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            docstrings.add(id(body[0].value))
     return {
         node.value
         for node in ast.walk(tree)
@@ -5565,6 +5575,316 @@ def check_positional_references(report: Report, docs: List[Path]) -> None:
     )
 
 
+# ------------------------------------------------------- what `make check` actually runs
+
+CHECKS_REGISTRY = ROOT / "scripts" / "checks.py"
+PRE_COMMIT = ROOT / "scripts" / "githooks" / "pre-commit"
+
+# The recipe's own enumeration. `check:` is a block of tab-indented lines and nothing but
+# `$(MAKE) --no-print-directory <target>` calls; see the Makefile's own comment for why they
+# are calls and not prerequisites (make is free to reorder prerequisites, and with -j it runs
+# them in parallel — a check suite has to run in a known order and stop at the first failure).
+_CHECK_RECIPE_RE = re.compile(r"\$\(MAKE\)\s+--no-print-directory\s+([a-z][a-z0-9-]*)")
+
+# A path inside the repo that a `runs` command names. Used to ask whether the pre-commit hook
+# invokes the same thing, which is the only honest way to check the `commit_path` field: the
+# hook runs `python3 scripts/docs-audit.py --staged`, never `make docs-audit`, so matching on
+# the target name would answer no for the one entry that is genuinely on the commit path.
+_RUNS_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:py|sh|mjs)")
+
+# AND ITS FLAGS, BECAUSE ONE SCRIPT IS TWO CHECKS HERE. `docs-audit` and `audit-self-test` run
+# the same file in different modes, and the hook runs a third — so a path match alone answers
+# "on the commit path" for both, which this row caught on its first run against the tree it
+# was written for. A check is on that path when the hook invokes its script IN ITS MODE.
+_RUNS_FLAG_RE = re.compile(r"--[a-z][a-z-]*")
+
+CHECK_ENTRY_KEYS = (
+    "target", "runs", "asserts", "needs", "writes",
+    "commit_path", "why_off_commit_path", "gates", "governed_by",
+)
+
+
+def _check_recipe() -> Optional[List[str]]:
+    """The targets `make check` runs, in recipe order, or None if the block cannot be read."""
+    makefile = ROOT / "Makefile"
+    if not exists(makefile):
+        return None
+    block = re.search(r"^check:\n((?:\t.*\n)+)", read(makefile), flags=re.M)
+    if block is None:
+        return None
+    return _CHECK_RECIPE_RE.findall(block.group(1))
+
+
+def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
+    """(CHECKS, NEEDS) out of scripts/checks.py, by literal_eval and never by import.
+
+    Same access `docs/map.py` and `scripts/status.py`'s SOURCES get, for the same reason: a
+    read-only check must not execute the code it is checking.
+    """
+    if not exists(CHECKS_REGISTRY):
+        return None
+    values = literals_from_module(CHECKS_REGISTRY)
+    entries, needs = values.get("CHECKS"), values.get("NEEDS")
+    if not isinstance(entries, (list, tuple)) or not isinstance(needs, dict):
+        return None
+    return [dict(entry) for entry in entries], dict(needs)
+
+
+def check_check_registry(report: Report) -> None:
+    """scripts/checks.py against the `check:` recipe it describes, both directions.
+
+    THE REGISTRY IS A PARALLEL DECLARATION AND NOT THE DRIVER, which is the shape that makes
+    this row necessary and also makes it safe. A registry that drove `make check` could not
+    disagree with it — and could silently stop running a check, which is the failure this repo
+    has paid for more than any other. A registry that merely describes it can only lie, and a
+    lie is what a check can catch.
+
+    ORDER IS CHECKED, not just membership. The file says its entries are in recipe order and
+    `make explain` prints them that way, so a reader takes the order as the running order; a
+    claim being read is a claim worth verifying, and it costs one comparison.
+    """
+    recipe = _check_recipe()
+    loaded = _checks_registry()
+    if recipe is None:
+        report.add("check registry", MECHANICAL, [Finding(
+            "Makefile",
+            "the `check:` recipe could not be read, so nothing can be reconciled against it. "
+            "If the target changed shape, this row's reader has to move with it.")])
+        return
+    if loaded is None:
+        report.add("check registry", MECHANICAL, [Finding(
+            rel(CHECKS_REGISTRY),
+            "CHECKS and NEEDS could not be read as module-level literals. They are parsed "
+            "with `ast.literal_eval` and never imported, so every entry must stay a plain "
+            "literal — no helper class, no call, no comprehension.")])
+        return
+
+    entries, needs = loaded
+    findings: List[Finding] = []
+
+    declared = [str(entry.get("target", "")) for entry in entries]
+    for name in recipe:
+        if name not in declared:
+            findings.append(Finding(rel(CHECKS_REGISTRY), (
+                "`make check` runs `{0}` and no entry describes it.\n"
+                "  Add one, or `make explain` and `make help` both under-report the suite."
+            ).format(name)))
+    for name in declared:
+        if name not in recipe:
+            findings.append(Finding(rel(CHECKS_REGISTRY), (
+                "there is an entry for `{0}`, which `make check` does not run.\n"
+                "  An entry for a check nobody runs reads as coverage."
+            ).format(name)))
+    if not findings and declared != recipe:
+        findings.append(Finding(rel(CHECKS_REGISTRY), (
+            "the entries are not in recipe order.\n"
+            "  recipe:   {0}\n"
+            "  registry: {1}"
+        ).format(", ".join(recipe), ", ".join(declared))))
+
+    for entry in entries:
+        where = "{0} — {1}".format(rel(CHECKS_REGISTRY), entry.get("target", "<unnamed>"))
+        missing = [key for key in CHECK_ENTRY_KEYS if key not in entry]
+        if missing:
+            findings.append(Finding(where, "entry is missing: {0}".format(", ".join(missing))))
+            continue
+        for token in entry["needs"]:
+            if token not in needs:
+                findings.append(Finding(where, (
+                    "`needs` names `{0}`, which NEEDS does not define.\n"
+                    "  A token nobody defined is a token nobody can reason about."
+                ).format(token)))
+
+    # NEEDS is a section of this file in D80's sense, and the same rule applies one level
+    # down: a vocabulary entry no check claims is a definition with no reader.
+    claimed = {token for entry in entries for token in entry.get("needs", ())}
+    for token in sorted(set(needs) - claimed):
+        findings.append(Finding(rel(CHECKS_REGISTRY), (
+            "NEEDS defines `{0}` and no check needs it. Delete it or use it (D80)."
+        ).format(token)))
+
+    report.add("check registry", MECHANICAL, findings,
+               "{0} checks, in recipe order".format(len(recipe)))
+
+
+def check_commit_path(report: Report) -> None:
+    """D18, asserted mechanically for the first time.
+
+    **Nothing that writes may run on the path that decides whether a commit proceeds.** That
+    rule is quoted in five Makefile comments, in `docs/DECISIONS.md` D18 and D16, and in the
+    header of every self-test it governs — and until this row it was enforced by nobody. It is
+    the most-cited rule in this repo with the least machinery behind it.
+
+    Three claims, and the third is the one with teeth:
+
+      1. `commit_path` agrees with `scripts/githooks/pre-commit`. Asked of the SCRIPT the
+         entry runs and never of the target name: the hook invokes
+         `python3 scripts/docs-audit.py --staged`, so a name match would answer no for the one
+         entry that is genuinely on that path.
+      2. `why_off_commit_path` is present exactly where `commit_path` is false. An entry
+         claiming both, or neither, is describing nothing.
+      3. Nothing on the commit path writes.
+
+    A check whose `runs` names no repository path — `npm --prefix app run lint`, the vale
+    pipeline — cannot be on the commit path, because the hook runs a bare python3 with nothing
+    installed. So the absence of a path is itself the answer, rather than a case this row
+    declines to judge.
+    """
+    loaded = _checks_registry()
+    if loaded is None:
+        report.add("commit path", MECHANICAL, [Finding(
+            rel(CHECKS_REGISTRY), "CHECKS could not be read; see the `check registry` row.")])
+        return
+    if not exists(PRE_COMMIT):
+        report.add("commit path", MECHANICAL, [Finding(
+            rel(PRE_COMMIT),
+            "does not exist, and every entry's `commit_path` is a claim about it.")])
+        return
+
+    entries, _ = loaded
+    hook = read(PRE_COMMIT)
+    findings: List[Finding] = []
+    on_path = 0
+
+    for entry in entries:
+        if not all(key in entry for key in CHECK_ENTRY_KEYS):
+            continue  # `check registry` reports the shape; this row does not repeat it
+        name = entry["target"]
+        where = "{0} — {1}".format(rel(CHECKS_REGISTRY), name)
+        paths = _RUNS_PATH_RE.findall(entry["runs"])
+        flags = _RUNS_FLAG_RE.findall(entry["runs"])
+        invoked = any(path in hook for path in paths) and all(flag in hook for flag in flags)
+        claimed = bool(entry["commit_path"])
+
+        if claimed and not invoked:
+            findings.append(Finding(where, (
+                "claims the commit path, and {0} invokes none of {1}."
+            ).format(rel(PRE_COMMIT), ", ".join(paths) or "the commands it runs")))
+        elif invoked and not claimed:
+            findings.append(Finding(where, (
+                "says it is off the commit path, but {0} runs {1} in that mode.\n"
+                "  Whichever is wrong, D18 is being reasoned about from a false premise."
+            ).format(rel(PRE_COMMIT), ", ".join(p for p in paths if p in hook))))
+
+        if claimed:
+            on_path += 1
+            if entry["writes"]:
+                findings.append(Finding(where, (
+                    "IS ON THE COMMIT PATH AND WRITES: {0}\n"
+                    "  D18: nothing that writes may run on the path that decides whether a\n"
+                    "  commit proceeds. An agent that can edit what its own gate reads will."
+                ).format(entry["writes"])))
+            if entry["why_off_commit_path"]:
+                findings.append(Finding(where, (
+                    "claims the commit path and also carries `why_off_commit_path`.")))
+        elif not entry["why_off_commit_path"]:
+            findings.append(Finding(where, (
+                "is off the commit path and says nothing about why.\n"
+                "  D18 or a toolchain — the reason is what a later session needs, and it is\n"
+                "  the field that stops one being moved back on to the path by tidiness.")))
+
+    report.add("commit path", MECHANICAL, findings,
+               "{0} of {1} on the commit path, none of them writing".format(on_path, len(entries)))
+
+
+# The published claims about what `make check` runs, as the sentence reads. The anchor is
+# `make check` followed by whitespace, an optional comment marker and a target name — which is
+# the summary form and nothing else. Every OTHER mention in these two files backticks the
+# command (``make check` is invoked by a person`, ``make check` green means…`), so the
+# backtick is what keeps ordinary prose about the target out of this row.
+_CHECK_CLAIM_RE = re.compile(r"make check[ \t]+#?[ \t]*(?=[a-z])")
+
+# The `+`-joined run that follows it. `\s` spans newlines because both claims wrap.
+_CHECK_LIST_RE = re.compile(r"(?:[a-z][a-z0-9-]*[ \t\n]*\+[ \t\n]*)*[a-z][a-z0-9-]*")
+
+_CHECK_CLAIM_DOCS = ("Makefile", "CLAUDE.md")
+
+
+def _check_claim_text(target: Path) -> str:
+    """The file's text with each claim's continuation scaffolding removed.
+
+    BOTH PUBLISHED CLAIMS WRAP, AND EACH WRAPS THROUGH A DIFFERENT SCAFFOLD — the Makefile's
+    help line through `@echo "` … `"`, CLAUDE.md's through the `#` of a fenced comment.
+    Neither is part of the sentence, and the Makefile's puts LETTERS between two target names:
+    `@echo` reads as a token to any scanner that does not know better, which would truncate
+    the list at every wrap and report the tail as missing.
+
+    Same idea as `_bridge_literals` one row over, for the same class of problem: a sentence a
+    human reads as one line and a regex reads as three.
+    """
+    out = []
+    for line in read(target).splitlines():
+        line = re.sub(r'^\s*@echo\s+"', "", line)   # Makefile help scaffolding
+        line = line.rstrip().rstrip('"')
+        line = re.sub(r"^\s*#\s*", "", line)        # a fenced comment's continuation
+        out.append(line)
+    return "\n".join(out)
+
+
+def check_check_census(report: Report) -> None:
+    """Every published list of what `make check` runs, against scripts/checks.py.
+
+    MECHANICAL, on `route census`'s reasoning exactly: the recipe is in the repository, the
+    sentence is in the repository, and they agree or they do not.
+
+    THIS ROW HAS A LIVE DEFENDANT. `make help` said `harness + docs-audit + the self-tests +
+    lint + typecheck` from the day `port-agreement` landed until this row was written — five
+    targets running and invisible from the front door, while CLAUDE.md two files over carried
+    the full list and noted that *the line above said five of them for months*. Nothing
+    compared the two, so the note aged into a description of a defect that was still there.
+
+    IT REFUSES TO GO QUIET, which is `route census`'s hard-won half: an anchor that matches
+    nothing in a watched file is reported as an unwatched claim. A check that silently stops
+    covering prose is the failure it exists to end, and rewording is how that happens.
+    """
+    loaded = _checks_registry()
+    if loaded is None:
+        report.add("check census", MECHANICAL, [Finding(
+            rel(CHECKS_REGISTRY), "CHECKS could not be read; see the `check registry` row.")])
+        return
+    entries, _ = loaded
+    expected = [str(entry.get("target", "")) for entry in entries]
+
+    findings: List[Finding] = []
+    checked = 0
+    for name in _CHECK_CLAIM_DOCS:
+        target = ROOT / name
+        if not exists(target):
+            findings.append(Finding(name, "does not exist, and it publishes what `make check` runs."))
+            continue
+        text = _check_claim_text(target)
+        anchors = list(_CHECK_CLAIM_RE.finditer(text))
+        if not anchors:
+            findings.append(Finding(name, (
+                "publishes no list of what `make check` runs that this row can see.\n"
+                "  Either the claim was deleted, or it was reworded past the pattern watching\n"
+                "  it. A check that quietly stops covering a sentence is worse than no check."
+            )))
+            continue
+        for anchor in anchors:
+            run = _CHECK_LIST_RE.match(text, anchor.end())
+            claimed = [token.strip() for token in run.group(0).split("+")] if run else []
+            if len(claimed) < 2:
+                findings.append(Finding(
+                    "{0}:{1}".format(name, text.count("\n", 0, anchor.start()) + 1),
+                    "reads as a list of checks and yields none. The pattern needs to move."))
+                continue
+            checked += 1
+            line = text.count("\n", 0, anchor.start()) + 1
+            for missing in [t for t in expected if t not in claimed]:
+                findings.append(Finding("{0}:{1}".format(name, line), (
+                    "`make check` runs `{0}` and this list does not name it.\n"
+                    "  Recount from the `check:` recipe; never add one to the end."
+                ).format(missing)))
+            for extra in [t for t in claimed if t not in expected]:
+                findings.append(Finding("{0}:{1}".format(name, line), (
+                    "this list names `{0}`, which `make check` does not run."
+                ).format(extra)))
+
+    report.add("check census", MECHANICAL, findings,
+               "{0} published lists, {1} checks each".format(checked, len(expected)))
+
+
 # -------------------------------------------------------------- how callers invoke this
 
 # Every file that runs this script as a gate or a build step. Each is checked for flags
@@ -6859,6 +7179,9 @@ def audit(staged_only: bool) -> Report:
     check_doc_hygiene(report, docs)
     check_route_rosters(report)
     check_route_census(report)
+    check_check_registry(report)
+    check_commit_path(report)
+    check_check_census(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this

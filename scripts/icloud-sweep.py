@@ -89,7 +89,7 @@ def main() -> int:
             (copy, original)
         )
 
-    for copy, original in identical:
+    for copy, _original in identical:
         rel = copy.relative_to(ROOT)
         if args.delete:
             copy.unlink()

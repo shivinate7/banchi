@@ -710,7 +710,7 @@ COMPONENTS = [
             "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states, and "
                                   "`open_section`, which puts one divider in front of the next "
                                   "card at the index only the store can read (D10)",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D58", "D59"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D58", "D59", "D83"], "tested_by": ["T7"]},
             "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
                                   "cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37"], "tested_by": ["T7"]},
@@ -914,6 +914,49 @@ COMPONENTS = [
                 # repository.
                 "governed_by": ["D42"],
                 "note": "Extensionless, unscanned, listed by hand — see the sibling above.",
+            },
+            "merge-pr.py": {
+                "does": "`make merge` — D42's whole operation: `gh pr merge`, then the local "
+                        "move of refs/heads/main onto the commit that produced. Refuses without "
+                        "a PR number somebody typed; a bare `ARGS=<n>` is a preview that presses "
+                        "nothing and only `--confirm` acts. It fetches origin FIRST and then "
+                        "asserts the merge commit is an ancestor of refs/remotes/origin/main — "
+                        "the same predicate reference-transaction evaluates at `prepared` — so "
+                        "the hook is never asked to refuse. Idempotent on a PR already merged, "
+                        "which is what makes a failed local half re-runnable rather than a "
+                        "handoff.",
+                # D42 governs it twice over: the operation it performs and the rejection it
+                # amends. D18 governs its shape — the preview is the read-only mode, and the
+                # act is behind a flag rather than a default. D33 is the instrument the two-step
+                # is borrowed from, one register down from a route that can spend money.
+                "governed_by": ["D18", "D33", "D42"],
+                "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
+                        "is explicit that a session reaching for that variable has left the "
+                        "amendment behind; this needs no hatch because allow rule 3 already "
+                        "permits the move it makes. WHAT IT AUTOMATES IS THE STATE LOOKUP AND "
+                        "NOT THE DECISION — the local half has two correct forms and the wrong "
+                        "one does not error, it fast-forwards whatever branch the main tree is "
+                        "standing on, moves no protected ref and trips no hook. Nothing here "
+                        "resolves a path relative to itself: the repository is the one "
+                        "`git rev-parse` answers for from the caller's directory, which is what "
+                        "lets the self-test point it at a temporary clone.",
+            },
+            "merge-selftest.sh": {
+                "does": "merge-pr.py's local half, against an origin, a clone and a linked "
+                        "worktree built and destroyed for the run. Seventeen cases: both forms "
+                        "of the move, a dirty main worktree, a commit origin does not carry, an "
+                        "unknown rev, a bare invocation — and the footgun, main checked out "
+                        "nowhere while another tree sits on a branch that is BEHIND its "
+                        "upstream.",
+                "governed_by": ["D18", "D42"],
+                "note": "THE FOOTGUN CASE WAS GREEN FOR THE WRONG REASON WHEN IT WAS FIRST "
+                        "WRITTEN, and the fixture carries the repair in a comment. The other "
+                        "tree sat on a branch already at the commit a wrong pull would have "
+                        "brought it to, so the assertion could not fail — proved by forcing the "
+                        "picker to always choose the pull form and watching it stay green. The "
+                        "branch is now one behind its upstream, the same mutation turns it red, "
+                        "and the fixture asserts its own arming. Same lesson githooks-selftest "
+                        "records about git's own refusals scoring as the hook's.",
             },
             "githooks-selftest.sh": {
                 "does": "builds an origin and a clone in a temp directory, points "
@@ -1254,6 +1297,41 @@ COMPONENTS = [
                         "outlive a refactor is not a defect, so this ranks suspicion and "
                         "never fails.",
             },
+            "checks.py": {
+                "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
+                        "own renderer, one entry per target in the recipe: what it asserts, "
+                        "what toolchain it needs, whether it writes, whether it is on the "
+                        "commit path and why not, whether a finding gates. Stdlib only, and "
+                        "the audit reads it with ast.literal_eval rather than importing it, "
+                        "for the reason every other declarative literal here is read that way.",
+                # THE LONG TAIL IS NOT DECORATION. Every decision a CHECKS entry cites is one
+                # this file's content depends on: D43 is why port-agreement exists at all, D65
+                # and D76 the same for set-hint-agreement, D47 for ignore-check, D60 and D74
+                # for vale. Change one and the entry describing that check goes stale with it,
+                # which is exactly what `governed_by` is for — so they are listed rather than
+                # allowlisted away.
+                "governed_by": ["D16", "D17", "D18", "D43", "D47", "D60", "D65", "D74",
+                                "D76", "D80", "D82"],
+                "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
+                        "the whole shape. A registry that drove `make check` could not "
+                        "disagree with the recipe — and could silently stop running a check, "
+                        "the failure this repo has paid for more than any other. One that "
+                        "merely describes it can only lie, and a lie is catchable: `check "
+                        "registry` reconciles it against the recipe both ways and in order, "
+                        "`check census` reconciles the published prose in the Makefile and "
+                        "CLAUDE.md against it, and `commit path` asserts D18 MECHANICALLY for "
+                        "the first time — nothing that writes may be on the path that decides "
+                        "whether a commit proceeds, a rule cited in five Makefile comments and "
+                        "two decisions and enforced until now by nobody. IT HAD A LIVE "
+                        "DEFENDANT: `make help` said `harness + docs-audit + the self-tests + "
+                        "lint + typecheck` from the day port-agreement landed, five targets "
+                        "running and invisible from the front door, while CLAUDE.md carried "
+                        "the full eleven and noted that the help line had said five of them "
+                        "for months. Nothing compared the two, so the note aged into a "
+                        "description of a defect that was still there. D80 governs the field "
+                        "list: every field is rendered by `make explain`, and the NEEDS "
+                        "vocabulary is checked for a token no entry uses.",
+            },
             "status.py": {
                 "does": "`make status`. Holds no fact about the project: the step and the "
                         "gate come from this file, the T1 score from harness/results/, the "
@@ -1459,7 +1537,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1846,11 +1924,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2190,7 +2268,12 @@ COMPONENTS = [
                         "which are the four things D20 says a box has that a person decides — "
                         "register one before a card goes into it, rename it, re-divide it, seal "
                         "or re-open it. Its NUMBER is not among them: that would be a renumber, "
-                        "which D10 forbids outright. Two destructive-adjacent controls sit "
+                        "which D10 forbids outright. A fifth, D83's Move to box, sits beside Set "
+                        "claims rather than among the four — it acts on the ticked selection or "
+                        "the box's on-hand cards, never on the box object itself, and unlike "
+                        "Edit dividers it is not a relabel: the source position becomes a "
+                        "permanent tombstone and the card is recorded fresh at a destination. "
+                        "Two destructive-adjacent controls sit "
                         "beneath them: D34's listing release, drawn over a free plan and "
                         "budgeted by this box's own copies, and D10 ruling 3's whole-box "
                         "delete behind a typed box number.",
@@ -2215,7 +2298,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D83"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "

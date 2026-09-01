@@ -46,7 +46,7 @@ Every degraded case ends in a named outcome:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List
 
 from codes import ledger, products, scan
 from store import files as store_files

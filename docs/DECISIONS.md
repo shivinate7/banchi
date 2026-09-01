@@ -1417,6 +1417,18 @@ At `prepared` the hook asks `git merge-base --is-ancestor "$new" refs/remotes/or
 
 **What it costs is real and is this entry's own subject.** Advancing main reshapes what every live worktree is cut from. What makes it a decision rather than a repeat is the pair of conditions above: an explicit instruction, and only to a commit that was on origin first.
 
+**That rejection is amended, and the sentence moves while the reasoning does not** (owner, 2026-09-01). `make merge` exists — `scripts/merge-pr.py`, `scripts/merge-selftest.sh`.
+
+**The rejection was aimed at automating the decision, and the decision is untouched.** Whether this pull request gets merged stays the owner's word, per *The word* below: a bare `make merge` refuses and says there is no default and will not be one, `ARGS=<n>` is a preview that presses nothing, and only `ARGS="<n> --confirm"` acts. That is D33's instrument one register down — the route that can spend money refuses without an explicit field, and this refuses without an explicit number and flag.
+
+**What is automated is the state lookup, which is not a choice anybody makes.** Which of the two forms above applies is a question with one right answer that git already knows, and *the unconditional shortcut is a footgun* two paragraphs up is the account of what it costs to get wrong: no error, no hook, a branch somebody else is working on quietly advanced. A session was being asked to remember a lookup; it asks git instead, and re-asks with `git rev-parse --abbrev-ref HEAD` before it pulls.
+
+**It widens nothing mechanically, for the same reason the amendment above widens nothing.** It fetches origin first and then asserts `merge-base --is-ancestor <commit> refs/remotes/origin/main` — allow rule 3, evaluated before anything moves rather than discovered when the hook refuses. It never sets `PKMNSCAN_MAIN` and no refusal it prints suggests it. A commit origin does not carry is refused by name.
+
+**`make help` lists it, and the plumbing worry is answered by shape rather than by obscurity.** Hiding the target would be security by not-being-listed, which this repo rejects everywhere else, and `CLAUDE.md`'s own rule is that a capability nobody can find is not done. The two raw commands stay in `CLAUDE.md` beside it: the wrapper must not become the only way anyone knows the answer.
+
+**The footgun has a test that was green for the wrong reason first.** `scripts/merge-selftest.sh` builds an origin, a clone and a linked worktree in a temp directory. Its first draft put the other tree on a branch already at the commit a wrong pull would have brought it to, so the assertion could not fail — found by forcing the picker to always choose the pull form and watching it stay green. The branch is one behind its upstream now, that mutation turns it red, and the fixture asserts its own arming. Same lesson `githooks-selftest` records about git's own refusals scoring as a hook's.
+
 ### The main checkout going stale
 
 **The SessionStart hook reports the main working tree left on a feature branch after that branch merged.** Added 2026-08-30. Everything above governs how main MOVES; this is the tree that holds it drifting a different way.
@@ -4234,6 +4246,201 @@ baseline — a white card on a white stand under flat light, where distance is a
 brightness was. The answer then is not a third constant but a second signal (edges, or the
 stand's own fixed landmarks), and it should arrive with a trace attached like this one did.
 
+## D82 — Ruff is adopted on the slice this session measured, not on what it enables by default
+
+**Adopted 2026-09-01, closing the question `make lint` left open since it was narrowed to JavaScript.**
+Python has no linter here. `docs/specs/audit-retirement.md` §9 already set the format for
+answering that kind of question — run the tool on this repo, read the findings, then decide
+— and this entry is that format applied to the one row that section left as "unmade."
+
+**Zero-config `ruff check .` found 2,131 things on this tree, and 79% of it was one wrong assumption.**
+1,051 `UP006`, 479 `UP045` and 148 `UP035` findings — 1,678 of 2,131 — are
+pyupgrade rewriting `Dict`/`List`/`Optional[X]` to PEP 585/604 syntax. `requirements.txt`'s
+zxing-cpp comment already says why that matters: this repo runs Python 3.9.6, pinned,
+load-bearing. `X | None` outside a deferred annotation is a runtime `TypeError` on 3.9, and
+ruff's own zero-config default assumes a newer interpreter — it marked most of those
+rewrites "safe" until told otherwise. Telling it `target-version = "py39"` flips the split:
+of 1,965 pyupgrade-family findings, safe-fixable drops from 1,798 to 264 and unsafe rises
+from 169 to 1,701 — ruff itself stops trusting the rewrite once it knows the truth. The
+codebase already defends itself here (57 of 63 files under the audited packages carry
+`from __future__ import annotations`; the 6 that do not are empty `__init__.py` stubs), but
+a bare `ruff check .` followed by `--fix` would have spent that discipline for nothing.
+
+**The measured signal, once the version is told the truth, is pyflakes plus a validated slice of bugbear and flake8-simplify.**
+Not ruff's ~900 default-enabled rules. Pyflakes and
+basic pycodestyle (`E4`, `E7`, `E9`, `F`) came back with 29 findings, every one read by
+hand: dead imports, extraneous `f""` prefixes, unused test-local variables, two ambiguous
+`l` names, one `lambda`-assignment, and two `Optional`/`Tuple` names used in an annotation
+without being imported — shielded from a live `NameError` by the same deferred-annotations
+discipline above, but real hygiene gaps. Zero were false positives; zero were live bugs.
+Bugbear plus flake8-simplify (`B`, `SIM`) came back with 39, and this is where the tool's
+blind spots showed up before they shipped:
+
+- `SIM115` flagged every `open()` this repo deliberately keeps past its own function's
+  return — the `flock` handle a lock holds open for the caller's whole critical section
+  (`store/files.py`), and the log handle handed to a detached `subprocess.Popen` that
+  outlives the spawning function (`scripts/serve.py`, twice). The rule has no way to see
+  either invariant; both are now a per-line `# noqa: SIM115` naming it.
+- `B023` flagged a closure over a loop variable in a concurrency test
+  (`harness/tests/t7_store_and_seams.py`) where the closure is started and joined within
+  the same iteration, before the next one rebinds what it captured — bugbear's documented
+  blind spot for a closure consumed synchronously rather than escaping the loop.
+- `SIM118` is the one that actually broke something. It flagged six `for game in
+  games.keys()` calls in `cli/resolve.py` as the dict idiom `key in dict.keys()`, and
+  `games` there is the `pipeline.games` MODULE, not a dict — `keys()` is a real function
+  it exports, unrelated to `dict.keys`. Applying the suggested rewrite (`for game in
+  games`) parses fine and fails at runtime: `TypeError: 'module' object is not iterable`,
+  three tests deep into `make harness` (T3, T4, T7), through `cli/cmd_join.py` ->
+  `cli/resolve.py:games_claimed`. Ruff has no type information here — it pattern-matches
+  the syntax `x in y.keys()` regardless of what `y` actually is. Caught by running the
+  harness before calling the fix done, not by anything ruff itself could have said;
+  reverted, and the six sites carry `# noqa: SIM118` naming the module.
+
+**The ruling: `ruff.toml` pins `target-version = "py39"` and selects exactly `E4`, `E7`, `E9`, `F`, `B`, `SIM`.**
+Never ruff's own defaults, and never `--fix` on this codebase without a
+harness run after. `make lint` runs it alongside eslint, gated by the same shape of guard
+`NPM_GUARD` already used (`RUFF_GUARD`, `requirements.txt`), so a missing dependency fails
+loudly rather than letting `make check` go green having checked nothing. `--fix` is not
+wired anywhere, matching D18: nothing that writes may run on the path that decides whether
+a commit proceeds, and this repo has now measured, on its own tree, that an automated
+rewrite here is not a decision to make blind.
+
+**What this does not cover.** The other ~890 rule categories ruff enables by default —
+everything outside pyflakes, bugbear and flake8-simplify — are unmeasured against this
+repo and stay off. Widening the selection is a repeat of this same process: run it, read
+every finding by hand, and record what is real before it gates anything.
+
+---
+
+## D83 — A card leaves a box through a third door: moved, not sold or retired
+
+**Built 2026-09-01, on the owner's want to unbind runs from boxes and rip whole vats of cards between them — "I feel like I'm in a prison of my own making."**
+A card's position has always been `(box, index)`, baked into the store's dict key, its
+photo's filename, its sidecar, its section boundaries, its queue entries and its listing
+holds — and no primitive anywhere moved one. This entry is the primitive.
+
+**A move is the same kind of event as a sale or a retirement, not the same kind of event as `do_remove_card`'s mid-box delete.**
+Two shapes were on the table. One generalised the delete-with-shift: cascade every higher
+card in the source box down one index, the way a delete already does. The other left the
+vacated position a permanent tombstone and recorded the card fresh at a newly allocated
+index elsewhere — D26's `retired` pattern, extended to a third destination instead of an
+exit. The cascade shape lost, for a reason sharper than taste: D58 (2026-08-30, two days
+before this entry) already re-argued and rejected moving the stored index for exactly this
+class of change, building `pipeline/join.py:Position` specifically so stored indices can
+stay put forever while rendered ranks close up over gaps. Reopening that argument for moves
+would not just fail to reuse D58's machinery — it would actively refight it. And the cascade
+shape has a second, harder failure: it inherits `do_remove_card`'s `renumber_blocked`
+refusal, which blocks a shift across any sold, retired or listing-held card above the
+target. A box that has been sold through even partway would refuse to give up almost
+anything through that door. The tombstone shape refuses none of that, because nothing else
+in the box moves.
+
+**`MOVED` joins `master.TERMINAL_STATES`, and that membership is where the payoff is.**
+`pipeline/join.py`'s occupancy rendering, `_Places`, `copies_on_hand` and every other reader
+already key off that tuple to decide what still occupies a box — so a moved card's gap
+closes up on screen for free, with zero changes to any of them. This is the same kind of
+"add a state, inherit the machinery" move D26 made for `retired`, applied a second time.
+
+**The tombstone clears `sku`, `condition`, `capture_id` and `photo`; the transplant keeps them.**
+This is the sharpest correctness requirement in the whole change, not decoration.
+`copies_not_sold` (D59's per-SKU shelf cap) and `positions_for_sku` both filter on `sku`
+alone, with no state exclusion — a tombstone that kept its SKU would be counted alongside
+its own transplant forever, double-billing every cap and every copies-of-this-SKU list.
+`capture_id` moves for the reason `card_by_capture_id` exists at all: two cards sharing one
+id raises `DuplicateCaptureId`. Descriptive fields — name, number, game, confidence and the
+rest — stay on the tombstone, exactly as `retire()` leaves them, so a person looking at the
+old slot's history still sees what card used to be there.
+
+**No listing-hold guard, unlike `do_remove_card`'s `card_listed` refusal.**
+D7 already treats a SKU's backing copies as fungible and position-independent — which
+physical copy backs a stage is deliberately unrecorded — so a card carrying an active
+listing hold is free to change boxes. The hold travels with the transplant's `sku`
+untouched, and nothing about `_release_plan`/`_listing_hold` reads a card's box in the
+first place.
+
+**Undo is not a separate operation, control, or result shape.**
+A transplant is not itself terminal — it is a normal record in whatever state it was in
+before the move — so moving it back is calling the same primitive again, in the other
+direction. It lands at a *fresh* index in the original box; the first tombstoned key is
+never reclaimed, the same permanent-gap behavior every other terminal state already has. No
+`undo_move` route exists and none is needed.
+
+**A card that has already left through this door refuses to leave again.**
+`card_moved` joins `card_sold` and `card_retired` at every route a departed card's
+target-state check already guarded: `do_remove_card`, `do_delete_box`'s blocker naming,
+`do_mark_sold`, `do_retire`, and `do_reshoot`. `store/master.py:Inventory.move_card` raises
+the generic `CardDeparted`/`CardNotFound` as a backstop for any caller that reaches it
+without going through a route's own richer check — the same belt-and-braces relationship
+`BoxClosed` already has with `allocate_capture`.
+
+**`_state_before_sale`/`_state_before_retirement` needed a third guard, not just the two they already had.**
+Both scan `history.jsonl` backwards for the last event naming a state, filtered against
+`master.STATES` — and `MOVED` becoming a member of that tuple means a hand-edited or
+corrupted history carrying a `moved` line directly under a `sold` or `retired` one would,
+without a guard, be handed back as a state to restore *to*. That is worse than the
+`retired`-under-`sold` hazard those functions already refuse: `set_state` accepts `moved`
+without complaint, since it is a plain state, but `Inventory.move_card` is the *only*
+correct way to reach it and never calls `set_state` — so a card restored to `moved` this
+way would carry no `moved_to`, no transplant, and no tombstone shape at all. Both functions
+refuse with `None` on a `moved` line, mirroring their existing `retired`/`sold` refusals
+exactly.
+
+**The batched primitive, `Inventory.move_cards`, is one call inside one lock, and order is the caller's.**
+Each card handed in ascending source-index order consumes the destination's next
+`next_index()` in turn, so a ticked selection or a section lands contiguously at the
+destination in the same relative order it left in — no separate bookkeeping for it. A whole
+box moved this way (`indices: null`) *is* a merge, from the caller's side; there is no
+separate merge route, and none is needed.
+
+**`_box_row` gained a `moved` count, beside `sold` and `retired`.**
+Same reason those two exist at all: so the delete panel can name which of
+`box_not_empty_of_commitments`'s grounds is holding a box open before anything is pressed.
+A box emptied by moving every card out of it (the merge case) is left holding only
+tombstones — departure records exactly like sold or retired ones — and stays undeletable
+through `do_delete_box`'s existing gate until each is accounted for. This is a real, named
+cost of a merge: the source box cannot be reclaimed for reuse afterward. Surfaced on the
+confirmation screen rather than discovered at a later delete attempt.
+
+**Named risk, not fixed here: the file move happens after the store call, not before.**
+`do_remove_card`'s "files first" ordering works because its destination indices are
+deterministic (`at - 1`) before any record is touched. A move's destination index is not
+knowable until `Inventory.move_card` allocates it, so the photo rename necessarily comes
+after. A crash between a successful rename and this request's commit leaves a photo at the
+new path while `inventory.json` still names the old one; recovery in that narrow window is
+manual. A second, related risk: `cli/resolve.py:realign` reads photo bytes off disk with no
+lock at all (a free, re-runnable CLI step, by design), and a move's cross-directory rename
+can race it. Neither is fixed in this entry — the accepted mitigation is not running a move
+concurrently with a `join --realign`, named rather than engineered around, in the company of
+`_sale_origin`'s own unlocked read.
+
+**What this entry BUILDS:** `MOVED`/`Card.moved_to`/`Box.section_names` in
+`store/master.py`; `Inventory.move_card`/`move_cards`; `do_move_card`
+(`POST /inventory/<box>/<index>/move`) and `do_move_cards`
+(`POST /inventory/<box>/move`, `indices: null` serving a whole-box move/merge); the six
+`MOVED` arms across `do_remove_card`, `do_delete_box`, `do_mark_sold`, `do_retire`,
+`do_reshoot` and the two `_state_before_*` guards; the `moved` count on `_box_row`; the
+client functions `moveCard`/`moveCards` in `app/src/server.ts`; and a reachable control —
+"Move to box" — beside Set Claims in `BoxOps.tsx`, gated on the ticked selection or the
+box's on-hand count exactly as Set Claims is, taking a typed destination box number.
+
+**What this entry does NOT build, named rather than left silent:** a searchable box picker
+(the control takes a typed number, not the richer name-search field the capture screen
+uses); a dedicated section-move affordance that reads a section's own name and carries it to
+a fresh divider at the destination (`Box.section_names` exists on the record but has no
+write path yet — sections move as plain index lists, unnamed); a dedicated split-box route
+(reachable today as create-a-box-then-move-into-it, two requests rather than one); and D48's
+reopening — an operator-chosen `combine` flag letting one identification run span several
+boxes. All four are compositions of, or thin additions beside, what this entry built rather
+than architectural gaps in it, and D48 in particular is unchanged and ungoverned by this
+entry: the cart still spawns one run per box, and an operator who wants one ruling across
+boxes has no way to ask for it yet.
+
+**What would reopen this:** a move that needs to cross a filesystem boundary (today
+`captures/cards/` is one tree and `os.replace` is atomic across it; a store layout that
+splits boxes across mounts breaks that assumption); a demonstrated need for the crash-window
+risk above to be closed rather than merely named; or the owner asking for the four
+not-built pieces above, in which case each is its own small entry rather than a reopening of
+this one.
 ## D84 — A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 
 **Built 2026-09-01, from three traces the owner recorded after D81 and handed back with one question: whether those were flawless runs.**

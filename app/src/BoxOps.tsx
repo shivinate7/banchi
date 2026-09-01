@@ -8,6 +8,7 @@ import type {
   BoxListingPlan,
   BoxListingRow,
   ListingReleaseResult,
+  MoveCardsResult,
   Place,
   SectionDetail,
 } from './types'
@@ -18,6 +19,7 @@ import {
   describeFailure,
   getBoxListings,
   getGames,
+  moveCards,
   releaseBoxListings,
   updateBox,
 } from './server'
@@ -658,12 +660,18 @@ export function BoxOps({
     write(() => updateBox(record.box, patch))
   /* Which editor is open, or null. One at a time per box: two open fields over one record is
    * two half-finished edits racing for the same lock. */
-  const [editing, setEditing] = useState<'name' | 'sections' | 'claims' | null>(null)
+  const [editing, setEditing] = useState<'name' | 'sections' | 'claims' | 'move' | null>(null)
   const [draft, setDraft] = useState('')
   const [refused, setRefused] = useState<string | null>(null)
   /* The last box-wide apply's receipt, or null. Held past the editor closing because the
    * numbers are the only evidence of what a write over eighty-five records actually did. */
   const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
+  /* D83's move — the destination box, typed rather than picked. The same free-text field
+   * shape the capture screen's own Box field uses is the richer version of this; this is
+   * the minimum that makes the route reachable from a screen (CLAUDE.md's own rule), and a
+   * search-by-name picker is a real follow-up rather than a silent gap. */
+  const [moveTo, setMoveTo] = useState('')
+  const [moved, setMoved] = useState<MoveCardsResult | null>(null)
 
   /* What an apply will reach, said the same way on the heading and on the button. The
      selection when there is one, the whole box when there is not — the widening argued at
@@ -687,6 +695,27 @@ export function BoxOps({
     }
   }
 
+  /* D83. `indices: null` moves every on-hand card — a whole-box move, which is a merge
+   * from this button's side; there is no separate merge control. A selection narrows it
+   * to a ticked set or a section, the same widening rule `scope`/`applyClaims` already
+   * follow. `to_box` is typed rather than validated client-side beyond "is it digits" —
+   * the server's own `to_box_invalid`/`box_closed`/`to_box_same` refusals are the ones
+   * with something true to say about a destination this component cannot check. */
+  const doMove = async () => {
+    const toBox = Number.parseInt(moveTo.trim(), 10)
+    if (!Number.isInteger(toBox) || toBox < 1) {
+      setRefused('Destination box is a whole number, 1 or higher.')
+      return
+    }
+    const result = await write(() =>
+      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox),
+    )
+    if (result !== null) {
+      setMoved(result)
+      setEditing(null)
+    }
+  }
+
   /* The parsed layout waiting on the owner's answer to the relabel warning, or null. A separate
    * state from the draft because the warning is a statement about a PARSED layout — it names
    * the first index that moves and counts what sits behind it, and neither is knowable from the
@@ -699,10 +728,12 @@ export function BoxOps({
      readings they draw. */
   const fill = known(record.fill)
 
-  const startEdit = (which: 'name' | 'sections' | 'claims') => {
+  const startEdit = (which: 'name' | 'sections' | 'claims' | 'move') => {
     setRefused(null)
     setProposed(null)
     setClaimed(null)
+    setMoved(null)
+    setMoveTo('')
     setEditing(which)
     setDraft(which === 'name' ? (record.name ?? '') : writeIndices(record))
   }
@@ -870,6 +901,24 @@ export function BoxOps({
               onClick={() => startEdit('claims')}
             />
           ) : null}
+          {/* D83's third door, drawn beside Set claims for the same reason: it is the other
+              control here that acts on cards rather than on the box, and `selection`/`on_hand`
+              gate it the identical way — absent over a box with nothing that could move,
+              rather than disabled. `record.on_hand` and not `record.cards`: a box holding only
+              sold, retired or already-moved records has nothing left to relocate, even though
+              `cards` still counts their tombstones. */}
+          {selection.length > 0 || (record.on_hand ?? 0) > 0 ? (
+            <Op
+              label="Move to box"
+              detail={
+                selection.length > 0
+                  ? `${selection.length} ticked`
+                  : count(record.on_hand ?? 0, 'card', 'cards')
+              }
+              busy={busy}
+              onClick={() => startEdit('move')}
+            />
+          ) : null}
         </div>
       ) : editing === 'claims' ? (
         <ClaimEditor
@@ -897,6 +946,34 @@ export function BoxOps({
               onClick={() => void saveName()}
             >
               Save name
+            </button>
+            <button className="boxops-plain" type="button" onClick={closeEdit}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : editing === 'move' ? (
+        <div className="boxops-editor">
+          <Field
+            label="Destination box"
+            value={moveTo}
+            onChange={setMoveTo}
+            placeholder="e.g. 7"
+          />
+          <p className="boxops-hint">
+            {selection.length > 0
+              ? `Moves the ${count(selection.length, 'selected card', 'selected cards')} — the tombstoned position here stays, permanently empty (D83).`
+              : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in box ${record.box} — the same operation a merge is, from this side.`}
+          </p>
+          {refused === null ? null : <p className="boxops-machine">{refused}</p>}
+          <div className="boxops-actions">
+            <button
+              className="boxops-plain"
+              type="button"
+              disabled={busy}
+              onClick={() => void doMove()}
+            >
+              Move
             </button>
             <button className="boxops-plain" type="button" onClick={closeEdit}>
               Cancel
@@ -939,6 +1016,17 @@ export function BoxOps({
       )}
 
         {claimed === null ? null : <ClaimReceipt result={claimed} />}
+
+        {moved === null ? null : (
+          <div className="boxops-note">
+            <p className="boxops-note-text">
+              Moved {count(moved.moved, 'card', 'cards')} from box {moved.box} to box{' '}
+              {moved.to_box}. The {count(moved.moved, 'position', 'positions')} left behind
+              {moved.moved === 1 ? ' stays' : ' stay'} permanently empty (D83) — the same
+              gap a sale or a retirement leaves.
+            </p>
+          </div>
+        )}
 
         <Trouble failure={trouble} />
 

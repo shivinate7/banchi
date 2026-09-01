@@ -1,0 +1,20 @@
+# D82's config, not a default install. `target-version` matters more than the ruleset: it is
+# what makes pyupgrade-family rules (off, below) refuse to suggest PEP 604 syntax that is a
+# runtime TypeError on the 3.9.6 this repo pins (requirements.txt's zxing-cpp comment). Ruff's
+# own zero-config default assumes a newer interpreter and would mark those rewrites "safe."
+target-version = "py39"
+
+[lint]
+# pyflakes + the basic pycodestyle errors, plus bugbear and flake8-simplify. NOT ruff's
+# default (~900 rules): the other categories are unmeasured against this tree, and three
+# rules in exactly this selection already produced confirmed false positives here — see the
+# per-line `noqa` comments this file's rules will not silence:
+#   SIM115  flags every `open()` this repo keeps open on purpose past its own function — a
+#           lock's flock handle (store/files.py), a detached child's log handle (scripts/serve.py).
+#   B023    flagged a closure over a loop variable in a test that is started and joined
+#           inside the same iteration — bugbear's known blind spot for a consumed closure.
+#   SIM118  flagged `x in y.keys()` in cli/resolve.py, where `y` is the pipeline.games
+#           MODULE, not a dict — `.keys()` is a real function there. Applying the suggested
+#           fix broke `make harness` (T3/T4/T7, `TypeError: 'module' object is not
+#           iterable`) before it was caught and reverted.
+select = ["E4", "E7", "E9", "F", "B", "SIM"]

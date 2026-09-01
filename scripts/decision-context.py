@@ -129,9 +129,10 @@ def track_for(relative: str) -> Optional[Dict[str, object]]:
     best: Optional[Dict[str, object]] = None
     for track in literals(MAP).get("TRACKS") or []:  # type: ignore[union-attr]
         owns = str(track.get("owns") or "")
-        if owns and relative.startswith(owns):
-            if best is None or len(owns) > len(str(best.get("owns") or "")):
-                best = track
+        if owns and relative.startswith(owns) and (
+            best is None or len(owns) > len(str(best.get("owns") or ""))
+        ):
+            best = track
     return best
 
 

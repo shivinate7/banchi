@@ -163,9 +163,8 @@ def _presentations(rows, t_hi: float, merge_ms: float = 300.0) -> list[float]:
     out: list[float] = []
     above = False
     for t, d, _dbase, _luma in rows:
-        if d > t_hi and not above:
-            if not out or t - out[-1] >= merge_ms:
-                out.append(t)
+        if d > t_hi and not above and (not out or t - out[-1] >= merge_ms):
+            out.append(t)
         above = d > t_hi
     return out
 
@@ -240,7 +239,7 @@ def sweep(paths: list[str]) -> None:
         t_hi_live = trace["params"].get("tHi") or (trace["params"]["dSeed"] * trace["params"]["moveK"])
         loaded.append((Path(path).name, rows, len(_presentations(rows, t_hi_live)), len(trace["events"])))
     print("presentations:", {name: p for name, _r, p, _l in loaded})
-    print("live verdicts:", {name: l for name, _r, _p, l in loaded})
+    print("live verdicts:", {name: verdict for name, _r, _p, verdict in loaded})
     for still_k in (1.4, 1.6, 1.8, 2.0, 2.2, 2.5):
         scored = [len(_replay(rows, still_k, still_k * 16 / 9, 4.5 / still_k)[0]) for _n, rows, _p, _l in loaded]
         meets = all(v >= live - 1 for v, (_n, _r, _p, live) in zip(scored, loaded))
@@ -256,7 +255,9 @@ def contact(path: str, out: str) -> None:
     try:
         from PIL import Image, ImageDraw  # noqa: PLC0415
     except ImportError:
-        raise SystemExit("contact needs Pillow: pip install pillow (or use the repo venv)")
+        raise SystemExit(
+            "contact needs Pillow: pip install pillow (or use the repo venv)"
+        ) from None
     trace = _load(path)
     x0, y0, x1, y1 = trace["grid"]["roi"]
     width, height = x1 - x0, y1 - y0

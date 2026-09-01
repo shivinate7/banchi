@@ -232,6 +232,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import os
@@ -474,6 +475,16 @@ _RESHOOT_RE = re.compile(r"^/inventory/(\d+)/(\d+)/photo$")
 # `do_remove_card` demands the target's own `capture_id` and refuses a mismatch, so a
 # replay of a lost response refuses instead of deleting a second card.
 _REMOVE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/remove$")
+# D83's third door. A POST beside `remove` and `retire`, for the identical shape of reason:
+# a different verb on a path longer than `/inventory/<box>/<index>`, whose own regex is
+# anchored to end there, so this cannot shadow the PUT and DELETE routes. Aim-checked like
+# `remove` and not idempotent like a capture — see `MOVE_FIELDS`.
+_MOVE_RE = re.compile(r"^/inventory/(\d+)/(\d+)/move$")
+# The batched move (D83): every on-hand card in a box, or a ticked selection of them, in one
+# write. Box-level like `_INVENTORY_BOX_RE` one register up, and matched after the single-
+# card `_MOVE_RE` for the reader's sake — both are anchored and admit no ambiguity between
+# them, since one carries an index and the other does not.
+_MOVE_CARDS_RE = re.compile(r"^/inventory/(\d+)/move$")
 # Digits only, like every other position pattern here: `/boxes/3`, never `/boxes/three`.
 # A non-numeric box therefore falls through to `no_such_route` rather than reaching a
 # handler that would refuse it in `box_invalid` — the same trade the four patterns above
@@ -671,6 +682,19 @@ RESHOOT_FIELDS = ("image", "capture_id")
 # again. The one target this cannot protect is a record with no id at all whose upstairs
 # neighbour also has none; both are pre-server records, and the limit is named at the check.
 REMOVE_FIELDS = ("capture_id",)
+
+# One card's move (D83). `capture_id` is the SAME aim check `REMOVE_FIELDS` above takes and
+# for the identical reason: `move_card` is not idempotent — a replayed request after a lost
+# response must not move whatever card now happens to sit at this key, which after a first
+# successful move is nothing at all (the key is a tombstone). `to_box` is the one thing this
+# body adds that a delete does not need: a destination.
+MOVE_FIELDS = ("capture_id", "to_box")
+
+# The batched move (D83): a list of indices IN THIS BOX, or `null` for every on-hand one —
+# the shape that makes a whole-box move (merge, from the caller's side) the same request as
+# a ticked selection, with no second field to mean "everything". `to_box` is required either
+# way; there is no such thing as moving nowhere.
+MOVE_CARDS_FIELDS = ("indices", "to_box")
 
 # What `POST /boxes/<box>/listings/release` accepts. `confirm` is required and must be
 # exactly `true` — D33's field, reused rather than reinvented, and required for its reason:
@@ -2577,7 +2601,7 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # re-validated here: the stale members cost a recorded problem at the next sidecar
         # read (`identify/sidecar.py` drops them, loudly) rather than a refusal that would
         # force every game correction to restate a claim it never mentioned.
-        judged_against = incoming["game"] if "game" in incoming else card.game
+        judged_against = incoming.get("game", card.game)
         if "variant" in payload:
             # The RETURN is what lands, not `variant_shape`: this is where the claim is put
             # into the game's enum order, and only this side knows the game (D3 rung 1's set
@@ -2773,7 +2797,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 _check_rarity_members(claim_shape, incoming["game"])
         elif "variant" in payload or "rarity_claim" in payload:
             rejected: List[Tuple[int, str]] = []
-            for at, key, card in targets:
+            for at, _key, card in targets:
                 try:
                     if "variant" in payload:
                         _check_variant_members(variant_shape, card.game)
@@ -2812,7 +2836,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 # on disk and make the next restated sweep diff as a change.
                 fields["metadata_finish"] = _check_variant_members(
                     variant_shape,
-                    incoming["game"] if "game" in incoming else card.game,
+                    incoming.get("game", card.game),
                 )
             if "rarity_claim" in payload:
                 fields["rarity_claim"] = claim_shape
@@ -2842,7 +2866,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
                 )
                 sidecars += 1
 
-        for at, key, changed in applied:
+        for _at, key, changed in applied:
             _history(inventory, CORRECTED, key, changed=changed, bulk=len(applied))
 
     return {
@@ -3369,6 +3393,16 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                 f"permanent gap (D26). If it is back in the box, send "
                 f"{{\"undo\": true}} to `/inventory/{box}/{index}/retire` first.",
             )
+        if card.state == master.MOVED:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_moved",
+                f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this key is "
+                f"a permanent tombstone, the same as a sold or retired one, and deleting it "
+                f"would put a future capture into a box this card's own history still "
+                f"claims. The card itself is not gone: move the transplant at "
+                f"{card.moved_to} instead.",
+            )
         held = _listing_hold(inventory, card)
         if held:
             summary = ", ".join(f"{count} {stage}" for stage, count in held)
@@ -3595,6 +3629,307 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # The index this box hands out next. After a shift that is the old high-water
         # mark: the top slot emptied, so the box got one position shorter.
         "next_index": released,
+    }
+
+
+def _move_one(
+    snapshot, inventory: master.Inventory, key: str, box: int, index: int, to_box: int
+) -> dict:
+    """One card's whole move, against an ALREADY-OPEN snapshot. `do_move_card`'s body,
+    lifted out so `do_move_cards` can call it in a loop inside ONE `Store.write()` — the
+    same reason `_sell` is snapshot-only rather than opening its own session.
+
+    THE STATE CHECKS ARE ROUTE-LEVEL, NOT `Inventory.move_card`'s, mirroring
+    `do_remove_card`'s three-way check rather than leaning on the generic `CardDeparted`
+    that method itself raises as a backstop. The reason is the same one every other
+    terminal-state refusal in this file gives: a person reading `card_sold` knows to send
+    `undo` to `/sold` first, and `card_departed` naming nothing would send them hunting.
+    `CardNotFound`/`CardDeparted`/`BoxClosed`/`PositionOccupied` still reach `_dispatch`'s
+    generic handlers for any caller that skips these checks — store/master.py's own
+    defense, not duplicated here, just not solely relied upon.
+
+    FILES MOVE AFTER THE STORE CALL, not before, and that is a real difference from
+    `do_remove_card`'s "files first" rule — worth stating rather than silently diverging.
+    That rule exists because the shift's destination indices are deterministic (`at - 1`)
+    before a single record is touched. This move's destination index is not knowable until
+    `Inventory.move_card` allocates it, so the file move necessarily comes after. What this
+    costs, named rather than engineered around: a crash between the successful file rename
+    and this block's commit leaves a photo at the new path while `inventory.json` on disk
+    still names the old one. Recovery is manual in that narrow window — move the file back,
+    or finish the record side by hand — the same class of accepted risk this file already
+    takes with `_sale_origin`'s unlocked read, stated rather than hidden.
+    """
+    card = inventory.cards.get(key)
+    if card is None:
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "card_not_found",
+            f"No card at box {box}, card {index}. A move relocates a card that exists.",
+        )
+    if card.state == master.SOLD:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "card_sold",
+            f"Box {box}, card {index} is sold, and its gap is the permanent record of "
+            f"that sale (D10) — a sold card has already left through the other door. If "
+            f"the sale was recorded in error, send {{\"undo\": true}} to "
+            f"`/inventory/{box}/{index}/sold` first.",
+        )
+    if card.state == master.RETIRED:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "card_retired",
+            f"Box {box}, card {index} is retired ({card.retire_reason}) — it already "
+            f"left inventory by its own door (D26). If it is back in the box, send "
+            f"{{\"undo\": true}} to `/inventory/{box}/{index}/retire` first.",
+        )
+    if card.state == master.MOVED:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "card_moved",
+            f"Box {box}, card {index} was already moved to {card.moved_to} (D83). Move "
+            f"the transplant at {card.moved_to} instead.",
+        )
+
+    had_photo = bool(card.photo)
+    tombstone, transplant = inventory.move_card(key, to_box)
+    new_key = transplant.key
+
+    photo_moved = False
+    sidecar_moved = False
+    if had_photo:
+        src = photo_path(box, index)
+        dst = photo_path(transplant.box, transplant.index)
+        if src.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(src, dst)
+            photo_moved = True
+        elif dst.is_file():
+            # A retry of a request that already moved the file — same "source missing
+            # means an earlier attempt already moved it" reasoning `do_remove_card` uses,
+            # narrower here because there is only ever one destination to check.
+            photo_moved = True
+        else:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "photo_missing",
+                f"Box {box}, card {index}'s record names a photo, and the file is at "
+                f"neither its old path nor the new one. A move relocates a file it can "
+                f"prove exists — re-shoot the card first, or restore the file, then "
+                f"retry. Nothing has been committed.",
+            )
+        transplant.photo = str(dst)
+        files.write_json(
+            sidecar_path(dst),
+            sidecar_payload(
+                transplant.box,
+                transplant.index,
+                **{name: getattr(transplant, name) for name in CLAIM_WIRE_NAMES},
+            ),
+        )
+        sidecar_moved = True
+        _unlink(sidecar_path(src))
+
+    # Re-keyed, not dropped — `do_remove_card`'s rule and its reason: an open review
+    # question or a paid identification answer follows the physical card to its new
+    # address, because the card is the same card and the question is still open.
+    try:
+        layout = inventory.sections_for(transplant.box)
+    except master.BadSections:
+        layout = None
+    label = (
+        join.Position(int(transplant.box), transplant.index, layout).label
+        if layout is not None
+        else None
+    )
+    review_moved = False
+    parked_moved = False
+    for queue in (snapshot.review, snapshot.parked):
+        entry = queue.entries.pop(key, None)
+        if entry is None:
+            continue
+        entry.position = new_key
+        entry.box = int(transplant.box)
+        entry.index = transplant.index
+        if label is not None:
+            entry.label = label
+        if entry.photo and photo_moved:
+            entry.photo = transplant.photo
+        queue.entries[new_key] = entry
+        if queue is snapshot.review:
+            review_moved = True
+        else:
+            parked_moved = True
+    cache_moved = False
+    cached = snapshot.cache.entries.pop(key, None)
+    if cached is not None:
+        snapshot.cache.entries[new_key] = cached
+        cache_moved = True
+
+    return {
+        "moved": key,
+        "to": new_key,
+        "box": int(box),
+        "index": int(index),
+        "new_box": int(transplant.box),
+        "new_index": int(transplant.index),
+        "photo_moved": photo_moved,
+        "sidecar_moved": sidecar_moved,
+        "review_moved": review_moved,
+        "parked_moved": parked_moved,
+        "cache_moved": cache_moved,
+    }
+
+
+def do_move_card(box: int, index: int, payload: dict) -> dict:
+    """Move one card to a fresh index in another box. D83 — the third door, addressed.
+
+    A THIRD DOOR OUT OF A BOX, NOT A SHIFT. `do_remove_card` above cascades every higher
+    card down one slot; this touches no card but the one named. The position at `box`,
+    `index` becomes a permanent tombstone (`store/master.py:Inventory.move_card` carries
+    the full argument for why: D58 already re-argued and rejected moving the stored index
+    for exactly this class of change), and the card itself is recorded fresh at a newly
+    allocated index in `to_box` — the ordinary `next_index` mechanism, not a slide.
+
+    NO LISTING-HOLD GUARD, DELIBERATELY, unlike `do_remove_card`'s `card_listed` refusal.
+    D7 already treats a SKU's backing copies as fungible and position-independent — which
+    physical copy backs a stage is unrecorded on purpose — so a card carrying an active
+    listing hold is free to change boxes; the hold travels with the transplant's `sku`
+    untouched, and nothing about `_release_plan`/`_listing_hold` reads a card's box.
+
+    UNDO IS THIS SAME ROUTE, RUN AGAIN. The transplant is not terminal, so moving it back
+    is an ordinary second move — it lands at a fresh index in the original box, and the
+    first tombstoned key is never reclaimed, same as any other permanent gap.
+
+    See `_move_one` for the state checks, the file-move ordering and its one named risk.
+    """
+    _reject_unknown(payload, MOVE_FIELDS)
+    if "capture_id" not in payload:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "capture_id_required",
+            "Send the target's own capture_id — the one its inventory row carries, or "
+            "null for a record that predates capture ids. It is what stops a stale or "
+            "replayed request from moving the card that now sits at this position.",
+        )
+    aimed_at = _optional_text(payload, "capture_id")
+    to_box = _require_to_box(payload)
+
+    key = master.position_key(box, index)
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        card = inventory.cards.get(key)
+        if card is not None and (card.capture_id or None) != aimed_at:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "capture_id_mismatch",
+                f"The card at box {box}, card {index} is not the one this request "
+                f"describes — its capture_id is {card.capture_id!r}, not {aimed_at!r}. "
+                f"The box has probably shifted since it was read. Re-read the inventory "
+                f"and aim again; nothing was moved.",
+            )
+        result = _move_one(snapshot, inventory, key, box, index, to_box)
+        result["card"] = _card_row(
+            inventory, result["new_box"], result["new_index"],
+            inventory.cards[result["to"]],
+        )
+
+    return result
+
+
+def _require_to_box(payload: dict) -> int:
+    raw = payload.get("to_box")
+    if raw is None:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a destination box number.")
+    try:
+        to_box = int(raw)
+    except (TypeError, ValueError):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST, "to_box_invalid", f"to_box was {raw!r}; send a whole number."
+        ) from None
+    if to_box < 1:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST, "to_box_invalid", f"to_box was {to_box}; boxes start at 1."
+        )
+    return to_box
+
+
+def do_move_cards(box: int, payload: dict) -> dict:
+    """Move several cards from `box` to `to_box` in one write. D83.
+
+    `indices: null` MOVES EVERY ON-HAND CARD — a whole-box move, which is what a merge
+    is from the caller's side: nothing about this route needs to know it is being used
+    that way. `indices: [...]` is a ticked selection or a section's membership, computed
+    by the caller from the box's own live rendering (`GET /boxes` already draws
+    `sections_detail`) — this route trusts the list rather than recomputing section
+    boundaries itself, the same trust `PUT /inventory/<box>`'s `indices` narrowing
+    already extends to a caller's mass-select.
+
+    ONE `Store.write()` FOR THE WHOLE LIST, so a crash or a refusal partway through
+    leaves nothing half-migrated — every earlier card's move is discarded along with the
+    one that failed, the same all-or-nothing shape `_sell` gives a multi-copy sale.
+
+    ORDER IS THE CALLER'S, ASCENDING BY CONVENTION, AND IT IS WHAT MAKES THE LANDING
+    CONTIGUOUS. Each move consumes the destination's next `next_index` in turn — see
+    `store/master.py:Inventory.move_cards` — so cards sent in ascending source-index
+    order land in that same relative order at the destination, with no separate
+    bookkeeping for it.
+
+    A card no longer on hand (already sold, retired, or moved by an earlier request) is
+    a real refusal here, not silently skipped — `CLAUDE.md` forbids dropping a card
+    without saying so, and a ticked selection that raced another session's write is
+    exactly the case that refusal exists for.
+    """
+    _reject_unknown(payload, MOVE_CARDS_FIELDS)
+    to_box = _require_to_box(payload)
+    raw_indices = payload.get("indices")
+    if raw_indices is not None:
+        if not isinstance(raw_indices, list) or not raw_indices:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "indices_invalid",
+                "indices must be a non-empty list of card numbers, or null to move "
+                "every on-hand card in the box.",
+            )
+        try:
+            wanted = sorted({int(v) for v in raw_indices})
+        except (TypeError, ValueError):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "indices_invalid", f"{raw_indices!r} is not a list of whole numbers."
+            ) from None
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if raw_indices is None:
+            wanted = sorted(
+                _position_int(card.index, f"index of card {key}")
+                for key, card in inventory.cards.items()
+                if _position_int(card.box, f"box of card {key}") == int(box)
+                and card.state not in master.TERMINAL_STATES
+            )
+            if not wanted:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "box_empty",
+                    f"Box {box} holds no on-hand cards to move.",
+                )
+        if int(to_box) == int(box):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "to_box_same",
+                f"to_box is box {box} itself — nothing to move.",
+            )
+        results = []
+        for at in wanted:
+            key = master.position_key(box, at)
+            results.append(_move_one(snapshot, inventory, key, box, at, to_box))
+
+    return {
+        "box": int(box),
+        "to_box": int(to_box),
+        "moved": len(results),
+        "cards": results,
     }
 
 
@@ -3892,6 +4227,12 @@ def do_delete_box(box: int) -> dict:
                 blockers.append((at, f"card {at} is sold"))
             elif card.state == master.RETIRED:
                 blockers.append((at, f"card {at} is retired ({card.retire_reason})"))
+            elif card.state == master.MOVED:
+                # D83's third door, named exactly like the other two: a moved card's
+                # tombstone is a departure record, not clutter, so a box left holding only
+                # tombstones (the residue of a merge) stays undeletable until each is
+                # accounted for — the same gate `box_not_empty_of_commitments` already is.
+                blockers.append((at, f"card {at} was moved to {card.moved_to}"))
             else:
                 held = _listing_hold(inventory, card)
                 if held:
@@ -4546,9 +4887,7 @@ def _catalog_matches(catalog, game: str, query: str) -> List[dict]:
         sku = str(row.get(tcgcsv.SKU_COLUMN, ""))
         if wanted and name == wanted:
             rank = 0
-        elif number and cell == number:
-            rank = 1
-        elif sku and sku == query.strip():
+        elif (number and cell == number) or (sku and sku == query.strip()):
             rank = 1
         elif wanted and wanted in name:
             rank = 2  # the epithet case: the read is part of the catalogued title
@@ -5026,14 +5365,14 @@ def do_review_stand_down(box: int, index: int, payload: dict) -> dict:
     )
     try:
         reason = queues.check_stand_down_reason(reason)
-    except queues.UnknownStandDownReason:
+    except queues.UnknownStandDownReason as exc:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "stand_down_reason_invalid",
             f"{reason!r} is not a stand-down reason. One of: "
             + ", ".join(queues.STAND_DOWN_REASONS)
             + ". Never coerced and never defaulted — the reason is the record.",
-        )
+        ) from exc
 
     key = master.position_key(box, index)
 
@@ -5707,12 +6046,21 @@ def _state_before_sale(events: Sequence[dict], key: str) -> Optional[str]:
     `retired`-with-a-live-listing, and scanning past it to an older state would silently
     erase the retirement. `sold_origin_unknown` names a file to go and look at, which is
     what this situation is.
+
+    `moved` IS `retired`'s SIBLING GUARD (D83), and for a sharper reason than symmetry:
+    `set_state` accepts `moved` without complaint — it is a plain member of `master.STATES`
+    — but `store/master.py:Inventory.move_card` is the ONLY correct way to reach it, and it
+    never uses `set_state` at all. A `moved` line directly under a `sold` one is therefore
+    not just hand-edited history, the way a `retired` one is; if this scan let it through as
+    `previous` and a caller passed it to `set_state`, the card would land in state `moved`
+    with no `moved_to`, no transplant, and no tombstone shape — a card claiming to have left
+    through a door it never went through. Refused for the same reason `retired` is.
     """
     for event in reversed(list(events)):
         if event.get("position") != key:
             continue
         state = event.get("event")
-        if state == master.RETIRED:
+        if state in (master.RETIRED, master.MOVED):
             return None
         if state in master.STATES and state != master.SOLD:
             return str(state)
@@ -5735,12 +6083,17 @@ def _state_before_retirement(events: Sequence[dict], key: str) -> Optional[str]:
     logs its restored state on top — so a `sold` line directly under a `retired` one is
     hand-edited history, and restoring to it would fabricate a sale this store never
     recorded. `retired_origin_unknown` sends the operator to the file instead.
+
+    `moved` REFUSES TOO (D83), same reason `_state_before_sale` refuses it: `moved` is
+    reachable only through `Inventory.move_card`, which never calls `set_state`, so handing
+    it back as a state to restore TO would put a card in that state with none of the
+    tombstone shape `move_card` guarantees — no `moved_to`, no transplant.
     """
     for event in reversed(list(events)):
         if event.get("position") != key:
             continue
         state = event.get("event")
-        if state == master.SOLD:
+        if state in (master.SOLD, master.MOVED):
             return None
         if state in master.STATES and state != master.RETIRED:
             return str(state)
@@ -5880,6 +6233,14 @@ def _sell(snapshot, box: int, index: int, undo: bool) -> dict:
                 f"the record of a departure with a transaction that did not happen. If "
                 f"it genuinely sold after all, send {{\"undo\": true}} to "
                 f"`/inventory/{box}/{index}/retire` first, then mark it sold.",
+            )
+        if was == master.MOVED:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_moved",
+                f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this key "
+                f"is a tombstone, not the card. Mark the transplant at {card.moved_to} "
+                f"sold instead.",
             )
         restored = master.SOLD
 
@@ -6153,6 +6514,14 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
                     f"retiring it again would record a second departure of one physical "
                     f"card.",
                 )
+            if was == master.MOVED:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "card_moved",
+                    f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this "
+                    f"key is a tombstone, not the card. Retire the transplant at "
+                    f"{card.moved_to} instead.",
+                )
             # `Inventory.retire` is the state write, the reason write and the history line
             # in one method — see its docstring for why the three must not come apart. The
             # return value is checked exactly as `set_state`'s is above.
@@ -6269,6 +6638,14 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
                 f"inventory, and a photo of a card that left is a photo of nothing. If it "
                 f"is back in the box, send {{\"undo\": true}} to "
                 f"`/inventory/{box}/{index}/retire` first.",
+            )
+        if card.state == master.MOVED:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "card_moved",
+                f"Box {box}, card {index} was moved to {card.moved_to} (D83) — this key "
+                f"is a tombstone with no photo of its own. Re-shoot the transplant at "
+                f"{card.moved_to} instead.",
             )
 
         holder = inventory.card_by_capture_id(capture_id)
@@ -6754,6 +7131,7 @@ def _box_row(
     cards = 0
     sold = 0
     retired = 0
+    moved = 0
     listed = 0
     for card in inventory.cards.values():
         try:
@@ -6770,8 +7148,14 @@ def _box_row(
             sold += 1
         elif card.state == master.RETIRED:
             retired += 1
+        elif card.state == master.MOVED:
+            # D83's third door. Reported for the same reason `sold`/`retired` are: once a
+            # move can be one of `box_not_empty_of_commitments`'s grounds (a merged-away box
+            # is left holding only tombstones), the delete panel needs to say so before the
+            # operator presses anything, not discover it from a refusal.
+            moved += 1
         # `elif` on the states and a SEPARATE `if` here, because they answer different
-        # questions: the two states are exclusive of each other, and a listing hold is a
+        # questions: the states are exclusive of each other, and a listing hold is a
         # fact about the SKU that a sold copy has as much as an identified one.
         if _listing_hold(inventory, card):
             listed += 1
@@ -6825,6 +7209,7 @@ def _box_row(
         # dict lookup per card rather than a second pass. `listed` counts CARDS whose SKU
         # holds a stage, not SKUs and not copies: it is the number the refusal would name.
         "retired": retired,
+        "moved": moved,
         "listed": listed,
         "sections_detail": detail,
     }
@@ -8239,6 +8624,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
             self._fail(HTTPStatus.CONFLICT, "section_ahead", str(exc))
         except master.UnknownBox as exc:
             self._fail(HTTPStatus.NOT_FOUND, "box_not_found", str(exc))
+        # D83's move primitive, caught here as a backstop rather than the whole story: the
+        # move routes run their own state checks first, with the richer per-door messages
+        # `card_sold`/`card_retired`/`card_moved` already give — these two exist for any
+        # caller that reaches `Inventory.move_card` without going through them, the same
+        # belt-and-braces relationship `BoxClosed` already has with `allocate_capture`.
+        except master.CardNotFound as exc:
+            self._fail(HTTPStatus.NOT_FOUND, "card_not_found", str(exc))
+        except master.CardDeparted as exc:
+            self._fail(HTTPStatus.CONFLICT, "card_departed", str(exc))
         # A FOURTH JOINS THEM, for the same reason and with the same shape. `BoxNameTaken`
         # is a 409 rather than a 400 on the rule the comment above draws: the request was
         # well-formed and lost to something the STORE knows — another box already answers
@@ -8513,6 +8907,22 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 body = do_remove_card(
                     int(match.group(1)), int(match.group(2)), self._body()
                 )
+                return self._json(HTTPStatus.OK, body)
+            # D83's third door: one card, to another box. Matched before the batched form
+            # one register down, though the two patterns cannot collide — `_MOVE_RE` needs
+            # two digit groups before `/move` and `_MOVE_CARDS_RE` needs exactly one.
+            match = _MOVE_RE.match(path)
+            if match:
+                body = do_move_card(
+                    int(match.group(1)), int(match.group(2)), self._body()
+                )
+                return self._json(HTTPStatus.OK, body)
+            # D83's batched move: a ticked selection, a section (indices computed by the
+            # caller from the box's own live rendering), or a whole box (`indices: null`) —
+            # which is a merge, from the caller's side, with no separate route for it.
+            match = _MOVE_CARDS_RE.match(path)
+            if match:
+                body = do_move_cards(int(match.group(1)), self._body())
                 return self._json(HTTPStatus.OK, body)
             # D34's release, matched before the pipeline block for no reason but that it is
             # a box route and belongs beside the other ones. It is a POST rather than a PUT
@@ -8800,7 +9210,7 @@ def serve(host: str = HOST, port: int = PORT) -> None:
         print(f"cannot listen on {host}:{port} — {exc}")
         print("  Something is already serving this port. `make status` says who.")
         print("  If it is your own supervisor: `make down`, or just use the one that is up.")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
     # SIGTERM RAISES THE INTERRUPT THE CTRL-C PATH ALREADY HANDLES, so there is one shutdown
     # and not two. Without this the default disposition terminates the process outright — no
@@ -8813,10 +9223,8 @@ def serve(host: str = HOST, port: int = PORT) -> None:
     def _term(_signum, _frame):
         raise KeyboardInterrupt
 
-    try:
+    with contextlib.suppress(ValueError):
         signal.signal(signal.SIGTERM, _term)
-    except ValueError:
-        pass
 
     print(f"pkmnscan capture server on http://{host}:{port}")
     print(f"  photos    {root}")

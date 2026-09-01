@@ -647,7 +647,7 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
         )
     # Registry order, so refusals and reports list games the way every picker does.
     return OrderedDict(
-        (game, needed[game]) for game in games.keys() if game in needed
+        (game, needed[game]) for game in games.keys() if game in needed  # noqa: SIM118 — `games` is the pipeline.games MODULE; `.keys()` is a real function, not dict.keys()
     )
 
 
@@ -700,7 +700,7 @@ def games_claimed(export: tcgcsv.Export) -> Tuple[str, ...]:
     lines = tcgcsv.product_lines(export)
     return tuple(
         game
-        for game in games.keys()
+        for game in games.keys()  # noqa: SIM118 — `games` is the pipeline.games MODULE; `.keys()` is a real function, not dict.keys()
         if isinstance(games.get(game)["product_line"], str)
         and games.get(game)["product_line"] in lines
     )
@@ -759,7 +759,7 @@ def exports_for(
             known = sorted(
                 {
                     str(games.get(game)["product_line"])
-                    for game in games.keys()
+                    for game in games.keys()  # noqa: SIM118 — `games` is the pipeline.games MODULE; `.keys()` is a real function, not dict.keys()
                     if isinstance(games.get(game)["product_line"], str)
                 }
             )
@@ -778,7 +778,7 @@ def exports_for(
     }
     if doubled:
         lines = ["REFUSING: more than one export claims the same game."]
-        for game in (g for g in games.keys() if g in doubled):
+        for game in (g for g in games.keys() if g in doubled):  # noqa: SIM118 — `games` is the pipeline.games MODULE; `.keys()` is a real function, not dict.keys()
             line = games.get(game)["product_line"]
             lines.append(f"  {game} (Product Line {line!r}):")
             lines += [f"    {path}" for path in doubled[game]]
@@ -794,7 +794,7 @@ def exports_for(
     _refuse_uncovered(needed, list(claimed_by))
 
     by_game: "OrderedDict[str, Path]" = OrderedDict(
-        (game, claimed_by[game][0]) for game in games.keys() if game in needed
+        (game, claimed_by[game][0]) for game in games.keys() if game in needed  # noqa: SIM118 — `games` is the pipeline.games MODULE; `.keys()` is a real function, not dict.keys()
     )
     notes = tuple(
         f"note: {path} carries only {', '.join(repr(v) for v in lines_of[path])} and "
@@ -1311,7 +1311,7 @@ def load(
     # never fire, and for one that handed a mapping straight in it is the same refusal in
     # the same place.
     needed = OrderedDict(
-        (game, grouped[game]) for game in games.keys() if game in grouped
+        (game, grouped[game]) for game in games.keys() if game in grouped  # noqa: SIM118 — `games` is the pipeline.games MODULE; `.keys()` is a real function, not dict.keys()
     )
     _refuse_uncovered(
         OrderedDict(
