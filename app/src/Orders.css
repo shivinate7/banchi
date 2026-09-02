@@ -275,6 +275,54 @@
   max-width: 76ch;
 }
 
+/* THE WINDOW BY STATUS (D91). One row per string the wire returned; the count and the
+   already-in-the-ledger figure sit in the util register beside the name, the same register
+   `.orders-pick-held` uses for a fact that is not a control. The checkbox takes its cursor from
+   base.css, as every toggle does (D50). */
+.orders-statuses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.orders-statuses-head {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 76ch;
+}
+
+.orders-status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.orders-status-pick {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.orders-status-count {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.orders-fetch {
+  align-self: flex-start;
+}
+
 /* ---------------------------------------------------------------------------- the six counts */
 
 /* ALL SIX ALWAYS, INCLUDING A ZERO, and they are drawn identically. A reason that vanished when

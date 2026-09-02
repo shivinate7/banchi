@@ -1615,7 +1615,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D91"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1760,7 +1760,7 @@ COMPONENTS = [
                 # D63 is the ledger this feeds; D65 is the body convention it deliberately does
                 # not carry over; D66 is the build order it discharges; D69 is the capture and
                 # the entry. D34 and D53 are cited in its own text.
-                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D69"],
+                "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D69", "D91"],
                 "tested_by": ["T7"],
                 "note": "THE AUTHENTICATED SUCCESS PATH IS UNEXERCISED. The wire shapes were "
                         "captured off the owner's own logged-in browser and every refusal is "
@@ -2002,11 +2002,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D91"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89", "D91"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2704,12 +2704,12 @@ COMPONENTS = [
                                        "behind the same control. IT DRAWS NO POSTAGE LANE: "
                                        "that is D61's question and #/shipping's answer, "
                                        "computed from a file this screen never sees.",
-                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D69"]},
+                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D69", "D91"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D91"]},
             "src/Shipping.tsx": {"does": "#/shipping: TCGplayer's Orders -> Export Shipping "
                                          "file read into D61's three lanes, with the Pirate "
                                          "Ship import CSV as a download and a way to forget the "
@@ -3063,7 +3063,7 @@ COMPONENTS = [
                                              "pre-write place rather than the sale's departed "
                                              "label. Not a harness test — it starts a browser; "
                                              "`make design-check` runs it.",
-                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D69"]},
+                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D69", "D91"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

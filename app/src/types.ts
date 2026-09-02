@@ -2393,11 +2393,29 @@ export type IngestResult = {
   keys: string[]
 }
 
-/** What `POST /orders/fetch` answered: EXACTLY the body `POST /orders/ingest` accepts and
- *  not one key more, so the fetched result is sent on unaltered. A count or a summary added
- *  here would be a field the ingest's `_reject_unknown` refuses by name, and the two routes
- *  would then need an adapter between them for no gain — the caller can count the list. */
-export type OrdersFetched = { orders: OrderIngestOrder[] }
+/** What `POST /orders/fetch {preview: true}` answered (D91): the window counted by the status
+ *  STRING TCGplayer gave each order, verbatim — no vocabulary lives on either side of this wire —
+ *  and, beside each, how many of them the ledger already holds at that status. Nothing was
+ *  detailed and nothing was written. */
+export type OrdersPreview = {
+  range: string
+  total: number
+  by_status: { status: string; count: number; known: number }[]
+  writes_nothing: true
+}
+
+/** What `POST /orders/fetch {statuses: [...]}` answered. `orders` is EXACTLY the body
+ *  `POST /orders/ingest` accepts and is the only part sent on — `ingestOrders(found.orders)` —
+ *  so the counts beside it reach no allowlist; they are what the paste note says about the
+ *  press. `remaining` is what the transport's detail cap left for the next press (D91): seen
+ *  and counted, never dropped without a trace. */
+export type OrdersFetched = {
+  orders: OrderIngestOrder[]
+  matched: number
+  skipped_known: number
+  detailed: number
+  remaining: number
+}
 
 /** One copy coming out of a box. All three are required in both directions.
  *

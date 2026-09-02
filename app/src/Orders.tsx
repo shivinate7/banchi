@@ -8,6 +8,7 @@ import {
   fetchOrders,
   getOrders,
   ingestOrders,
+  previewOrders,
   pullCopy,
   undoPull,
 } from './server'
@@ -15,7 +16,9 @@ import type { Failure } from './server'
 import type {
   OrderLineReason,
   OrderRow,
+  OrdersFetched,
   OrdersPayload,
+  OrdersPreview,
   PickRow,
   PullTarget,
   ResolvedLine,
@@ -107,6 +110,19 @@ function breakdownOf(line: ResolvedLine): string {
   ].join(' · ')
 }
 
+/** The paste note after a fetch: what was added, what was detailed, and what the cap left.
+ *  `remaining` is named rather than swallowed — the transport counted those orders and stopped
+ *  detailing at its budget, and the next press picks them up (D91). */
+function fetchNote(found: OrdersFetched, ingested: string | null): string {
+  const parts = [ingested ?? 'Nothing new to add.']
+  parts.push(
+    `${found.detailed} of ${found.matched} matching ${found.matched === 1 ? 'order' : 'orders'} detailed` +
+      (found.skipped_known > 0 ? `, ${found.skipped_known} already in the ledger.` : '.'),
+  )
+  if (found.remaining > 0) parts.push(`${found.remaining} remaining — press again for the rest.`)
+  return parts.join(' ')
+}
+
 export function Orders() {
   const [payload, setPayload] = useState<OrdersPayload | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -116,6 +132,12 @@ export function Orders() {
   const [dropped, setDropped] = useState<string[]>([])
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [showDone, setShowDone] = useState(false)
+  /* THE WINDOW BY STATUS, AND WHICH STATUSES ARE TICKED (D91). Both are this press's and are
+     remembered nowhere: a status string is TCGplayer's word for an order's state, seen on the
+     wire and drawn verbatim, and which of them mean "needs picking" is the operator's tick each
+     time rather than a vocabulary this file holds. */
+  const [preview, setPreview] = useState<OrdersPreview | null>(null)
+  const [ticked, setTicked] = useState<string[]>([])
   /* THE WAY IN, OPEN OR SHUT. Its CONTROL is in the header at every state and never moves; only
      the panel's disclosure changes. What decides the initial state is whether the ledger has
      anything in it: an empty ledger has no work to do, so the screen draws its own way in
@@ -219,11 +241,39 @@ export function Orders() {
     })()
   }
 
-  /* THE FETCH ENTERS THROUGH THE SAME ONE DOOR THE PASTE DOES. `POST /orders/fetch` answers
-     EXACTLY the body `POST /orders/ingest` accepts, so the result's array is sent on unaltered
-     rather than adapted here — that shape is the whole reason the transport was given its own
-     route instead of writing the ledger itself. Free: it reads the account's own order host with
-     the session already in `.env` and writes nothing at all, not even the ledger. */
+  /* THE FETCH IS TWO PRESSES SINCE D91, BECAUSE ONE PRESS NEVER WORKED ON THIS ACCOUNT. The
+     three-month window holds 370 orders against a detail cap of 100, and the single-body fetch
+     was refused every time it was pressed. `Check TCGplayer` walks the search pages — one
+     request per 25 orders, no detail call, nothing written — and draws the window by the status
+     STRING the wire returned, with how many of each the ledger already holds. `Fetch N orders`
+     details only the statuses ticked, skipping what the ledger holds unchanged.
+
+     THE RESULT STILL ENTERS THROUGH THE SAME ONE DOOR THE PASTE DOES. `POST /orders/fetch`
+     answers EXACTLY the body `POST /orders/ingest` accepts in `orders`, so the array is sent on
+     unaltered rather than adapted here — that shape is the whole reason the transport was given
+     its own route instead of writing the ledger itself. Free: it reads the account's own order
+     host with the session already in `.env` and writes nothing at all, not even the ledger. */
+  const onCheck = () => {
+    void (async () => {
+      setBusy('check')
+      setFailure(null)
+      setPasteNote(null)
+      setDropped([])
+      try {
+        const found = await previewOrders()
+        if (!live.current) return
+        setPreview(found)
+        setTicked([])
+        if (found.total === 0) setPasteNote(`The ${found.range} window holds no orders.`)
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
   const onFetch = () => {
     void (async () => {
       setBusy('fetch')
@@ -231,15 +281,13 @@ export function Orders() {
       setPasteNote(null)
       setDropped([])
       try {
-        const found = await fetchOrders()
+        const found = await fetchOrders({ statuses: ticked, skip_known: true })
         if (!live.current) return
-        if (found.orders.length === 0) {
-          setPasteNote('That range holds no orders. Nothing was written.')
-          return
-        }
-        const done = await ingestOrders(found.orders)
+        const done = found.orders.length === 0 ? null : await ingestOrders(found.orders)
         if (!live.current) return
-        setPasteNote(done.summary)
+        setPasteNote(fetchNote(found, done?.summary ?? null))
+        /* RE-READ EITHER WAY. An empty fetch used to return before this line, so a ledger
+           another device had just moved stayed stale behind a note saying nothing happened. */
         await reread()
       } catch (err) {
         if (!live.current) return
@@ -250,7 +298,17 @@ export function Orders() {
     })()
   }
 
-  /* ------------------------------------------------------------------------ the pull */
+  /* WHAT THE TICKS ADD UP TO, for the button's own label: the matching orders the ledger does
+     not already hold at that status, which is exactly what `skip_known` will detail. */
+  const toFetch = useMemo(
+    () =>
+      preview === null
+        ? 0
+        : preview.by_status
+            .filter((row) => ticked.includes(row.status))
+            .reduce((sum, row) => sum + Math.max(0, row.count - row.known), 0),
+    [preview, ticked],
+  )
 
   const onPull = (order: OrderRow, line: ResolvedLine, pick: PickRow, target: PullTarget) => {
     void (async () => {
@@ -414,13 +472,64 @@ export function Orders() {
               ingest accepts, and both arrive at the ledger through the one door
               `orderPaste.ts` owns. A fetch button in the page header would say this screen has
               two ways in when it has one way in and two sources. */}
-          <button type="button" className="orders-plain" onClick={onFetch} disabled={busy !== null}>
-            Fetch from TCGplayer
+          <button type="button" className="orders-plain" onClick={onCheck} disabled={busy !== null}>
+            {busy === 'check' ? 'Checking…' : 'Check TCGplayer'}
           </button>
           <span className="orders-paste-source">
             Anything that does not name a source is stamped {DEFAULT_ORDER_SOURCE}.
           </span>
         </div>
+        {/* THE WINDOW BY STATUS, TICKED BY HAND (D91). Every row is a string TCGplayer used,
+            drawn verbatim — an empty one is drawn as the absence it is — with how many orders
+            carry it and how many of those the ledger already holds. Nothing is pre-ticked: which
+            statuses mean "needs picking" is the one thing about this feed nobody has enumerated,
+            and a default here would be that guess made silently on every press. */}
+        {preview === null ? null : (
+          <div className="orders-statuses" role="group" aria-label="Which statuses to fetch">
+            <p className="orders-statuses-head">
+              {preview.total} {preview.total === 1 ? 'order' : 'orders'} in the {preview.range}{' '}
+              window, by the status TCGplayer gave them. Tick the ones to fetch.
+            </p>
+            {preview.by_status.length === 0 ? null : (
+              <ul className="orders-status-list">
+                {preview.by_status.map((row) => (
+                  <li key={row.status} className="orders-status">
+                    <label className="orders-status-pick">
+                      <input
+                        type="checkbox"
+                        checked={ticked.includes(row.status)}
+                        disabled={busy !== null}
+                        onChange={(event) =>
+                          setTicked((was) =>
+                            event.target.checked
+                              ? [...was, row.status]
+                              : was.filter((one) => one !== row.status),
+                          )
+                        }
+                      />
+                      <span className="orders-status-name">
+                        {row.status === '' ? 'no status' : row.status}
+                      </span>
+                      <span className="orders-status-count">
+                        {row.count} · {row.known} in the ledger
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              className="orders-plain orders-fetch"
+              onClick={onFetch}
+              disabled={busy !== null || ticked.length === 0}
+            >
+              {busy === 'fetch'
+                ? 'Fetching…'
+                : `Fetch ${toFetch} ${toFetch === 1 ? 'order' : 'orders'}`}
+            </button>
+          </div>
+        )}
         {pasteNote === null ? null : <p className="orders-paste-note">{pasteNote}</p>}
         {/* WHAT WAS DROPPED, NAMED. A silent strip cannot be told apart on screen from a feed
             that never carried the field, and this line is how the operator sees the PII boundary

@@ -189,7 +189,7 @@ function oneOpenOrder(): OrdersPayload {
  */
 async function open(
   page: Page,
-  options: { orders?: OrdersPayload; pull?: unknown } = {},
+  options: { orders?: OrdersPayload; pull?: unknown; preview?: unknown; fetched?: unknown } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
 
@@ -203,6 +203,48 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(options.pull ?? { undone: false, order_key: '', sku: '', newly: 1, recorded: 1, outstanding: 0, places: [], sales: [] }),
+    })
+  })
+
+  /* THE FETCH ROUTE, IN BOTH BODIES (D91). Registered before `/orders$` like every write-shaped
+     route here: the read regex is the looser one. A preview body answers the window by status; a
+     statuses body answers the ingest-shaped orders plus the four counts. Recorded, not performed
+     — nothing here reaches TCGplayer, and nothing may: this file runs against whatever real
+     server is listening on this checkout's port. */
+  await page.route(/\/orders\/fetch$/, async (route) => {
+    const body = route.request().postDataJSON() as { preview?: boolean }
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        body.preview === true
+          ? (options.preview ?? {
+              range: 'LastThreeMonths',
+              total: 370,
+              by_status: [
+                { status: 'Shipped', count: 280, known: 0 },
+                { status: 'Cancelled', count: 88, known: 0 },
+                { status: 'Ready to Ship', count: 2, known: 0 },
+              ],
+              writes_nothing: true,
+            })
+          : (options.fetched ?? {
+              orders: [
+                {
+                  source: 'TCGplayer',
+                  number: ORDER_NUMBER,
+                  placed_at: '2026-08-30',
+                  status: 'Ready to Ship',
+                  lines: [{ sku: SKU, quantity: 1, name: 'Volcanion', unit_price: '11.88' }],
+                },
+              ],
+              matched: 2,
+              skipped_known: 0,
+              detailed: 2,
+              remaining: 0,
+            }),
+      ),
     })
   })
 
@@ -454,8 +496,9 @@ test('a paste is projected before it is sent, and what was dropped is named', as
 
   /* AND THE FETCH IS INSIDE IT, not in the page header. It is the same errand with the copying
      done for you — `POST /orders/fetch` answers exactly the body the ingest accepts — so the
-     screen has one way in and two sources rather than two ways in. */
-  await expect(page.locator('.orders-paste button.orders-plain', { hasText: 'Fetch from TCGplayer' })).toHaveCount(1)
+     screen has one way in and two sources rather than two ways in. Two presses since D91, and
+     the first is the one drawn before anything is checked. */
+  await expect(page.locator('.orders-paste button.orders-plain', { hasText: 'Check TCGplayer' })).toHaveCount(1)
 
   /* A BUYER, A STREET AND AN EMAIL AT THE TOP LEVEL — the shape a real console copy has. None
      of the three may reach the wire, and the screen has to SAY it dropped them: a silent strip
@@ -491,4 +534,87 @@ test('a paste is projected before it is sent, and what was dropped is named', as
   await expect(dropped).toContainText('buyerName')
   await expect(dropped).toContainText('shippingAddress')
   await expect(dropped).toContainText('email')
+})
+
+/* -------------------------------------------------------------------------------------- 8 */
+
+test('the fetch is two presses: the window by status, then only the ticked statuses (D91)', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
+  const mounted = reads()
+  await page.locator('.orders-controls button.orders-plain').click()
+  await page.locator('.orders-paste button.orders-plain', { hasText: 'Check TCGplayer' }).click()
+
+  /* THE FIRST PRESS DETAILS NOTHING AND DRAWS THE WINDOW AS THE WIRE SPELLED IT. 370 orders in
+     three months was the measurement that made this two presses: the one-press fetch was refused
+     on that account every time it was pressed. Every status is a verbatim string with its count
+     and the ledger's count beside it, and NOTHING is pre-ticked — which strings mean "needs
+     picking" is the one thing about this feed nobody has enumerated. */
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
+  expect(wire.find((one) => one.path.endsWith('/orders/fetch'))?.body).toEqual({ preview: true })
+  const rows = page.locator('.orders-status')
+  await expect(rows).toHaveCount(3)
+  await expect(rows.nth(0)).toContainText('Shipped')
+  await expect(rows.nth(0)).toContainText('280')
+  await expect(rows.nth(2)).toContainText('Ready to Ship')
+  await expect(page.locator('.orders-status input:checked')).toHaveCount(0)
+  await expect(page.locator('button.orders-fetch')).toBeDisabled()
+  expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
+
+  /* THE SECOND PRESS DETAILS ONLY WHAT WAS TICKED, SKIPPING WHAT THE LEDGER HOLDS, and the
+     result enters through the one door the paste uses: the fetched `orders` array, sent on
+     unaltered. The button says how many the ticks add up to before it is pressed. */
+  await rows.nth(2).locator('input').check()
+  const fetch = page.locator('button.orders-fetch')
+  await expect(fetch).toHaveText('Fetch 2 orders')
+  await fetch.click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
+  expect(wire.filter((one) => one.path.endsWith('/orders/fetch'))[1]?.body).toEqual({
+    statuses: ['Ready to Ship'],
+    skip_known: true,
+  })
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length).toBe(1)
+  expect(wire.find((one) => one.path.endsWith('/orders/ingest'))?.body).toEqual({
+    orders: [
+      {
+        source: 'TCGplayer',
+        number: ORDER_NUMBER,
+        placed_at: '2026-08-30',
+        status: 'Ready to Ship',
+        lines: [{ sku: SKU, quantity: 1, name: 'Volcanion', unit_price: '11.88' }],
+      },
+    ],
+  })
+  /* AND THE LEDGER IS RE-READ AFTER THE INGEST — one more read than the mount made. Counted
+     relative to the mount rather than as an absolute, because React's StrictMode runs the
+     mount effect twice in development and this spec runs against the dev server. */
+  await expect.poll(reads).toBe(mounted + 1)
+  await expect(page.locator('.orders-paste-note')).toContainText('2 of 2 matching orders detailed')
+})
+
+/* -------------------------------------------------------------------------------------- 9 */
+
+test('a fetch the cap cut short says how many it left, and an empty one still re-reads', async ({
+  page,
+}) => {
+  const wire = await open(page, {
+    fetched: { orders: [], matched: 130, skipped_known: 30, detailed: 0, remaining: 100 },
+  })
+  const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
+  const mounted = reads()
+  await page.locator('.orders-controls button.orders-plain').click()
+  await page.locator('.orders-paste button.orders-plain', { hasText: 'Check TCGplayer' }).click()
+  await expect(page.locator('.orders-status')).toHaveCount(3)
+  await page.locator('.orders-status').nth(0).locator('input').check()
+  await page.locator('button.orders-fetch').click()
+
+  /* NOTHING TO INGEST IS NOT NOTHING TO SAY. The note names the cap's leftover as a number and
+     tells the operator the next press picks it up; and the screen re-reads the ledger anyway,
+     because "nothing new for me" and "nothing moved" are different facts. */
+  await expect(page.locator('.orders-paste-note')).toContainText('100 remaining')
+  await expect(page.locator('.orders-paste-note')).toContainText('30 already in the ledger')
+  expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
+  await expect.poll(reads).toBe(mounted + 1)
 })

@@ -639,6 +639,7 @@ D86  The pricing answer is one file for the store, and the worklist spans runs
 D87  The reconcile is store-wide, and what it writes is `live`
 D88  The store of record is SQLite, and a write is one transaction
 D89  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
+D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

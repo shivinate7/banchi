@@ -30,7 +30,7 @@ here (T2b), and a `T6` that collided with the harness's own.
 
 | step | state |
 |---|---|
-| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). The transport's endpoints, auth kind, body shape and four refusal codes were measured, and `search` has since run authenticated against the live host and returned three real orders. `detail` — the half that carries a buyer's name and address — has not. Section 6. |
+| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). **The fetch is two presses since D91**: the window counted by status string, then only the ticked statuses detailed — because the one-press fetch was refused `order_too_many` on every press against this account's 370-order window and had never returned an order. The transport's endpoints, auth kind, body shape and four refusal codes were measured; `search` has run authenticated and returned three real orders, and the summary walk is proven by that refusal. `detail` — the half that carries a buyer's name and address — has not run live. Section 6. |
 | 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
 | 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
 | 11 pull | **built and reachable.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. |
@@ -550,9 +550,12 @@ nothing a reader can open, and is kept only to say what was corroborated against
 check` never sees it, `docs/map.py` does not map it, the git hooks do not guard it, and nothing
 in this repo calls it or depends on it.
 
-**Postage economics, volumes and account state** — the letter rate, the insurance premium, the
-347-orders-in-90-days figure, the seller level — are all external facts carried from the planning
-session. They decided the lanes and none of them is checkable from here.
+**Postage economics and account state** — the letter rate, the insurance premium, the seller
+level — are external facts carried from the planning session. They decided the lanes and none of
+them is checkable from here. **The volume is measured now**: this paragraph carried a
+347-orders-in-90-days figure from the same session, and on 2026-09-02 the fetch itself counted
+**370 orders in `LastThreeMonths`** on the owner's account — the refusal that opened D91. It is
+the first number this repo has about the order feed's size that came off the wire.
 
 **That pasted JSON is a sufficient input for T1** is an argument, not a measurement, until
 somebody pastes one. **It is still an argument as of 2026-08-30, with T1 built and reachable**,
@@ -600,3 +603,11 @@ already in `.env`, which is what closed the session question in section 6. What 
 bullet is **`detail` running against the live host**, still one press away rather than one build
 away, and still the half that would first put a buyer's name and address through
 `project_order` outside a fixture.
+
+~~**The intake meeting `order_too_many` on the real account**~~ — **happened, and was the first
+thing the owner said about the fetch**: 370 orders in `LastThreeMonths` against a cap of 100,
+refused on every press, with a remedy the range vocabulary could not express. D91 answers it: the
+summaries are walked whole and counted by status string, the operator ticks the statuses to
+detail, and the cap counts detail calls rather than the window. What is left of this bullet is
+the same thing the one above leaves — `detail` has still not run against the live host, and the
+first filtered fetch is when it does.

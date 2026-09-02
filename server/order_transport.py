@@ -32,11 +32,18 @@ was accepted, so the 403 shape is understood correctly; the plain-JSON body was 
 D65's form encoding really is the wrong shape here and not merely a different one; and the
 response parsed and projected without raising.
 
-**`detail` AND `fetch_open_orders` ARE STILL UNEXERCISED AGAINST THE LIVE HOST**, and that is
-the half that carries a buyer's name and address. `products[].skuId` has been read in the
-BROWSER and never through this module, so `project_order`'s drop of `buyerName`,
-`shippingAddress` and `paymentType` is proven against T7's fixtures and against nothing that
-came off the wire. Whoever presses Fetch first exercises it; until then this line stands.
+**`fetch_open_orders` HAS RUN AGAINST THE LIVE HOST AND RETURNED NOTHING, 2026-09-02.** The
+owner pressed Fetch and was refused `order_too_many`: the search pages walked far enough to
+count 370 orders in `LastThreeMonths` against a cap of 100, so the PAGING is proven live and
+the cap, as it stood, meant this module had never handed an order to the ledger on the one
+account it exists for. D91 moved the cap to the detail calls and put the status filter in the
+operator's hands; the refusal that fired is quoted in that entry.
+
+**`detail` IS STILL UNEXERCISED AGAINST THE LIVE HOST**, and that is the half that carries a
+buyer's name and address. `products[].skuId` has been read in the BROWSER and never through
+this module, so `project_order`'s drop of `buyerName`, `shippingAddress` and `paymentType` is
+proven against T7's fixtures and against nothing that came off the wire. The first filtered
+fetch — the owner ticking a status and pressing — exercises it; until then this line stands.
 
 What was measured in the owner's own logged-in browser on 2026-08-30, before any of that:
 
@@ -136,7 +143,8 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import quote, urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -202,11 +210,19 @@ CUSTOM_RANGE = "Custom"
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 
-# ONE FETCH IS ONE SEARCH PLUS ONE DETAIL PER ORDER, AND THE CEILING IS A RATE LIMIT. The
-# bridge extension limits itself to 120 requests a minute against these hosts, which is the
-# only number anyone has for what this API tolerates. 1 + 100 = 101 keeps a whole fetch inside
-# that budget without this module having to sleep in the middle of a request. Past it, the
-# operator narrows the range — they are not silently given the first hundred.
+# ONE FETCH IS ONE SEARCH PAGE PER 25 ORDERS PLUS ONE DETAIL PER ORDER DETAILED, AND THE
+# CEILING IS A RATE LIMIT ON THE DETAILS. The bridge extension limits itself to 120 requests a
+# minute against these hosts, which is the only number anyone has for what this API tolerates —
+# it is that client's own self-limit, not a measurement of the server. 15 pages plus 100 details
+# is 115, inside that budget without this module sleeping in the middle of a request.
+#
+# THE CEILING COUNTS DETAIL CALLS, NOT ORDERS IN THE WINDOW (D91). It counted the window until
+# 2026-09-02, and on the owner's account that meant this module had never returned an order:
+# `LastThreeMonths` holds 370, every press was refused `order_too_many`, and the remedy printed
+# — "ask for a narrower range" — is one the range vocabulary below cannot express. The pages are
+# walked whole now; what is capped is what gets detailed, which is the statuses the operator
+# ticked and the ledger does not already hold. Past the cap the rest is COUNTED and reported as
+# `remaining`, never silently left behind, and the next press picks it up.
 MAX_ORDERS = 100
 
 # A JSON API, not a CSV the portal builds on demand, so this is a fraction of `tcg_export`'s
@@ -836,63 +852,35 @@ def detail(order_number: str) -> Dict[str, Any]:
     return _detail(order_number, _cookie())
 
 
-def fetch_open_orders(
-    range_: str = DEFAULT_RANGE,
-    *,
-    page_size: int = DEFAULT_PAGE_SIZE,
-    limit: int = MAX_ORDERS,
-) -> List[Dict[str, Any]]:
-    """Every order in `range_`, each with its lines, projected. The ingest-shaped payload.
+@dataclass(frozen=True)
+class FetchResult:
+    """What one filtered fetch did, beside the orders it detailed (D91).
 
-    THE SHAPE IS WHAT `pipeline/orders.py` INGESTS, field for field:
-
-        {"orderNumber": str,  ->  Order.number
-         "orderDate":   str,  ->  Order.placed_at
-         "status":      str,  ->  kept for the screen; nothing here routes on it
-         "products": [{"skuId":  str,  ->  OrderLine.sku
-                       "quantity": int, ->  OrderLine.quantity
-                       "name":   str,   ->  OrderLine.name
-                       "unitPrice": str ->  OrderLine.unit_price}]}
-
-    `OrderLine.kind` is deliberately absent. `pipeline/orders.py` defaults it to `single` and
-    its docstring rules that the module ROUTES on what the feed says rather than classifying —
-    deciding that "Booster Box" is sealed by reading a product name is the guessing `CLAUDE.md`
-    forbids. This feed does not say, so this module does not say either, and a sealed product
-    surfaces honestly as `sku_unseen` rather than being quietly reclassified.
-
-    "OPEN" IS THE RANGE, NOT A STATUS FILTER, AND THAT IS AN ADMISSION. The status vocabulary
-    this API uses was never enumerated on the wire — one capture, one account, one afternoon —
-    so filtering on it here would be a guess about which strings mean "still needs picking",
-    and a guess that drops an order is an envelope that never ships. Every order in the range
-    comes back with `status` verbatim, and the caller decides. Whoever enumerates the
-    vocabulary against a real account should move the filter here and say so in a decision
-    entry.
-
-    IT PAGES, AND IT REFUSES RATHER THAN TRUNCATING. `from`/`size` walks the result set until
-    it has what the search said there was. Past `limit` it refuses and tells the operator to
-    narrow the range — handing back the first hundred of two hundred orders, with nothing
-    anywhere saying which hundred, is the silent drop this repo's second hard rule forbids.
-
-    NOTHING IS WRITTEN. This is a read: no card state, no listing count, no run directory. D63
-    makes a replay a no-op by construction rather than by a guard.
+    `orders` is the ingest-shaped list and is the only part a caller forwards. The counts are
+    what the screen says about the press. `remaining` is the honest word for a cap that stopped
+    the detailing: the summaries past it were SEEN and are named as a number rather than dropped
+    without a trace, and the next press picks them up because the ledger then knows the ones
+    this press detailed.
     """
-    cookie = _cookie()
-    try:
-        ceiling = int(limit)
-    except (TypeError, ValueError):
-        raise FetchRefusal(
-            "order_page_invalid",
-            "The order limit must be a whole number. Nothing was fetched.",
-        ) from None
-    if not 1 <= ceiling <= MAX_ORDERS:
-        raise FetchRefusal(
-            "order_page_invalid",
-            f"A limit of {ceiling} orders is outside 1..{MAX_ORDERS}. The ceiling is a rate "
-            f"limit, not a preference: one fetch is one search plus one request per order, and "
-            f"{MAX_ORDERS} keeps a whole fetch inside the 120-per-minute budget the only other "
-            f"client anyone has measured holds itself to. Nothing was fetched.",
-        )
 
+    orders: List[Dict[str, Any]]
+    total: int
+    matched: int
+    skipped_known: int
+    detailed: int
+    remaining: int
+
+
+def _summaries(
+    range_: str, page_size: int, cookie: str
+) -> Tuple[int, List[Dict[str, Any]]]:
+    """Every summary in `range_`: the search pages walked whole. `(totalOrders, summaries)`.
+
+    NO CEILING HERE, AND THAT IS D91'S CHANGE. The pages are the cheap half of a fetch — one
+    request per 25 orders, 15 for the 370 the owner's account holds in three months — and they
+    are what the operator has to see before anything is detailed: which statuses the window
+    holds, and how many of each. The two guards below are about PROGRESS, not size.
+    """
     summaries: List[Dict[str, Any]] = []
     seen = set()
     total = 0
@@ -910,31 +898,136 @@ def fetch_open_orders(
                 summaries.append(entry)
         if len(summaries) == before:
             # A PAGE THAT ADDED NOTHING ENDS THE WALK, and this guard is not theoretical: an
-            # endpoint that ignores `from` hands back page one forever, and the loop below
-            # would then ask for `totalOrders / page_size` pages of the same twenty-five
-            # orders. Progress is measured in NEW order numbers rather than in the offset,
-            # because the offset is what such an endpoint is ignoring.
+            # endpoint that ignores `from` hands back page one forever, and the loop would
+            # then ask for `totalOrders / page_size` pages of the same twenty-five orders.
+            # Progress is measured in NEW order numbers rather than in the offset, because
+            # the offset is what such an endpoint is ignoring.
             break
         offset += len(page)
         if len(summaries) >= total or offset >= total:
             break
-        if len(summaries) > ceiling:
-            # Stop paging the moment the cap is passed. The refusal below is what reports it;
-            # continuing would spend requests on orders that are about to be refused anyway.
-            break
+    return total, summaries
 
-    if len(summaries) > ceiling or total > ceiling:
+
+def summaries(
+    range_: str = DEFAULT_RANGE, *, page_size: int = DEFAULT_PAGE_SIZE
+) -> List[Dict[str, Any]]:
+    """Every order in `range_` as `{orderNumber, orderDate, status}`, and NOT ONE DETAIL CALL.
+
+    Public because `POST /orders/fetch {preview: true}` answers from this alone: the statuses
+    the window holds, counted by the STRING the wire returned, so the operator can tick the ones
+    worth a detail request each (D91). Projected, so `buyerName` does not come out of here
+    either.
+    """
+    return _summaries(range_, page_size, _cookie())[1]
+
+
+def fetch_open_orders(
+    range_: str = DEFAULT_RANGE,
+    *,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    limit: int = MAX_ORDERS,
+    statuses: Optional[Sequence[str]] = None,
+    known: Optional[Dict[str, str]] = None,
+) -> FetchResult:
+    """The orders in `range_` the operator asked for, each with its lines, projected.
+
+    THE SHAPE IS WHAT `pipeline/orders.py` INGESTS, field for field:
+
+        {"orderNumber": str,  ->  Order.number
+         "orderDate":   str,  ->  Order.placed_at
+         "status":      str,  ->  kept for the screen; nothing here routes on it
+         "products": [{"skuId":  str,  ->  OrderLine.sku
+                       "quantity": int, ->  OrderLine.quantity
+                       "name":   str,   ->  OrderLine.name
+                       "unitPrice": str ->  OrderLine.unit_price}]}
+
+    `OrderLine.kind` is deliberately absent. `pipeline/orders.py` defaults it to `single` and
+    its docstring rules that the module ROUTES on what the feed says rather than classifying —
+    deciding that "Booster Box" is sealed by reading a product name is the guessing `CLAUDE.md`
+    forbids. This feed does not say, so this module does not say either, and a sealed product
+    surfaces honestly as `sku_unseen` rather than being quietly reclassified.
+
+    THE WINDOW IS THE RANGE AND THE STATUS IS THE FILTER, AND THE OPERATOR HOLDS IT (D91).
+    "Open" is still not a status filter this module applies on its own: the vocabulary was
+    never enumerated on the wire — one capture, one account, one afternoon — and a guess that
+    drops an order is an envelope that never ships. What changed is who chooses. `statuses` is
+    the list the operator ticked off the strings `summaries` returned, compared VERBATIM after a
+    strip — never folded, never mapped — and `None` still means every order in the window.
+
+    THE CAP IS ON DETAIL CALLS, NOT ON THE WINDOW, and until D91 that inversion meant this
+    function had never returned an order on the owner's account: 370 in three months against a
+    cap of 100, refused on every press with a remedy the range vocabulary cannot express. The
+    summaries are walked whole. Of the ones that match, `known` — `{number: status}` as the
+    ledger holds them — removes the orders a previous press already detailed at this status,
+    and the first `limit` of the rest are detailed. What is left is `remaining`: seen, counted,
+    reported, and picked up by the next press because the ledger will then know these.
+
+    IT NEVER SLEEPS. Fifteen pages plus a hundred details is 115 requests against the 120 a
+    minute the bridge extension holds itself to. A route that slept its way through 370 would
+    block one request for minutes, which is the wrong shape for a button. Two presses inside one
+    minute can pass the budget and this module does not stop them; D91 names that cost.
+
+    NOTHING IS WRITTEN. This is a read: no card state, no listing count, no run directory. D63
+    makes a replay a no-op by construction rather than by a guard.
+    """
+    cookie = _cookie()
+    try:
+        ceiling = int(limit)
+    except (TypeError, ValueError):
         raise FetchRefusal(
-            "order_too_many",
-            f"The {range_} range holds {max(total, len(summaries))} orders and this fetch is "
-            f"capped at {ceiling}. Nothing was read rather than the first {ceiling} being read "
-            f"and the rest silently left behind. Ask for a narrower range.",
+            "order_page_invalid",
+            "The order limit must be a whole number. Nothing was fetched.",
+        ) from None
+    if not 1 <= ceiling <= MAX_ORDERS:
+        raise FetchRefusal(
+            "order_page_invalid",
+            f"A limit of {ceiling} orders is outside 1..{MAX_ORDERS}. The ceiling is a rate "
+            f"limit, not a preference: one fetch is one search page per 25 orders plus one "
+            f"request per order detailed, and {MAX_ORDERS} details keeps a press inside the "
+            f"120-per-minute budget the only other client anyone has measured holds itself to. "
+            f"Nothing was fetched.",
         )
+    wanted: Optional[set] = None
+    if statuses is not None:
+        wanted = {str(status).strip() for status in statuses if str(status).strip()}
+        if not wanted:
+            raise FetchRefusal(
+                "order_status_required",
+                "An empty status list would detail nothing. Send the statuses to detail, as "
+                "the summaries spelled them, or None for every order in the window. Nothing "
+                "was fetched.",
+            )
+    # THE LEDGER'S KEY IS FOLDED TO COMPARE AND THE STATUS IS NOT. `store/orders.py:order_key`
+    # folds the number for the same reason; the status is the API's own word and a fold of it
+    # would be the first step toward the vocabulary this module refuses to have.
+    known_at: Dict[str, str] = {
+        str(number).strip().casefold(): str(status).strip()
+        for number, status in (known or {}).items()
+    }
+
+    total, every = _summaries(range_, page_size, cookie)
+    matched = [
+        entry for entry in every
+        if wanted is None or str(entry.get("status") or "").strip() in wanted
+    ]
+    fresh = [
+        entry for entry in matched
+        if known_at.get(str(entry["orderNumber"]).strip().casefold())
+        != str(entry.get("status") or "").strip()
+    ]
+    to_detail = fresh[:ceiling]
 
     # THE SUMMARY IS PASSED IN so the detail's `createdAt`/`status` can fall back to the
     # search's `orderDate`/`orderStatus`. The two endpoints spell the same two facts
     # differently, and an order left dateless sorts LAST in `order_sequence` — which would hand
     # stock to a newer order over an older one.
-    return [
-        _detail(summary["orderNumber"], cookie, summary) for summary in summaries
-    ]
+    orders = [_detail(entry["orderNumber"], cookie, entry) for entry in to_detail]
+    return FetchResult(
+        orders=orders,
+        total=total,
+        matched=len(matched),
+        skipped_known=len(matched) - len(fresh),
+        detailed=len(to_detail),
+        remaining=len(fresh) - len(to_detail),
+    )

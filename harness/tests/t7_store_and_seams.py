@@ -16606,6 +16606,334 @@ def check_shipping_routes(checks: Checks) -> None:
                 os.environ[name] = value
 
 
+def check_order_fetch_route(checks: Checks) -> None:
+    """`POST /orders/fetch` in both of its bodies (D91), against canned pages and no socket.
+
+    THE FIRST ROUTE-LEVEL COVERAGE THIS ROUTE HAS HAD. `check_shipping_routes`' T3 block proves
+    the transport's pieces — the projection, the body builder, the refusal codes — and nothing
+    proved that `do_order_fetch` maps the transport's dict into the body `do_order_ingest`
+    accepts; that contract lived in two docstrings. It is asserted here by feeding one route's
+    answer to the other. And the reason the route has two bodies is asserted as a measurement:
+    a window larger than the cap is walked whole and refused nowhere, because the cap counts
+    DETAIL calls (D91) — until it did, the owner's 370-order window had never returned an order.
+
+    NO SOCKET. `urllib.request.build_opener` answers canned pages, the seam the T3 block uses,
+    because this suite runs on the Stop hook and a case that reached a third party would put a
+    stranger's uptime on the path that decides whether work is done. The cookie is this block's
+    own fixture, read through `envfile.get_live` off a temp file, for `check_export_fetch`'s
+    reason: an earlier `load()` over a real `.env` would otherwise hand the stub the operator's
+    session.
+    """
+    checks.note("")
+    checks.note("ORDER FETCH — POST /orders/fetch, two bodies, no socket (D91)")
+
+    cookie = "TCGAuthTicket_Production=t7-fetch-not-a-session; other=1"
+    dotenv = Path(tempfile.gettempdir()) / "t7-order-fetch.env"
+    dotenv.write_text(
+        f"TCGPLAYER_STORE_COOKIE={cookie}\nPKMNSCAN_TCG_SELLER_KEY=a2ffc195\n",
+        encoding="utf-8",
+    )
+    env_keys = ("PKMNSCAN_TCG_ORDERS_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY")
+    previous = {name: os.environ.get(name) for name in env_keys}
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = dotenv
+    envfile._from_file.clear()
+    envfile._loaded = False
+
+    # SIXTY ORDERS IN THREE STATUSES: three search pages of 25, and more than any cap this
+    # block will set. The strings are the API's own spelling as seen on the owner's account.
+    statuses = ["Shipped"] * 40 + ["Ready to Ship"] * 15 + ["Cancelled"] * 5
+    window = [
+        {
+            "orderNumber": f"A2FFC195-{at:06X}-{at % 7:05d}",
+            "orderDate": f"2026-08-{(at % 28) + 1:02d}",
+            "orderStatus": status,
+            "buyerName": "Buyer Placeholder",
+        }
+        for at, status in enumerate(statuses, start=1)
+    ]
+    detailed: list = []
+
+    class _Reply:
+        """What `_open` reads off an opener: a status, headers, and a body."""
+
+        def __init__(self, payload) -> None:
+            self.status = 200
+            self.headers = {"Content-Type": "application/json"}
+            self._body = json.dumps(payload).encode("utf-8")
+
+        def read(self, size=-1):  # noqa: ARG002 — the opener's signature
+            return self._body
+
+    class _Canned:
+        """An opener answering search pages and details out of `window`, recording each."""
+
+        def __init__(self) -> None:
+            self.requests: list = []
+
+        def open(self, request, data=None, timeout=None):  # noqa: A003, ARG002
+            self.requests.append(request)
+            url = request.full_url
+            if "/orders/search" in url:
+                body = json.loads(request.data.decode("utf-8"))
+                frm, size = int(body["from"]), int(body["size"])
+                return _Reply({"totalOrders": len(window), "orders": window[frm : frm + size]})
+            asked = url.rsplit("/", 1)[1].split("?")[0]
+            match = next(entry for entry in window if entry["orderNumber"] == asked)
+            detailed.append(asked)
+            return _Reply(
+                {
+                    "orderNumber": asked,
+                    "createdAt": match["orderDate"],
+                    "status": match["orderStatus"],
+                    "buyerName": "Buyer Placeholder",
+                    "shippingAddress": {"line1": "101 Example St", "city": "Springfield"},
+                    "paymentType": "Visa",
+                    "products": [
+                        {"skuId": 9191486, "quantity": 2, "name": "Moonfall", "unitPrice": 11.88}
+                    ],
+                }
+            )
+
+    canned = _Canned()
+    real_opener = urllib.request.build_opener
+    try:
+        for name in ("TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY"):
+            os.environ.pop(name, None)
+        os.environ["PKMNSCAN_TCG_ORDERS_URL"] = "http://127.0.0.1:1"
+        checks.equal(
+            envfile.get_live("TCGPLAYER_STORE_COOKIE"),
+            cookie,
+            "the reader answers this block's own fixture cookie and not the operator's",
+        )
+        urllib.request.build_opener = lambda *args, **kwargs: canned
+
+        with isolated_home():
+            # ---- 1. the preview: the pages walked whole, nothing detailed, nothing written
+            preview = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True}),
+                "the preview body answers",
+            )
+            if preview is not None:
+                checks.equal(
+                    sorted(preview),
+                    ["by_status", "range", "total", "writes_nothing"],
+                    "the preview's key set, whole",
+                )
+                checks.equal(
+                    preview["total"],
+                    60,
+                    "A WINDOW LARGER THAN THE CAP IS WALKED WHOLE AND REFUSED NOWHERE. The cap "
+                    "counts detail calls and not orders in the window (D91) — until it did, the "
+                    "owner's 370-order window answered `order_too_many` on every press and this "
+                    "route had never handed the ledger an order",
+                )
+                checks.equal(
+                    preview["by_status"],
+                    [
+                        {"status": "Shipped", "count": 40, "known": 0},
+                        {"status": "Ready to Ship", "count": 15, "known": 0},
+                        {"status": "Cancelled", "count": 5, "known": 0},
+                    ],
+                    "counted by the STRING the wire returned, largest first — no status "
+                    "vocabulary lives on this side of the wire, and which of these means "
+                    "'needs picking' is the operator's tick",
+                )
+                checks.equal(
+                    [request.get_method() for request in canned.requests],
+                    ["POST", "POST", "POST"],
+                    "three search pages of 25 and NOT ONE detail request",
+                )
+                checks.equal(detailed, [], "no order was detailed by a preview")
+                checks.ok(
+                    cookie not in json.dumps(preview) and "Buyer" not in json.dumps(preview),
+                    "and neither the credential nor a buyer is in the answer",
+                )
+            checks.equal(
+                capture_server.do_orders()["orders"],
+                [],
+                "the preview WROTE NOTHING — the ledger is still empty",
+            )
+
+            # ---- 2. the fetch: only the ticked status, ingest-shaped, accepted verbatim
+            del canned.requests[:]
+            fetched = answers(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"statuses": ["Ready to Ship"], "skip_known": True}
+                ),
+                "the fetch body answers",
+            )
+            if fetched is not None:
+                checks.equal(
+                    sorted(fetched),
+                    ["detailed", "matched", "orders", "remaining", "skipped_known"],
+                    "the fetch's key set, whole: the ingest body and the four counts",
+                )
+                checks.equal(
+                    (
+                        fetched["matched"],
+                        fetched["skipped_known"],
+                        fetched["detailed"],
+                        fetched["remaining"],
+                    ),
+                    (15, 0, 15, 0),
+                    "fifteen matched the ticked status; all fifteen detailed, none skipped, "
+                    "none left over",
+                )
+                checks.equal(
+                    len(detailed),
+                    15,
+                    "EXACTLY the ticked orders were detailed — the forty shipped and the five "
+                    "cancelled cost no request, which is the whole saving",
+                )
+                checks.equal(
+                    sorted(fetched["orders"][0]),
+                    ["lines", "number", "placed_at", "source", "status"],
+                    "each order is the ingest's shape, key set whole",
+                )
+                checks.equal(
+                    fetched["orders"][0]["lines"],
+                    [{"sku": "9191486", "quantity": 2, "name": "Moonfall", "unit_price": "11.88"}],
+                    "and each line is the ingest's spelling, the SKU coerced to a string",
+                )
+                ingested = answers(
+                    checks,
+                    lambda: capture_server.do_order_ingest({"orders": fetched["orders"]}),
+                    "AND THE INGEST ACCEPTS THE FETCH'S ANSWER VERBATIM — the contract both "
+                    "routes' docstrings state, asserted by feeding one to the other",
+                )
+                if ingested is not None:
+                    checks.equal(
+                        (ingested["added"], ingested["total"]),
+                        (15, 15),
+                        "fifteen orders landed in the ledger",
+                    )
+
+            # ---- 3. the delta: known at this status is skipped; a moved status is detailed again
+            del canned.requests[:]
+            del detailed[:]
+            again = answers(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"statuses": ["Ready to Ship"], "skip_known": True}
+                ),
+                "the second press answers",
+            )
+            if again is not None:
+                checks.equal(
+                    (
+                        again["matched"],
+                        again["skipped_known"],
+                        again["detailed"],
+                        again["remaining"],
+                        again["orders"],
+                    ),
+                    (15, 15, 0, 0, []),
+                    "THE LEDGER IS THE DELTA: all fifteen are held at this status, so the second "
+                    "press details nothing and pays three search pages",
+                )
+                checks.equal(len(canned.requests), 3, "three requests, all search pages")
+            preview_after = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True}),
+                "the preview after an ingest answers",
+            )
+            if preview_after is not None:
+                row = next(
+                    entry for entry in preview_after["by_status"]
+                    if entry["status"] == "Ready to Ship"
+                )
+                checks.equal(
+                    row["known"],
+                    15,
+                    "and the preview's `known` is the same compare the delta makes — what it "
+                    "says the ledger holds is exactly what the fetch will skip",
+                )
+            moved = window[40]
+            moved["orderStatus"] = "Shipped"
+            del detailed[:]
+            third = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": ["Shipped"], "skip_known": True}),
+                "a fetch of the shipped status answers",
+            )
+            if third is not None:
+                checks.equal(
+                    third["detailed"],
+                    41,
+                    "AN ORDER WHOSE STATUS MOVED IS DETAILED AGAIN, beside the forty never "
+                    "fetched — how a shipped order's new word reaches the ledger without a "
+                    "full re-fetch",
+                )
+                checks.ok(
+                    moved["orderNumber"] in detailed,
+                    "the moved order is among the detailed",
+                    f"detailed {len(detailed)}",
+                )
+            moved["orderStatus"] = "Ready to Ship"
+
+            # ---- 4. the cap counts detail calls, and the leftover is counted rather than dropped
+            del detailed[:]
+            capped = order_transport.fetch_open_orders(
+                "LastThreeMonths", statuses=["Shipped"], limit=10
+            )
+            checks.equal(
+                (capped.total, capped.matched, capped.detailed, capped.remaining),
+                (60, 40, 10, 30),
+                "A LIMIT OF TEN OVER FORTY MATCHES DETAILS TEN AND REPORTS THIRTY REMAINING. The "
+                "window of sixty is not refused; the drop is loud and finite, and the next press "
+                "picks the thirty up because the ledger will then know these ten",
+            )
+            checks.equal(len(detailed), 10, "ten detail requests and no more")
+
+            # ---- 5. the refusals
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({}),
+                "statuses_required",
+                "a body naming no status is refused rather than detailing the window — the "
+                "one-press fetch is the thing that never worked",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": []}),
+                "statuses_required",
+                "an empty tick list is the same refusal",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True, "statuses": ["Shipped"]}),
+                "fields_conflict",
+                "the two bodies do not mix",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": ["Shipped"], "page_size": 100}),
+                "field_not_settable",
+                "THE PAGE SIZE AND THE CAP ARE STILL NOT THE CLIENT'S — `_reject_unknown` "
+                "refuses by name, so no page can raise this account's request budget",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": "yes"}),
+                "preview_invalid",
+                "a stringified flag is refused rather than read as true",
+            )
+    finally:
+        urllib.request.build_opener = real_opener
+        envfile.ENV_FILE, restore_from_file, envfile._loaded = env_before
+        envfile._from_file.clear()
+        envfile._from_file.update(restore_from_file)
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        dotenv.unlink(missing_ok=True)
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -16659,6 +16987,7 @@ def run() -> Result:
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_screen(checks)
+    check_order_fetch_route(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
     check_price_history(checks)

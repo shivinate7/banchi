@@ -760,11 +760,17 @@ ORDER_INGEST_LINE_FIELDS = (
     "kind",
 )
 
-# What `POST /orders/fetch` accepts: the search range and nothing else. Every other knob
-# `server/order_transport.py` takes — the page size, the ceiling — is a rate limit rather
-# than a preference, and a route that let a client raise either would put this account's
-# request budget in the hands of whatever page was open.
-ORDER_FETCH_FIELDS = ("range",)
+# What `POST /orders/fetch` accepts: the search range, the preview flag, the statuses to detail
+# and the delta flag (D91) — and NOT the page size or the ceiling. Every knob
+# `server/order_transport.py` takes beyond these is a rate limit rather than a preference, and a
+# route that let a client raise either would put this account's request budget in the hands of
+# whatever page was open. `statuses` is the operator's tick list over the strings the preview
+# returned; it is the one filter this route applies, and it is never a vocabulary of its own.
+ORDER_FETCH_FIELDS = ("range", "preview", "statuses", "skip_known")
+
+# A fetch names the statuses to detail. The preview answers a handful — the API's own words for
+# an order's state — so a list past this is a client sending something other than what it ticked.
+ORDER_FETCH_STATUS_LIMIT = 50
 
 # What `POST /orders/pull` carries in each direction. TWO TUPLES, `ANSWER_FIELDS`'
 # convention exactly: a body carrying `undo` AND an order key is a client that has confused
@@ -8151,8 +8157,25 @@ def do_order_ingest(payload: dict) -> dict:
     }
 
 
+def _known_orders(ledger: order_store.Ledger) -> Dict[str, str]:
+    """`{number: status}` for every TCGplayer order the ledger holds — the fetch's delta (D91).
+
+    The number is folded to compare, the way `order_key` folds it; the status is the feed's own
+    word and is NOT folded, because a fold is the first step toward the vocabulary the
+    transport refuses to hold. An order the ledger has at this exact status has already been
+    detailed once and need not be again; one whose status moved is detailed afresh, which is
+    how a shipped order's new word reaches the ledger without a full re-fetch.
+    """
+    known: Dict[str, str] = {}
+    for record in ledger.orders.values():
+        if str(record.source).strip().casefold() != ORDER_FETCH_SOURCE.casefold():
+            continue
+        known[str(record.number).strip().casefold()] = str(record.status or "").strip()
+    return known
+
+
 def do_order_fetch(payload: dict) -> dict:
-    """`POST /orders/fetch` — ask TCGplayer for this account's own orders. FREE.
+    """`POST /orders/fetch` — ask TCGplayer for this account's own orders. FREE. Two bodies.
 
     IT IS NOT THE MONEY GATE AND CARRIES NO `confirm`. The one route in this server that can
     cause a charge is still `POST /pipeline/identify`, and it is still named for it. This is
@@ -8160,12 +8183,28 @@ def do_order_fetch(payload: dict) -> dict:
     `.env` — the same account session `server/tcg_export.py` uses one host over — and it
     writes nothing: no card state, no listing count, no run directory, not even the ledger.
 
-    IT RETURNS EXACTLY WHAT `POST /orders/ingest` ACCEPTS AND NOT ONE KEY MORE. The body is
-    `{"orders": [...]}`, which is the paste path's body verbatim, so the fetched result can
-    be sent to the ingest route unaltered — which is the whole point of the shape. A count
-    or a summary added here would be a field `_reject_unknown` refuses by name at the ingest,
-    and the two routes would then need an adapter between them for no gain: the caller can
-    count the list.
+    TWO PRESSES SINCE D91, BECAUSE ONE PRESS NEVER WORKED HERE. Measured 2026-09-02 on the
+    owner's account: `LastThreeMonths` holds 370 orders against a detail cap of 100, and every
+    press of the single-body fetch answered `order_too_many` with a remedy — "ask for a
+    narrower range" — the range vocabulary cannot express. So the route takes two bodies:
+
+        {"preview": true, "range"?}
+            -> {range, total, by_status: [{status, count, known}], writes_nothing: true}
+        {"statuses": [...], "skip_known"?, "range"?}
+            -> {orders: [...], matched, skipped_known, detailed, remaining}
+
+    The preview walks the search pages — one request per 25 orders, NO detail call — and
+    counts the window by the status STRING the wire returned, verbatim; `known` beside each is
+    how many of those the ledger already holds at that status. The fetch details only the
+    statuses the operator ticked, skips what the ledger holds unchanged when `skip_known` is
+    set, details at most the transport's cap, and reports `remaining` for the next press. No
+    vocabulary is coded here: the strings on the wire are the strings on the screen, and which
+    of them mean "needs picking" is the operator's to say.
+
+    `orders` IS STILL EXACTLY WHAT `POST /orders/ingest` ACCEPTS. The client forwards that
+    array and nothing else — `ingestOrders(found.orders)` — so the counts beside it reach no
+    allowlist; they are what the paste note says about the press. A wrapper that forwarded the
+    whole answer would meet `field_not_settable` by name, which is the right refusal for it.
 
     THE PROJECTION HAPPENED UPSTREAM AND IS NOT REPEATED HERE. `server/order_transport.py`
     drops `buyerName`, `shippingAddress`, `paymentType` and the transaction breakdown where
@@ -8173,10 +8212,10 @@ def do_order_fetch(payload: dict) -> dict:
     does not arrive through this route either. What this function does is rename the four
     surviving fields into this repo's own spelling.
 
-    A REFUSAL IS THE TRANSPORT'S OWN CODE. One `except` at the one call site is the whole
-    seam, exactly as `_dispatch` does for `pipeline_routes.PipelineRefusal` — that module
-    raises its own exception type because this file imports it and the reverse import would
-    be a cycle. Every one of its twenty-one codes carries a sentence saying what to fix.
+    A REFUSAL IS THE TRANSPORT'S OWN CODE. One `except` at each of the two call sites is the
+    whole seam, exactly as `_dispatch` does for `pipeline_routes.PipelineRefusal` — that
+    module raises its own exception type because this file imports it and the reverse import
+    would be a cycle. Every one of its codes carries a sentence saying what to fix.
     """
     _reject_unknown(payload, ORDER_FETCH_FIELDS)
     asked = payload.get("range")
@@ -8189,9 +8228,58 @@ def do_order_fetch(payload: dict) -> dict:
             f"{order_transport.DEFAULT_RANGE}.",
         )
     wanted = (asked or "").strip() or order_transport.DEFAULT_RANGE
+    preview = _optional_flag(payload, "preview", "preview_invalid")
+    skip_known = _optional_flag(payload, "skip_known", "skip_known_invalid")
+    statuses = payload.get("statuses")
 
+    if preview:
+        if statuses is not None or "skip_known" in payload:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "fields_conflict",
+                "preview: true walks the summaries and details nothing; statuses and "
+                "skip_known belong to the fetch body. Send one body or the other.",
+            )
+        known = _known_orders(Store().read().ledger)
+        try:
+            found = order_transport.summaries(wanted)
+        except order_transport.FetchRefusal as exc:
+            raise BadRequest(HTTPStatus.BAD_REQUEST, exc.code, exc.message) from None
+        by_status: Dict[str, dict] = {}
+        for entry in found:
+            status = str(entry.get("status") or "").strip()
+            row = by_status.setdefault(status, {"status": status, "count": 0, "known": 0})
+            row["count"] += 1
+            if known.get(str(entry["orderNumber"]).strip().casefold()) == status:
+                row["known"] += 1
+        # LARGEST FIRST, THEN BY NAME, so the screen's first row is the window's shape and two
+        # equal counts do not swap places between presses.
+        rows = sorted(by_status.values(), key=lambda row: (-row["count"], row["status"]))
+        return {"range": wanted, "total": len(found), "by_status": rows, "writes_nothing": True}
+
+    if (
+        not isinstance(statuses, list)
+        or not statuses
+        or not all(isinstance(status, str) and status.strip() for status in statuses)
+    ):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "statuses_required",
+            "Send statuses: [...] — the strings the preview answered, ticked — or preview: "
+            "true to see them. Since D91 a fetch details only the statuses you asked for: this "
+            "account's window alone holds hundreds of orders, and one press taking all of them "
+            "is what never worked.",
+        )
+    if len(statuses) > ORDER_FETCH_STATUS_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_statuses",
+            f"{len(statuses)} statuses in one fetch; the preview answers far fewer than "
+            f"{ORDER_FETCH_STATUS_LIMIT}. Send the ones you ticked.",
+        )
+    known = _known_orders(Store().read().ledger) if skip_known else None
     try:
-        fetched = order_transport.fetch_open_orders(wanted)
+        result = order_transport.fetch_open_orders(wanted, statuses=statuses, known=known)
     except order_transport.FetchRefusal as exc:
         raise BadRequest(HTTPStatus.BAD_REQUEST, exc.code, exc.message) from None
 
@@ -8212,8 +8300,12 @@ def do_order_fetch(payload: dict) -> dict:
                     for line in order["products"]
                 ],
             }
-            for order in fetched
-        ]
+            for order in result.orders
+        ],
+        "matched": result.matched,
+        "skipped_known": result.skipped_known,
+        "detailed": result.detailed,
+        "remaining": result.remaining,
     }
 
 
