@@ -470,12 +470,21 @@ COMPONENTS = [
                                   "believe it shipped. Candidates are a HINT, never a permission "
                                   "set: a copy is valid for what it IS (holds the SKU, not terminal, "
                                   "located, not already spoken for), which is D7's fungibility rather "
-                                  "than an address re-imposed on it.",
+                                  "than an address re-imposed on it. "
+                                  "A LINE MAY WANT ZERO SINCE 2026-09-02 (D90), and the permission "
+                                  "is deliberate rather than a loosened guard: the server asks this "
+                                  "engine for what the ledger still OWES rather than what the buyer "
+                                  "bought, so a line whose copies are all pulled arrives wanting "
+                                  "nothing — it picks none, answers `resolved` at once, and still "
+                                  "counts its breakdown, which is how a filled line keeps its "
+                                  "figures on screen without a second implementation of "
+                                  "`OrderLine`. A NEGATIVE quantity is still the bug it always "
+                                  "was.",
                           # D58 because it decides what this module deliberately does NOT
                           # do: a card's number counts the cards in the box now, so drawing
                           # a label needs the box's whole occupancy — a `Pick` carries the
                           # box and index and leaves the rendering to the one label formula.
-                          "governed_by": ["D7", "D10", "D21", "D24", "D26", "D36", "D58"],
+                          "governed_by": ["D7", "D10", "D21", "D24", "D26", "D36", "D58", "D90"],
                           "tested_by": ["T7"],
                           "note": "THE SKU IS COERCED AT THE BOUNDARY AND WITHOUT THAT NOTHING WORKS "
                                   "AT ALL: `Card.sku` is a CSV string and a JSON payload carries the "
@@ -1580,12 +1589,17 @@ COMPONENTS = [
                 # register. What a reader actually needs from this entry is which SHAPES of
                 # route exist, and that is what the line below now says.
                 "does": "the capture, status, photo, inventory, queue, review-answer, "
-                        "mark-sold, undo, search and box routes — including D34's listing "
+                        "mark-sold, undo, search, box and order routes — including D34's listing "
                         "release and the free plan that must be drawn before it, D37's "
                         "stand-down in both directions, D20's box name as an address "
                         "(`name_taken`, and a number allocated rather than typed), and D10's "
                         "one-divider-at-a-time `POST /boxes/<box>/sections`, which takes no "
                         "index because the store reads `next_index` inside its own lock; "
+                        "D90's `POST /orders/fill` — THE ENVELOPE, every line of one order "
+                        "recorded as pulled and sold in ONE Store.write() on the press that says "
+                        "the buyer's cards are in hand, with an undo that names its own lines "
+                        "back; and D91's two-bodied `POST /orders/fetch`, whose `{preview: true}` "
+                        "half counts the window by status and details nothing; "
                         "the sidecar identify reads "
                         "back; the photo store; the origin allowlist that stands between a "
                         "stray browser tab and a hard delete; "
@@ -1594,7 +1608,15 @@ COMPONENTS = [
                         "Store.write(), so the line and the change it describes commit "
                         "together or neither does. NOT ONE OF THEM is a member of "
                         "master.STATES, which is what keeps _state_before_sale from "
-                        "restoring a reversed sale to one of them.",
+                        "restoring a reversed sale to one of them. "
+                        "THE TWO ORDER-PULL DOORS SHARE ONE IMPLEMENTATION OF THE CHECKS, which "
+                        "is why the envelope could be added without a second aim rule: "
+                        "`_prepare_targets` and `_ledger_pull` were lifted out of "
+                        "`do_order_pull`, so the capture_id_mismatch aim check, the SKU check and "
+                        "the duplicate guard are one body behind `/orders/pull` and "
+                        "`/orders/fill` alike. The envelope is two phases inside that one write: "
+                        "any refusal anywhere aggregates to `fill_entry_refused` naming the line "
+                        "and the position, and NOTHING is written.",
                 # THE EVENT NAMES ARE NOT ENUMERATED HERE, and that is the fix rather than a
                 # thinning. This line named five of them — `corrected`, `removed`, `answered`,
                 # `unanswered`, `reshot` — and said "none of the five", while the tuple had
@@ -1615,7 +1637,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D91", "D69"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1756,7 +1778,19 @@ COMPONENTS = [
                         "that genuinely does not transfer between the two hosts. 403 is "
                         "order_seller_key_rejected and NOT order_session_expired, because a "
                         "missing filters.sellerKey answers 403 rather than 400 and reads "
-                        "exactly like an expired session. Twenty-one named refusal codes.",
+                        "exactly like an expired session. Twenty-one named refusal codes. "
+                        "TWO SHAPES SINCE D91, because the one it had was refused on every press "
+                        "this account ever made: `LastThreeMonths` holds 370 orders against a "
+                        "detail cap of 100, the cap counted the WINDOW, and the remedy it printed "
+                        "— ask for a narrower range — is one the range vocabulary here cannot "
+                        "express. The search pages are walked whole now and are the cheap half "
+                        "(one request per 25 orders, no detail call, nothing written); what is "
+                        "capped is the DETAIL calls, over the statuses the operator ticked and "
+                        "the orders the ledger does not already hold; and what the cap leaves is "
+                        "COUNTED and returned as `remaining` rather than silently dropped. The "
+                        "status string is the API's own word and is never folded — folding it "
+                        "would be the first step toward the vocabulary this module refuses to "
+                        "have.",
                 # D63 is the ledger this feeds; D65 is the body convention it deliberately does
                 # not carry over; D66 is the build order it discharges; D69 is the capture and
                 # the entry. D34 and D53 are cited in its own text.
@@ -1786,7 +1820,9 @@ COMPONENTS = [
                 "pipeline lives on, the review queue, the pricing worklist, the order "
                 "screen and the shipping lane (D69 gave each its own route rather than "
                 "making one a mode of the other), the one "
-                "inventory view (D31 folded the box walk and the pull preview into it), the "
+                "inventory view (D31 folded the box walk and the pull preview into it, and "
+                "D90 let an ORDER drive it as a third mode — a URL parameter on the same "
+                "screen, adding no route and moving no count), the "
                 "code-card screen D70 gave its own route, and "
                 "step 6's component gallery — and one "
                 "the Fulfiller's, which the shell deliberately draws no nav over. The count "
@@ -2002,11 +2038,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D91"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89", "D91"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89", "D90", "D91"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2222,8 +2258,26 @@ COMPONENTS = [
                     "is written by emit and is null on every sub-threshold and withheld card. "
                     "The store holds no price at all (D8), so this is the only place one can "
                     "come from, and the age of the reading is drawn with it because `join` is "
-                    "re-run against refreshed exports.",
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89"]},
+                    "re-run against refreshed exports. "
+                    "TWO MORE INBOUND PROPS since 2026-09-02 (D90), both optional and both "
+                    "answering the same question — how an ORDER drives this walk without a second "
+                    "copy of it. `arrows` makes ArrowLeft/Right step the caller's QUEUE instead "
+                    "of the box: the one window listener and the one STEPS table stay, every "
+                    "guard above the move stays, and only who answers the key changes, because a "
+                    "second listener in the caller would be a second copy of those guards kept in "
+                    "step by hand. The deep keys — PageUp/Down, Home/End, the tick — keep walking "
+                    "the box, which is still what they are about. `arrows.says` replaces the "
+                    "header chip's sentence so the chip cannot go on claiming the arrows move one "
+                    "card, and may be null where a queue of one stop has nothing to step between. "
+                    "`banner` is a THIRD SLOT, rendered between the header row and the body, "
+                    "because its guard is different again: `detail` needs a selected card and "
+                    "`boxPanel` sits in the row D39 forbids to wrap, and a banner about the order "
+                    "driving the walk is about neither the card nor the box. The empty-list early "
+                    "return yields to it — an empty walk is not an empty queue, and a search "
+                    "matching nothing must not take the arrows away from the order.",
+            # D90 is the order-driven mode these two props exist for; this file draws none of it
+            # and only hands the keys and a slot to the caller that does.
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -2232,8 +2286,13 @@ COMPONENTS = [
                                   "sizes it. THAT BAND IS GONE since 2026-08-29: the facts left the card's "
                                   "column to cap the copies, so the photograph is sized by its COLUMN again "
                                   "and there is nothing beside it to take a height from. The body is three "
-                                  "columns at 22/33/45, and the run line moved to the header row.",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41"]},
+                                  "columns at 22/33/45, and the run line moved to the header row. "
+                                  "ONE RULE FOR THE BANNER SLOT since 2026-09-02 (D90) and nothing "
+                                  "more: `.browse-banner` gives whatever the caller puts between "
+                                  "the header row and the body the same breath the body gets, and "
+                                  "what fills it styles itself — the order walk's banner is "
+                                  "src/OrderWalkBanner.css's, not this file's.",
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -2283,6 +2342,95 @@ COMPONENTS = [
                         "has tested an edge.",
                 "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41", "D46", "D50"],
             },
+            "src/OrderWalkBanner.tsx": {
+                "does": "the banner over #/inventory while an order drives the walk (D90) — "
+                        "presentation only, and ONE ROW that never becomes two. Left to right it "
+                        "answers the question in the order it arrives at the drawer: which order, "
+                        "stop k of n, the card, `take n` and the two shortfalls, then a "
+                        "right-packed end cluster holding the envelope press — whose label "
+                        "carries `mark k of n sold`, so the glance and the press cannot disagree "
+                        "— and, ALWAYS LAST, a quiet `Stop walking`. That order is the rule: when "
+                        "a filled order vacates the envelope's rectangle, the way out does not "
+                        "slide into the space a finger was already traveling toward, and "
+                        "`Walk the next order` is offered on the LEFT instead. Wave mode draws one "
+                        "row per open order beneath, each with its own envelope press, the current "
+                        "one carrying the 2px inset ink rail the box strip and the copies list "
+                        "already use for `this one`, and a filled one drawn dashed with the word "
+                        "`filled` in the button's own footprint rather than deleted. "
+                        "Inventory.tsx owns the queue, the cursor, the writes and the receipts; "
+                        "this draws what they say and holds no state but one focus cue. "
+                        "NO --accent FILL, and the argument is docs/DESIGN.md's own: the fill is "
+                        "for a screen whose state reduces to ONE action (D29's group confirm, "
+                        "D33's spending press behind a preflight), and at no moment here is it "
+                        "one — `Not here`, `Take this one instead`, `Retire`, the walk itself and "
+                        "the exit are all live beside the envelope.",
+                # D28 is the rule the whole layout exists to satisfy, applied to the strip above
+                # a list somebody is arrowing through: `flex-wrap: nowrap` and one shrinking
+                # child make "the body never moves" structural rather than a promise in a
+                # comment. D39 is the same ruling one node above, over the header row that may
+                # never become two. D90 is the mode and the envelope it presses.
+                "governed_by": ["D28", "D29", "D31", "D33", "D39", "D45", "D50", "D57", "D58",
+                                "D69", "D90"],
+                "note": "MEASURED IN A BROWSER AT 1280 ON 2026-09-02 RATHER THAN ESTIMATED: the "
+                        "banner is 50px in every state, its inner row 32px, and `scrollWidth` "
+                        "equals `clientWidth` at 1222 — no overflow and no sideways page scroll. "
+                        "The stylesheet carries those numbers and says what to re-measure when a "
+                        "span is added.\n\n"
+                        "ONE CLAIM IN ITS HEADER IS ORDER-MODE ONLY. `atEnd` moves focus to the "
+                        "envelope when a Right press at the last stop has nowhere to go — the one "
+                        "moment this mode moves focus at all — and `fillRef` is attached to the "
+                        "main row's press alone; the wave-mode envelope rows pass "
+                        "`innerRef={null}`, so in that mode the end of the queue is still "
+                        "answered by silence. app/tests/order-walk.spec.ts case 4 asserts the "
+                        "move and case 10 deliberately does not. Not a harness test — it starts a "
+                        "browser; `make design-check` runs it.",
+            },
+            "src/OrderWalkBanner.css": {
+                "does": "THE WHOLE ORDER-WALK MODE'S STYLESHEET, which is more than the banner: "
+                        "the banner off .inventory-note's shape, the util register for its facts, "
+                        "the 2px ink rail on the current envelope row and the dashed border on a "
+                        "filled one — and also the COPIES ROWS' marks, the one sentence that says "
+                        "why an unmarked copy is still takeable, and the envelope receipt's stack "
+                        "of places. The marks are two tones and the split is the instruction "
+                        "rather than a ranking: ink where the mark tells the hand what to do with "
+                        "this card (`for this order`, `taken instead`), muted where it reports "
+                        "somebody else's fact (`for order N`, `pulled for order N`). That is "
+                        ".orders-pick-held's own register, so one fact reads the same on both "
+                        "screens that draw it, and it costs no second color. The receipt's "
+                        "places are a block of one line each rather than laid into the wrapping "
+                        "receipt row, because each place is itself `Box 2 · Section 1 · Card 1` "
+                        "and the whitespace between two of them would be the whitespace inside "
+                        "one — a list you can check off against the cards in your hand needs the "
+                        "line breaks.",
+                # D28 is why the row is `nowrap` with one shrinking child; D45 is why a copy with
+                # no control beside it is still reachable — its position label is a walk-to; D50
+                # is why nothing here changes size on hover. D90 is the mode.
+                "governed_by": ["D28", "D45", "D50", "D90"],
+            },
+            "src/orderWalk.ts": {
+                "does": "THE ORDER WALK'S QUEUE AS PURE FUNCTIONS over one GET /orders answer: "
+                        "what the location hash asks (`?order=<key>` or `?orders=open`), the "
+                        "stops — one per order LINE the ledger still owes on, standing at its "
+                        "next pullable copy (T6's first determination) — in order-mode or wave "
+                        "order, the marks the copies panel draws (pulled, held, target, pick, "
+                        "spoken), each envelope's targets after the operator's re-aims and "
+                        "exclusions, and where the cursor stands after a re-read. Holds no "
+                        "state, calls no server, imports no React: the queue is re-derived "
+                        "from every read (D36), and the URL is the handoff rather than "
+                        "sessionStorage (D49's argument for #/pricing?run=). A line the ledger "
+                        "still owes on with no aimable copy is `unfillable`: the banner counts "
+                        "it and points at #/orders, and the walk never lands on a place that "
+                        "does not exist.",
+                "governed_by": ["D7", "D36", "D45", "D49", "D57", "D58", "D63", "D69", "D90"],
+                "note": "WAVE MODE DOES NOT VIOLATE `a stop is a line, not a position`. It sorts "
+                        "the same line-stops by `(landing.box, landing.index)` so the pass "
+                        "through the drawers is one direction, and because a landing is "
+                        "re-derived on every read, a three-copy line whose first copy was just "
+                        "filled stands at its next unfilled copy. The box pass is a property of "
+                        "the read, not a stored list.\n\n"
+                        "Exercised through the browser by app/tests/order-walk.spec.ts, which is "
+                        "not a harness test — it starts a browser; `make design-check` runs it.",
+            },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
                         "correction on 2026-08-23 was that this is \"find a card in a box-based "
@@ -2295,7 +2443,27 @@ COMPONENTS = [
                         "the whole-box delete. No cache: there is one place inventory lives and "
                         "it is not here. It also holds the one request that goes the OTHER way "
                         "(D45): a press on a copy's position asks the walk to go there, which is "
-                        "the only thing this file tells BoxBrowse to do.",
+                        "the only thing this file tells BoxBrowse to do.\n\n"
+                        "THERE IS A THIRD MODE SINCE 2026-09-02, AND IT DOES NOT REOPEN THE "
+                        "SENTENCE ABOVE. D31 folded #/boxes and #/pull because they were three "
+                        "instances of one thing; an ORDER DRIVING THE WALK (D90) is the opposite "
+                        "case — the same one screen, the same spine, with a queue deciding which "
+                        "card it stands on next. It arrives as a URL parameter and not a route: "
+                        "`#/inventory?order=<key>` or `#/inventory?orders=open`, D49's argument "
+                        "for `#/pricing?run=` verbatim, so nothing in App.tsx's ROUTES table "
+                        "moves and no published count changes. What this file adds for it is the "
+                        "hash-driven ask, the queue and cursor memos over one GET /orders answer, "
+                        "the effect that lands the walk on each stop through the same `goTo`, the "
+                        "two corrections the operator makes with their hands (take another copy "
+                        "instead — in ANY box, on the owner's 2026-09-02 ruling that D7 already "
+                        "settles it — and `Not here`), and the one write. "
+                        "THE WALK WRITES NOTHING PER CARD: `Mark sold` is drawn on NO row while "
+                        "an order drives, because the plain sale writes card state and not the "
+                        "ledger, so a card sold under a walk leaves its line owed forever. "
+                        "`Retire` stays, a damaged copy being damaged whoever it was promised to. "
+                        "The one press is the envelope — every line of one order in one "
+                        "POST /orders/fill — and in order mode the next order is not offered "
+                        "until it has been pressed.",
                 "note": "IT WRITES NOW, AND ITS HEADER OVERTURNS ITS OWN OBJECTION IN PLACE "
                         "rather than deleting it. The file argued at length that a sold button "
                         "here would be 'the same irreversible-looking write with neither guard, "
@@ -2318,9 +2486,23 @@ COMPONENTS = [
                         "re-read while the clock runs. The retirement is untouched — its four "
                         "reasons are the write's only input, not an acknowledgement — and "
                         "#/fulfillment is untouched, its two-step being a displacement guard a "
-                        "real double-tap sale earned.",
-                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D31",
-                                "D33", "D38", "D39", "D41", "D45", "D57", "D58", "D68", "D71"],
+                        "real double-tap sale earned.\n\n"
+                        "ONE MARK IS UNREACHABLE FOR THE STATE ITS OWN NAME DESCRIBES, and it is "
+                        "written here rather than discovered again. `Action` returns inside its "
+                        "sold branch before it reaches the walk branch, so a copy recorded "
+                        "against an order AND SOLD draws the plain word `sold` and never "
+                        "`pulled for order N`; the mark renders only for a recorded copy still on "
+                        "hand, which is a sale reversed by hand. The server half's stated purpose "
+                        "for `_order_progress.pulled` — the only way the copies panel can mark "
+                        "the slot a pulled card came out of — therefore does not hold for the "
+                        "ordinary pulled-and-sold copy. Nothing is wrong on screen; the branch is "
+                        "simply narrower than its comment claims.",
+                # D28 is the receipt's undo window and the row that must not move under a finger;
+                # D36 is why the queue is re-derived on every read rather than stored; D49 is the
+                # URL as the handoff; D90 is the order-driven mode and its envelope.
+                "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
+                                "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
+                                "D58", "D68", "D71", "D90"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -2703,13 +2885,33 @@ COMPONENTS = [
                                        "paste (projected by src/orderPaste.ts) or by fetch "
                                        "behind the same control. IT DRAWS NO POSTAGE LANE: "
                                        "that is D61's question and #/shipping's answer, "
-                                       "computed from a file this screen never sees.",
-                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D58", "D61", "D63", "D69", "D91"]},
+                                       "computed from a file this screen never sees. "
+                                       "THE FETCH IS TWO PRESSES SINCE D91, because one press "
+                                       "never worked on this account: `Check TCGplayer` walks "
+                                       "the search pages, details nothing and draws the window "
+                                       "by the status STRING the wire returned — verbatim, an "
+                                       "empty one as the absence it is — with how many of each "
+                                       "the ledger already holds; nothing is pre-ticked, because "
+                                       "which statuses mean `needs picking` is the one thing "
+                                       "about this feed nobody has enumerated. `Fetch N orders` "
+                                       "then details only what was ticked, and the note names "
+                                       "the cap's leftover as `remaining` rather than swallowing "
+                                       "it. IT IS ALSO THE WAY INTO THE WALK (D90): every open "
+                                       "order draws `Walk this order` and the header draws "
+                                       "`Walk every open order`, both as plain <a> links to "
+                                       "#/inventory with a parameter, so middle-click and "
+                                       "Cmd-click work and no state is handed over. Each line "
+                                       "now reads `found of OWED` with what is already pulled "
+                                       "beside it, because the resolver is asked what the ledger "
+                                       "still owes rather than what the buyer bought.",
+                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D49", "D58", "D61", "D63", "D69", "D90", "D91"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
-                                       "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D91"]},
+                                       "rather than offered twice. Since D91 it also carries the "
+                                       "status window the fetch is ticked from, and since D90 "
+                                       "the two links into the order walk.",
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D90", "D91"]},
             "src/Shipping.tsx": {"does": "#/shipping: TCGplayer's Orders -> Export Shipping "
                                          "file read into D61's three lanes, with the Pirate "
                                          "Ship import CSV as a download and a way to forget the "
@@ -3061,9 +3263,59 @@ COMPONENTS = [
                                              "for, that the pull sends the row's own "
                                              "capture_id, and that the receipt reads the "
                                              "pre-write place rather than the sale's departed "
-                                             "label. Not a harness test — it starts a browser; "
-                                             "`make design-check` runs it.",
-                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D69", "D91"]},
+                                             "label. TWO CASES OVER THE TWO-PRESS FETCH (D91): "
+                                             "the first press details nothing and draws the "
+                                             "window as the wire spelled it, the second details "
+                                             "only the ticked statuses and skips what the ledger "
+                                             "holds, and a fetch the cap cut short says how many "
+                                             "it left — while an empty one still re-reads the "
+                                             "ledger, which is the bug the early return was. It "
+                                             "asserts NOTHING about the order walk; that is "
+                                             "app/tests/order-walk.spec.ts. Not a harness test — "
+                                             "it starts a browser; `make design-check` runs it.",
+                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D69", "D91", "D49"]},
+            "tests/order-walk.spec.ts": {
+                "does": "AN ORDER DRIVING THE BOX WALK, IN A BROWSER (D90) — the only thing "
+                        "that looks at the mode at all, since tests/inventory.spec.ts walks "
+                        "#/inventory plainly and asserts no stop, no arrow step and no envelope "
+                        "press. Thirteen cases, and the "
+                        "strongest of them are ABSENCES and MEASUREMENTS rather than renders: no "
+                        "row offers `Mark sold` anywhere on the screen while an order drives, one "
+                        "envelope press sends one POST /orders/fill carrying every line's own "
+                        "capture_id and ZERO /sold and ZERO /orders/pull, the banner's row does "
+                        "not change height across an arrow step (D28), and `Stop walking` does "
+                        "not move into the rectangle a filled envelope vacated. The rest walk the "
+                        "mode end to end: the arrows stepping the queue across boxes and stopping "
+                        "at both ends, a cross-box swap that the stop then follows, a copy "
+                        "excluded as `not here` with the walk advancing on its own, the receipt "
+                        "reversing the whole envelope through the same route, wave mode "
+                        "interleaving two orders in (box, index) order with one envelope each, a "
+                        "key the ledger does not hold falling through to the plain walk, and a "
+                        "409 drawing its code with nothing recorded. THE FIRST STOP IS "
+                        "DELIBERATELY NOT THE BOX'S FIRST CARD, which is what makes every landing "
+                        "assertion non-vacuous — with picks at 2/1 a mode that drove nothing "
+                        "would pass — and the fall-through case asserts the plain walk's own "
+                        "landing for the same reason. Not a harness test: it starts a browser, so "
+                        "`make design-check` runs it and `make harness` does not.",
+                # D7 is the fungibility the cross-box swap case rests on; D36 is why the fixture
+                # re-derives rather than stores; D45 is the walk-to a copy row still offers; D49
+                # is the URL-as-handoff the entry links use; D52 and D58 are the photo and the
+                # label the landing assertions read.
+                "governed_by": ["D7", "D28", "D36", "D45", "D49", "D52", "D58", "D90"],
+                "note": "TWO THINGS IT DOES NOT COVER, NAMED SO NEITHER IS MISTAKEN FOR ASSERTED. "
+                        "The `held` mark — `spoken for by order N`, drawn where a pick carries "
+                        "`held_by` — is uncovered: the fixture's competing pick deliberately "
+                        "carries none, so the muted-tone case asserts `for order N` instead. And "
+                        "the ENTRY LINKS are asserted by neither spec — `Walk this order` and "
+                        "`Walk every open order` are rendered by app/src/Orders.tsx and every "
+                        "case here enters by navigating the URL itself, so nothing checks that "
+                        "the press on #/orders composes the hash the walk reads.\n\n"
+                        "ITS ORDER NUMBERS CONTAIN NO `D<digits>` SUBSTRING ON PURPOSE. The "
+                        "`repo map` row scans a module for decision citations and takes any "
+                        "`D` followed by one or two digits as one, so a fixture order numbered "
+                        "`D12-…` would demand a governed_by entry for a decision this file has "
+                        "no opinion about.",
+            },
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

@@ -147,10 +147,13 @@ capture        live camera, box / game / set hint / finish / rarity, undo, motio
 runs           the pipeline: preflight, the money gate, join / emit / reconcile, downloads
 review queue   one card at a time, photo first — the answer writes and advances
 pricing        the hand-pricing worklist, one row per SKU, and D49's deliberate holds
-orders         which copies this buyer gets and where they are, out of the order ledger
+orders         which copies this buyer gets and where they are, out of the order ledger,
+               and the two ways into the walk below — this order, or every open one at once
 shipping       which envelope an order goes in, out of TCGplayer's own shipping export
 inventory      the box walk, and everything that hangs off it: search, a card's copies
-               and its sale, and the box's own operations
+               and its sale, and the box's own operations — and, since D90, an ORDER
+               driving that same walk stop by stop, writing nothing per card and
+               recording the whole envelope on one press
 codes          the code-card track: read a box's QRs into the ledger, the two lanes the
                pile is tiered into, and a lane handed to a buyer against a named order
 Fulfillment    the second persona's whole product: pull, photo-confirm, mark sold

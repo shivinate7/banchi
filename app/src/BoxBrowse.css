@@ -53,6 +53,13 @@
 
    `s2` under it rather than `s4`, and no margin over it: the hairline is what separates this
    from the body, and 16px of air on both sides of a hairline is 32px spent on a rule. */
+/* THE BANNER SLOT — an order driving the walk. Sits between the header row and the body, and
+   what fills it styles itself (`.inventory-walk`); this only gives it the same breath the body
+   gets below the header. */
+.browse-banner {
+  margin-top: var(--s3);
+}
+
 .browse-controls {
   display: flex;
   flex-wrap: wrap;

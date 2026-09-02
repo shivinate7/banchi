@@ -451,6 +451,21 @@ type BoxBrowseProps = {
    *  never disagree about what "the selection" means; `box` is null on a pooled or unplaced
    *  shelf, which has no box to identify. */
   onScope?: (scope: { box: number | null; indices: readonly number[] }) => void
+
+  /** WHEN GIVEN, ArrowLeft/ArrowRight STEP THIS INSTEAD OF THE BOX — the order walk's queue.
+   *
+   *  The one window listener and the one `STEPS` table stay; what changes is who answers the
+   *  key. A second listener in the caller would be a second copy of the four guards above the
+   *  move, kept in step by hand. `says` replaces the header chip's sentence so the chips stay
+   *  truthful about what the arrows do. The deep keys (PageUp/Down, Home/End, the tick) keep
+   *  walking the box: they are about its sections, which is still true while an order drives. */
+  arrows?: { says: string | null; onStep: (delta: -1 | 1) => void } | null
+
+  /** Rendered after the header row and before the three-column body. A THIRD SLOT because the
+   *  guard is different again: `detail` is drawn only with a selected card, `boxPanel` sits in
+   *  the header row that may never become two rows (D39), and a banner about the ORDER driving
+   *  the walk is about neither the card nor the box. */
+  banner?: ReactNode
 }
 
 
@@ -917,6 +932,8 @@ export function BoxBrowse({
   head,
   detail,
   boxPanel,
+  arrows = null,
+  banner,
   onSelect,
   onBoxes,
   onScope,
@@ -1343,7 +1360,9 @@ export function BoxBrowse({
    * onto a card the filter removed.
    */
   useEffect(() => {
-    if (visible.length === 0) return
+    /* The queue's arrows must survive a query matching nothing: an empty walk is not an empty
+     * queue, and the order still wants stepping to its next stop. */
+    if (visible.length === 0 && arrows === null) return
 
     const onKeyDown = (event: KeyboardEvent) => {
       /* Modifiers belong to the browser and the OS: Cmd-Left is Back and Alt-Left is a word
@@ -1378,6 +1397,13 @@ export function BoxBrowse({
        * the top. */
       event.preventDefault()
 
+      /* AN ORDER IS DRIVING: the key steps the queue and the caller lands the walk through
+       * `goTo`. Every guard above still applies — the arrows are the same arrows. */
+      if (arrows !== null) {
+        arrows.onStep(step.delta)
+        return
+      }
+
       setSelected((prev) => {
         const at = visible.findIndex((row) => row.key === prev)
 
@@ -1401,7 +1427,7 @@ export function BoxBrowse({
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [visible])
+  }, [visible, arrows])
 
   /* Keep the selected row where it can be seen. The failure this prevents is specific, and it
    * is the one that makes a keyboard list feel broken: the detail panel updates, the marked
@@ -1921,7 +1947,11 @@ export function BoxBrowse({
             state measures 428px, so it would wrap to two lines the moment anything is ticked —
             the one thing D39 forbids. That is a measurement, not a preference. */}
         {boxPanel}
-        {rows === null || rows.length < 2 ? null : (
+        {/* THE CHIP SAYS WHAT THE ARROWS DO, and while an order drives that is not the box.
+            `arrows.says` may be null — a queue of one stop has nothing to step between, which is
+            the same rule the plain walk applies to a list of one: a hint offering to move you
+            through a list of one is chrome that has stopped being true. */}
+        {(arrows ? arrows.says : rows === null || rows.length < 2 ? null : 'step one card') === null ? null : (
           /* THE WORDS FIRST, THEN THE CHIPS, and the span itself is pushed to the far edge of
              the row by `margin-left: auto`. Chips-then-words put two bordered arrow keys
              twelve pixels from a real bordered button, which is the prev/next affordance
@@ -1929,7 +1959,7 @@ export function BoxBrowse({
              puts the sentence where a sentence goes and the keys where the eye already
              expects a pager. */
           <span className="browse-keys">
-            step one card
+            {arrows ? arrows.says : 'step one card'}
             {STEPS.map((step) => (
               <kbd className="browse-key" key={step.key}>
                 {step.label}
@@ -1938,6 +1968,12 @@ export function BoxBrowse({
           </span>
         )}
       </div>
+
+      {/* THE BANNER SLOT — the order driving the walk, when one is. Between the header row
+          and the body so it is about neither the card nor the box; see the prop. */}
+      {banner === undefined || banner === null ? null : (
+        <div className="browse-banner">{banner}</div>
+      )}
 
       {failure === null ? null : (
         <div className="browse-note">

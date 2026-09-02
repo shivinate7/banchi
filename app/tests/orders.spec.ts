@@ -619,3 +619,53 @@ test('a fetch the cap cut short says how many it left, and an empty one still re
   expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
   await expect.poll(reads).toBe(mounted + 1)
 })
+
+/* -------------------------------------------------------------------------------------- 10
+ *
+ * THE WAY INTO THE WALK, ASSERTED WHERE IT IS DRAWN. `app/tests/order-walk.spec.ts` enters every
+ * one of its cases by navigating the URL, so until this case existed the two links on this screen
+ * were rendered by the app and asserted by nothing — the exact shape of CLAUDE.md's route-is-not-
+ * a-feature rule, one register down: the capability was reachable and nothing proved it.
+ *
+ * THEY ARE `<a href>` AND NOT BUTTONS, which is what makes middle-click, Cmd-click and the
+ * keyboard work; the href is the whole handoff (D49's argument for `#/pricing?run=`), so asserting
+ * the string IS asserting the mechanism. The key is percent-encoded because `source:number`
+ * carries a colon. */
+
+test('every open order offers the walk, and the header offers all of them at once', async ({ page }) => {
+  await open(page)
+
+  const perOrder = page.locator('.orders-order a.orders-walk')
+  await expect(perOrder).toHaveCount(1)
+  await expect(perOrder).toHaveText('Walk this order')
+  /* THE WIRE'S KEY VERBATIM, ENCODED — never a key this screen composed. `store/orders.py`
+     folds case to COMPARE and stores what it was given, so the client has no business folding
+     anything: it forwards the string the server answered with, and the walk validates it back
+     against the same payload. Asserting the composition here is asserting the handoff. */
+  await expect(perOrder).toHaveAttribute(
+    'href',
+    `#/inventory?order=${encodeURIComponent(`TCGplayer:${ORDER_NUMBER}`)}`,
+  )
+
+  const wave = page.locator('.orders-controls a.orders-walk')
+  await expect(wave).toHaveText('Walk every open order')
+  await expect(wave).toHaveAttribute('href', '#/inventory?orders=open')
+})
+
+/* -------------------------------------------------------------------------------------- 11 */
+
+test('a ledger with nothing open offers no walk at all', async ({ page }) => {
+  /* A WALK OVER NOTHING IS A BANNER AND NO STOP. The header link is drawn only while something is
+     open, and a fulfilled order draws no link of its own — `OrderCard` renders it on `order.open`,
+     which is the LEDGER's answer and never the feed's `status` string. */
+  const done = oneOpenOrder()
+  const shut = {
+    ...done,
+    orders: done.orders.map((order) => ({ ...order, open: false, recorded: order.wanted })),
+    resolution: { ...done.resolution, orders: [] },
+  }
+  await open(page, { orders: shut })
+  await page.locator('.orders-plain', { hasText: 'Show' }).click()
+
+  await expect(page.locator('a.orders-walk')).toHaveCount(0)
+})

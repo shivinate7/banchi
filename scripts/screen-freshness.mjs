@@ -185,6 +185,7 @@ const RECORDED = {
     'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep', 'putDecisions',
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
+    'fillEnvelope', 'undoEnvelope',
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
   nonRequests: [

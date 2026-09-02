@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PositionLabel } from './PositionLabel'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
+import { walkHash } from './orderWalk'
 import {
   describeFailure,
   fetchOrders,
@@ -399,6 +400,14 @@ export function Orders() {
             <span className="orders-scope">
               {payload === null ? 'Not read yet' : payload.summary}
             </span>
+            {/* EVERY OPEN ORDER IN ONE PASS THROUGH THE BOXES — wave mode. Drawn only while
+                something is open, because a walk over nothing is a screen with a banner and no
+                stop. `open` rather than `all`: filled orders are never in the queue. */}
+            {payload === null || !payload.orders.some((order) => order.open) ? null : (
+              <a className="orders-plain orders-walk" href={walkHash({ kind: 'wave' })}>
+                Walk every open order
+              </a>
+            )}
             <button
               type="button"
               className="orders-plain"
@@ -648,6 +657,15 @@ function OrderCard({
         </span>
         {order.placed_at === null ? null : (
           <span className="orders-order-placed">{order.placed_at}</span>
+        )}
+        {/* THE WAY INTO THE WALK, AS A LINK. `#/inventory?order=<key>` is a route parameter
+            rather than a handoff (D49's argument for `#/pricing?run=`): the ledger is the key's
+            one source of truth, so no second `sessionStorage` key and no clearing rules, and a
+            reload lands on the first remaining stop. An `<a>` so middle-click and Cmd-click work. */}
+        {!order.open ? null : (
+          <a className="orders-plain orders-walk" href={walkHash({ kind: 'order', key: order.key })}>
+            Walk this order
+          </a>
         )}
       </div>
 
