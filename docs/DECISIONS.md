@@ -4640,11 +4640,40 @@ would be moving one of them to a corner it can have alone.
 
 ---
 
-## D86 — The pricing worklist spans runs; the answer file does not
+## D86 — The pricing answer is one file for the store, and the worklist spans runs
 
-**`#/pricing` opens on every run that still has pricing in it, merges the same SKU across them into one row, and writes one answer into every run's own `decisions.json`.** Built 2026-09-01 on the owner's instruction: *"if I capture from multiple boxes, they ought to be processed in pricing at the same time"*, with the general form beside it — *"items that aren't processed ought to have the functionality of being processed all at once"* — and the boundary they set on it, that pricing by box is good too and must not be lost.
+**AMENDED THE SAME DAY IT WAS BUILT, ON THE OWNER'S QUESTION.** Shown the fan-out write and the conflict detector below, they asked: *"why can't it be my front end is largely a pricing corpus/dashboard of everything, with boxes feeding it? why is it we've made a federalist state system when this is best done as a centralized system?"*
+
+They were right, and this entry had already written the evidence down without acting on it. `runs/<n>/decisions.json` held **two kinds of fact in one file**:
+
+| scope | keys | what it is |
+|---|---|---|
+| run-wide | `rule`, `basis`, `sub_threshold` | arguably a property of the lot — D48's argument |
+| **per-SKU** | `overrides`, `no_market_data` | **a property of the CARD** — D7's argument |
+
+The second half is what a price *is*. TCGplayer prices per SKU globally, D7 states *"price is per-SKU and shared across copies"*, and `pipeline/join.py` spends the live cap against every box at once. Stored in a run directory, one card carried one answer per drawer it had ever been photographed in.
+
+**`pipeline/corpus.py` is the home, and `inventory/prices.json` is the file.** Keyed by SKU, holding the policy too on the owner's instruction, with a per-run policy override kept for the lot that genuinely differs — which is D48's argument surviving in the one place it is actually about. `Corpus.for_run`/`scoped_to` project it into a `Decisions`, so `join`, `emit` and `prices_for` never learned that answers moved: the property D48 spends its length protecting, applied to this move.
+
+**D49 AND D62 BOTH NAMED THIS GAP AND NEITHER CLOSED IT.** D49: *"no durable home for a hold outside the run directory; no cross-run view of what is being held."* D62: *"No cross-run view."* `pkmnscan prices show --held` is one line now.
+
+**What the amendment DELETED, which is the useful part.** The first build answered the duplication with machinery: a fan-out write into N files, conflict detection on every row, and an agreement refusal before a merged file could be written. All of it existed only to reconcile a duplication. `pipeline/merge.py`'s first version carried a `PriceDisagreement` and, run against three real runs, **refused on 66 SKUs — almost every one of them the market having moved between two joins rather than any disagreement at all**. Reporting a defect is worth less than making it unrepresentable.
+
+**What survived whole: the cap.** It is arithmetic over positions, not an answer, so centralising changed nothing about it — see "The cap is D59's defect one register up" below.
+
+**`pkmnscan prices adopt` is the migration**, and it previews by default because there is a real decision inside it. The owner's ruling was newest-wins; three of the eight contested SKUs are a `withheld` hold answered by a later price, and newest-wins resolves those **to the price** — the direction that cost money. The command names those three rather than counting them.
+
+**A legacy run file is never read as a fallback.** That would put the duplication back on the first re-join of an old run. `join` and `emit` refuse with a sentence naming the command instead.
+
+---
+
+**The original entry follows, with the parts the amendment retired marked where they stand.**
+
+**`#/pricing` opens on every run that still has pricing in it, merges the same SKU across them into one row, and — ~~writes one answer into every run's own `decisions.json`~~ RETIRED, see the amendment — writes one answer into the corpus.** Built 2026-09-01 on the owner's instruction: *"if I capture from multiple boxes, they ought to be processed in pricing at the same time"*, with the general form beside it — *"items that aren't processed ought to have the functionality of being processed all at once"* — and the boundary they set on it, that pricing by box is good too and must not be lost.
 
 **This is D48's own resolution one register over, and it overturns nothing.** That entry ruled a send is a cart of boxes and a run is still one box, because *"a run carries a reading, a `--bypass` ruling and a `decisions.json`, and all three are properties of what is IN the drawer"*. Every word stays true. The **view** merges; the **file** does not. One answer to a merged row is one `PUT /pipeline/runs/<name>/decisions` per run holding that SKU, the route is untouched, and nothing downstream learns a new shape — the property D48 spends its length protecting.
+
+**~~One answer to a merged row is one `PUT` per run holding that SKU.~~ RETIRED.** There is one document and one write. The sentence stood for about four hours.
 
 **Nothing in D49 argued for the single-select this replaces.** That entry defends where the run comes from — *"a picker here cannot disagree with anything"*, because `GET /pipeline/runs` is the single source — and says nothing about how many may be picked. A set over that same single source has the identical property. D39's one-mass-select rule is about **cards** and is untouched; `#/inventory` still owns the only one. `useState<string | null>` was the cheapest thing to write on 2026-08-30 and no entry defended it.
 
@@ -4697,4 +4726,10 @@ D59 fixed per-**box** capping inside one join and this survived per-**run** acro
 
 **The two already-over-pushed SKUs are not corrected.** Fixing the arithmetic does not un-list what TCGplayer already holds; that is the owner's to reconcile.
 
-**What would reopen this: a worklist that is never used with more than one run.** The whole cost of this entry is the merge and the per-run write fan-out; if every sitting is one box forever, the honest simplification is the single-select again. The measurement is whether any `GET /pipeline/pricing` is answered with more than one run in it.
+**What would reopen this, and there are two.**
+
+*A worklist that is never used with more than one run.* The remaining cost of the merge is the union and the cap arithmetic; if every sitting is one box forever, the honest simplification is the single-select again. The measurement is whether any `GET /pipeline/pricing` is answered with more than one run in it.
+
+*A lot that genuinely wants its own policy.* `Corpus.overrides` keeps a per-run `rule`/`basis`/`sub_threshold` for exactly that, and **nothing writes one today** — no screen offers it and the migration never produces one. If the field is still empty after several sittings it is speculative generality and should go, taking `_agree_policy` and its refusal with it. If it fills up, D48's per-lot argument is stronger than this entry credits and the policy belongs back in the run.
+
+**What is still NOT built.** The reconcile is per run: `cli/cmd_reconcile.py` scopes its diff to one run's `emitted_skus`, while the thing it diffs against — `store/master.py`'s `Listing` — is already per SKU across every box and run. The owner named the consequence: a full live TCGplayer export should reconcile across every emit, box and date at once, and report **both directions**, which is that command's own rule. It would be the first thing able to see the two SKUs this entry measured at `pushed: 6` against a cap of 4. Not built here.

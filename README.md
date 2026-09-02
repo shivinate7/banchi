@@ -96,7 +96,13 @@ human. One blocking command would put a person in the middle of a poll loop.
 ./pkmnscan scan       <capture-dir>                   code cards: read the QRs. FREE.
 ./pkmnscan identify   <capture-dir>                   submit, wait, collect. COSTS MONEY.
 ./pkmnscan join       <run-dir> --export <export.csv> resolve against the export. Free.
-./pkmnscan emit       <run-dir>                       write import CSVs. Free.
+./pkmnscan emit       <run-dir> [<run-dir> ...]        write import CSVs. Free.
+                        several runs -> ONE file, cap spent once across them (D86).
+                        --listed-only  above-threshold rows only
+                        --split-games  one file per game, if the portal refuses one
+./pkmnscan prices     adopt [--write]                 fold the legacy per-run answers into
+                                                      inventory/prices.json. Previews first.
+./pkmnscan prices     show [--held]                   the corpus, and what is held back.
 ./pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
 ```
 

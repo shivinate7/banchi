@@ -1617,27 +1617,14 @@ export type PricingPayload = {
 /* ------------------------------------------------- the cross-run pricing worklist (D86) */
 
 /** One run's own row for a SKU the worklist merged — the whole `PricingSku` that run wrote,
- *  plus which run it is and what that run's `decisions.json` answers for it.
+ *  plus which run it came out of.
  *
- *  THE ANSWER IS RAW AND UNPARSED, which is what lets the screen show a disagreement in the
- *  spelling it is written in. `0.5` and `.5` are one answer and the server says so; `12.75`
- *  and `13` are two, and the operator has to see both to pick one. */
+ *  IT NO LONGER CARRIES AN ANSWER, and the absence is D86's amendment. A leg used to bring its
+ *  run's own answer so the screen could compare them; there is one answer now, in the corpus,
+ *  so there is nothing to compare. What a leg is still for is WHERE the card is — the boxes on
+ *  the row — and which runs a merged emit would cover. */
 export type PricingLeg = PricingSku & {
   run: string
-  answer: string | number | WithheldRecord | null
-}
-
-/** What two runs disagree about for one SKU.
- *
- *  `hold_overridden` RANKS ABOVE `price` BECAUSE ONE OF THEM COSTS MONEY. Two prices a cent
- *  apart is an inconsistency; a hold answered with a price is the operator's own decision
- *  reversed by a later sitting that could not see it. Measured on 2026-09-01: SKU 9191210 was
- *  held `bullish` above $5 in box 3 and listed at $3.45 out of box 4. */
-export type PricingConflict = {
-  kind: 'hold_overridden' | 'price'
-  held_by: string[]
-  priced_by: string[]
-  answers: Record<string, string | number | WithheldRecord>
 }
 
 /** One card across every run in the worklist. A `PricingSku` in its own right — every field
@@ -1646,7 +1633,6 @@ export type PricingConflict = {
 export type MergedSku = PricingSku & {
   /** Every run holding this SKU, oldest first. The write fans out over exactly this list. */
   in: PricingLeg[]
-  conflict: PricingConflict | null
   /** What the runs SEPARATELY believe they may add. `add_to_quantity` beside it is what can
    *  actually go — `min(claimed, cap - copies_out, copies)`. They differ when runs joined
    *  before either emitted each spent the same room against a global cap. */
@@ -1663,6 +1649,38 @@ export type RosterRun = RunSummary & {
   /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. */
   owes: string[]
   open: boolean
+}
+
+/** One card's answer as the corpus stores it — D49's shapes, with provenance beside them. */
+export type CorpusAnswer = {
+  value: string | number | WithheldRecord | null
+  at?: string
+  from_run?: string
+  /** `"price"` for `overrides`, `"unknown"` for `no_market_data`. The channel decides which
+   *  gate `emit` measures the answer against, so it is carried rather than inferred. */
+  channel?: string
+}
+
+/** `GET /pricing` — every listing answer this operator has given, and the standing policy.
+ *
+ *  ONE DOCUMENT FOR THE STORE (D86, amended). It was one per run, which is why the same card
+ *  carried one answer per drawer it had been photographed in — 66 SKUs on this machine, 8
+ *  answered twice, 3 of those a hold overridden by a later price. A price is a fact about a
+ *  SKU; this is where it lives.
+ *
+ *  `skus` IS DELIBERATELY LOOSE AND ROUND-TRIPPED WHOLE, exactly as `DecisionsDocument` was:
+ *  `PUT /pricing` replaces the document, so a key a later version adds — or `_note`, which a
+ *  person writes by hand — has to survive a screen that has never heard of it. */
+export type PricingCorpus = {
+  version?: number
+  policy: {
+    rule?: string
+    basis?: string
+    sub_threshold?: string | { flat: string } | null
+    per_run?: Record<string, Record<string, unknown>>
+  }
+  skus: Record<string, CorpusAnswer>
+  [key: string]: unknown
 }
 
 export type PricingWorklist = {

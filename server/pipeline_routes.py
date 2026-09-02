@@ -102,7 +102,6 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
@@ -1675,92 +1674,16 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
     return owes
 
 
-def _answer_for(answers: Optional[dict], sku: str) -> Optional[object]:
-    """This run's raw answer for one SKU, or None where it has not been answered.
-
-    RAW AND UNPARSED, DELIBERATELY. `Decisions.parse` normalises a hold into a `Withheld` and
-    a price into a `Decimal`, and both are the wrong shape for a screen that has to draw what
-    is IN the file — D49 spends a line of chrome on `withheld: <reason>` precisely so it can
-    be grepped from the screen into `decisions.json`. Two runs whose answers differ only in
-    spelling (`0.5` against `.5`) are not in conflict and this is what lets `_conflict` say so.
-    """
-    for table in ("overrides", "no_market_data"):
-        held = (answers or {}).get(table) or {}
-        if sku in held and held[sku] is not None:
-            return held[sku]
-    return None
-
-
-def _is_hold(answer: object) -> bool:
-    """Whether an answer is a hold rather than a price — D49's two shapes, read loosely.
-
-    A dict is a hold with a reason; the bare string `unlisted` is a hold without one, which is
-    the spelling a terminal user types and the one `no_market_data` has accepted since D9.
-    """
-    if isinstance(answer, dict):
-        return True
-    return str(answer).strip().lower() == "unlisted"
-
-
-def _same_price(left: object, right: object) -> bool:
-    """Whether two price answers are the same money written two ways.
-
-    `0.5` AND `.5` ARE ONE ANSWER AND MUST NOT BE REPORTED AS A DISAGREEMENT. Four of the
-    eight cross-run pairs measured on 2026-09-01 were exactly this — the same figure typed
-    with and without its leading zero, in two sittings. A screen that flagged them would
-    spend the operator's attention on nothing and teach them to ignore the flag that matters.
-    Compared as `Decimal` through `str` because that is how `pipeline/decisions.py:_price`
-    reads both, so this cannot disagree with what `emit` will do with them.
-    """
-    try:
-        return Decimal(str(left).strip()) == Decimal(str(right).strip())
-    except (ArithmeticError, ValueError):
-        return str(left).strip() == str(right).strip()
-
-
-def _conflict(answered: Dict[str, object]) -> Optional[dict]:
-    """What two runs disagree about for one SKU, or None where they do not.
-
-    THIS IS THE WHOLE REASON THE WORKLIST IS WORTH BUILDING, and it is a measurement rather
-    than a guess. Across the eight runs on disk on 2026-09-01, 66 SKUs carried an answer, 8
-    of them in more than one run, and THREE were a `withheld` hold answered with a price in a
-    later run — SKU 9191210 (LeBlanc, Everywhere At Once) held `bullish` with `watch_above`
-    $5 in box 3 on 08-31, then listed at $3.45 out of box 4 on 09-01. That row drew as an
-    ordinary listable one: `at_cap: false`, `nothing_to_add: null`, no note anywhere. Nothing
-    on the screen could have said otherwise, because a hold lives in its run and dies with it
-    (D49) and no screen had ever read two runs at once.
-
-    `hold_overridden` RANKS ABOVE `price` BECAUSE ONE OF THEM COSTS MONEY. Two prices that
-    differ by a cent is an inconsistency; a hold answered with a price is the operator's own
-    deliberate decision reversed by a later sitting that could not see it. Where a SKU is both
-    — held in one run, and priced differently in two others — the hold is what gets reported.
-
-    D49's OWN REOPENING MEASUREMENT WAS THE OTHER DIRECTION AND FOUND NOTHING. It watched for
-    "the same SKU withheld in two runs over one box", which has never happened. It is the
-    asymmetric case that fires, and D86 replaces the measurement rather than repealing it.
-    """
-    if len(answered) < 2:
-        return None
-    holds = {run: value for run, value in answered.items() if _is_hold(value)}
-    prices = {run: value for run, value in answered.items() if not _is_hold(value)}
-    if holds and prices:
-        return {
-            "kind": "hold_overridden",
-            "held_by": sorted(holds),
-            "priced_by": sorted(prices),
-            "answers": dict(answered),
-        }
-    if not holds:
-        first = next(iter(prices.values()))
-        if all(_same_price(first, value) for value in prices.values()):
-            return None
-        return {
-            "kind": "price",
-            "held_by": [],
-            "priced_by": sorted(prices),
-            "answers": dict(answered),
-        }
-    return None
+# THE CONFLICT HELPERS THAT STOOD HERE ARE DELETED, AND THE DELETION IS THE POINT (D86,
+# amended). `_answer_for`, `_is_hold`, `_same_price` and `_conflict` detected one card answered
+# two ways across runs — 8 SKUs on this machine, 3 of them a hold overridden by a later price.
+# They were machinery for reconciling a duplication, and the duplication is gone: the answer
+# lives once in `pipeline/corpus.py`, keyed by SKU, so a card cannot be answered two ways.
+#
+# Reporting a defect is worth less than making it unrepresentable, and the owner said so:
+# *"why is it we've made a federalist state system when this is best done as a centralized
+# system?"* What is kept below is `over_cap`, which is a different fact and still real — the
+# CAP is spent per run against a global limit whatever the answers do.
 
 
 def _pricing_constant(chosen: Sequence[str], field: str) -> Optional[str]:
@@ -1952,14 +1875,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                 here["positions"] = positions
                 here["copies"] = len(positions)
 
-    for sku, row in merged.items():
-        answered: Dict[str, object] = OrderedDict()
-        for leg in row["in"]:
-            answer = _answer_for(answers_by_run.get(leg["run"]), sku)
-            leg["answer"] = answer
-            if answer is not None:
-                answered[leg["run"]] = answer
-        row["conflict"] = _conflict(answered)
+    for row in merged.values():
         # THE CAP, COMPUTED ONCE ACROSS THE RUNS THIS SCREEN IS SHOWING.
         #
         # `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a
@@ -2019,13 +1935,117 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             summaries and _pricing_constant(chosen, "threshold")
         ) or None,
         "floor": (summaries and _pricing_constant(chosen, "floor")) or None,
-        # ONE RUN'S REMEMBERED ANSWER IS STILL ONE RUN'S. Offered from the newest chosen run
-        # so the label means something on a worklist; D9 forbids defaulting it either way, and
-        # this stays a label rather than becoming a default here exactly as it is there.
-        "remembered_sub_threshold": (
-            _remembered_sub_threshold(_open_run(chosen[-1])) if chosen else None
-        ),
+        # `remembered_sub_threshold` IS GONE FROM THIS PAYLOAD, AND ITS ABSENCE IS THE POINT
+        # (D86, amended). It walked up to five sibling run directories for the newest answer
+        # to a question each run had to be asked separately, and offered it as a LABEL because
+        # D9 forbids defaulting it. There is one answer now — the corpus's policy — so the
+        # next run is priced by it without a screen offering anything, and a button saying
+        # "box 5 answered floor · use it" over a document that already says `floor` is a
+        # control that can only confuse. The per-run route still answers it, for the screens
+        # that draw one run.
         "live_cap": join.LIVE_QUANTITY_CAP,
+    }
+
+
+# ------------------------------------------------------------------ the pricing corpus
+
+
+def do_pricing_corpus() -> dict:
+    """`GET /pricing` — every listing answer this operator has given, and the policy (D86).
+
+    ONE READ FOR THE WHOLE SCREEN, which is the shape the corpus makes possible. `#/pricing`
+    used to fetch one `decisions.json` per run it was showing and reconcile them in the client;
+    there is one document now, so there is one read and nothing to reconcile.
+
+    IT IS SEPARATE FROM `GET /pipeline/pricing` ON PURPOSE. That route answers the WORKLIST —
+    which cards are in front of the operator, out of which runs, with which export rows. This
+    one answers what has been decided, and it is the same document whatever is on screen. Two
+    facts, two routes, and the screen holds them apart the same way.
+    """
+    return {"corpus": corpus.Corpus.read().to_payload(), "path": str(files.prices_path())}
+
+
+def do_pricing_corpus_write(payload: dict) -> dict:
+    """`PUT /pricing` — replace the corpus.
+
+    WHOLESALE, EXACTLY AS `PUT .../decisions` WAS, AND FOR ITS REASON: the screen round-trips
+    every key it does not understand, so a field a later version adds — or `_note`, which a
+    person writes by hand — survives a client that has never heard of it.
+
+    IT VALIDATES THE POLICY AND NOT THE ANSWERS, which is the same line D49 drew. `Corpus.parse`
+    raises on a rule or basis outside the enum, because a screen could otherwise write a
+    document that makes `emit` answer with a traceback an hour later. A per-SKU answer is left
+    alone: `Decisions.parse` is the one parser for what an answer means and it runs at the
+    moment one is used, where its refusal names the SKU.
+    """
+    document = payload.get("corpus")
+    if not isinstance(document, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "corpus_invalid",
+            "Send {\"corpus\": {...}} — the whole document, as `GET /pricing` answers it.",
+        )
+    try:
+        book = corpus.Corpus.parse(document)
+    except (decisions.MalformedDecisions, ValueError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "corpus_invalid", str(exc)
+        ) from None
+    written = book.write()
+    return {"ok": True, "written": str(written), "answers": len(book.answers)}
+
+
+def do_pipeline_merged_emit(payload: dict) -> dict:
+    """`POST /pipeline/emit` — one import file over several runs (D86).
+
+    FREE AND RE-RUNNABLE, WHICH IS WHY IT RUNS INSIDE THE REQUEST. `emit` spends nothing: it
+    reads the runs, writes a CSV and raises `pushed`. The one route here that can cause money
+    to be spent is still `POST /pipeline/identify` and is still named for it.
+
+    IT IS NOT `POST /pipeline/runs/<name>/emit` WIDENED, and the difference is the point. That
+    route is per run and stays; this one takes a LIST, because the cap has to be re-derived
+    across it — `pipeline/join.py` spends `live_cap - copies_out` per run against a global cap,
+    so N per-run presses are exactly the over-push a merged file exists to prevent. Measured:
+    three separate emits over three real runs wrote two SKUs past the cap of four.
+
+    THE OUTPUT IS THE COMMAND'S OWN STDOUT, VERBATIM (D33). It names the file, the runs, and
+    every SKU whose runs over-claimed; a screen summarising that would be deciding what
+    mattered on the operator's behalf at the one moment a file is written.
+    """
+    wanted = payload.get("runs")
+    if not isinstance(wanted, list) or not wanted:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "runs_required",
+            "Send a non-empty `runs` list. A merged emit over no run is not a send.",
+        )
+    if len(wanted) > MAX_LEGS:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_runs",
+            f"At most {MAX_LEGS} runs in one send.",
+        )
+    # RESOLVED THROUGH `_open_run`, WHICH VALIDATES THE NAME AND NEVER JOINS A PATH BLIND —
+    # the same guard every other run route uses, applied before anything is read.
+    directories = [str(_open_run(str(name))) for name in wanted]
+    newest = sorted(str(name) for name in wanted)[-1]
+    argv = [str(PKMNSCAN), "emit", *directories]
+    if payload.get("listed_only"):
+        argv.append("--listed-only")
+    if payload.get("split_games"):
+        argv.append("--split-games")
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+    return {
+        "ok": code == 0,
+        "exit_code": code,
+        "runs": [str(name) for name in wanted],
+        "console": console,
+        # THE FILE LANDS IN THE NEWEST RUN OF THE SEND, so that run's artefact list is where a
+        # screen finds it — `GET /pipeline/runs/<name>/file` already serves it and needed no
+        # widening. Answered here so the client does not have to re-derive which run that was.
+        "run": newest,
+        "files": _artefacts(_open_run(newest)),
+        "summary": _summary(_open_run(newest)),
     }
 
 

@@ -308,7 +308,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -324,7 +324,15 @@ COMPONENTS = [
                                     "first join and never touches its rule again (D49) — the two "
                                     "lines that did ran under the sentence promising your edits "
                                     "were kept.",
-                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49", "D54", "D58", "D59"], "tested_by": ["T4", "T7"]},
+                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49", "D54", "D58", "D59", "D86"], "tested_by": ["T4", "T7"]},
+            "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
+                                      "decisions.json into the corpus — previews unless given "
+                                      "--write, newest-wins, and NAMES the holds a later price "
+                                      "replaced rather than counting them. `prices show --held` "
+                                      "is the cross-run view of what is being held that D49 "
+                                      "named as missing and D62 repeated.",
+                              "governed_by": ["D9", "D49", "D62", "D86"],
+                              "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered. Prices "
                                     "from decisions.json rather than from the run manifest (D49). "
                                     "A RE-EMIT ADDS AND NEVER SUBTRACTS (D54): it never opens an "
@@ -342,7 +350,7 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59"], "tested_by": ["T7"]},
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86"], "tested_by": ["T7"]},
             "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D54"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
@@ -353,7 +361,7 @@ COMPONENTS = [
                                    "mid-box delete moves them — reading it raw is the defect that "
                                    "wrote 47 box-2 queue entries one position off.",
                            "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59", "D64"], "tested_by": ["T7"]},
-            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54"], "tested_by": ["T7"]},
+            "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
     {
@@ -528,6 +536,30 @@ COMPONENTS = [
                                       "an opaque string somebody else composed. Buyer PII passes "
                                       "through and is NOT persisted: `render` returns bytes so a "
                                       "caller need never put a name on a disk."},
+            "corpus.py": {"does": "inventory/prices.json — ONE listing answer per SKU for the "
+                                  "whole store, plus the standing policy (rule, basis, "
+                                  "sub_threshold) and an optional per-run policy override. "
+                                  "D86 amended: the per-SKU half of a run's decisions.json is "
+                                  "a fact about the CARD, not the drawer, and stored per run "
+                                  "one card carried one answer per box it had been "
+                                  "photographed in — 66 SKUs, 8 answered twice, 3 of those a "
+                                  "hold overridden by a later price. `for_run`/`scoped_to` "
+                                  "project it into a `Decisions`, so join, emit and prices_for "
+                                  "never learned that answers moved. `adopt` folds the legacy "
+                                  "run files in, newest-wins, reporting every choice.",
+                          "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86"],
+                          "tested_by": ["T7"]},
+            "merge.py": {"does": "one import file over several runs: the copies union, deduped "
+                                 "on (box, index), and the live cap spent ONCE over that union. "
+                                 "D59's defect one register up — add_to_quantity spends "
+                                 "live_cap - copies_out per RUN against a cap that is global, "
+                                 "so runs joined before either emitted each believe the whole "
+                                 "cap is theirs. Measured: three separate emits over three real "
+                                 "runs wrote two SKUs past the cap of 4; one merged emit wrote "
+                                 "none. Writes nothing — cli/cmd_emit.py owns the file and the "
+                                 "store.",
+                         "governed_by": ["D7", "D48", "D49", "D54", "D59", "D86"],
+                         "tested_by": ["T7"]},
             "decisions.py": {"does": "decisions.json — the pricing decision as a file, not a flag, "
                                      "and as of D49 the AUTHORITY for rule and basis rather than "
                                      "a copy of them. `overrides` holds a price OR a `Withheld`: "
@@ -740,7 +772,7 @@ COMPONENTS = [
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
                                           "D29", "D36", "D53", "D63"], "tested_by": ["T7"]},
             "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2", "D21"]},
-            "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15"], "tested_by": ["T7"]},
+            "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15", "D43", "D86"], "tested_by": ["T7"]},
             # D53 and D63 because the header now prices what this module does NOT promise:
             # the five files it replaces are each atomic and the SET of them is not, which
             # is why D53's supervisor drains before it restarts and why the ledger is last.

@@ -819,6 +819,33 @@
   text-underline-offset: 2px;
 }
 
+/* THE MERGED SEND'S OWN CONTROLS (D86). The bar itself is `.pricing-ship`, unchanged and
+   reused: one run or several, the operator is looking at the same place for the same act.
+
+   THE CHECKBOX IS THE ONE NEW AFFORDANCE and it is drawn as a label rather than a chip
+   because it is a modifier on the press beside it, not a choice between presses — the owner
+   asked for *"a checkmark to export just the valuable cards ... otherwise it defaults to
+   all"*, and a chip pair would make the default look like a decision they had to take. */
+.pricing-ship-only {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pricing-ship-says {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
 /* ------------------------------------------------------------------- the hold panel */
 
 .pricing-holdpanel {

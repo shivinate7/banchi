@@ -152,8 +152,7 @@ async function open(
     worklist?: {
       runs: { run: string; box: number | null; box_name: string | null; skus: number }[]
       skus: (PricingSku & {
-        in: { run: string; answer: unknown; add_to_quantity?: number }[]
-        conflict?: unknown
+        in: { run: string; add_to_quantity?: number }[]
         claimed_add?: number
         over_cap?: boolean
       })[]
@@ -258,6 +257,56 @@ async function open(
     })
   })
 
+  /* THE PRICING CORPUS — one document for the store, and the answer (D86, amended).
+     Cases still name `decisions` because that is what a run's answers were called, and the
+     fixture projects it into the corpus the screen reads. That keeps every case written
+     before the move saying what it always said: "this SKU is answered thus". */
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') {
+      wire.push({
+        method: 'PUT',
+        path: '/pricing',
+        body: route.request().postDataJSON(),
+      })
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1 }),
+      })
+    }
+    const answers =
+      options.decisions === undefined
+        ? { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} }
+        : options.decisions
+    const skus: Record<string, unknown> = {}
+    for (const [sku, value] of Object.entries(
+      (answers?.overrides ?? {}) as Record<string, unknown>,
+    )) {
+      skus[sku] = { value }
+    }
+    for (const [sku, value] of Object.entries(
+      (answers?.no_market_data ?? {}) as Record<string, unknown>,
+    )) {
+      skus[sku] = { value, channel: 'unknown' }
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: {
+          version: 1,
+          policy: {
+            rule: answers?.rule ?? 'match',
+            basis: answers?.basis ?? 'market',
+            sub_threshold: answers?.sub_threshold ?? null,
+          },
+          skus,
+        },
+        path: '/tmp/prices.json',
+      }),
+    })
+  })
+
   /* THE CROSS-RUN WORKLIST — the route the screen actually reads since D86.
      `/pipeline/runs/<name>/pricing` below is left registered and is no longer called by the
      app; it stays because `do_pipeline_pricing` is still a route the server serves and one
@@ -274,8 +323,7 @@ async function open(
       options.worklist?.skus ??
       ((options.skus ?? [sku()]) as PricingSku[]).map((row) => ({
         ...row,
-        in: [{ ...row, run: RUN, answer: null }],
-        conflict: null,
+        in: [{ ...row, run: RUN }],
         claimed_add: row.add_to_quantity,
         over_cap: false,
       }))
@@ -527,6 +575,29 @@ const loadTrends = (page: Page) => page.getByRole('button', { name: /Load trends
 
 const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
 
+/** The answers the last `PUT /pricing` carried, as `{sku: value}`.
+ *
+ *  ONE SHAPE READ IN ONE PLACE. Every case below used to reach into `body.decisions.overrides`
+ *  by hand; the answers moved into the corpus (D86, amended) and nineteen assertions would
+ *  otherwise each have learned the new path. The values are D49's own shapes, unchanged — a
+ *  string for a price, an object for a hold — so what a case asserts is what it always did. */
+function sentAnswers(wire: Wire[]): Record<string, unknown> {
+  const put = wire.filter((row) => row.method === 'PUT').pop()?.body as {
+    corpus?: { skus?: Record<string, { value: unknown }> }
+  }
+  return Object.fromEntries(
+    Object.entries(put?.corpus?.skus ?? {}).map(([sku, row]) => [sku, row.value]),
+  )
+}
+
+/** The policy the last `PUT /pricing` carried — `rule`, `basis`, `sub_threshold`. */
+function sentPolicy(wire: Wire[]): Record<string, unknown> {
+  const put = wire.filter((row) => row.method === 'PUT').pop()?.body as {
+    corpus?: { policy?: Record<string, unknown> }
+  }
+  return put?.corpus?.policy ?? {}
+}
+
 // ------------------------------------------------------------------ it is reachable
 
 test('the screen is on its own route and draws the run it was linked to', async ({ page }) => {
@@ -661,12 +732,9 @@ test('the sub-threshold answer is settable here, and emit says what it still owe
 
   await page.getByRole('button', { name: /At the \$0.40 floor/ }).click()
   await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
-  const body = wire.filter((r) => r.method === 'PUT')[0]?.body as {
-    decisions: Record<string, unknown>
-  }
   /* THE BARE STRING `pipeline/decisions.py` COMPARES AGAINST, never a value derived from the
      button's label — that comparison is a `==` with no trim and no case fold. */
-  expect(body.decisions.sub_threshold).toBe('floor')
+  expect(sentPolicy(wire).sub_threshold).toBe('floor')
 
   await expect(page.locator('.pricing-ready')).toContainText('Pricing is answered')
   /* AND IT CLAIMS ONLY WHAT IT CHECKED. The screen sees two of emit's ~8 refusals; "ready to
@@ -770,10 +838,7 @@ test('the first digit typed clears the suggestion, and Enter commits what you ty
   await page.keyboard.press('Enter')
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
 
-  const sent = wire.filter((row) => row.method === 'PUT').pop()?.body as {
-    decisions?: { overrides?: Record<string, unknown> }
-  }
-  expect(sent.decisions?.overrides).toEqual({ '8608859': '4.50' })
+  expect(sentAnswers(wire)).toEqual({ '8608859': '4.50' })
 })
 
 test('the field refuses anything that is not a price, at the keystroke', async ({ page }) => {
@@ -834,10 +899,7 @@ test('a hold writes a reason and a watch, and never a price', async ({ page }) =
   await page.getByRole('button', { name: 'Hold it' }).click()
 
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
-  const sent = wire.filter((row) => row.method === 'PUT').pop()?.body as {
-    decisions?: { overrides?: Record<string, unknown> }
-  }
-  expect(sent.decisions?.overrides).toEqual({
+  expect(sentAnswers(wire)).toEqual({
     '8608859': { withheld: 'bullish', watch_above: '30.00', note: 'waiting on rotation' },
   })
 })
@@ -1307,8 +1369,7 @@ test('a hold taken now does not move its row, and has moved it by the next load'
         roster: [],
         skus: skus.map((row) => ({
           ...row,
-          in: [{ ...row, run: RUN, answer: null }],
-          conflict: null,
+          in: [{ ...row, run: RUN }],
           claimed_add: row.add_to_quantity,
           over_cap: false,
         })),
@@ -1328,6 +1389,24 @@ test('a hold taken now does not move its row, and has moved it by the next load'
         live_cap: 4,
         threshold: '0.40',
         floor: '0.40',
+      }),
+    })
+  })
+  /* AND THE ANSWER ITSELF, which is the corpus's since D86's amendment. Both halves have to be
+     re-registered: the worklist says which rows exist, `/pricing` says which of them are held,
+     and the sink is a fact about the second read at load time. */
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: {
+          version: 1,
+          policy: { rule: 'match', basis: 'market', sub_threshold: null },
+          skus: { '8608459': { value: { withheld: 'keeping' } } },
+        },
+        path: '/tmp/prices.json',
       }),
     })
   })
@@ -1490,10 +1569,7 @@ test('a second answer is written too, and it is not the first one over again', a
      the document wholesale, so the second body must carry BOTH answers rather than the second
      alone. */
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
-  const sent = wire.filter((row) => row.method === 'PUT').pop()?.body as {
-    decisions?: { overrides?: Record<string, unknown> }
-  }
-  expect(sent.decisions?.overrides).toEqual({ '8608859': '4.50', '8608459': '1.25' })
+  expect(sentAnswers(wire)).toEqual({ '8608859': '4.50', '8608459': '1.25' })
   await expect(page.locator('.pricing-save')).toHaveText('saved')
 })
 
@@ -1513,17 +1589,21 @@ test('an answer typed while a write is in flight is not lost', async ({ page }) 
   const held = new Promise<void>((resolve) => {
     release = resolve
   })
-  await page.route(/\/pipeline\/runs\/[^/]+\/decisions$/, async (route) => {
+  /* THE WRITE IS `PUT /pricing` SINCE D86's AMENDMENT — one document for the store, not one
+     per run. Re-registered here so the FIRST write is held open and the second answer is typed
+     while it is in flight, which is the whole of what this case is about. */
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback()
     wire.push({
       method: 'PUT',
-      path: new URL(route.request().url()).pathname,
+      path: '/pricing',
       body: route.request().postDataJSON(),
     })
     if (wire.length === 1) await held
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ok: true, run: RUN, written: 'decisions.json' }),
+      body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 2 }),
     })
   })
 
@@ -1540,8 +1620,7 @@ test('an answer typed while a write is in flight is not lost', async ({ page }) 
   release()
 
   await expect.poll(() => wire.length).toBe(2)
-  const sent = wire.pop()?.body as { decisions?: { overrides?: Record<string, unknown> } }
-  expect(sent.decisions?.overrides).toEqual({ '8608859': '4.50', '8608459': '1.25' })
+  expect(sentAnswers(wire)).toEqual({ '8608859': '4.50', '8608459': '1.25' })
   await expect(page.locator('.pricing-save')).toHaveText('saved')
 })
 
@@ -1555,9 +1634,6 @@ test('a preset writes the rule and the basis, which is what the pipeline reads',
   await page.getByRole('button', { name: 'Market −5%' }).click()
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
 
-  const sent = wire.filter((row) => row.method === 'PUT').pop()?.body as {
-    decisions?: Record<string, unknown>
-  }
   /* THE PRESS USED TO WRITE `preset: <key>`, WHICH NO READER ANYWHERE HAS.
      `pipeline/decisions.py:parse` does not know the field and `to_payload` does not emit it,
      so the next join dropped it and `rule`/`basis` stayed at `match`/`market` — the
@@ -1565,14 +1641,14 @@ test('a preset writes the rule and the basis, which is what the pipeline reads',
      riftbound run: that dead key beside `rule: match`, 2 overrides across 50 SKUs, 48 cards
      about to list at a price nobody chose. The rule at layer 4 is the thing that has to
      move, because D49 correctly refuses to write the suggestions as overrides at layer 1. */
-  expect(sent.decisions?.rule).toBe('undercut:5')
-  expect(sent.decisions?.basis).toBe('market')
-  expect(sent.decisions).not.toHaveProperty('preset')
+  expect(sentPolicy(wire).rule).toBe('undercut:5')
+  expect(sentPolicy(wire).basis).toBe('market')
+  expect(sentPolicy(wire)).not.toHaveProperty('preset')
 
   /* AND NO ROW GAINED AN OVERRIDE. The whole reason the preset must move the RULE is that
      writing the suggestions would beat it — layer 1 over layer 4 — and produce a run where
      changing the preset silently changed nothing. */
-  expect(sent.decisions?.overrides).toEqual({})
+  expect(sentAnswers(wire)).toEqual({})
 })
 
 test('the chip says which rule is live, and it is derived rather than remembered', async ({
@@ -2198,22 +2274,21 @@ test('an open reading covers no ship-bar control and no row draws through it', a
   expect(clears).toBe(true)
 })
 
-// ------------------------------------------- the worklist spans runs, the file does not (D86)
+// ------------------------------- the worklist spans runs, and the answer is the store's (D86)
 
 /* THE CASE THAT PAYS FOR THE WHOLE FEATURE, and it is a real one off the owner's disk.
  *
  * Measured 2026-09-01 across the eight runs in `runs/`: 78 of 423 SKUs sit in more than one
  * run, 8 carried an answer in more than one, and THREE were a `withheld` hold answered with a
  * price in a later sitting. SKU 9191210 — LeBlanc, Everywhere At Once — was held `bullish`
- * with `watch_above: "5"` out of box 3 on 08-31 and listed at **$3.45** out of box 4 on 09-01,
- * below the operator's own watch. It drew as an ordinary listable row: `at_cap: false`,
- * `nothing_to_add: null`, no note anywhere. Nothing could have said otherwise, because a hold
- * lives in its run and dies with it (D49) and no screen had ever read two runs at once.
+ * with `watch_above: "5"` out of box 3 on 08-31 and listed at $3.45 out of box 4 on 09-01,
+ * below the operator's own watch.
  *
- * D49's OWN REOPENING MEASUREMENT WAS THE OTHER DIRECTION AND FOUND NOTHING. It watched for
- * "the same SKU withheld in two runs over one box", which has never happened once. It is the
- * asymmetric case that fires. */
-const CLASH = {
+ * THAT STATE IS NOW UNREPRESENTABLE, WHICH IS WHY THESE CASES ASSERT A SHAPE AND NOT A
+ * WARNING. The first build of D86 detected the disagreement and drew it on the row; the owner
+ * asked why the duplication existed at all, and the answer moved into one corpus keyed by SKU.
+ * A card cannot be answered two ways, so there is nothing to detect. */
+const SPAN = {
   runs: [
     { run: '2026-08-31-box3-01', box: 3, box_name: 'RB Epics', skus: 2 },
     { run: '2026-09-01-box4-01', box: 4, box_name: 'WB1 R2', skus: 2 },
@@ -2232,22 +2307,9 @@ const CLASH = {
         ],
       }),
       in: [
-        {
-          run: '2026-08-31-box3-01',
-          answer: { withheld: 'bullish', watch_above: '5' },
-          add_to_quantity: 2,
-        },
-        { run: '2026-09-01-box4-01', answer: '3.45', add_to_quantity: 2 },
+        { run: '2026-08-31-box3-01', add_to_quantity: 2 },
+        { run: '2026-09-01-box4-01', add_to_quantity: 2 },
       ],
-      conflict: {
-        kind: 'hold_overridden',
-        held_by: ['2026-08-31-box3-01'],
-        priced_by: ['2026-09-01-box4-01'],
-        answers: {
-          '2026-08-31-box3-01': { withheld: 'bullish', watch_above: '5' },
-          '2026-09-01-box4-01': '3.45',
-        },
-      },
       claimed_add: 4,
       over_cap: true,
     },
@@ -2255,60 +2317,38 @@ const CLASH = {
       /* A CARD IN ONE DRAWER ONLY, so the case also proves the line is NOT drawn where there
          is nothing to say — a marker on every row is a marker nobody reads. */
       ...sku({ sku: '8608459', name: 'Dunsparce' }),
-      in: [{ run: '2026-09-01-box4-01', answer: null, add_to_quantity: 3 }],
-      conflict: null,
+      in: [{ run: '2026-09-01-box4-01', add_to_quantity: 3 }],
       claimed_add: 3,
       over_cap: false,
     },
   ],
-  decisions: {
-    '2026-08-31-box3-01': {
-      rule: 'match',
-      basis: 'market',
-      sub_threshold: null,
-      overrides: { '9191210': { withheld: 'bullish', watch_above: '5' } },
-    },
-    '2026-09-01-box4-01': {
-      rule: 'match',
-      basis: 'market',
-      sub_threshold: null,
-      overrides: { '9191210': '3.45' },
-    },
-  },
+  decisions: {},
 }
 
-test('one answer is written into every run holding the card, and the files stay separate', async ({
+test('one answer is written once, for the store, however many runs hold the card', async ({
   page,
 }) => {
-  const wire = await open(page, { worklist: CLASH })
+  const wire = await open(page, { worklist: SPAN })
 
   await field(page).first().focus()
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
 
-  /* TWO PUTs, ONE PER RUN, AND NEITHER IS A MERGED FILE. This is the whole of D86's write
-     path and the whole of what keeps D48 intact: the view merges, `decisions.json` does not.
-     A single PUT here would mean one answer file had been invented for two drawers; three
-     would mean a run that does not hold the card was written to. */
-  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
+  /* ONE PUT, AND THE PATH IS NOT A RUN'S. This is the amendment to D86 at the write path. It
+     was one write per run holding the card, into files that could disagree — the state that
+     put three deliberate holds under a later price. There is one document now, so there is one
+     write, and a second PUT here would mean a per-run copy had come back. */
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(1)
   const puts = wire.filter((row) => row.method === 'PUT')
-  expect(puts.map((row) => row.path.split('/').at(-2)).sort()).toEqual([
-    '2026-08-31-box3-01',
-    '2026-09-01-box4-01',
-  ])
-
-  /* THE SAME PRICE IN BOTH, AND THE HOLD IS GONE FROM THE ONE THAT HELD IT. That second half
-     is the actual repair: before this, answering the card in box 4 left box 3 still holding
-     it, and the two files disagreed with nothing on any screen able to say so. */
-  for (const put of puts) {
-    const sent = put.body as { decisions?: { overrides?: Record<string, unknown> } }
-    expect(sent.decisions?.overrides?.['9191210']).toBe('12.00')
-  }
+  expect(puts.map((row) => row.path)).toEqual(['/pricing'])
+  expect(sentAnswers(wire)['9191210']).toBe('12.00')
   await expect(page.locator('.pricing-save')).toHaveText('saved')
 })
 
-test('a card in two drawers says so, and a card in one says nothing', async ({ page }) => {
-  await open(page, { worklist: CLASH })
+test('a card in two drawers says where it is, and a card in one says nothing', async ({
+  page,
+}) => {
+  await open(page, { worklist: SPAN })
 
   const rows = page.locator('.pricing-row')
   await expect(rows).toHaveCount(2)
@@ -2316,26 +2356,22 @@ test('a card in two drawers says so, and a card in one says nothing', async ({ p
   /* THE BOXES AND NOT THE RUN NAMES. A person owns drawers, not directories; the runs are on
      the chips above. Deduped and ascending, which is the order the shelf is in. */
   await expect(rows.nth(0).locator('.pricing-span-where')).toHaveText('Boxes 3, 4 · 2 runs')
-  await expect(rows.nth(0).locator('.pricing-span-clash')).toHaveText(
-    'held in 1, priced in 1',
-  )
-  await expect(rows.nth(0).locator('.pricing-span-clash')).toHaveAttribute(
-    'data-kind',
-    'hold_overridden',
-  )
 
   /* THE ABSENCE, WHICH IS THE HALF A MARKER-ON-EVERY-ROW REGRESSION WOULD STILL SATISFY. */
   await expect(rows.nth(1).locator('.pricing-row-span')).toHaveCount(0)
 })
 
 test('the cap is what can go, and the row says the runs disagree with it', async ({ page }) => {
-  await open(page, { worklist: CLASH })
+  await open(page, { worklist: SPAN })
 
   /* `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a cap
      that is GLOBAL, so two runs joined before either emitted each spend the same room. D59
      fixed this one register down — per BOX inside one join — and it survived per RUN across
      joins that never saw each other. Measured on the owner's store: five SKUs' claims sum past
-     four, and two reached `pushed: 6` against a cap of 4 in `inventory/inventory.json`.
+     four, and two reached `pushed: 6` in `inventory/inventory.json`.
+
+     CENTRALISING THE ANSWERS DID NOT TOUCH THIS. The cap is arithmetic over positions, not an
+     answer, so it is the one thing from D86's first build that survived the amendment whole.
 
      THE QTY CELL DRAWS WHAT CAN ACTUALLY GO. Drawing the sum would put a 4 in the column of a
      card three of which may be listed — D59's own named-rather-than-counted rule, which exists
@@ -2348,54 +2384,56 @@ test('the cap is what can go, and the row says the runs disagree with it', async
   )
 })
 
-test('the emit press is absent while more than one run is loaded', async ({ page }) => {
-  await open(page, { worklist: CLASH })
+test('a send of several runs offers one file, and a send of one offers the per-run emit', async ({
+  page,
+}) => {
+  await open(page, { worklist: SPAN })
 
-  /* ABSENT RATHER THAN DISABLED, which is D33's own rule for the control that spends applied
-     to the one that writes files. `emit` is per run (D48), so a press over a worklist of two
-     would have to choose one — and a press that emitted each in turn is exactly the cross-run
-     over-push the row above reports. One run at a time, from its own view. */
-  await expect(page.locator('.pricing-ship')).toHaveCount(0)
+  /* ONE PRESS FOR THE SEND, because the CAP has to be re-derived across it: pressing the
+     per-run button twice IS the over-push above. Measured from an identical cleared ledger,
+     three separate emits over three real runs wrote two SKUs past the cap of four and one
+     merged emit wrote none. */
+  await expect(page.getByRole('button', { name: 'Write one import file' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(0)
+
+  /* AND THE CHECKBOX THE OWNER ASKED FOR, defaulting to everything: "i can hit a checkmark to
+     export just the valuable cards ... otherwise it defaults to all". */
+  const only = page.getByRole('checkbox', { name: /above-threshold/ })
+  await expect(only).toBeVisible()
+  await expect(only).not.toBeChecked()
 })
 
-test('the emit press is there for one run, so its absence above is the multi-run case', async ({
+test('the per-run emit is what a send of one offers, so the pair is not one press hiding', async ({
   page,
 }) => {
   /* THE OTHER HALF, AS ITS OWN CASE. Calling `open` twice in one test re-registers every route
      on the same page and the two fixtures then race; the pair only means anything if both
-     halves actually run, so they are two tests rather than one flaky one. */
+     halves actually run. */
   await open(page, { skus: [sku()] })
-  await expect(page.locator('.pricing-ship')).toHaveCount(1)
+  await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Write one import file' })).toHaveCount(0)
 })
 
-test('an undo returns each run to what IT said, not to one answer for both', async ({
+test('an undo returns the card to what it was, including to having no answer', async ({
   page,
 }) => {
-  const wire = await open(page, { worklist: CLASH })
+  const wire = await open(page, { worklist: SPAN })
 
   await field(page).first().focus()
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
-  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
+  await expect.poll(() => sentAnswers(wire)['9191210']).toBe('12.00')
 
   /* `u` ON THE ROW, which is this screen's own undo — the price field's alphabet is closed to
      `[0-9.]` precisely so a letter can be a command (D49), and that closure is the whole safety
-     argument for it. Not `Meta+z`: nothing binds that here. */
+     argument for it.
+
+     THE ROW HAD NO ANSWER BEFORE, so undoing must DELETE the key and return it to its
+     suggestion rather than writing the suggestion in. That is the one write this screen may
+     never make: an override is layer 1 of the ladder and beats the rule at layer 4, so a
+     screen that wrote its suggestions would produce a run where changing the preset silently
+     changed nothing. */
   await field(page).first().focus()
   await page.keyboard.press('u')
-
-  /* THE RUNS DID NOT AGREE BEFORE THE WRITE — that disagreement is the thing this screen
-     exists to show — so an undo that restored ONE value to both would silently resolve a
-     conflict the operator never answered. Box 3 goes back to its hold; box 4 to its price. */
-  await expect
-    .poll(() => wire.filter((row) => row.method === 'PUT').length)
-    .toBeGreaterThanOrEqual(4)
-  const byRun = new Map<string, unknown>()
-  for (const put of wire.filter((row) => row.method === 'PUT')) {
-    const run = put.path.split('/').at(-2) as string
-    const sent = put.body as { decisions?: { overrides?: Record<string, unknown> } }
-    byRun.set(run, sent.decisions?.overrides?.['9191210'])
-  }
-  expect(byRun.get('2026-08-31-box3-01')).toEqual({ withheld: 'bullish', watch_above: '5' })
-  expect(byRun.get('2026-09-01-box4-01')).toBe('3.45')
+  await expect.poll(() => sentAnswers(wire)).toEqual({})
 })
