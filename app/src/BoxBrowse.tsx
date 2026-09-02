@@ -2685,7 +2685,7 @@ export function BoxBrowse({
  * is on the record, and `absent` is the 404 this screen learned about from the <img>'s own
  * onError. */
 function photoMissing(row: Row, absent: boolean): boolean {
-  return row.card.photo === null || absent
+  return row.card.photo === null || row.card.photo_reclaimed_at !== null || absent
 }
 
 type PhotoPanelProps = {
@@ -2704,15 +2704,21 @@ type PhotoPanelProps = {
   nonce: string | null
 }
 
-/* Two ways a photo can be missing, and they are different facts, so they get different
+/* Three ways a photo can be missing, and they are different facts, so they get different
  * sentences rather than one broken image.
  *
- *   `photo` is null   — no photo was ever stored. `emit` can record a card that was never
- *                       photographed, and `store/master.py` keeps the field null for it.
- *   the route 404s    — the record claims a photo and the file is not there. That is a
- *                       store that has lost something, and it is worth saying so plainly.
+ *   `photo` is null            — no photo was ever stored. `emit` can record a card that was
+ *                                never photographed, and `store/master.py` keeps the field
+ *                                null for it.
+ *   `photo_reclaimed_at` set   — the photograph was deleted ON PURPOSE after the card sold
+ *                                (D88), and the record kept its digest. Checked before the
+ *                                404 branch because the route WILL 404 for this card, and the
+ *                                404 sentence would call a deliberate reclaim a loss.
+ *   the route 404s             — the record claims a photo and the file is not there. That
+ *                                is a store that has lost something, and it is worth saying
+ *                                so plainly.
  *
- * Both print the URL that was asked for, so the next move is a curl rather than a guess.
+ * The last two print what was asked for, so the next move is a curl rather than a guess.
  */
 function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
   /* One phrasing, used by both the sentence beside a missing photo and the alt text on a
@@ -2726,6 +2732,20 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
       <div className="browse-absent">
         <p className="browse-note-text">No photo was stored for this card.</p>
         <p className="browse-machine">photo: null</p>
+      </div>
+    )
+  }
+
+  if (row.card.photo_reclaimed_at !== null) {
+    return (
+      <div className="browse-absent">
+        <p className="browse-note-text">
+          Photograph reclaimed after the sale — deleted on purpose, record kept (D88).
+        </p>
+        <p className="browse-machine">
+          reclaimed {row.card.photo_reclaimed_at}
+          {row.card.photo_sha256 ? ` · sha256 ${row.card.photo_sha256.slice(0, 16)}…` : ''}
+        </p>
       </div>
     )
   }

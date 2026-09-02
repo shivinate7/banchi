@@ -25,6 +25,10 @@
                                            queue entries, cache, registry (D10, owner ruling 3)
     GET    /boxes/<box>/listings           what this box's SKUs are believed to be holding,
                                            and what a release would give up. FREE (D34)
+    GET    /boxes/<box>/photos             what a reclaim would delete: sold cards whose
+                                           photograph is still on disk, and the bytes (D88)
+    POST   /boxes/<box>/photos/reclaim     delete those photographs, keep every record, keep
+                                           each one's digest. `confirm: true`. No undo.
     POST   /boxes/<box>/listings/release   give up what this box's copies could account for,
                                            on the operator's word (D34)
     GET    /search?q=<text>                find a card by name, number, SKU, set hint or note
@@ -502,6 +506,9 @@ _BOX_LISTINGS_RELEASE_RE = re.compile(r"^/boxes/(\d+)/listings/release$")
 # nothing at all — the index comes from `next_index` inside the lock, which is the only
 # place it can be read without a round trip that could go stale between the two halves.
 _BOX_SECTIONS_RE = re.compile(r"^/boxes/(\d+)/sections$")
+# D88's pair: the free count of what a reclaim would delete, and the reclaim itself.
+_BOX_PHOTOS_RE = re.compile(r"^/boxes/(\d+)/photos$")
+_BOX_PHOTOS_RECLAIM_RE = re.compile(r"^/boxes/(\d+)/photos/reclaim$")
 
 # The pipeline routes. A run name is `<date>-<slug>-<nn>` and nothing else builds one, so
 # the character class here is the same one `pipeline_routes._open_run` validates against —
@@ -701,6 +708,10 @@ MOVE_CARDS_FIELDS = ("indices", "to_box")
 # this route asserts a fact about a system this process cannot see, so a request that did
 # not say so deliberately must not be able to make the assertion by accident.
 RELEASE_FIELDS = ("confirm",)
+# D88's reclaim takes the same one field, for the same reason: the route's whole content is
+# a person's decision that these photographs are disposable, and a request that did not say
+# so on purpose must not make it by accident.
+RECLAIM_FIELDS = ("confirm",)
 
 # `PUT /inventory/<box>` accepts the claims plus ONE non-claim field. `indices` narrows the
 # sweep from "every eligible card in the box" to the ones the operator actually selected —
@@ -1733,10 +1744,16 @@ class _Places:
         # has run at all. Cached for the same reason `_cache` above is: this class is
         # instantiated per request, so `do_inventory` renders 5,000 rows against one walk
         # rather than 5,000.
-        self._walked = False
-        self._boxmates: Optional[
-            Dict[int, Tuple[Tuple[Tuple[int, Optional[str]], ...], Tuple[int, ...]]]
-        ] = None
+        # PER BOX SINCE D87, and lazily: `Inventory.records_in` answers one box out of the
+        # `cards` table without building the other boxes' records, which is what keeps a
+        # capture's `_card_summary` from loading the whole store to label one card. The
+        # degrade is still whole-store — `records_in` refuses on an unreadable record
+        # ANYWHERE, exactly as the scan it replaces did — so `_degraded` is one flag and
+        # not one per box.
+        self._degraded = False
+        self._boxmates: Dict[
+            int, Tuple[Tuple[Tuple[int, Optional[str]], ...], Tuple[int, ...]]
+        ] = {}
 
     def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]:
         """`(registry entry or None, validated layout, denominator, on-hand indices)`.
@@ -1829,32 +1846,30 @@ class _Places:
         rather than being skipped past. A pooled record is skipped by ruling, not by
         failure — it has no slot, so it is nobody's neighbour and no section's gap (D24).
         """
-        if not self._walked:
-            self._walked = True
-            grouped: Dict[int, List[Tuple[int, Optional[str], bool]]] = {}
-            try:
-                for card in self._inventory.cards.values():
-                    entry = self._game_of(card)
-                    if entry is not None and not entry["located"]:
-                        continue
-                    at = (int(card.box), int(card.index))
-                    name = card.name if isinstance(card.name, str) and card.name else None
-                    grouped.setdefault(at[0], []).append(
-                        (at[1], name, card.state in master.TERMINAL_STATES)
-                    )
-            except (TypeError, ValueError):
-                self._boxmates = None
-            else:
-                self._boxmates = {
-                    number: (
-                        tuple((i, name) for i, name, gone in sorted(rows) if not gone),
-                        tuple(i for i, _, gone in sorted(rows) if gone),
-                    )
-                    for number, rows in grouped.items()
-                }
-        if self._boxmates is None:
+        if self._degraded:
             return None
-        return self._boxmates.get(box, ((), ()))
+        number = int(box)
+        cached = self._boxmates.get(number)
+        if cached is not None:
+            return cached
+        rows: List[Tuple[int, Optional[str], bool]] = []
+        try:
+            for at, _, card in self._inventory.records_in(number):
+                entry = self._game_of(card)
+                if entry is not None and not entry["located"]:
+                    continue
+                name = card.name if isinstance(card.name, str) and card.name else None
+                rows.append((at, name, card.state in master.TERMINAL_STATES))
+        except (master.BadPosition, TypeError, ValueError):
+            self._degraded = True
+            self._boxmates = {}
+            return None
+        cached = (
+            tuple((i, name) for i, name, gone in sorted(rows) if not gone),
+            tuple(i for i, _, gone in sorted(rows) if gone),
+        )
+        self._boxmates[number] = cached
+        return cached
 
     def _company(
         self, box: int, at: int, start: int, end: Optional[int]
@@ -2262,7 +2277,7 @@ def _queue_depth(queue: queues.Queue) -> Tuple[Optional[int], Optional[str]]:
         return len(queue), None
     except (ArithmeticError, TypeError, ValueError) as exc:
         return None, (
-            f"{queues.FILENAMES[queue.name]} holds an entry that cannot be ordered "
+            f"the {queue.name} queue holds an entry that cannot be ordered "
             f"({type(exc).__name__}: {exc}), so the {queue.name} queue cannot be counted."
         )
 
@@ -2327,7 +2342,7 @@ def do_status() -> dict:
     # A corrupt record must not take down the health endpoint — that is the one route you
     # reach for when something is wrong. Report it as a finding instead.
     try:
-        boxes = sorted({int(card.box) for card in inventory.cards.values()})
+        boxes = _boxes_named(inventory)
         body["next_index"] = {str(box): inventory.next_index(box) for box in boxes}
     except (master.BadPosition, TypeError, ValueError) as exc:
         body["next_index"] = None
@@ -2754,10 +2769,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
         # than being skipped, since it cannot be proven to be outside the box.
         targets: List[Tuple[int, str, master.Card]] = []
         skipped: List[Tuple[int, str]] = []
-        for key, card in inventory.cards.items():
-            if _position_int(card.box, f"box of card {key}") != int(box):
-                continue
-            at = _position_int(card.index, f"index of card {key}")
+        for at, key, card in inventory.records_in(box):
             if selected is not None and at not in selected:
                 continue
             if card.state in master.TERMINAL_STATES:
@@ -3438,10 +3450,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # the allocator, against a printed label.
         movers: List[Tuple[int, str, master.Card]] = []
         blockers: List[Tuple[int, str]] = []
-        for other_key, other in inventory.cards.items():
-            if _position_int(other.box, f"box of card {other_key}") != int(box):
-                continue
-            at = _position_int(other.index, f"index of card {other_key}")
+        for at, other_key, other in inventory.records_in(box):
             if at <= int(index):
                 continue
             movers.append((at, other_key, other))
@@ -3903,10 +3912,9 @@ def do_move_cards(box: int, payload: dict) -> dict:
         inventory = snapshot.inventory
         if raw_indices is None:
             wanted = sorted(
-                _position_int(card.index, f"index of card {key}")
-                for key, card in inventory.cards.items()
-                if _position_int(card.box, f"box of card {key}") == int(box)
-                and card.state not in master.TERMINAL_STATES
+                at
+                for at, _, card in inventory.records_in(box)
+                if card.state not in master.TERMINAL_STATES
             )
             if not wanted:
                 raise BadRequest(
@@ -4170,6 +4178,147 @@ def do_release_box_listings(box: int, payload: dict) -> dict:
     }
 
 
+def _reclaimable(inventory: master.Inventory, box: int) -> Tuple[list, list]:
+    """`(reclaimable, reclaimed)` — the sold cards in `box` whose photograph is still on disk,
+    each as `(index, key, card, path, bytes)`, and the ones already reclaimed as `(index, key,
+    card)`. One walk, shared by the count and the write so the two cannot disagree (D88).
+
+    SOLD ONLY, AND THE OTHER DOORS ARE LEFT ALONE ON PURPOSE. A retired card's photograph is
+    what lets the retirement be questioned later (D26); a moved tombstone has none; a card on
+    hand is a card whose photograph the pull preview exists to show (D6). The owner's ruling
+    is "photos are disposable once a card is sold through", and this is that sentence and no
+    wider.
+
+    A STAT PER SOLD CARD, not `bool(card.photo)`: `_copy_row` records why — the field and the
+    file come apart in both directions — and here the file is the thing being deleted, so
+    the file is what is counted.
+    """
+    reclaimable = []
+    reclaimed = []
+    for at, key, card in inventory.records_in(box):
+        if card.state != master.SOLD:
+            continue
+        if card.photo_reclaimed_at:
+            reclaimed.append((at, key, card))
+            continue
+        path = photo_path(box, at)
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        reclaimable.append((at, key, card, path, size))
+    return reclaimable, reclaimed
+
+
+def do_box_photos(box: int) -> dict:
+    """What a reclaim over this box would delete. FREE, READ-ONLY, AND THE STEP THAT COMES
+    FIRST — `do_box_listings`' shape, for `do_box_listings`' reason: the count and the bytes
+    are on screen before the control that deletes them exists (D33, one register down).
+
+    `reclaimable` is sold cards with a photograph on disk; `reclaimed` is sold cards whose
+    photograph already went, with the digest each kept. `on_hand_photos` is what the box
+    would still hold afterwards, so the panel can say what a reclaim does NOT touch.
+    """
+    inventory = Store().read().inventory
+    if inventory.box(box) is None and not _box_holds_cards(inventory, box):
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "box_not_found",
+            f"No box {box} — nothing registered under that number and no card names it.",
+        )
+    reclaimable, reclaimed = _reclaimable(inventory, box)
+    on_hand = sum(
+        1 for at, _, card in inventory.records_in(box)
+        if card.state not in master.TERMINAL_STATES and photo_path(box, at).is_file()
+    )
+    return {
+        "box": int(box),
+        "reclaimable": {
+            "cards": len(reclaimable),
+            "bytes": sum(size for *_, size in reclaimable),
+            "indices": [at for at, *_ in reclaimable],
+        },
+        "reclaimed": {
+            "cards": len(reclaimed),
+            "indices": [at for at, *_ in reclaimed],
+        },
+        "on_hand_photos": on_hand,
+    }
+
+
+def do_reclaim_box_photos(box: int, payload: dict) -> dict:
+    """Delete the photographs of every sold card in this box, keeping every record (D88).
+
+    THE THIRD SHAPE, and the one this store did not have. Capture-undo deletes the record AND
+    the photograph (D10); `sold` and `retired` keep both (D26). What the 100k pile needs is a
+    record kept and a photograph reclaimed — measured at ~1.8 MB per photograph, ~176 GB at
+    100,000 cards, and ~9 GB once the sold-through ones are gone.
+
+    WHAT THE RECORD KEEPS IS THE DIGEST, and it is computed here, from the bytes, in the
+    moment before they go. D36 makes the photograph the truth and `photo_sha256` the binding
+    between a run and a slot; a box whose sold photographs are gone can no longer be checked
+    that way FOR THOSE CARDS, and D88 gives that up on purpose for cards that have left the
+    box. The digest on the record is what keeps the history able to say what was there, and
+    what a dispute about which copy sold can still be answered with.
+
+    FILES GO INSIDE THE LOCK, AFTER THE RECORDS ARE MARKED, PHOTO ONLY. The sidecar stays: it
+    is a few hundred bytes of the operator's own claims and `identify.sidecar.scan` keys on
+    the photograph, so a sidecar with no photograph beside it is inert. A crash after some
+    unlinks leaves records marked for photographs that are gone — which is exactly what the
+    records say — and records unmarked for photographs still there, which the next press
+    finishes; `_unlink` treats absence as no failure, so a retry is safe.
+
+    NO UNDO, AND IT GATES. The bytes are gone and the card is not in your hand, so this sits
+    with the whole-box delete under docs/DESIGN.md's "genuinely destructive actions may still
+    gate" clause: `confirm: true` on the wire, and on the screen the count and the bytes
+    drawn by the free route above before the control that fires exists.
+    """
+    _reject_unknown(payload, RECLAIM_FIELDS)
+    if payload.get("confirm") is not True:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Reclaiming deletes photographs that nothing can regenerate. Send `confirm: "
+            "true`, and show the count from GET /boxes/<box>/photos first.",
+        )
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None and not _box_holds_cards(inventory, box):
+            raise BadRequest(
+                HTTPStatus.NOT_FOUND,
+                "box_not_found",
+                f"No box {box} — nothing registered under that number and no card names it.",
+            )
+        reclaimable, already = _reclaimable(inventory, box)
+        if not reclaimable:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "nothing_to_reclaim",
+                f"Box {box} holds no sold card with a photograph still on disk"
+                + (f" — {len(already)} were reclaimed already" if already else "")
+                + ". A photograph is reclaimed from a SOLD card only; a retired card keeps "
+                "its photograph (D26), and a card on hand needs it for the pull preview.",
+            )
+
+        freed = 0
+        keys = []
+        for _at, key, _card, path, size in reclaimable:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            inventory.record_photo_reclaimed(key, sha256=digest, size=size)
+            if _unlink(path):
+                freed += size
+            keys.append(key)
+
+    return {
+        "box": int(box),
+        "reclaimed": len(keys),
+        "bytes": freed,
+        "keys": keys,
+        "already_reclaimed": len(already),
+    }
+
+
 def do_delete_box(box: int) -> dict:
     """Delete a whole box: records, photos, sidecars, queue entries, cache, registry.
 
@@ -4218,10 +4367,7 @@ def do_delete_box(box: int) -> dict:
 
         holds: List[Tuple[int, str, master.Card]] = []
         blockers: List[Tuple[int, str]] = []
-        for card_key, card in inventory.cards.items():
-            if _position_int(card.box, f"box of card {card_key}") != int(box):
-                continue
-            at = _position_int(card.index, f"index of card {card_key}")
+        for at, card_key, card in inventory.records_in(box):
             holds.append((at, card_key, card))
             if card.state == master.SOLD:
                 blockers.append((at, f"card {at} is sold"))
@@ -4509,10 +4655,10 @@ def _answer_origin(store: Store, key: str) -> Tuple[Optional[dict], Optional[str
         # Broad on purpose, as at `_sale_origin`: a bad line, an unreadable file and non-UTF-8
         # bytes are one condition to this route — history cannot say — and the operator needs
         # to be told which file to go and look at rather than handed a 503.
-        return None, f"history.jsonl could not be read ({type(exc).__name__}: {exc})"
+        return None, f"the store's history could not be read ({type(exc).__name__}: {exc})"
     previous = _answer_before(events, key)
     if previous is None:
-        return None, "history.jsonl records no answer here that says what it replaced"
+        return None, "the store's history records no answer here that says what it replaced"
     return previous, None
 
 
@@ -6150,10 +6296,10 @@ def _origin(store: Store, key: str, reader) -> Tuple[Optional[str], Optional[str
         # condition to this route — history cannot say — and each of them must leave the
         # sale writable. Narrowing this to StoreError alone would re-open the same hole for
         # the next way a log file goes wrong.
-        return None, f"history.jsonl could not be read ({type(exc).__name__}: {exc})"
+        return None, f"the store's history could not be read ({type(exc).__name__}: {exc})"
     state = reader(events, key)
     if state is None:
-        return None, "history.jsonl records no earlier state for it"
+        return None, "the store's history records no earlier state for it"
     return state, None
 
 
@@ -7133,7 +7279,7 @@ def _box_row(
     retired = 0
     moved = 0
     listed = 0
-    for card in inventory.cards.values():
+    for card in inventory.cards.where(box=int(box)):
         try:
             if int(card.box) != int(box):
                 continue
@@ -7215,6 +7361,20 @@ def _box_row(
     }
 
 
+def _boxes_named(inventory: master.Inventory) -> List[int]:
+    """Every box number a card names, ascending — refusing on a record whose box is not one.
+
+    One `DISTINCT` over the indexed column since D87 rather than a walk over every record,
+    and the refusal is kept: a NULL in that column is exactly a record `int()` refused, so
+    it is loaded and coerced to raise `BadPosition` naming the card, as the walk did.
+    """
+    values = inventory.cards.distinct("box")
+    if None in values:
+        for key, _ in inventory.cards.select(("box",), box=None):
+            _position_int(inventory.cards[key].box, f"box of card {key}")
+    return sorted(int(value) for value in values if value is not None)
+
+
 def _same_box(card: master.Card, box: int) -> bool:
     """Does this record name this box? Never raises; an unreadable record names none."""
     try:
@@ -7225,13 +7385,7 @@ def _same_box(card: master.Card, box: int) -> bool:
 
 def _box_holds_cards(inventory: master.Inventory, box: int) -> bool:
     """Does any record name this box? Never raises; an unreadable record is not evidence."""
-    for card in inventory.cards.values():
-        try:
-            if int(card.box) == int(box):
-                return True
-        except (TypeError, ValueError):
-            continue
-    return False
+    return bool(inventory.cards.select(("box",), box=int(box)))
 
 
 def do_boxes() -> dict:
@@ -7255,11 +7409,9 @@ def do_boxes() -> dict:
             numbers.add(int(key))
         except (TypeError, ValueError):
             continue
-    for card in inventory.cards.values():
-        try:
-            numbers.add(int(card.box))
-        except (TypeError, ValueError):
-            continue
+    for value in inventory.cards.distinct("box"):
+        if value is not None:
+            numbers.add(int(value))
 
     places = _Places(inventory)
     return {"boxes": [_box_row(inventory, box, places) for box in sorted(numbers)]}
@@ -7414,7 +7566,7 @@ def do_put_box(box: int, payload: dict) -> dict:
                 gone = tuple(
                     sorted(
                         int(card.index)
-                        for card in inventory.cards.values()
+                        for card in inventory.cards.where(box=int(box))
                         if _same_box(card, box) and card.state in master.TERMINAL_STATES
                     )
                 )
@@ -8720,6 +8872,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _BOX_LISTINGS_RE.match(path)
             if match:
                 return self._json(HTTPStatus.OK, do_box_listings(int(match.group(1))))
+            # D88's free count, the read that comes before the reclaim.
+            match = _BOX_PHOTOS_RE.match(path)
+            if match:
+                return self._json(HTTPStatus.OK, do_box_photos(int(match.group(1))))
             match = _BOXES_ITEM_RE.match(path)
             if match:
                 # One box on its own is deliberately NOT a route. `GET /boxes` is a handful
@@ -8956,6 +9112,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _BOX_LISTINGS_RELEASE_RE.match(path)
             if match:
                 body = do_release_box_listings(int(match.group(1)), self._body())
+                return self._json(HTTPStatus.OK, body)
+            # D88's reclaim: the photographs of every sold card in the box, records kept.
+            match = _BOX_PHOTOS_RECLAIM_RE.match(path)
+            if match:
+                body = do_reclaim_box_photos(int(match.group(1)), self._body())
                 return self._json(HTTPStatus.OK, body)
             # D10's divider, opened at the rig. A POST rather than a field on the box's own
             # PUT because it sets no field: the index it writes is read from the store, not

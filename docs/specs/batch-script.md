@@ -74,12 +74,16 @@ deleting one must never cost money or state.
 
 ```
 inventory/
-  inventory.json        MASTER. Cards, positions, SKUs, listing states.
-  history.jsonl         Append-only event log. Never rewritten.
-  identifications.json  The cache. Answers already paid for.
-  review.json           Standing main review queue. Survives runs.
-  parked.json           Standing low-value queue. Survives runs.
-  .lock                 Exclusive lock file.
+  store.sqlite          MASTER, since D87 (2026-09-01). One SQLite file: cards, boxes,
+                        listings, the identification cache, both standing queues, the
+                        order ledger and the history — one table each, one transaction
+                        per write. store.sqlite-wal and -shm beside it are the database.
+  legacy-json/          the six JSON files this store was migrated FROM, moved aside whole
+                        on the first open and read by nothing. MIGRATED.json says what was
+                        imported and how to reverse it.
+  prices.json           the pricing corpus (D86). Still a file.
+  codes.jsonl           the code ledger (C8). Still a file.
+  .lock                 Exclusive lock file — the writer's lock.
 
 runs/<YYYY-MM-DD>-<label>-<nn>/
   manifest.json         Inputs: capture dir, export path + mtime + sha256, prompt
@@ -93,22 +97,28 @@ runs/<YYYY-MM-DD>-<label>-<nn>/
   reconcile.txt         Written by reconcile.
 ```
 
-**Write discipline.** `inventory.json` is rewritten whole: to a temp file in the same
-directory, then `os.replace()` into position — atomic on POSIX, so a reader sees the entire
-old file or the entire new one and a crash mid-write leaves the old file intact. All
-read-modify-write cycles hold an exclusive lock on `.lock`, because atomicity prevents torn
-files but not lost updates: two writers each reading, each modifying, each writing back
-means the second silently erases the first. The capture server (step 5) uses the same lock
-and the same atomic write; it is a second writer, not a second owner.
+**Write discipline.** Every `Store.write()` is one SQLite transaction over every table,
+opened inside an exclusive lock on `.lock` and committed whole on a clean exit or not at
+all (D87). The lock is still needed, because atomicity prevents torn writes but not lost
+updates: two writers each reading, each modifying, each writing back means the second
+silently erases the first, so the session reads inside the lock. The capture server (step
+5) uses the same lock and the same transaction; it is a second writer, not a second owner.
 
-`history.jsonl` is append-only and is the audit trail — when a card was captured,
-identified, pushed, staged, live, sold. D10 makes this worth keeping: positions are never
-renumbered and sold cards leave permanent gaps, so the history *is* inventory truth over
-time.
+**This section said the opposite until 2026-09-01.** It read: *"`inventory.json` is
+rewritten whole: to a temp file in the same directory, then `os.replace()` into position"*,
+and, under a bold **Not SQLite**, that *"D13 settles inventory as server-side JSON ... A
+later session that 'upgrades' inventory to SQLite is re-litigating D13."* D87 re-litigated
+it in the open. The per-file atomic replace was real and the SET of five files was never one
+transaction — a kill between two writes left the inventory and a queue disagreeing — and
+every capture re-read and rewrote every card in the store, which crossed the feeder's own
+cadence at ~48,000 cards. D13's sentence — one truth, server-side, on the Mac, read and
+written through the capture server — is unchanged; the file format behind it moved.
 
-**Not SQLite.** D13 settles inventory as server-side JSON. D15's SQLite is the read-only
-*catalog* index at build step 9 and is a different thing entirely. A later session that
-"upgrades" inventory to SQLite is re-litigating D13.
+The history is the `events` table and is still append-only and still the audit trail —
+when a card was captured, identified, pushed, staged, live, sold. D10 makes this worth
+keeping: positions are never renumbered and sold cards leave permanent gaps, so the history
+*is* inventory truth over time. Since D87 the rows describing a change commit in the same
+transaction as the change, where `history.jsonl` was appended afterwards.
 
 ---
 

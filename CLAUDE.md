@@ -240,6 +240,32 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   wants its own `sub_threshold`. Nothing writes one today; D86 names that as a reopening
   condition rather than leaving it to be discovered.
 
+- **THE STORE OF RECORD IS ONE SQLITE FILE, AND `inventory.json` IS A LEGACY FILE READ BY
+  NOTHING** (D87, 2026-09-01). `inventory/store.sqlite` holds cards, boxes, listings, the
+  identification cache, both standing queues, the order ledger and the history, one table
+  each, and every `Store.write()` is ONE transaction over all of them — the five-file torn set
+  `store/session.py` spent a week calling "a decision nobody has argued" cannot happen
+  now. `Snapshot` is still the API and `inventory.cards` is still a dict to every caller
+  (`store/rows.py`), but a session bound to the database loads only the rows a method names:
+  a capture into a 100,000-card store builds ONE card object and commits in ~3 ms, where the
+  JSON cycle took ~4 s. **The first open of a legacy store migrates it** — without loss, under
+  the lock, moving the six JSON files to `inventory/legacy-json/` with a receipt — and a JSON
+  file left beside the database is never a fallback (D86's rule): `make status` reports one.
+  Look at the store with the `sqlite3` CLI; the owner ruled no JSON export target is wanted.
+  What is NOT in the transaction is what never was: photographs, sidecars and `codes.jsonl`,
+  written inside the flock, which is why the flock survives.
+
+- **A SOLD CARD'S PHOTOGRAPH IS RECLAIMED ON PURPOSE, AND THAT IS A THIRD SHAPE** (D88).
+  Capture-undo deletes the record and the photograph (D10); `sold` and `retired` keep both
+  (D26). `POST /boxes/<box>/photos/reclaim` deletes the photographs of a box's SOLD cards and
+  keeps every record, each carrying `photo_sha256` and `photo_reclaimed_at` from then on. Sold
+  only: a retired card's photograph is what lets the retirement be questioned, and a card on
+  hand needs its photograph for the pull preview. The control is on `#/inventory`'s box
+  operations, gated like the box delete and shaped like the listing release — the free count
+  (`GET /boxes/<box>/photos`) is on screen before the control that fires exists. What it gives
+  up is named: D36's realign can no longer re-bind THOSE cards by digest, which is right for
+  cards that have left the box, and the digest on the record is what the history keeps.
+
 - **`emit` OVER SEVERAL RUNS WRITES ONE FILE, AND THE CAP IS SPENT ONCE ACROSS THEM** (D86).
   `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a cap that
   is GLOBAL, so runs joined before either emitted each believe the whole cap is theirs. This is
@@ -596,6 +622,8 @@ D83  A card leaves a box through a third door: moved, not sold or retired
 D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 D85  The corner is settled by geometry, and a variable nothing sets is not a fallback
 D86  The pricing answer is one file for the store, and the worklist spans runs
+D87  The store of record is SQLite, and a write is one transaction
+D88  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

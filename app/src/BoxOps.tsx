@@ -7,8 +7,10 @@ import type {
   GameEntry,
   BoxListingPlan,
   BoxListingRow,
+  BoxPhotoPlan,
   ListingReleaseResult,
   MoveCardsResult,
+  PhotoReclaimResult,
   Place,
   SectionDetail,
 } from './types'
@@ -18,8 +20,10 @@ import {
   deleteBox,
   describeFailure,
   getBoxListings,
+  getBoxPhotos,
   getGames,
   moveCards,
+  reclaimBoxPhotos,
   releaseBoxListings,
   updateBox,
 } from './server'
@@ -1071,6 +1075,12 @@ export function BoxOps({
             nothing at all unless this box actually holds a listing. */}
         <ReleaseListings record={record} onChanged={onChanged} />
 
+        {/* ABOVE THE DELETE AND BELOW THE RELEASE, because it destroys less than the one and
+            more than the other. A release edits counts; this deletes photographs nothing can
+            regenerate; the delete takes the records with them. It draws nothing at all unless
+            this box holds a sold card (D88). */}
+        <ReclaimPhotos record={record} onChanged={onChanged} />
+
         <DeleteBox record={record} onChanged={onChanged} />
       </div>
     </section>
@@ -1829,6 +1839,189 @@ function ReleaseListings({
       </div>
     </div>
   )
+}
+
+/* PHOTO RECLAMATION — D88's third shape, between capture-undo and the terminal states.
+ *
+ * Undo deletes the record AND the photograph; `sold` and `retired` keep both. What the 100k
+ * pile needs is the record kept and the photograph reclaimed, once the card has sold through:
+ * measured at ~1.8 MB a photograph, that is ~176 GB at 100,000 cards and ~9 GB with the sold
+ * ones gone. The record keeps the digest of what was there, so the history can still say it.
+ *
+ * IT GATES, LIKE THE DELETE BELOW IT AND FOR THE SAME CLAUSE. There is no undo — the bytes are
+ * gone and the card is not in your hand — so docs/DESIGN.md's "genuinely destructive actions
+ * may still gate" is what licenses two presses here. The gate is `ReleaseListings`' shape and
+ * not `DeleteBox`'s: the free count is read on opening the panel, and the control that fires
+ * DOES NOT EXIST until it has answered, so the number of photographs and the megabytes they
+ * hold are on screen before anything can be pressed. Both presses name the box.
+ *
+ * SOLD ONLY, and the panel says what it leaves alone rather than only what it takes. A retired
+ * card's photograph is what lets the retirement be questioned (D26); a card on hand needs its
+ * photograph for the pull preview (D6). `on_hand_photos` is drawn for exactly that sentence.
+ */
+function ReclaimPhotos({
+  record,
+  onChanged,
+}: {
+  record: BoxRecord
+  onChanged: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [plan, setPlan] = useState<BoxPhotoPlan | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [trouble, setTrouble] = useState<Failure | null>(null)
+  const [receipt, setReceipt] = useState<PhotoReclaimResult | null>(null)
+
+  const box = record.box
+
+  /* Fetched on open and re-fetched if the box moves under the panel — `ReleaseListings`'
+     guard, for its reason: a count for box 1 above a button that reclaims box 3 is the mis-aim
+     the preflight exists to prevent. */
+  useEffect(() => {
+    if (!open) return
+    let ignore = false
+    setLoading(true)
+    setPlan(null)
+    setTrouble(null)
+    getBoxPhotos(box)
+      .then((answer) => {
+        if (!ignore) setPlan(answer)
+      })
+      .catch((err) => {
+        if (!ignore) setTrouble(describeFailure(err))
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [open, box])
+
+  const run = async () => {
+    if (busy) return
+    setBusy(true)
+    setTrouble(null)
+    try {
+      const result = await reclaimBoxPhotos(box)
+      setReceipt(result)
+      setOpen(false)
+      setPlan(null)
+      /* The re-read is the caller's: `has_photo` flips on every copy row of the walk and the
+         card band draws "reclaimed" off `photo_reclaimed_at`, and both are stale until the
+         inventory comes back. */
+      onChanged()
+    } catch (err) {
+      setTrouble(describeFailure(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (receipt !== null) {
+    return (
+      <div className="boxops-receipt">
+        <p className="boxops-note-text">
+          Reclaimed {count(receipt.reclaimed, 'photograph', 'photographs')} from box{' '}
+          {receipt.box}, {megabytes(receipt.bytes)}. Every record stays, sold, and each keeps the
+          digest of the photograph it had. <strong>There is no undo.</strong>
+          {receipt.already_reclaimed > 0
+            ? ` ${count(receipt.already_reclaimed, 'card', 'cards')} had been reclaimed before.`
+            : ''}
+        </p>
+        <p className="boxops-machine">{receipt.keys.join(' · ')}</p>
+      </div>
+    )
+  }
+
+  if (record.sold === 0) return null
+
+  if (!open) {
+    return (
+      <div className="boxops-actions boxops-actions-lone">
+        <button className="boxops-plain" type="button" onClick={() => setOpen(true)}>
+          Reclaim the photographs of {count(record.sold, 'sold card', 'sold cards')} in box{' '}
+          {box}…
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="boxops-danger">
+      <p className="boxops-note-text">
+        This deletes the <strong>photograph</strong> of every sold card in box {box} and keeps
+        every record — the card stays sold, with the digest of the photograph it had.{' '}
+        <strong>There is no undo:</strong> a capture photograph cannot be regenerated, and the
+        card is not in your hand.
+      </p>
+
+      {loading ? <p className="boxops-hint">Counting what a reclaim would delete…</p> : null}
+
+      {plan === null ? null : (
+        <p className="boxops-hint">
+          {plan.reclaimable.cards === 0 ? (
+            <>
+              Nothing to reclaim: no sold card in box {box} still has a photograph on disk
+              {plan.reclaimed.cards > 0
+                ? ` — ${count(plan.reclaimed.cards, 'was', 'were')} reclaimed already`
+                : ''}
+              .
+            </>
+          ) : (
+            <>
+              {count(plan.reclaimable.cards, 'photograph', 'photographs')},{' '}
+              {megabytes(plan.reclaimable.bytes)}, would go
+              {plan.reclaimed.cards > 0
+                ? ` (${count(plan.reclaimed.cards, 'card', 'cards')} reclaimed already)`
+                : ''}
+              . Untouched: the {count(plan.on_hand_photos, 'photograph', 'photographs')} of cards
+              still on hand, and every retired card's — a retired card keeps its photograph so
+              the retirement can be questioned.
+            </>
+          )}
+        </p>
+      )}
+
+      <Trouble failure={trouble} />
+      <div className="boxops-actions">
+        {/* ABSENT, NOT DISABLED, UNTIL THE FREE COUNT HAS ANSWERED, and absent when it answers
+            zero — `ReleaseListings`' rule and docs/DESIGN.md's: a disabled button is one
+            attribute away from pressable. Both presses name the box. */}
+        {plan === null || plan.reclaimable.cards === 0 ? null : (
+          <button
+            className="boxops-plain boxops-plain-danger"
+            type="button"
+            disabled={busy}
+            onClick={() => void run()}
+          >
+            {busy
+              ? 'Reclaiming…'
+              : `Delete ${count(plan.reclaimable.cards, 'photograph', 'photographs')} from box ${box} permanently`}
+          </button>
+        )}
+        <button
+          className="boxops-plain"
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            setPlan(null)
+            setTrouble(null)
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Bytes as the unit a person compares a disk against. One decimal below 10 MB, none above:
+ *  `4.7 MB` is a number, `1,806 MB` is the same number with the decimal doing nothing. */
+function megabytes(bytes: number): string {
+  const mb = bytes / 1_000_000
+  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb).toLocaleString()} MB`
 }
 
 /* THE WHOLE-BOX DELETE — D10's third 2026-08-23 ruling, and the most destructive action in the

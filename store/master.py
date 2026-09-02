@@ -1,4 +1,5 @@
-"""`inventory.json` — cards, positions, SKUs, listing states.
+"""The inventory — cards, positions, SKUs, listing states. The `cards`, `boxes` and
+`listings` tables of `inventory/store.sqlite` since D87; `inventory.json` before it.
 
 One record per PHYSICAL CARD, keyed by position, never per SKU. D7 collapses copies to one
 import row but keeps every copy as its own position with its own photo, because that is what
@@ -69,6 +70,13 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
+# THE ONE INTRA-PACKAGE IMPORT THIS MODULE MAKES, and it is a container rather than a disk.
+# The comment beside `BadPosition` below explains why nothing here reaches `store/files.py`;
+# `store/rows.py` imports nothing and touches nothing, and it is what lets `Inventory.cards`
+# stay a dict to every caller while a session bound to the database loads one box at a time
+# (D87). The table specs at the bottom of `Inventory` are the other half of that contract.
+from store.rows import Rows, TableSpec, int_or_none
+
 VERSION = 2
 
 CAPTURED = "captured"
@@ -103,6 +111,12 @@ RETIRED = "retired"
 # module's own `_log` writes the state name as the event name at every other transition —
 # reusing that convention here rather than minting a second word for one fact.
 MOVED = "moved"
+
+# THE HISTORY EVENT A RECLAIMED PHOTOGRAPH WRITES (D88). An event and not a state: the card
+# stays `sold`, and what changed is that the bytes behind `photo` are gone. Not a member of
+# `STATES` for D26's reason — `_state_before_sale` filters history against that tuple, and
+# an event sharing a state's word would make a reversal restorable to it.
+PHOTO_RECLAIMED = "photo_reclaimed"
 
 # A POSITION'S STATE DESCRIBES ONE PHYSICAL CARD AND NOTHING ELSE (D7, amended).
 #
@@ -182,6 +196,10 @@ class UnknownRetireReason(ValueError):
 
 class CardNotFound(ValueError):
     """`move_card` was asked to move a position holding no record."""
+
+
+class CardNotSold(ValueError):
+    """`record_photo_reclaimed` was asked about a card that has not sold (D88)."""
 
 
 class CardDeparted(ValueError):
@@ -357,6 +375,19 @@ class Card:
     # nor clear it.
     moved_to: Optional[str] = None
     run: Optional[str] = None
+    # THE PHOTOGRAPH'S DIGEST, KEPT AFTER THE PHOTOGRAPH IS GONE (D88). Set by
+    # `record_photo_reclaimed` and by nothing else; None on every card whose photograph is
+    # still on disk, because while the file exists the file is the fact and a copy of its
+    # digest here would be a second thing to keep true through D26's re-shoot. Once the bytes
+    # are reclaimed this is the only trace of what was photographed — it is what D36's
+    # `photo_sha256` binding on a run record can still be compared against, and what a
+    # dispute about which card sold can be answered with. NOT a capture claim, for
+    # `retire_reason`'s reason: a re-record must neither invent it nor clear it.
+    photo_sha256: Optional[str] = None
+    # When the photograph was reclaimed, or None while it is on disk. The pair travels
+    # together: `record_photo_reclaimed` sets both, and a screen that finds this set draws
+    # "reclaimed" rather than "missing" — the two are different facts about the store.
+    photo_reclaimed_at: Optional[str] = None
 
     @property
     def key(self) -> str:
@@ -731,14 +762,56 @@ class Listing:
         return gave
 
 
+def _card_columns(card: "Card") -> Dict[str, object]:
+    """The indexed columns beside a card's payload (D87). `box`/`idx` are NULL where the
+    stored value will not coerce, which is how `next_index` finds such a record without a
+    scan — see `int_or_none`."""
+    return {
+        "box": int_or_none(card.box),
+        "idx": int_or_none(card.index),
+        "state": card.state,
+        "sku": card.sku,
+        "condition": card.condition,
+        "capture_id": card.capture_id,
+        "name": card.name,
+        "number": card.number,
+        "game": card.game,
+        "set_hint": card.set_hint,
+        "run": card.run,
+        "captured_at": card.captured_at,
+        "state_at": card.state_at,
+    }
+
+
+def _known(cls, record: dict) -> dict:
+    return {k: v for k, v in record.items() if k in cls.__annotations__}
+
+
 @dataclass
 class Inventory:
-    """The master record. Rewritten whole, always through `store.session`."""
+    """The master record. Written through `store.session`, one transaction per session.
 
-    cards: Dict[str, Card] = field(default_factory=dict)
-    boxes: Dict[str, Box] = field(default_factory=dict)
-    listings: Dict[str, Listing] = field(default_factory=dict)
+    `cards`, `boxes` and `listings` are `Rows` (D87): a dict to every caller, and to a
+    session bound to the database a set of queries that load only the rows a method names.
+    The methods below that used to walk every card — the high-water scan, the capture-id
+    replay, the SKU walk, the box-number allocator — ask the mapping for the rows they want
+    instead, and the memory-backed mapping answers the same questions over its dict, so T7
+    drives both backings through one code path.
+    """
+
+    cards: "Rows" = field(default_factory=lambda: Rows(Inventory.CARDS))
+    boxes: "Rows" = field(default_factory=lambda: Rows(Inventory.BOXES))
+    listings: "Rows" = field(default_factory=lambda: Rows(Inventory.LISTINGS))
     events: List[dict] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # A caller handing in a plain dict gets the same mapping the default gives.
+        if not isinstance(self.cards, Rows):
+            self.cards = Rows(Inventory.CARDS, objects=dict(self.cards))
+        if not isinstance(self.boxes, Rows):
+            self.boxes = Rows(Inventory.BOXES, objects=dict(self.boxes))
+        if not isinstance(self.listings, Rows):
+            self.listings = Rows(Inventory.LISTINGS, objects=dict(self.listings))
 
     # ------------------------------------------------------------------ (de)serialising
 
@@ -795,9 +868,16 @@ class Inventory:
                     continue
                 boxes.setdefault(str(number), Box(box=number))
 
-        return cls(cards=cards, boxes=boxes, listings=listings)
+        return cls(
+            cards=Rows(cls.CARDS, objects=cards),
+            boxes=Rows(cls.BOXES, objects=boxes),
+            listings=Rows(cls.LISTINGS, objects=listings),
+        )
 
     def to_payload(self) -> dict:
+        """The whole inventory as one JSON document — the legacy file's shape, kept as the
+        wire shape of `GET /inventory` and as what a migration test compares. Loads every
+        row, which is what a whole-store read costs."""
         return {
             "version": VERSION,
             "cards": {key: asdict(card) for key, card in sorted(self.cards.items())},
@@ -829,11 +909,52 @@ class Inventory:
         """
         box = _as_position_int(box, "box")
         highest = 0
-        for key, card in self.cards.items():
-            if _as_position_int(card.box, f"box of card {key}") != box:
-                continue
-            highest = max(highest, _as_position_int(card.index, f"index of card {key}"))
+        for _key, at in self._positions_in(box):
+            highest = max(highest, at)
         return highest + 1
+
+    def _positions_in(self, box: int) -> List[Tuple[str, int]]:
+        """`(key, index)` of every record in `box`, refusing on any record that will not
+        coerce — ANYWHERE in the store, which is the rule `next_index` has always had.
+
+        Asked of the mapping as three indexed queries rather than a walk (D87): the rows
+        whose `box` column is this box, plus the rows whose `box` or `idx` column is NULL —
+        which is exactly the set of records `int()` refuses, since the columns are derived
+        by the same coercion. A record that will not coerce is then LOADED so the refusal
+        can name it with its raw value, as it always did; there are none in a healthy store,
+        so the load is free. Nothing else in the box is built as an object.
+        """
+        out: List[Tuple[str, int]] = []
+        seen = set()
+        for key, (raw_box, raw_index) in self.cards.select(("box", "idx"), box=box):
+            seen.add(key)
+            if raw_box is None or raw_index is None:
+                card = self.cards[key]
+                _as_position_int(card.box, f"box of card {key}")
+                _as_position_int(card.index, f"index of card {key}")
+            out.append((key, int(raw_index)))
+        for equals in ({"box": None}, {"idx": None}):
+            for key, _ in self.cards.select(("box", "idx"), **equals):
+                if key in seen:
+                    continue
+                seen.add(key)
+                card = self.cards[key]
+                _as_position_int(card.box, f"box of card {key}")
+                _as_position_int(card.index, f"index of card {key}")
+        return out
+
+    def records_in(self, box) -> List[Tuple[int, str, Card]]:
+        """`(index, key, card)` for every record in `box`, ascending, coerced the way
+        `next_index` coerces and refusing the same way. What the box-scoped routes walk
+        instead of the whole store (D87)."""
+        box = _as_position_int(box, "box")
+        self._positions_in(box)  # the refusal, before anything is built
+        out = [
+            (_as_position_int(card.index, f"index of card {card.key}"), card.key, card)
+            for card in self.cards.where(box=box)
+        ]
+        out.sort(key=lambda row: row[0])
+        return out
 
     def allocate_capture(
         self,
@@ -913,7 +1034,7 @@ class Inventory:
 
     def card_by_capture_id(self, capture_id: str) -> Optional[Card]:
         """The card recorded under `capture_id`, or None. Refuses on a duplicate."""
-        matches = [c for c in self.cards.values() if c.capture_id == capture_id]
+        matches = self.cards.where(capture_id=capture_id)
         if len(matches) > 1:
             raise DuplicateCaptureId(
                 f"{capture_id!r} is on {len(matches)} cards: "
@@ -1035,6 +1156,30 @@ class Inventory:
         card.state = RETIRED
         card.state_at = now()
         self._log(RETIRED, key, sku=card.sku, run=card.run, reason=reason)
+        return True
+
+    def record_photo_reclaimed(self, key: str, *, sha256: str, size: int) -> bool:
+        """Record that this card's photograph has been deleted on purpose (D88).
+
+        The FILE is the route's to remove, inside the same lock; this writes the two facts
+        the record keeps once it is gone — the digest of what was there and when it went —
+        and the history line carrying both plus the bytes freed. One method rather than two
+        assignments, for `retire`'s reason: a digest without a stamp, or a stamp without a
+        digest, is a record nobody can read. False if the position holds no record.
+
+        SOLD ONLY, and the store refuses the rest rather than leaving it to the route: a
+        retired card's photograph is what lets the retirement be questioned (D26), a moved
+        tombstone has none, and a card still on hand is a card whose photograph the pull
+        preview shows. The route says the same in its own code first.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            return False
+        if card.state != SOLD:
+            raise CardNotSold(f"{key} is {card.state}, and only a sold card's photograph is reclaimed")
+        card.photo_sha256 = sha256
+        card.photo_reclaimed_at = now()
+        self._log(PHOTO_RECLAIMED, key, sku=card.sku, sha256=sha256, bytes=int(size))
         return True
 
     def move_card(self, key: str, to_box) -> Tuple[Card, Card]:
@@ -1247,11 +1392,9 @@ class Inventory:
                 taken.add(int(key))
             except (TypeError, ValueError):
                 continue
-        for card in self.cards.values():
-            try:
-                taken.add(int(card.box))
-            except (TypeError, ValueError):
-                continue
+        for value in self.cards.distinct("box"):
+            if value is not None:
+                taken.add(int(value))
         number = 1
         while number in taken:
             number += 1
@@ -1391,22 +1534,16 @@ class Inventory:
 
     def positions_for_sku(self, sku: str) -> List[Card]:
         """Every copy holding this SKU, in box-walk order (D7's SKU -> positions map)."""
-        return sorted(
-            (c for c in self.cards.values() if c.sku == sku),
-            key=lambda c: (c.box, c.index),
-        )
+        return sorted(self.cards.where(sku=sku), key=lambda c: (c.box, c.index))
 
     def in_state(self, state: str) -> List[Card]:
         check_state(state)
-        return sorted(
-            (c for c in self.cards.values() if c.state == state),
-            key=lambda c: (c.box, c.index),
-        )
+        return sorted(self.cards.where(state=state), key=lambda c: (c.box, c.index))
 
     def counts(self) -> Dict[str, int]:
         counts = {state: 0 for state in STATES}
-        for card in self.cards.values():
-            counts[card.state] = counts.get(card.state, 0) + 1
+        for _, (state,) in self.cards.select(("state",)):
+            counts[state] = counts.get(state, 0) + 1
         return counts
 
     def copies_on_hand(self, sku: str) -> List[Card]:
@@ -1474,3 +1611,41 @@ class Inventory:
             if age is not None and age >= days:
                 out.append(entry)
         return out
+
+    # ------------------------------------------------------------------- the tables
+
+    # HOW EACH MAPPING BECOMES ROWS (D87). `parse` is the same annotation-filtered
+    # construction `Inventory.parse` has always done per record, so a row and a JSON record
+    # are read by one rule; `dump` is `asdict`, the same as `to_payload`; `columns` is the
+    # handful of indexed fields `store/db.py` declares beside the payload. Declared here and
+    # not in `store/db.py` because the dataclass is the authority on its own fields, and the
+    # database module must not have to learn a field's name to store it.
+    CARDS = TableSpec(
+        "cards",
+        parse=lambda key, record: Card(**_known(Card, record)),
+        dump=asdict,
+        columns=_card_columns,
+        column_names=(
+            "box", "idx", "state", "sku", "condition", "capture_id", "name", "number",
+            "game", "set_hint", "run", "captured_at", "state_at",
+        ),
+    )
+    BOXES = TableSpec(
+        "boxes",
+        parse=lambda key, record: Box(**_known(Box, record)),
+        dump=asdict,
+        columns=lambda box: {"box": int_or_none(box.box), "name": box.name, "state": box.state},
+        column_names=("box", "name", "state"),
+    )
+    LISTINGS = TableSpec(
+        "listings",
+        parse=lambda key, record: Listing(**_known(Listing, record)),
+        dump=asdict,
+        columns=lambda entry: {
+            "condition": entry.condition,
+            "pushed": int_or_none(entry.pushed),
+            "staged": int_or_none(entry.staged),
+            "live": int_or_none(entry.live),
+        },
+        column_names=("condition", "pushed", "staged", "live"),
+    )

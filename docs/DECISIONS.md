@@ -294,6 +294,8 @@ The fix is a rotation remembered per device and applied at capture time rather t
 
 **Frame the card tight in the 4K field; that matters more than the sensor.** The reasoning is in `docs/specs/capture-app.md` and it corrects a simpler argument that was nearly recorded here: resolution is *not* irrelevant just because `identify/images.py` downscales the whole card to 1568px. The crop-retry path in `geometry/crop.py` upscales the collector number to at least 600px, and it can only enlarge pixels that were really captured — which is the failure mode T1's recorded misses actually have. Tight framing at 4K recovers most of what tethering would have bought, for free, and glare on the number corner is unrecoverable at any resolution.
 
+**"Server-side JSON" was reopened by D87 on 2026-09-01, and the rest of this entry stands.** The first sentence above names JSON and never argues for it — it is the one word in this entry that was a default rather than a decision, and `store/__init__.py` spent three weeks forbidding a SQLite store on this entry's authority in words this entry never used. What D13 actually decides is unchanged: one truth, server-side, on this Mac, read and written through the capture server so two devices cannot disagree. D87 changed the file format behind that sentence, on an argument about transactions this entry did not have, and it cites this paragraph rather than restating it.
+
 ## D14 — Two tracks, one rig
 
 **One rig serves two tracks: singles and code cards share hardware, never schemas.**
@@ -4733,3 +4735,102 @@ D59 fixed per-**box** capping inside one join and this survived per-**run** acro
 *A lot that genuinely wants its own policy.* `Corpus.overrides` keeps a per-run `rule`/`basis`/`sub_threshold` for exactly that, and **nothing writes one today** — no screen offers it and the migration never produces one. If the field is still empty after several sittings it is speculative generality and should go, taking `_agree_policy` and its refusal with it. If it fills up, D48's per-lot argument is stronger than this entry credits and the policy belongs back in the run.
 
 **What is still NOT built.** The reconcile is per run: `cli/cmd_reconcile.py` scopes its diff to one run's `emitted_skus`, while the thing it diffs against — `store/master.py`'s `Listing` — is already per SKU across every box and run. The owner named the consequence: a full live TCGplayer export should reconcile across every emit, box and date at once, and report **both directions**, which is that command's own rule. It would be the first thing able to see the two SKUs this entry measured at `pushed: 6` against a cap of 4. Not built here.
+
+## D87 — The store of record is SQLite, and a write is one transaction
+
+**`inventory/store.sqlite` is the master store, every `Store.write()` is one transaction over every table, and a session loads only the rows it names.** Built 2026-09-01, from the owner's plan for a 100,000-card run: the pile is 100,000 raw cards, scanning is the highest-margin activity on the table — measured at $0.00105 per card in API cost against $138–921 of gross value discovered per scan-hour — and two things blocked the run, neither of them strategy. This entry is the first. **This reopens D13**, which said "server-side JSON" without ever arguing for it; D13 carries the amendment and the rest of that entry stands.
+
+### The argument is correctness first, and speed second on purpose
+
+`store/session.py` made the case against itself for a week. Its header said the five JSON files were each replaced atomically and *"the set of them is not one transaction. A kill between two `write_json` calls leaves the store internally inconsistent... The exposure is real at Ctrl-C frequency rather than theoretical"*, named the two honest fixes — *"a staged directory swapped by a single `os.replace`, or a real embedded store"* — and called choosing between them *"a decision nobody has argued"*. D53's supervisor drains in-flight requests before a restart for exactly this hole, and D63's ledger was written LAST so a torn write lost the order feed rather than the inventory — a preference among losses, which that entry says in as many words. **A transaction closes the hole; an ordering only chooses what falls into it.**
+
+The speed argument is real and is deliberately second. **Every capture re-read, re-parsed and re-serialised every card in the store, and synced the whole file to disk.** Measured on a copy of the owner's store grown synthetically, one capture's store cycle under the JSON files:
+
+| cards | read + parse | write | total |
+|---|---|---|---|
+| 1,560 (the store on 2026-09-01) | 13 ms | 57 ms | 70 ms |
+| 10,000 | 67 ms | 309 ms | 374 ms |
+| 20,000 | 167 ms | 611 ms | 770 ms |
+| 50,000 | 498 ms | 1,616 ms | 2,112 ms |
+| 100,000 | 1,203 ms | 3,234 ms | 4,366 ms |
+
+The feeder's measured cadence is 623 ms per card and the client awaits this write inside the capture loop, so past roughly 20,000 cards capture was store-limited rather than feeder-limited, and at 100,000 it was running at a seventh of the feeder's pace. Write-behind would have fixed that alone, more cheaply — at the cost of durability on data that names photographs nothing can regenerate. It was not taken, because it does nothing for the first argument.
+
+### Why SQLite, on this repo's own bar
+
+`requirements.txt` refused `requests` for *"one fewer dependency between a clean clone and a green harness"* and refused opencv twice on measurements. Against that bar, `sqlite3` is stdlib: no new dependency, O(row) writes, one transaction over everything, and a query language a person can use. JSON-per-card or JSONL-with-compaction add no dependency and close no transaction; `dbm` closes neither; LMDB is a C extension with no index a person can query; DuckDB is tens of megabytes of OLAP; Postgres is a service that must be running for `make harness` to pass. **D15 already made this argument for the catalog**: *"SQLite, not Postgres. ~20k rows, read-only after load, one machine... `sqlite3` is stdlib."* Same machine, same single writer. This applies a choice the project had already made to the place that needed it.
+
+### The shape: one payload column, a few indexed columns beside it, and a mapping that is a dict until it is asked to be a database
+
+**Every record is stored whole as JSON text in a `payload` column, exactly the dict `asdict` produces.** The record classes under `store/` gain and lose fields the way they always have — `Inventory.parse` filters on `__annotations__` and `store/db.py` never learns a field's name — so a schema migration is not what a new field costs. Beside the payload sit the INDEXED columns each `TableSpec.columns` derives from the object at write time (`box`, `idx`, `state`, `sku`, `capture_id`...), which cannot disagree with the payload because they are computed from it, and which are what a person queries:
+
+    sqlite3 inventory/store.sqlite "select key, name, state from cards where box = 3"
+
+**`Snapshot` is still the API and `inventory.cards` is still a dict to every caller.** `store/rows.py`'s `Rows` is a `MutableMapping` that is memory-backed for `Inventory()`, `Inventory.parse` and everything T7 drives directly, and bound to a `Source` inside a session — where a point lookup is one row, `where(sku=...)` is one indexed query, and `select(("box", "idx"), box=3)` returns column values with no object built. **The allocator's high-water scan, the capture-id replay, the SKU walk and the box-number allocator ask the mapping for the rows they want rather than walking every card**, and `Inventory.next_index` keeps its refusal on a record that will not coerce by asking for the rows whose `box` or `idx` column is NULL — which is exactly the set `int()` refuses, since the columns are derived by the same coercion. Iterating the whole mapping loads the whole table, which is what iterating a whole table should cost. **A flush is a diff**: every loaded object is re-dumped and compared to the shape it had when it was read, so a session that read one card and changed nothing writes nothing.
+
+Measured after, same synthetic store, one capture's `Store.write()` with `allocate_capture`:
+
+| cards | capture cycle | card objects built | whole-store read |
+|---|---|---|---|
+| 1,560 | 2.4 ms | 1 | 11 ms |
+| 10,000 | 2.7 ms | 1 | 77 ms |
+| 20,000 | 2.8 ms | 1 | 154 ms |
+| 50,000 | 2.9 ms | 1 | 420 ms |
+| 100,000 | 3.3 ms | 1 | 978 ms |
+
+At 100,000 cards the capture cycle is **~1,300 times faster** and stops growing with the store; the whole-store read (`GET /inventory`, a join, an emit) is still O(cards), which is what those operations are. **`synchronous=FULL`**, so every commit reaches the disk before the request answers — the durability the per-file `fsync` had, and the 3 ms includes it. WAL mode is what lets `Store.read()` stay lock-free: a reader sees the last commit and never a torn one, and holds nothing a writer waits on.
+
+**The flock stays, and the transaction is inside it.** `files.exclusive` guards more than the tables: callers unlink photographs, rename sidecars and upsert `codes.jsonl` inside `Store.write()` on the strength of that lock, and none of that is in a table. A crash between a file write and the commit still leaves a file the store does not describe, exactly as before — `do_delete_box`'s money rule is unchanged — and D53's drain is still a prerequisite for the watcher for that reason.
+
+**The history is the `events` table, still append-only, and it commits with the change.** `history.jsonl` was appended after the files, so a crash between the two under-reported history; a row now lands in the same transaction as the state it describes. `Store.history()` still refuses the whole log over one unreadable row, so `_sale_origin`'s degrade-to-unknown path is unchanged and T7 still holds it there.
+
+### The migration is automatic, lossless, reversible, and never a fallback
+
+**The first open of a legacy store imports it**, under the lock, through `Inventory.parse` — which is where the D10 v1→v2 card-state migration has always lived, so a v1 file crosses both in one read — and moves the six JSON files to `inventory/legacy-json/` with a `MIGRATED.json` receipt naming each file's digest and byte count. The database is built under a temporary name and renamed into place before any file moves, so a crash at any point before the rename leaves the JSON exactly where it was. **Reversing it is deleting `store.sqlite*` and moving `legacy-json/*` back up one level**, and the receipt says so. **Measured on a copy of the owner's real store**: 1,560 cards, 443 listings, 1,560 paid answers, 232 queue entries and 7,450 history events imported in 0.13 s, and every part read back through the database compares equal to `parse()` of the original file — the T7 case that pins this uses a record carrying a field no dataclass declares, which the same filter drops on both paths.
+
+Automatic rather than a command, unlike D86's `prices adopt`, because there is no decision inside it: D86's fold had eight SKUs answered two ways and three holds that lost to a price, and a person had to see that. This is a re-encoding, and the receipt is what a person sees.
+
+**A legacy file beside a live database is never read** — D86's rule for a legacy run file, applied here. `make status` reports one; nothing else notices it. The cost of this ruling is that a hand-restored `inventory.json` does nothing until the database is deleted, which is the same cost D86 accepted for the same reason: a fallback that is sometimes read is a duplication waiting to disagree.
+
+### What is enforced
+
+`harness/tests/t7_store_and_seams.py:check_store_of_record` holds the three claims: the queue table's write raising after the card table's leaves NEITHER row committed and no history row either; a capture into a 61-card store builds at most two card objects and never loads the table; and the legacy import reads back equal, moves every file, receipts the counts, and ignores a file put back beside the database. Every case in that file that used to compare a store file's bytes compares the table's rows now, and every case that seeded `history.jsonl` by hand seeds the `events` table — the argument for each is unchanged and is in the case.
+
+### What it costs, and what is deliberately not done
+
+**State stops being greppable as text.** The owner ruled `sqlite3 .dump` and a `SELECT` sufficient and that no JSON export target is wanted; `to_payload()` is still the wire shape of `GET /inventory`, so a JSON view of the inventory is one request away, and that is not a target.
+
+**`Store.history()` still returns every event.** The sale and retirement reversals read the whole log to find one position's last state, which was O(history) under the file and is O(history) now — 42 ms on the owner's store, and a position-scoped read is one indexed query away when it matters. Not built here, because nothing measured it mattering.
+
+**The whole-store read is still O(cards)**, and `GET /inventory` at 100,000 cards is ~1 s. That route is polled; the honest fix when it bites is a box-scoped read, which the `cards` table's index already supports.
+
+**What would reopen this: a second writer that is not this process.** The flock and the WAL both assume one machine and a local filesystem, which is the assumption the NAS entry under Someday already refuses to break, and SQLite over a network filesystem is the classic way to corrupt one.
+
+## D88 — A sold card's photograph is reclaimed on purpose, and the record keeps its digest
+
+**`POST /boxes/<box>/photos/reclaim` deletes the photographs of a box's sold cards, keeps every record, and writes the photograph's digest onto the record before the bytes go.** Built 2026-09-01, the second of the two things the owner's 100k plan named as blocking the run. Photographs measure ~1.8 MB each — `captures/` is 2.7 GB for ~1,560 cards — so 100,000 cards is ~176 GB, and if ~95% sell or go out as bulk and are reclaimed per batch, the retained set is ~9 GB. The owner's ruling: **records are permanent, photographs are disposable once a card is sold through.**
+
+### The operation did not exist, and it is a third shape
+
+`_unlink` ran only in the capture-undo path, which deletes the RECORD as well (D10). `sold` and `retired` both keep the photograph (D26). Record kept, photograph reclaimed is the shape between them, and it is a new one rather than a softening of either: D10's undo is a card that was never captured, D26's states are a card that left with its evidence intact, and this is a card that left and whose evidence is now the digest rather than the bytes.
+
+**Sold only, and the boundary is the store's.** A retired card's photograph is what lets the retirement be questioned later — D26 says so — and a card on hand needs its photograph for the pull preview (D6). `Inventory.record_photo_reclaimed` refuses any state but `sold` with `CardNotSold`, so a caller that bypassed the route cannot reclaim a photograph a screen still needs; the route filters to sold cards with a photograph on disk before it asks. The sidecar stays: it is the operator's claims, a few hundred bytes, and `identify.sidecar.scan` keys on the photograph, so a sidecar with none beside it is inert.
+
+### What the record keeps, and what D36 gives up
+
+**`photo_sha256` and `photo_reclaimed_at` are set together, by this operation and nothing else, and are null while the file is on disk.** While the photograph exists the file is the fact, and a copy of its digest on the record would be a second thing to keep true through D26's re-shoot. Once the bytes are gone the digest is the only trace of what was photographed. The `photo` path is kept too, so `photo: null` goes on meaning "never photographed" — `emit` records such cards — and a screen that finds `photo_reclaimed_at` set draws *reclaimed*, which is a different fact from *missing*: one is a store that gave something up on purpose, the other is a store that lost something. `BoxBrowse`'s photo panel says which, with the stamp and the digest.
+
+**D36 made the photograph the truth and `photo_sha256` the binding between a run and a slot**; a box whose sold photographs are gone can no longer be re-bound that way FOR THOSE CARDS. That is given up here deliberately, for cards that have left the box, and it costs less than it reads: `cli/resolve.py:realign` reads a reclaimed card as *departed* — the digest on the run record is on no photograph in a box whose other photographs are present — which is the truth, it sold. T7 holds that outcome. A box reclaimed whole reads as *unverified* and passes through, which is D36's existing answer for a box with nothing to check against.
+
+### It gates, and it is shaped like the release rather than the delete
+
+There is no undo — the bytes are gone and the card is not in your hand — so this sits with the whole-box delete under `docs/DESIGN.md`'s *"genuinely destructive actions may still gate"* clause. The gate is D34's preflight shape: `GET /boxes/<box>/photos` answers the free count — sold cards whose photograph is on disk, the bytes they hold, the cards already reclaimed, and the on-hand photographs a reclaim does NOT touch — and the control that fires **does not exist** until it has answered, absent rather than disabled. Both presses name the box. `confirm: true` on the wire, for the release's reason: the route's whole content is a person's decision that these photographs are disposable, and a request must say so on purpose. A second press meets `nothing_to_reclaim` rather than a silent zero.
+
+**Reachable**: `#/inventory`'s box operations, above the delete and below the release, drawn only for a box holding a sold card. The route, the client functions, the control, the receipt naming every key, and the panel's reclaimed sentence all landed together, which is `CLAUDE.md`'s route-is-not-a-feature rule observed rather than owed.
+
+### What is not built
+
+**No store-wide reclaim.** The plan's own shape is per batch — reclaim as each 5,000-card lot sells through, so the peak stays near 9 GB rather than climbing to 176 — and a box is the batch this product has. A whole-store press is one loop over `GET /boxes` away if the per-box gesture turns out to be resented, and the history of the box delete says what a resented gate becomes.
+
+**No probe of the pile.** Neither this entry nor D87 measures whether the 100,000 cards are worth scanning; the 2,000-card probe that decides it is work at the rig, and it needs none of this — at 2,000 cards the JSON store was 25 ms. This is the second half of the plan built ahead of the first, on the owner's instruction to execute the plan end to end, and it is recorded that way rather than as the probe having been done.
+

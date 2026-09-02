@@ -1,16 +1,27 @@
-"""The master store — inventory, the identification cache, and the standing queues.
+"""The master store — inventory, the identification cache, the standing queues, the order
+ledger and the history, in one SQLite file (D87).
 
 Runs are immutable inputs; this is the thing they feed. Deleting a run directory must never
 cost money or state, which is only true if the answers already paid for and the decisions
 already made live somewhere else. That somewhere is here.
 
     inventory/
-      inventory.json        MASTER. Cards at positions, boxes, per-SKU listing counts.
-      history.jsonl         Append-only event log. Never rewritten.
-      identifications.json  The cache. Answers already paid for.
-      review.json           Standing main review queue. Survives runs.
-      parked.json           Standing low-value queue. Survives runs.
-      .lock                 Exclusive lock file.
+      store.sqlite          MASTER. Cards at positions, boxes, per-SKU listing counts, the
+                            paid answers, both standing queues, the order ledger and every
+                            history event — one table each, one transaction per write.
+      store.sqlite-wal      SQLite's own write-ahead log and shared-memory index, beside
+      store.sqlite-shm      the file. They ARE the database while a server is up.
+      legacy-json/          the six files this store was migrated FROM on first open —
+                            inventory.json, identifications.json, review.json, parked.json,
+                            orders.json, history.jsonl — moved aside whole and read by
+                            nothing (D86's rule for a legacy file). MIGRATED.json beside
+                            them says what was imported and how to reverse it.
+      prices.json           the pricing corpus (D86). Still a file: it is the operator's
+                            answers rather than the store's state, and `pipeline/corpus.py`
+                            owns it.
+      codes.jsonl           the code ledger (C8). Still a file, upserted under this lock.
+      .lock                 Exclusive lock file — the WRITER's lock, held around every
+                            transaction and around the file writes a session makes beside it.
 
 TWO KINDS OF STATE, AND THEY ARE ABOUT DIFFERENT SUBJECTS. A `Card` wears one of `STATES`
 — `captured`, `identified`, `sold` — which describes one physical object at one position.
@@ -25,24 +36,33 @@ turns the old `set_state(key, PUSHED)` into a raised `UnknownState` rather than 
 per-position flag. `Inventory.parse` migrates a v1 file: a card wearing a stage becomes
 `identified` and hands that stage to its SKU as a count.
 
-NOT SQLITE. D13 settles inventory as server-side JSON. D15's SQLite is the read-only
-*catalog* index at build step 9 and is a different thing entirely — a later session that
-"upgrades" inventory to SQLite is re-litigating D13, not improving it.
+SQLITE, AS OF D87 — AND THE PARAGRAPH THIS REPLACES SAID THE OPPOSITE FOR THREE WEEKS. It
+read "NOT SQLITE. D13 settles inventory as server-side JSON ... a later session that
+'upgrades' inventory to SQLite is re-litigating D13, not improving it." D87 re-litigated it
+in the open, with the argument D13 never made: the five JSON files were each replaced
+atomically and the SET of them was not one transaction, and every capture re-read and
+rewrote every card in the store. D13's sentence — one truth, server-side, on the Mac, read
+and written through the capture server — is unchanged; what changed is the file format
+behind it. D15's SQLite for the read-only catalog is still a different thing: that one is
+an index built from a snapshot, this one is the store of record.
 
 TWO WRITERS, ONE OWNER. Step 5's capture server writes here too. It uses the same lock and
-the same atomic replace; it is a second writer, not a second owner.
+the same transaction; it is a second writer, not a second owner.
 
-READS NEED NO LOCK; WRITES DO. Every file is replaced atomically, so a reader sees the whole
-old file or the whole new one and never a torn one — that is what `os.replace` buys, and it
-is why `read()` is lock-free. What atomicity does NOT prevent is a lost update: two writers
-each reading, each modifying, each writing back means the second silently erases the first.
-So `write()` takes the exclusive lock AND re-reads from disk inside it. Re-reading is the
-half that actually matters; a lock around a stale snapshot loses the update just as quietly.
+READS NEED NO LOCK; WRITES DO. WAL mode is what buys the first half: a reader sees the store
+as of the last commit and never a torn one, and holds nothing a writer waits on. What a
+transaction does NOT prevent is a lost update: two writers each reading, each modifying,
+each writing back means the second silently erases the first. So `write()` takes the
+exclusive lock AND opens its transaction inside it, and every row a session touches is
+read inside that transaction. Re-reading is the half that actually matters; a lock around
+a stale snapshot loses the update just as quietly.
 
-`history.jsonl` is append-only and is the audit trail. D10 makes it worth keeping: positions
-are never renumbered and sold cards leave permanent gaps IN THE INDEX — D58 closes the gap
-in the LABEL and touches nothing here — so the history IS inventory truth
-over time, in a way the current-state file cannot be.
+THE HISTORY IS A TABLE NOW AND STILL APPEND-ONLY, and it is the audit trail. D10 makes it
+worth keeping: positions are never renumbered and sold cards leave permanent gaps IN THE
+INDEX — D58 closes the gap in the LABEL and touches nothing here — so the history IS
+inventory truth over time, in a way the current-state tables cannot be. Since D87 the rows
+describing a change commit in the same transaction as the change, where `history.jsonl`
+was appended after the files and could under-report a change the store had made.
 """
 
 from store.files import (  # noqa: F401
@@ -61,12 +81,14 @@ from store.master import (  # noqa: F401
     IDENTIFIED,
     LISTING_STAGES,
     LIVE,
+    PHOTO_RECLAIMED,
     PUSHED,
     SOLD,
     STAGED,
     STATES,
     Box,
     Card,
+    CardNotSold,
     Inventory,
     Listing,
 )

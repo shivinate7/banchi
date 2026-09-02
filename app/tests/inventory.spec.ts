@@ -109,6 +109,9 @@ function card(input: {
    *  every fixture in this file until 2026-08-30, which is how the ranked block's whole
    *  vocabulary shipped unasserted. */
   neighbors?: { prev: Neighbor | null; next: Neighbor | null } | null
+  /** D88: when this card's photograph was reclaimed after its sale, or null while the file is
+   *  on disk — the default, and what every case written before D88 assumed. */
+  reclaimed?: string | null
 }) {
   const box = input.box ?? 2
   const boxTotal = input.boxTotal ?? 5
@@ -190,6 +193,8 @@ function card(input: {
     ...(gone ? {} : { card: slot }),
     place,
     photo: `photos/${box}/${input.index}.jpg`,
+    photo_sha256: input.reclaimed ? 'deadbeef00112233445566778899aabbccddeeff00112233445566778899aabb' : null,
+    photo_reclaimed_at: input.reclaimed ?? null,
     set_hint: 'ME01',
     metadata_finish: input.finish === undefined ? 'normal' : input.finish,
     game: 'pokemon',
@@ -651,6 +656,40 @@ async function open(
         cache_deleted: 0,
         registry_deleted: true,
         directory_removed: true,
+      }),
+    })
+  })
+
+  /* D88's two, the free count and the reclaim, registered here for the same prefix reason as
+     D34's pair below them. The count answers two reclaimable photographs — the fixture's one
+     sold card and one more — so the panel has a number to draw before the press exists. */
+  await page.route(/\/boxes\/\d+\/photos$/, async (route) => {
+    const request = route.request()
+    record(request.method(), request.url(), null)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 2,
+        reclaimable: { cards: 2, bytes: 3_612_000, indices: [3, 7] },
+        reclaimed: { cards: 0, indices: [] },
+        on_hand_photos: 3,
+      }),
+    })
+  })
+
+  await page.route(/\/boxes\/\d+\/photos\/reclaim$/, async (route) => {
+    const request = route.request()
+    record(request.method(), request.url(), request.postDataJSON())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 2,
+        reclaimed: 2,
+        bytes: 3_612_000,
+        keys: ['2/3', '2/7'],
+        already_reclaimed: 0,
       }),
     })
   })
@@ -2239,6 +2278,97 @@ test('a box with no listing hold is offered no release at all', async ({ page })
      button one register down: a disabled control is one attribute away from pressable. This
      one is cheap to render and would be chrome on every box that has never been listed. */
   await expect(page.getByRole('button', { name: /Release the listing hold/ })).toHaveCount(0)
+})
+
+// ----------------------------------------------------------- photo reclamation (D88)
+
+test('a box that has sold nothing is offered no photo reclaim at all', async ({ page }) => {
+  await open(page, { boxes: [{ ...BOXES.boxes[0], sold: 0 }] })
+  await openBoxOps(page)
+
+  /* ABSENT, NOT DISABLED — the same rule as the release above it. There is nothing a reclaim
+     could take from a box holding no sold card, and a control saying so would be chrome on
+     every box that has never sold. */
+  await expect(page.getByRole('button', { name: /Reclaim the photographs/ })).toHaveCount(0)
+})
+
+test('the control that reclaims does not exist until the free count has answered', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+
+  /* D33's preflight-then-confirm, the third time on this panel: the count and the megabytes
+     are on screen before the button that deletes appears. Held open by never fulfilling the
+     read, which is the only way to observe the intermediate state. */
+  await page.route(/\/boxes\/\d+\/photos$/, async () => {
+    /* deliberately never fulfilled */
+  })
+  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in box 2/ }).click()
+  await expect(page.locator('.boxops-danger')).toContainText('There is no undo')
+  await expect(page.getByRole('button', { name: /permanently$/ })).toHaveCount(0)
+  expect(wire.filter((sent) => sent.path.endsWith('/photos/reclaim'))).toHaveLength(0)
+})
+
+test('the reclaim names the count and the bytes, sends confirm, and both presses name the box', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in box 2/ }).click()
+
+  const panel = page.locator('.boxops-danger')
+  /* THE NUMBER AND THE SIZE, BEFORE THE PRESS. `3_612_000` bytes is `3.6 MB`; the sentence
+     also says what stays — the on-hand photographs and every retired card's — because the
+     failure this panel guards against is an operator reading "reclaim" as "everything". */
+  await expect(panel).toContainText('2 photographs, 3.6 MB, would go')
+  await expect(panel).toContainText('the 3 photographs of cards still on hand')
+  await expect(panel).toContainText('a retired card keeps its photograph')
+
+  const read = wire.find((sent) => sent.path === '/boxes/2/photos')
+  expect(read?.method).toBe('GET')
+  expect(wire.filter((sent) => sent.path.endsWith('/photos/reclaim'))).toHaveLength(0)
+
+  const fire = page.getByRole('button', { name: 'Delete 2 photographs from box 2 permanently' })
+  await expect(fire).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible()
+  await fire.click()
+
+  const sent = wire.find((sent) => sent.path.endsWith('/photos/reclaim'))
+  expect(sent?.method).toBe('POST')
+  expect(sent?.path).toBe('/boxes/2/photos/reclaim')
+  /* The server refuses without it: the route's whole content is a person's decision that
+     these photographs are disposable, and a request must say so on purpose. */
+  expect(sent?.body).toEqual({ confirm: true })
+
+  /* The receipt names the keys, which is the only evidence left: the bytes are gone. */
+  await expect(page.locator('.boxops-receipt')).toContainText('Reclaimed 2 photographs from box 2')
+  await expect(page.locator('.boxops-receipt')).toContainText('2/3 · 2/7')
+})
+
+test('a reclaimed photograph is drawn as reclaimed, not as a photo the store lost', async ({
+  page,
+}) => {
+  /* THE SOLD CARD, because only a sold card's photograph is ever reclaimed (D88): Eiscue at
+     2/4, the same fixture row every departed-card case in this file walks to. */
+  const cards: Cards = {
+    ...CARDS,
+    '2/4': card({
+      index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1,
+      sectionEnd: 3, reclaimed: '2026-09-01T21:00:00.000+00:00',
+    }),
+  }
+  await open(page, BOXES, { ...STORE, cards })
+  /* A departed row sits under the fold, as every other case that walks to one already knows. */
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+
+  /* THREE ABSENCES, THREE SENTENCES. `photo: null` is a card never photographed; a 404 is a
+     store that lost something; this is a store that gave a photograph up on purpose after the
+     sale, and it says so with the stamp and the digest rather than calling itself broken. */
+  await expect(page.locator('.browse-absent')).toContainText('Photograph reclaimed after the sale')
+  await expect(page.locator('.browse-absent')).toContainText('sha256 deadbeef00112233')
+  await expect(page.locator('.browse-absent')).not.toContainText('did not load')
 })
 
 test('a listing hold is named on the delete panel rather than discovered by pressing it', async ({

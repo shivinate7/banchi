@@ -15,6 +15,7 @@ import type {
   GameRegistry,
   GroupAnswerResult,
   Inventory,
+  PhotoReclaimResult,
   Place,
   PlaceNeighbor,
   QueueSnapshot,
@@ -31,6 +32,7 @@ import type {
   MoveCardsResult,
   BoxDeleteResult,
   BoxListingPlan,
+  BoxPhotoPlan,
   ListingReleaseResult,
   CropPreview,
   CsvUpload,
@@ -1557,6 +1559,39 @@ export async function deleteBox(box: number): Promise<BoxDeleteResult> {
  */
 export async function getBoxListings(box: number): Promise<BoxListingPlan> {
   return (await request(`/boxes/${box}/listings`)) as BoxListingPlan
+}
+
+/**
+ * What a photo reclaim over this box would delete: the sold cards whose photograph is still
+ * on disk, and the bytes. FREE and read-only (D88).
+ *
+ * THE STEP THAT COMES FIRST, exactly as `getBoxListings` is for the release: the control that
+ * deletes is not drawn until this has answered, so the count and the megabytes are on screen
+ * before anything can be pressed. Zero reclaimable is ordinary — a box that has sold nothing,
+ * or one reclaimed already — and is not an error.
+ */
+export async function getBoxPhotos(box: number): Promise<BoxPhotoPlan> {
+  return (await request(`/boxes/${box}/photos`)) as BoxPhotoPlan
+}
+
+/**
+ * Delete the photographs of every sold card in this box. The records stay, sold, each keeping
+ * the digest of the photograph it had (D88).
+ *
+ * THERE IS NO UNDO — the bytes are gone and the card is not in your hand — so this sits with
+ * `deleteBox` under docs/DESIGN.md's "genuinely destructive actions may still gate" clause.
+ * The server refuses without `confirm: true`, and refuses `nothing_to_reclaim` when no sold
+ * card in the box still has a photograph, which is what a second press meets.
+ *
+ * THE WAY BACK IS THE BOX ROW AND THE WALK, both of which the caller re-reads: `has_photo`
+ * flips on every copy row and the card band draws "reclaimed" off `photo_reclaimed_at`.
+ */
+export async function reclaimBoxPhotos(box: number): Promise<PhotoReclaimResult> {
+  return (await request(`/boxes/${box}/photos/reclaim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as PhotoReclaimResult
 }
 
 /**

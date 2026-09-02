@@ -27,7 +27,8 @@ cli/                       argument parsing and sequencing. No rules live here.
 pipeline/                  CSV, variant ladder, pricing, join, routing, decisions
 identify/                  prompt, Batch API transport, sidecars, image prep
 geometry/                  find the card in the frame; crop-retry bands
-store/                     the master store: inventory, cache, standing queues
+store/                     the master store: inventory, cache, standing queues, the order
+                           ledger and the history — one SQLite file since D87
 server/                    capture server: /capture, /status, /photo, inventory state,
                            and the pipeline seam — the one place a route can spend money
 app/                       the web app. Vite + React + TS. Ten screens — capture, runs,
@@ -37,7 +38,8 @@ app/                       the web app. Vite + React + TS. Ten screens — captu
 harness/                   T1-T7. The Stop hook runs `make harness` at every turn end.
 
 runs/                      per-run inputs and outputs. Derived; safe to delete.
-inventory/                 the master store on disk. Real, local, never in git.
+inventory/                 the master store on disk: store.sqlite, and legacy-json/ for
+                           the JSON files it was migrated from. Real, local, never in git.
 ```
 
 ## Start

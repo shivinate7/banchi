@@ -123,6 +123,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from store.rows import Rows, TableSpec
+
 FILENAME = "orders.json"
 
 VERSION = 1
@@ -324,6 +326,40 @@ class OrderRecord:
         )
 
 
+def _parse_order(key, record) -> Optional[OrderRecord]:
+    """One order from its stored record, or None for one that will not construct.
+    `__annotations__` filtering at both levels — see `Ledger.parse`."""
+    if str(key).startswith("_") or not isinstance(record, dict):
+        return None
+    known = {k: v for k, v in record.items() if k in OrderRecord.__annotations__}
+    lines = []
+    for raw in known.get("lines") or []:
+        fields = {k: v for k, v in raw.items() if k in OrderLine.__annotations__}
+        try:
+            lines.append(OrderLine(**fields))
+        except TypeError:
+            continue
+    known["lines"] = lines
+    try:
+        return OrderRecord(**known)
+    except TypeError:
+        return None
+
+
+def _parse_fulfilment(key, per_sku) -> Optional[Dict[str, LineProgress]]:
+    """One order's per-SKU progress map, or None where nothing constructs."""
+    if str(key).startswith("_") or not isinstance(per_sku, dict):
+        return None
+    rows: Dict[str, LineProgress] = {}
+    for sku, raw in per_sku.items():
+        fields = {k: v for k, v in raw.items() if k in LineProgress.__annotations__}
+        try:
+            rows[str(sku)] = LineProgress(**fields)
+        except TypeError:
+            continue
+    return rows or None
+
+
 @dataclass
 class IngestReport:
     """What one sync did. Counts, so a caller can say it out loud without re-deriving it."""
@@ -351,10 +387,40 @@ class IngestReport:
 
 @dataclass
 class Ledger:
-    """`orders.json`. Two maps, and the split between them is the guard — see the header."""
+    """Two maps, and the split between them is the guard — see the header. `orders.json`
+    until D87; the `orders` and `fulfilment` tables of `store.sqlite` since."""
 
-    orders: Dict[str, OrderRecord] = field(default_factory=dict)
-    fulfilment: Dict[str, Dict[str, LineProgress]] = field(default_factory=dict)
+    orders: "Rows" = field(default_factory=lambda: Rows(Ledger.ORDERS))
+    fulfilment: "Rows" = field(default_factory=lambda: Rows(Ledger.FULFILMENT))
+
+    # THE TWO TABLES (D87), and the split the header argues survives the move exactly:
+    # `ingest` still cannot name `fulfilment`, because it is a different mapping bound to
+    # a different table. A fulfilment row is one order's whole per-SKU map, which is the
+    # unit `record_pull` reads and writes.
+    ORDERS = TableSpec(
+        "orders",
+        parse=lambda key, record: _parse_order(key, record),
+        dump=asdict,
+        columns=lambda record: {
+            "source": record.source,
+            "number": record.number,
+            "status": record.status,
+        },
+        column_names=("source", "number", "status"),
+    )
+    FULFILMENT = TableSpec(
+        "fulfilment",
+        parse=lambda key, record: _parse_fulfilment(key, record),
+        dump=lambda rows: {sku: asdict(row) for sku, row in sorted(rows.items())},
+        columns=lambda rows: {},
+        column_names=(),
+    )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.orders, Rows):
+            self.orders = Rows(Ledger.ORDERS, objects=dict(self.orders))
+        if not isinstance(self.fulfilment, Rows):
+            self.fulfilment = Rows(Ledger.FULFILMENT, objects=dict(self.fulfilment))
 
     # ------------------------------------------------------------------ (de)serialising
 
@@ -377,36 +443,19 @@ class Ledger:
         fulfilment: Dict[str, Dict[str, LineProgress]] = {}
 
         for key, record in (payload.get("orders") or {}).items():
-            if str(key).startswith("_"):
-                continue
-            known = {k: v for k, v in record.items() if k in OrderRecord.__annotations__}
-            lines = []
-            for raw in known.get("lines") or []:
-                fields = {k: v for k, v in raw.items() if k in OrderLine.__annotations__}
-                try:
-                    lines.append(OrderLine(**fields))
-                except TypeError:
-                    continue
-            known["lines"] = lines
-            try:
-                orders[str(key)] = OrderRecord(**known)
-            except TypeError:
-                continue
+            parsed = _parse_order(key, record)
+            if parsed is not None:
+                orders[str(key)] = parsed
 
         for key, per_sku in (payload.get("fulfilment") or {}).items():
-            if str(key).startswith("_"):
-                continue
-            rows: Dict[str, LineProgress] = {}
-            for sku, raw in (per_sku or {}).items():
-                fields = {k: v for k, v in raw.items() if k in LineProgress.__annotations__}
-                try:
-                    rows[str(sku)] = LineProgress(**fields)
-                except TypeError:
-                    continue
+            rows = _parse_fulfilment(key, per_sku)
             if rows:
                 fulfilment[str(key)] = rows
 
-        return cls(orders=orders, fulfilment=fulfilment)
+        return cls(
+            orders=Rows(cls.ORDERS, objects=orders),
+            fulfilment=Rows(cls.FULFILMENT, objects=fulfilment),
+        )
 
     def to_payload(self) -> dict:
         return {
