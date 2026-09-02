@@ -20,6 +20,10 @@ from typing import Any, Optional, Sequence
 HOME_ENV = "PKMNSCAN_HOME"
 
 INVENTORY_DIRNAME = "inventory"
+# The pricing corpus (D86). `prices` and not `pricing`, because `runs/<n>/pricing.json` is
+# the join's derived TABLE and this is the operator's ANSWER — two files a session will
+# otherwise conflate, and one of them is authoritative.
+PRICES_NAME = "prices.json"
 RUNS_DIRNAME = "runs"
 LOCK_NAME = ".lock"
 
@@ -62,6 +66,22 @@ def runs_dir() -> Path:
 
 def codes_ledger_path() -> Path:
     return inventory_dir() / CODES_LEDGER_NAME
+
+
+def prices_path() -> Path:
+    """The pricing corpus — every listing answer this operator has given, keyed by SKU (D86).
+
+    THREE FILES IN THIS REPO ARE ABOUT PRICE AND THEY ARE NOT THE SAME FILE. `runs/<n>/
+    pricing.json` is the TABLE a join wrote — what the export said about the cards in one run,
+    and it is derived, rewritten on every join, and read-only to a person. `runs/<n>/
+    decisions.json` was the per-run ANSWER file and is now an optional per-lot override.
+    This is the ANSWER, once, for every card the operator has ever priced.
+
+    UNDER `inventory/` AND THEREFORE PER CHECKOUT (D43), beside `inventory.json` and the codes
+    ledger, because it is the same kind of fact: something this operator decided about their
+    own stock, which a worktree must not inherit and must not write into the main tree.
+    """
+    return inventory_dir() / PRICES_NAME
 
 
 @contextmanager

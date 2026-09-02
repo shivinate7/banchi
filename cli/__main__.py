@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli import cmd_emit, cmd_identify, cmd_join, cmd_reconcile, cmd_scan, runs  # noqa: E402
+from cli import cmd_emit, cmd_prices, cmd_identify, cmd_join, cmd_reconcile, cmd_scan, runs  # noqa: E402
 from identify import images  # noqa: E402
 from pipeline import pricing, routing, variant  # noqa: E402
 from store import files as store_files  # noqa: E402
@@ -160,7 +160,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     # ----------------------------------------------------------------------------- emit
     emit = sub.add_parser("emit", help="write the import CSVs. Free, re-runnable.")
-    emit.add_argument("run_dir")
+    # ONE RUN OR SEVERAL (D86). `nargs="+"` rather than a `--runs` flag, because the argument
+    # has always been the run and a send of one must keep reading exactly as it did — every
+    # existing invocation, harness case and doc line is a list of one.
+    emit.add_argument("run_dir", nargs="+")
+    emit.add_argument(
+        "--listed-only",
+        action="store_true",
+        help="above-threshold rows only, so the valuable cards can be staged first",
+    )
+    emit.add_argument(
+        "--split-games",
+        action="store_true",
+        help="one file per game, if Import to Staged refuses a multi-Product-Line file",
+    )
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile
@@ -169,6 +182,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reconcile.add_argument("run_dir")
     reconcile.add_argument("staged_export", help="TCGplayer's Export From Staged download")
+
+    # -------------------------------------------------------------------------- prices
+    #
+    # THE CORPUS, AND THE ONE-TIME FOLD THAT FILLS IT (D86). `adopt` previews by default
+    # because it is a data move with a real decision inside it — 8 SKUs on this machine are
+    # answered twice and 3 of the pairs are a hold against a later price — and a migration
+    # nobody watched is how those three would have gone quiet a second time.
+    prices = sub.add_parser("prices", help="the pricing corpus: adopt the run files, or read it")
+    prices_sub = prices.add_subparsers(dest="prices_command")
+    adopt = prices_sub.add_parser("adopt", help="fold every run's decisions.json into one file")
+    adopt.add_argument("--write", action="store_true", help="actually write; previews without it")
+    adopt.add_argument(
+        "--force",
+        action="store_true",
+        help="adopt again over a corpus that already holds answers",
+    )
+    show = prices_sub.add_parser("show", help="what the corpus holds")
+    show.add_argument("--held", action="store_true", help="list every card held back")
 
     return parser
 
@@ -179,6 +210,7 @@ COMMANDS = {
     "join": cmd_join.run,
     "emit": cmd_emit.run,
     "reconcile": cmd_reconcile.run,
+    "prices": cmd_prices.run,
 }
 
 

@@ -112,7 +112,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
-from pipeline import decisions, games as game_registry, join, tcgcsv  # noqa: E402
+from pipeline import corpus, decisions, games as game_registry, join, tcgcsv  # noqa: E402
 from server import tcg_export  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
 # reaches `json`, `time`, `urllib`, `dataclasses`, `datetime`, `decimal` and `pathlib`
@@ -1570,7 +1570,7 @@ def do_pipeline_pricing(name: str) -> dict:
             f"Run {name} has no {run_files.PRICING} — `join` is what writes it, and every "
             f"run made before it predates the file. Join this run and it will appear.",
         )
-    decisions_path = directory / run_files.DECISIONS
+
     try:
         pricing = json.loads(table.read_text("utf-8"))
     except (OSError, ValueError) as exc:
@@ -1583,16 +1583,22 @@ def do_pipeline_pricing(name: str) -> dict:
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
     # `QueueEntry.label`.
     _relabel_positions(pricing)
+    # THE ANSWERS COME FROM THE CORPUS, SCOPED TO THIS RUN'S OWN SKUS (D86, amended). They
+    # used to be `runs/<n>/decisions.json`, which is why the same card carried one answer per
+    # drawer it had been photographed in. Narrowed to this run's rows so a screen drawing one
+    # run is not handed every answer the operator has ever given.
+    #
+    # AN UNREADABLE CORPUS IS NOT A REFUSAL HERE. `emit` and `join` both answer one with a
+    # sentence naming what is wrong, and that is where an operator should read it; a screen
+    # that would not draw AT ALL because its answers file is malformed is a screen that cannot
+    # show you the file.
     answers = None
-    if decisions_path.is_file():
-        try:
-            answers = json.loads(decisions_path.read_text("utf-8"))
-        except (OSError, ValueError):
-            # DELIBERATELY NOT A REFUSAL. `emit` and `join` both answer an unreadable
-            # decisions document with a sentence naming what is wrong with it, and that is
-            # where an operator should read it; a screen that would not draw AT ALL because
-            # its answers file is malformed is a screen that cannot show you the file.
-            answers = None
+    try:
+        book = corpus.Corpus.read()
+        wanted = {str(row.get("sku")) for row in pricing.get("skus") or []}
+        answers = book.scoped_to(wanted, run_name=directory.name).to_payload()
+    except Exception:  # noqa: BLE001 - see above: a bad corpus must not blank the table
+        answers = None
     return {
         "run": directory.name,
         "pricing": pricing,
@@ -1634,7 +1640,7 @@ def _run_is_open(manifest: dict, pricing: dict, answers: Optional[dict]) -> bool
     return bool(_run_owes(manifest, pricing, answers))
 
 
-def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:
+def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:  # noqa: D401
     """Why this run still has pricing work in it, in the words `emit` would refuse it with.
 
     THE PICKER DRAWS A REMAINDER RATHER THAN A TOTAL BECAUSE OF THIS FUNCTION. Every chip used
@@ -1833,6 +1839,13 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     # the worklist's. The picker has to draw runs that are NOT loaded (that is what makes it a
     # picker), and it has to say which of them are worth loading. One pass, reusing the reads
     # the chooser below needs anyway.
+    try:
+        book = corpus.Corpus.read()
+    except decisions.MalformedDecisions:
+        # A CORPUS THAT CANNOT BE PARSED MUST NOT BLANK THE SCREEN — the operator has to be
+        # able to SEE the file that is wrong. Every run then reads as owing an answer, which
+        # is the honest reading of "nobody can tell what has been answered".
+        book = corpus.Corpus()
     roster: List[dict] = []
     owed_by_run: Dict[str, List[str]] = {}
     for entry in sorted(root.iterdir()):
@@ -1847,10 +1860,18 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         try:
             if table.is_file():
                 parsed = json.loads(table.read_text("utf-8"))
-            answers_path = entry / run_files.DECISIONS
-            if answers_path.is_file():
-                answers = json.loads(answers_path.read_text("utf-8"))
-        except (OSError, ValueError):
+            # THE ANSWERS ARE THE CORPUS'S, SCOPED TO THIS RUN (D86, amended). One read for the
+            # whole roster would be cheaper and would be wrong: `_run_owes` asks what `emit`
+            # would refuse THIS run for, and that question is about this run's own rows.
+            answers = (
+                book.scoped_to(
+                    {str(row.get("sku")) for row in parsed.get("skus") or []},
+                    run_name=entry.name,
+                ).to_payload()
+                if parsed
+                else None
+            )
+        except (OSError, ValueError, decisions.MalformedDecisions):
             owed_by_run[entry.name] = ["run files cannot be read"]
             roster.append(
                 {**_summary(entry, names), "owes": owed_by_run[entry.name], "open": True}
@@ -1882,8 +1903,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             continue
         directory = _open_run(name)
         summaries.append(_summary(directory, names))
-        answers = payload.get("decisions")
-        answers_by_run[name] = answers
+        answers_by_run[name] = payload.get("decisions")
         defaults[name] = {
             "rule": payload["pricing"].get("rule"),
             "basis": payload["pricing"].get("basis"),

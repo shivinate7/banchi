@@ -24,8 +24,9 @@ import json
 from collections import Counter
 
 from cli import resolve, runs
-from pipeline import decisions, join, pricing, routing, tcgcsv
+from pipeline import corpus, decisions, join, pricing, routing, tcgcsv
 from store import master, queues
+from store import files
 from store.session import Store
 
 STALE_EXPORT_DAYS = 7
@@ -536,54 +537,67 @@ def run(args, say) -> int:
     if listed:
         say(f"listings         {listed}")
 
-    # ------------------------------------------------------------- decisions.json (merge)
-    decisions_path = run_dir.path(runs.DECISIONS)
-    if decisions_path.is_file():
-        try:
-            choice = decisions.Decisions.read(decisions_path)
-        except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
-            # A REFUSAL RATHER THAN A TRACEBACK, for the reason `cmd_emit` gives at the same
-            # seam: these three are the only ways this document can be unreadable, only one of
-            # them is a `MalformedDecisions`, and `PUT /pipeline/runs/<name>/decisions` writes
-            # it with no validation — so a screen can produce every one of them.
-            say(f"{runs.DECISIONS} is unusable: {exc}")
-            say("Fix it, or delete it and let this join write a fresh one.")
-            return 1
-        say(f"decisions        merging into existing {runs.DECISIONS} — your edits are kept")
-    else:
-        # SEEDED FROM THE RUN ON THE FIRST JOIN ONLY. `--rule` and `--basis` are how a run's
-        # pricing starts; after that the FILE is the authority and this command may not touch it.
-        choice = decisions.Decisions(rule=resolved.rule, basis=resolved.basis)
-
-    added = choice.add_unpriced(sorted(resolved.no_market_data_skus))
-    dropped = choice.prune(set(resolved.matches))
-    # `choice.rule` and `choice.basis` ARE NOT REASSIGNED HERE, AND THE TWO LINES THAT DID IT
-    # ARE THE POINT OF THIS COMMENT. They ran immediately after the sentence above promising
-    # "your edits are kept", and they overwrote exactly the two fields an operator is most
-    # likely to have edited — measured: `markup:100` on `low` went back to `match` on `market`
-    # on a plain re-join, silently, while `sub_threshold` was correctly preserved beside it.
+    # ----------------------------------------------------------- the pricing corpus (D86)
     #
-    # `join` is free and re-runnable and is re-run routinely — after a review is cleared, after
-    # an export is refreshed — so this was not an edge case, it was every second run. The
-    # manifest still records what THIS join used (`run_dir.set(rule=..., basis=...)` below), and
-    # `report.txt` prints it; a record of what happened is a different thing from the answer,
-    # and only one of them may be authoritative.
-    choice.write(decisions_path)
+    # THE ANSWER LIVES IN ONE FILE FOR THE WHOLE STORE, AND THIS COMMAND NO LONGER WRITES A
+    # PER-RUN ONE. `runs/<n>/decisions.json` held two different kinds of fact — a lot's policy
+    # and a CARD's answer — and only the first is a property of the drawer. The second is a
+    # property of the SKU, which is why the same card carried one answer per box it had ever
+    # been photographed in: 66 SKUs, 8 of them answered twice, 3 of those a hold overridden by
+    # a later price. See `pipeline/corpus.py` and D86.
+    #
+    # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ. `pkmnscan prices adopt` folds it
+    # in, once, with a report of every answer it had to choose between. Reading it here as a
+    # fallback would put the duplication back the moment somebody re-joined an old run.
+    try:
+        book = corpus.Corpus.read()
+    except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
+        say("Fix it, or delete it and let this join write a fresh one.")
+        return 1
 
-    say(f"                 {decisions_path}")
+    legacy = run_dir.path(runs.DECISIONS)
+    if legacy.is_file() and not book.answers:
+        say(f"this run has a legacy {runs.DECISIONS} and the corpus is empty")
+        say("Run `pkmnscan prices adopt` to fold every run's answers into one file first.")
+        return 1
+
+    # SEEDED, NEVER PRUNED, AND THE ASYMMETRY IS THE WHOLE POINT OF CENTRALISING. `prune` used
+    # to drop unanswered entries this run no longer matched, which is right for a file scoped
+    # to one run and catastrophic for one that is not: pruning against box 3's matches would
+    # delete box 7's answers. Nothing here can see the other boxes, so nothing here may remove.
+    added = []
+    for sku in sorted(resolved.no_market_data_skus):
+        if sku not in book.answers:
+            book.answers[sku] = corpus.Answer(value=None, channel="unknown", from_run=run_dir.name)
+            added.append(sku)
+
+    # `rule` AND `basis` ARE THE CORPUS'S AND ARE NOT REASSIGNED FROM THE RUN. D49 Part One,
+    # unchanged and pointed one level up: the manifest records what THIS join ran with and
+    # `report.txt` prints it, and a record of what happened is not the answer to what should
+    # happen. `--rule` seeds an EMPTY corpus and nothing else, because a document that cannot
+    # answer its own question is not a document.
+    if not book.answers and book.rule == "match" and book.basis == "market":
+        book.rule, book.basis = str(resolved.rule), resolved.basis
+    written = book.write()
+    choice = book.scoped_to(
+        set(resolved.matches),
+        run_name=run_dir.name,
+        unpriced=resolved.no_market_data_skus,
+    )
+
+    say(f"decisions        {written}")
     say(f"                 {choice.describe}")
+    say(f"                 {len(book.answers)} answer(s) in the corpus, {len(resolved.matches)} matched here")
     if added:
         say(f"                 +{len(added)} unpriced SKU(s) need a hand-entered answer")
-    if dropped:
-        say(f"                 -{len(dropped)} stale unanswered entr(ies) removed")
     for warning in choice.warnings:
         say(f"                 note: {warning}")
 
     # THE WATCH, AND THIS IS THE ONLY COMMAND THAT CAN FIRE IT (D49). A withhold can name a
     # market price the operator wants to be told about; `join` is free, re-runnable and
     # pointed at a REFRESHED export, so it is the only moment a price has moved and therefore
-    # the only moment a watch has anything to say. A method rather than a `warnings` entry
-    # because `warnings` is a zero-argument property and cannot see a price.
+    # the only moment a watch has anything to say.
     for crossed in choice.watches(resolved.matches):
         say(f"                 WATCH: {crossed}")
 
@@ -667,5 +681,6 @@ def run(args, say) -> int:
     path = run_dir.write_text(runs.REPORT, full_report + "\n")
     say("")
     say(f"report           {path}")
-    say(f"next: edit {decisions_path}, then pkmnscan emit {run_dir.directory}")
+    say(f"next: price on #/pricing (or edit {files.prices_path()}), then pkmnscan emit "
+        f"{run_dir.directory}")
     return 0
