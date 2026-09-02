@@ -760,11 +760,17 @@ ORDER_INGEST_LINE_FIELDS = (
     "kind",
 )
 
-# What `POST /orders/fetch` accepts: the search range and nothing else. Every other knob
-# `server/order_transport.py` takes — the page size, the ceiling — is a rate limit rather
-# than a preference, and a route that let a client raise either would put this account's
-# request budget in the hands of whatever page was open.
-ORDER_FETCH_FIELDS = ("range",)
+# What `POST /orders/fetch` accepts: the search range, the preview flag, the statuses to detail
+# and the delta flag (D91) — and NOT the page size or the ceiling. Every knob
+# `server/order_transport.py` takes beyond these is a rate limit rather than a preference, and a
+# route that let a client raise either would put this account's request budget in the hands of
+# whatever page was open. `statuses` is the operator's tick list over the strings the preview
+# returned; it is the one filter this route applies, and it is never a vocabulary of its own.
+ORDER_FETCH_FIELDS = ("range", "preview", "statuses", "skip_known")
+
+# A fetch names the statuses to detail. The preview answers a handful — the API's own words for
+# an order's state — so a list past this is a client sending something other than what it ticked.
+ORDER_FETCH_STATUS_LIMIT = 50
 
 # What `POST /orders/pull` carries in each direction. TWO TUPLES, `ANSWER_FIELDS`'
 # convention exactly: a body carrying `undo` AND an order key is a client that has confused
@@ -774,6 +780,12 @@ ORDER_PULL_FIELDS = ("source", "number", "sku", "targets", "undo")
 ORDER_PULL_UNDO_FIELDS = ("undo", "targets")
 ORDER_PULL_TARGET_FIELDS = ("box", "index", "capture_id")
 
+# What `POST /orders/fill` carries — the envelope, every line of one order in one write. ONE
+# TUPLE FOR BOTH DIRECTIONS, unlike the pull's: the undo names its lines too, because the
+# screen holds the receipt of what it sent and the ledger must agree with every line of it.
+ORDER_FILL_FIELDS = ("source", "number", "lines", "undo")
+ORDER_FILL_LINE_FIELDS = ("sku", "targets")
+
 # A paste ceiling, not a page size. Two hundred orders is far past any day's work and well
 # short of a whole exported history, which is the accident this guards: one paste of
 # everything the marketplace ever sold would take the store lock for the length of it.
@@ -782,6 +794,10 @@ ORDER_INGEST_LIMIT = 200
 # One press is one operator's armful of cards. Fifty is generous for that and refuses the
 # script that meant to send the whole box.
 ORDER_PULL_TARGET_LIMIT = 50
+
+# One envelope is one buyer's cards, across every line of the order. The same fifty, for the
+# same reason.
+ORDER_FILL_TARGET_LIMIT = 50
 
 # The feed a fetched order is recorded under. `store/orders.py:order_key` folds case to
 # compare and stores what it was given, so this is the spelling that reaches a screen.
@@ -7706,13 +7722,25 @@ def _order_optional_text(
     return text or None
 
 
-def _engine_order(record: order_store.OrderRecord) -> order_engine.Order:
+def _engine_order(
+    record: order_store.OrderRecord, ledger: order_store.Ledger
+) -> order_engine.Order:
     """`store.orders.OrderRecord` → `pipeline.orders.Order`. THE ONLY ADAPTER, and it is here.
 
     Neither package may hold it. `store/orders.py` is a document and knows nothing about an
     `Inventory`; `pipeline/orders.py` is a resolver and stores nothing — a shared carrier
     would make each import the other's vocabulary to say what it already says. The server is
     where the two meet, so the mapping is one function at that seam.
+
+    THE RESOLVER IS ASKED FOR WHAT IS STILL OWED, NOT FOR THE ORDER'S QUANTITY. Until the
+    order walk arrived this passed `line.quantity` raw, and the ledger's recorded pulls were
+    subtracted nowhere: after one of three copies was pulled the resolver still wanted three,
+    found the two unsold and reported `short` — while the ledger said two were owed — and in
+    a store with five copies it allocated three picks against a line owed two, taking a copy
+    from every other order for that SKU. `Ledger.outstanding` is the quantity that reaches the
+    engine now. A line owed nothing arrives wanting ZERO: the engine picks none and answers
+    `resolved` with the breakdown still counted, which is how the screen keeps drawing a
+    filled line's figures without a second implementation of `_Draw`.
 
     `kind` IS PASSED ONLY WHERE IT IS TRUTHY, and that is not a tidiness. The store leaves
     `kind` unvalidated and uses `None` for "the feed said nothing"; the engine's own default
@@ -7726,7 +7754,7 @@ def _engine_order(record: order_store.OrderRecord) -> order_engine.Order:
         lines.append(
             order_engine.OrderLine(
                 sku=line.sku,
-                quantity=line.quantity,
+                quantity=ledger.outstanding(record.key, line.sku),
                 name=line.name,
                 number=line.number,
                 printing=line.printing,
@@ -7741,11 +7769,39 @@ def _engine_order(record: order_store.OrderRecord) -> order_engine.Order:
     )
 
 
-def _order_progress(ledger: order_store.Ledger, record: order_store.OrderRecord) -> List[dict]:
+def _pulled_positions(inventory: master.Inventory, copies) -> List[dict]:
+    """Where each pulled copy sits RIGHT NOW: `{capture_id, box, index}`, composed per answer.
+
+    THE JOIN THE COPIES PANEL NEEDS AND NOTHING STORES (D36). The ledger holds capture ids,
+    the walk is keyed by position, and a pulled copy is sold — so it is in no pick and the
+    panel's `GET /search` rows carry no capture id to meet it on. `card_by_capture_id` is an
+    indexed lookup under D88 and is answered here, once per recorded copy; a card that is
+    gone, or a duplicate id the store refuses to guess between, answers nulls rather than
+    taking `GET /orders` down.
+    """
+    out: List[dict] = []
+    for capture_id in copies:
+        try:
+            card = inventory.card_by_capture_id(str(capture_id))
+        except master.DuplicateCaptureId:
+            card = None
+        out.append(
+            {
+                "capture_id": str(capture_id),
+                "box": card.box if card is not None else None,
+                "index": card.index if card is not None else None,
+            }
+        )
+    return out
+
+
+def _order_progress(
+    ledger: order_store.Ledger, record: order_store.OrderRecord, inventory: master.Inventory
+) -> List[dict]:
     """What WE have recorded against each line of one order. The ledger's own half.
 
     `recorded` rather than `progress`, which is the accessor that INVENTS an empty row and
-    stores it — a read that created a fulfilment entry would put a row in `orders.json`
+    stores it — a read that created a fulfilment entry would put a row in the ledger
     claiming a pull that never happened, every time a screen was drawn.
     """
     key = record.key
@@ -7764,6 +7820,7 @@ def _order_progress(ledger: order_store.Ledger, record: order_store.OrderRecord)
                 # argument.
                 "over": ledger.over(key, line.sku),
                 "copies": list(row.copies),
+                "pulled": _pulled_positions(inventory, row.copies),
                 "at": row.at,
             }
         )
@@ -7771,7 +7828,10 @@ def _order_progress(ledger: order_store.Ledger, record: order_store.OrderRecord)
 
 
 def _order_row(
-    ledger: order_store.Ledger, record: order_store.OrderRecord, is_open: bool
+    ledger: order_store.Ledger,
+    record: order_store.OrderRecord,
+    is_open: bool,
+    inventory: master.Inventory,
 ) -> dict:
     """One order as the feed said it, with our own progress beside it.
 
@@ -7781,7 +7841,7 @@ def _order_row(
     Whether an order still owes copies is a question this store owns, and
     `Ledger.unfulfilled` computes it from its own two maps.
     """
-    progress = _order_progress(ledger, record)
+    progress = _order_progress(ledger, record, inventory)
     return {
         "key": record.key,
         "source": record.source,
@@ -7842,12 +7902,17 @@ def _line_answer(
     store keys on `source:number` — a number is unique to a marketplace and not across two,
     so a screen that wanted to act on this line would have nothing to name it by.
     """
+    ordered = record.line_for(line.sku)
     return {
         "order": line.order,
         "order_key": record.key,
         "sku": line.sku,
         "reason": line.reason,
-        "wanted": line.wanted,
+        # `wanted` IS THE ORDER'S QUANTITY AND `owed` IS THE LEDGER'S. The resolver was asked
+        # for `owed` (see `_engine_order`), so its own `wanted` is that figure; the buyer's
+        # number comes off the record so the screen can draw "2 of 3" as recorded of wanted.
+        "wanted": int(ordered.quantity) if ordered is not None else line.wanted,
+        "owed": line.wanted,
         "fulfilled": line.fulfilled,
         "outstanding": line.outstanding,
         "on_hand": line.on_hand,
@@ -7899,7 +7964,7 @@ def do_orders() -> dict:
     open_keys = {record.key for record in ledger.unfulfilled()}
     open_records = [record for record in sequence if record.key in open_keys]
 
-    asked = [_engine_order(record) for record in open_records]
+    asked = [_engine_order(record, ledger) for record in open_records]
     # KEYED BY OBJECT IDENTITY rather than by order number, because `order_sequence` sorts
     # the very objects it was handed and hands them back — so identity survives the pass,
     # while a number does not identify a record: two marketplaces may spell one number, and
@@ -7943,7 +8008,10 @@ def do_orders() -> dict:
 
     return {
         "summary": ledger.summary,
-        "orders": [_order_row(ledger, record, record.key in open_keys) for record in sequence],
+        "orders": [
+            _order_row(ledger, record, record.key in open_keys, snapshot.inventory)
+            for record in sequence
+        ],
         "resolution": {
             # EVERY REASON, INCLUDING THE ZEROS — `Resolution.counts` returns all six and
             # nothing here filters them. Reporting only the reasons that fired would make
@@ -8151,8 +8219,25 @@ def do_order_ingest(payload: dict) -> dict:
     }
 
 
+def _known_orders(ledger: order_store.Ledger) -> Dict[str, str]:
+    """`{number: status}` for every TCGplayer order the ledger holds — the fetch's delta (D91).
+
+    The number is folded to compare, the way `order_key` folds it; the status is the feed's own
+    word and is NOT folded, because a fold is the first step toward the vocabulary the
+    transport refuses to hold. An order the ledger has at this exact status has already been
+    detailed once and need not be again; one whose status moved is detailed afresh, which is
+    how a shipped order's new word reaches the ledger without a full re-fetch.
+    """
+    known: Dict[str, str] = {}
+    for record in ledger.orders.values():
+        if str(record.source).strip().casefold() != ORDER_FETCH_SOURCE.casefold():
+            continue
+        known[str(record.number).strip().casefold()] = str(record.status or "").strip()
+    return known
+
+
 def do_order_fetch(payload: dict) -> dict:
-    """`POST /orders/fetch` — ask TCGplayer for this account's own orders. FREE.
+    """`POST /orders/fetch` — ask TCGplayer for this account's own orders. FREE. Two bodies.
 
     IT IS NOT THE MONEY GATE AND CARRIES NO `confirm`. The one route in this server that can
     cause a charge is still `POST /pipeline/identify`, and it is still named for it. This is
@@ -8160,12 +8245,28 @@ def do_order_fetch(payload: dict) -> dict:
     `.env` — the same account session `server/tcg_export.py` uses one host over — and it
     writes nothing: no card state, no listing count, no run directory, not even the ledger.
 
-    IT RETURNS EXACTLY WHAT `POST /orders/ingest` ACCEPTS AND NOT ONE KEY MORE. The body is
-    `{"orders": [...]}`, which is the paste path's body verbatim, so the fetched result can
-    be sent to the ingest route unaltered — which is the whole point of the shape. A count
-    or a summary added here would be a field `_reject_unknown` refuses by name at the ingest,
-    and the two routes would then need an adapter between them for no gain: the caller can
-    count the list.
+    TWO PRESSES SINCE D91, BECAUSE ONE PRESS NEVER WORKED HERE. Measured 2026-09-02 on the
+    owner's account: `LastThreeMonths` holds 370 orders against a detail cap of 100, and every
+    press of the single-body fetch answered `order_too_many` with a remedy — "ask for a
+    narrower range" — the range vocabulary cannot express. So the route takes two bodies:
+
+        {"preview": true, "range"?}
+            -> {range, total, by_status: [{status, count, known}], writes_nothing: true}
+        {"statuses": [...], "skip_known"?, "range"?}
+            -> {orders: [...], matched, skipped_known, detailed, remaining}
+
+    The preview walks the search pages — one request per 25 orders, NO detail call — and
+    counts the window by the status STRING the wire returned, verbatim; `known` beside each is
+    how many of those the ledger already holds at that status. The fetch details only the
+    statuses the operator ticked, skips what the ledger holds unchanged when `skip_known` is
+    set, details at most the transport's cap, and reports `remaining` for the next press. No
+    vocabulary is coded here: the strings on the wire are the strings on the screen, and which
+    of them mean "needs picking" is the operator's to say.
+
+    `orders` IS STILL EXACTLY WHAT `POST /orders/ingest` ACCEPTS. The client forwards that
+    array and nothing else — `ingestOrders(found.orders)` — so the counts beside it reach no
+    allowlist; they are what the paste note says about the press. A wrapper that forwarded the
+    whole answer would meet `field_not_settable` by name, which is the right refusal for it.
 
     THE PROJECTION HAPPENED UPSTREAM AND IS NOT REPEATED HERE. `server/order_transport.py`
     drops `buyerName`, `shippingAddress`, `paymentType` and the transaction breakdown where
@@ -8173,10 +8274,10 @@ def do_order_fetch(payload: dict) -> dict:
     does not arrive through this route either. What this function does is rename the four
     surviving fields into this repo's own spelling.
 
-    A REFUSAL IS THE TRANSPORT'S OWN CODE. One `except` at the one call site is the whole
-    seam, exactly as `_dispatch` does for `pipeline_routes.PipelineRefusal` — that module
-    raises its own exception type because this file imports it and the reverse import would
-    be a cycle. Every one of its twenty-one codes carries a sentence saying what to fix.
+    A REFUSAL IS THE TRANSPORT'S OWN CODE. One `except` at each of the two call sites is the
+    whole seam, exactly as `_dispatch` does for `pipeline_routes.PipelineRefusal` — that
+    module raises its own exception type because this file imports it and the reverse import
+    would be a cycle. Every one of its codes carries a sentence saying what to fix.
     """
     _reject_unknown(payload, ORDER_FETCH_FIELDS)
     asked = payload.get("range")
@@ -8189,9 +8290,58 @@ def do_order_fetch(payload: dict) -> dict:
             f"{order_transport.DEFAULT_RANGE}.",
         )
     wanted = (asked or "").strip() or order_transport.DEFAULT_RANGE
+    preview = _optional_flag(payload, "preview", "preview_invalid")
+    skip_known = _optional_flag(payload, "skip_known", "skip_known_invalid")
+    statuses = payload.get("statuses")
 
+    if preview:
+        if statuses is not None or "skip_known" in payload:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "fields_conflict",
+                "preview: true walks the summaries and details nothing; statuses and "
+                "skip_known belong to the fetch body. Send one body or the other.",
+            )
+        known = _known_orders(Store().read().ledger)
+        try:
+            found = order_transport.summaries(wanted)
+        except order_transport.FetchRefusal as exc:
+            raise BadRequest(HTTPStatus.BAD_REQUEST, exc.code, exc.message) from None
+        by_status: Dict[str, dict] = {}
+        for entry in found:
+            status = str(entry.get("status") or "").strip()
+            row = by_status.setdefault(status, {"status": status, "count": 0, "known": 0})
+            row["count"] += 1
+            if known.get(str(entry["orderNumber"]).strip().casefold()) == status:
+                row["known"] += 1
+        # LARGEST FIRST, THEN BY NAME, so the screen's first row is the window's shape and two
+        # equal counts do not swap places between presses.
+        rows = sorted(by_status.values(), key=lambda row: (-row["count"], row["status"]))
+        return {"range": wanted, "total": len(found), "by_status": rows, "writes_nothing": True}
+
+    if (
+        not isinstance(statuses, list)
+        or not statuses
+        or not all(isinstance(status, str) and status.strip() for status in statuses)
+    ):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "statuses_required",
+            "Send statuses: [...] — the strings the preview answered, ticked — or preview: "
+            "true to see them. Since D91 a fetch details only the statuses you asked for: this "
+            "account's window alone holds hundreds of orders, and one press taking all of them "
+            "is what never worked.",
+        )
+    if len(statuses) > ORDER_FETCH_STATUS_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_statuses",
+            f"{len(statuses)} statuses in one fetch; the preview answers far fewer than "
+            f"{ORDER_FETCH_STATUS_LIMIT}. Send the ones you ticked.",
+        )
+    known = _known_orders(Store().read().ledger) if skip_known else None
     try:
-        fetched = order_transport.fetch_open_orders(wanted)
+        result = order_transport.fetch_open_orders(wanted, statuses=statuses, known=known)
     except order_transport.FetchRefusal as exc:
         raise BadRequest(HTTPStatus.BAD_REQUEST, exc.code, exc.message) from None
 
@@ -8212,8 +8362,12 @@ def do_order_fetch(payload: dict) -> dict:
                     for line in order["products"]
                 ],
             }
-            for order in fetched
-        ]
+            for order in result.orders
+        ],
+        "matched": result.matched,
+        "skipped_known": result.skipped_known,
+        "detailed": result.detailed,
+        "remaining": result.remaining,
     }
 
 
@@ -8262,6 +8416,321 @@ def _pull_target(at: int, raw) -> dict:
         )
     return {"box": box, "index": index, "capture_id": capture_id.strip()}
 
+
+def _prepare_targets(
+    snapshot,
+    places: "_Places",
+    parsed: List[dict],
+    sku: str,
+    undo: bool,
+    seen: Set[str],
+) -> Tuple[List[dict], List[Tuple[str, BadRequest]]]:
+    """Phase one of a pull, shared by `/orders/pull` and `/orders/fill`: validate every
+    target and compute every PRE-WRITE place, writing nothing.
+
+    Lifted out of `do_order_pull` when the envelope route arrived, so the aim check
+    (`capture_id_mismatch`), the SKU check and the duplicate guard are ONE implementation
+    behind both doors. Refusals are COLLECTED rather than raised, because the caller decides
+    the unit that is refused whole — one line's press, or one envelope's. `seen` is the
+    caller's, so an envelope can refuse one position sent under two lines.
+    """
+    prepared: List[dict] = []
+    refused: List[Tuple[str, BadRequest]] = []
+    for target in parsed:
+        position = master.position_key(target["box"], target["index"])
+        try:
+            if position in seen:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "duplicate_target",
+                    f"{position} is in this pull twice. One physical card is pulled "
+                    f"once; a repeated position would record a second sale of it and "
+                    f"compute the wrong state to restore.",
+                )
+            seen.add(position)
+
+            card = snapshot.inventory.cards.get(position)
+            if card is None:
+                raise BadRequest(
+                    HTTPStatus.NOT_FOUND,
+                    "card_not_found",
+                    f"No card at box {target['box']}, index {target['index']}.",
+                )
+            if not card.capture_id:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "copy_not_identifiable",
+                    f"The card at {position} carries no capture_id, so this pull "
+                    f"cannot be made idempotent and is refused rather than counted "
+                    f"blind. Every record written by this server has one; this is a "
+                    f"record that predates it.",
+                )
+            if str(card.capture_id) != target["capture_id"]:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "capture_id_mismatch",
+                    f"The card at {position} is not the card the screen drew: it "
+                    f"carries capture_id {card.capture_id!r} and the request aimed at "
+                    f"{target['capture_id']!r}. A mid-box delete, a capture undo "
+                    f"releasing an index, or a re-shoot all change a slot's occupant. "
+                    f"Re-read the order screen, then aim again.",
+                )
+            if not undo and str(card.sku or "").strip() != sku:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "sku_mismatch",
+                    f"The card at {position} carries SKU "
+                    f"{str(card.sku or '') or 'nothing'}, and this pull is for {sku}. "
+                    f"A copy fills a line by carrying its SKU; nothing here recategorises "
+                    f"a card to make it fit.",
+                )
+            # COMPUTED BEFORE ANY WRITE — see `do_order_pull`'s docstring, phase one.
+            place = places.of(target["box"], target["index"])
+        except BadRequest as exc:
+            refused.append((position, exc))
+            continue
+        prepared.append(
+            {
+                "box": target["box"],
+                "index": target["index"],
+                "capture_id": str(card.capture_id),
+                "place": place,
+            }
+        )
+    return prepared, refused
+
+
+def _ledger_pull(
+    snapshot, key: str, sku: str, copies: List[str], undo: bool
+) -> Tuple[str, str, int]:
+    """Phase two's ledger half, shared by both doors: record or forget, and map the store's
+    refusals to this server's codes. Answers `(key, sku, newly)` — for an undo the key and
+    SKU are DISCOVERED from whoever holds the copies, because `/orders/pull`'s undo names no
+    line and `/orders/fill`'s undo names one it must then agree with."""
+    if undo:
+        holders = []
+        for copy in copies:
+            holder = snapshot.ledger.holder_of(copy)
+            if holder is None:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "pull_not_recorded",
+                    f"The ledger has no record of the copy {copy!r} being pulled for an "
+                    f"order, so this route did not do what is being undone. If it was "
+                    f"marked sold on #/inventory, reverse it there.",
+                )
+            holders.append(holder)
+        spanned = sorted(set(holders))
+        if len(spanned) > 1:
+            named = ", ".join(f"{held_key} SKU {held_sku}" for held_key, held_sku in spanned)
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "pull_spans_lines",
+                f"These copies are held by more than one line ({named}). One press "
+                f"pulled one line and one press reverses one; send the copies of a "
+                f"single line.",
+            )
+        found_key, found_sku = spanned[0]
+        return found_key, found_sku, int(snapshot.ledger.forget_pull(found_key, found_sku, copies))
+    try:
+        newly = snapshot.ledger.record_pull(key, sku, copies)
+    except order_store.UnknownOrder:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "order_not_ingested",
+            f"Order {key} is not in this ledger, so there is nothing to fulfil. "
+            f"Paste or fetch it first — inventing it here would put a shipment on "
+            f"record for a purchase nobody can produce.",
+        ) from None
+    except order_store.UnknownOrderLine:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "sku_not_on_order",
+            f"Order {key} has no line for SKU {sku}. The buyer did not order it, "
+            f"and fulfilment is keyed by SKU.",
+        ) from None
+    except order_store.CopyNotIdentifiable as exc:
+        raise BadRequest(HTTPStatus.CONFLICT, "copy_not_identifiable", str(exc)) from None
+    except order_store.CopyAlreadyPulled as exc:
+        raise BadRequest(HTTPStatus.CONFLICT, "copy_already_pulled", str(exc)) from None
+    except order_store.OverFulfilled as exc:
+        # NOTHING IS CLAMPED. Recording a fourth copy against an order for three is a
+        # mistake with nothing to be gained by swallowing it — you cannot ship the fourth.
+        raise BadRequest(HTTPStatus.CONFLICT, "over_fulfilled", str(exc)) from None
+    return key, sku, int(newly)
+
+
+def do_order_fill(payload: dict) -> dict:
+    """`POST /orders/fill` — the envelope: every line of one order in ONE transaction. D63.
+
+    THE UNIT OF THE WRITE IS THE ENVELOPE, AND THAT REOPENS D69 ON THE OWNER'S WORD. D69 ruled
+    "one card, one press, and there is no batch control", and `/orders/pull` still is that.
+    The owner then named the failure the per-card press produces at the drawer: moving on to
+    the next card and only afterwards wondering whether the last one was marked sold. So the
+    order walk on `#/inventory` writes NOTHING per card; this route records every copy of one
+    order — pulled and sold — on the one press that says the envelope is filled, and the walk
+    does not offer the next order until it has been pressed. The unit moved; what did not is
+    that every copy is still aimed by its own `capture_id`, still checked against the card at
+    the slot, and still undoable — the whole envelope, in one write, through this same route.
+
+    WHY NOT N CALLS TO `/orders/pull`. That route takes one SKU per call, so an envelope of
+    three lines would be three writes; a refusal on the second leaves a half-recorded envelope,
+    and the undo could not reverse it in one press because `/orders/pull`'s undo refuses
+    `pull_spans_lines`. One transaction, one refusal, one undo.
+
+    BODY-ADDRESSED, both directions, for `/orders/pull`'s reason: a number may carry a colon.
+
+        record: {source, number, lines: [{sku, targets: [{box, index, capture_id}]}]}
+        undo:   {undo: true, source, number, lines: [{sku, targets: [...]}]}
+
+    Unlike `/orders/pull`, the undo NAMES its lines — the screen holds the receipt of what it
+    sent — and the ledger's own answer (`holder_of`) must agree with every one of them, or the
+    whole undo refuses `fill_line_mismatch`.
+
+    ONE `Store.write()`, TWO PHASES, exactly `do_order_pull`'s and through the same two
+    helpers. Phase one validates every target of every line and computes every pre-write place;
+    a refusal anywhere aggregates to `fill_entry_refused` naming the line and the position, and
+    NOTHING is written. Phase two writes the ledger line by line, then sells every copy.
+    `Store.write()` commits only on a clean exit, so a raise anywhere discards all of it.
+    """
+    undo = _optional_flag(payload, "undo", "undo_invalid")
+    _reject_unknown(payload, ORDER_FILL_FIELDS)
+    source = _order_text(
+        payload,
+        "source",
+        "source_required",
+        "Send `source` — the marketplace this order came from. It is half of the key the "
+        "envelope is recorded under.",
+    )
+    number = _order_text(
+        payload,
+        "number",
+        "number_required",
+        "Send `number` — the order's own identifier at that marketplace.",
+    )
+    try:
+        key = order_store.order_key(source, number)
+    except order_store.BadOrderKey as exc:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "order_key_invalid", str(exc)) from None
+
+    raw_lines = payload.get("lines")
+    if not isinstance(raw_lines, list) or not raw_lines:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "lines_required",
+            "Send `lines` — one entry per order line, each {sku, targets: [...]}. An "
+            "envelope of nothing is refused rather than recorded as filled.",
+        )
+    parsed_lines: List[Tuple[str, List[dict]]] = []
+    total = 0
+    for line_at, raw in enumerate(raw_lines, start=1):
+        if not isinstance(raw, dict):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "line_invalid",
+                f"Line {line_at} is not an object. Send {{\"sku\": …, \"targets\": [...]}}.",
+            )
+        _reject_unknown(raw, ORDER_FILL_LINE_FIELDS)
+        sku = _order_text(
+            raw,
+            "sku",
+            "sku_required",
+            f"Line {line_at} names no `sku` — the TCGplayer Id of the line these copies "
+            f"fill. Fulfilment is keyed by SKU because that is the only line identity stable "
+            f"across two ingests.",
+        )
+        if any(sku == other for other, _ in parsed_lines):
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "duplicate_line",
+                f"SKU {sku} appears on two lines of this envelope. One order line is one "
+                f"SKU; send its targets together.",
+            )
+        targets = raw.get("targets")
+        if not isinstance(targets, list) or not targets:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "targets_required",
+                f"Line {line_at} ({sku}) names no `targets`. A line the envelope does not "
+                f"fill is left out of the body, not sent empty.",
+            )
+        total += len(targets)
+        if total > ORDER_FILL_TARGET_LIMIT:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "too_many_targets",
+                f"More than {ORDER_FILL_TARGET_LIMIT} positions in one envelope. One press is "
+                f"one envelope's cards; a longer list is a script that meant to send the box.",
+            )
+        parsed_lines.append(
+            (sku, [_pull_target(f"{line_at}.{at}", entry) for at, entry in enumerate(targets, 1)])
+        )
+
+    with Store().write() as snapshot:
+        places = _Places(snapshot.inventory)
+
+        # ---------------------------------------------------------------- phase one
+        seen: Set[str] = set()
+        prepared_lines: List[Tuple[str, List[dict]]] = []
+        refused: List[Tuple[str, BadRequest]] = []
+        for sku, parsed in parsed_lines:
+            prepared, bad = _prepare_targets(snapshot, places, parsed, sku, undo, seen)
+            refused.extend((f"line {sku} {position}", exc) for position, exc in bad)
+            prepared_lines.append((sku, prepared))
+        if refused:
+            named = "; ".join(f"{where}: {exc.code} — {exc}" for where, exc in refused)
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "fill_entry_refused",
+                f"{len(refused)} of {total} positions refused, so the whole envelope is "
+                f"refused and nothing was written — not one line of the ledger and not one "
+                f"card's state. Re-read the walk and aim again. {named}",
+            )
+
+        # ---------------------------------------------------------------- phase two
+        lines_out: List[dict] = []
+        all_prepared: List[dict] = []
+        for sku, prepared in prepared_lines:
+            copies = [entry["capture_id"] for entry in prepared]
+            found_key, found_sku, newly = _ledger_pull(snapshot, key, sku, copies, undo)
+            if (found_key, found_sku) != (key, sku):
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "fill_line_mismatch",
+                    f"The copies sent under {key} SKU {sku} are held by {found_key} SKU "
+                    f"{found_sku}. An undo reverses the line that holds the copies; send them "
+                    f"under it.",
+                )
+            lines_out.append(
+                {
+                    "sku": sku,
+                    "newly": newly,
+                    "recorded": snapshot.ledger.fulfilled(key, sku),
+                    "outstanding": snapshot.ledger.outstanding(key, sku),
+                }
+            )
+            all_prepared.extend(prepared)
+
+        # `_sell`'s refusals reach the dispatcher unchanged; a raise here discards every
+        # ledger write above with everything else — `Store.write()` commits only on a clean
+        # exit.
+        sales = [_sell(snapshot, entry["box"], entry["index"], undo) for entry in all_prepared]
+
+        record = snapshot.ledger.orders.get(key)
+        complete = record is not None and all(
+            snapshot.ledger.outstanding(key, line.sku) == 0 for line in record.lines
+        )
+        body = {
+            "undone": bool(undo),
+            "order_key": key,
+            "complete": complete,
+            "lines": lines_out,
+            # The PRE-WRITE places, one per target in request order across the lines.
+            "places": [entry["place"] for entry in all_prepared],
+            "sales": sales,
+        }
+
+    return body
 
 def do_order_pull(payload: dict) -> dict:
     """`POST /orders/pull` — record copies against an order line and mark them sold. D63.
@@ -8359,71 +8828,7 @@ def do_order_pull(payload: dict) -> dict:
         places = _Places(snapshot.inventory)
 
         # ---------------------------------------------------------------- phase one
-        prepared: List[dict] = []
-        refused: List[Tuple[str, BadRequest]] = []
-        seen: Set[str] = set()
-        for target in parsed:
-            position = master.position_key(target["box"], target["index"])
-            try:
-                if position in seen:
-                    raise BadRequest(
-                        HTTPStatus.CONFLICT,
-                        "duplicate_target",
-                        f"{position} is in this pull twice. One physical card is pulled "
-                        f"once; a repeated position would record a second sale of it and "
-                        f"compute the wrong state to restore.",
-                    )
-                seen.add(position)
-
-                card = snapshot.inventory.cards.get(position)
-                if card is None:
-                    raise BadRequest(
-                        HTTPStatus.NOT_FOUND,
-                        "card_not_found",
-                        f"No card at box {target['box']}, index {target['index']}.",
-                    )
-                if not card.capture_id:
-                    raise BadRequest(
-                        HTTPStatus.CONFLICT,
-                        "copy_not_identifiable",
-                        f"The card at {position} carries no capture_id, so this pull "
-                        f"cannot be made idempotent and is refused rather than counted "
-                        f"blind. Every record written by this server has one; this is a "
-                        f"record that predates it.",
-                    )
-                if str(card.capture_id) != target["capture_id"]:
-                    raise BadRequest(
-                        HTTPStatus.CONFLICT,
-                        "capture_id_mismatch",
-                        f"The card at {position} is not the card the screen drew: it "
-                        f"carries capture_id {card.capture_id!r} and the request aimed at "
-                        f"{target['capture_id']!r}. A mid-box delete, a capture undo "
-                        f"releasing an index, or a re-shoot all change a slot's occupant. "
-                        f"Re-read the order screen, then aim again.",
-                    )
-                if not undo and str(card.sku or "").strip() != sku:
-                    raise BadRequest(
-                        HTTPStatus.CONFLICT,
-                        "sku_mismatch",
-                        f"The card at {position} carries SKU "
-                        f"{str(card.sku or '') or 'nothing'}, and this pull is for {sku}. "
-                        f"A copy fills a line by carrying its SKU; nothing here recategorises "
-                        f"a card to make it fit.",
-                    )
-                # COMPUTED BEFORE ANY WRITE — see the docstring's phase one.
-                place = places.of(target["box"], target["index"])
-            except BadRequest as exc:
-                refused.append((position, exc))
-                continue
-            prepared.append(
-                {
-                    "box": target["box"],
-                    "index": target["index"],
-                    "capture_id": str(card.capture_id),
-                    "place": place,
-                }
-            )
-
+        prepared, refused = _prepare_targets(snapshot, places, parsed, sku, undo, set())
         if refused:
             named = "; ".join(f"{position}: {exc.code} — {exc}" for position, exc in refused)
             raise BadRequest(
@@ -8437,63 +8842,7 @@ def do_order_pull(payload: dict) -> dict:
         copies = [entry["capture_id"] for entry in prepared]
 
         # ---------------------------------------------------------------- phase two
-        if undo:
-            holders = []
-            for entry, copy in zip(prepared, copies):
-                holder = snapshot.ledger.holder_of(copy)
-                if holder is None:
-                    raise BadRequest(
-                        HTTPStatus.CONFLICT,
-                        "pull_not_recorded",
-                        f"The ledger has no record of the copy at box {entry['box']}, "
-                        f"index {entry['index']} being pulled for an order, so this route "
-                        f"did not do what is being undone. If it was marked sold on "
-                        f"#/inventory, reverse it there.",
-                    )
-                holders.append(holder)
-            spanned = sorted(set(holders))
-            if len(spanned) > 1:
-                named = ", ".join(f"{held_key} SKU {held_sku}" for held_key, held_sku in spanned)
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "pull_spans_lines",
-                    f"These copies are held by more than one line ({named}). One press "
-                    f"pulled one line and one press reverses one; send the copies of a "
-                    f"single line.",
-                )
-            key, sku = spanned[0]
-            newly = snapshot.ledger.forget_pull(key, sku, copies)
-        else:
-            try:
-                newly = snapshot.ledger.record_pull(key, sku, copies)
-            except order_store.UnknownOrder:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "order_not_ingested",
-                    f"Order {key} is not in this ledger, so there is nothing to fulfil. "
-                    f"Paste or fetch it first — inventing it here would put a shipment on "
-                    f"record for a purchase nobody can produce.",
-                ) from None
-            except order_store.UnknownOrderLine:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "sku_not_on_order",
-                    f"Order {key} has no line for SKU {sku}. The buyer did not order it, "
-                    f"and fulfilment is keyed by SKU.",
-                ) from None
-            except order_store.CopyNotIdentifiable as exc:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT, "copy_not_identifiable", str(exc)
-                ) from None
-            except order_store.CopyAlreadyPulled as exc:
-                raise BadRequest(
-                    HTTPStatus.CONFLICT, "copy_already_pulled", str(exc)
-                ) from None
-            except order_store.OverFulfilled as exc:
-                # NOTHING IS CLAMPED. Recording a fourth copy against an order for three is
-                # a mistake with nothing to be gained by swallowing it — you cannot ship
-                # the fourth.
-                raise BadRequest(HTTPStatus.CONFLICT, "over_fulfilled", str(exc)) from None
+        key, sku, newly = _ledger_pull(snapshot, key, sku, copies, undo)
 
         # `_sell`'s five refusals reach the dispatcher unchanged and unsoftened. A raise
         # here discards the ledger write above with everything else — `Store.write()`
@@ -9213,6 +9562,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
             if path == "/orders/pull":
                 return self._json(HTTPStatus.OK, do_order_pull(self._body()))
+            # THE ENVELOPE — every line of one order in one write, the order walk's one
+            # door. Exact string like its three neighbours; spends nothing.
+            if path == "/orders/fill":
+                return self._json(HTTPStatus.OK, do_order_fill(self._body()))
             # D61's Export Shipping read. Free, re-runnable, and it spends nothing — what
             # it costs is memory holding buyer addresses, which the DELETE below is the way
             # back from.

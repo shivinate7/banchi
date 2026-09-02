@@ -30,19 +30,21 @@ here (T2b), and a `T6` that collided with the harness's own.
 
 | step | state |
 |---|---|
-| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). The transport's endpoints, auth kind, body shape and four refusal codes were measured, and `search` has since run authenticated against the live host and returned three real orders. `detail` — the half that carries a buyer's name and address — has not. Section 6. |
+| 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). **The fetch is two presses since D91**: the window counted by status string, then only the ticked statuses detailed — because the one-press fetch was refused `order_too_many` on every press against this account's 370-order window and had never returned an order. The transport's endpoints, auth kind, body shape and four refusal codes were measured; `search` has run authenticated and returned three real orders, and the summary walk is proven by that refusal. `detail` — the half that carries a buyer's name and address — has not run live. Section 6. |
 | 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
 | 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
-| 11 pull | **built and reachable.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. |
+| 11 pull | **built and reachable, in BOTH its forms.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. Since 2026-09-02 the order also drives the inventory walk (T6, D90): `#/inventory?order=<key>` or `?orders=open`, and `POST /orders/fill` records the whole envelope on one press. |
 | 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship, and its three Rubber Stamp columns render empty — `POST /shipping/batches/<batch>/stamps` is specified and not built (T2b). |
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
 
-**Step 11 has a SECOND FORM, recorded 2026-08-30 and not built: T6 below.** The owner wants an
-order to drive the inventory walk rather than being pulled from a list. It is a different way of
-doing step 11 and not a fifteenth step, so it gets no row here and it takes nothing away from the
-`built` above — the pull that exists works and is reachable. T6 is where the want, its three
-determinations and its costs are written down.
+**Step 11 has a SECOND FORM, recorded 2026-08-30 and built 2026-09-02: T6 below.** The owner
+wanted an order to drive the inventory walk rather than being pulled from a list, and it does now
+— one order or every open order at once, with the write moved from the card to the envelope on his
+ruling (D90). It is a different way of doing step 11 and not a fifteenth step, so it gets no row of
+its own here, it adds no route, and it takes nothing away from the `built` above: the list pull
+still works and is still reachable. T6 is where the want, its three determinations and its costs
+are written down, and it now records which of them survived the build.
 
 **`store/orders.py` was the one piece that was wired, and it is now written to by a screen.**
 `store/session.py` carries `Ledger` in `Snapshot` and writes it last on every store write.
@@ -358,27 +360,64 @@ authors on one shipment is D34's problem twice.
 
 ### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen
 
-**Recorded 2026-08-30 on the owner's want, and NOTHING HERE IS BUILT.** An order of 3x card X and
-2x card Y should land the operator on card X inside `#/inventory`, under its own photograph; the
-third copy marked sold should advance the screen to card Y on its own. Zero attention spent on
-navigation between drawers, which is the same sentence `CLAUDE.md` opens with about capture.
+**Built 2026-09-02, and D90 carries the ruling.** The want is the owner's own and it is unchanged:
+*"as orders arrive on TCGPlayer I want them to be matched against PKMNSCAN for SKUs they may hit,
+and then I literally want to be able to have all the cards pulled either in one go across all
+orders or work order by order with basically an order fulfillment screen showing me one after the
+other without me searching for each card"*. An order of 3x card X and 2x card Y now lands the
+operator on card X inside `#/inventory`, under its own photograph, and the queue steps to card Y.
+Zero attention spent on navigation between drawers, which is the same sentence `CLAUDE.md` opens
+with about capture.
 
-**It is a second form of step 11 rather than a fifteenth step, and it is downstream of neither T4
-nor T5.** It needs the ledger, the resolver and the walk; all three are built and reachable, so
-this can be taken whenever the owner wants it. What it replaces is the *gesture*: today the pull
-is a button on a list of picks, and the operator carries the position in their head to the drawer.
+**One sentence of the recorded form did not survive, and it is THE ONE THAT MATTERED.** This
+section used to read *"the third copy marked sold should advance the screen to card Y on its
+own"* — an advance driven by a per-card sale. The owner ruled that out before it was built, and
+named the failure the per-card press produces at the drawer: *"i'd rather it be i can't move on
+from the envelope until I click a button saying the envelope is filled all items mark sold
+something like that, yanno? currently i think my biggest error point might be remembering only
+after i've already switched to pulling another card that oh did i even mark the previous card
+sold?"* **So the walk writes NOTHING per card.** Stepping the queue is navigation and nothing
+else; one press per ORDER records every copy in it; and in order mode the next order is not
+offered until that press has happened. **D90 is where the unit of the write is argued**, and it
+reopens D69's *"One card, one press, and there is no batch control."* on the owner's word while
+leaving `POST /orders/pull` exactly as D69 built it.
 
-#### Nothing in it is new machinery, and this is the useful half of the record
+**It is a second form of step 11 rather than a fifteenth step, and it was downstream of neither T4
+nor T5.** It needed the ledger, the resolver and the walk; all three were already built and
+reachable, which is why it could be taken the moment the owner asked. What it replaces is the
+*gesture*: the pull was a button on a list of picks, and the operator carried the position in
+their head to the drawer.
+
+#### Two modes, because the owner asked for both in one sentence
+
+**Order mode walks one order** — `#/inventory?order=<key>` — and its stops keep the payload's own
+order, which is `order_sequence`'s. **Wave mode walks every open order at once** —
+`#/inventory?orders=open` — and sorts every stop by `(landing.box, landing.index)`, so the pass
+through the drawers runs one direction and a drawer is opened once. Wave mode draws an envelope
+list under the banner, one row per open order with its own fill button, which is how *"all the
+cards pulled in one go"* stays one walk and still one press per envelope.
+
+**A landing is re-derived on every read rather than stored**, and that is what keeps wave mode
+inside determination 1 below. A three-copy line whose first copy was just recorded stands at its
+next copy the next time `GET /orders` is read, so the pass through the boxes is a property of the
+read rather than a list somebody built. A line the ledger still owes on with no copy `aimable` picks out —
+`no_copies_on_hand`, a pooled copy, a record carrying no capture id — is `unfillable`: counted on
+the banner, linked to `#/orders`, and never walked to, because the walk may not land on a place
+that does not exist.
+
+#### Nearly nothing in it was new machinery, and the one exception is the envelope
 
 | what | where | what it already does |
 |---|---|---|
-| the handoff | `app/src/runHandoff.ts` | scope carried between two screens through `sessionStorage`, D27's carve-out rather than a new one; validated field by field; falls through rather than guessing; not cleared by being read |
+| ~~the handoff~~ **superseded, and D49 is the precedent** | ~~`app/src/runHandoff.ts`~~ → the route's own parameter | the walk is asked for in the URL — `#/inventory?order=<key>` or `#/inventory?orders=open`, read by `app/src/orderWalk.ts:askInHash`. `sessionStorage` would stand a second source of truth, with its own clearing rules, beside a hash that already says what the screen is doing; D49 made exactly this argument for `#/pricing?run=`. It also decides the reload question this section left open |
 | the jump | `BoxBrowse`'s `goTo: {key, at}` (D45) | the walk already takes a jump request from OUTSIDE, switching box if it has to, with a counter so one target may be asked for twice |
-| its only caller today | `app/src/Inventory.tsx` `walkTo` | one line, fed by a press on a copy's position label |
-| the address | `PickRow.box`/`.index` against `SearchCopy.key` | `"<box>/<index>"` IS `store/master.py`'s position key, so the resolver's picks are ALREADY spelled in the walk's own address space and the handoff needs no adapter |
+| its callers | `app/src/Inventory.tsx` `walkTo`, and now the landing effect | `walkTo` is one line fed by a press on a copy's position label; the walk adds one more caller and no second mechanism |
+| the arrows | `BoxBrowse`'s existing window `keydown` listener, behind `arrows?: {says, onStep}` | ArrowLeft/Right already step card to card inside the box, and the copies panel already redraws for whichever card is selected. While an order drives, the same two keys step the QUEUE, consulted after the same guards in the same listener — one table, one listener. This is the owner's request verbatim: *"i want that same mechanic on the order walks too"* |
+| the address, and the sort | `PickRow.box`/`.index` against `SearchCopy.key` | `"<box>/<index>"` IS `store/master.py`'s position key, so the resolver's picks are ALREADY spelled in the walk's own address space. Wave mode's sort is those same two integers and needs no second address |
 | the pick list | `app/src/CardLocations.tsx` | every copy of a SKU, across boxes, each label a walk-to |
 | the gesture | D57 | the one-press sale, its twenty-second undo on the row AND on a receipt that outlives the row's unmount |
 | the resolution | `GET /orders` | the picks, their `held_by`, and all six reasons out of ONE store snapshot |
+| **the envelope — the exception** | `POST /orders/fill`, `server/capture_server.py` | NEW, and the only new server surface here. Every line of one order in one `Store.write()`, two phases, through `_prepare_targets` and `_ledger_pull` lifted out of `do_order_pull` so both doors share one implementation of the aim check. Determination 2 argues it |
 
 #### Three determinations, which are the whole of the design work
 
@@ -393,29 +432,63 @@ the want was stated in. **A queue of positions would stand a second pick list be
 already drawn**, which is the second-renderer failure section 4 names and this repo has recorded
 three times.
 
+**Amended 2026-09-02 by wave mode, and the amendment does not repeal it.** Wave mode orders its
+stops by `(landing.box, landing.index)`, which reads like the queue of positions this
+determination refused. It is not one, and the test is what gets DRAWN: a stop is still one line,
+its whole pick list is still the copies panel that was already on screen, and the sort chooses
+which line the walk stands on next rather than exploding a line into entries. Nothing renders a
+second list of positions, which is the failure the determination exists to prevent. `stopsOf` in
+`app/src/orderWalk.ts` is where both orderings live, and it is one function because the
+membership rule is the same in both modes.
+
 **What the copies panel is blind to, and the queue must therefore carry: `held_by`.**
 `resolve_all` is a one-pass allocation over the WHOLE open set, and the double-book guard is its
 single most important property — section 2's transcript is a second order for one SKU correctly
 getting no picks at all. `CardLocations` reads `GET /search`, which knows nothing of the ledger,
-so a copy already spoken for by another buyer looks identical to a free one there. The handoff
+so a copy already spoken for by another buyer looks identical to a free one there. The queue
 carries the resolver's `picks` and their `held_by` beside the line, and the walk marks a copy that
-is spoken for. **This is the one fact the reused panel cannot supply and the only thing the
-handoff has to add.**
+is spoken for. **This is the one fact the reused panel cannot supply and the only thing the queue
+has to add** — `marksOf` is that mapping, and it draws five claims with the highest winning:
+`pulled`, `held`, `target`, `pick`, `spoken`.
 
 **2. The sale on the walk has to be the PULL, and this is the seam the feature is really about.**
 It is already named in the tree: `do_order_pull`'s undo refuses with *"If it was marked sold on
 #/inventory, reverse it there."* `POST /inventory/<box>/<index>/sold` writes card state and **not**
 the ledger, so a card sold on the walk while an order is driving it leaves the line uncounted and
 the order open forever — the operator would ship a card the ledger still says is owed. While a
-queue is running the control posts `POST /orders/pull` with the row's own `capture_id`, which
-brings three guards the plain sale does not have: the aim check (`capture_id_mismatch` rather than
-selling whatever sits at that slot after a mid-box delete — D10 ruling 1, D58), `over_fulfilled`
-(nothing is clamped, because you cannot ship the fourth), and `copy_already_pulled`.
+queue is running the control brings three guards the plain sale does not have: the aim check
+(`capture_id_mismatch` rather than selling whatever sits at that slot after a mid-box delete —
+D10 ruling 1, D58), `over_fulfilled` (nothing is clamped, because you cannot ship the fourth), and
+`copy_already_pulled`.
 
-**The undo goes through the same door.** `undoPull` and `undoSale` reverse different writes, and a
-receipt offering the wrong one leaves the ledger holding a copy the store says is on hand. D57's
-receipt already outlives the row's unmount, which is exactly what this needs: a successful pull
-makes the resolver stop offering the copy, so the row goes.
+**Kept, and it is enforced now rather than asked for: `Mark sold` is not rendered on any row while
+an order drives.** The determination was a rule a screen could quietly break, and the screen was
+the only thing that could break it, so the mode removes the control instead of documenting it.
+`Retire` stays, because a damaged card found at the drawer is not a sale and leaves no line owed.
+
+**What changed is the ROUTE: the control posts `POST /orders/fill` — the whole envelope — and not
+`POST /orders/pull`.** The owner's ruling above is the first reason and the mechanical ones agree
+with it. `/orders/pull` takes one SKU per call, so an envelope of three lines would be three
+writes; a refusal on the second leaves a half-recorded envelope on a shelf somebody is standing
+at; and the undo could not reverse it in one press, because that route's undo refuses
+`pull_spans_lines`. **One transaction, one refusal, one undo.** Every guard named above survives
+the move intact: `_prepare_targets` and `_ledger_pull` were lifted out of `do_order_pull` so the
+aim check, the SKU check and the duplicate guard are one implementation behind both doors, phase
+one validates every target of every line before anything is written, and a refusal anywhere
+aggregates to `fill_entry_refused` naming the line and the position with nothing written.
+`ORDER_FILL_TARGET_LIMIT` caps one envelope at 50 positions. Harness T7's `check_order_fill`
+covers the route; `/orders/pull` is untouched and still reachable from `#/orders`.
+
+**The undo goes through the same door, and it names what it is reversing.** `undoPull` and
+`undoSale` reverse different writes, and a receipt offering the wrong one leaves the ledger
+holding a copy the store says is on hand. The envelope's undo is a third: it carries the lines the
+screen sent, and the ledger's own `holder_of` must agree with every one of them or the whole undo
+refuses `fill_line_mismatch` — a receipt cannot half-reverse an envelope any more than the write
+could half-record one. **It is on the receipt ALONE and deliberately not on the rows**, which is
+where it parts company with D57's doubled undo: a fill sells every copy it wrote, so a row-level
+Undo would reverse an envelope of five copies from the slot of one. D57's receipt already outlives
+the row's unmount, which is exactly what this needs — a successful fill makes the resolver stop
+offering every copy in it, so all of those rows go at once.
 
 **3. The advance reads the line's `outstanding` off the server and never counts in the client.**
 `Orders.tsx` re-reads after every write for this reason and its own header says why — a pull
@@ -423,16 +496,29 @@ changes the resolution of every OTHER line that wanted the same SKU. A client-si
 advance past a line the server refused, which is the one failure mode that ends with a buyer short
 and nothing on screen saying so.
 
+**Kept, and true twice over now, because the server half was wrong in the same direction.**
+`_engine_order` asked the resolver for the BUYER's quantity, so after one of three copies was
+pulled it still wanted three, found the two unsold and reported `short`; with five copies in the
+store it allocated three picks against a line owed two, taking copies from every other order for
+that SKU. It passes `Ledger.outstanding` now, and `pipeline/orders.py:OrderLine` accepts a
+quantity of zero — a line already filled — refusing only negatives. On the wire a resolved line
+carries `owed` beside `wanted`. The client half is the same rule one register up: the queue is
+re-derived from a fresh `GET /orders` after every write, and `cursorAfter` keeps the cursor by
+stop id rather than by any count, so a stop that vanished takes the walk to the next one that is
+still there.
+
 #### What it costs, named rather than designed away
 
 - **Every advance across boxes discards the mass-select.** A shelf change clears the ticks (D31,
   because the write the selection feeds is box-scoped), and D45 already pays this. What is new is
   that the shelf now changes on an advance the operator did not press rather than on a label they
   did, so a selection on its way to `#/runs` through D39's handoff can vanish without a gesture.
-- **`#/inventory` acquires a MODE, and it stays a mode.** D31 merged two routes away on the
-  grounds that they were modes of one, and `App.tsx`'s chord table is a ROUTE table whose own
-  comment rules out a second key space reaching modes inside a route. What this needs is a banner
-  saying which order is driving and a way out of it — not a route, not a chord.
+- ~~**`#/inventory` acquires a MODE, and it stays a mode.**~~ **Discharged as designed.** What
+  landed is a banner saying which order is driving and a way out of it — `app/src/OrderWalkBanner.tsx`,
+  one row that never wraps and never changes height (D28), ending in a quiet `Stop walking`. No
+  route and no chord: `App.tsx`'s ROUTE table is untouched, this feature adds no route, and the
+  screen count in `CLAUDE.md` and `README.md` does not move. D31's grounds for merging two routes
+  away are the grounds this stayed a mode.
 - **It is owner-side only**, which is D31's downstream rule rather than an omission.
   `app/src/PositionLabel.tsx`'s header records that the Fulfiller's screens never import it, and
   he has no walk to drive.
@@ -440,16 +526,39 @@ and nothing on screen saying so.
   is a sufficient input until somebody pastes a real order — is not discharged by this, and a
   queue makes the unproven path longer rather than shorter.
 
-**Done:** an order in the ledger is handed from `#/orders` to the walk; each line lands under its
-own photograph; each copy is pulled with the aim check and its own way back; the queue advances on
-the server's `outstanding` and stops when the order is complete. **Reachable at both ends** — the
-handoff control on `#/orders`, the banner and its exit on `#/inventory` — which is `CLAUDE.md`'s
-route-is-not-a-feature rule applied before the work starts instead of after.
+**Done, and this is what was built.** An open order is walked from `#/orders` — `Walk this order`
+per row, `Walk every open order` in the header, both plain links to the parameter. Each line lands
+under its own photograph and the arrows step the queue. Every copy is aimed by its own
+`capture_id`, and the operator may re-aim one (`Take this one instead`, any copy of the SKU in any
+box) or set it aside (`Not here`) before the press. One press per order records the whole envelope
+— pulled and sold — with its own receipt and a distinct undo label, and the next order is not
+offered until it has been pressed. **Reachable at both ends**, which is `CLAUDE.md`'s
+route-is-not-a-feature rule: the entry controls on `#/orders`, the banner and its exit on
+`#/inventory`.
 
-**What this does not decide.** Whether the queue survives a reload: `runHandoff.ts` argues that
-case one register down and the argument is stronger here, since a pull walk is minutes standing at
-a drawer rather than seconds between two screens. And nothing whatsoever about postage, which is
-D61's ruling and `#/shipping`'s answer, computed from a file this ledger has never seen.
+**`make design-check` is where the reachability half is evidenced, and it does not yet cover this
+one — that is a gap, named here rather than left to be discovered.** It is the only check in this
+repo that can see whether a human can reach a thing, which is why the STATUS table above says
+`built` on its say-so and why it is deliberately off the commit path. `app/tests/orders.spec.ts`
+and `app/tests/inventory.spec.ts` are the two specs the walk crosses and neither asserts a stop,
+an arrow step or the envelope press today, so the mode is in exactly the position the route
+rosters were before they got a reader: green, and asserted by nothing. Harness T7's
+`check_order_fill` covers the SERVER half and cannot see a screen. **A session that adds those
+assertions may strike this paragraph and not before.**
+
+**The swap is box-agnostic, on the owner's ruling of 2026-09-02.** `Take this one instead` was
+going to be fenced to the copy under the photograph and never one in another box; the owner:
+*"You're giving boxes too much independence."* D7 already says why they have none here — every
+unsold copy of a SKU is equally sellable, which is the whole reason the copies panel draws them
+across boxes at all. The chosen copy goes to the front of the stop's targets, so the LANDING
+follows it and nothing snaps back to the drawer the resolver happened to pick.
+
+**What this does not decide.** Nothing whatsoever about postage, which is D61's ruling and
+`#/shipping`'s answer, computed from a file this ledger has never seen. **The reload question IS
+decided**, and it was the open one this section left: the ask is in the URL, so a reload re-reads
+`GET /orders` and lands on the first stop still owed. What a reload does drop is this session's own
+corrections — the re-aims and the set-asides — because they are the screen's and not the store's,
+and the resolver's picks stand in again.
 
 ---
 
@@ -550,9 +659,12 @@ nothing a reader can open, and is kept only to say what was corroborated against
 check` never sees it, `docs/map.py` does not map it, the git hooks do not guard it, and nothing
 in this repo calls it or depends on it.
 
-**Postage economics, volumes and account state** — the letter rate, the insurance premium, the
-347-orders-in-90-days figure, the seller level — are all external facts carried from the planning
-session. They decided the lanes and none of them is checkable from here.
+**Postage economics and account state** — the letter rate, the insurance premium, the seller
+level — are external facts carried from the planning session. They decided the lanes and none of
+them is checkable from here. **The volume is measured now**: this paragraph carried a
+347-orders-in-90-days figure from the same session, and on 2026-09-02 the fetch itself counted
+**370 orders in `LastThreeMonths`** on the owner's account — the refusal that opened D91. It is
+the first number this repo has about the order feed's size that came off the wire.
 
 **That pasted JSON is a sufficient input for T1** is an argument, not a measurement, until
 somebody pastes one. **It is still an argument as of 2026-08-30, with T1 built and reachable**,
@@ -561,6 +673,19 @@ against a stubbed `POST /orders/ingest`, which proves the projection and proves 
 whether a real marketplace's JSON survives it. **This line may be struck only by a session
 holding a transcript of a real order pasted, walked and pulled** — the same standing the two
 paragraphs above it have.
+
+**It is STILL an argument as of 2026-09-02, with T6 built as well, and the walk shipping settles
+it no more than the screen did.** What T6 changes is that the strike now has an exact
+measurement attached to it rather than a description: **the first real envelope filled through the
+walk** — a real order in the ledger however it got there, its lines standing at real drawers,
+`POST /orders/fill` answering `complete`, and `inventory/orders.json` holding it afterwards. That
+single transcript discharges this paragraph and section 8's `A real order pulled end to end`
+bullet together, because it is the one event that exercises the ingest, the resolver, the aim
+check and the ledger in a single pass. It says nothing about `detail`, which is the transport's
+own unproven half two paragraphs up and is not reached by a paste. Until that transcript exists,
+every path below the paste box is proven against fixtures and against a store whose forty-two
+sales all went around it — section 1's re-measure, which is the reason this line has never been
+close to being struck.
 
 ---
 
@@ -600,3 +725,27 @@ already in `.env`, which is what closed the session question in section 6. What 
 bullet is **`detail` running against the live host**, still one press away rather than one build
 away, and still the half that would first put a buyer's name and address through
 `project_order` outside a fixture.
+
+~~**The intake meeting `order_too_many` on the real account**~~ — **happened, and was the first
+thing the owner said about the fetch**: 370 orders in `LastThreeMonths` against a cap of 100,
+refused on every press, with a remedy the range vocabulary could not express. D91 answers it: the
+summaries are walked whole and counted by status string, the operator ticks the statuses to
+detail, and the cap counts detail calls rather than the window. What is left of this bullet is
+the same thing the one above leaves — `detail` has still not run against the live host, and the
+first filtered fetch is when it does.
+
+**Two devices filling at once**, which is the envelope's own reopener and is unanswered by
+design rather than by oversight. The WRITE is safe and needs nothing: phase one re-validates
+every target against the store inside the same `Store.write()` that phase two writes in, D88
+makes that one transaction, and a copy the other device already took refuses
+`copy_already_pulled` or `capture_id_mismatch` — aggregated to `fill_entry_refused` with nothing
+written. **What is undecided is what the loser should then see.** The refusal is all-or-nothing
+over the whole envelope by construction, so one contested copy refuses four uncontested lines
+with it, and there is no ruling on whether the answer is a re-read and a second press or a
+partial fill somebody has to reconcile. The plain sale settled its own version of this and the
+envelope has no equivalent: `docs/specs/order-flow.md` §8.1 rules that a second device's
+`already_sold` is *"a receipt for a card leaving your list rather than an error"*. The undo has
+the same shape one step later — a fill reversed after another device has moved the same copies
+refuses `fill_line_mismatch`, correctly, and again with nothing said about what to do next.
+**Nothing reopens until two people actually pull at once**, which has not happened, in a store
+where no envelope has been filled at all.

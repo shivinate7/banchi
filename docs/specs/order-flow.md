@@ -861,4 +861,17 @@ directly.
   one press and the undo is doubled — in the copy row and on the receipt. **The rule for a THIRD
   sale path is unchanged**: bring the guards, and argue in a decision entry if one of them is
   already satisfied by the screen it would sit on.
+
+  **The third path landed 2026-09-02, and it met that rule rather than going around it.**
+  `POST /orders/fill` is how a card leaves inventory on the order walk this screen now hosts: one
+  press records a whole order's envelope, every copy pulled and sold in one write. D90 is the
+  entry, `docs/specs/order-pipeline.md`'s T6 is the build. Both guards came with it. The
+  photograph is answered exactly as D57 answers it here, by the card band beside the row, because
+  the walk stands the operator under the copy's own photograph before anything is pressed. **The
+  undo is the receipt's alone rather than the doubled pair above**, and that is the one thing the
+  envelope does differently: a fill sells every copy it wrote, so those rows draw the plain word
+  `sold`, and a row-level Undo would reverse five copies from the slot of one. What it adds that
+  neither sale path had is the aim check — every copy carries its own `capture_id`, and a slot
+  whose occupant changed under it refuses `capture_id_mismatch` instead of selling whoever sits
+  there now.
 - **D26's state is `retired`, never `removed` — §10.1 has the collision that decided it.**

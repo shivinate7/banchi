@@ -51,7 +51,10 @@ import type {
   RunSummary,
   IngestResult,
   OrderIngestOrder,
+  FillLine,
+  FillResult,
   OrdersFetched,
+  OrdersPreview,
   OrdersPayload,
   PullResult,
   PullTarget,
@@ -2260,18 +2263,91 @@ export async function ingestOrders(orders: readonly OrderIngestOrder[]): Promise
  * unaltered. That is the shape's whole purpose: no adapter between the two, and the fetch
  * enters the app through the same one door the paste does.
  *
+ * TWO PRESSES SINCE D91, BECAUSE ONE NEVER WORKED ON THIS ACCOUNT: the three-month window
+ * holds 370 orders against a detail cap of 100, and the single-body fetch was refused on every
+ * press. `previewOrders` below walks the cheap search pages and counts the window by status;
+ * this call details only the `statuses` the operator ticked — the strings the preview returned,
+ * verbatim, no vocabulary on either side — and, with `skip_known`, only the orders the ledger
+ * does not already hold at that status. Past the transport's cap the rest comes back as
+ * `remaining`, and the next press picks it up.
+ *
  * `range` is one of the transport's `KNOWN_RANGES`; omit it for its default. Refusals worth
  * branching on are the transport's own codes — `order_cookie_missing`,
  * `order_seller_key_rejected` (a 403, which reads exactly like an expired session and is
  * not one: `PKMNSCAN_TCG_SELLER_KEY` is missing), `order_session_expired` — each carrying a
  * sentence naming what to fix.
  */
-export async function fetchOrders(range?: string): Promise<OrdersFetched> {
+export async function fetchOrders(options: {
+  statuses: readonly string[]
+  skip_known?: boolean
+  range?: string
+}): Promise<OrdersFetched> {
   return (await request('/orders/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(range === undefined ? {} : { range }),
+    body: JSON.stringify({
+      statuses: [...options.statuses],
+      ...(options.skip_known === undefined ? {} : { skip_known: options.skip_known }),
+      ...(options.range === undefined ? {} : { range: options.range }),
+    }),
   })) as OrdersFetched
+}
+
+/**
+ * Count this account's orders by status before fetching any (D91). Writes nothing and details
+ * nothing: one search page per 25 orders in the window, and the status strings TCGplayer used,
+ * verbatim, each with how many of its orders the ledger already holds. The tick list
+ * `fetchOrders` takes is drawn from this and from nothing in this file.
+ */
+export async function previewOrders(range?: string): Promise<OrdersPreview> {
+  return (await request('/orders/fetch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(range === undefined ? { preview: true } : { preview: true, range }),
+  })) as OrdersPreview
+}
+
+/**
+ * Record a whole envelope — every line of one order — as pulled and sold, in ONE write.
+ *
+ * THE ORDER WALK'S ONE DOOR. `#/inventory`, driven by an order, writes nothing per card; the
+ * press that says the envelope is filled sends every line's copies here, each aimed by its
+ * own `capture_id`, and `POST /orders/fill` records all of them or none — one refusal names
+ * the line and the position (`fill_entry_refused`), and nothing moves. Not N calls to
+ * `pullCopy`: one SKU per call means a half-recorded envelope on the second refusal, and
+ * `undoPull` refuses `pull_spans_lines`. The answer carries the PRE-write `places` for the
+ * receipt (D58) and `complete`, the ledger's word on the whole order after the write.
+ */
+export async function fillEnvelope(
+  order: { source: string; number: string },
+  lines: readonly FillLine[],
+): Promise<FillResult> {
+  return (await fill({ source: order.source, number: order.number, lines: [...lines] })) as FillResult
+}
+
+/**
+ * Reverse a whole envelope in one write — the receipt's Undo. Unlike `undoPull`, this NAMES
+ * its lines: the screen holds what it sent, and the server refuses `fill_line_mismatch` if
+ * the ledger holds a copy under a different line than the one named.
+ */
+export async function undoEnvelope(
+  order: { source: string; number: string },
+  lines: readonly FillLine[],
+): Promise<FillResult> {
+  return (await fill({
+    undo: true,
+    source: order.source,
+    number: order.number,
+    lines: [...lines],
+  })) as FillResult
+}
+
+async function fill(body: Record<string, unknown>): Promise<FillResult> {
+  return (await request('/orders/fill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as FillResult
 }
 
 /* One route in both directions — `POST /orders/pull`, with `{"undo": true}` to reverse — and

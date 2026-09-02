@@ -2251,6 +2251,9 @@ export type OrderLineProgress = {
    *  underneath a legitimate pull is what makes it non-zero. */
   over: number
   copies: string[]
+  /** Where each recorded copy sits RIGHT NOW, joined at read time off its capture id and
+   *  stored nowhere (D36). Nulls where the card is gone. The copies panel's `pulled` mark. */
+  pulled: OrderPulledCopy[]
   at: string | null
 }
 
@@ -2317,6 +2320,9 @@ export type ResolvedLine = {
   sku: string
   reason: OrderLineReason
   wanted: number
+  /** What the ledger still owes on this line, and what the resolver was asked to find.
+   *  `wanted` is the buyer's number; `wanted - owed` is what has been recorded as pulled. */
+  owed: number
   fulfilled: number
   outstanding: number
   on_hand: number
@@ -2393,11 +2399,29 @@ export type IngestResult = {
   keys: string[]
 }
 
-/** What `POST /orders/fetch` answered: EXACTLY the body `POST /orders/ingest` accepts and
- *  not one key more, so the fetched result is sent on unaltered. A count or a summary added
- *  here would be a field the ingest's `_reject_unknown` refuses by name, and the two routes
- *  would then need an adapter between them for no gain — the caller can count the list. */
-export type OrdersFetched = { orders: OrderIngestOrder[] }
+/** What `POST /orders/fetch {preview: true}` answered (D91): the window counted by the status
+ *  STRING TCGplayer gave each order, verbatim — no vocabulary lives on either side of this wire —
+ *  and, beside each, how many of them the ledger already holds at that status. Nothing was
+ *  detailed and nothing was written. */
+export type OrdersPreview = {
+  range: string
+  total: number
+  by_status: { status: string; count: number; known: number }[]
+  writes_nothing: true
+}
+
+/** What `POST /orders/fetch {statuses: [...]}` answered. `orders` is EXACTLY the body
+ *  `POST /orders/ingest` accepts and is the only part sent on — `ingestOrders(found.orders)` —
+ *  so the counts beside it reach no allowlist; they are what the paste note says about the
+ *  press. `remaining` is what the transport's detail cap left for the next press (D91): seen
+ *  and counted, never dropped without a trace. */
+export type OrdersFetched = {
+  orders: OrderIngestOrder[]
+  matched: number
+  skipped_known: number
+  detailed: number
+  remaining: number
+}
 
 /** One copy coming out of a box. All three are required in both directions.
  *
@@ -2406,6 +2430,25 @@ export type OrdersFetched = { orders: OrderIngestOrder[] }
  *  `capture_id` is the aim check on the way in (a mid-box delete or a re-shoot changes which
  *  physical card sits at a slot) and the WHOLE of the lookup on the way back. */
 export type PullTarget = { box: number; index: number; capture_id: string }
+
+/** One pulled copy's current position, composed per `GET /orders` answer. */
+export type OrderPulledCopy = { capture_id: string; box: number | null; index: number | null }
+
+/** One line of an envelope: the SKU and the copies taken for it, each aimed by capture id. */
+export type FillLine = { sku: string; targets: PullTarget[] }
+
+/** What `POST /orders/fill` answered — the whole envelope in one write, both directions.
+ *  `places` are the PRE-write places, one per target across the lines in request order, for
+ *  the receipt (D58: a post-write label reads departed). `complete` is the ledger's answer
+ *  for the whole order after the write. */
+export type FillResult = {
+  undone: boolean
+  order_key: string
+  complete: boolean
+  lines: { sku: string; newly: number; recorded: number; outstanding: number }[]
+  places: Place[]
+  sales: SaleResult[]
+}
 
 /** What a pull or its undo did.
  *

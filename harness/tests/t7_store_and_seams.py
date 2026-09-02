@@ -14198,6 +14198,20 @@ def check_order_ledger(checks: Checks) -> None:
             "AND POSITION 3/3 NOW HOLDS A CARD THAT WAS NEVER PULLED — a ledger storing "
             "['3/2', '3/3'] would name o4 here and send that card to the buyer",
         )
+        drawn = answers(checks, capture_server.do_orders, "GET /orders answers after the shift")
+        if drawn is not None:
+            shifted = next(order for order in drawn["orders"] if order["key"] == key)
+            checks.equal(
+                sorted(
+                    (entry["capture_id"], entry["box"], entry["index"])
+                    for entry in shifted["progress"][0]["pulled"]
+                ),
+                [("o2", 3, 1), ("o3", 3, 2)],
+                "AND THE POSITIONS THE SCREEN DRAWS FOR THE PULLED COPIES FOLLOWED THE CARDS: "
+                "joined at read time off the capture id, so o2 reads 3/1 now and o4's slot is "
+                "named for nobody — a stored position would have pointed the copies panel at "
+                "the card that inherited the slot (D36)",
+            )
         recorded = moved.ledger.recorded(key, "9191486")
         checks.equal(
             sorted(recorded.copies),
@@ -14746,10 +14760,10 @@ def check_order_screen(checks: Checks) -> None:
             )
             checks.equal(
                 sorted(by_number["OLD"]),
-                ["fulfilled", "line", "on_hand", "order", "order_key", "outstanding",
+                ["fulfilled", "line", "on_hand", "order", "order_key", "outstanding", "owed",
                  "picks", "pooled", "reason", "retired", "sku", "sold", "wanted"],
                 "and a LINE is the reason, the breakdown behind it and the copies it found "
-                "— thirteen keys, no lane and no stamp among them",
+                "— fourteen keys, no lane and no stamp among them",
             )
 
             inventory = Store().read().inventory
@@ -14872,6 +14886,31 @@ def check_order_screen(checks: Checks) -> None:
                 "POSITION. The two differ, and the response carries the FIRST: a sale moves "
                 "the box's occupancy (D58), so a receipt composed afterwards would name "
                 "where the box has closed up to rather than the slot the card came out of",
+            )
+
+        after_screen = answers(
+            checks, capture_server.do_orders, "GET /orders after the pull answers"
+        )
+        if after_screen is not None:
+            row = after_screen["resolution"]["orders"][0]["lines"][0]
+            checks.equal(
+                (
+                    row["wanted"], row["owed"], row["fulfilled"], row["outstanding"],
+                    row["reason"], sorted(pick["index"] for pick in row["picks"]),
+                ),
+                (3, 2, 2, 0, "resolved", [2, 3]),
+                "THE RESOLVER IS ASKED FOR WHAT IS STILL OWED. One of three is recorded, so "
+                "the line wants two more, finds two and is `resolved` — not `short` with a "
+                "third pick the buyer is not owed. `wanted` stays the order's quantity and "
+                "`owed` is the ledger's; before this the resolver was handed the raw quantity "
+                "and over-allocated against every other order for the SKU",
+            )
+            checks.equal(
+                after_screen["orders"][0]["progress"][0]["pulled"],
+                [{"capture_id": "p1", "box": 3, "index": 1}],
+                "AND THE PULLED COPY'S POSITION IS JOINED AT READ TIME off its capture id — "
+                "composed for this answer and stored nowhere (D36) — so the copies panel can "
+                "mark the slot a pulled card came out of",
             )
 
         refusal(
@@ -16606,6 +16645,556 @@ def check_shipping_routes(checks: Checks) -> None:
                 os.environ[name] = value
 
 
+def check_order_fetch_route(checks: Checks) -> None:
+    """`POST /orders/fetch` in both of its bodies (D91), against canned pages and no socket.
+
+    THE FIRST ROUTE-LEVEL COVERAGE THIS ROUTE HAS HAD. `check_shipping_routes`' T3 block proves
+    the transport's pieces — the projection, the body builder, the refusal codes — and nothing
+    proved that `do_order_fetch` maps the transport's dict into the body `do_order_ingest`
+    accepts; that contract lived in two docstrings. It is asserted here by feeding one route's
+    answer to the other. And the reason the route has two bodies is asserted as a measurement:
+    a window larger than the cap is walked whole and refused nowhere, because the cap counts
+    DETAIL calls (D91) — until it did, the owner's 370-order window had never returned an order.
+
+    NO SOCKET. `urllib.request.build_opener` answers canned pages, the seam the T3 block uses,
+    because this suite runs on the Stop hook and a case that reached a third party would put a
+    stranger's uptime on the path that decides whether work is done. The cookie is this block's
+    own fixture, read through `envfile.get_live` off a temp file, for `check_export_fetch`'s
+    reason: an earlier `load()` over a real `.env` would otherwise hand the stub the operator's
+    session.
+    """
+    checks.note("")
+    checks.note("ORDER FETCH — POST /orders/fetch, two bodies, no socket (D91)")
+
+    cookie = "TCGAuthTicket_Production=t7-fetch-not-a-session; other=1"
+    dotenv = Path(tempfile.gettempdir()) / "t7-order-fetch.env"
+    dotenv.write_text(
+        f"TCGPLAYER_STORE_COOKIE={cookie}\nPKMNSCAN_TCG_SELLER_KEY=a2ffc195\n",
+        encoding="utf-8",
+    )
+    env_keys = ("PKMNSCAN_TCG_ORDERS_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY")
+    previous = {name: os.environ.get(name) for name in env_keys}
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = dotenv
+    envfile._from_file.clear()
+    envfile._loaded = False
+
+    # SIXTY ORDERS IN THREE STATUSES: three search pages of 25, and more than any cap this
+    # block will set. The strings are the API's own spelling as seen on the owner's account.
+    statuses = ["Shipped"] * 40 + ["Ready to Ship"] * 15 + ["Cancelled"] * 5
+    window = [
+        {
+            "orderNumber": f"A2FFC195-{at:06X}-{at % 7:05d}",
+            "orderDate": f"2026-08-{(at % 28) + 1:02d}",
+            "orderStatus": status,
+            "buyerName": "Buyer Placeholder",
+        }
+        for at, status in enumerate(statuses, start=1)
+    ]
+    detailed: list = []
+
+    class _Reply:
+        """What `_open` reads off an opener: a status, headers, and a body."""
+
+        def __init__(self, payload) -> None:
+            self.status = 200
+            self.headers = {"Content-Type": "application/json"}
+            self._body = json.dumps(payload).encode("utf-8")
+
+        def read(self, size=-1):  # noqa: ARG002 — the opener's signature
+            return self._body
+
+    class _Canned:
+        """An opener answering search pages and details out of `window`, recording each."""
+
+        def __init__(self) -> None:
+            self.requests: list = []
+
+        def open(self, request, data=None, timeout=None):  # noqa: A003, ARG002
+            self.requests.append(request)
+            url = request.full_url
+            if "/orders/search" in url:
+                body = json.loads(request.data.decode("utf-8"))
+                frm, size = int(body["from"]), int(body["size"])
+                return _Reply({"totalOrders": len(window), "orders": window[frm : frm + size]})
+            asked = url.rsplit("/", 1)[1].split("?")[0]
+            match = next(entry for entry in window if entry["orderNumber"] == asked)
+            detailed.append(asked)
+            return _Reply(
+                {
+                    "orderNumber": asked,
+                    "createdAt": match["orderDate"],
+                    "status": match["orderStatus"],
+                    "buyerName": "Buyer Placeholder",
+                    "shippingAddress": {"line1": "101 Example St", "city": "Springfield"},
+                    "paymentType": "Visa",
+                    "products": [
+                        {"skuId": 9191486, "quantity": 2, "name": "Moonfall", "unitPrice": 11.88}
+                    ],
+                }
+            )
+
+    canned = _Canned()
+    real_opener = urllib.request.build_opener
+    try:
+        for name in ("TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY"):
+            os.environ.pop(name, None)
+        os.environ["PKMNSCAN_TCG_ORDERS_URL"] = "http://127.0.0.1:1"
+        checks.equal(
+            envfile.get_live("TCGPLAYER_STORE_COOKIE"),
+            cookie,
+            "the reader answers this block's own fixture cookie and not the operator's",
+        )
+        urllib.request.build_opener = lambda *args, **kwargs: canned
+
+        with isolated_home():
+            # ---- 1. the preview: the pages walked whole, nothing detailed, nothing written
+            preview = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True}),
+                "the preview body answers",
+            )
+            if preview is not None:
+                checks.equal(
+                    sorted(preview),
+                    ["by_status", "range", "total", "writes_nothing"],
+                    "the preview's key set, whole",
+                )
+                checks.equal(
+                    preview["total"],
+                    60,
+                    "A WINDOW LARGER THAN THE CAP IS WALKED WHOLE AND REFUSED NOWHERE. The cap "
+                    "counts detail calls and not orders in the window (D91) — until it did, the "
+                    "owner's 370-order window answered `order_too_many` on every press and this "
+                    "route had never handed the ledger an order",
+                )
+                checks.equal(
+                    preview["by_status"],
+                    [
+                        {"status": "Shipped", "count": 40, "known": 0},
+                        {"status": "Ready to Ship", "count": 15, "known": 0},
+                        {"status": "Cancelled", "count": 5, "known": 0},
+                    ],
+                    "counted by the STRING the wire returned, largest first — no status "
+                    "vocabulary lives on this side of the wire, and which of these means "
+                    "'needs picking' is the operator's tick",
+                )
+                checks.equal(
+                    [request.get_method() for request in canned.requests],
+                    ["POST", "POST", "POST"],
+                    "three search pages of 25 and NOT ONE detail request",
+                )
+                checks.equal(detailed, [], "no order was detailed by a preview")
+                checks.ok(
+                    cookie not in json.dumps(preview) and "Buyer" not in json.dumps(preview),
+                    "and neither the credential nor a buyer is in the answer",
+                )
+            checks.equal(
+                capture_server.do_orders()["orders"],
+                [],
+                "the preview WROTE NOTHING — the ledger is still empty",
+            )
+
+            # ---- 2. the fetch: only the ticked status, ingest-shaped, accepted verbatim
+            del canned.requests[:]
+            fetched = answers(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"statuses": ["Ready to Ship"], "skip_known": True}
+                ),
+                "the fetch body answers",
+            )
+            if fetched is not None:
+                checks.equal(
+                    sorted(fetched),
+                    ["detailed", "matched", "orders", "remaining", "skipped_known"],
+                    "the fetch's key set, whole: the ingest body and the four counts",
+                )
+                checks.equal(
+                    (
+                        fetched["matched"],
+                        fetched["skipped_known"],
+                        fetched["detailed"],
+                        fetched["remaining"],
+                    ),
+                    (15, 0, 15, 0),
+                    "fifteen matched the ticked status; all fifteen detailed, none skipped, "
+                    "none left over",
+                )
+                checks.equal(
+                    len(detailed),
+                    15,
+                    "EXACTLY the ticked orders were detailed — the forty shipped and the five "
+                    "cancelled cost no request, which is the whole saving",
+                )
+                checks.equal(
+                    sorted(fetched["orders"][0]),
+                    ["lines", "number", "placed_at", "source", "status"],
+                    "each order is the ingest's shape, key set whole",
+                )
+                checks.equal(
+                    fetched["orders"][0]["lines"],
+                    [{"sku": "9191486", "quantity": 2, "name": "Moonfall", "unit_price": "11.88"}],
+                    "and each line is the ingest's spelling, the SKU coerced to a string",
+                )
+                ingested = answers(
+                    checks,
+                    lambda: capture_server.do_order_ingest({"orders": fetched["orders"]}),
+                    "AND THE INGEST ACCEPTS THE FETCH'S ANSWER VERBATIM — the contract both "
+                    "routes' docstrings state, asserted by feeding one to the other",
+                )
+                if ingested is not None:
+                    checks.equal(
+                        (ingested["added"], ingested["total"]),
+                        (15, 15),
+                        "fifteen orders landed in the ledger",
+                    )
+
+            # ---- 3. the delta: known at this status is skipped; a moved status is detailed again
+            del canned.requests[:]
+            del detailed[:]
+            again = answers(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"statuses": ["Ready to Ship"], "skip_known": True}
+                ),
+                "the second press answers",
+            )
+            if again is not None:
+                checks.equal(
+                    (
+                        again["matched"],
+                        again["skipped_known"],
+                        again["detailed"],
+                        again["remaining"],
+                        again["orders"],
+                    ),
+                    (15, 15, 0, 0, []),
+                    "THE LEDGER IS THE DELTA: all fifteen are held at this status, so the second "
+                    "press details nothing and pays three search pages",
+                )
+                checks.equal(len(canned.requests), 3, "three requests, all search pages")
+            preview_after = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True}),
+                "the preview after an ingest answers",
+            )
+            if preview_after is not None:
+                row = next(
+                    entry for entry in preview_after["by_status"]
+                    if entry["status"] == "Ready to Ship"
+                )
+                checks.equal(
+                    row["known"],
+                    15,
+                    "and the preview's `known` is the same compare the delta makes — what it "
+                    "says the ledger holds is exactly what the fetch will skip",
+                )
+            moved = window[40]
+            moved["orderStatus"] = "Shipped"
+            del detailed[:]
+            third = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": ["Shipped"], "skip_known": True}),
+                "a fetch of the shipped status answers",
+            )
+            if third is not None:
+                checks.equal(
+                    third["detailed"],
+                    41,
+                    "AN ORDER WHOSE STATUS MOVED IS DETAILED AGAIN, beside the forty never "
+                    "fetched — how a shipped order's new word reaches the ledger without a "
+                    "full re-fetch",
+                )
+                checks.ok(
+                    moved["orderNumber"] in detailed,
+                    "the moved order is among the detailed",
+                    f"detailed {len(detailed)}",
+                )
+            moved["orderStatus"] = "Ready to Ship"
+
+            # ---- 4. the cap counts detail calls, and the leftover is counted rather than dropped
+            del detailed[:]
+            capped = order_transport.fetch_open_orders(
+                "LastThreeMonths", statuses=["Shipped"], limit=10
+            )
+            checks.equal(
+                (capped.total, capped.matched, capped.detailed, capped.remaining),
+                (60, 40, 10, 30),
+                "A LIMIT OF TEN OVER FORTY MATCHES DETAILS TEN AND REPORTS THIRTY REMAINING. The "
+                "window of sixty is not refused; the drop is loud and finite, and the next press "
+                "picks the thirty up because the ledger will then know these ten",
+            )
+            checks.equal(len(detailed), 10, "ten detail requests and no more")
+
+            # ---- 5. the refusals
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({}),
+                "statuses_required",
+                "a body naming no status is refused rather than detailing the window — the "
+                "one-press fetch is the thing that never worked",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": []}),
+                "statuses_required",
+                "an empty tick list is the same refusal",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True, "statuses": ["Shipped"]}),
+                "fields_conflict",
+                "the two bodies do not mix",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": ["Shipped"], "page_size": 100}),
+                "field_not_settable",
+                "THE PAGE SIZE AND THE CAP ARE STILL NOT THE CLIENT'S — `_reject_unknown` "
+                "refuses by name, so no page can raise this account's request budget",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": "yes"}),
+                "preview_invalid",
+                "a stringified flag is refused rather than read as true",
+            )
+    finally:
+        urllib.request.build_opener = real_opener
+        envfile.ENV_FILE, restore_from_file, envfile._loaded = env_before
+        envfile._from_file.clear()
+        envfile._from_file.update(restore_from_file)
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        dotenv.unlink(missing_ok=True)
+
+
+def check_order_fill(checks: Checks) -> None:
+    """`POST /orders/fill` — the envelope: every line of one order in one transaction, and its
+    undo. The order walk's one write.
+
+    The owner's failure at the drawer was moving on to the next card and only then wondering
+    whether the last one was marked sold. So the walk writes nothing per card, and this route
+    records the whole envelope on one press — every copy still aimed by its own `capture_id`
+    (D36), the whole thing refused if one target is wrong, the whole thing reversible in one
+    press. D29's validate-all-then-write-all at envelope scale, through the same two phases
+    `/orders/pull` uses, lifted into `_prepare_targets` and `_ledger_pull` so the aim check is
+    one implementation behind both doors.
+    """
+    checks.note("")
+    checks.note("ORDER FILL — POST /orders/fill, the envelope in one transaction")
+
+    def target(box: int, index: int, capture_id: str) -> dict:
+        return {"box": box, "index": index, "capture_id": capture_id}
+
+    def stock(box: int, count: int, sku: str, prefix: str) -> None:
+        for at in range(1, count + 1):
+            capture_server.do_capture(
+                {
+                    "box": box,
+                    "capture_id": f"{prefix}{at}",
+                    "image": base64.b64encode(
+                        b"\xff\xd8\xff" + bytes([at]) * 64
+                    ).decode("ascii"),
+                }
+            )
+        with Store().write() as snapshot:
+            for at in range(1, count + 1):
+                snapshot.inventory.record_identification(
+                    f"{box}/{at}", name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"{box}/{at}"].sku = sku
+
+    with isolated_home():
+        stock(3, 3, "9191486", prefix="a")
+        stock(4, 2, "9199579", prefix="b")
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9191486").set(master.LIVE, 3)
+        capture_server.do_order_ingest(
+            {
+                "orders": [
+                    {
+                        "source": "TCGplayer",
+                        "number": "E-1",
+                        "placed_at": "2026-09-01T10:00:00.000+00:00",
+                        "lines": [
+                            {"sku": "9191486", "quantity": 2, "name": "Moonfall"},
+                            {"sku": "9199579", "quantity": 1, "name": "Brutalizer"},
+                        ],
+                    }
+                ]
+            }
+        )
+        key = order_store.order_key("TCGplayer", "E-1")
+        envelope = {
+            "source": "TCGplayer",
+            "number": "E-1",
+            "lines": [
+                {"sku": "9191486", "targets": [target(3, 1, "a1"), target(3, 2, "a2")]},
+                {"sku": "9199579", "targets": [target(4, 1, "b1")]},
+            ],
+        }
+
+        # ---- 1. one refused target refuses the whole envelope, and line one is not written
+        wrong = json.loads(json.dumps(envelope))
+        wrong["lines"][1]["targets"][0]["capture_id"] = "not-the-card-on-screen"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(wrong),
+            "fill_entry_refused",
+            "ONE REFUSED TARGET REFUSES THE WHOLE ENVELOPE — a mis-aimed copy on line two "
+            "is answered as one refusal naming the line and the position",
+        )
+        snapshot = Store().read()
+        checks.equal(
+            (
+                snapshot.ledger.recorded(key, "9191486").fulfilled,
+                snapshot.inventory.cards["3/1"].state,
+                snapshot.inventory.cards["3/2"].state,
+            ),
+            (0, master.IDENTIFIED, master.IDENTIFIED),
+            "and line one's two good targets were NOT written — the envelope is one "
+            "transaction, so a half-recorded envelope cannot exist",
+        )
+
+        # ---- 2. the fill
+        filled = answers(
+            checks, lambda: capture_server.do_order_fill(envelope), "the envelope fills"
+        )
+        if filled is not None:
+            checks.equal(
+                sorted(filled),
+                ["complete", "lines", "order_key", "places", "sales", "undone"],
+                "the answer's key set, whole",
+            )
+            checks.equal(
+                (
+                    filled["complete"],
+                    filled["undone"],
+                    [(row["sku"], row["newly"], row["recorded"], row["outstanding"])
+                     for row in filled["lines"]],
+                ),
+                (True, False, [("9191486", 2, 2, 0), ("9199579", 1, 1, 0)]),
+                "three copies over two lines recorded on ONE press, and the order is complete",
+            )
+            checks.equal(
+                [place["label"] for place in filled["places"]],
+                ["Box 3 · Section 1 · Card 1", "Box 3 · Section 1 · Card 2",
+                 "Box 4 · Section 1 · Card 1"],
+                "the PRE-WRITE places, one per target in request order across the lines — "
+                "where the operator just was, for the receipt (D58)",
+            )
+            snapshot = Store().read()
+            checks.equal(
+                [snapshot.inventory.cards[k].state for k in ("3/1", "3/2", "4/1")],
+                [master.SOLD, master.SOLD, master.SOLD],
+                "every copy is sold, in the same write as the ledger rows",
+            )
+            checks.equal(
+                snapshot.inventory.listings["9191486"].live,
+                1,
+                "and the SKU's `live` fell by the two copies that left",
+            )
+            checks.equal(
+                snapshot.ledger.unfulfilled(), [], "the order owes nothing — `unfulfilled` is empty"
+            )
+            checks.equal(
+                capture_server._Places(snapshot.inventory).of(3, 1)["label"],
+                join.departed_label(3, 1),
+                "a `_Places` built after the write reads the slot as departed — the answer "
+                "carried the label from before",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(envelope),
+            "already_sold",
+            "pressing the envelope again refuses — the ledger dedups the capture ids and "
+            "`_sell` will not sell one card twice",
+        )
+        checks.equal(
+            Store().read().ledger.recorded(key, "9191486").fulfilled,
+            2,
+            "and the refusal cost the line nothing",
+        )
+
+        # ---- 3. the undo reverses the whole envelope in one press
+        undone = answers(
+            checks,
+            lambda: capture_server.do_order_fill({"undo": True, **envelope}),
+            "the undo reverses the whole envelope",
+        )
+        if undone is not None:
+            checks.equal(
+                (
+                    undone["undone"],
+                    undone["complete"],
+                    [(row["sku"], row["newly"], row["recorded"], row["outstanding"])
+                     for row in undone["lines"]],
+                ),
+                (True, False, [("9191486", 2, 0, 2), ("9199579", 1, 0, 1)]),
+                "every line forgotten and every copy owed again, in one write",
+            )
+            snapshot = Store().read()
+            checks.equal(
+                [snapshot.inventory.cards[k].state for k in ("3/1", "3/2", "4/1")],
+                [master.IDENTIFIED, master.IDENTIFIED, master.IDENTIFIED],
+                "every copy is back on hand",
+            )
+            checks.equal(
+                snapshot.inventory.listings["9191486"].live, 3, "and `live` is back to three"
+            )
+
+        # ---- 4. an undo under the wrong line
+        answers(checks, lambda: capture_server.do_order_fill(envelope), "filled again")
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(
+                {
+                    "undo": True, "source": "TCGplayer", "number": "E-1",
+                    "lines": [{"sku": "9199579", "targets": [target(3, 1, "a1")]}],
+                }
+            ),
+            "fill_line_mismatch",
+            "AN UNDO NAMES ITS LINES AND THE LEDGER MUST AGREE — a copy sent under the wrong "
+            "SKU is refused rather than forgotten off the line that holds it",
+        )
+        checks.equal(
+            Store().read().inventory.cards["3/1"].state,
+            master.SOLD,
+            "and the copy stayed sold",
+        )
+
+        # ---- 5. the door
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(
+                {"source": "TCGplayer", "number": "E-1", "lines": []}
+            ),
+            "lines_required",
+            "an envelope of nothing is refused",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill({**envelope, "sku": "9191486"}),
+            "field_not_settable",
+            "a field from the per-line route is refused by name",
+        )
+        doubled = json.loads(json.dumps(envelope))
+        doubled["lines"][1]["sku"] = "9191486"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(doubled),
+            "duplicate_line",
+            "one SKU on two lines of an envelope is refused",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -16659,6 +17248,8 @@ def run() -> Result:
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_screen(checks)
+    check_order_fetch_route(checks)
+    check_order_fill(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
     check_price_history(checks)

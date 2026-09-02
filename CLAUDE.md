@@ -325,9 +325,33 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   the one place the client reads either — `Box 3 · RB Epics`, and `Box 3` ALONE where the box
   has no name, because a name is optional and a placeholder would draw a fault where there is
   none.
+- **AN ORDER WALK WRITES AT THE ENVELOPE, NEVER AT THE CARD, AND NEVER THROUGH THE PLAIN SALE**
+  (D90). `#/inventory?order=<key>` and `#/inventory?orders=open` put the box walk under an
+  order's control: it lands on the first copy that order needs, the arrows step the queue
+  instead of the box, and the copies panel follows the focus as it always has. **Nothing is
+  recorded per card.** One press — `POST /orders/fill`, `fillEnvelope` in
+  `app/src/server.ts` — records every copy of one order as pulled and sold in ONE
+  transaction, and in order mode the next order is not offered until it lands. The way back
+  is `undoEnvelope`, which names the lines it is reversing and refuses `fill_line_mismatch`
+  if the ledger disagrees; a refusal anywhere aggregates to `fill_entry_refused` and nothing
+  is written.
+
+  **`Mark sold` is HIDDEN on every row while an order drives, and that is the seam the whole
+  feature turns on.** `POST /inventory/<box>/<index>/sold` writes card state and **not** the
+  ledger, so a card sold that way while an order is driving leaves its line owed forever and
+  the operator ships a card the ledger still wants. `Retire` stays — it is a claim about a
+  card and belongs to nobody's order. **A copy is taken by walking to it**: any unsold copy of
+  the line's SKU in ANY box may be swapped in with `Take this one instead` (D7 — every unsold
+  copy is sellable), and the stop then follows the copy taken rather than snapping back to the
+  drawer the resolver picked. **What the swap costs if you skip it**: lift a different copy out of
+  the drawer without pressing it and the envelope records the slot the walk was standing on — the
+  right SKU at the wrong address, and nothing can tell.
+
 - **The app has ten screens and ten routes** — nine the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
-  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — D39 added
+  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — a THIRD mode
+  joined them on 2026-09-02, the order walk (D90), which is a driver over that same one
+  screen and adds no route — D39 added
   `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
   the review queue, D49 added `#/pricing` on 2026-08-30, which is where a listing price is
   set by hand, and D69 added `#/orders` and `#/shipping` on 2026-08-30 — the order screen,
@@ -639,6 +663,8 @@ D86  The pricing answer is one file for the store, and the worklist spans runs
 D87  The reconcile is store-wide, and what it writes is `live`
 D88  The store of record is SQLite, and a write is one transaction
 D89  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
+D90  The envelope is the unit of the write, and an order drives the walk as a mode of the inventory screen
+D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
@@ -662,10 +688,14 @@ D89  A sold card's photograph is reclaimed on purpose, and the record keeps its 
   NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. **Its T6 — an order DRIVING the inventory walk, so the screen advances
-  from card to card as each copy is pulled — is RECORDED and NEITHER, on the owner's want of
-  2026-08-30.** It is a second form of step 11 rather than a fifteenth step; §3 carries the
-  three determinations, of which the one that bites is that the walk's control has to post the
-  pull and not the sale. Not `docs/specs/order-flow.md`, the sell path.
+  from card to card as each copy is pulled — is BUILT as of 2026-09-02 (D90), and the UNIT OF
+  THE WRITE is the envelope rather than the card.** One press per order records every copy in
+  it as pulled and sold; the walk itself writes nothing per card, and in order mode the next
+  order is not offered until that press has landed. It is a second form of step 11 rather than
+  a fifteenth step and gets no build-order row; §3 carries the three determinations, of which
+  the one that bites is that the walk's control has to post the pull and not the sale. Its own
+  open question — whether the queue survives a reload — is answered by the route parameter.
+  Not `docs/specs/order-flow.md`, the sell path.
 - `docs/specs/code-cards.md` — the code-card track end to end: the QR decode (BUILT, and
   measured at 140/140 physically-possible frames with zero mis-reads), the ledger (BUILT),
   the product claim that retires C2's OCR (BUILT), and the channel decision (RECORDED, and
