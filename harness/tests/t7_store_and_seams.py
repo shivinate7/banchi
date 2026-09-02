@@ -12331,7 +12331,8 @@ def check_export_fetch(checks: Checks) -> None:
 
     WHAT IS PROVABLE HERE AND WHAT IS NOT, said plainly so a green run is not misread.
     Provable: that a session redirected to a login page never becomes a parsed CSV, that a WAF
-    403 has its own name, that a narrower export refuses before it can mislist, that a refusal
+    403 has its own name, that a re-fetch of identical bytes lands on the file the run already
+    holds, that a refusal
     keeps nothing, that the cookie reaches the socket and reaches no file, and that a fetched
     file is the one `join` then actually joins against. NOT provable: whether TCGplayer's WAF
     accepts this client when the request carries a real session. That is one live fetch by the
@@ -12343,8 +12344,8 @@ def check_export_fetch(checks: Checks) -> None:
     # THE FAKE PORTAL. It serves whatever `stub["mode"]` currently says, which is how one
     # socket covers a good download, an expired session in BOTH of its shapes, a WAF block and
     # an export that has quietly narrowed. Real fixture rows throughout — `write_export`
-    # builds them out of the committed SV09 file — because the guard counts SKUs and condition
-    # rows per number, and invented rows would be testing the fixture.
+    # builds them out of the committed SV09 file — because the receipt counts rows and SKUs,
+    # and invented rows would be testing the fixture.
     stub = {
         "mode": "csv",
         "body": b"",
@@ -12523,84 +12524,6 @@ def check_export_fetch(checks: Checks) -> None:
                         payload=payload or {},
                     )
 
-                # ------------------------------ THE GUARD'S OWN ARITHMETIC, ON BUILT ROWS
-                #
-                # `_coverage` DIRECTLY RATHER THAN THROUGH THE ROUTE, because what these
-                # three cases separate is invisible from the outside: all three REFUSE, and
-                # what differs is whether the refusal claims a FINISH was lost. Both
-                # defects they pin shipped in the first build and both were found by
-                # measuring against the owner's real exports rather than against a fixture.
-                nm = tcgcsv.read_export(FIXTURE_EXPORT).by_sku()
-                fc = pipeline_routes._finish_conditions(["pokemon"])
-
-                def built(rows, name):
-                    path = home / name
-                    tcgcsv.write_csv(path, tcgcsv.read_export(FIXTURE_EXPORT).header, rows)
-                    return tcgcsv.read_export(path)
-
-                plain, reverse = dict(nm[DUNSPARCE_SKU]), dict(nm[DUNSPARCE_REVERSE_SKU])
-                played = dict(plain)
-                played[tcgcsv.CONDITION_COLUMN] = "Lightly Played"
-                played[tcgcsv.SKU_COLUMN] = "9000001"
-                renamed = dict(reverse)
-                renamed[tcgcsv.NAME_COLUMN] = plain[tcgcsv.NAME_COLUMN] + " (Reverse)"
-
-                # 1. A PLAY CONDITION IS NOT A FINISH. D12 scopes this product to Near Mint
-                #    and the committed fixtures are Near-Mint-only, so filtering to Near
-                #    Mint is the operator doing the right thing. The first build counted
-                #    every condition string and called it thinning: measured on the owner's
-                #    box-3 export, all 153 of its numbers read as thinned against the wide
-                #    riftbound file and NOT ONE had lost a finish.
-                only_played_went = pipeline_routes._coverage(
-                    built([plain, reverse], "cov-fetch-1.csv"),
-                    built([plain, reverse, played], "cov-base-1.csv"),
-                    fc,
-                )
-                checks.equal(
-                    only_played_went["thinned"],
-                    [],
-                    "losing a PLAY CONDITION is not losing a finish — the refusal may still "
-                    "fire on the row that went, but it may not claim a reverse holo is "
-                    "about to list at the normal row's price when the finishes are intact",
-                )
-                checks.equal(
-                    only_played_went["lost_skus"],
-                    ["9000001"],
-                    "and the row that went is still reported, because it did go",
-                )
-
-                # 2. A FINISH GOING IS THE THING THIS EXISTS FOR.
-                finish_went = pipeline_routes._coverage(
-                    built([plain], "cov-fetch-2.csv"),
-                    built([plain, reverse], "cov-base-2.csv"),
-                    fc,
-                )
-                checks.equal(
-                    len(finish_went["thinned"]),
-                    1,
-                    "a number that had Near Mint AND Near Mint Reverse Holofoil and now has "
-                    "one is D3 rung 2's input, and it is exactly what the operator cannot "
-                    "see from anywhere else",
-                )
-
-                # 3. THE KEY MIRRORS THE LOOKUP, AND `Product Name` IN IT LOSES REAL CASES.
-                #    Finish variants usually share a name — 143 of sv09's 144 multi-row
-                #    numbers do, which is why the third leg looked free. Keyed (set, number)
-                #    the wide riftbound export has 550 numbers stocked in more than one
-                #    finish; keyed with the name it has 522. This is one of the 28.
-                differently_named = pipeline_routes._coverage(
-                    built([plain], "cov-fetch-3.csv"),
-                    built([plain, renamed], "cov-base-3.csv"),
-                    fc,
-                )
-                checks.equal(
-                    len(differently_named["thinned"]),
-                    1,
-                    "a finish listed under a DIFFERENT product name is still that number's "
-                    "finish — a key carrying the product name calls them two products and "
-                    "reports no thinning at all",
-                )
-
                 # ------------------------------------------------ the transport refusals
                 for mode, expected, label in (
                     (
@@ -12647,11 +12570,11 @@ def check_export_fetch(checks: Checks) -> None:
                 status, raw, _ = fetch()
                 body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, body.get("ok"), body.get("verified")),
-                    (200, True, ["pokemon"]),
+                    (status, body.get("ok"), body.get("previous")),
+                    (200, True, {"pokemon": {"file": "export.csv", "rows": 3, "skus": 3}}),
                     "the ordinary case: the export downloads, `exports_for` rules on it "
-                    "before anything is joined, and it comes back VERIFIED — this run had a "
-                    "previous export to check against and this one lost nothing",
+                    "before anything is joined, and the receipt carries what the last join "
+                    "used — per game, its file, rows and SKUs — and refuses nothing on it",
                 )
                 checks.equal(
                     (body.get("skus"), body.get("games")),
@@ -12714,6 +12637,30 @@ def check_export_fetch(checks: Checks) -> None:
                     "used would report success and change nothing",
                 )
 
+                # ------------------------------------------- IDENTICAL BYTES, ONE FILE
+                #
+                # The name put a one-second stamp BEFORE the digest, so no two fetches a
+                # second apart ever composed the same name and a re-fetch of identical bytes
+                # always added a copy — run `2026-08-31-box3-01` holds two byte-identical
+                # 366 KB exports 29 seconds apart, while the comment above the name claimed
+                # the opposite. The digest is looked up first now, and a hit IS the file.
+                status, raw, _ = fetch()
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("ok"), fetched_files(), body.get("file")),
+                    (200, True, kept, kept[0]),
+                    "a re-fetch of identical bytes lands on the file the run already holds "
+                    "— still one file, and the receipt names it — rather than adding a "
+                    "second copy under a later stamp",
+                )
+                checks.equal(
+                    (body.get("previous") or {}).get("pokemon", {}).get("file"),
+                    kept[0],
+                    "and `previous` names that same file, because it is what the last join "
+                    "used: the receipt says so rather than refusing over a comparison of a "
+                    "file with itself",
+                )
+
                 # --------------------------------------------------- naming a file by hand
                 for wanted, expected_status, expected, label in (
                     (
@@ -12757,17 +12704,15 @@ def check_export_fetch(checks: Checks) -> None:
                         (status, error_code(raw)), (expected_status, expected), label
                     )
 
-                # ------------------------------------------------------ THE NARROWING GUARD
+                # ------------------------------------------- A NARROWER FILE IS REPORTED
                 #
-                # The measured hazard, and the reason this route has a guard at all.
-                # Completeness against the CATALOG cannot be read off a file: the Pricing tab
-                # narrows by set, by printing, by condition and by whether a listing carries a
-                # photo, the axes are independent, and the last of them leaves no trace at all
-                # (`Photo URL` is empty in every export this project has ever read, filtered
-                # and unfiltered alike). What CAN be checked is this run's own previous
-                # export. The case below is the QUIET failure rather than the loud one:
-                # Dunsparce has a Near Mint row and a Near Mint Reverse Holofoil row, and a
-                # file carrying only the first turns it into a number the CATALOG decides.
+                # D64's delta guard refused this file: Dunsparce has a Near Mint row and a
+                # Near Mint Reverse Holofoil row, and a file carrying only the first turns it
+                # into a number the CATALOG decides (D3 rung 2). Retired 2026-09-02 (D64,
+                # amended): D65 names the scope, so the positive check is the whole guard,
+                # and the delta refused every run's FIRST fetch by construction. What the
+                # receipt keeps is the comparison — the last joined export's rows beside this
+                # one's — so the narrowing is visible without a refusal in the way.
                 source = tcgcsv.read_export(FIXTURE_EXPORT)
                 by_sku = source.by_sku()
                 thinner = home / "thinner.csv"
@@ -12776,68 +12721,46 @@ def check_export_fetch(checks: Checks) -> None:
                 )
                 stub["body"] = thinner.read_bytes()
                 status, raw, _ = fetch()
+                body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, error_code(raw)),
-                    (409, "export_narrower"),
-                    "an export that lost a printing REFUSES against the file this run was "
-                    "last joined against — and it refuses at the fetch, where the fault is "
-                    "attributable, rather than at the join where it would read as a pricing "
-                    "result",
-                )
-                message = str(
-                    (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
-                )
-                checks.ok(
-                    "rung 2" in message and DUNSPARCE_REVERSE_SKU in message,
-                    "and the refusal says which SKU went AND what losing it costs: a number "
-                    "left with one condition row is decided by that row, so a reverse holo "
-                    "with no finish claim would resolve to the normal row and list at its "
-                    "price, silently",
-                    message[:400],
+                    (status, body.get("ok")),
+                    (200, True),
+                    "an export narrower than the one this run was last joined against is "
+                    "KEPT — nothing refuses on the comparison any more, because the scope "
+                    "was named and the file is checked for that instead",
                 )
                 checks.equal(
                     len(fetched_files()),
-                    1,
-                    "the refused download is deleted, and the file the last GOOD fetch wrote "
-                    "is untouched — a refusal may not take a working export with it",
+                    2,
+                    "and different bytes get a name of their own beside the earlier file: "
+                    "the digest lookup finds identical bytes and nothing else",
                 )
-                status, raw, _ = fetch({"accept_narrower": True})
-                body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, body.get("ok"), body.get("accepted_narrower")),
-                    (200, True, True),
-                    "and it is an acknowledgement rather than a wall: an operator who "
-                    "narrowed the portal filter on purpose says so in a field, which is "
-                    "D33's gate one register down — a field a stray request does not carry",
+                    (
+                        body.get("rows"),
+                        (body.get("previous") or {}).get("pokemon", {}).get("rows"),
+                    ),
+                    (2, 3),
+                    "and the receipt states the delta the guard used to refuse on — two rows "
+                    "now against the three the last join used — as information the operator "
+                    "reads rather than a wall they press through",
                 )
 
-                # ---------------------------------------- nothing to check a first fetch against
+                # ------------------------------------ a first fetch has nothing earlier
                 stub["body"] = whole.read_bytes()
                 bare = runs.create("t7-unjoined")
                 bare.write_identifications(identifications_for(cards))
                 status, raw, _ = request(
                     port, "POST", f"/pipeline/runs/{bare.directory.name}/export", payload={}
                 )
-                checks.equal(
-                    (status, error_code(raw)),
-                    (409, "export_unverified"),
-                    "a run with no previous export has NOTHING to check a fetch against and "
-                    "says so, rather than accepting one quietly — an absence of evidence is "
-                    "not evidence, and this is the one state where the guard can say nothing",
-                )
-                status, raw, _ = request(
-                    port,
-                    "POST",
-                    f"/pipeline/runs/{bare.directory.name}/export",
-                    payload={"accept_unverified": True},
-                )
                 body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, body.get("ok"), body.get("unverified")),
-                    (200, True, ["pokemon"]),
-                    "and that acknowledgement is SEPARATE from the narrowing one, because "
-                    "they are separate sentences — and the report still says which games "
-                    "went unchecked rather than reporting them as verified",
+                    (status, body.get("ok"), body.get("previous")),
+                    (200, True, {}),
+                    "a run with no previous export reports NONE rather than refusing — a run "
+                    "directory is new per run, so `export_unverified` fired on every run's "
+                    "first fetch and cost each one an acknowledgement and a second download "
+                    "of the same file (D64, amended 2026-09-02)",
                 )
 
                 # ------------------------------ THE GATE IS WHAT PROTECTS THE CREDENTIAL
@@ -12905,7 +12828,7 @@ def check_export_fetch(checks: Checks) -> None:
                 )
 
                 # ---------------------------------------------------------- the wrong file
-                before = len(fetched_files())
+                before = fetched_files()
                 stub["body"] = (
                     Path(FIXTURE_EXPORT).parent / "riftbound_export_untouched.csv"
                 ).read_bytes()
@@ -12914,13 +12837,33 @@ def check_export_fetch(checks: Checks) -> None:
                     (status, error_code(raw)),
                     (409, "export_wrong_game"),
                     "an export for a game this run holds no card of is refused by name — the "
-                    "portal's filter pointed at the wrong product line, which is a thing to "
-                    "fix in the portal rather than a file to join against",
+                    "category this process asked for came back carrying another product "
+                    "line, which is a registry or endpoint fault rather than a file to join "
+                    "against",
                 )
                 checks.equal(
                     len(fetched_files()),
-                    before,
+                    len(before),
                     "and that refusal keeps nothing either",
+                )
+                checks.equal(
+                    fetched_files(),
+                    before,
+                    "and the files the earlier GOOD fetches wrote survive it untouched — a "
+                    "refusal deletes only what it built, never a recorded export",
+                )
+                message = str(
+                    (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
+                )
+                checks.ok(
+                    "pokemon" in message
+                    and "Riftbound League of Legends Trading Card Game" in message
+                    and "Pricing tab" not in message,
+                    "and the sentence names the game that was asked for and the product line "
+                    "that arrived, and sends nobody to the Pricing tab — since D65 the "
+                    "category is named by this process, so the portal's saved filter is not "
+                    "what is wrong",
+                    message[:400],
                 )
                 # --------------------------- THE VOCABULARY THE CAPTURE SCREEN OFFERS
                 #
@@ -13013,7 +12956,7 @@ def check_export_fetch(checks: Checks) -> None:
                 stub["mode"] = "csv"
                 stub["body"] = whole.read_bytes()
                 stub["posted"] = []
-                fetch({"accept_narrower": True, "accept_unverified": True})
+                fetch()
                 sent = json.loads(
                     urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                 ) if stub["posted"] else {}
@@ -13077,7 +13020,7 @@ def check_export_fetch(checks: Checks) -> None:
                     stub["mode"] = "csv"
                     stub["body"] = whole.read_bytes()
                     stub["posted"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True, **(payload or {})})
+                    fetch(payload or {})
                     return json.loads(
                         urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                     ) if stub["posted"] else {}
@@ -13211,7 +13154,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=one\n")
                     stub["seen"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    fetch()
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=one",
@@ -13224,7 +13167,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=two\n")
                     stub["seen"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    fetch()
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=two",
@@ -13236,7 +13179,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                     os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=from-env"
                     stub["seen"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    fetch()
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=from-env",

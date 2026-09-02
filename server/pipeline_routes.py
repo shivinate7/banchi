@@ -2676,74 +2676,12 @@ def _pricing_flags(payload: dict) -> List[str]:
 
 
 def _sku_set(export) -> set:
-    """Every `TCGplayer Id` in an export. The unit both halves of the guard count in."""
+    """Every `TCGplayer Id` in an export. The unit the receipt counts SKUs in."""
     return {
         str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
         for row in export.rows
         if str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
     }
-
-
-def _finish_conditions(claimed: Sequence[str]) -> set:
-    """Every condition string that names a FINISH, for the games a file answers for.
-
-    THE REGISTRY'S ANSWER, NOT A GUESS AND NOT EVERY CONDITION IN THE FILE. This is what
-    `pipeline/variant.py` resolves between — `condition_by_finish` is the whole vocabulary
-    the ladder can choose from — and it is the distinction the first build of this guard got
-    wrong.
-    """
-    out: set = set()
-    for game in claimed:
-        entry = game_registry.get(game) or {}
-        out.update((entry.get("condition_by_finish") or {}).values())
-    return out
-
-
-def _printings(export, finishes: set) -> Dict[tuple, set]:
-    """key -> the FINISH conditions stocked for it. Play conditions are not finishes.
-
-    TWO THINGS HERE WERE WRONG IN THE FIRST BUILD AND BOTH WERE FOUND BY MEASURING AGAINST
-    THE OWNER'S REAL EXPORTS RATHER THAN THE THREE-ROW FIXTURE.
-
-    **It counted every condition, so filtering to Near Mint read as thinning.** D12 scopes
-    this product to Near Mint and the committed fixtures are Near-Mint-only (sv09 carries
-    exactly `Near Mint`, `Near Mint Holofoil`, `Near Mint Reverse Holofoil`), while a WIDE
-    export carries eleven to sixteen conditions because it also lists Lightly Played,
-    Moderately Played, Heavily Played and Damaged. Measured on the owner's box-3 export: all
-    153 of its numbers looked "thinned" against the wide riftbound file, and **not one of
-    them had lost a finish** — 145 are stocked only in the foil family and 8 only in the
-    plain one, and what the wide file added was play conditions. So the refusal would have
-    fired on an operator doing exactly the right thing, carrying a sentence about a reverse
-    holo listing at the normal row's price that was simply untrue.
-
-    **And the key carried `Product Name`, which loses real cases.** Finish variants usually
-    share a product name — 143 of sv09's 144 multi-row numbers do — so the third leg looked
-    free. It is not: keyed `(set, number)` the wide riftbound export has **550** numbers
-    stocked in more than one finish, and keyed with the name it has **522**. Twenty-eight
-    numbers whose foil and non-foil are listed under different product names were invisible
-    to the check written to find them.
-
-    SO THE KEY MIRRORS THE LOOKUP INSTEAD. A card with a number is found by its number
-    (`pipeline/join.py`'s composed key), so its finishes group under `(set, number)`. A card
-    with a BLANK number is found by name — D24's code cards, and the blank-`Number` rows
-    D35's rung falls back to — so those group under the name, which is both what
-    distinguishes them and what the ladder actually matched them on. Deriving the key from
-    how the row would be FOUND is what stops it being a third opinion about identity.
-    """
-    out: Dict[tuple, set] = {}
-    for row in export.rows:
-        condition = str(row.get(tcgcsv.CONDITION_COLUMN) or "")
-        if condition not in finishes:
-            continue
-        set_name = str(row.get(tcgcsv.SET_COLUMN) or "")
-        number = str(row.get(tcgcsv.NUMBER_COLUMN) or "").strip()
-        key = (
-            (set_name, number)
-            if number
-            else (set_name, "", str(row.get(tcgcsv.NAME_COLUMN) or ""))
-        )
-        out.setdefault(key, set()).add(condition)
-    return out
 
 
 def _distinct(export, column: str) -> List[str]:
@@ -2754,40 +2692,6 @@ def _distinct(export, column: str) -> List[str]:
         if value and value not in seen:
             seen.append(value)
     return seen
-
-
-def _coverage(fetched, baseline, finishes: set) -> dict:
-    """What this file covers that the run's previous export did not, and what it lost.
-
-    THE GUARD IS A DELTA AGAINST A KNOWN-GOOD FILE, AND IT IS NOT A COMPLETENESS CHECK — the
-    difference is the whole reason D64 exists as an entry rather than as a function. An
-    export's completeness against the CATALOG cannot be certified from its contents: the
-    Pricing tab can narrow by set, by printing, by condition and by whether a listing has a
-    photo, at least one of those leaves no trace in the file at all (`Photo URL` is empty in
-    all eleven exports this project has seen, filtered and unfiltered alike), and the axes are
-    independent — so a file carrying five conditions can still be missing whole printings, and
-    every content-inspection guard is defeated by an axis it does not know about.
-
-    What IS checkable is whether this file covers what the RUN'S OWN PREVIOUS EXPORT covered,
-    because that file is a fact rather than an inference. Two axes, because the two silent
-    failures are different:
-
-      - **SKUs.** A row the run once matched and this file does not carry becomes
-        `no_catalog_row` on the next join. Loud, but still a regression.
-      - **PRINTINGS PER NUMBER.** A number that had several condition rows and now has one is
-        the quiet one: D3 rung 2 (`CATALOG_FORCED`) fires when exactly one row exists for a
-        number, so a variant-thinned file MANUFACTURES single-row numbers and a reverse holo
-        with no finish claim resolves to the normal row and is priced there. Nothing about
-        that reads as a failure anywhere downstream.
-    """
-    lost_skus = sorted(_sku_set(baseline) - _sku_set(fetched))
-    before, after = _printings(baseline, finishes), _printings(fetched, finishes)
-    thinned = sorted(
-        key
-        for key, conditions in before.items()
-        if len(conditions) > 1 and 0 < len(after.get(key, ())) < len(conditions)
-    )
-    return {"lost_skus": lost_skus, "thinned": thinned}
 
 
 def _export_report(path: Path, games: Sequence[str]) -> dict:
@@ -3170,18 +3074,15 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     run's recorded exports it does not replace, BEFORE anything is joined, which is that
     function's own stated contract. So the check is the real rule rather than a second
     approximation of it, and a fetched file that would refuse at join time refuses here where
-    the fault is attributable to the fetch.
+    the fault is attributable to the fetch. The receipt then reports the last export this run
+    was joined against beside this one, per game, and refuses nothing on that comparison —
+    D65 names the scope, so what the file is checked for is what was asked, and a run's first
+    fetch has nothing earlier to be compared with by construction (D64, amended 2026-09-02).
 
     A REFUSAL TEARS DOWN WHAT IT BUILT. The bytes are written first because
     `exports_for` reads files rather than buffers, and every refusal path unlinks them again —
     the rule D48 states for a cart's scope directories, for the same reason: a run directory
     accumulating one dead export per mis-timed press is a run that stops explaining itself.
-
-    TWO ACKNOWLEDGEMENTS, EACH NAMED FOR THE FACT IT ANSWERS. `accept_unverified` says "this
-    run has nothing to compare against and I know it"; `accept_narrower` says "this file
-    covers less than the last one and I mean it". Separate fields because they are separate
-    sentences — the first is an absence of evidence and the second is evidence — and because
-    D33's gate is a field a stray request does not carry rather than a typed string.
     """
     directory = _open_run(name)
 
@@ -3197,23 +3098,39 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
     # THE NAME CARRIES A DIGEST, AND A ONE-SECOND STAMP ALONE WAS A DATA-LOSS BUG. T7 found
     # it: two fetches inside the same second composed the same filename, so the second one
-    # OVERWROTE the first — and the first is what the run was joined against, which made it
-    # the baseline the guard below compares to. A file silently replaced by the very thing
-    # being checked against it passes every check by comparing itself to itself.
+    # OVERWROTE the first — and the first is what the run was joined against. A file silently
+    # replaced by the very thing being checked against it passes every check by comparing
+    # itself to itself. T7's same-second case is the record of that.
     #
-    # A CONTENT DIGEST RATHER THAN A COUNTER OR A FINER CLOCK, because it also makes the
-    # right thing happen on a re-fetch: identical bytes land on the identical name and the
-    # run gains no second copy of a file it already holds, while any change at all gets a
-    # name of its own and can never clobber a predecessor.
-    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    # IDENTICAL BYTES LAND ON THE FILE THE RUN ALREADY HOLDS — AND THAT CLAIM WAS FALSE UNTIL
+    # 2026-09-02. This comment said a re-fetch of identical bytes "lands on the identical
+    # name", while the per-second stamp came BEFORE the digest in that name: two fetches a
+    # second apart never composed the same name, `fresh` was always true, and every re-fetch
+    # added a copy. Measured: run `2026-08-31-box3-01` holds two byte-identical 366 KB exports
+    # 29 seconds apart. So the digest is computed first and the run directory is searched for
+    # a file already carrying it, compared in full — 32 bits of digest is a name, not a proof.
+    # A hit IS the file: an identical re-fetch is a fresh observation of the same reading, so
+    # its mtime is touched, because the export's observation time is read off that mtime. A
+    # miss gets a stamped name of its own and can never clobber a predecessor.
     digest = hashlib.sha256(body).hexdigest()[:8]
-    target = directory / f"{FETCHED_PREFIX}{stamp}-{digest}.csv"
+    held = [
+        path
+        for path in sorted(directory.glob(f"{FETCHED_PREFIX}*-{digest}.csv"))
+        if path.read_bytes() == body
+    ]
     # WHETHER THIS REQUEST CREATED IT DECIDES WHETHER A REFUSAL MAY DELETE IT. "A refusal
     # tears down what it built" is the rule, and the emphasis is on BUILT: re-fetching bytes
     # this run already holds lands on the existing file, and unlinking that would destroy a
-    # recorded export over a guard that fired on something else.
-    fresh = not target.exists()
-    target.write_bytes(body)
+    # recorded export over a refusal that fired on something else.
+    if held:
+        target = held[0]
+        fresh = False
+        os.utime(target, None)
+    else:
+        stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+        target = directory / f"{FETCHED_PREFIX}{stamp}-{digest}.csv"
+        fresh = True
+        target.write_bytes(body)
 
     def refuse(status, code, message):
         if fresh:
@@ -3221,7 +3138,8 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
         return PipelineRefusal(status, code, message)
 
     try:
-        claimed = run_resolve.games_claimed(tcgcsv.read_export(target))
+        fetched_export = tcgcsv.read_export(target)
+        claimed = run_resolve.games_claimed(fetched_export)
     except Exception as caught:  # noqa: BLE001 — a file we cannot parse is the refusal
         raise refuse(
             HTTPStatus.BAD_GATEWAY,
@@ -3258,28 +3176,30 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
     answers_for = [game for game in plan.by_game if plan.by_game[game] == target]
     if not answers_for:
+        # NOT THE PRICING TAB. Since D65 `_scope_for_run` names `CategoryId` from the run's
+        # own game, so the portal's saved filter is not consulted and cannot be what is
+        # wrong. What is left is a wrong `tcgplayer_category_id` in `pipeline/games.py`,
+        # `PKMNSCAN_TCG_EXPORT_URL` pointing at the old unscoped endpoint, or TCGplayer
+        # renumbering a category — and the sentence names all three, with the product lines
+        # the file actually carries, because `claimed` is empty whenever none is registered.
+        lines = ", ".join(tcgcsv.product_lines(fetched_export)) or "no product line at all"
         raise refuse(
             HTTPStatus.CONFLICT,
             "export_wrong_game",
-            f"TCGplayer sent an export for {', '.join(claimed) or 'no registered game'}, and "
-            f"this run holds no card of any of them. That is the portal's filter pointed at "
-            f"the wrong product line — change it and fetch again. Nothing was kept.",
+            f"Asked TCGplayer for category {asked['category_id']} ({asked['game']}) and the "
+            f"file that came back carries {lines}; this run holds no card of a game that "
+            f"claims it. The category is `tcgplayer_category_id` for {asked['game']} in "
+            f"pipeline/games.py and the request went to {tcg_export.endpoint()} — one of "
+            f"those is wrong, or TCGplayer renumbered. Nothing was kept.",
         )
-
-    # ------------------------------------------------------------------------ the guard
-    unverified: List[str] = []
-    lost: Dict[str, list] = {}
-    thinned: Dict[str, list] = {}
-    fetched_export = tcgcsv.read_export(target)
 
     # ---------------------------------------------- THE POSITIVE CHECK (D65)
     #
-    # ASKED-FOR RATHER THAN INFERRED, WHICH IS THE WHOLE POINT OF SCOPING THE REQUEST. D64's
-    # delta guard exists because completeness could not be read off a file somebody else had
-    # filtered: three axes narrow an export and one leaves no trace in it. A file fetched to a
-    # scope this process NAMED is complete within that scope by construction, so the question
-    # stops being "what might be missing" and becomes "did I get what I asked for", which the
-    # file can answer.
+    # ASKED-FOR RATHER THAN INFERRED, WHICH IS THE WHOLE POINT OF SCOPING THE REQUEST. The
+    # scope was NAMED by this process — the category, the sets, all printings, every
+    # condition — so the file can be checked for what was asked rather than read for what
+    # somebody else's filter might have left out: the question is "did I get what I asked
+    # for", which the file can answer.
     #
     # It refuses rather than warns because a set that was asked for and did not arrive means
     # the cards in it will queue as `no_catalog_row` — a whole box's worth, silently, from a
@@ -3295,72 +3215,38 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
                 f"{', '.join(absent)}. Every card of a missing set would queue as "
                 f"no_catalog_row. Nothing was kept.",
             )
+
+    # ------------------------------------ WHAT THE LAST JOIN USED, BESIDE WHAT ARRIVED
+    #
+    # INFORMATION, AND NEVER A REFUSAL. D64's delta guard compared this file against the
+    # export the run was last joined with and refused a narrower one; it was retired
+    # 2026-09-02 (D64, amended) because D65 names the scope — so the check above is the
+    # whole guard — and because a run's FIRST fetch has nothing to compare with by
+    # construction, which made every run cost an acknowledgement. The figures stay on the
+    # receipt so that a narrower file is visible to the operator who asked for it. Read off
+    # `run.exports_by_game` directly: `baselines` above deliberately EXCLUDES the games this
+    # file claims. A previous file that no longer parses is OMITTED rather than raised — a
+    # 500 is the one answer this route may not give, and that file's state is not this
+    # fetch's fault.
+    previous: Dict[str, dict] = {}
     for game in answers_for:
-        previous = run.exports_by_game.get(game)
-        if previous is None or not Path(previous).is_file():
-            unverified.append(game)
+        prev = run.exports_by_game.get(game)
+        if prev is None or not Path(prev).is_file():
             continue
-        delta = _coverage(
-            fetched_export,
-            tcgcsv.read_export(Path(previous)),
-            _finish_conditions([game]),
-        )
-        if delta["lost_skus"]:
-            lost[game] = delta["lost_skus"]
-        if delta["thinned"]:
-            thinned[game] = delta["thinned"]
-
-    if (lost or thinned) and not payload.get("accept_narrower"):
-        # ONE CODE FOR TWO READINGS OF ONE FACT, and the second reading is why this refuses
-        # at all. A condition row IS a SKU, so a number cannot lose a printing without losing
-        # the row that carried it — the two lists below can never disagree about WHETHER this
-        # file is narrower, only about what the narrowing costs. Lost SKUs alone are loud:
-        # the cards that matched them queue as `no_catalog_row` on the next join and the
-        # operator sees it. A THINNED NUMBER is the quiet one, and it is the reason this is a
-        # refusal rather than a note.
-        lines = ["This export covers less than the one this run was last joined against."]
-        for game, skus in sorted(lost.items()):
-            shown = ", ".join(skus[:8]) + ("…" if len(skus) > 8 else "")
-            lines.append(
-                f"  {game}: {len(skus)} SKU(s) the last export carried are gone — {shown}. "
-                f"Cards matching them would queue as no_catalog_row."
-            )
-        for game, keys in sorted(thinned.items()):
-            shown = ", ".join(f"{k[0] or '?'} {k[1] or k[-1] or '?'}" for k in keys[:6])
-            lines.append(
-                f"  {game}: and {len(keys)} of them thin a number that had SEVERAL condition "
-                f"rows down to one — {shown}. A number left with one row is decided by that "
-                f"row (D3 rung 2), so a reverse holo with no finish claim would resolve to "
-                f"the normal row and list at its price, silently."
-            )
-        lines.append(
-            "Turn All Printings back on in the Pricing tab, clear any condition filter, and "
-            "fetch again — or send accept_narrower to keep this file anyway. Nothing was "
-            "kept."
-        )
-        raise refuse(HTTPStatus.CONFLICT, "export_narrower", "\n".join(lines))
-
-    if unverified and not payload.get("accept_unverified"):
-        raise refuse(
-            HTTPStatus.CONFLICT,
-            "export_unverified",
-            f"This run has never been joined against a {', '.join(unverified)} export, so "
-            f"there is nothing to check this one against. Completeness cannot be read off an "
-            f"export's own contents — the Pricing tab narrows by set, by printing, by "
-            f"condition and by photo, and the last of those leaves no trace in the file — so "
-            f"the only honest check is against a file this run already used. Confirm the "
-            f"portal's filter is All Printings with no condition filter, then send "
-            f"accept_unverified. Nothing was kept.",
-        )
+        try:
+            was = _export_report(Path(prev), [game])
+        except Exception:  # noqa: BLE001 — omit the game rather than fail the fetch
+            continue
+        previous[game] = {"file": was["file"], "rows": was["rows"], "skus": was["skus"]}
 
     report = _export_report(target, answers_for)
     report.update(
         {
             "ok": True,
             "run": directory.name,
-            "verified": [g for g in answers_for if g not in unverified],
-            "unverified": unverified,
-            "accepted_narrower": bool(lost or thinned),
+            # ALWAYS PRESENT, POSSIBLY EMPTY: a run with no earlier export reports none,
+            # which is a fact about the run and not a fault in the fetch.
+            "previous": previous,
             "source": tcg_export.endpoint(),
             # WHAT WAS ASKED FOR, beside what arrived. A receipt that showed only the result
             # cannot be read for whether the scope was right — and the scope is the operator's

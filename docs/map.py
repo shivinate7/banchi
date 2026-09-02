@@ -1727,9 +1727,8 @@ COMPONENTS = [
                         "server/tcg_export.py instead of the operator downloading and "
                         "uploading it: free, reported separately from the join so a failure "
                         "is attributable, ruled on by cli/resolve.py:exports_for BEFORE "
-                        "anything is joined, guarded by a per-run coverage delta rather than "
-                        "by inspecting the file (completeness cannot be read off an export "
-                        "— three filters narrow it and one leaves no trace), and deleting "
+                        "anything is joined, checked against the scope it asked for (D65) "
+                        "rather than by inspecting the file for completeness, and deleting "
                         "what it wrote on every refusal. GET .../pricing RE-RENDERS every "
                         "stored position label against the live store before it answers and "
                         "serves the one join froze into pricing.json never (D58, on D56's "
@@ -3061,10 +3060,9 @@ COMPONENTS = [
                                          "void when either moves. AND THE EXPORT IS FETCHED "
                                          "RATHER THAN DOWNLOADED AND UPLOADED (D64): one press "
                                          "fetches and then joins with the file by name, the "
-                                         "receipt says what came back and which games were "
-                                         "checked, and the control that waves a refusal through "
-                                         "is ABSENT unless the refusal is one of the two an "
-                                         "operator can answer.",
+                                         "receipt says what came back and what the last joined "
+                                         "export held beside it, and every refusal is a sentence "
+                                         "with nothing to press.",
                                  # D1 is why one step spawns and three answer in the request. D9 is
                                  # the decisions document this panel edits as text rather than as a
                                  # form. D3 is the ladder the join walks. D31

@@ -118,22 +118,6 @@ export function runningFor(row: { created_at?: string | null }): string {
  * `phase`, because `phase` answers "what is this run waiting for" and this answers "what are
  * the four things there are" — a screen that only drew the current step would leave the
  * operator unable to see that emit exists until join had finished. */
-/* The two fetch refusals an operator may answer, and the field each is answered with (D64).
- *
- * A MAP RATHER THAN TWO CONDITIONS IN THE JSX, which is what makes "absent for everything
- * else" structural. `POST .../export` has ten refusal codes and only these two have an answer
- * a press can give: the rest — an expired session, a WAF block, an export for the wrong
- * product line — are things to go and fix elsewhere. A screen that drew a control for an
- * unlisted code would be offering to wave through a refusal it does not understand.
- *
- * `docs/DESIGN.md` puts the control ABSENT rather than disabled until the refusal that earns
- * it has arrived, which is D33's money gate one register down: a disabled button is one
- * attribute away from pressable, and that attribute is what a later refactor drops. */
-const FETCH_ACK: Record<string, { send: 'acceptUnverified' | 'acceptNarrower'; label: string }> = {
-  export_unverified: { send: 'acceptUnverified', label: 'Fetch anyway — nothing to compare' },
-  export_narrower: { send: 'acceptNarrower', label: 'Fetch anyway — I narrowed it' },
-}
-
 /* WHY THE FETCH IS ASKING FOR WHAT IT IS ASKING FOR (D76), in the operator's words.
  *
  * THE SAME TWO-SIZE RULE THE REVIEW QUEUE'S REASONS FOLLOW: a sentence a person reads, with
@@ -1000,28 +984,18 @@ export function RunPanel({ cart }: RunPanelProps) {
    * press Export Filtered CSV, wait, find the download, come back, pick it. The fetch reports
    * first and separately, and the join runs only if it landed — a fetch that refused has
    * written nothing, so joining after one would silently re-use the previous export and look
-   * like the fetch had worked.
-   *
-   * `ack` is undefined on the ordinary press. It carries a value only when the operator
-   * answers one of the two refusals `FETCH_ACK` lists, which is why this takes the field name
-   * rather than a boolean: a signature of two booleans is one that can be called with both. */
-  const doFetchExport = (ack?: 'acceptUnverified' | 'acceptNarrower') =>
+   * like the fetch had worked. */
+  const doFetchExport = () =>
     guard('fetch', async () => {
       if (openRun === null) return
       setFetchRefusal(null)
       let answer: ExportFetched
       try {
-        /* THE SCOPE TRAVELS WITH THE ACKNOWLEDGEMENT, NOT INSTEAD OF IT (D76). A retry
-           after `export_narrower` must ask for the same scope the first press did, or the
-           operator answers a question about one file and gets another. */
-        answer = await fetchExport(openRun, {
-          ...scopeOptions,
-          ...(ack === undefined ? {} : { [ack]: true }),
-        })
+        answer = await fetchExport(openRun, scopeOptions)
       } catch (err) {
-        /* Caught here rather than left to `guard`, because this is the refusal the operator
-           may be able to ANSWER and the control that answers it is drawn from this state. A
-           panel-wide banner would put the sentence a long way from the button it earns. */
+        /* Caught here rather than left to `guard`, because the refusal is drawn beside the
+           control that earned it. A panel-wide banner would put the sentence a long way from
+           the button — and every fetch refusal is a sentence with nothing to press. */
         setFetched(null)
         setFetchRefusal(describeFailure(err))
         return
@@ -1035,13 +1009,6 @@ export function RunPanel({ cart }: RunPanelProps) {
       setDetail(await getRun(openRun))
       await loadRuns()
     })
-
-  /* WHETHER THE STANDING FETCH REFUSAL IS ONE AN OPERATOR MAY ANSWER — resolved once here
-   * rather than indexed twice inside the JSX. `undefined` is the ordinary answer and it draws
-   * no control at all: `FETCH_ACK` holds only the two codes that have an answer, so every
-   * other refusal renders its sentence and nothing to press. */
-  const acknowledgement =
-    fetchRefusal === null ? undefined : FETCH_ACK[fetchRefusal.code]
 
   const pickExports = () =>
     guard('exports', async () => {
@@ -2110,10 +2077,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                           <dd>{fetched.conditions.length}</dd>
                         </div>
                       </dl>
-                      {/* WHICH GAMES WERE CHECKED AND WHICH WERE NOT, never folded together.
-                          An unverified game was accepted because this run had no previous
-                          export to compare against — an absence of evidence, which reads as a
-                          clean bill of health if it is reported as one. */}
                       {/* WHAT WAS ASKED FOR, ABOVE WHAT ARRIVED (D65). The export is scoped
                           by this box's own capture claims, so this line is the operator's own
                           input read back — and the place a wrong hint becomes visible. */}
@@ -2141,14 +2104,25 @@ export function RunPanel({ cart }: RunPanelProps) {
                           ? ''
                           : ` (${fetched.asked.hinted} of ${fetched.asked.cards} hinted).`}
                       </p>
-                      <p className="run-step-note run-step-fine">
-                        {fetched.verified.length > 0
-                          ? `Checked against this run's last export: ${fetched.verified.join(', ')}.`
-                          : null}{' '}
-                        {fetched.unverified.length > 0
-                          ? `Not checked — this run had no previous export for ${fetched.unverified.join(', ')}.`
-                          : null}
-                      </p>
+                      {/* WHAT THE LAST JOIN USED, BESIDE WHAT ARRIVED. The export this run
+                          was last joined against, per game, next to this one's figures — so
+                          a narrower file is visible to the operator who asked for it.
+                          Nothing here refuses: D65 names the scope, the server's positive
+                          check is the whole guard, and the delta that used to refuse a
+                          narrower file is retired (D64, amended 2026-09-02). */}
+                      {Object.entries(fetched.previous).length === 0 ? (
+                        <p className="run-step-note run-step-fine">
+                          First export for this run — nothing earlier to set beside it.
+                        </p>
+                      ) : (
+                        Object.entries(fetched.previous).map(([game, was]) => (
+                          <p className="run-step-note run-step-fine" key={game}>
+                            Last export this run was joined against for {game}: {was.rows}{' '}
+                            rows / {was.skus} SKUs ({was.file}); this one: {fetched.rows} /{' '}
+                            {fetched.skus}.
+                          </p>
+                        ))
+                      )}
                     </div>
                   )}
 
@@ -2156,22 +2130,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                     <div className="run-note run-result-refused">
                       <p className="run-note-text">{fetchRefusal.message}</p>
                       <p className="run-machine">{fetchRefusal.code}</p>
-                      {/* ABSENT UNLESS THE REFUSAL IS ONE OF THE TWO AN OPERATOR CAN ANSWER.
-                          Everything else here — an expired session, a WAF block, an export for
-                          the wrong product line — is fixed somewhere other than this screen,
-                          and a button would be offering to wave it through. */}
-                      {acknowledgement === undefined ? null : (
-                        <div className="run-actions">
-                          <button
-                            type="button"
-                            className="run-button"
-                            disabled={busy !== null}
-                            onClick={() => void doFetchExport(acknowledgement.send)}
-                          >
-                            {acknowledgement.label}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )}
                   <p className="run-step-note run-step-fine">

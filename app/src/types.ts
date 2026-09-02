@@ -1998,12 +1998,6 @@ export type CsvUpload = { name: string; content: string }
 /** What `POST /pipeline/runs/<name>/export` fetched, in the terms the operator filters the
  *  portal in (D64). Free: it downloads the owner's own Filtered Export and spends nothing.
  *
- *  `verified` and `unverified` are the halves of the guard's answer and both are lists, so a
- *  mixed-game run can report per game. A game in `unverified` was accepted on the operator's
- *  acknowledgement because this run had no previous export to compare against — an absence of
- *  evidence rather than evidence, which is why it is reported separately rather than folded
- *  into `verified`.
- *
  *  `file` is the name the join is then handed. It is a name and not the bytes: the server
  *  already holds them, and sending a megabyte back through the browser to arrive at them is
  *  not a step. */
@@ -2028,9 +2022,9 @@ export type ExportFetched = {
   sets: string[]
   conditions: string[]
   product_lines: string[]
-  verified: string[]
-  unverified: string[]
-  accepted_narrower: boolean
+  /** What the last join used, per game this file answers for, beside what arrived. Always
+   *  present and `{}` on a run's first fetch; information only — nothing refuses on it. */
+  previous: Record<string, { file: string; rows: number; skus: number }>
   source: string
   /** What was ASKED FOR, beside what arrived (D65). The scope is derived from the box's own
    *  capture claims — its game, and the set hints the operator set — so this is the half they

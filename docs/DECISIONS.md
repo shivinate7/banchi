@@ -2075,7 +2075,7 @@ Added 2026-08-30, from the owner asking how they would know whether a change tou
 
 **The join is handed the file by name, not the bytes.** The server already holds them.
 
-**The control that waves a refusal through is absent unless the refusal is one an operator can answer.** `FETCH_ACK` lists the two codes that have an answer, and every other refusal draws its sentence and nothing to press. An expired session, a WAF block and an export for the wrong product line are fixed somewhere other than this screen, so a button there would offer to wave through a refusal the screen does not understand. Absent rather than disabled is D33's rule, for its reason: a disabled button is one attribute away from pressable.
+**The control that waves a refusal through is absent unless the refusal is one an operator can answer.** `FETCH_ACK` lists the two codes that have an answer, and every other refusal draws its sentence and nothing to press. An expired session, a WAF block and an export for the wrong product line are fixed somewhere other than this screen, so a button there would offer to wave through a refusal the screen does not understand. Absent rather than disabled is D33's rule, for its reason: a disabled button is one attribute away from pressable. Retired 2026-09-02 with the two refusals it listed (D64, amended): every fetch refusal draws a sentence and nothing to press, and `FETCH_ACK` is gone.
 
 **`app/tests/run-panel.spec.ts` asserts that absence at rest and after a clean fetch.** A control appearing once the panel had merely been used would be as wrong as one always there. Two mutations were observed failing: drawing the acknowledgement for every refusal, and joining after a refused fetch.
 
@@ -2979,13 +2979,13 @@ This is cookie-session auth, not the order-management API, which is another host
 
 **The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
 
-**What was fetched is downloadable.** `_artifacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
+**What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
 
 **The WAF does not block an authenticated stdlib client, measured 2026-08-30.** The owner placed a session cookie and the fetch returned 68,363 bytes over 394 rows. This was the one thing the entry recorded as owed, and it is the reason `PKMNSCAN_TCG_USER_AGENT` exists: the earlier unauthenticated measurement said nothing about a request carrying a session, so a block was a plausible outcome the build had to survive. It did not occur. `tcg_blocked` stays, because one measurement on one day is not a guarantee about a rule somebody else maintains.
 
 **What that fetch also showed is that the portal's saved filter decides what arrives.** It returned the owner's current listings — eight conditions including `Unopened` and the Lightly Played family — rather than a catalog export. That is not a defect in the fetch, and the guard is what catches it: against box 3's baseline the same file carries 145 Riftbound rows to that run's 153, so it refuses `export_narrower` and names what went.
 
-**What would reopen this: an authenticated probe of `getjsonfilters` and `productsearch`.** If scope can be set by request, the scoped-export design replaces this guard with a positive one, and the one-fetch-one-game limit may soften with it.
+**Amended 2026-09-02: the delta guard is retired.** D65 met the condition above the same day and names the scope, so this guard's remedy asked about a Pricing-tab filter the request overrides. A run directory is new per run, so `previous is None` on every first fetch and `export_unverified` fired on every run — a 1.7 MB download unlinked and fetched again on a press; `export_narrower` fired on a legitimate set-scoped fetch after a category-wide one. Both codes, both fields, `_coverage`, `_printings` and `_finish_conditions` are gone; `export_scope_incomplete` is the whole guard; the receipt carries `previous`, the last joined export's file, rows and SKUs per game, and refuses nothing on it. The filename finds identical bytes by digest before it stamps — with the stamp first, every re-fetch added a copy, and `2026-08-31-box3-01` holds two byte-identical 366 KB exports 29 seconds apart.
 
 ---
 
@@ -3023,7 +3023,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **A scope this process named can be checked against what arrived.** The question becomes "did I get the sets I asked for", which the file answers. `export_scope_incomplete` refuses rather than warns: a set asked for and absent means every card in it queues as `no_catalog_row`, a whole box silently, from a fetch that reported success.
 
-**The delta guard stays for exports that arrive by upload**, where nobody named a scope.
+**There never was a delta guard on the upload path, and the fetch path's was retired 2026-09-02** (D64, amended): the positive check is the whole guard.
 
 ### The scope is the claims the operator already made
 
@@ -3760,7 +3760,7 @@ D65 scoped the export by the set hints the box's own cards carry. The reasoning 
 
 **So the three are hoisted into `STANDING_FILTERS` and spread last**, where a re-capture of the portal's body cannot silently paste over them, and `scripts/docs-audit.py`'s `export request` row blocks the commit on any value that has moved — naming the instruction rather than the literal, because somebody who has just changed a value already knows what the literal is. T7 asserts all three on the wire, which is the half a literal check cannot reach.
 
-**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job; `accept_narrower` is the honest answer once, and the baseline moves with it.
+**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job; `accept_narrower` is the honest answer once, and the baseline moves with it (retired 2026-09-02).
 
 **The rarity and condition axes stay unspent.** `Scope` carries `rarity_ids` and `condition_ids` and both remain empty: D64 measured that a condition filter thins a number's rows and that D3 rung 2 then decides a card from whichever row survived, and a rarity claim is per-card and would inherit the exact partial-claim defect this entry fixes.
 

@@ -525,14 +525,21 @@ at a temporary directory, so nothing here touches the real inventory.
   joins against, recorded in the manifest — which is the seam a route that fetched a file
   nobody used would pass without.
 
-  **Three cases call `_coverage` directly, and that is not laziness.** All three of them
-  REFUSE, and what differs is whether the refusal claims a FINISH was lost — invisible from
-  outside the route. They pin two defects that shipped in the first build and were found by
-  measuring against the owner's real exports rather than the three-row fixture: counting play
+  **Three cases called `_coverage` directly, and the figures they carried are D64's evidence
+  that a content-inspection guard is hard to get right.** All three REFUSED, and what differed
+  was whether the refusal claimed a FINISH was lost — invisible from outside the route. They
+  pinned two defects that shipped in the guard's first build and were found by measuring
+  against the owner's real exports rather than the three-row fixture: counting play
   conditions as finishes (measured, all 153 of box 3's numbers read as thinned and not one
   had lost a finish), and a key carrying `Product Name` (measured, 550 multi-finish riftbound
   numbers keyed `(set, number)` against 522 with the name, so 28 real cases were invisible to
   the check written to find them). Both mutations were observed failing, each on one case.
+  **The guard those measurements justified was retired 2026-09-02** (D64, amended): D65 names
+  the scope, so the positive check `export_scope_incomplete` is the whole guard, and the
+  delta's first-fetch refusal cost every run an acknowledgement and a second download. The
+  three cases went with it. What the section proves instead is that a re-fetch of identical
+  bytes lands on the file the run already holds, and that the receipt carries the last joined
+  export's rows and SKUs beside the new file's, per game, refusing nothing on the comparison.
 
   **What it CANNOT prove, said here so a green run is not misread**: whether TCGplayer's WAF
   accepts this client when the request carries a real session. Measured unauthenticated, the

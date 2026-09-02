@@ -1956,17 +1956,13 @@ export async function getRun(name: string): Promise<RunDetail> {
  * (D64). Free: it spends nothing, and `POST /pipeline/identify` is still the only route that
  * can. Reported separately from the join so a failure is attributable to one or the other.
  *
- * THE TWO ACKNOWLEDGEMENTS ARE NOT DEFAULTS AND MUST NOT BECOME ONE. `acceptUnverified` says
- * this run has no previous export to check against; `acceptNarrower` says this file covers
- * less than the last one and the operator means it. Sending either unasked would turn a guard
- * that refuses a silently variant-thinned export — the one that mislists a reverse holo at
- * the normal row's price — into a field nobody reads.
- *
- * Refusals worth branching on: `export_unverified` and `export_narrower`, which are the two
- * an operator can answer, and which the screen answers by calling this again with the
- * matching flag. Everything else — `tcg_cookie_missing`, `tcg_session_expired`,
- * `tcg_blocked`, `export_wrong_game` — is a `ServerError` carrying a sentence to read and no
- * control to press.
+ * EVERY REFUSAL IS A SENTENCE WITH NOTHING TO PRESS. `tcg_cookie_missing`,
+ * `tcg_session_expired`, `tcg_blocked`, `export_wrong_game` and `export_scope_incomplete`
+ * each arrive as a `ServerError` carrying a sentence to read, and each is fixed somewhere
+ * other than this screen. The two acknowledgements this once took — `acceptUnverified` and
+ * `acceptNarrower` — went with the delta guard they answered (D64, amended 2026-09-02): D65
+ * names the scope, so the file is checked for what was asked, and the receipt's `previous`
+ * says what the last join used beside what arrived.
  */
 /**
  * The real set names for a game (D65), for the capture screen's hint field.
@@ -2010,8 +2006,6 @@ export async function getExportScope(
 export async function fetchExport(
   name: string,
   options: {
-    acceptUnverified?: boolean
-    acceptNarrower?: boolean
     /** Which category to ask for. Required only where the run holds more than one game —
      *  one fetch answers for one category, because `CategoryId` is scalar in the portal. */
     game?: string
@@ -2026,8 +2020,6 @@ export async function fetchExport(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      accept_unverified: options.acceptUnverified,
-      accept_narrower: options.acceptNarrower,
       game: options.game,
       scope: options.scope,
       set_ids: options.setIds,
