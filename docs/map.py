@@ -308,7 +308,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -351,7 +351,7 @@ COMPONENTS = [
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D54"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
                                    "reason `pipeline/orders.py` may not hold it: it reads a run "
@@ -549,6 +549,20 @@ COMPONENTS = [
                                   "run files in, newest-wins, reporting every choice.",
                           "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86"],
                           "tested_by": ["T7"]},
+            "livecheck.py": {"does": "the whole store against one live TCGplayer export "
+                                     "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
+                                     "scopes its diff to one run's emitted_skus while "
+                                     "`store/master.py:Listing` is already per SKU across every "
+                                     "box and run (D7 amended), so the scoping was the command's "
+                                     "and not the data's. Reads and writes nothing — it diffs. "
+                                     "What the caller writes from it is `live` and ONLY `live`: "
+                                     "`pushed` is the cumulative record of what was sent and "
+                                     "`_copies_out` already corrects a stuck one against the "
+                                     "physical ceiling. Measured: 405 of 443 SKUs read live 0 "
+                                     "while carrying pushed copies, and the cap arithmetic went "
+                                     "from seeing 93 live copies to 1,079.",
+                             "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87"],
+                             "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and the live cap spent ONCE over that union. "
                                  "D59's defect one register up — add_to_quantity spends "
@@ -1569,7 +1583,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1659,7 +1673,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1956,7 +1970,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
@@ -2410,6 +2424,28 @@ COMPONENTS = [
             # The pipeline moved off #/inventory onto a route of its own at the owner's
             # instruction. RunPanel.tsx did not change shape for it: these three files are the
             # scope it used to get from the walk, answered where there is no walk.
+            "src/LiveReconcile.tsx": {"does": "the store-wide reconcile panel on #/runs (D87) — "
+                                              "upload one live export, preview, settle. On this "
+                                              "screen because its own lede names the four "
+                                              "commands and this is the fourth in the shape that "
+                                              "is not run-scoped; NOT on #/inventory, which is "
+                                              "where a card's state changes and this changes "
+                                              "none. Two presses: the settle control is ABSENT "
+                                              "until a preview has answered (D33's gate pointed "
+                                              "at the ledger), and the same bytes are sent twice "
+                                              "rather than re-picked.",
+                                      "governed_by": ["D7", "D13", "D33", "D87"],
+                                      # `app/tests/live-reconcile.spec.ts` is the check the hard
+                                      # rule says does not otherwise exist — it runs under
+                                      # `make design-check`, not at turn end, so it is named
+                                      # here in prose rather than in `tested_by`.
+                                      },
+            "src/LiveReconcile.css": {"does": "the store-wide reconcile panel's own styles — "
+                                             "quieter than the run panel above it on purpose, "
+                                             "and the stdout block is `white-space: pre` with "
+                                             "its own overflow because the report draws "
+                                             "fixed-width columns a wrap would break.",
+                                     "governed_by": ["D50", "D87"]},
             "src/Runs.tsx": {"does": "#/runs: the page chrome and the box picker, with RunPanel "
                                      "beneath them. Owns the SCOPE and nothing else — a strip of "
                                      "boxes from GET /boxes, and the ticked selection handed over "
@@ -2423,7 +2459,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -3022,6 +3058,14 @@ COMPONENTS = [
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
                                       "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86"]},
+            "tests/live-reconcile.spec.ts": {
+                "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
+                        "#/runs at all, that the preview asks for no write, and that the settle "
+                        "control does not EXIST until the preview has answered — absent rather "
+                        "than disabled, D33's shape applied to the press that settles the "
+                        "ledger. The route is intercepted and its body read; no real request is "
+                        "made and no store is touched.",
+                "governed_by": ["D7", "D33", "D87"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "

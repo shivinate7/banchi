@@ -8995,6 +8995,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_crop_preview(self._body())
                 )
+            if path == "/pipeline/reconcile-live":
+                # THE FOURTH COMMAND, OVER THE WHOLE STORE (D87). Free, and it writes only
+                # when asked — the preview is the default. Not run-scoped: this is the one
+                # shape that can report what TCGplayer holds and this pipeline never sent.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_reconcile_live(self._body())
+                )
             if path == "/pipeline/emit":
                 # ONE IMPORT FILE OVER SEVERAL RUNS (D86). FREE — it reads runs, writes a CSV
                 # and raises `pushed`; the route that can cause money to be spent is the one

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { describeFailure, getBoxes, type Failure } from './server'
 import { boxLabel } from './runScope'
 import type { BoxRecord } from './types'
+import { LiveReconcile } from './LiveReconcile'
 import { RunPanel, type CartBox } from './RunPanel'
 import { carriedScope, clearCarriedScope } from './runHandoff'
 import './Runs.css'
@@ -275,6 +276,10 @@ export function Runs() {
       </div>
 
       <RunPanel cart={cart} />
+
+      {/* THE FOURTH COMMAND, UNSCOPED (D87). Below the run panel because everything
+          above it is about a run and this deliberately is not. */}
+      <LiveReconcile />
     </main>
   )
 }

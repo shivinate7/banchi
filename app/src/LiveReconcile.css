@@ -1,0 +1,105 @@
+/* THE STORE-WIDE RECONCILE (D87). Drawn as its own section under the run panel, and visually
+   quieter than it: everything above is about a run, and this deliberately is not. The rule is
+   `docs/DESIGN.md`'s — a panel that shouted would read as a fifth pipeline step rather than
+   the unscoped form of the fourth. */
+.livecheck {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.livecheck-head {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.livecheck-says {
+  max-width: 62ch;
+  margin: var(--s2) 0 0;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.livecheck-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.livecheck-pick input {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* NO SOLID ACCENT FILL, which `app/tests/pricing.spec.ts` floors for the screen next door and
+   `docs/DESIGN.md` states once for all of them: the product spends hue on two states and this
+   is not one of them. A border and the ink weight carry it. */
+.livecheck-settle {
+  padding: var(--s2) var(--s3);
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.livecheck-settle:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.livecheck-settle:disabled {
+  color: var(--muted);
+  border-color: var(--line);
+  cursor: default;
+}
+
+/* THE COMMAND'S STDOUT, MONOSPACED AND SCROLLED RATHER THAN WRAPPED. It draws fixed-width
+   columns — copies, sku, push, live, sold, hand — and a wrap would break the alignment those
+   columns exist for. `overflow-x` on the block itself keeps the page from scrolling sideways,
+   which is the rule every wide element in this app follows. */
+.livecheck-console {
+  max-height: 60vh;
+  margin: var(--s3) 0 0;
+  padding: var(--s3);
+  overflow: auto;
+  font-family: var(--util);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  white-space: pre;
+}
+
+.livecheck-note {
+  margin-top: var(--s3);
+}
+
+.livecheck-note-text {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.livecheck-machine {
+  margin: var(--s1) 0 0;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}

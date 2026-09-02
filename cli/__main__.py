@@ -180,8 +180,22 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile = sub.add_parser(
         "reconcile", help="confirm what TCGplayer actually staged"
     )
-    reconcile.add_argument("run_dir")
-    reconcile.add_argument("staged_export", help="TCGplayer's Export From Staged download")
+    # ONE RUN, OR THE WHOLE STORE (D87). The positionals stay exactly as they were — every
+    # invocation, harness case and doc line written before this is a run and a staged export —
+    # and `--live` is the store-wide mode, which needs neither.
+    reconcile.add_argument("run_dir", nargs="?")
+    reconcile.add_argument(
+        "staged_export", nargs="?", help="TCGplayer's Export From Staged download"
+    )
+    reconcile.add_argument(
+        "--live",
+        help="a full live export (My Pricing): reconcile every SKU in the store against it",
+    )
+    reconcile.add_argument(
+        "--write",
+        action="store_true",
+        help="with --live: settle the ledger. Previews without it.",
+    )
 
     # -------------------------------------------------------------------------- prices
     #

@@ -116,7 +116,21 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
-./pkmnscan reconcile <run-dir> <staged-export.csv>
+./pkmnscan reconcile <run-dir> <staged-export.csv>   # one import, one Export From Staged
+./pkmnscan reconcile --live <my-pricing.csv> [--write]
+                                   # THE WHOLE STORE against one live export (D87). Previews
+                                   #   by default. Reports BOTH directions — copies this
+                                   #   pipeline sent that TCGplayer no longer holds, and SKUs
+                                   #   it holds that were never sent from here.
+                                   #   WHAT IT WRITES IS `live`, AND ONLY `live`. `pushed` is
+                                   #   the cumulative record of what was sent, and
+                                   #   `cli/resolve.py:_copies_out` already corrects a stuck
+                                   #   one against the physical ceiling. Nothing had ever
+                                   #   written `live`: 405 of 443 SKUs read 0 while carrying
+                                   #   pushed copies, so the cap arithmetic saw 93 live copies
+                                   #   where there were 1,079.
+                                   #   It moves QUANTITIES and marks no card sold (D7).
+                                   #   Reachable on `#/runs`, under the run panel.
 ```
 
 ## Things you will get wrong without being told
@@ -596,6 +610,7 @@ D83  A card leaves a box through a third door: moved, not sold or retired
 D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 D85  The corner is settled by geometry, and a variable nothing sets is not a fallback
 D86  The pricing answer is one file for the store, and the worklist spans runs
+D87  The reconcile is store-wide, and what it writes is `live`
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

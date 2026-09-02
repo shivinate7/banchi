@@ -104,6 +104,8 @@ human. One blocking command would put a person in the middle of a poll loop.
                                                       inventory/prices.json. Previews first.
 ./pkmnscan prices     show [--held]                   the corpus, and what is held back.
 ./pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
+./pkmnscan reconcile  --live <my-pricing.csv>         the WHOLE store against one live
+                        export, both directions. Previews; --write settles `live`.
 ```
 
 `identify --dry-run` does everything except the API call, so a mistyped directory, a

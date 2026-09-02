@@ -1947,6 +1947,48 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     }
 
 
+# ---------------------------------------------------------------- the store-wide reconcile
+
+
+def do_reconcile_live(payload: dict) -> dict:
+    """`POST /pipeline/reconcile-live` — the whole store against one live export (D87).
+
+    FREE, AND IT WRITES ONLY WITH `write`. The preview is the default for the same reason
+    `pkmnscan prices adopt` previews: it moves the quantities `pipeline/join.py`'s cap
+    arithmetic reads, over every SKU at once, and a settlement nobody watched is how a wrong
+    number becomes the new floor.
+
+    NOT RUN-SCOPED, WHICH IS THE WHOLE POINT. `POST /pipeline/runs/<name>/reconcile` exists
+    and stays — it answers one import against one Export From Staged. This answers the STORE
+    against a full live export, which is the only document that can report the other direction:
+    SKUs TCGplayer holds that this pipeline never sent.
+
+    THE FILE IS UPLOADED RATHER THAN NAMED BY PATH, for `_store_upload`'s reason: a route that
+    opened any absolute path a request named would be a file-read primitive behind an origin
+    header. It lands under `inventory/.reconcile/`, beside the store it is about to settle.
+    """
+    upload = payload.get("export")
+    if not isinstance(upload, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "export_required",
+            "Send `export` as {name, content} — TCGplayer's My Pricing export, all printings.",
+        )
+    target = files.inventory_dir() / ".reconcile"
+    target.mkdir(parents=True, exist_ok=True)
+    path = _store_upload(target, upload, "live-")
+    argv = [str(PKMNSCAN), "reconcile", "--live", str(path)]
+    if payload.get("write"):
+        argv.append("--write")
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+    return {
+        "ok": code == 0,
+        "exit_code": code,
+        "wrote": bool(payload.get("write")) and code == 0,
+        "console": console,
+    }
+
+
 # ------------------------------------------------------------------ the pricing corpus
 
 
