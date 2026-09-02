@@ -72,7 +72,8 @@ one fact.
   pipeline rather than about the run that has not happened: `no_market_data` is routing's
   fourth destination beside listed, main and parked, and `pipeline/join.py` writes a queue
   entry only for `routing.MAIN` and `routing.PARKED`. A card with a blank or $0.00 market
-  cell is priced by hand in `decisions.json` (D9) and never appears on that screen.
+  cell is priced by hand on `#/pricing` (`inventory/prices.json`, D9/D86) and never appears on
+  that screen.
   Separately, `card_not_detected` is a constant nothing in `pipeline/`, `cli/` or `identify/`
   ever assigns — it is reachable in principle and has no producer in the repo today. Neither
   is a defect in the screen and neither costs more than a line in a lookup table; both are

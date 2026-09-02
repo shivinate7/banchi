@@ -40,6 +40,10 @@ what happened is not an answer to what should happen.
 NOTHING HERE READS THE STORE OR THE CATALOG. It holds answers, produces a
 `pipeline/decisions.py:Decisions` for a run, and is otherwise inert — which is what lets
 `join`, `emit` and every test written before it stay exactly as they are.
+
+THE POLICY HAS A DEFAULT FOR ONE KEY: a `sub_threshold` the file leaves absent or null reads
+as `DEFAULT_SUB_THRESHOLD`, flat $0.49 (D9, amended 2026-09-02), so a fresh store's first
+emit is not refused for want of an answer the owner has already given once.
 """
 
 from __future__ import annotations
@@ -57,6 +61,13 @@ FILENAME = "prices.json"
 #: The document version. Bumped only when a reader would get an OLD file wrong — a new
 #: optional key is not a version change, because `parse` round-trips what it does not know.
 VERSION = 1
+
+#: The standing sub-threshold disposition when the policy is silent (D9, amended 2026-09-02):
+#: flat $0.49, in the corpus's own `{"flat": "<price>"}` shape. Applied where the key is
+#: ABSENT OR NULL and nowhere else — a file that says `"floor"` says floor. Applied on READ,
+#: never written on read: `Corpus.read` serves GET routes, and the default reaches the file on
+#: the next ordinary write (every join's `book.write()`, every `#/pricing` save).
+DEFAULT_SUB_THRESHOLD: dict = {decisions_mod.FLAT_KEY: "0.49"}
 
 
 @dataclass
@@ -105,7 +116,7 @@ class Corpus:
 
     rule: str = "match"
     basis: str = "market"
-    sub_threshold: object = None
+    sub_threshold: object = field(default_factory=lambda: dict(DEFAULT_SUB_THRESHOLD))
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the
     #: standing policy, which is expected to be almost all of them.
@@ -152,10 +163,19 @@ class Corpus:
         # raising matters.
         pricing.Rule.parse(policy.get("rule", "match"))
         pricing.check_basis(policy.get("basis", "market"))
+        # THE ONE KEY WITH A DEFAULT, AND ONLY WHERE THE FILE IS SILENT. Absent or `null`
+        # reads as `DEFAULT_SUB_THRESHOLD`; `"floor"` and a written flat price are what they
+        # say. Validated ONCE here, by the parser `Decisions.parse` uses, for the argument the
+        # comment above makes for `rule`: a malformed policy refuses at read time, where
+        # `cli/cmd_join.py` and `cli/cmd_emit.py` already catch `MalformedDecisions`.
+        sub_threshold = policy.get("sub_threshold")
+        if sub_threshold is None:
+            sub_threshold = dict(DEFAULT_SUB_THRESHOLD)
+        decisions_mod.parse_sub_threshold(sub_threshold)
         return cls(
             rule=str(policy.get("rule", "match")),
             basis=str(policy.get("basis", "market")),
-            sub_threshold=policy.get("sub_threshold"),
+            sub_threshold=sub_threshold,
             answers=answers,
             overrides={
                 str(name): dict(over)
@@ -247,13 +267,12 @@ class Corpus:
         breaks when they are not.
 
         `unpriced` SEEDS A NULL FOR EVERY CARD THIS RUN COULD NOT PRICE AND THE CORPUS HAS NOT
-        ANSWERED. That is `Decisions.add_unpriced`'s job in the per-run world and it has to
-        keep happening: a `no_market_data` key with a `null` value is precisely what makes
-        `blocking` say the run owes an answer, and D9 forbids inventing one — *a missing price
-        is an unknown price, never the floor by default*.
+        ANSWERED. That was `Decisions.add_unpriced`'s job in the per-run world (gone with D86's
+        amendment) and it has to keep happening: a `no_market_data` key with a `null` value is
+        precisely what makes `blocking` say the run owes an answer, and D9 forbids inventing one
+        — *a missing price is an unknown price, never the floor by default*.
         """
         keys = set(wanted)
-        over = self.overrides.get(run_name or "") or {}
         prices: dict = {}
         unknown: dict = {}
         for sku, answer in self.answers.items():
@@ -264,9 +283,7 @@ class Corpus:
             if sku not in prices and sku not in unknown:
                 unknown[sku] = None
         payload: dict = {
-            "rule": over.get("rule", self.rule),
-            "basis": over.get("basis", self.basis),
-            "sub_threshold": over.get("sub_threshold", self.sub_threshold),
+            **self.policy_for(run_name),
             "overrides": prices,
             "no_market_data": unknown,
         }
@@ -281,10 +298,13 @@ class Corpus:
         reads, rather than a document read twice.
         """
         over = self.overrides.get(run_name or "") or {}
+        # AN EXPLICIT `null` IN AN OVERRIDE MEANS "TAKE THE STANDING POLICY", not "unset": the
+        # standing key can no longer be null after `parse`, and an override that could put a
+        # null back would reopen the refusal the default exists to end.
+        standing = {"rule": self.rule, "basis": self.basis, "sub_threshold": self.sub_threshold}
         return {
-            "rule": over.get("rule", self.rule),
-            "basis": over.get("basis", self.basis),
-            "sub_threshold": over.get("sub_threshold", self.sub_threshold),
+            key: (over[key] if over.get(key) is not None else value)
+            for key, value in standing.items()
         }
 
     def scoped_to(
@@ -318,8 +338,37 @@ class Change:
     hold_lost: bool
 
 
-def adopt(run_answers: List[Tuple[str, dict]], corpus: Optional[Corpus] = None):
+@dataclass
+class Kept:
+    """One SKU a run file answers that the corpus already answers, left as the corpus has it.
+
+    THE CORPUS'S ANSWER IS THE NEWER FACT. After the first adoption every answer is written on
+    `#/pricing` into the corpus, and a run file that still names the SKU is the older sitting
+    by construction — so a re-adopt keeps the corpus and REPORTS the file, and only `--force`
+    reverses that. `in_file` and `in_corpus` are `_token`s, so the line can say whether the
+    two actually differ.
+    """
+
+    sku: str
+    run: str
+    in_file: str
+    in_corpus: str
+
+
+def adopt(
+    run_answers: List[Tuple[str, dict]],
+    corpus: Optional[Corpus] = None,
+    *,
+    replace: bool = True,
+) -> Tuple[Corpus, List[Change], List[Kept]]:
     """Fold per-run `decisions.json` documents into one corpus. Newest wins, changes reported.
+
+    `replace=True` IS THE FIRST ADOPTION: every answer in a file lands over the base, newest
+    file last, and the policy is the newest run's that stated one. `replace=False` IS EVERY
+    ADOPTION AFTER IT: a SKU the corpus already answers is left alone and returned as a
+    `Kept`, a SKU it does not is added, and the three policy keys are never touched. Both
+    fold into the corpus handed in — never into a fresh one, which would drop every answer
+    written on `#/pricing` since the last fold.
 
     `run_answers` is `(run name, parsed document)` OLDEST FIRST — run names are date-prefixed,
     so that is the directory order. The last writer wins, which is the owner's ruling on this
@@ -339,16 +388,38 @@ def adopt(run_answers: List[Tuple[str, dict]], corpus: Optional[Corpus] = None):
     policy global at all.
     """
     out = corpus or Corpus()
+    # SNAPSHOTTED BEFORE THE WALK, so two files naming one SKU the corpus does not hold still
+    # resolve newest-wins between themselves rather than the second reading as "already held".
+    already = set(out.answers) if not replace else set()
+    # AND IN REPLACE MODE THE CORPUS'S OWN ANSWER IS THE OLDEST ENTRY IN THE HISTORY, so a
+    # `--force` that folds a run's price over a hold set on `#/pricing` reports it as the
+    # hold-lost change it is, rather than as a SKU nobody disagreed about.
+    prior = {sku: answer for sku, answer in out.answers.items()} if replace else {}
     seen: Dict[str, List[Tuple[str, object]]] = {}
+    kept: List[Kept] = []
     for name, payload in run_answers:
         if not isinstance(payload, dict):
             continue
-        for key in ("rule", "basis", "sub_threshold"):
-            if payload.get(key) is not None:
-                setattr(out, key, payload[key])
+        if replace:
+            for key in ("rule", "basis", "sub_threshold"):
+                if payload.get(key) is not None:
+                    setattr(out, key, payload[key])
         for table in ("overrides", "no_market_data"):
             for sku, value in (payload.get(table) or {}).items():
                 if value is None:
+                    continue
+                if str(sku) in prior and str(sku) not in seen:
+                    held = prior[str(sku)]
+                    seen[str(sku)] = [(held.from_run or "corpus", held.value)]
+                if str(sku) in already:
+                    kept.append(
+                        Kept(
+                            sku=str(sku),
+                            run=name,
+                            in_file=_token(value),
+                            in_corpus=_token(out.answers[str(sku)].value),
+                        )
+                    )
                     continue
                 seen.setdefault(str(sku), []).append((name, value))
                 out.answers[str(sku)] = Answer(
@@ -383,7 +454,30 @@ def adopt(run_answers: List[Tuple[str, dict]], corpus: Optional[Corpus] = None):
                 ),
             )
         )
-    return out, changes
+    return out, changes, kept
+
+
+def retirable(run_answers: List[Tuple[str, dict]], corpus: Corpus) -> List[str]:
+    """The run names whose every answered SKU the corpus now answers — the files `adopt` may retire.
+
+    A FILE IS RETIRED ONLY WHEN NOTHING IN IT IS LOST, and "lost" is measured against the
+    corpus rather than against what this fold added: a re-adopt that kept the corpus's answer
+    for a SKU still leaves that SKU answered, so the file naming it has nothing left to say.
+    A file the fold could not read is never in `run_answers` and so is never here.
+    """
+    out: List[str] = []
+    for name, payload in run_answers:
+        if not isinstance(payload, dict):
+            continue
+        answered = {
+            str(sku)
+            for table in ("overrides", "no_market_data")
+            for sku, value in (payload.get(table) or {}).items()
+            if value is not None
+        }
+        if answered <= set(corpus.answers):
+            out.append(name)
+    return out
 
 
 def _is_hold(value: object) -> bool:

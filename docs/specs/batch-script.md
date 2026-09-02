@@ -91,8 +91,8 @@ runs/<YYYY-MM-DD>-<label>-<nn>/
   manifest.json         Inputs: capture dir, export path + mtime + sha256, prompt
                         fingerprint, flags, batch ids, cost.
   identifications.json  What this run read, before caching.
-  decisions.json        The pricing decision. Written by join, edited by you (or the
-                        app at step 7), read by emit.
+  decisions.json.adopted  A pre-D86 answer file, folded by `prices adopt` and retired.
+                        Nothing reads it; the live answers are `inventory/prices.json`.
   report.txt            The join report, both directions, verbatim.
   import-listed.csv      Above-threshold import file.
   import-subthreshold.csv Sub-threshold import file.
@@ -337,7 +337,7 @@ and `no_catalog_row` still refuse.
 
 **`--dry-run` previews the join and writes nothing.** It walks the ladder once, counts what
 would queue by reason code, and returns before the first write: no queues, no
-`decisions.json`, no `report.txt`, no manifest. A preview built from a different source than
+`inventory/prices.json` change, no `report.txt`, no manifest. A preview built from a different source than
 the write is a preview that can be wrong in the one way that matters, so the counts come off
 `entries_for` — the same function the write uses.
 
@@ -425,27 +425,32 @@ Round to two decimals, half up. Then clamp to the floor — in that order, so ro
 never sneak a price under it. Floor and threshold are both `$0.40`, both configurable, both
 already in `pipeline/pricing.py`.
 
-### 6.3 Sub-threshold disposition — `decisions.json`
+### 6.3 Sub-threshold disposition — `inventory/prices.json` `policy.sub_threshold`, default flat $0.49 (D86; D9 amended 2026-09-02)
 
 D9 forbids the script from guessing what happens to a sub-threshold card. The decision is
-**a file, not a flag**, so the step 7 React screen becomes a nicer editor for an existing
-contract rather than a second code path.
+**a document, not a flag**, so `#/pricing` is an editor for an existing contract rather than
+a second code path.
 
-`join` writes `decisions.json` pre-filled with every sub-threshold SKU — name, market price,
-copy count, suggested price — and the run-wide choice **unset**. You edit it today; the app
-edits the same file through the capture server later. `emit` reads it and refuses to write
-if the run-wide choice is still unset.
+The answer is the store's standing policy and not a run's (D86): `pipeline/corpus.py` reads
+`policy.sub_threshold` out of `inventory/prices.json` and projects it into every run's
+`Decisions`. Where the key is absent or null the corpus applies the default, **flat $0.49**
+(`DEFAULT_SUB_THRESHOLD`), on read, and writes it on the next save — so a fresh store's first
+`emit` is not refused for want of an answer the owner has already given once. `"floor"` and a
+written flat price say what they say. The press that changes it is on `#/pricing`, and `join`
+names the standing disposition on its own `sub-threshold` line every time it runs. What `emit`
+still refuses on is an unanswered `no_market_data` card, and that rule is unchanged.
 
 ```jsonc
 {
-  "rule": "match",
-  "basis": "market",
-  "sub_threshold": null,          // "floor" | {"flat": "0.25"} — MUST be set
-  "overrides": {                  // per-SKU, works above or below threshold
-    "8823901": "0.35"
+  "version": 1,
+  "policy": {
+    "rule": "match",                    // match | undercut:PCT | markup:PCT
+    "basis": "market",                  // market | low
+    "sub_threshold": {"flat": "0.49"}   // "floor" | {"flat": "0.25"} — the default when silent
   },
-  "no_market_data": {             // never auto-priced; priced here or left unlisted
-    "8823944": null
+  "skus": {                             // one answer per SKU, for the whole store (D86)
+    "8823901": {"value": "0.35"},       // a price, above or below the threshold
+    "8823944": {"value": null, "channel": "unknown"}   // no market price: a price, or "unlisted"
   }
 }
 ```
@@ -594,7 +599,7 @@ report — catching an import that was staged and never moved live.
 | `--review-below-confidence` | `low` | `none` \| `low` \| `medium` |
 | `--dry-run` (join) | off | preview both queues, write nothing |
 | `--basis` | `market` | `market` \| `low` |
-| `--rule` | `match` | `decisions.json`, seeded by the flag |
+| `--rule` | `match` | `inventory/prices.json` `policy.rule`, seeded by the flag on the first join of an empty corpus (D86) |
 | threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py` |
 | live cap | 4 | D7, `join.LIVE_QUANTITY_CAP` |
 | cards per section | *no default* | D10 — dividers are declared, never assumed |

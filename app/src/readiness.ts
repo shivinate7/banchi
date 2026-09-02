@@ -4,16 +4,19 @@ import type { DecisionsDocument, PricingSku } from './types'
  * without a round trip. D54.
  *
  * THIS IS A SECOND IMPLEMENTATION OF `pipeline/decisions.py:blocking`, AND THAT IS THE
- * OWNER'S CHOICE RATHER THAN AN ACCIDENT. The screen autosaves `decisions.json` on every
- * commit, so a server-computed answer would lag the keystroke that satisfies it — and the
- * whole value of the line is that it settles the moment you answer. The cost is drift, and
- * the defence is that `scripts/docs-audit.py`'s `emit readiness` row reconciles the
- * vocabulary below against the Python on every commit, with `make readiness-agreement`
- * holding the behaviour over a committed fixture.
+ * OWNER'S CHOICE RATHER THAN AN ACCIDENT. The screen autosaves `inventory/prices.json` on
+ * every commit, so a server-computed answer would lag the keystroke that satisfies it — and
+ * the whole value of the line is that it settles the moment you answer. The cost is drift.
  *
- * SO THIS FILE IS SHAPED TO BE AUDITED, not merely to work. `OWED_REASONS` is a flat literal
- * a parser can read, every reason is constructed by `owed` below, and nothing else in the app
- * spells one of these strings.
+ * NOTHING AUDITS THIS TODAY — `docs/DEBTS.md` names it. This header claimed an `emit
+ * readiness` docs-audit row and a `make readiness-agreement` target until 2026-09-02, and
+ * neither has ever existed. What does exist is the roster on `GET /pipeline/pricing`, which
+ * asks the Python that actually refuses, so a chip and this line can disagree and the chip is
+ * the one that is right.
+ *
+ * SO THIS FILE IS SHAPED TO BE AUDITED, even though nothing does yet. `OWED_REASONS` is a
+ * flat literal a parser can read, every reason is constructed by `owed` below, and nothing
+ * else in the app spells one of these strings.
  *
  * WHAT IT ANSWERS, EXACTLY: "is pricing answered". NEVER "will emit succeed". `cli/cmd_emit.py`
  * also refuses on cards routed to a queue that are not in one on disk, an empty catalog, a
@@ -52,7 +55,7 @@ export type OwedReason = (typeof OWED_REASONS)[number]
  *  audit taking a view on English, which is the boundary `check_withhold_reasons` already
  *  draws for the hold vocabulary. */
 export const OWED_LABELS: Record<OwedReason, string> = {
-  sub_threshold_unset: 'the run-wide sub-threshold answer',
+  sub_threshold_unset: "the store's sub-threshold policy (null in the file)",
   no_market_data_unanswered: 'a price for every card with no market value',
 }
 

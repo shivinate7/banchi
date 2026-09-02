@@ -753,10 +753,10 @@ test('arrow keys walk the box, and a text field keeps its own caret keys', async
     offset: 1,
   })
 
-  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input and a textarea, and
-     an unguarded window listener would steal the caret keys from both — the operator would be
-     unable to move through a value they were editing. Reveal `Custom`, put the caret in its
-     number field, and the walk must not move.
+  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input, and an unguarded
+     window listener would steal the caret keys from it — the operator would be unable to move
+     through a value they were editing. Reveal `Custom`, put the caret in its number field, and
+     the walk must not move.
 
      WAITED FOR RATHER THAN ASSERTED IMMEDIATELY, and the first draft of this case got that
      wrong in a way worth recording: `toContainText` passes the instant the text matches, so
@@ -1485,7 +1485,7 @@ test('the routing lever reaches join', async ({ page }) => {
   await page.getByRole('button', { name: 'Join again' }).click()
 
   /* `--review-below-confidence` was reachable only from a terminal. `--rule` and `--basis`
-     are deliberately NOT here: D49 makes decisions.json the one place a pricing answer is
+     are deliberately NOT here: D49 makes `inventory/prices.json` the one place a pricing answer is
      written, and a second place to say `rule` already cost 48 cards a price nobody chose. */
   const join = wire.filter((row) => row.path.endsWith('/join')).pop()
   expect(join?.body).toMatchObject({ review_below_confidence: 'medium' })

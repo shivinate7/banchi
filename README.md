@@ -130,10 +130,10 @@ verbatim, and the import CSVs as downloads. D33 is the decision; the panel is th
 the one thing Gate B could not close — *emit's import files existed only as filenames in
 terminal output the owner never saw.*
 
-Between `join` and `emit` you edit the run's `decisions.json`: what happens to sub-threshold
-cards, and a price for anything the catalog has no price for. `emit` refuses to write until
-both are answered — see D9. It is a file rather than a flag so the step 7 screen becomes an
-editor for the same contract instead of a second code path.
+Between `join` and `emit` the pricing answers live in `inventory/prices.json` and are set on
+`#/pricing`: a price or hold per SKU, and the standing sub-threshold policy (flat $0.49 unless
+you change it). `emit` refuses only while a card the catalog has no price for is unanswered —
+D9, D86.
 
 The master store lives in `inventory/`, overridable with `PKMNSCAN_HOME`. Deleting a run
 directory costs nothing; deleting the store costs every answer you have paid for.

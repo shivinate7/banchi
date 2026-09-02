@@ -5,8 +5,8 @@ refresh the export, change the rule, run it again. Nothing here spends money and
 writes an import file.
 
 WHAT IT PRODUCES. The report, in both directions and in full. The standing queues, updated
-with every card that did not list. And `decisions.json`, pre-filled with every SKU that needs
-an answer and the run-wide choice left UNSET — `emit` refuses until you set it.
+with every card that did not list. And the corpus, `inventory/prices.json`, seeded with every
+SKU the catalog has no price for (D86) — `emit` refuses until each of those is answered.
 
 REVIEWS DO NOT BLOCK. An unresolved card sits at a known position in a box: it is not lost
 and it is not urgent, and holding 400 good cards hostage to 7 ambiguous ones is the wrong
@@ -256,7 +256,7 @@ def _preview(args, run_dir, plan, resolved, say) -> int:
     """
     mine = _reason_counts(resolved)
     say("")
-    say(f"DRY RUN          nothing written — no queues, no {runs.DECISIONS}, no "
+    say(f"DRY RUN          nothing written — no queues, no {corpus.FILENAME} change, no "
         f"{runs.REPORT}, no manifest")
     say(f"would queue      {sum(mine.values())} card(s)")
     _counts_block(say, mine)
@@ -267,6 +267,17 @@ def _preview(args, run_dir, plan, resolved, say) -> int:
 
 def run(args, say) -> int:
     run_dir = runs.open_run(args.run_dir)
+    # A LEGACY ANSWER FILE REFUSES HERE, BEFORE ANYTHING IS READ OR WRITTEN (D86, amended
+    # 2026-09-02). `runs/<n>/decisions.json` is never read as a fallback — that would put the
+    # per-run duplication back on the first re-join of an old run — and the refusal used to
+    # sit AFTER the store write, gated on the corpus being EMPTY, so on the owner's store eight
+    # such files were silently ignored while the docs described a refusal. Unconditional now,
+    # and before the export plan, so "Nothing was joined" is true where it is printed.
+    legacy = run_dir.path(runs.DECISIONS)
+    if legacy.is_file():
+        say(f"{legacy} is a legacy pricing file; run `pkmnscan prices adopt --write` to "
+            f"fold and retire it. Nothing was joined.")
+        return 1
     # The file->game mapping, read off each file's own Product Line cells, and every
     # refusal it can raise — two files claiming one game, a game in the run with no
     # export, a file naming no registered game — fires HERE, before the store is opened,
@@ -501,20 +512,14 @@ def run(args, say) -> int:
     # been photographed in: 66 SKUs, 8 of them answered twice, 3 of those a hold overridden by
     # a later price. See `pipeline/corpus.py` and D86.
     #
-    # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ. `pkmnscan prices adopt` folds it
-    # in, once, with a report of every answer it had to choose between. Reading it here as a
-    # fallback would put the duplication back the moment somebody re-joined an old run.
+    # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ — this command refused on one at
+    # its top, before the store was opened. `pkmnscan prices adopt --write` folds it in, once,
+    # with a report of every answer it had to choose between, and retires it.
     try:
         book = corpus.Corpus.read()
     except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
         say(f"{corpus.FILENAME} is unusable: {exc}")
         say("Fix it, or delete it and let this join write a fresh one.")
-        return 1
-
-    legacy = run_dir.path(runs.DECISIONS)
-    if legacy.is_file() and not book.answers:
-        say(f"this run has a legacy {runs.DECISIONS} and the corpus is empty")
-        say("Run `pkmnscan prices adopt` to fold every run's answers into one file first.")
         return 1
 
     # SEEDED, NEVER PRUNED, AND THE ASYMMETRY IS THE WHOLE POINT OF CENTRALISING. `prune` used
@@ -541,8 +546,15 @@ def run(args, say) -> int:
         unpriced=resolved.no_market_data_skus,
     )
 
-    say(f"decisions        {written}")
+    say(f"prices           {written}")
     say(f"                 {choice.describe}")
+    # THE STANDING DISPOSITION, NAMED ON EVERY JOIN. It is the store's policy and not this
+    # run's, it has a default (`pipeline/corpus.py:DEFAULT_SUB_THRESHOLD`, D9 amended), and
+    # the press that changes it is on `#/pricing` — so the line says all three rather than
+    # leaving an operator to wonder why the report stopped asking for an answer.
+    sub = choice.sub_threshold
+    say(f"sub-threshold    {'UNSET' if sub is None else sub.describe} — the store's standing "
+        f"policy ({corpus.FILENAME}); change it on #/pricing")
     say(f"                 {len(book.answers)} answer(s) in the corpus, {len(resolved.matches)} matched here")
     if added:
         say(f"                 +{len(added)} unpriced SKU(s) need a hand-entered answer")
@@ -560,7 +572,7 @@ def run(args, say) -> int:
         say(f"                 EMIT WILL REFUSE: {reason}")
 
     # ---------------------------------------------------------------- pricing.json (D49)
-    # WRITTEN AFTER `decisions.json`, so the rule it records is the one this join resolved
+    # WRITTEN AFTER THE CORPUS, so the rule it records is the one this join resolved
     # with and the one the screen will draw as the source of every suggestion. Written on
     # every join for the same reason the report is: it describes THIS join, and a stale copy
     # beside a fresh report would be the two-files-from-two-moments problem the pricing route

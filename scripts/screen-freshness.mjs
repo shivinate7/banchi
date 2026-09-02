@@ -182,7 +182,7 @@ const RECORDED = {
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
     'undoStandDown', 'undoAnswer', 'answerReviewGroup', 'markSold', 'undoSale', 'retireCard',
     'undoRetire', 'createBox', 'updateBox', 'openSection', 'applyBoxClaims', 'removeCardInPlace',
-    'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep', 'putDecisions',
+    'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep',
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
     'fillEnvelope', 'undoEnvelope',
@@ -670,11 +670,12 @@ const LIST_SURGERY = new Set(['filter', 'map', 'flatMap', 'concat', 'slice', 'so
 
 /** The root identifier of `target.card.box` — `target`. Null for anything that has none.
  *
- *  THE CASTS ARE PEELED OFF FIRST, and that is not tidiness. `Pricing.tsx` sends
- *  `putDecisions(run, sent as Record<string, unknown>)`, and an `as` is a node in the tree: a
- *  version of this that stopped at it saw no argument named `sent`, could not match the
- *  `savedDoc.current = sent` two lines below, and reported the most carefully argued write on
- *  that screen as having no way back. A cast changes the type and nothing else. */
+ *  THE CASTS ARE PEELED OFF FIRST, and that is not tidiness. `Pricing.tsx` once sent
+ *  `putDecisions(run, sent as Record<string, unknown>)` (the per-run write, deleted with D86's
+ *  amendment), and an `as` is a node in the tree: a version of this that stopped at it saw no
+ *  argument named `sent`, could not match the `savedDoc.current = sent` two lines below, and
+ *  reported the most carefully argued write on that screen as having no way back. A cast
+ *  changes the type and nothing else, and `putPricingCorpus` is sent the same way. */
 function rootIdentifier(node) {
   let n = node
   for (;;) {
@@ -699,9 +700,10 @@ function rootIdentifier(node) {
 
 /** Whether this subtree reaches a server read: an imported read, or a raw `fetch`.
  *
- *  `RunPanel.tsx:openDecisions` is the raw one — `fetch(runFileUrl(openRun,'decisions.json'))`,
- *  the single request in this app that bypasses `server.ts`. It is a read, and a scan that only
- *  knew about `server.ts` imports would call the write beside it unfreshened. */
+ *  `RunPanel.tsx:openDecisions` was the raw one — `fetch(runFileUrl(openRun,'decisions.json'))`,
+ *  the single request in this app that bypassed `server.ts`, deleted with the per-run editor
+ *  (D86, amended 2026-09-02). `fetch` stays recognised here so the next raw read, if one is
+ *  ever written, is a read to this scan rather than an unfreshened write beside it. */
 function reachesRead(screen, node, depth = 0, seen = new Set()) {
   if (depth > 3) return false
   let found = false

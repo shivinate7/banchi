@@ -183,6 +183,8 @@ The join preserves the sub-threshold price distribution in bands rather than lum
 
 TCGplayer's native Bulk Lots category (Level 4, Pricing tab) remains the exit for whatever is not listed — selected against that distribution, not sorted into blindly at emit time. No eBay needed.
 
+**Amended 2026-09-02, on the owner's decision: the sub-threshold disposition is a standing STORE policy with a default, and output is no longer suppressed for want of it.** The answer is `inventory/prices.json`'s `policy.sub_threshold` (D86) — one for the whole store, not one per run — and the default is **flat $0.49**: `pipeline/corpus.py:DEFAULT_SUB_THRESHOLD`, applied by `Corpus.parse` wherever the key is absent or null and written to the file on the next ordinary save, never on read. A file that says `"floor"` or a flat price says what it says; only silence takes the default. *"Per-run choice, never a constant in the code"* above is retired: the constant is the owner's own answer, given once, and the per-lot exception survives as `Corpus.overrides` for the run that genuinely wants its own. The `no_market_data` paragraph below is unchanged — a missing price is still an unknown price, still answered by hand, and `emit` still refuses while one is unanswered.
+
 ## D10 — Inventory model
 
 **A card gets a sequential position at capture, and positions are never renumbered.** Location is Box N, Section N, Card N. Sold cards leave permanent gaps.
@@ -4666,6 +4668,8 @@ The second half is what a price *is*. TCGplayer prices per SKU globally, D7 stat
 **`pkmnscan prices adopt` is the migration**, and it previews by default because there is a real decision inside it. The owner's ruling was newest-wins; three of the eight contested SKUs are a `withheld` hold answered by a later price, and newest-wins resolves those **to the price** — the direction that cost money. The command names those three rather than counting them.
 
 **A legacy run file is never read as a fallback.** That would put the duplication back on the first re-join of an old run. `join` and `emit` refuse with a sentence naming the command instead.
+
+**Amended 2026-09-02: the refusal is unconditional, the migration retires what it folds, and the per-run editor is deleted.** The refusal above was gated on an EMPTY corpus — `join` and `emit` looked for a legacy file only while `inventory/prices.json` held no answers — so from the first adoption onward eight files on the owner's store were silently ignored while this entry and CLAUDE.md described a refusal. It is unconditional now and fires before anything is read or written, naming `pkmnscan prices adopt --write`. That command RETIRES each folded file to `decisions.json.adopted` (`cli/runs.py:retire_decisions`, never overwriting); a re-adopt over SKUs the corpus already answers keeps the corpus's answer, reports the file's under `kept`, and retires the file without `--force`; and `--force` folds the files OVER the corpus rather than into a fresh one — the old form dropped every answer written on `#/pricing` since adoption. `PUT /pipeline/runs/<name>/decisions`, the `#/runs` textarea and `remembered_sub_threshold` are deleted: they answered 409 for every run made after this entry, because `join` no longer wrote the file they edited. The policy's default is D9's amendment of the same day.
 
 ---
 

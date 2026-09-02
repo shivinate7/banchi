@@ -10,8 +10,6 @@ import {
   getTcgSets,
   photoUrl,
   preflightRun,
-  putDecisions,
-  runFileUrl,
   runStep,
   startRun,
   type Failure,
@@ -145,8 +143,8 @@ const SCOPE_CHOICES = [
 type ScopeChoice = (typeof SCOPE_CHOICES)[number]['key']
 
 /* D76's one join lever with no other home. `--rule` and `--basis` are NOT here and must not
- * be: D49 makes `decisions.json` the one place a pricing answer is written, `#/pricing` is
- * the press that writes it, and `check_pricing_presets` exists in `scripts/docs-audit.py`
+ * be: D49 makes `inventory/prices.json` the one place a pricing answer is written, `#/pricing`
+ * is the press that writes it, and `check_pricing_presets` exists in `scripts/docs-audit.py`
  * because a SECOND place to say `rule` already produced 48 cards about to list at a price
  * nobody had chosen. Confidence routing is a routing question, it is written nowhere else,
  * and it was reachable only from a terminal. */
@@ -658,15 +656,13 @@ export function RunPanel({ cart }: RunPanelProps) {
 
   /* PER-RUN STATE BELONGS TO THE RUN IT WAS PRODUCED AGAINST, and none of it was cleared when
    * the open run changed. Opening run A, pressing Preview, then clicking run B left A's answer
-   * on screen under B — and `saveDecisions` posts the textarea to whatever `openRun` is at the
-   * moment of the press, so A's edited `decisions.json` could be written into B. Rendering a
-   * step's answer inside its own step box makes a stale one MORE believable, not less, which is
-   * what turns this from latent into worth fixing. One effect rather than an edit at each
-   * `setOpenRun` call site, so a later caller cannot forget it. */
+   * on screen under B. Rendering a step's answer inside its own step box makes a stale one
+   * MORE believable, not less, which is what turns this from latent into worth fixing. One
+   * effect rather than an edit at each `setOpenRun` call site, so a later caller cannot forget
+   * it. (The per-run `decisions.json` textarea that once shared this reset is deleted — D86,
+   * amended 2026-09-02 — which took with it the sharper hazard, A's edit written into B.) */
   useEffect(() => {
     setStepOut(null)
-    setDecisions(null)
-    setDecisionsBad(null)
     /* THE RECEIPT IS THE WORSE OF THE TWO TO LEAVE BEHIND. It names a file, and a file fetched
        into one run is not a file another run holds — `fetched` is the name the join is handed,
        so a stale one would ask the server to join a run against a name it does not have. */
@@ -848,10 +844,10 @@ export function RunPanel({ cart }: RunPanelProps) {
    * card do the same thing because a key with no visible control is a key nobody finds.
    *
    * GUARDED ON THE EVENT'S TARGET, which is the whole subtlety. This panel holds a number
-   * input (Custom's max edge) and a textarea (`decisions.json`), and an unguarded window
-   * listener would steal the caret keys from both — the operator would be unable to move
-   * through a number they were editing. Modifier chords are left alone too: they belong to
-   * the browser and to `App.tsx`'s route chords. */
+   * input (Custom's max edge), and an unguarded window listener would steal the caret keys
+   * from it — the operator would be unable to move through a number they were editing. The
+   * guard is written for any text field, so a control added later is covered. Modifier chords
+   * are left alone too: they belong to the browser and to `App.tsx`'s route chords. */
   useEffect(() => {
     if (!scoped) return
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1035,57 +1031,6 @@ export function RunPanel({ cart }: RunPanelProps) {
       if (stagedPick.current !== null) stagedPick.current.value = ''
     })
 
-  /* ------------------------------------------------------ D9's pricing answer, as a document
-   *
-   * A TEXT EDITOR AND NOT A FORM, and that is a considered choice rather than a shortcut. The
-   * route it writes through says in its own comment that it does not validate what a
-   * disposition MEANS — `emit` owns that refusal — and a typed form here would have to encode
-   * the schema a second time, in TypeScript, where nothing audits it against
-   * `pipeline/decisions.py`. That is the drift D16 exists to catch, and the same argument
-   * `docs/DESIGN.md` makes for showing reason codes verbatim.
-   *
-   * The file already explains itself: `join` writes a `_note` block naming every field and
-   * what `emit` will refuse without. Showing the operator that block is worth more than any
-   * label this component could write over the top of it. */
-  const [decisions, setDecisions] = useState<string | null>(null)
-  const [decisionsBad, setDecisionsBad] = useState<string | null>(null)
-
-  const openDecisions = () =>
-    guard('decisions-read', async () => {
-      if (openRun === null) return
-      const response = await fetch(runFileUrl(openRun, 'decisions.json'), { cache: 'no-store' })
-      if (!response.ok) {
-        setTrouble({
-          code: 'decisions_not_written',
-          message:
-            'This run has no decisions.json yet. Join is what writes it, with every SKU that ' +
-            'needs an answer already filled in.',
-        })
-        return
-      }
-      setDecisions(await response.text())
-      setDecisionsBad(null)
-    })
-
-  const saveDecisions = () =>
-    guard('decisions-write', async () => {
-      if (openRun === null || decisions === null) return
-      let parsed: Record<string, unknown>
-      try {
-        parsed = JSON.parse(decisions) as Record<string, unknown>
-      } catch (err) {
-        /* Parsed HERE rather than sent, because a body that is not JSON would come back as
-         * `body_invalid` from the request layer and the operator would have lost their edit in
-         * the round trip. The message is the browser's own parse error, which names the
-         * character — the one thing this side of the wire knows better than the server. */
-        setDecisionsBad(err instanceof Error ? err.message : String(err))
-        return
-      }
-      await putDecisions(openRun, parsed)
-      setDecisionsBad(null)
-      setDecisions(null)
-    })
-
   /* ------------------------------------------------------------------------------- render */
 
   const runRow = (row: RunSummary) => (
@@ -1222,9 +1167,8 @@ export function RunPanel({ cart }: RunPanelProps) {
             card is sent as, and the crop and the max edge are what decide those.
 
             EVERY BOX IN THE CART IS ITS OWN RUN. One press starts several children, and
-            nothing downstream learns a new shape: each box gets a run directory, a manifest,
-            a queue and its own `decisions.json`. What is new is a fact about the REQUEST, not
-            about a run.
+            nothing downstream learns a new shape: each box gets a run directory, a manifest
+            and a queue. What is new is a fact about the REQUEST, not about a run.
 
             THE READING IS DRAWN AS A PAIR RATHER THAN AS TWO CONTROLS — see `READINGS` above
             for the measurement that decides it, and for why a checkbox beside a free number
@@ -2139,63 +2083,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                     a TCGplayer session in <code>.env</code>, and answers for one game per
                     press.
                   </p>
-                </>
-              )}
-
-              {step.key === 'emit' && detail !== null && (
-                <>
-                  <div className="run-actions">
-                    <button
-                      type="button"
-                      className="run-button"
-                      disabled={busy !== null}
-                      onClick={() => void openDecisions()}
-                    >
-                      The rule and basis…
-                    </button>
-                  </div>
-                  <p className="run-step-note run-step-fine">
-                    The advanced door, not the pricing door: a rule outside the three presets
-                    — <code>undercut:7</code> — is typed here. Prices, holds and the
-                    sub-threshold answer are on Pricing.
-                  </p>
-                  {decisions === null ? null : (
-                    <div className="run-decisions">
-                      <label className="run-field run-field-wide">
-                        decisions.json
-                        <textarea
-                          className="run-textarea"
-                          rows={16}
-                          spellCheck={false}
-                          value={decisions}
-                          onChange={(event) => setDecisions(event.target.value)}
-                        />
-                      </label>
-                      {decisionsBad === null ? null : (
-                        <p className="run-blocked">{decisionsBad}</p>
-                      )}
-                      <div className="run-actions">
-                        <button
-                          type="button"
-                          className="run-button"
-                          disabled={busy !== null}
-                          onClick={() => void saveDecisions()}
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          className="run-plain"
-                          onClick={() => {
-                            setDecisions(null)
-                            setDecisionsBad(null)
-                          }}
-                        >
-                          Close
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
 

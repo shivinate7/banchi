@@ -1391,43 +1391,6 @@ def do_pipeline_run(name: str) -> dict:
     return body
 
 
-def _remembered_sub_threshold(directory: Path) -> Optional[dict]:
-    """The sub-threshold answer the newest OTHER run gave, or `None`.
-
-    "REMEMBER THAT I SAID SO", WITH NO NEW STORAGE — the owner's words when asked what the
-    standing answer should be. Every run already writes its own answer into its own
-    `decisions.json`, so the last one is on disk and needs no second home, no migration and
-    no file that can disagree with the runs it claims to summarise.
-
-    A LABEL AND NEVER A DEFAULT. D9 is explicit that the sub-threshold disposition is a
-    per-run choice and that output is suppressed until it is made — so this removes the time
-    spent DECIDING and not the press. A pre-selected answer is one nobody read.
-
-    Bounded to five directories, newest first, stopping at the first run that answered. No
-    earlier answer means no label, which is correct: there is nothing to remember.
-    """
-    root = files.runs_dir()
-    if not root.is_dir():
-        return None
-    seen = 0
-    for entry in sorted(root.iterdir(), reverse=True):
-        if not entry.is_dir() or entry == directory:
-            continue
-        seen += 1
-        if seen > 5:
-            return None
-        path = entry / run_files.DECISIONS
-        if not path.is_file():
-            continue
-        try:
-            answer = json.loads(path.read_text("utf-8")).get("sub_threshold")
-        except (OSError, ValueError):
-            continue
-        if answer is not None:
-            return {"answer": answer, "run": entry.name}
-    return None
-
-
 def _position_label(
     views: Dict[int, join.BoxView],
     inventory: Optional[master.Inventory],
@@ -1516,7 +1479,7 @@ def _relabel_positions(table) -> None:
         # route had for free until it started reading one. Its table comes off the run
         # directory; the store is consulted only to compose a caption. So an unreadable
         # inventory costs the captions and nothing else — the same call the handler below
-        # makes for a malformed `decisions.json`, degrading the way `_Places` does: null,
+        # makes for a malformed corpus, degrading the way `_Places` does: null,
         # never the stored string and never a guess.
         inventory = None
     views = {} if inventory is None else run_resolve.box_views(inventory)
@@ -1550,10 +1513,10 @@ def do_pipeline_pricing(name: str) -> dict:
     market price is — see `written_at` below for why that is a file mtime and what it does not
     claim.
 
-    TWO FILES IN ONE READ, WHICH IS THE WHOLE REASON IT IS A ROUTE RATHER THAN TWO
-    DOWNLOADS. `_DOWNLOADABLE` already matches `.json`, so a screen could fetch
-    `pricing.json` and `decisions.json` through `GET .../file` and needs neither route nor
-    handler — but two fetches can straddle a re-join, and a table describing one join beside
+    THE TABLE AND THE ANSWERS IN ONE READ, WHICH IS THE WHOLE REASON IT IS A ROUTE RATHER
+    THAN A DOWNLOAD BESIDE `GET /pricing`. `_DOWNLOADABLE` already matches `.json`, so a
+    screen could fetch `pricing.json` through `GET .../file` and the corpus through its own
+    route — but two fetches can straddle a re-join, and a table describing one join beside
     answers written against another is a screen quietly pricing the wrong set of cards.
 
     IT IMPORTS NOTHING NEW. `make server` runs bare `python3`, so this module is stdlib-only;
@@ -1601,7 +1564,6 @@ def do_pipeline_pricing(name: str) -> dict:
         "run": directory.name,
         "pricing": pricing,
         "decisions": answers,
-        "remembered_sub_threshold": _remembered_sub_threshold(directory),
         # WHEN THIS TABLE WAS WRITTEN, WHICH IS THE ONLY AGE THIS SERVER CAN HONESTLY GIVE A
         # PRICE. `cli/cmd_join.py` rewrites `pricing.json` on every join, so its mtime is the
         # moment a join last read an export — and every figure under `snap` came out of that
@@ -1630,10 +1592,10 @@ def _run_is_open(manifest: dict, pricing: dict, answers: Optional[dict]) -> bool
     the same question `app/src/readiness.ts:owed` asks the other side of the wire, asked here
     against the Python that actually refuses rather than against a third implementation of it.
 
-    A MALFORMED ANSWERS FILE READS AS OPEN. `do_pipeline_pricing` already rules that an
-    unreadable `decisions.json` must not stop a screen drawing — the operator has to be able
-    to SEE the file that is wrong. The same argument decides this: a run whose answers cannot
-    be parsed is exactly the run somebody needs to open.
+    A MALFORMED CORPUS READS AS OPEN. `do_pipeline_pricing` already rules that an
+    unreadable `inventory/prices.json` must not stop a screen drawing — the operator has to
+    be able to SEE the file that is wrong. The same argument decides this: a run whose answers
+    cannot be parsed is exactly the run somebody needs to open.
     """
     return bool(_run_owes(manifest, pricing, answers))
 
@@ -1711,12 +1673,11 @@ def _pricing_constant(chosen: Sequence[str], field: str) -> Optional[str]:
 def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     """`GET /pipeline/pricing` — one pricing worklist over several runs (D86).
 
-    THE WORKLIST SPANS RUNS; THE ANSWER FILE DOES NOT. That is D48's own resolution applied
-    one register over: there, a send is a cart of boxes and a run is still one box, because a
-    run carries a reading and a `decisions.json` that are both properties of what is in the
-    drawer. Every word of that stays true. What this route adds is a VIEW
-    across them, and the write path is untouched — `PUT /pipeline/runs/<name>/decisions` is
-    still per run, and one answer to a merged row is one PUT per run holding that SKU.
+    THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D48's resolution — a send is a cart of
+    boxes and a run is still one box, because a run carries a reading that is a property of
+    what is in the drawer — stays true of the READING. What this route adds is a VIEW across
+    runs; the answer is the corpus's (D86, amended), and there is one write, `PUT /pricing`,
+    whatever is on screen.
 
     WHY A ROUTE RATHER THAN N FETCHES FROM THE CLIENT. Two reasons and the second is the one
     that matters. The default landing is every open run, which on this machine is eight tables
@@ -1743,12 +1704,9 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         return {
             "runs": [],
             "skus": [],
-            "decisions": {},
-            "defaults": {},
             "roster": [],
             "skipped": [],
             "asked": list(wanted),
-            "remembered_sub_threshold": None,
             "live_cap": join.LIVE_QUANTITY_CAP,
             "threshold": None,
             "floor": None,
@@ -1808,8 +1766,6 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     chosen = asked or [row["run"] for row in roster if row["open"]]
 
     summaries: List[dict] = []
-    answers_by_run: Dict[str, Optional[dict]] = {}
-    defaults: Dict[str, dict] = {}
     written_at: Dict[str, int] = {}
     skipped: List[dict] = []
     # sku -> merged row. An `OrderedDict` because the ORDER IS THE HIERARCHY on this screen
@@ -1825,11 +1781,6 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             continue
         directory = _open_run(name)
         summaries.append(_summary(directory, names))
-        answers_by_run[name] = payload.get("decisions")
-        defaults[name] = {
-            "rule": payload["pricing"].get("rule"),
-            "basis": payload["pricing"].get("basis"),
-        }
         if payload.get("written_at") is not None:
             written_at[name] = payload["written_at"]
         for row in payload["pricing"].get("skus") or []:
@@ -1913,14 +1864,10 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     return {
         "runs": summaries,
         "skus": list(merged.values()),
-        "decisions": answers_by_run,
-        # EACH RUN'S OWN `rule` AND `basis`, FOR SEEDING A DOCUMENT THAT DOES NOT EXIST YET.
-        # D54: a screen that seeded `{}` sent a document with no rule, and `Decisions.parse`
-        # then defaulted it to match/market while `cli/cmd_join.py` treats the FILE as
-        # authoritative — one keystroke from silently resetting a run joined at `markup:100`.
-        # PER RUN and never one seed for the worklist, which is D48: box 3 has been joined at
-        # `undercut:1` on `low` and at `match` on `market` on different days.
-        "defaults": defaults,
+        # NO PER-RUN `decisions` AND NO PER-RUN `defaults` (D86, amended 2026-09-02). Both
+        # were served for a screen that seeded and wrote one document per run; the answer is
+        # the corpus's, read once through `GET /pricing`, and a payload carrying eight copies
+        # of it keyed by run was a shape nothing read for a day and a half.
         "written_at": written_at,
         "roster": roster,
         "skipped": skipped,
@@ -1934,14 +1881,11 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             summaries and _pricing_constant(chosen, "threshold")
         ) or None,
         "floor": (summaries and _pricing_constant(chosen, "floor")) or None,
-        # `remembered_sub_threshold` IS GONE FROM THIS PAYLOAD, AND ITS ABSENCE IS THE POINT
-        # (D86, amended). It walked up to five sibling run directories for the newest answer
-        # to a question each run had to be asked separately, and offered it as a LABEL because
-        # D9 forbids defaulting it. There is one answer now — the corpus's policy — so the
-        # next run is priced by it without a screen offering anything, and a button saying
-        # "box 5 answered floor · use it" over a document that already says `floor` is a
-        # control that can only confuse. The per-run route still answers it, for the screens
-        # that draw one run.
+        # `remembered_sub_threshold` IS GONE, HERE AND FROM THE PER-RUN ROUTE (D86, amended
+        # 2026-09-02). It walked up to five sibling run directories for the newest answer to a
+        # question each run had to be asked separately, and offered it as a LABEL because D9
+        # forbade defaulting it. There is one answer now — the corpus's policy, with a default
+        # (D9 amended) — so nothing has to be remembered and no screen offers anything.
         "live_cap": join.LIVE_QUANTITY_CAP,
     }
 
@@ -2240,7 +2184,7 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     IT PRICES NOTHING AND D8 IS NOT REOPENED. `pipeline/pricehistory.py`'s own header is
     emphatic on this and the route is the place it could quietly stop being true: nothing
     here computes a listing price, writes `TCG Marketplace Price`, or reaches
-    `decisions.json`. It is a READING taken beside the export, on the screen where a hold is
+    `inventory/prices.json`. It is a READING taken beside the export, on the screen where a hold is
     set — D49 records that the `bullish` withhold and its `watch_above` threshold have been
     set against the operator's memory of what a card used to cost, and this is the fact that
     was missing. The day a listing price is allowed to depend on a trend, that is a change
@@ -3310,37 +3254,3 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         "summary": _summary(directory),
     }
 
-
-def do_pipeline_decisions(name: str, payload: dict) -> dict:
-    """`PUT /pipeline/runs/<name>/decisions` — the sub-threshold answer D9 makes a file.
-
-    THE PRICING QUESTION GATES `emit` AND NOTHING ELSE, which is the owner's ruling and is
-    already how the pipeline is built: `join` writes `decisions.json` with the run-wide
-    choice UNSET and `emit` refuses while it stays that way. This route is the screen's way
-    to answer it, and it deliberately does not validate the answer's meaning — `emit` owns
-    that refusal, and a second validator here would be a second set of rules about what a
-    disposition is, disagreeing with the first at exactly the moment it mattered.
-
-    Replaces the file wholesale, because it is one document the operator is editing and a
-    merge would need this route to understand the schema it just declined to own. The client
-    reads the current file through `GET /pipeline/runs/<name>/file?name=decisions.json`
-    first, which is the same read-modify-write the run report tells a terminal user to do.
-    """
-    directory = _open_run(name)
-    document = payload.get("decisions")
-    if not isinstance(document, dict):
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "decisions_invalid",
-            "Send `decisions` as the whole decisions.json object.",
-        )
-    target = directory / run_files.DECISIONS
-    if not target.is_file():
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT,
-            "decisions_not_written",
-            f"Run {name} has no {run_files.DECISIONS} yet — `join` is what writes it, with "
-            f"every SKU that needs an answer already filled in.",
-        )
-    target.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    return {"ok": True, "run": directory.name, "written": str(target)}

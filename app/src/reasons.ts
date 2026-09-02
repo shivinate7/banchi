@@ -71,7 +71,7 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   number_unread_name_matched: 'Number unreadable, matched by name',
   /* Reachable on screen only if the route puts it in a queue. `cli/resolve.py:entries_for`
    * queues `routing.MAIN` and `routing.PARKED`, and `no_market_data` is neither — it is its
-   * own destination, priced by hand in decisions.json. Kept because docs/DESIGN.md names
+   * own destination, priced by hand on #/pricing. Kept because docs/DESIGN.md names
    * thirteen, and a map that quietly held twelve would be the drift this comment is about. */
   no_market_data: 'No market price',
 }

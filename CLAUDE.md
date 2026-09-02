@@ -110,9 +110,12 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   wrote 2 SKUs past the cap of 4; one merged emit wrote 0.
                                    #   --listed-only  above-threshold rows only
                                    #   --split-games  one file per game
-./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
-                                   #   Previews by default; newest-wins, and it NAMES the holds
-                                   #   a later price replaced rather than counting them.
+./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus
+                                   #   and RETIRE it (`decisions.json.adopted`). Previews by
+                                   #   default; newest-wins, and it NAMES the holds a later
+                                   #   price replaced rather than counting them. A re-adopt over
+                                   #   answered SKUs keeps the corpus's and needs no --force;
+                                   #   --force folds the files OVER the corpus, never a fresh one.
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
@@ -236,6 +239,9 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   2026-09-02 on the owner's question). `pipeline/corpus.py` over `inventory/prices.json` holds
   every listing answer — a price, or a hold with its reason, watch and note — plus the standing
   `rule`/`basis`/`sub_threshold`. A run directory carries NO pricing answer any more.
+  **`sub_threshold` has a default — flat $0.49** (`pipeline/corpus.py:DEFAULT_SUB_THRESHOLD`;
+  D9 amended 2026-09-02), applied where the key is absent or null and written on the next
+  save, so a fresh store's first emit is not refused for want of an answer already given once.
 
   **Why it moved: a run's `decisions.json` held two different kinds of fact.** `rule`, `basis`
   and `sub_threshold` are arguably properties of the lot (D48); `overrides` and
@@ -246,9 +252,13 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   drawn as an ordinary row with no note anywhere.
 
   **The migration is `pkmnscan prices adopt` and it previews first.** Newest-wins, and it names
-  the holds a later price replaced rather than counting them. **A legacy run file is never read
-  as a fallback** — that would put the duplication back on the first re-join of an old run — so
-  `join` and `emit` refuse with a sentence naming the command.
+  the holds a later price replaced rather than counting them. `--write` RETIRES each folded
+  file to `decisions.json.adopted`, and a re-adopt over answered SKUs retires without `--force`.
+  **A legacy run file is never read as a fallback** — that would put the duplication back on
+  the first re-join of an old run — so `join` and `emit` refuse UNCONDITIONALLY, before
+  anything is read or written, with a sentence naming `prices adopt --write`. That refusal was
+  gated on an EMPTY corpus until 2026-09-02, and eight files on the owner's store sat ignored
+  behind it.
 
   **What is per-run still: a POLICY override**, `Corpus.overrides`, for the lot that genuinely
   wants its own `sub_threshold`. Nothing writes one today; D86 names that as a reopening

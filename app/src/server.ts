@@ -1736,14 +1736,14 @@ export async function startRun(cart: readonly RunLeg[]): Promise<RunStarted> {
 }
 
 /**
- * The per-SKU pricing table for one run, with this run's answers and the last run's
- * sub-threshold choice. FREE and read-only: it creates nothing and prices nothing.
+ * The per-SKU pricing table for one run, with the corpus's answers scoped to it. FREE and
+ * read-only: it creates nothing and prices nothing.
  *
- * TWO FILES IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE. `pricing.json` and
- * `decisions.json` are both downloadable through `GET .../file` already, so a screen could
- * fetch them separately and need no server change at all — but two fetches can straddle a
- * re-join, and a table describing one join beside answers written against another is a
- * screen quietly pricing the wrong set of cards.
+ * THE TABLE AND THE ANSWERS IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE.
+ * `pricing.json` is downloadable through `GET .../file` and the corpus has `getPricingCorpus`,
+ * so a screen could fetch them separately and need no server change at all — but two fetches
+ * can straddle a re-join, and a table describing one join beside answers written against
+ * another is a screen quietly pricing the wrong set of cards.
  *
  * Refusals worth branching on: `pricing_not_written` (the run predates the file, or has not
  * been joined — the remedy is a re-join and the message says so) and `no_such_run`.
@@ -1792,8 +1792,10 @@ export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path:
 }
 
 /**
- * Replace the corpus. Wholesale, for `putDecisions`' reason: the screen round-trips every key
- * it does not understand, so a hand-written `_note` survives a client that never heard of it.
+ * Replace the corpus. Wholesale, for D49's reason: the screen round-trips every key it does
+ * not understand, so a hand-written `_note` survives a client that never heard of it. This is
+ * the ONE pricing write in the app — the per-run `PUT .../decisions` it replaced is deleted
+ * (D86, amended 2026-09-02).
  */
 export async function putPricingCorpus(
   corpus: PricingCorpus,
@@ -1840,8 +1842,8 @@ export async function emitMerged(
  * separator. A named run is drawn whether or not the server would have chosen it — asking for
  * one has already answered the question the filter exists to ask.
  *
- * IT IS A READ AND IT SPENDS NOTHING. The write path is unchanged and still per run:
- * `putDecisions` below, once per run holding the SKU being answered.
+ * IT IS A READ AND IT SPENDS NOTHING. The write path is `putPricingCorpus` above — one
+ * document for the store, however many runs are on screen.
  */
 export async function getPricingWorklist(runs: readonly string[] = []): Promise<PricingWorklist> {
   const query = runs.map((run) => `run=${encodeURIComponent(run)}`).join('&')
@@ -2056,7 +2058,7 @@ export async function runStep(
 }
 
 /**
- * Where a run artefact can be downloaded. The import CSVs, the report, `decisions.json`.
+ * Where a run artefact can be downloaded. The import CSVs, the report, `pricing.json`.
  *
  * A URL rather than a fetch, because the browser's own download is what the operator wants
  * — this is the file that goes into TCGplayer's Import to Staged, and a string in a text
@@ -2065,25 +2067,6 @@ export async function runStep(
  */
 export function runFileUrl(name: string, file: string): string {
   return `${base}/pipeline/runs/${encodeURIComponent(name)}/file?name=${encodeURIComponent(file)}`
-}
-
-/**
- * D9's sub-threshold answer, which gates `emit` and nothing else.
- *
- * Replaces the whole document, because it is one file the operator is editing and a merge
- * would need this route to understand a schema it deliberately does not own — `emit` owns
- * what a disposition MEANS and refuses on it. Read the current file through `runFileUrl`
- * first; that is the same read-modify-write the run report tells a terminal user to do.
- */
-export async function putDecisions(
-  name: string,
-  decisions: Record<string, unknown>,
-): Promise<{ ok: boolean; run: string; written: string }> {
-  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/decisions`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ decisions }),
-  })) as { ok: boolean; run: string; written: string }
 }
 
 /* ------------------------------------------------------------------ the code-card track */

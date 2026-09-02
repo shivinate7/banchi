@@ -57,7 +57,6 @@
     GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     GET    /pipeline/runs/<name>/trends    many SKUs' shape at once, for the row strip
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
-    PUT    /pipeline/runs/<name>/decisions D9's sub-threshold answer, which gates `emit`
 
 The first five are build-order step 5 in `docs/GATES.md`. The sixth is the capture app's
 undo, and it lives here rather than in the app because deleting a record, a sidecar, a
@@ -521,8 +520,8 @@ _RUN_FILE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/file$")
 _RUN_PRICING_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/pricing$")
 # MATCHED BEFORE `_RUN_STEP_RE`, WHICH WOULD OTHERWISE SWALLOW IT. That pattern's second
 # group is `[a-z]+` and `export` is `[a-z]+`, so the order of the two `if`s at the dispatch
-# site is what keeps this route from being refused as `no_such_step` — the same care
-# `_RUN_DECISIONS_RE` needs one line down, and the reason both are declared here together.
+# site is what keeps this route from being refused as `no_such_step` — the same care every
+# GET-only sibling below needs, and the reason they are declared together.
 _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # The price history for ONE SKU, named on the query string (D62). Matched before the
 # run-item and step patterns for the same reason the two above are: the more specific
@@ -543,7 +542,6 @@ _RUN_TRENDS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/trends$")
 # `no_such_step` if this were declared after it. GET only — it presses nothing.
 _RUN_SCOPE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/scope$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
-_RUN_DECISIONS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/decisions$")
 
 # The shipping batches (D61). A batch id is 128 random bits rendered as hex by
 # `server/shipping_routes.py:_new_batch_id`, and the character class here is the alphabet
@@ -9648,21 +9646,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, do_put_box(int(match.group(1)), self._body())
                 )
             if path == "/pricing":
-                # THE CORPUS, REPLACED WHOLESALE (D86, amended) — the same read-modify-write
-                # `PUT .../decisions` used, over one document for the store instead of one per
-                # run. Wholesale because the screen round-trips every key it does not
-                # understand, which is what keeps a hand-written `_note` alive.
+                # THE CORPUS, REPLACED WHOLESALE (D86, amended) — the read-modify-write the
+                # retired per-run `PUT .../decisions` used, over one document for the store
+                # instead of one per run. Wholesale because the screen round-trips every key
+                # it does not understand, which is what keeps a hand-written `_note` alive.
+                # That per-run route is DELETED (D86, amended 2026-09-02): it answered 409
+                # for every run made after the corpus landed, because `join` no longer wrote
+                # the file it edited.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pricing_corpus_write(self._body())
-                )
-            # D9's sub-threshold answer, which gates `emit` and nothing else. Matched
-            # before nothing — `/pipeline/runs/<name>/decisions` shares no prefix with the
-            # two inventory PUTs — and kept a PUT because it replaces one whole document.
-            match = _RUN_DECISIONS_RE.match(path)
-            if match:
-                return self._json(
-                    HTTPStatus.OK,
-                    pipeline_routes.do_pipeline_decisions(match.group(1), self._body()),
                 )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No PUT route {path}.")
 

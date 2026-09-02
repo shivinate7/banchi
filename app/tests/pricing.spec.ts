@@ -29,8 +29,8 @@ import type {
  * the entire point."
  *
  * NO REAL REQUEST IS EVER MADE. Every route is intercepted; the PUT that writes
- * `decisions.json` is recorded rather than performed, which is what lets these cases assert
- * what the screen WOULD have written.
+ * `inventory/prices.json` is recorded rather than performed, which is what lets these cases
+ * assert what the screen WOULD have written.
  *
  * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is seven Python tests
  * at the Stop hook; this starts a browser.
@@ -156,7 +156,6 @@ async function open(
         claimed_add?: number
         over_cap?: boolean
       })[]
-      decisions: Record<string, Record<string, unknown> | null>
     }
   } = {},
 ): Promise<Wire[]> {
@@ -183,19 +182,6 @@ async function open(
         files: [{ name: 'import-listed.csv', bytes: 2048, modified: 0, is_import: true }],
         summary: { run: RUN, phase: 'reconcile' },
       }),
-    })
-  })
-
-  await page.route(/\/pipeline\/runs\/[^/]+\/decisions$/, async (route) => {
-    wire.push({
-      method: 'PUT',
-      path: new URL(route.request().url()).pathname,
-      body: route.request().postDataJSON(),
-    })
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true, run: RUN, written: 'decisions.json' }),
     })
   })
 
@@ -298,7 +284,11 @@ async function open(
           policy: {
             rule: answers?.rule ?? 'match',
             basis: answers?.basis ?? 'market',
-            sub_threshold: answers?.sub_threshold ?? null,
+            /* THE SERVER NEVER ANSWERS NULL HERE (D9, amended 2026-09-02): a policy the file
+               leaves silent reads as the store default, flat $0.49, and `Corpus.parse` applies
+               it before anything is served. A case that hands over `null` gets the default,
+               which is what the real route would give it. */
+            sub_threshold: answers?.sub_threshold ?? { flat: '0.49' },
           },
           skus,
         },
@@ -314,8 +304,9 @@ async function open(
 
      A ONE-RUN WORKLIST IS THE DEFAULT, AND THAT IS WHY THE OLDER CASES STILL READ. Each SKU
      becomes a merged row over a single leg, which is exactly what the server answers for a
-     worklist of one — so `skus`, `decisions`, `runs` and `emitted` keep meaning what they
-     meant, and only a case that hands over `worklist` is testing the merge. */
+     worklist of one — so `skus`, `runs` and `emitted` keep meaning what they meant, and only
+     a case that hands over `worklist` is testing the merge. The answers are NOT on this
+     payload: they are the corpus's, read through `/pricing` above. */
   await page.route(/\/pipeline\/pricing/, async (route) => {
     const listed = options.worklist?.runs ??
       options.runs ?? [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: 1 }]
@@ -327,14 +318,6 @@ async function open(
         claimed_add: row.add_to_quantity,
         over_cap: false,
       }))
-    const answers =
-      options.worklist?.decisions ??
-      ({
-        [RUN]:
-          options.decisions === undefined
-            ? { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} }
-            : options.decisions,
-      } as Record<string, unknown>)
     const summary = (row: {
       run: string
       box: number | null
@@ -366,14 +349,9 @@ async function open(
           open: options.emitted !== true,
         })),
         skus: options.noRun === true && listed.length === 0 ? [] : rows,
-        decisions: answers,
-        defaults: Object.fromEntries(
-          listed.map((row) => [row.run, { rule: 'match', basis: 'market' }]),
-        ),
         written_at: {},
         skipped: [],
         asked: [],
-        remembered_sub_threshold: null,
         live_cap: 4,
         threshold: '0.40',
         floor: '0.40',
@@ -408,7 +386,6 @@ async function open(
           options.decisions === undefined
             ? { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} }
             : options.decisions,
-        remembered_sub_threshold: null,
       }),
     })
   })
@@ -613,7 +590,7 @@ test('the screen is on its own route and draws the run it was linked to', async 
   /* AND IT NAMES THE DRAWER (D56). This line read `<run> · N SKUs` — a directory and a count,
      never what is in the box — which is the complaint that produced D56, in the place the
      owner was looking when they made it. The run name STAYS: it is what `emit` and `join` are
-     pointed at and what `decisions.json` is written under. What is new goes in front of it. */
+     pointed at. What is new goes in front of it. */
   await expect(page.locator('.pricing-scope')).toHaveText(
     `Box 7 · Riftbound epics · ${RUN} · 1 SKUs`,
   )
@@ -711,7 +688,7 @@ test('a suggested row carries the rule price and writes no key at all', async ({
 
 // -------------------------------------------------- shipping the run (D54)
 
-test('the sub-threshold answer is settable here, and emit says what it still owes', async ({
+test('the sub-threshold policy is answered from the start, and the floor press writes it once', async ({
   page,
 }) => {
   const wire = await open(page, {
@@ -721,26 +698,41 @@ test('the sub-threshold answer is settable here, and emit says what it still owe
        therefore inert from the day it was written; the annotation on `sku()` is what found
        it. */
     skus: [sku({ bucket: 'sub_threshold' })],
-    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
   })
 
-  /* THE REFUSAL EMIT MAKES, ON THE SCREEN WHERE IT CAN BE ANSWERED. `blocking` never consults
-     `overrides`, so hand-pricing every row still left emit refusing and the only surface for
-     this answer was a JSON textarea on another route. Two of the three runs on disk are
-     parked on exactly this. */
-  await expect(page.locator('.pricing-ready')).toContainText('Emit will refuse')
-
-  await page.getByRole('button', { name: /At the \$0.40 floor/ }).click()
-  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
-  /* THE BARE STRING `pipeline/decisions.py` COMPARES AGAINST, never a value derived from the
-     button's label — that comparison is a `==` with no trim and no case fold. */
-  expect(sentPolicy(wire).sub_threshold).toBe('floor')
-
+  /* ANSWERED BEFORE ANYTHING IS PRESSED (D9, amended 2026-09-02). The policy has a default —
+     flat $0.49 — that the corpus applies wherever the file is silent, so the refusal this
+     screen used to open on ("Emit will refuse: still needs the run-wide sub-threshold
+     answer") is gone for a fresh store. `blocking` still never consults `overrides`; what
+     changed is that the policy is never null on the wire. */
   await expect(page.locator('.pricing-ready')).toContainText('Pricing is answered')
   /* AND IT CLAIMS ONLY WHAT IT CHECKED. The screen sees two of emit's ~8 refusals; "ready to
      emit" would be a promise it cannot keep, and overstating a check is worse than not
      running one. */
   await expect(page.locator('.pricing-ready')).toContainText('can still refuse')
+  /* THE ROW SAYS WHOSE ANSWER THIS IS. It is the store's standing policy and not this run's,
+     and the key is what a person reads to learn that before pressing anything. */
+  await expect(page.locator('.pricing-ship-key').first()).toContainText(
+    'standing policy for the store',
+  )
+
+  const floor = page.getByRole('button', { name: /At the \$0.40 floor/ })
+  await expect(floor).toHaveAttribute('aria-pressed', 'false')
+  await floor.click()
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
+  /* THE BARE STRING `pipeline/decisions.py` COMPARES AGAINST, never a value derived from the
+     button's label — that comparison is a `==` with no trim and no case fold. */
+  expect(sentPolicy(wire).sub_threshold).toBe('floor')
+  await expect(floor).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-save')).toHaveText('saved')
+
+  /* A SECOND PRESS WRITES NOTHING. The button used to TOGGLE, and its second press put `null`
+     into a policy whose null now means "take the default" — a press that read as an undo and
+     was a no-op at the file. Floor over floor is not a change, so nothing is sent. */
+  await floor.click()
+  await page.waitForTimeout(300)
+  expect(wire.filter((r) => r.method === 'PUT')).toHaveLength(1)
+  await expect(floor).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('typing a price then pressing emit saves before it sends', async ({ page }) => {
@@ -916,7 +908,7 @@ test('a held row says so, in both registers, and has no price field', async ({ p
   await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
   await expect(page.locator('.pricing-held')).toContainText('Holding')
   /* docs/DESIGN.md's human-label-large, machine-string-small rule. The machine line is the
-     JSON as it sits in the file, so grepping `withheld` finds the screen, decisions.json and
+     JSON as it sits in the file, so grepping `withheld` finds the screen, the corpus and
      the run report at once — which is the only job that line has.
 
      IT IS ON THE ROW'S SECOND LINE AND NOT INSIDE THE HELD CELL, which is where it used to
@@ -1270,7 +1262,7 @@ test('a held row sinks between the prices and the rows that can add nothing', as
   ])
 
   /* AND THE REASON IS STILL ON THE ROW. The heading says the group is held; which hold it is
-     stays greppable from the screen to `decisions.json` (D49), which is the whole argument for
+     stays greppable from the screen to `inventory/prices.json` (D49), which is the whole argument for
      drawing the machine string at all. */
   await expect(page.locator('.pricing-row').nth(2).locator('.pricing-machine')).toHaveText(
     'withheld: bullish',
@@ -1373,19 +1365,9 @@ test('a hold taken now does not move its row, and has moved it by the next load'
           claimed_add: row.add_to_quantity,
           over_cap: false,
         })),
-        decisions: {
-          [RUN]: {
-            rule: 'match',
-            basis: 'market',
-            sub_threshold: null,
-            overrides: { '8608459': { withheld: 'keeping' } },
-          },
-        },
-        defaults: { [RUN]: { rule: 'match', basis: 'market' } },
         written_at: {},
         skipped: [],
         asked: [],
-        remembered_sub_threshold: null,
         live_cap: 4,
         threshold: '0.40',
         floor: '0.40',
@@ -1403,7 +1385,7 @@ test('a hold taken now does not move its row, and has moved it by the next load'
       body: JSON.stringify({
         corpus: {
           version: 1,
-          policy: { rule: 'match', basis: 'market', sub_threshold: null },
+          policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' } },
           skus: { '8608459': { value: { withheld: 'keeping' } } },
         },
         path: '/tmp/prices.json',
@@ -1660,7 +1642,7 @@ test('the chip says which rule is live, and it is derived rather than remembered
   const under = page.getByRole('button', { name: 'Market −5%' })
 
   /* The run loads at `match`/`market`, so that chip is the live one before anything is
-     pressed — read off `decisions.json`, not off a selection this screen remembers. */
+     pressed — read off the corpus's policy, not off a selection this screen remembers. */
   await expect(match).toHaveAttribute('aria-pressed', 'true')
   await expect(under).toHaveAttribute('aria-pressed', 'false')
 
@@ -1670,7 +1652,8 @@ test('the chip says which rule is live, and it is derived rather than remembered
 })
 
 test('a hand-typed rule lights no chip rather than a stale one', async ({ page }) => {
-  /* `#/runs` edits `decisions.json` as text (D33), so a rule no preset names is ordinary and
+  /* A rule outside the three presets is typed by hand into `inventory/prices.json`'s policy,
+     so one no preset names is ordinary and
      must not be drawn as one of the three. A remembered selection would have lit whichever
      chip was pressed last, which is a claim about what untouched rows will list at — and the
      pair the pipeline reads is the only thing that can answer that. */
@@ -2129,7 +2112,7 @@ test('the spans and the overlap caveat are stated once, above the list', async (
  * the corner and raised them to `z-index: 21` to win it; they then drew over the panel they
  * were escaping AND over the ship bar, so every row scrolled behind the bar punched its two
  * letters through it and took the clicks landing there. A press at the bar's left edge opened
- * a hold on a card nobody could see, and a hold writes `decisions.json`.
+ * a hold on a card nobody could see, and a hold writes `inventory/prices.json`.
  *
  * NOTHING ON THE COMMIT PATH COULD TELL. The suite was green, typecheck was green, lint was
  * green; the screen was a pile. What this file had was text, grid templates and row heights,
@@ -2322,7 +2305,6 @@ const SPAN = {
       over_cap: false,
     },
   ],
-  decisions: {},
 }
 
 test('one answer is written once, for the store, however many runs hold the card', async ({
@@ -2401,6 +2383,44 @@ test('a send of several runs offers one file, and a send of one offers the per-r
   const only = page.getByRole('checkbox', { name: /above-threshold/ })
   await expect(only).toBeVisible()
   await expect(only).not.toBeChecked()
+})
+
+test('the standing policy is on the multi-run landing, and one press writes it once', async ({
+  page,
+}) => {
+  /* THE CONTROL WAS GATED ON "EXACTLY ONE RUN LOADED", which is where it sat from D54 until
+     2026-09-02 — and the screen OPENS on every open run, so the press that changes the store's
+     policy was hidden on the landing it opens on. It is the store's answer (D86) and it draws
+     wherever a sub-threshold row is on screen. */
+  const wire = await open(page, {
+    worklist: {
+      ...SPAN,
+      skus: [
+        SPAN.skus[0] as (typeof SPAN.skus)[number],
+        {
+          ...sku({ sku: '8608459', name: 'Dunsparce', bucket: 'sub_threshold' }),
+          in: [{ run: '2026-09-01-box4-01', add_to_quantity: 3 }],
+          claimed_add: 3,
+          over_cap: false,
+        },
+      ],
+    },
+  })
+
+  const region = page.getByRole('region', { name: 'Ship these runs' })
+  /* THE READY LINE IS DRAWN HERE TOO. `owes` is computed over the union of every run on
+     screen, so this is the line that says whether a MERGED emit would refuse — and nothing
+     drew it on this landing before. */
+  await expect(region.locator('.pricing-ready')).toContainText('Pricing is answered')
+  const floor = region.getByRole('button', { name: /At the \$0.40 floor/ })
+  await expect(floor).toBeVisible()
+
+  await floor.click()
+  /* ONE PUT, TO THE CORPUS, however many runs hold a sub-threshold card — the same property
+     the answer case above asserts for a price. */
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
+  expect(wire.filter((r) => r.method === 'PUT').map((r) => r.path)).toEqual(['/pricing'])
+  expect(sentPolicy(wire).sub_threshold).toBe('floor')
 })
 
 test('the per-run emit is what a send of one offers, so the pair is not one press hiding', async ({

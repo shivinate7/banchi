@@ -433,12 +433,16 @@ ARTICUNO_SKU = "8608859"  # 161/159 Near Mint Holofoil, market 22.03 — one row
 SEAM_SKUS = (DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU)
 
 
-def write_export(path, *, live=None):
+def write_export(path, *, live=None, market=None):
     """A Filtered Export holding the three seam rows. `live` overrides `Total Quantity`.
 
     That column is the one D8 and D11 make authoritative and the one `./pkmnscan join` reads
     a SKU's `live` count from, so every case below that moves `live` moves it by rewriting
     this file rather than by writing the number it expects to read back.
+
+    `market` overrides `TCG Market Price` the same way, because all three seam rows sit above
+    the $0.40 threshold in the fixture and a case about the sub-threshold disposition needs one
+    that does not — moved by rewriting the export, which is where `prices_for` reads it from.
     """
     source = tcgcsv.read_export(FIXTURE_EXPORT)
     by_sku = source.by_sku()
@@ -447,6 +451,8 @@ def write_export(path, *, live=None):
         row = dict(by_sku[sku])
         if live is not None and sku in live:
             row[tcgcsv.LIVE_QUANTITY_COLUMN] = str(live[sku])
+        if market is not None and sku in market:
+            row[tcgcsv.MARKET_PRICE_COLUMN] = str(market[sku])
         rows.append(row)
     tcgcsv.write_csv(path, source.header, rows)
     return Path(path)
@@ -508,19 +514,24 @@ def identifications_for(cards) -> dict:
     }
 
 
-def seam_run(checks: Checks, cards, *, live=None):
+def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
     """A joined run over `cards`, in whatever isolated home is current. Returns the run.
 
     Captures a photo per card through the real route first, so the store holds the same
     positions the identifications name — the ordinary case. The one case that deliberately
     skips this is the position `emit` has never seen, which builds its payload by hand.
+
+    `join=False` stops before the join and returns the run with an empty report, for the
+    cases that need to put something in the run directory FIRST and watch the join refuse.
     """
     for box, index, *_ in cards:
         while Store().read().inventory.next_index(box) <= index:
             capture_server.do_capture(capture_payload(box))
     run_dir = runs.create("t7-seam")
     run_dir.write_identifications(identifications_for(cards))
-    export = write_export(run_dir.path("export.csv"), live=live)
+    export = write_export(run_dir.path("export.csv"), live=live, market=market)
+    if not join:
+        return runs.open_run(run_dir.directory), ""
     said = command(checks, "join", str(run_dir.directory), "--export", str(export))
     return runs.open_run(run_dir.directory), said
 
@@ -9552,6 +9563,278 @@ def check_pricing_authority(checks: Checks) -> None:
             )
 
 
+def check_prices_adopt(checks: Checks) -> None:
+    """`pkmnscan prices adopt` folds, RETIRES, and the two commands refuse until it has (D86, amended).
+
+    THE REFUSAL WAS GATED ON AN EMPTY CORPUS, AND ON THE OWNER'S STORE EIGHT FILES SAT BEHIND
+    IT. `join` and `emit` refused a run carrying `decisions.json` only while `inventory/
+    prices.json` held no answers — so from the first adoption onward every legacy file was
+    silently ignored, while CLAUDE.md and D86 described an unconditional refusal. And `adopt`
+    itself refused to run a second time without `--force`, whose implementation folded the run
+    files into a FRESH corpus — every answer written on `#/pricing` since the first fold would
+    have gone with it.
+
+    These cases pin the shape that replaces it: the guard is unconditional and fires before
+    anything is read or written; `adopt --write` retires each folded file to
+    `decisions.json.adopted`; a re-adopt keeps the corpus's answers and retires the files
+    without `--force`; `--force` folds OVER the corpus and names the hold it costs; and the
+    sub-threshold disposition has a standing default (D9, amended 2026-09-02) so a fresh
+    store's first emit is not refused for want of it.
+
+    Its own isolated home per case, for this file's usual reason: emit writes `pushed`.
+    """
+    from cli import __main__ as entry
+
+    checks.note("")
+    checks.note("PRICES ADOPT — fold, retire, and refuse until then")
+
+    cards = [(3, 1, "Articuno", "161", None)]
+    older_doc = {
+        "sub_threshold": {"flat": ".5"},
+        "overrides": {ARTICUNO_SKU: {"withheld": "bullish"}},
+    }
+    newer_doc = {
+        "sub_threshold": "floor",
+        "overrides": {ARTICUNO_SKU: "3.45"},
+        "no_market_data": {DUNSPARCE_SKU: "1.00"},
+    }
+
+    def legacy_run(document: dict):
+        made = runs.create("t7-legacy")
+        path = made.directory / runs.DECISIONS
+        path.write_text(json.dumps(document, indent=2) + "\n", "utf-8")
+        return made, path.read_bytes()
+
+    # ---------------------------------------------------------- (1) the first adoption
+    with isolated_home():
+        older, older_bytes = legacy_run(older_doc)
+        newer, newer_bytes = legacy_run(newer_doc)
+
+        preview = command(checks, "prices", "adopt")
+        checks.ok(
+            "DRY RUN" in preview
+            and str(older.directory / runs.DECISIONS) in preview.split("would retire", 1)[-1]
+            and preview.count("would retire") == 2,
+            "the preview says DRY RUN and names BOTH files under `would retire` — what will "
+            "leave the run directory is written down before it moves",
+            preview,
+        )
+        checks.ok(
+            (older.directory / runs.DECISIONS).is_file()
+            and (newer.directory / runs.DECISIONS).is_file()
+            and not files.prices_path().exists(),
+            "and the preview moved nothing: both files where they were, no corpus written",
+        )
+
+        said = command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        checks.equal(
+            (
+                book.answers[ARTICUNO_SKU].value,
+                book.answers[DUNSPARCE_SKU].value,
+                book.answers[DUNSPARCE_SKU].channel,
+                book.sub_threshold,
+            ),
+            ("3.45", "1.00", "unknown", "floor"),
+            "newest wins: the later price over the earlier hold, the no-market-data answer "
+            "on its own channel, and the policy from the newest run that stated one",
+        )
+        checks.ok(
+            "A HOLD WAS REPLACED BY A PRICE" in said and ARTICUNO_SKU in said,
+            "and the hold that lost is NAMED, in as many words — the direction that cost money",
+            said,
+        )
+        checks.ok(
+            not (older.directory / runs.DECISIONS).exists()
+            and not (newer.directory / runs.DECISIONS).exists()
+            and (older.directory / runs.DECISIONS_ADOPTED).read_bytes() == older_bytes
+            and (newer.directory / runs.DECISIONS_ADOPTED).read_bytes() == newer_bytes
+            and "retired" in said,
+            "`--write` RETIRES each folded file to `decisions.json.adopted`, byte for byte — "
+            "the run keeps the record it was priced with, under a name nothing refuses on",
+            said,
+        )
+
+    # ------------------------------------------ (2) a re-adopt keeps the corpus's answers
+    def answered_corpus():
+        book = corpus.Corpus.read()
+        book.answers["9999001"] = corpus.Answer(value="9.99")
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "keeping"})
+        book.write()
+
+    third_doc = {
+        "sub_threshold": {"flat": ".5"},
+        "overrides": {ARTICUNO_SKU: "3.45", "9999002": "0.10"},
+    }
+
+    with isolated_home():
+        legacy_run(older_doc)
+        legacy_run(newer_doc)
+        command(checks, "prices", "adopt", "--write")
+        answered_corpus()
+        third, _ = legacy_run(third_doc)
+
+        said = command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        checks.equal(
+            (
+                book.answers[ARTICUNO_SKU].value,
+                book.answers["9999001"].value,
+                book.answers["9999002"].value,
+                book.sub_threshold,
+            ),
+            ({"withheld": "keeping"}, "9.99", "0.10", "floor"),
+            "WITHOUT `--force`, THE CORPUS KEEPS WHAT IT ALREADY ANSWERS: the hold set on "
+            "#/pricing survives the file's price, a SKU in no file is untouched, a SKU the "
+            "corpus never held is added, and the policy is not moved by the file's `.5`",
+        )
+        checks.ok(
+            "kept" in said and ARTICUNO_SKU in said.split("kept", 1)[-1],
+            "and the answer it kept is named under `kept`, with what the file said beside it",
+            said,
+        )
+        checks.ok(
+            not (third.directory / runs.DECISIONS).exists()
+            and (third.directory / runs.DECISIONS_ADOPTED).is_file(),
+            "the file is retired all the same — every SKU it answers is answered in the "
+            "corpus, so it has nothing left to say",
+        )
+        with quiet() as again:
+            code = entry.main(["prices", "adopt", "--write"])
+        checks.equal(
+            (code, "nothing to adopt" in again.getvalue()),
+            (0, True),
+            "a second `adopt --write` with no files left exits 0 and says so — the migration "
+            "is re-runnable, which is what lets a session run it without checking first",
+        )
+
+    # ------------------------------------------------- (3) --force folds OVER the corpus
+    with isolated_home():
+        legacy_run(older_doc)
+        legacy_run(newer_doc)
+        command(checks, "prices", "adopt", "--write")
+        answered_corpus()
+        legacy_run(third_doc)
+
+        said = command(checks, "prices", "adopt", "--write", "--force")
+        book = corpus.Corpus.read()
+        checks.equal(
+            (book.answers[ARTICUNO_SKU].value, book.answers["9999001"].value),
+            ("3.45", "9.99"),
+            "`--force` lets the file win where the two differ, and a SKU in no file SURVIVES "
+            "— the old `--force` folded into a fresh corpus and would have dropped it",
+        )
+        checks.ok(
+            "A HOLD WAS REPLACED BY A PRICE" in said and ARTICUNO_SKU in said,
+            "and the hold it cost is named — the corpus's own answer is the oldest entry in "
+            "the history, so a price folded over a screen hold is reported as the loss it is",
+            said,
+        )
+
+    # ------------------------------------------------------ (4) join refuses, early
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards, join=False)
+        (run_dir.directory / runs.DECISIONS).write_text('{"rule": "match"}\n', "utf-8")
+        argv = ["join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))]
+        with quiet() as said:
+            code = entry.main(argv)
+        text = said.getvalue()
+        after = Store().read()
+        got = (
+            code,
+            "prices adopt --write" in text,
+            "Nothing was joined" in text,
+            bool(runs.open_run(run_dir.directory).manifest.get("joined")),
+            len(after.review.entries) + len(after.parked.entries),
+        )
+        want = (1, True, True, False, 0)
+        checks.ok(
+            got == want,
+            "JOIN REFUSES A LEGACY FILE UNCONDITIONALLY, NAMES THE COMMAND, AND HAS WRITTEN "
+            "NOTHING when it says so — no `joined` in the manifest, nothing in either queue. "
+            "The guard sat after the store write and fired only on an empty corpus before",
+            f"expected: {want!r}\nactual:   {got!r}\n{text}",
+        )
+        command(checks, "prices", "adopt", "--write")
+        with quiet() as said:
+            code = entry.main(argv)
+        checks.ok(
+            code == 0,
+            "and once the file is retired the same join exits 0",
+            f"exit {code}\n{said.getvalue()}",
+        )
+
+    # ------------------------------------------------------- (5) emit refuses, per run
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        (run_dir.directory / runs.DECISIONS).write_text('{"rule": "match"}\n', "utf-8")
+        with quiet() as said:
+            code = entry.main(["emit", str(run_dir.directory)])
+        text = said.getvalue()
+        got = (
+            code,
+            "prices adopt --write" in text,
+            "Nothing was written" in text,
+            run_dir.path(runs.import_listed_name("pokemon")).exists(),
+        )
+        want = (1, True, True, False)
+        checks.ok(
+            got == want,
+            "emit refuses the same file the same way, before any CSV exists",
+            f"expected: {want!r}\nactual:   {got!r}\n{text}",
+        )
+
+    with isolated_home():
+        first, _ = seam_run(checks, cards)
+        second, _ = seam_run(checks, cards)
+        (second.directory / runs.DECISIONS).write_text('{"rule": "match"}\n', "utf-8")
+        with quiet() as said:
+            code = entry.main(["emit", str(first.directory), str(second.directory)])
+        text = said.getvalue()
+        got = (code, second.name in text, "prices adopt --write" in text)
+        want = (1, True, True)
+        checks.ok(
+            got == want,
+            "THE MERGED EMIT REFUSES TOO, NAMING THE RUN THAT CARRIES THE FILE — the merged "
+            "path had no guard at all, so a send of several runs walked straight past what "
+            "a send of one refused",
+            f"expected: {want!r}\nactual:   {got!r}\n{text}",
+        )
+
+    # -------------------------------------------- (6) the standing default, flat $0.49
+    with isolated_home():
+        run_dir, said = seam_run(
+            checks, [(3, 1, "Dunsparce", "120", "normal")], market={DUNSPARCE_SKU: "0.12"}
+        )
+        policy = json.loads(files.prices_path().read_text())["policy"]
+        checks.equal(
+            policy["sub_threshold"],
+            {"flat": "0.49"},
+            "A FRESH CORPUS'S SUB-THRESHOLD POLICY IS FLAT $0.49 AFTER THE FIRST JOIN (D9, "
+            "amended 2026-09-02): the default is applied on read and reaches the file on the "
+            "join's own write, so nothing has to be pressed before the first emit",
+        )
+        checks.ok(
+            "sub-threshold    flat at $0.49" in said and "EMIT WILL REFUSE" not in said,
+            "the join names the standing disposition on its own line and stops nagging — "
+            "`EMIT WILL REFUSE` fires for a genuinely blocking reason only",
+            said,
+        )
+        before = files.prices_path().read_bytes()
+        command(checks, "emit", str(run_dir.directory))
+        written = {
+            row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN]
+            for row in tcgcsv.read_export(
+                run_dir.path(runs.import_subthreshold_name("pokemon"))
+            ).rows
+        }
+        checks.equal(
+            (written.get(DUNSPARCE_SKU), files.prices_path().read_bytes() == before),
+            ("0.49", True),
+            "and emit prices the sub-threshold card at the default without touching the "
+            "corpus — the answer was already there; emit only reads it",
+        )
+
 def check_live_reconcile(checks: Checks) -> None:
     """The whole store against one live export, both directions (D87).
 
@@ -9841,12 +10124,6 @@ def check_pricing_route(checks: Checks) -> None:
                 "the CSV in front of them while they price, and a subset chosen here is a "
                 "decision about what matters taken by the wrong file",
             )
-            checks.equal(
-                payload["remembered_sub_threshold"],
-                None,
-                "with no earlier run there is nothing to remember, and the answer is null "
-                "rather than a guess — D9 forbids a default and this is a LABEL, not one",
-            )
             # WHEN THE TABLE WAS WRITTEN, WHICH IS THE ONLY AGE A PRICE CAN HONESTLY CARRY.
             # `#/inventory`'s card panel draws `$5.47 · read 2 days ago` off this, and the
             # second half is not decoration: `join` is free, re-runnable and routinely pointed
@@ -9881,9 +10158,10 @@ def check_pricing_route(checks: Checks) -> None:
             # THE ANSWER IS THE CORPUS'S, AND A LATER RUN DOES NOT HAVE TO BE REMINDED OF IT.
             # `remembered_sub_threshold` walked up to five sibling run directories looking for
             # the newest answer, because each run held its own — a label offered so the
-            # operator did not have to re-decide, which D9 forbids defaulting. With one
-            # document there is nothing to remember: the answer IS the policy, and the next run
-            # is priced by it without a screen offering anything.
+            # operator did not have to re-decide, which D9 then forbade defaulting. It is gone
+            # from every payload now (D86, amended 2026-09-02): with one document there is
+            # nothing to remember — the answer IS the policy, it has a default (D9 amended),
+            # and the next run is priced by it without a screen offering anything.
             book = corpus.Corpus.read()
             book.sub_threshold = "floor"
             book.write()
@@ -12025,46 +12303,6 @@ def check_pipeline_routes(checks: Checks) -> None:
                 )
                 checks.equal((status, error_code(body)), (400, expected), label)
 
-            # ------------------------------------------------------------- the decisions PUT
-            status, body, _ = request(
-                port,
-                "PUT",
-                f"/pipeline/runs/{made.directory.name}/decisions",
-                payload={"decisions": {"rule": "match"}},
-            )
-            checks.equal(
-                (status, error_code(body)),
-                (409, "decisions_not_written"),
-                "the pricing answer refuses a run that has not been joined — `join` is what "
-                "writes decisions.json with every SKU that needs an answer already in it, "
-                "and a route that created the file would invent the question as well",
-            )
-            (made.directory / runs.DECISIONS).write_text('{"rule": "match"}\n')
-            status, body, _ = request(
-                port,
-                "PUT",
-                f"/pipeline/runs/{made.directory.name}/decisions",
-                payload={"decisions": {"rule": "undercut:5", "sub_threshold": "floor"}},
-            )
-            checks.equal(
-                (status, json.loads((made.directory / runs.DECISIONS).read_text())),
-                (200, {"rule": "undercut:5", "sub_threshold": "floor"}),
-                "and once it exists the route replaces it wholesale — one document the "
-                "operator is editing, and a merge would need this route to understand a "
-                "schema it deliberately does not own",
-            )
-            status, body, _ = request(
-                port,
-                "PUT",
-                f"/pipeline/runs/{made.directory.name}/decisions",
-                payload={"decisions": "floor"},
-            )
-            checks.equal(
-                (status, error_code(body)),
-                (400, "decisions_invalid"),
-                "a non-object answer is refused rather than written — emit owns what a "
-                "disposition MEANS, but this route still owns what a document IS",
-            )
         finally:
             httpd.shutdown()
             thread.join(timeout=5)
@@ -17159,6 +17397,7 @@ def run() -> Result:
     check_emit_claim_decides(checks)
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
+    check_prices_adopt(checks)
     check_merged_emit_cap(checks)
     check_live_reconcile(checks)
     check_withholding(checks)

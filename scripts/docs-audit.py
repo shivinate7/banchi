@@ -3473,7 +3473,7 @@ def check_withhold_reasons(report: Report) -> None:
                 "app/src/holds.ts",
                 f"{reason!r} is offered by the screen and is not in "
                 f"pipeline/decisions.py:WITHHOLD_REASONS — `_withheld` refuses it, so "
-                f"choosing it writes a decisions.json the next join cannot read.",
+                f"choosing it writes an inventory/prices.json the next join cannot read.",
             )
         )
     for reason in sorted(authored - offered):
@@ -3631,7 +3631,7 @@ def check_pricing_presets(report: Report) -> None:
 
     `cli/cmd_join.py:PRESETS` is `(key, rule, basis)` and prices every SKU under every preset
     so the client performs no arithmetic on money. `app/src/Pricing.tsx:PRESETS` is what a
-    press on the pricing screen writes into `decisions.json` — and it has to write the RULE,
+    press on the pricing screen writes into `inventory/prices.json` — and it has to write the RULE,
     because D49 refuses to write the suggestions themselves: an override is layer 1 of
     `prices_for` and would beat the rule at layer 4, producing a run where changing the preset
     silently changed nothing.
@@ -3644,9 +3644,9 @@ def check_pricing_presets(report: Report) -> None:
     check compared the two tables, and the screen never drew which rule was live.
 
     BLOCKING, for the reason `check_withhold_reasons` above gives and which applies here
-    verbatim: `PUT /pipeline/runs/<name>/decisions` validates nothing, so two declarations
-    agreeing is the whole defence. A rule the screen writes and `pricing.Rule.parse` refuses is
-    a run `emit` cannot price.
+    nearly verbatim: `PUT /pricing` refuses a rule `pricing.Rule.parse` cannot read, but a
+    refused save is an answer that never landed, so two declarations agreeing is still the
+    whole defence. A rule the screen writes and the parser refuses is a run `emit` cannot price.
 
     THE LABELS AND THE BLURBS ARE NOT CHECKED, the same carve-out and the same reason: they are
     prose for a person, and a rule about wording would be this audit taking a view on English.
@@ -6257,7 +6257,7 @@ NON_PATHS = [
     # module of the same name in ordinary prose is still found (see REAL_PATHS).
     "- **One route spends and is named for it** — `POST /pipeline/identify`. It refuses",
     "`GET /pipeline/runs/<name>/file` — one artefact's bytes, for download",
-    "`PUT /pipeline/runs/<name>/decisions` — D9's sub-threshold answer",
+    "`GET /pipeline/pricing` — one worklist over several runs",
     "`DELETE /inventory/<box>/<index>` — D10's hard delete of a record",
     "Refill on later imports as `Add to Quantity = min(cap - live, backstock)`",
     "The repo sits under `~/Library/Mobile Documents/com~apple~CloudDocs/`",

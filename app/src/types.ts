@@ -1647,9 +1647,10 @@ export type WithheldRecord = {
   note?: string
 }
 
-/** `decisions.json` as it sits on disk. Deliberately loose: `PUT .../decisions` replaces the
- *  document wholesale, so the screen round-trips every key it does not understand rather
- *  than rebuilding the file from what it happens to know about. */
+/** One run's pricing decision, as `GET .../pricing` projects the corpus for one run (D86).
+ *  Deliberately loose, for the reason the corpus type below gives: every reader on `#/pricing`
+ *  takes this shape, and the corpus is projected into it rather than each reader learning a
+ *  new one. */
 export type DecisionsDocument = {
   rule?: string
   basis?: string
@@ -1663,10 +1664,6 @@ export type PricingPayload = {
   run: string
   pricing: PricingTable
   decisions: DecisionsDocument | null
-  /** The sub-threshold answer the newest OTHER run gave. A LABEL and never a default — D9
-   *  forbids defaulting this on the operator's behalf, so this removes the time spent
-   *  deciding and not the press. */
-  remembered_sub_threshold: { answer: string | { flat: string }; run: string } | null
   /** When `pricing.json` was last written, as a UNIX SECOND — `cli/cmd_join.py` rewrites it on
    *  every join, so this is the moment a join last read an export and therefore the age of
    *  every figure under `snap`.
@@ -1756,17 +1753,12 @@ export type PricingWorklist = {
    *  which are worth loading, so this is deliberately wider than `runs` above. */
   roster: RosterRun[]
   skus: MergedSku[]
-  decisions: Record<string, DecisionsDocument | null>
   written_at: Record<string, number>
   /** A run that could not be read, named rather than dropped — an eight-run worklist must not
    *  fail to draw because one directory predates `pricing.json`. */
   skipped: { run: string; code: string; message: string }[]
   asked: string[]
-  remembered_sub_threshold: PricingPayload['remembered_sub_threshold']
   live_cap: number
-  /** Each run's own `rule`/`basis`, for seeding a document that does not exist yet (D54).
-   *  Per run and never one seed for the worklist — D48 makes both a property of the lot. */
-  defaults: Record<string, { rule: string | null; basis: string | null }>
   /** The two run-wide figures a row is drawn against, off the newest run in the list. Null
    *  where no table could be read, which the screen falls back on rather than blanks. */
   threshold: string | null

@@ -1667,7 +1667,7 @@ class SubThresholdBucket:
     def report(self) -> str:
         lines = [
             f"below ${self.threshold} threshold: {len(self.matches)} SKU(s), "
-            f"{self.copies} copies — disposition required before output"
+            f"{self.copies} copies"
         ]
         for band in self.bands():
             lines.append(

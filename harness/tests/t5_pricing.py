@@ -330,8 +330,9 @@ def run() -> Result:
     c.equal(
         held.to_payload()["overrides"][ACCELGOR],
         pricing.UNLISTED,
-        "the bare form ROUND-TRIPS BYTE-IDENTICALLY — a hold typed by hand as a string must "
-        "not silently become an object on the next join, which rewrites this file every time",
+        "the bare form round-trips byte-identically through `to_payload`, the shape "
+        "`GET .../pricing` serves — a hold typed by hand as a string must not come back as "
+        "an object",
     )
     c.equal(
         held.to_payload()["overrides"][ARTICUNO],
@@ -343,8 +344,8 @@ def run() -> Result:
             {"overrides": {ARTICUNO: {"withheld": "bullish"}}}
         ).to_payload()["overrides"][ARTICUNO],
         {"withheld": "bullish"},
-        "an EMPTY note is omitted rather than written — `join` rewrites this file on every "
-        "run, so a written empty would accrete on every held SKU forever",
+        "an EMPTY note is omitted rather than written — the corpus is rewritten on every "
+        "save, so a written empty would accrete on every held SKU forever",
     )
     c.ok(
         any("withheld" in w for w in held.warnings),
@@ -380,13 +381,13 @@ def run() -> Result:
         "hold — the floor comparison is guarded on the value being a Decimal",
     )
 
-    # --- decisions.json is the contract, and it refuses rather than defaulting --------------
+    # --- the parsed decision is the contract, and the parser refuses rather than defaulting ---
     choice = decisions.Decisions.parse(
         {"rule": "undercut:5", "basis": "low", "sub_threshold": None,
          "overrides": {ARTICUNO: "9.99"}, "no_market_data": {ACCELGOR: None}}
     )
-    c.equal(str(choice.rule), "undercut:5", "decisions.json carries the rule")
-    c.equal(choice.basis, "low", "decisions.json carries the basis")
+    c.equal(str(choice.rule), "undercut:5", "the parsed decision carries the rule")
+    c.equal(choice.basis, "low", "the parsed decision carries the basis")
     c.equal(choice.unanswered, [ACCELGOR], "a null no_market_data entry is unanswered")
     c.equal(
         len(choice.blocking([ARTICUNO])),
@@ -409,31 +410,6 @@ def run() -> Result:
         decisions.MalformedDecisions,
         lambda: decisions.Decisions.parse({"sub_threshold": "cheap"}),
         "an unrecognised sub_threshold is refused, never guessed at",
-    )
-
-    # Merge, never clobber — `join` is re-runnable, and a re-run must not discard a decision.
-    kept = decisions.Decisions.parse(
-        {"sub_threshold": "floor", "no_market_data": {ACCELGOR: "1.50"}}
-    )
-    added = kept.add_unpriced([ACCELGOR, ARTICUNO])
-    c.equal(added, [ARTICUNO], "re-running adds only the SKUs that are new")
-    c.equal(
-        kept.no_market_data[ACCELGOR],
-        Decimal("1.50"),
-        "an answer already given is preserved across a re-run",
-    )
-    # Pruned against a run that contains neither: the unanswered one goes, the answered
-    # one stays. A card that failed to identify this run will identify next run, and
-    # re-asking a question you already answered is the merge failure this guards.
-    c.equal(
-        kept.prune({"9999999"}),
-        [ARTICUNO],
-        "an UNANSWERED entry for a SKU no longer in the run is dropped",
-    )
-    c.equal(
-        kept.no_market_data.get(ACCELGOR),
-        Decimal("1.50"),
-        "an ANSWERED entry survives pruning — re-asking an answered question is the bug",
     )
 
     # --- the catalog is still the thing being priced ----------------------------------------
