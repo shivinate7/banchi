@@ -1601,6 +1601,10 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
       </p>
       {result.skipped.length === 0 ? null : (
         <p className="boxops-machine">
+          {/* sigil-ok: these are the SKIPPED TERMINAL rows — sold, retired, moved — and a
+              departed record is in no slot at all (D58), so the key is not merely the right
+              number here, it is the only one that exists. It also sits inside
+              `boxops-machine`, a diagnostic line nobody counts a box against. */}
           stepped over: {result.skipped.map((row) => `#${row.index} ${row.state}`).join(' · ')}
         </p>
       )}

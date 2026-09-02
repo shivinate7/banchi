@@ -594,7 +594,14 @@ appears in `server/tcg_export.py` and `server/order_transport.py`, and a three-d
 reads both as citations of a decision that does not exist — a real false positive today
 against a real blind spot someday.
 
-**Unfixed because the fix cannot be tested against this tree.** The highest entry is D72.
+**THE TRIGGER HAS FIRED AND THE DISCHARGE HAS NOT HAPPENED (noted 2026-09-02, D92).** The
+sentence below said "the highest entry is D72" and the highest entry is **D92** — D90, D91 and
+D92 all landed without anyone widening the patterns, which is the failure mode this file exists
+to prevent, recorded here rather than fixed because the widening is its own change with its own
+self-test cases and was not in the scope of the session that noticed. **Eight entries of margin
+remain.** At D100 the four rows named above go silently green.
+
+**Unfixed because the fix cannot be tested against this tree.**
 Widening now means loosening a pattern on a guess, with the `noqa` collision as the only
 observable effect. The discharge is triggered rather than open: **at the ninetieth entry** —
 the last point at which both patterns still agree — widen them to three digits, exclude a
@@ -604,3 +611,28 @@ the last point at which both patterns still agree — widen them to three digits
 makes this sentence a citation of an entry that does not exist, and `decision ids` blocks the
 commit for it — correctly, and it did while this entry was being written. A debt about four
 citation checks cannot be recorded in a form one of them has to refuse.
+
+
+## 9 — The sigil check matches text, so a renamed local walks past it
+
+`make sigil-check` (D92) refuses a bare `#` composed from an expression naming `index`, which is
+what keeps D58's count and the store key from being spelled the same way on one screen. It reads
+SOURCE TEXT. `const n = side.index` on one line and `#{n}` on the next is a violation it cannot
+see, and so is any indirection through a helper, a destructure or a prop rename.
+
+**The fix that could not be evaded was considered and rejected on blast radius.** A nominal type
+over the two numbers — branding `slot` and `index` so the compiler refuses the swap — is the real
+answer, and `slot` and `index` are plain numbers across the whole wire contract and forty call
+sites. That is a refactor much larger than the bug, and D92 took the cheap check that runs on
+every commit over the expensive one nobody would finish.
+
+**What makes the ceiling tolerable is where the mistake actually happens.** All four sites the
+check found on its first run compose the `#` and the field on ONE line, at the point of render,
+because that is what drawing a number looks like. The evasion is available and has never been
+taken; if it is, this is the entry that says the check went quiet rather than the tree going
+clean.
+
+**Not blocking, and not a discharge condition.** The check is worth what it is worth. It would
+become worth fixing properly if a violation ever ships THROUGH the gap — that is the trigger,
+and until then a green run means "no `#` is drawn over a field named index", which is exactly
+what it says and no more.

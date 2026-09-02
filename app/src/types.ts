@@ -1117,10 +1117,24 @@ export type Place = {
   section_gaps?: number | null
 }
 
-/** One side of `Place.neighbors`: the record's index in the box, and its identified name or
- *  null. The index is D10's allocator number — the same space as `Place.index` — so `#41`
- *  drawn from it is a slot a hand can count to, not a store key. */
+/** One side of `Place.neighbors`: where the neighbouring record is, in BOTH spaces, and its
+ *  identified name or null.
+ *
+ *  THIS COMMENT SAID THE OPPOSITE OF THE TRUTH UNTIL D92, and it is the third place the two
+ *  spaces were confused in writing. It read "the index is D10's allocator number — the same
+ *  space as `Place.index` — so `#41` drawn from it is a slot a hand can count to, not a store
+ *  key". Both halves of that are right and the conclusion inverts them: `Place.index` IS the
+ *  store key, D58 made the drawn number a COUNT, and a `#41` composed from the key is
+ *  therefore precisely NOT the slot a hand counts to. `server.ts:placeParts` had the same
+ *  fact recorded correctly as a known hazard on the very next screen, and neither reader
+ *  checked the other — which is what the `make check` row added with D92 now does.
+ *
+ *  `slot` is what a renderer draws; `index` is for a caller that needs to ADDRESS the card
+ *  (D45's way back into the walk) and no renderer may put a bare `#` in front of it. */
 export type PlaceNeighbor = {
+  /** D58's count — this card's number among the cards actually in the box. What gets drawn. */
+  slot: number
+  /** D10's allocator number: `/inventory/<box>/<index>`, the `<index>.jpg`. Never drawn bare. */
   index: number
   name: string | null
 }

@@ -348,11 +348,15 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
  * void. Measured on the owner's store before it went: it cost 15px on every copy row in a box
  * that had ever had a sale, and it was the reason the line wrapped to three lines at all.
  *
- * A NEIGHBOUR NOTHING HAS IDENTIFIED DEGRADES TO ITS INDEX — `#41`, never a blank. Known
- * hazard, recorded rather than fixed here: `PlaceNeighbor.index` is the STORE key and D58
- * made the drawn number a count of cards, so on a box with departures those diverge and the
- * `#41` can name something that is not the slot you would count to. It is wrong the same way
- * it was before this change; widening it is a decision about what the server sends. */
+ * A NEIGHBOUR NOTHING HAS IDENTIFIED DEGRADES TO ITS SLOT — `#41`, never a blank. IT
+ * DEGRADED TO THE INDEX UNTIL D92, and this paragraph recorded that as a known hazard for
+ * two days rather than fixing it: `PlaceNeighbor.index` is the STORE key and D58 made the
+ * drawn number a count of cards, so on a box with departures those diverge and the `#41`
+ * named something that is not the slot you would count to. The note ended "widening it is a
+ * decision about what the server sends", and that is the decision D92 took — `_company` now
+ * sends `slot` beside `index`, this composes the slot, and nothing renders a bare `#` over a
+ * store key. Measured when it went: box 3 was 76 apart, and 5 of its on-hand cards carry no
+ * name, so those rows were the ones actually drawing it. */
 export type PlaceParts = {
   prev: PlaceNeighbor | null
   next: PlaceNeighbor | null
@@ -366,7 +370,7 @@ export function placeParts(place: Place | undefined): PlaceParts | null {
   if (neighbors === undefined || neighbors === null) return null
 
   const { prev, next } = neighbors
-  const name = (side: PlaceNeighbor): string => side.name ?? `#${side.index}`
+  const name = (side: PlaceNeighbor): string => side.name ?? `#${side.slot}`
 
   let said: string
   if (prev !== null && next !== null) said = `between ${name(prev)} and ${name(next)}`

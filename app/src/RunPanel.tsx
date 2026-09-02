@@ -1560,6 +1560,10 @@ export function RunPanel({ cart }: RunPanelProps) {
               ) : preview === null ? null : preview.sample.unreadable !== undefined ||
                 preview.sample.frame === undefined ? (
                 <p className="run-preview-fact">
+                  {/* sigil-ok: the key, and here it is doubly the right number — this sentence
+                      is about a FILE that will not decode, and the file is `<index>.jpg`, named
+                      after exactly this. A count would name a card in a box; the trouble is
+                      with a photograph on disk. `CropSample` carries no slot in any case. */}
                   #{preview.sample.index} — this photograph cannot be decoded, so nothing is
                   sent for it.
                 </p>
@@ -1658,7 +1662,11 @@ export function RunPanel({ cart }: RunPanelProps) {
                   )}
 
                   <p className="run-preview-fact">
-                    <span className="run-preview-slot">#{preview.sample.index}</span>
+                    {/* sigil-ok: a preflight preview over a CAPTURE DIRECTORY, before any join — `CropSample`
+                        carries `box` and `index` and no slot, because nothing here has consulted the
+                        store. The class said `slot` until D92 and meant the key, which is the same
+                        confusion one register down. */}
+                    <span className="run-preview-key">#{preview.sample.index}</span>
                     {/* THE CARD ABOVE IS THE PAYLOAD, DRAWN SMALL, AND THAT HAS TO BE SAID.
                         It is ~28% of the sent pixels, and no two downscales are
                         distinguishable at that size — so an operator comparing 1200 against

@@ -1893,10 +1893,24 @@ class _Places:
         """`(neighbors, section_gaps)` for one located card, both None when degraded.
 
         `neighbors` walks OUTWARD from `at` over the box's non-terminal records: the
-        nearest on each side, `{index, name}` with `name` null for a card nothing has
+        nearest on each side, `{index, slot, name}` with `name` null for a card nothing has
         identified, null past either end of the box. A sold or retired record is passed
         over rather than named — a departed card cannot be the thing you count from,
         which is the whole reason D30 wants the sentence.
+
+        BOTH NUMBERS, BECAUSE THE ROW DRAWS ONE AND A FUTURE CALLER WANTS THE OTHER (D92).
+        `index` is the store key — `/inventory/<box>/<index>`, the `<index>.jpg` — and
+        `slot` is D58's count, this neighbour's ordinal among the cards actually in the box.
+        They are the same number only in a box nothing has left, and box 3 is 76 apart. The
+        renderer draws `slot` and nothing may draw `index`: a bare `#` on these screens is a
+        count, so the `#41` this decoration used to be rendered as named a card that is not
+        the one a hand counting to 41 arrives at. `index` stays on the wire unread because
+        D45 makes a copies list a way back into the walk, and a click target needs the key.
+
+        THE SLOT IS THE ORDINAL AND IS NOT RECOMPUTED. `occupants` is already every on-hand
+        index ascending — the same sequence `Position.occupied` bisects — so a neighbour's
+        slot is its place in it. Deriving it any other way would be a second spelling of
+        `Position.slot` in the one function that can see both.
 
         `section_gaps` counts the terminal records inside `[start, end]` — this card's
         own section bounds, exactly as the block states them. `end` is None only for a
@@ -1912,16 +1926,18 @@ class _Places:
         indices = [i for i, _ in occupants]
         before = bisect_left(indices, at) - 1
         after = bisect_right(indices, at)
-        prev_of = (
-            None
-            if before < 0
-            else {"index": occupants[before][0], "name": occupants[before][1]}
-        )
-        next_of = (
-            None
-            if after >= len(occupants)
-            else {"index": occupants[after][0], "name": occupants[after][1]}
-        )
+
+        # `at + 1` IS THE SLOT: `occupants` is ascending and holds only cards on hand, so a
+        # neighbour's ordinal in it is `Position.slot` by the same bisect that property runs.
+        def side(where: int) -> dict:
+            return {
+                "index": occupants[where][0],
+                "slot": where + 1,
+                "name": occupants[where][1],
+            }
+
+        prev_of = None if before < 0 else side(before)
+        next_of = None if after >= len(occupants) else side(after)
 
         low = bisect_left(gaps, start)
         high = len(gaps) if end is None else bisect_right(gaps, end)
@@ -3453,11 +3469,22 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                 f"and aim again; nothing was deleted.",
             )
 
-        # The layout, validated BEFORE any file is touched. Every re-keyed queue entry
-        # carries a rendered label, and a layout that will not validate means the labels
-        # this shift would write are unknowable — `BadSections` escapes as
+        # The layout, validated BEFORE any file is touched — `BadSections` escapes as
         # `sections_invalid`, and a refusal that early burns nothing.
-        layout = inventory.sections_for(box)
+        #
+        # ITS ORIGINAL REASON IS GONE AND THE CALL IS KEPT DELIBERATELY (D92). This read
+        # "every re-keyed queue entry carries a rendered label, and a layout that will not
+        # validate means the labels this shift would write are unknowable" — and no label is
+        # written here any more, so that sentence is void. What remains is a narrower claim
+        # this route can still make honestly: a box whose dividers will not parse is a box
+        # whose cards cannot be LABELLED after the shift either, by `_queue_row` or by
+        # `_box_view`, and renumbering into that state quietly is worse than refusing.
+        #
+        # Kept rather than dropped because deleting a refusal is a wider decision than the
+        # one D92 took, and nothing asserts this one — no harness case reaches
+        # `sections_invalid` through this route, so its removal would have been invisible.
+        # The result is unbound because nothing reads it; the call is here for the raise.
+        inventory.sections_for(box)
 
         # EVERY RECORD IN THIS BOX ABOVE THE TARGET, coerced the way `next_index` coerces —
         # and like that scan, an unparsable record REFUSES rather than being skipped
@@ -3579,7 +3606,14 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
             other.photo = str(dst) if dst.is_file() else None
             inventory.cards[new_key] = other
 
-            label = join.Position(int(box), new_index, layout).label
+            # NO LABEL IS WRITTEN HERE, AND THAT IS THE POINT (D92). This wrote one in INDEX
+            # space — `join.Position` with no `occupied` — while every route serves a label
+            # re-rendered in COUNT space by `_queue_row`. Nothing read it, so the wrong
+            # number never reached a screen; what it left behind was a field holding a
+            # plausible, wrong rendering indistinguishable from the correct ones
+            # `cli/resolve.py` writes, one forgotten `places` argument away from being
+            # served. D56's rule is that a rendering nobody can correct is joined at read
+            # time and not stored, and `_queue_row` already does exactly that.
             for queue in (snapshot.review, snapshot.parked):
                 entry = queue.entries.pop(old_key, None)
                 if entry is None:
@@ -3587,7 +3621,6 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                 entry.position = new_key
                 entry.box = int(box)
                 entry.index = new_index
-                entry.label = label
                 if entry.photo:
                     entry.photo = str(dst)
                 # No collision possible: `new_key`'s entry, if there was one, belonged to
@@ -3758,15 +3791,12 @@ def _move_one(
     # Re-keyed, not dropped — `do_remove_card`'s rule and its reason: an open review
     # question or a paid identification answer follows the physical card to its new
     # address, because the card is the same card and the question is still open.
-    try:
-        layout = inventory.sections_for(transplant.box)
-    except master.BadSections:
-        layout = None
-    label = (
-        join.Position(int(transplant.box), transplant.index, layout).label
-        if layout is not None
-        else None
-    )
+    #
+    # NO LABEL IS WRITTEN, for the reason `do_remove_card` states at its own re-key (D92):
+    # this composed one in INDEX space and no route serves a stored label. A move is the
+    # worse of the two cases, because the entry crosses INTO ANOTHER BOX — so the stale
+    # string named a section and card number belonging to a different box's layout. The
+    # `sections_for` lookup went with it; nothing else here wanted it.
     review_moved = False
     parked_moved = False
     for queue in (snapshot.review, snapshot.parked):
@@ -3776,8 +3806,6 @@ def _move_one(
         entry.position = new_key
         entry.box = int(transplant.box)
         entry.index = transplant.index
-        if label is not None:
-            entry.label = label
         if entry.photo and photo_moved:
             entry.photo = transplant.photo
         queue.entries[new_key] = entry
