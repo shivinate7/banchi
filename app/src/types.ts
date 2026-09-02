@@ -388,6 +388,15 @@ export type InventoryCard = {
   captured_at: string | null
   capture_id: string | null
 
+  /** D89. Set together by the reclaim and by nothing else: the digest of the photograph that
+   *  used to be at `photo`, and when it was deleted. Both null while the file is on disk —
+   *  the file is the fact then, and a copy of its digest here would be a second thing to
+   *  keep true through a re-shoot. A screen that finds these set draws "reclaimed", which is
+   *  a different fact from "missing": one is a store that gave a photograph up on purpose
+   *  after the card sold, the other is a store that lost something. */
+  photo_sha256: string | null
+  photo_reclaimed_at: string | null
+
   /* Everything below is written by the four commands — identify, join, emit, reconcile.
    * The app READS state and never sets it. That is not a simplification for this pass: the
    * app-side CSV import was struck from build-order step 7 because every state transition
@@ -665,6 +674,33 @@ export type BoxDeleteResult = {
   cache_deleted: number
   registry_deleted: boolean
   directory_removed: boolean
+}
+
+/** `GET /boxes/<box>/photos` — what a reclaim over this box would delete (D89). FREE and
+ *  read-only, and the step that comes first: the control that deletes does not exist until
+ *  this has answered, D34's preflight shape applied to bytes instead of counts.
+ *
+ *  `reclaimable` is the SOLD cards whose photograph is still on disk — not retired ones (D26
+ *  keeps that photograph so the retirement can be questioned) and not cards on hand (the pull
+ *  preview needs theirs). `reclaimed` is the sold cards whose photograph already went.
+ *  `on_hand_photos` is what the box keeps afterwards, so the panel can say what a reclaim
+ *  does NOT touch. */
+export type BoxPhotoPlan = {
+  box: number
+  reclaimable: { cards: number; bytes: number; indices: number[] }
+  reclaimed: { cards: number; indices: number[] }
+  on_hand_photos: number
+}
+
+/** `POST /boxes/<box>/photos/reclaim`'s receipt (D89). `keys` is every record whose
+ *  photograph went, so the claim is checkable afterwards — each of those records now carries
+ *  `photo_sha256` and `photo_reclaimed_at`. There is no undo: the bytes are gone. */
+export type PhotoReclaimResult = {
+  box: number
+  reclaimed: number
+  bytes: number
+  keys: string[]
+  already_reclaimed: number
 }
 
 /** Copies at each TCGplayer stage. Stages sitting at zero are omitted rather than sent as 0,

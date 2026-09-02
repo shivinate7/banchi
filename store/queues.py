@@ -44,6 +44,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
+from store.rows import Rows, TableSpec, int_or_none
+
 MAIN = "review"
 PARKED = "parked"
 
@@ -164,25 +166,52 @@ class QueueEntry:
         return f"{self.label}  {self.read.get('name') or '?'}  {self.reason}  {money}{waited}"
 
 
+def _parse_entry(key: str, record: dict) -> Optional[QueueEntry]:
+    """One queued card from its stored record, or None for a shape that will not construct.
+    One rule for a JSON record and a database row (D88)."""
+    if str(key).startswith("_"):
+        return None
+    known = {k: v for k, v in record.items() if k in QueueEntry.__annotations__}
+    try:
+        return QueueEntry(**known)
+    except TypeError:
+        return None
+
+
 @dataclass
 class Queue:
-    """One standing queue file."""
+    """One standing queue. Was one file each; both are the `queues` table since D88,
+    told apart by the `queue` column that `store/session.py` binds each mapping to."""
 
     name: str
-    entries: Dict[str, QueueEntry] = field(default_factory=dict)
+    entries: "Rows" = field(default_factory=lambda: Rows(Queue.ENTRIES))
+
+    ENTRIES = TableSpec(
+        "queues",
+        parse=_parse_entry,
+        dump=asdict,
+        columns=lambda entry: {
+            "box": int_or_none(entry.box),
+            "idx": int_or_none(entry.index),
+            "reason": entry.reason,
+            "cleared_by_human": 1 if entry.cleared_by_human else 0,
+            "first_seen": entry.first_seen,
+        },
+        column_names=("box", "idx", "reason", "cleared_by_human", "first_seen"),
+    )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.entries, Rows):
+            self.entries = Rows(Queue.ENTRIES, objects=dict(self.entries))
 
     @classmethod
     def parse(cls, name: str, payload: Optional[dict]) -> "Queue":
         entries = {}
         for key, record in (payload or {}).items():
-            if key.startswith("_"):
-                continue
-            known = {k: v for k, v in record.items() if k in QueueEntry.__annotations__}
-            try:
-                entries[key] = QueueEntry(**known)
-            except TypeError:
-                continue
-        return cls(name=name, entries=entries)
+            entry = _parse_entry(key, record)
+            if entry is not None:
+                entries[key] = entry
+        return cls(name=name, entries=Rows(cls.ENTRIES, objects=entries))
 
     def to_payload(self) -> dict:
         return {key: asdict(entry) for key, entry in sorted(self.entries.items())}

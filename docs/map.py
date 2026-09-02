@@ -229,6 +229,17 @@ SHIPPED = [
               "REASON IT IS LISTED: it was a week of work that no step accounted for, so the build "
               "order read as if nothing had happened since 2026-08-24 while `make status` reported step "
               "9 of 15."},
+    {"n": 21, "on": "2026-09-01", "title": "The store of record is SQLite, and a sold card's photograph is reclaimed",
+     "note": "D88, D89. One SQLite file replaces the five JSON documents and the history log; every "
+              "Store.write() is one transaction over every table, so the five-file torn set is "
+              "cannot happen; and a session loads only the rows it names. MEASURED on a synthetic "
+              "100,000-card copy of the owner's store: a capture's store cycle went from ~4.4 s under "
+              "the JSON files to ~3 ms, building one card object. The owner's real store migrated "
+              "without loss in 0.13 s, six files moved to legacy-json/ with a receipt. D89 is the third "
+              "shape between capture-undo and the terminal states — record kept, photograph reclaimed, "
+              "digest kept — on #/inventory's box operations, gated like the delete. WHAT THIS STEP DID "
+              "NOT DO: the 2,000-card probe that decides whether the 100k run is worth making is work "
+              "at the rig and has not been run; nothing here measures the pile."},
 ]
 
 OPEN = [
@@ -743,8 +754,9 @@ COMPONENTS = [
     {
         "path": "store/",
         "status": "built",
-        "does": "the master store: inventory, cache, standing queues, order ledger",
-        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63"],
+        "does": "the master store: inventory, cache, standing queues, order ledger and the "
+                "history, in one SQLite file since D88",
+        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D88", "D89"],
         "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
@@ -753,19 +765,22 @@ COMPONENTS = [
                 "behavior, so it carries no tested_by: an unenforced claim is the defect "
                 "docs/DEBTS.md names, not a rounding error.",
         "modules": {
-            "master.py": {"does": "inventory.json — cards, positions, SKUs, listing states, and "
-                                  "`open_section`, which puts one divider in front of the next "
-                                  "card at the index only the store can read (D10)",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D58", "D59", "D83"], "tested_by": ["T7"]},
-            "queues.py": {"does": "review.json and parked.json — the standing queues, and the "
-                                  "cross-queue release a re-routed position needs",
-                          "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37"], "tested_by": ["T7"]},
+            "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
+                                  "listing states, `open_section`, which puts one divider in front "
+                                  "of the next card at the index only the store can read (D10), and "
+                                  "D89's `record_photo_reclaimed`. Its three mappings are `Rows`: the "
+                                  "high-water scan, the capture-id replay and the SKU walk ask the "
+                                  "mapping for the rows they want rather than walking every card",
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D58", "D59", "D83", "D88", "D89"], "tested_by": ["T7"]},
+            "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
+                                  "name — and the cross-queue release a re-routed position needs",
+                          "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
             # THE DURABLE HALF OF THE ORDER FLOW, and the split from pipeline/orders.py is
             # the design rather than a packaging choice: the resolver's answer is true of
             # one Inventory snapshot and of no other (D36), so it is recomputed on every
             # read, while an order outlives every snapshot. Imports nothing from pipeline/,
             # which is why OrderLine is declared in both — the edge runs the other way.
-            "orders.py": {"does": "inventory/orders.json — one record per {source}:{order_number}, "
+            "orders.py": {"does": "the `orders` and `fulfilment` tables — one record per {source}:{order_number}, "
                                   "upserted. TWO TOP-LEVEL MAPS and the separation IS the guard: "
                                   "`orders` is the feed's and is replaced wholesale on every sync, "
                                   "`fulfilment` is ours and `ingest` cannot name it — a count "
@@ -784,15 +799,32 @@ COMPONENTS = [
                                   "session.py writes it, fifth and last of five files whose set is "
                                   "not atomic.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
-                                          "D29", "D36", "D53", "D63"], "tested_by": ["T7"]},
-            "cache.py": {"does": "identifications.json — answers already paid for", "governed_by": ["D2", "D21"]},
-            "files.py": {"does": "where the store lives, the lock, the atomic replace", "governed_by": ["D13", "D15", "D43", "D86"], "tested_by": ["T7"]},
-            # D53 and D63 because the header now prices what this module does NOT promise:
-            # the five files it replaces are each atomic and the SET of them is not, which
-            # is why D53's supervisor drains before it restarts and why the ledger is last.
-            "session.py": {"does": "lock-free read, or locked read-modify-write, over five files "
-                                   "that are each atomic and are not one transaction",
-                           "governed_by": ["D13", "D53", "D63"], "tested_by": ["T7"]},
+                                          "D29", "D36", "D53", "D63", "D88"], "tested_by": ["T7"]},
+            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
+            "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
+                                 "files still beside the database use (prices.json, codes.jsonl)",
+                         "governed_by": ["D13", "D15", "D43", "D86"], "tested_by": ["T7"]},
+            # D53 still, and D63, because the header now says what the transaction DOES
+            # promise where it used to say what five files did not: one commit over every
+            # table, history rows included. D53's drain is still a prerequisite for the
+            # watcher — the photographs and sidecars a session writes beside the transaction
+            # are what a kill still tears.
+            "session.py": {"does": "lock-free read, or locked read-modify-write, over one SQLite "
+                                   "transaction — `Snapshot` is the API and every field of it "
+                                   "loads only the rows a caller names",
+                           "governed_by": ["D13", "D53", "D63", "D88"], "tested_by": ["T7"]},
+            "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
+                                "caller and, bound to a `Source`, loads one row, one indexed "
+                                "column's matches, or column values with no object built at all. "
+                                "A flush is a diff over what was loaded. NO SQL, NO I/O, NO "
+                                "PACKAGE IMPORT — the one thing master.py is allowed to import",
+                        "governed_by": ["D88"], "tested_by": ["T7"]},
+            "db.py": {"does": "the SQLite file: the schema (one payload column per row with a few "
+                              "indexed columns derived beside it), `SqliteSource` behind every "
+                              "`Rows`, the per-session flush, the events table that is the "
+                              "history, and the one-time lossless import of a legacy JSON store "
+                              "into it — under the lock, files moved to legacy-json/ with a receipt",
+                      "governed_by": ["D86", "D88"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1056,7 +1088,7 @@ COMPONENTS = [
                 # so a stale screen shows a number that now belongs to a different card. D18
                 # decides where it runs: node, like port-agreement.py, so `make check` and never
                 # the git hook. D14 is why it excludes the code-card track, by banner.
-                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86"],
+                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D87", "D89"],
             },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
@@ -1397,7 +1429,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -1583,7 +1615,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1673,7 +1705,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1970,11 +2002,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2191,7 +2223,7 @@ COMPONENTS = [
                     "The store holds no price at all (D8), so this is the only place one can "
                     "come from, and the age of the reading is drawn with it because `join` is "
                     "re-run against refreshed exports.",
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -2344,7 +2376,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D83"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D83", "D89"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -3116,7 +3148,7 @@ COMPONENTS = [
                         "row it can name. THE MOVE'S OWN WRITE IS STILL UNASSERTED HERE — the "
                         "FOUR WRITES above are the four this file sends; D83 shipped its "
                         "control with no file under app/tests/ touched.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71", "D83"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71", "D83", "D89"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

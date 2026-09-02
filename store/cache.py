@@ -46,9 +46,11 @@ model's answer here is the open decision that run put on the table.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Mapping, Optional
+from typing import Iterable, List, Mapping, Optional
+
+from store.rows import Rows, TableSpec
 
 WEAK_CONFIDENCE = "low"
 
@@ -76,22 +78,49 @@ class CacheEntry:
         return self.confidence == WEAK_CONFIDENCE
 
 
+def _parse_entry(key: str, record: dict) -> Optional[CacheEntry]:
+    """One paid answer from its stored record, or None for a shape that will not
+    construct — re-reading such a card is cheap, and the rule is the same for a JSON
+    record and a database row."""
+    if str(key).startswith("_"):
+        return None
+    known = {k: v for k, v in record.items() if k in CacheEntry.__annotations__}
+    try:
+        return CacheEntry(**known)
+    except TypeError:
+        return None
+
+
 @dataclass
 class Cache:
-    entries: Dict[str, CacheEntry]
+    entries: "Rows" = field(default_factory=lambda: Rows(Cache.ENTRIES))
+
+    # The `identifications` table (D88): the answer whole in the payload, the digest and
+    # the cleared flag beside it so `sqlite3` can ask which answers a person vouched for.
+    ENTRIES = TableSpec(
+        "identifications",
+        parse=_parse_entry,
+        dump=asdict,
+        columns=lambda entry: {
+            "photo_sha256": entry.photo_sha256,
+            "cleared_by_human": 1 if entry.cleared_by_human else 0,
+            "at": entry.at,
+        },
+        column_names=("photo_sha256", "cleared_by_human", "at"),
+    )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.entries, Rows):
+            self.entries = Rows(Cache.ENTRIES, objects=dict(self.entries))
 
     @classmethod
     def parse(cls, payload: Optional[dict]) -> "Cache":
         entries = {}
         for key, record in (payload or {}).items():
-            if key.startswith("_"):
-                continue
-            known = {k: v for k, v in record.items() if k in CacheEntry.__annotations__}
-            try:
-                entries[key] = CacheEntry(**known)
-            except TypeError:
-                continue  # a record from an older shape; re-reading it is cheap
-        return cls(entries=entries)
+            entry = _parse_entry(key, record)
+            if entry is not None:
+                entries[key] = entry
+        return cls(entries=Rows(cls.ENTRIES, objects=entries))
 
     def to_payload(self) -> dict:
         return {key: asdict(entry) for key, entry in sorted(self.entries.items())}

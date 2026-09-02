@@ -218,7 +218,7 @@ from server import (  # noqa: E402
     shipping_routes,
     tcg_export,
 )
-from store import files, master, queues  # noqa: E402
+from store import db, files, master, queues  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
 # — the resolver computes and stores nothing, this one persists — so it takes an alias
 # rather than shadowing the name half this file's order cases are written against.
@@ -331,6 +331,56 @@ def isolated_home():
                 os.environ.pop(files.HOME_ENV, None)
             else:
                 os.environ[files.HOME_ENV] = previous
+
+
+def store_tables() -> dict:
+    """Every table of the isolated store, as ordered rows. What is compared where a case
+    used to compare a file's bytes (D88): 'byte-identical' on a document becomes
+    'row-identical' on a table, and the argument for it is unchanged."""
+    conn = db.connect(files.inventory_dir())
+    try:
+        return db.dump_tables(conn)
+    finally:
+        conn.close()
+
+
+def stored_payloads(table: str, fixed: Optional[dict] = None) -> dict:
+    """key -> stored payload dict for one table, straight off the database rather than
+    through a snapshot — the on-disk shape, which is what a wire-only decoration must
+    never reach."""
+    conn = db.connect(files.inventory_dir())
+    try:
+        src = db.source(conn, table, fixed)
+        return {key: json.loads(text) for key, text in src.all()}
+    finally:
+        conn.close()
+
+
+def append_history(events) -> None:
+    """Hand-write history rows, bypassing every route — the seed for the cases that need a
+    log no route can produce. `history.jsonl` used to be appended to directly here."""
+    conn = db.connect(files.inventory_dir())
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        db.append_events(conn, events)
+        conn.execute("COMMIT")
+    finally:
+        conn.close()
+
+
+def corrupt_history() -> None:
+    """One history row whose payload is not JSON — the hand-edit `_sale_origin` degrades
+    on. It used to be a `{not json` line appended to `history.jsonl`."""
+    conn = db.connect(files.inventory_dir())
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT INTO events (at, event, position, payload) VALUES (?, ?, ?, ?)",
+            (master.now(), None, None, "{not json"),
+        )
+        conn.execute("COMMIT")
+    finally:
+        conn.close()
 
 
 @contextmanager
@@ -744,8 +794,376 @@ def check_store(checks: Checks) -> None:
 
         checks.ok(
             not list(Store().directory.glob(".*.tmp")),
-            "the atomic replace leaves no temp file behind",
+            "and nothing is staged beside the database — the transaction is the atomicity",
         )
+
+
+def check_store_of_record(checks: Checks) -> None:
+    """D88: one transaction over every table, a session that loads only what it names, and
+    a legacy JSON store imported whole on the first open and moved aside rather than read.
+
+    THE TORN-SET CASE IS THE ONE THIS ENTRY EXISTS FOR. `store/session.py`'s header spent
+    a week saying a kill between two `write_json` calls left the inventory saying one thing
+    and a queue that was meant to move with it saying another. It is simulated here by the
+    only means that reaches it: the queue table's write raises after the cards table's has
+    run, inside one session, and NEITHER lands.
+    """
+    checks.note("")
+    checks.note("STORE OF RECORD — store/db.py, store/rows.py (D88)")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.inventory.allocate_capture(3, capture_id="seed")
+        checks.ok(
+            db.path(files.inventory_dir()).is_file(),
+            "a fresh store is one SQLite file",
+        )
+
+        # --------------------------------------------------- one transaction, or nothing
+        real_upsert = db.SqliteSource.upsert
+
+        def torn(self, key, columns, payload):
+            if self.table == "queues":
+                raise RuntimeError("deliberate: the queue write fails after the card write")
+            return real_upsert(self, key, columns, payload)
+
+        db.SqliteSource.upsert = torn
+        try:
+            with Store().write() as snapshot:
+                snapshot.inventory.allocate_capture(3, capture_id="torn")
+                snapshot.review.upsert(entry(3, 2))
+        except RuntimeError:
+            pass
+        finally:
+            db.SqliteSource.upsert = real_upsert
+        after = Store().read()
+        checks.equal(
+            after.inventory.next_index(3),
+            2,
+            "a write that fails on the SECOND table commits the FIRST table's rows either — "
+            "the five-file torn set is unrepresentable",
+        )
+        checks.ok(
+            after.review.entries.get("3/2") is None,
+            "and the queue entry that was meant to move with the card is not there alone",
+        )
+        checks.equal(
+            len([e for e in Store().history() if e.get("event") == master.CAPTURED]),
+            1,
+            "and the history rows commit with the change rather than after it",
+        )
+
+        # ----------------------------------------------------------- a session is lazy
+        for at in range(2, 41):
+            capture_server.do_capture(capture_payload(3, capture_id=f"c{at}", set_hint="sv9"))
+        for at in range(1, 21):
+            capture_server.do_capture(capture_payload(4, capture_id=f"d{at}", set_hint="sv9"))
+        with Store().write() as snapshot:
+            card, created = snapshot.inventory.allocate_capture(3, capture_id="lazy")
+            built = snapshot.inventory.cards.loaded_count
+            complete = snapshot.inventory.cards.complete
+        checks.ok(created and card.key == "3/41", "a capture lands at the high-water mark")
+        checks.ok(
+            not complete and built <= 2,
+            f"and built {built} card object(s) to do it, not the store's 60 — the box is a "
+            f"column query and the replay lookup is an index, so a capture's cost stops "
+            f"growing with the store (D88)",
+        )
+        checks.equal(
+            len(Store().read().inventory.cards),
+            61,
+            "while a whole-store read still sees every card",
+        )
+        checks.equal(
+            Store().read().inventory.next_index(4),
+            21,
+            "and the other box's high-water mark was untouched",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["3/41"].box = "three"
+        caught = checks.raises(
+            master.BadPosition,
+            lambda: Store().read().inventory.next_index(3),
+            "a record whose box will not coerce still refuses the scan — found by its "
+            "NULL column rather than by walking every row",
+        )
+        if caught is not None:
+            checks.ok("3/41" in str(caught), "and the refusal still names the card")
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["3/41"].box = 3
+        checks.equal(
+            Store().read().inventory.positions_for_sku("none") , [],
+            "a SKU nothing carries answers an empty list through the index",
+        )
+
+    # ------------------------------------------------ the legacy import, whole and aside
+    with isolated_home():
+        legacy_inventory = {
+            "version": 2,
+            "cards": {
+                "2/1": {"box": 2, "index": 1, "state": master.IDENTIFIED, "sku": "111",
+                        "name": "Moonfall", "capture_id": "old-1", "metadata_finish": "foil"},
+                "2/2": {"box": 2, "index": 2, "state": master.SOLD, "sku": "111",
+                        "capture_id": "old-2", "extra_field_nobody_declared": True},
+            },
+            "boxes": {"2": {"box": 2, "name": "Epics", "sections": [1], "state": "open"}},
+            "listings": {"111": {"sku": "111", "pushed": 2, "live": 1}},
+        }
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        files.write_json(directory / db.LEGACY_INVENTORY, legacy_inventory)
+        files.write_json(
+            directory / db.LEGACY_CACHE,
+            {"2/1": {"identification": {"name": "Moonfall", "confidence": "high"},
+                     "photo_sha256": "abc", "prompt_fingerprint": "p1", "at": "2026-08-01"}},
+        )
+        files.write_json(directory / db.LEGACY_REVIEW, {"2/1": asdict_entry(entry(2, 1))})
+        files.write_json(directory / db.LEGACY_PARKED, {})
+        files.write_json(
+            directory / db.LEGACY_ORDERS,
+            {"version": 1, "orders": {}, "fulfilment": {"tcgplayer:A": {"111": {"fulfilled": 1, "copies": ["old-2"]}}}},
+        )
+        for event in (
+            {"at": "2026-08-01T00:00:00+00:00", "event": master.CAPTURED, "position": "2/1"},
+            {"at": "2026-08-02T00:00:00+00:00", "event": master.SOLD, "position": "2/2"},
+        ):
+            files.append_jsonl(directory / db.LEGACY_HISTORY, event)
+        expected = master.Inventory.parse(legacy_inventory).to_payload()
+
+        imported = Store().read()
+        checks.equal(
+            imported.inventory.to_payload(),
+            expected,
+            "the legacy inventory.json reads back through the database EXACTLY as "
+            "`Inventory.parse` read the file — a lossless import, undeclared field dropped "
+            "by the same filter",
+        )
+        checks.equal(
+            imported.inventory.cards["2/1"].metadata_finish,
+            "foil",
+            "a bare-string finish claim survives as the bare string (D3: both shapes legal)",
+        )
+        checks.ok(
+            imported.cache.get("2/1") is not None and imported.cache.get("2/1").photo_sha256 == "abc",
+            "the paid answers came across",
+        )
+        checks.ok(
+            imported.review.entries.get("2/1") is not None,
+            "so did the review queue",
+        )
+        checks.equal(
+            imported.ledger.fulfilled("tcgplayer:A", "111"),
+            1,
+            "and the ledger's fulfilment map, which `ingest` cannot name",
+        )
+        checks.equal(
+            [e["event"] for e in Store().history()],
+            [master.CAPTURED, master.SOLD],
+            "and history.jsonl became the events table, in order",
+        )
+        checks.equal(
+            sorted(p.name for p in db.legacy_dir(directory).iterdir()),
+            sorted(list(db.LEGACY_FILES) + [db.RECEIPT_NAME]),
+            "every legacy file moved to legacy-json/ with a receipt beside it",
+        )
+        checks.equal(
+            db.legacy_present(directory),
+            [],
+            "and none is left where a reader could mistake it for the store",
+        )
+        receipt = json.loads((db.legacy_dir(directory) / db.RECEIPT_NAME).read_text("utf-8"))
+        checks.equal(
+            receipt["counts"]["cards"],
+            2,
+            "the receipt counts what was imported",
+        )
+        # A legacy file put back BESIDE the database is never read (D86's rule, D88's).
+        files.write_json(directory / db.LEGACY_INVENTORY, {"version": 2, "cards": {"9/9": {"box": 9, "index": 9}}})
+        checks.ok(
+            Store().read().inventory.get("9/9") is None,
+            "a legacy file beside a live database is not a fallback — it is read by nothing",
+        )
+        (directory / db.LEGACY_INVENTORY).unlink()
+        checks.equal(
+            Store().read().inventory.next_index(2),
+            3,
+            "and the store is what it was",
+        )
+
+
+def check_photo_reclaim(checks: Checks) -> None:
+    """D89: a sold card's photograph is reclaimed, the record stays, the digest stays.
+
+    The third shape between D10's undo (record and photograph both go) and D26's terminal
+    states (both stay): record kept, photograph gone, digest on the record. Refusal for
+    refusal like the release beside it — `confirm` required, nothing to reclaim is a
+    conflict — and the store's own boundary refuses a card that has not sold, so a caller
+    bypassing the route cannot reclaim a photograph the pull preview still needs.
+    """
+    checks.note("")
+    checks.note("PHOTO RECLAMATION — GET /boxes/<box>/photos, POST /boxes/<box>/photos/reclaim (D89)")
+
+    with isolated_home():
+        # DISTINGUISHABLE BYTES PER PHOTOGRAPH — `check_photo_cache`'s rule, and here it is
+        # what makes the D36 case at the bottom meaningful: four identical photographs are
+        # one digest at four slots, which the realign rightly refuses as ambiguous.
+        for at in range(1, 5):
+            capture_server.do_capture(capture_payload(
+                3, capture_id=f"r{at}", set_hint="sv9",
+                image=base64.b64encode(b"\xff\xd8\xff" + bytes([at]) * 64).decode("ascii"),
+            ))
+        with Store().write() as snapshot:
+            for at in (1, 3):
+                snapshot.inventory.set_state(f"3/{at}", master.SOLD)
+            snapshot.inventory.retire("3/2", "damaged")
+        before = capture_server.photo_path(3, 1).read_bytes()
+        expected_digest = hashlib.sha256(before).hexdigest()
+
+        plan = answers(checks, lambda: capture_server.do_box_photos(3), "the free count answers")
+        if plan is not None:
+            checks.equal(
+                (plan["reclaimable"]["cards"], plan["reclaimable"]["indices"]),
+                (2, [1, 3]),
+                "it counts the SOLD cards whose photograph is on disk and nothing else — not "
+                "the retired one (D26 keeps that photograph) and not the two on hand",
+            )
+            checks.equal(plan["reclaimable"]["bytes"], 2 * len(before), "and the bytes they hold")
+            checks.equal(
+                plan["on_hand_photos"], 1,
+                "and says what the box keeps afterwards — the one card still on hand; the "
+                "retired card is neither reclaimable nor on hand",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_reclaim_box_photos(3, {}),
+            "confirm_required",
+            "the reclaim refuses without `confirm: true`",
+        )
+        checks.ok(
+            capture_server.photo_path(3, 1).is_file(),
+            "and the refusal deleted nothing",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_reclaim_box_photos(3, {"confirm": True, "extra": 1}),
+            "field_not_settable",
+            "an unknown field refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_reclaim_box_photos(99, {"confirm": True}),
+            "box_not_found",
+            "a box nothing names refuses",
+        )
+
+        receipt = answers(
+            checks,
+            lambda: capture_server.do_reclaim_box_photos(3, {"confirm": True}),
+            "the reclaim answers",
+        )
+        if receipt is not None:
+            checks.equal(
+                (receipt["reclaimed"], receipt["keys"], receipt["bytes"]),
+                (2, ["3/1", "3/3"], 2 * len(before)),
+                "and reports what went, by key and by byte",
+            )
+        checks.ok(
+            not capture_server.photo_path(3, 1).is_file()
+            and not capture_server.photo_path(3, 3).is_file(),
+            "the two sold cards' photographs are gone",
+        )
+        checks.ok(
+            capture_server.photo_path(3, 2).is_file() and capture_server.photo_path(3, 4).is_file(),
+            "the retired card's and the on-hand card's are not",
+        )
+        checks.ok(
+            capture_server.sidecar_path(capture_server.photo_path(3, 1)).is_file(),
+            "the sidecar stays — it is the operator's claims, a few hundred bytes, and inert "
+            "without a photograph beside it",
+        )
+        after = Store().read().inventory
+        card = after.get("3/1")
+        checks.equal(
+            (card.state, card.photo_sha256, bool(card.photo_reclaimed_at), card.photo is not None),
+            (master.SOLD, expected_digest, True, True),
+            "THE RECORD STAYS, sold, with the digest of the photograph that was there and "
+            "when it went — the path it had is kept too, so `photo: null` still means 'never "
+            "photographed' and not 'reclaimed'",
+        )
+        checks.equal(
+            after.get("3/4").photo_reclaimed_at,
+            None,
+            "and a card on hand carries neither field",
+        )
+        checks.equal(
+            [e for e in events_for("3/1") if e["event"] == master.PHOTO_RECLAIMED][-1]["sha256"],
+            expected_digest,
+            "the history line carries the digest",
+        )
+        checks.equal(
+            [e for e in events_for("3/1") if e["event"] == master.PHOTO_RECLAIMED][-1]["bytes"],
+            len(before),
+            "and the bytes freed",
+        )
+        checks.ok(
+            master.PHOTO_RECLAIMED not in master.STATES,
+            "and the event is not a state, so a sale's reversal cannot restore to it (D26)",
+        )
+
+        # The second press.
+        refusal(
+            checks,
+            lambda: capture_server.do_reclaim_box_photos(3, {"confirm": True}),
+            "nothing_to_reclaim",
+            "a second press finds nothing left and says so — the operation is idempotent by "
+            "refusal rather than by a silent zero",
+        )
+        plan = answers(checks, lambda: capture_server.do_box_photos(3), "the count after")
+        if plan is not None:
+            checks.equal(
+                (plan["reclaimable"]["cards"], plan["reclaimed"]["cards"], plan["reclaimed"]["indices"]),
+                (0, 2, [1, 3]),
+                "reports the two as reclaimed, by index",
+            )
+        checks.ok(
+            capture_server.do_inventory()["cards"]["3/1"].get("photo_reclaimed_at"),
+            "GET /inventory carries the stamp, which is what a screen draws 'reclaimed' from "
+            "rather than 'missing'",
+        )
+
+        # The store's own boundary.
+        with Store().write() as snapshot:
+            checks.raises(
+                master.CardNotSold,
+                lambda: snapshot.inventory.record_photo_reclaimed("3/4", sha256="x", size=1),
+                "the store refuses to mark a card that has not sold, whatever route asked",
+            )
+            checks.ok(
+                not snapshot.inventory.record_photo_reclaimed("3/99", sha256="x", size=1),
+                "and answers False for a position holding no record (v1 bug 5's shape)",
+            )
+
+        # D36: a reclaimed photograph reads as a DEPARTED card to the realign, which is the
+        # truth — it sold — and not as an unverified box.
+        payload = {"cards": {
+            "3/1": {"box": 3, "index": 1, "photo_sha256": expected_digest},
+            "3/4": {"box": 3, "index": 4,
+                    "photo_sha256": hashlib.sha256(capture_server.photo_path(3, 4).read_bytes()).hexdigest()},
+        }}
+        _, moved, departed, unverified = resolve.realign(payload)
+        checks.equal(
+            (moved, departed, unverified),
+            ({}, ["3/1"], []),
+            "D36's realign reads the reclaimed card as departed — the digest on the record is "
+            "still comparable, and the box's other photographs are still there to check",
+        )
+
+
+def asdict_entry(entry) -> dict:
+    from dataclasses import asdict
+
+    return asdict(entry)
 
 
 # ------------------------------------------------------------------- the server, in-process
@@ -952,14 +1370,15 @@ def check_server_routes(checks: Checks) -> None:
             row["card"], join.Position(3, 2).card, "and its card within that section"
         )
 
-        # WIRE-ONLY, which is the constraint that makes the decoration safe. `inventory.json`
-        # is the on-disk format and `Inventory.parse` filters on `Card.__annotations__`, so a
-        # label written into it would be silently dropped on the next reload — a field that
-        # exists only until something re-reads it is worse than no field at all.
-        on_disk = json.loads(Store().inventory_path.read_text("utf-8"))
+        # WIRE-ONLY, which is the constraint that makes the decoration safe. The stored
+        # payload is the on-disk format and `Inventory.parse` filters on
+        # `Card.__annotations__`, so a label written into it would be silently dropped on
+        # the next reload — a field that exists only until something re-reads it is worse
+        # than no field at all.
+        on_disk = stored_payloads("cards")
         checks.ok(
-            all("label" not in record for record in on_disk["cards"].values()),
-            "and the decoration never reaches inventory.json — to_payload is untouched",
+            on_disk and all("label" not in record for record in on_disk.values()),
+            "and the decoration never reaches the stored row — to_payload is untouched",
         )
 
         # A corrupt record must not take down the one route you reach for when something is
@@ -2200,15 +2619,16 @@ def check_queues(checks: Checks) -> None:
         # measured escaping /status as a 500 once 7b put these counts in it. It is the one
         # route you reach for when something is wrong, and it already refuses to be taken down
         # by a bad inventory record; the queues are held to the same rule.
-        raw = Store().queue_path(queues.MAIN)
-        healthy = raw.read_text("utf-8")
         for label, damage in (
             ("a market that is not a number", {"market": "twelve"}),
             ("a box that arrived as a string", {"box": "3"}),
         ):
-            broken = json.loads(healthy)
-            broken["3/3"].update(damage)
-            raw.write_text(json.dumps(broken), encoding="utf-8")
+            # Written through a session, which stores whatever the record holds — the
+            # damage a hand edit of the old file used to seed, reached the one way a row
+            # is written now.
+            with Store().write() as snapshot:
+                for name, value in damage.items():
+                    setattr(snapshot.review.entries["3/3"], name, value)
             report = answers(
                 checks,
                 capture_server.do_status,
@@ -2226,8 +2646,8 @@ def check_queues(checks: Checks) -> None:
                     f"what is waiting in the other",
                 )
                 checks.ok(
-                    "review.json" in report.get("problem", ""),
-                    f"{label}: and the problem names the file to go and fix",
+                    "review" in report.get("problem", ""),
+                    f"{label}: and the problem names the queue to go and fix",
                     f"problem was: {report.get('problem')!r}",
                 )
 
@@ -2248,9 +2668,7 @@ def check_queues(checks: Checks) -> None:
         # always answered, which is what made joining cheaper than a new shape.
         with Store().write() as snapshot:
             snapshot.inventory.cards["3/1"].box = "three"
-        broken = json.loads(healthy)
-        broken["3/3"]["market"] = "twelve"
-        raw.write_text(json.dumps(broken), encoding="utf-8")
+            snapshot.review.entries["3/3"].market = "twelve"
         both_wrong = answers(
             checks,
             capture_server.do_status,
@@ -2263,7 +2681,7 @@ def check_queues(checks: Checks) -> None:
                 "with each finding nulling its own field and neither taking the route down",
             )
             checks.ok(
-                "review.json" in both_wrong.get("problem", "")
+                "review queue" in both_wrong.get("problem", "")
                 and "the inventory holds a card" in both_wrong.get("problem", ""),
                 "and both sentences travel in the one `problem` string, so neither is the "
                 "one that got dropped",
@@ -2941,8 +3359,7 @@ def check_review_answer(checks: Checks) -> None:
         # A LOG THAT WILL NOT PARSE COSTS THE REVERSAL AND NOTHING ELSE — the answer
         # direction never reads history, only appends to it, which is the asymmetry
         # `_answer_origin`'s docstring claims and this pair of cases holds it to.
-        with open(Store().history_path, "a", encoding="utf-8") as handle:
-            handle.write("{not json\n")
+        corrupt_history()
         blind = answers(
             checks,
             lambda: capture_server.do_review_answer(
@@ -2981,7 +3398,7 @@ def check_review_answer(checks: Checks) -> None:
                 "history cannot say",
             )
             checks.ok(
-                "history.jsonl" in str(caught) and "could not be read" in str(caught),
+                "history" in str(caught) and "could not be read" in str(caught),
                 "but the message names the file to repair",
                 f"message was: {caught}",
             )
@@ -3630,12 +4047,11 @@ def check_mark_sold(checks: Checks) -> None:
         # `store_unavailable` and left a card he had physically sold recorded as unsold.
         # Measured that way before `_sale_origin` existed. A sale is the one event here that
         # has already happened in the world: unlisted is fine, unrecorded is not (CLAUDE.md).
-        with open(Store().history_path, "a", encoding="utf-8") as handle:
-            handle.write("{not json\n")
+        corrupt_history()
         degraded = answers(
             checks,
             lambda: capture_server.do_mark_sold(3, 3, {}),
-            "one malformed line in history.jsonl does not stop the sale being recorded",
+            "one malformed row in the history does not stop the sale being recorded",
         )
         if degraded is not None:
             checks.equal(degraded["state"], master.SOLD, "the card is sold")
@@ -3658,7 +4074,7 @@ def check_mark_sold(checks: Checks) -> None:
                 "one condition: history cannot say",
             )
             checks.ok(
-                "history.jsonl" in str(caught) and "could not be read" in str(caught),
+                "history" in str(caught) and "could not be read" in str(caught),
                 "but the message says WHICH of the two it is, since one of them is a file "
                 "to go and repair",
                 f"message was: {caught}",
@@ -4046,18 +4462,14 @@ def check_retire(checks: Checks) -> None:
             snapshot.inventory.cards["7/1"] = master.Card(
                 box=7, index=1, state=master.SOLD
             )
-        with open(Store().history_path, "a", encoding="utf-8") as handle:
+        append_history(
+            {"at": master.now(), "event": event, "position": "7/1", **extra}
             for event, extra in (
                 (master.CAPTURED, {}),
                 (master.RETIRED, {"reason": "lost"}),
                 (master.SOLD, {}),
-            ):
-                handle.write(
-                    json.dumps(
-                        {"at": master.now(), "event": event, "position": "7/1", **extra}
-                    )
-                    + "\n"
-                )
+            )
+        )
         caught = checks.raises(
             capture_server.BadRequest,
             lambda: capture_server.do_mark_sold(7, 1, {"undo": True}),
@@ -4083,12 +4495,10 @@ def check_retire(checks: Checks) -> None:
             snapshot.inventory.cards["7/2"] = master.Card(
                 box=7, index=2, state=master.RETIRED, retire_reason="lost"
             )
-        with open(Store().history_path, "a", encoding="utf-8") as handle:
-            for event in (master.CAPTURED, master.SOLD, master.RETIRED):
-                handle.write(
-                    json.dumps({"at": master.now(), "event": event, "position": "7/2"})
-                    + "\n"
-                )
+        append_history(
+            {"at": master.now(), "event": event, "position": "7/2"}
+            for event in (master.CAPTURED, master.SOLD, master.RETIRED)
+        )
         refusal(
             checks,
             lambda: capture_server.do_retire(7, 2, {"undo": True}),
@@ -10679,8 +11089,11 @@ def check_listing_commands(checks: Checks) -> None:
     # that the migration survives a read and a commit through `store/session.py`, which is
     # the only path a running system ever takes.
     with isolated_home():
+        # A LEGACY STORE, WRITTEN AS THE FILE IT WAS. The first `Store()` open imports it
+        # into the database (D88) through `Inventory.parse`, which is where the v1->v2
+        # migration has always lived — so this is both migrations in one read.
         files.write_json(
-            Store().inventory_path,
+            files.inventory_dir() / db.LEGACY_INVENTORY,
             {
                 "version": 1,
                 "cards": {
@@ -10700,13 +11113,18 @@ def check_listing_commands(checks: Checks) -> None:
         with Store().write():
             pass  # read, migrate, commit — the shape every request has
 
-        on_disk = json.loads(Store().inventory_path.read_text("utf-8"))
-        checks.equal(on_disk["version"], master.VERSION, "the committed file is v2")
+        on_disk = Store().read().inventory.to_payload()
+        checks.equal(on_disk["version"], master.VERSION, "the committed store is v2")
         checks.equal(
-            [record["state"] for record in on_disk["cards"].values()],
+            [record["state"] for record in stored_payloads("cards").values()],
             [master.IDENTIFIED, master.IDENTIFIED],
-            "and no card on disk wears a listing stage any more — a v2 file that did would "
+            "and no stored card wears a listing stage any more — a v2 row that did would "
             "fail `check_state` loudly on the next write rather than being repaired forever",
+        )
+        checks.ok(
+            not (files.inventory_dir() / db.LEGACY_INVENTORY).exists()
+            and (db.legacy_dir(files.inventory_dir()) / db.LEGACY_INVENTORY).is_file(),
+            "and the legacy file was moved to legacy-json/, never deleted and never re-read",
         )
         checks.equal(
             {
@@ -13668,9 +14086,7 @@ def check_order_ledger(checks: Checks) -> None:
         )
 
         # --------------------------------------- 3. IDEMPOTENCE, AS BYTES AND NOT A COUNT
-        ledger_bytes = store.ledger_path.read_bytes()
-        inventory_bytes = store.inventory_path.read_bytes()
-        history_bytes = store.history_path.read_bytes()
+        before_tables = store_tables()
 
         with store.write() as snapshot:
             second = snapshot.ledger.ingest([record(
@@ -13684,22 +14100,23 @@ def check_order_ledger(checks: Checks) -> None:
             (0, 0, 1, True),
             "the SECOND sync of the same order reports it unchanged",
         )
+        after_tables = store_tables()
         checks.equal(
-            store.ledger_path.read_bytes(),
-            ledger_bytes,
-            "and orders.json is BYTE-IDENTICAL — a row count would go green on a ledger "
-            "that threw its fulfilment away and re-ingested over the top (D54)",
+            (after_tables["orders"], after_tables["fulfilment"]),
+            (before_tables["orders"], before_tables["fulfilment"]),
+            "and the orders and fulfilment rows are IDENTICAL — a row count would go green "
+            "on a ledger that threw its fulfilment away and re-ingested over the top (D54)",
         )
         checks.equal(
-            store.inventory_path.read_bytes(),
-            inventory_bytes,
-            "and so is inventory.json, which is the half a count could never see",
+            (after_tables["cards"], after_tables["listings"]),
+            (before_tables["cards"], before_tables["listings"]),
+            "and so are the cards and listings, which is the half a count could never see",
         )
         checks.equal(
-            store.history_path.read_bytes(),
-            history_bytes,
-            "and history.jsonl — a sync appending a line per order is not the no-op the "
-            "module promises, however small the line is",
+            after_tables["events"],
+            before_tables["events"],
+            "and the history — a sync appending a row per order is not the no-op the "
+            "module promises, however small the row is",
         )
 
         # ---------------------------------------------- 4. the pull, and its idempotence
@@ -13732,8 +14149,7 @@ def check_order_ledger(checks: Checks) -> None:
         )
 
         # -------------------------------------- 5. A COUNT, AND NOT A LIST OF POSITIONS
-        stored = json.loads(store.ledger_path.read_text("utf-8"))
-        row = stored["fulfilment"][key]["9191486"]
+        row = stored_payloads("fulfilment")[key]["9191486"]
         checks.equal(
             sorted(row.keys()),
             ["at", "copies", "fulfilled"],
@@ -13998,11 +14414,14 @@ def check_order_ledger(checks: Checks) -> None:
     # behavioural test would have to hang to fail.
     tree = ast.parse(Path(order_store.__file__).read_text("utf-8"))
     imported = set()
+    modules = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             imported.update(alias.name.split(".")[0] for alias in node.names)
+            modules.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
+            modules.add(node.module)
     checks.equal(
         sorted(imported & {"urllib", "http", "socket", "requests", "subprocess", "pathlib"}),
         [],
@@ -14011,10 +14430,12 @@ def check_order_ledger(checks: Checks) -> None:
         "already holds",
     )
     checks.equal(
-        sorted(n for n in imported if n in {"store", "pipeline"}),
-        [],
+        sorted(m for m in modules if m.split(".")[0] in {"store", "pipeline"}),
+        ["store.rows"],
         "and nothing from `pipeline`, which is why OrderLine is declared twice: the edge "
-        "runs the other way and a cycle is what reusing the resolver's would cost",
+        "runs the other way and a cycle is what reusing the resolver's would cost. "
+        "`store.rows` is the one package import (D88): a container with no I/O, which is "
+        "what lets the two maps be tables without this module learning what a table is",
     )
 
 
@@ -14140,7 +14561,7 @@ def check_order_screen(checks: Checks) -> None:
             )
 
     # ------------------------------ 2-5. the ingest: idempotence, the PII backstop, the kinds
-    with isolated_home() as home:
+    with isolated_home():
         stock(3, 3, "9191486")
         moonfall = paste("A-1", line("9191486", 1, name="Moonfall"))
 
@@ -14153,14 +14574,9 @@ def check_order_screen(checks: Checks) -> None:
                 "the first paste reports one order added and says it wrote something",
             )
 
-        watched = ["inventory/orders.json", "inventory/inventory.json",
-                   "inventory/history.jsonl"]
-
         def bytes_now() -> dict:
-            return {
-                name: (home / name).read_bytes() if (home / name).exists() else None
-                for name in watched
-            }
+            tables = store_tables()
+            return {name: tables[name] for name in ("orders", "fulfilment", "cards", "events")}
 
         before = bytes_now()
         again = answers(checks, lambda: capture_server.do_order_ingest(moonfall),
@@ -14176,8 +14592,8 @@ def check_order_screen(checks: Checks) -> None:
         checks.equal(
             after,
             before,
-            "AND ALL THREE FILES ARE BYTE-IDENTICAL ACROSS IT — orders.json, inventory.json "
-            "and history.jsonl. BYTE EQUALITY, NEVER A ROW COUNT: 'the file holds one order' "
+            "AND EVERY TABLE IS ROW-IDENTICAL ACROSS IT — orders, fulfilment, cards and the "
+            "history. ROW EQUALITY, NEVER A ROW COUNT: 'the store holds one order' "
             "is satisfied identically by a ledger that learned nothing and by a ledger that "
             "threw its fulfilment away and re-ingested the same order over the top, which is "
             "D54's lesson said one layer up",
@@ -16204,6 +16620,8 @@ def run() -> Result:
     check_allocator(checks)
     check_boxes_and_listings(checks)
     check_store(checks)
+    check_store_of_record(checks)
+    check_photo_reclaim(checks)
     check_server_routes(checks)
     check_drain(checks)
     check_undo(checks)

@@ -543,24 +543,25 @@ def _box_names() -> Dict[int, Tuple[str, Optional[str], FrozenSet[str]]]:
     for a box that has since been deleted (D10 ruling 3): the run remembers a box the store
     no longer has, and a missing name is the honest rendering of that.
 
-    IT PARSES THE INVENTORY AND NOT THE SNAPSHOT. `Store().read()` also parses the
-    identification cache and both queue files, which this has no use for — measured on the
-    owner's own store at 7.3ms against 4.5ms for the inventory alone, over a 268KB cache
-    nothing here reads. `GET /pipeline/runs` is polled at 4s while a run is live, so the
-    cheaper read is the one to take.
+    IT READS THE CARDS AND NOTHING ELSE. This used to parse `inventory.json` directly rather
+    than take `Store().read()`, because that read also parsed the identification cache and
+    both queue files — measured at 7.3ms against 4.5ms over a 268KB cache nothing here
+    reads. Since D88 a snapshot loads only the tables a caller touches, so the ordinary read
+    is the cheap one and the direct parse is gone with the file it parsed. `GET
+    /pipeline/runs` is polled at 4s while a run is live; two column-only queries answer it.
 
     IT NEVER RAISES, which is `do_status`'s rule applied to a decoration. A store this cannot
     read costs the run list its box names and must not cost it the run list — the phase, the
     elapsed time and the download links are what that poll is actually for.
     """
     try:
-        inventory = master.Inventory.parse(files.read_json(Store().inventory_path))
+        inventory = Store().read().inventory
+        present: Dict[int, set] = {}
+        for _, (box, run) in inventory.cards.select(("box", "run")):
+            if box is not None and isinstance(run, str) and run.strip():
+                present.setdefault(int(box), set()).add(run)
     except Exception:  # noqa: BLE001 — a name is never worth an unanswered poll
         return {}
-    present: Dict[int, set] = {}
-    for card in inventory.cards.values():
-        if isinstance(card.run, str) and card.run.strip():
-            present.setdefault(card.box, set()).add(card.run)
     names: Dict[int, Tuple[str, Optional[str], FrozenSet[str]]] = {}
     for key, entry in inventory.boxes.items():
         name = entry.name

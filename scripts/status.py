@@ -833,10 +833,45 @@ def icloud() -> List[str]:
 
 
 def store() -> List[str]:
+    """The store's two directories, and the shape of the store inside the first (D88).
+
+    `store.sqlite` is the master since D88 and the six JSON files before it are moved to
+    `legacy-json/` on the first open. Three states are worth telling apart here, because
+    two of them look identical from a directory listing: a database, a legacy store nobody
+    has opened on the new code yet (the next open migrates it), and a legacy file sitting
+    BESIDE a database — which nothing reads, and which a person will otherwise trust.
+    Stdlib sqlite3, no project import, the same rule as everything else in this file.
+    """
     out = []
     for name, absent in (("inventory", "nothing captured yet"), ("runs", "no identify run yet")):
         found = resolve(name)  # declared optional, so absence is reported, not a failure
         out.append(field(f"{name}/", "present" if found else f"absent — {absent}"))
+        if name != "inventory" or not found:
+            continue
+        directory = found[0]
+        database = directory / "store.sqlite"
+        legacy = [n for n in ("inventory.json", "identifications.json", "review.json",
+                              "parked.json", "orders.json", "history.jsonl")
+                  if (directory / n).is_file()]
+        if database.is_file():
+            try:
+                import sqlite3
+
+                conn = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+                cards = conn.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
+                boxes = conn.execute("SELECT COUNT(*) FROM boxes").fetchone()[0]
+                conn.close()
+                out.append(cont(f"store.sqlite: {cards} cards in {boxes} boxes (D88)"))
+            except Exception as exc:  # noqa: BLE001 — status reports, never raises
+                out.append(cont(f"store.sqlite: could not be read ({exc})"))
+            if legacy:
+                out.append(cont(f"AND {', '.join(legacy)} beside it — READ BY NOTHING. Move "
+                                f"them into legacy-json/ or delete them; a legacy file is "
+                                f"never a fallback (D86, D88)."))
+        elif legacy:
+            out.append(cont(f"legacy JSON store ({', '.join(legacy)}) — the next `Store()` "
+                            f"open migrates it to store.sqlite and moves these to "
+                            f"legacy-json/ (D88)"))
     return out
 
 
