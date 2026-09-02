@@ -4,19 +4,25 @@ import {
   describeFailure,
   getPriceHistory,
   getPriceTrends,
-  getPricing,
+  emitMerged,
+  getPricingCorpus,
+  getPricingWorklist,
+  putPricingCorpus,
   getRun,
   getRuns,
-  putDecisions,
   photoUrl,
+  runFileUrl,
   runStep,
   type Failure,
 } from './server'
 import type {
   DecisionsDocument,
-  PricingPayload,
+  CorpusAnswer,
+  MergedSku,
+  RosterRun,
+  PricingCorpus,
+  PricingWorklist,
   PricingSku,
-  PricingTable,
   RunDetail,
   RunFile,
   RunSummary,
@@ -238,11 +244,14 @@ const HELD_HEAD = 'held back from this run'
  *  as a reasoned hold does, and it keeps the card out of the same import file. A group of rows
  *  that will not list is the honest set; one that took the reasoned half alone would leave the
  *  other half sitting among the unanswered rows looking like work. */
-function heldOnArrival(table: PricingTable, doc: DecisionsDocument): ReadonlySet<string> {
+function heldOnArrival(
+  rows: readonly PricingSku[],
+  doc: DecisionsDocument,
+): ReadonlySet<string> {
   const overrides = (doc.overrides ?? {}) as Record<string, unknown>
   const unpriced = (doc.no_market_data ?? {}) as Record<string, unknown>
   const out = new Set<string>()
-  for (const row of table.skus) {
+  for (const row of rows) {
     const standing = targetOf(row.bucket) === 'overrides' ? overrides[row.sku] : unpriced[row.sku]
     if (isWithheld(standing)) out.add(row.sku)
   }
@@ -253,19 +262,227 @@ function heldOnArrival(table: PricingTable, doc: DecisionsDocument): ReadonlySet
  *  SIBLINGS in the list rather than a heading owning a nested list of its own — the caption
  *  above them is a sibling of the rows for the same reason, and a wrapper would stop the rows
  *  being what the section's own grid template applies to. */
-type Drawn = { head: string; count: number } | { head: null; sku: PricingSku }
+type Drawn = { head: string; count: number } | { head: null; sku: MergedSku }
 
-type Undo = { sku: string; target: 'overrides' | 'no_market_data'; before: unknown }
+/** One keystroke, and what the card was answered before it.
+ *
+ *  ONE VALUE AGAIN. It was a per-run map for as long as the answers were, and `undefined`
+ *  still means the key was absent and undoing DELETES it — D49's rule for clearing an answer,
+ *  since there is deliberately no delete verb anywhere for this. */
+type Undo = {
+  sku: string
+  before: CorpusAnswer | undefined
+  channel: 'price' | 'unknown'
+}
+
+/* ------------------------------------------------------- the corpus, as this screen (D86)
+ *
+ * ONE DOCUMENT, AND EVERY READER ON THIS SCREEN UNCHANGED. The answers used to be one
+ * `decisions.json` per run, which is why this file briefly carried a merge, a fan-out write
+ * and a conflict detector — machinery whose only job was to reconcile a duplication. The owner
+ * retired the duplication instead: *"why is it we've made a federalist state system when this
+ * is best done as a centralized system?"*
+ *
+ * `corpusAsDoc` IS THE WHOLE SEAM. `answers`, `unpriced`, the preset chips, the sub-threshold
+ * controls and `owed` all read a `DecisionsDocument`, and they keep doing so — the corpus is
+ * projected into that shape rather than every reader learning a new one. The projection is
+ * one-way; writes go through `setAnswer` below, into the corpus.
+ */
+
+/** The corpus as the document every reader on this screen already understands.
+ *
+ *  THE TWO TABLES ARE KEPT APART BY `channel`, and that is not cosmetic:
+ *  `pipeline/decisions.py:blocking` reads `no_market_data` ALONE to decide whether `emit` must
+ *  refuse, and `app/src/readiness.ts` mirrors it. Route a hand-entered answer for a card the
+ *  catalog has no price for through `overrides` instead and the price is still right while the
+ *  gate stops being able to see it — a screen reporting nothing owed for a run `emit` refuses. */
+function corpusAsDoc(book: PricingCorpus | null): DecisionsDocument {
+  if (book === null) return {}
+  const overrides: Record<string, unknown> = {}
+  const unpriced: Record<string, unknown> = {}
+  for (const [sku, answer] of Object.entries(book.skus ?? {})) {
+    if (answer === null || answer === undefined) continue
+    const table = answer.channel === 'unknown' ? unpriced : overrides
+    table[sku] = answer.value
+  }
+  return {
+    rule: book.policy?.rule,
+    basis: book.policy?.basis,
+    sub_threshold: book.policy?.sub_threshold ?? null,
+    overrides: overrides as DecisionsDocument['overrides'],
+    no_market_data: unpriced as DecisionsDocument['no_market_data'],
+  }
+}
+
+/** Set or clear one card's answer, returning a NEW corpus.
+ *
+ *  `undefined` DELETES THE KEY and returns the row to its suggestion, which is D49's rule for
+ *  clearing an answer — there is deliberately no delete verb anywhere for this. Every other key
+ *  in the document is spread through untouched, so a hand-written `_note` and anything a later
+ *  version adds survive a screen that has never heard of them. */
+function setAnswer(
+  book: PricingCorpus,
+  sku: string,
+  value: unknown,
+  channel: 'price' | 'unknown',
+): PricingCorpus {
+  const skus = { ...(book.skus ?? {}) }
+  if (value === undefined) delete skus[sku]
+  else skus[sku] = { ...(skus[sku] ?? {}), value: value as never, channel }
+  return { ...book, skus }
+}
+
+/** The run picker — a filter over the worklist since D86, and no longer a gate in front of it.
+ *
+ *  MULTI-SELECT, MIRRORING `Runs.tsx`'s BOX CART (D48). Nothing ever argued for the
+ *  single-select this replaces: D49 defends where the run comes from — *"a picker here cannot
+ *  disagree with anything"*, because `GET /pipeline/runs` is the single source — and says
+ *  nothing about how many may be picked. A set over that same single source has the identical
+ *  property. D39's one-mass-select rule is about CARDS and is untouched; `#/inventory` still
+ *  owns the only one.
+ *
+ *  FOUR THINGS ARE PINNED BY `app/tests/pricing.spec.ts` AND ALL FOUR SURVIVE: one
+ *  `.pricing-run` chip per joined run, `.pricing-run-name` exactly `runBoxLabel(row)`, an
+ *  unnamed box drawing its number alone, and `.pricing-run-id` still carrying the full run
+ *  directory. What is added is the fifth line the chip never had.
+ *
+ *  THE FIGURE IS A REMAINDER AND NOT A TOTAL. `counts.skus` is the SIZE of a job — box 2's
+ *  109 SKUs are one `floor` press and box 3's 199 are 117 real decisions — so a picker
+ *  drawing it could not answer the only question being asked of it. `owes` comes from
+ *  `Decisions.blocking`, the Python that actually refuses an emit.
+ *
+ *  ASCENDING BY BOX, WHICH IS THE ORDER THE SHELF IS IN. `GET /pipeline/runs` sorts by
+ *  directory name reversed, so within a day this drew box 5, box 4, box 3 — backwards against
+ *  `Runs.tsx`'s stated rule, *"the order they sit on a shelf and the order the strip on
+ *  `#/inventory` already draws"*. Date descending between days, because the newest sitting is
+ *  the one being worked. */
+function PickRuns({
+  runs,
+  picked,
+  onToggle,
+}: {
+  runs: readonly RosterRun[]
+  picked: ReadonlySet<string>
+  onToggle: (run: string) => void
+}) {
+  const order = [...runs].sort((a, b) => {
+    const day = (b.created_at ?? '').slice(0, 10).localeCompare((a.created_at ?? '').slice(0, 10))
+    if (day !== 0) return day
+    return (a.box ?? 0) - (b.box ?? 0) || a.run.localeCompare(b.run)
+  })
+  return (
+    <div className="pricing-runs" role="group" aria-label="Which runs to price">
+      {order.map((row) => {
+        /* THE DRAWER LARGE, THE DIRECTORY SMALL BENEATH IT (D56). This chip drew the run name
+           over a SKU count — a date, a box digit and a number — and the owner named it
+           exactly: *"not just the date and the raw box number."* It is `docs/DESIGN.md`'s
+           human-label-large, machine-string-small rule pointed at a picker: the box is what a
+           person is choosing between, and the run directory is the greppable identity of the
+           thing they are choosing.
+
+           THE RUN NAME IS NOT DEMOTED OUT OF USEFULNESS, and it must not be. Two runs over
+           one box draw the SAME headline — box 1 and box 3 both do this on the owner's store
+           — so the second line is the only thing telling them apart.
+
+           A RUN WITH NO BOX FALLS BACK TO ITS OWN NAME AS THE HEADLINE, rather than drawing
+           an empty line above one. */
+        const label = runBoxLabel(row)
+        const day = runDay(row.created_at)
+        const on = picked.has(row.run)
+        return (
+          <button
+            key={row.run}
+            type="button"
+            className={`pricing-run${on ? ' pricing-run-on' : ''}${row.open ? ' pricing-run-open' : ''}`}
+            aria-pressed={on}
+            onClick={() => onToggle(row.run)}
+          >
+            <span className="pricing-run-name">
+              {label ?? row.run}
+              {label === null || day === null ? null : ` · ${day}`}
+            </span>
+            <span className="pricing-run-meta">
+              {label === null ? null : <span className="pricing-run-id">{row.run}</span>}
+              <span>{row.counts?.skus ?? '?'} SKUs</span>
+            </span>
+            {/* WHAT IS LEFT, OR THAT NOTHING IS. Both are worth a line: a run that owes
+                nothing is the one an operator should not open, and before this the only way
+                to learn that was to open it. */}
+            <span className={`pricing-run-owes${row.open ? '' : ' pricing-run-done'}`}>
+              {row.owes.length === 0 ? 'answered' : row.owes.join(' · ')}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** The runs named on the hash. `run` REPEATS rather than carrying a comma list, matching the
+ *  wire (`getPricingWorklist`) and `/trends` behind it, for their reason: a comma inside a
+ *  value is indistinguishable from the separator. A single `?run=` is the link `#/runs` has
+ *  always written and still resolves to a worklist of one, so every URL made before D86 lands
+ *  on exactly the screen it did. */
+function runsInHash(): string[] {
+  const query = window.location.hash.split('?')[1] ?? ''
+  return new URLSearchParams(query).getAll('run').filter((name) => name !== '')
+}
 
 export function Pricing() {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
-  const [run, setRun] = useState<string | null>(null)
-  const [payload, setPayload] = useState<PricingPayload | null>(null)
+  /** WHICH RUNS THE WORKLIST IS OVER, AND EMPTY MEANS "WHATEVER STILL HAS WORK IN IT".
+   *
+   *  THE EMPTY SET IS A REAL STATE AND NOT AN UNSET ONE, which is the whole shape of D86.
+   *  `#/pricing` used to open on a picker and hold `run: string | null`, so the operator's
+   *  first act on a screen built for *"a hundred real decisions in a sitting"* was always to
+   *  answer a question — which box — that the pipeline can already answer for them. With no
+   *  selection the server chooses every run that still owes something, so the screen opens on
+   *  the work rather than on a menu. Picking runs NARROWS that; it no longer gates it.
+   *
+   *  A SET OF RUN NAMES, MIRRORING `Runs.tsx`'s `picked: ReadonlySet<number>` (D48). Same
+   *  name, same shape, same toggle, and drawn in the server's order rather than the order
+   *  they were ticked — selection order would make the picker and the list disagree about
+   *  which run comes first for no reason anybody chose. */
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(runsInHash()))
+  const [work, setWork] = useState<PricingWorklist | null>(null)
+  const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
-  const [doc, setDoc] = useState<DecisionsDocument | null>(null)
+  /** THE PRICING CORPUS — one document for the store, and the authority (D86, amended).
+   *
+   *  IT WAS A MAP KEYED BY RUN AND THE OWNER RETIRED THAT: *"why is it we've made a
+   *  federalist state system when this is best done as a centralized system?"* A price is a
+   *  fact about a SKU, so one stored per run meant one answer per drawer a card had been
+   *  photographed in — 66 SKUs on this machine, 8 answered twice, 3 of those a hold overridden
+   *  by a later price. `doc` below is a `DecisionsDocument`-shaped READ of this, which is what
+   *  lets every reader on this screen stay exactly as it was.
+   *
+   *  THE FAN-OUT WRITE IS GONE WITH IT. `write` sets one key here and one `PUT /pricing`
+   *  follows; there is no second file for it to disagree with. */
+  const [book, setBook] = useState<PricingCorpus | null>(null)
+
+  /** The merged press: whether it is sending, and whether the operator wants only the
+   *  above-threshold rows. `listedOnly` is the owner's checkbox — *"i can hit a checkmark to
+   *  export just the valuable cards (splitting off the threshold ones) otherwise it defaults
+   *  to all"* — so the default is everything and the split is opt-in. */
+  const [sendingAll, setSendingAll] = useState(false)
+  const [listedOnly, setListedOnly] = useState(false)
+
+  /* TOGGLING A RUN NARROWS OR WIDENS THE WORKLIST, and un-ticking the last one returns it to
+     "everything unpriced" rather than to an empty screen. The empty set is the default state
+     and means the server chooses, so there is no way to arrive at a deliberately blank
+     worklist by pressing chips — which is the state that would look like a bug. */
+  const toggleRun = useCallback((name: string) => {
+    setPicked((held) => {
+      const now = new Set(held)
+      if (now.has(name)) now.delete(name)
+      else now.add(name)
+      return now
+    })
+  }, [])
   const [saving, setSaving] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
   const [holdFor, setHoldFor] = useState<string | null>(null)
+
   /* THE HOLDS AS THE SERVER LAST HANDED THEM OVER. State and not a memo over `doc`: the whole
    * property is that it does NOT track the document the operator is editing. */
   const [sunkHolds, setSunkHolds] = useState<ReadonlySet<string>>(() => new Set())
@@ -377,8 +594,16 @@ export function Pricing() {
    *
    * Refs and not state: nothing here draws, and the save loop must not re-render a hundred
    * rows to bookkeep itself. */
-  const savedDoc = useRef<DecisionsDocument | null>(null)
-  /* ONE PUT IN FLIGHT. This was the `saving` STATE, read inside the effect — which put
+  /** Which worklist fetch is live — see `load`. */
+  const loadWalk = useRef(0)
+
+  /** WHAT THE SERVER LAST CONFIRMED. `dirty` is a comparison against this rather than a flag,
+   *  so it cannot be cleared for a write that did not carry the answer. */
+  const savedBook = useRef<PricingCorpus | null>(null)
+  /* ONE PUT IN FLIGHT. A boolean again: there is one document, so there is one write, and the
+   * per-run `Set` this briefly was existed only because there were eight files.
+   *
+   * This was the `saving` STATE, read inside the effect — which put
    * `saving` in the dependency list, so raising it re-ran the effect, and the re-run's
    * CLEANUP set the in-flight closure's `live` to false. The response then landed on a dead
    * closure: neither the clear nor `setSaving(false)` ever fired, so the indicator read
@@ -389,7 +614,7 @@ export function Pricing() {
    * true after a failure — correctly, the server does not have these answers — and without
    * this the effect would re-fire the moment `saving` went false, forever. The next keystroke
    * makes a new document and the retry happens then. */
-  const failedDoc = useRef<DecisionsDocument | null>(null)
+  const failedBook = useRef<PricingCorpus | null>(null)
   /* WHICH FIELDS HAVE BEEN TYPED INTO THIS SESSION, and it has to be its own fact rather than
    * derived from whether an answer is stored. The first draft asked "is there a committed
    * answer for this SKU?" and cleared the field when there was not — so it cleared on EVERY
@@ -407,12 +632,22 @@ export function Pricing() {
      cannot disagree with anything, and `#/runs` links a specific run through the URL rather
      than through a second `sessionStorage` key with its own clearing rules. */
   useEffect(() => {
+    /* THE MOUNT READ IS THE `useState` INITIALISER ABOVE AND NOT THIS EFFECT, WHICH IS A
+       CORRECTNESS FIX RATHER THAN A TIDY-UP. Reading it here meant the screen mounted with an
+       empty selection, fired a load for "everything unpriced", then set `picked` from the hash
+       and fired a SECOND load — two responses in flight over one mount. Whichever landed last
+       won `docs`, but `savedDocs` is a ref written outside React's batching, so a render could
+       see the first load's documents against the second load's saved marker. They compare
+       unequal, `dirty` goes true with nothing typed, and the screen PUTs a document the
+       operator never touched — the one write D49 calls the load-bearing absence of this whole
+       screen. Caught by the snap case, which asserts a letter press writes nothing.
+
+       This listener now handles only what it is named for: the hash CHANGING while the screen
+       is mounted, which is `#/runs` linking a specific run at a screen already open. */
     const fromHash = () => {
-      const query = window.location.hash.split('?')[1] ?? ''
-      const named = new URLSearchParams(query).get('run')
-      if (named !== null && named !== '') setRun(named)
+      const named = runsInHash()
+      if (named.length > 0) setPicked(new Set(named))
     }
-    fromHash()
     window.addEventListener('hashchange', fromHash)
     return () => window.removeEventListener('hashchange', fromHash)
   }, [])
@@ -432,59 +667,113 @@ export function Pricing() {
     }
   }, [])
 
-  const load = useCallback(async (name: string) => {
-    /* THE TREND STRIP IS THIS RUN'S AND DIES WITH IT (D79). `history` above deliberately
-       survives a run change — a card's sales history is a fact about the CARD — but the strip
-       is a reading over the rows this run still wants an answer for, and which rows those are
-       is a fact about the run. Abandoning the walk is the other half: a chunked read started
-       over the old run would otherwise keep filling the new one's column, one chunk at a
-       time, for the rest of the half-minute. */
+  /** Fetch the worklist and seed a document per run. One request whatever the run count.
+   *
+   *  ONE ROUTE RATHER THAN N FETCHES, which is D86's own argument and not an optimisation.
+   *  The default landing is every open run — eight tables and ~909KB on this machine — and
+   *  two of them fetched either side of a `join` describe different worlds. `GET
+   *  /pipeline/pricing` reads them together for the reason `do_pipeline_pricing` already
+   *  reads one run's two files together. */
+  const load = useCallback(async (wanted: ReadonlySet<string>) => {
+    /* THE TREND STRIP IS THE LOADED SET'S AND DIES WITH IT (D79). `history` above
+       deliberately survives a reload — a card's sales history is a fact about the CARD — but
+       the strip is a reading over the rows still wanting an answer, and which rows those are
+       is a fact about what is loaded. Abandoning the walk is the other half: a chunked read
+       started over the old set would otherwise keep filling the new one's column, one chunk
+       at a time, for the rest of the half-minute. */
     trendWalk.current += 1
     setTrends({})
     setTrendRun(null)
+    setLoading(true)
+    /* WHICH LOAD IS LIVE. Two selections in quick succession are two requests, and the slower
+       one must not land on top of the faster: it would seat `docs` and `savedDocs` for a
+       worklist the screen is no longer showing. The trend walk one line up has had this guard
+       since D79 and for the same reason; this is the same shape over the table itself. */
+    loadWalk.current += 1
+    const mine = loadWalk.current
     try {
-      const answer = await getPricing(name)
-      /* SEEDED FROM THE TABLE'S OWN RULE WHERE THE RUN HAS NO DOCUMENT YET (D54). This was
-         `answer.decisions ?? {}`, so the first write `PUT` a document carrying no `rule` and
-         no `basis` — and `Decisions.parse` then defaults them to `match`/`market` while
-         `cli/cmd_join.py` treats the FILE as authoritative. A run joined at `markup:100` was
-         one keystroke from being silently reset to market price. Seeding writes nothing on
-         its own: `savedDoc` is set to the same object, so `dirty` is false. */
-      const held =
-        answer.decisions ?? { rule: answer.pricing.rule, basis: answer.pricing.basis }
-      setPayload(answer)
-      setDoc(held)
-      setSunkHolds(heldOnArrival(answer.pricing, held))
-      savedDoc.current = held
-      failedDoc.current = null
+      // TWO READS, ONE MOMENT. The worklist says which cards are in front of the operator;
+      // the corpus says what has been decided about them. Fetched together so a render can
+      // never draw one against the other's world — the same argument `do_pipeline_pricing`
+      // makes for reading a run's two files in one handler, one level up.
+      const [answer, held] = await Promise.all([
+        getPricingWorklist([...wanted].sort()),
+        getPricingCorpus(),
+      ])
+      if (mine !== loadWalk.current) return
+      setWork(answer)
+      setBook(held.corpus)
+      setSunkHolds(heldOnArrival(answer.skus, corpusAsDoc(held.corpus)))
+      savedBook.current = held.corpus
+      failedBook.current = null
       setFailure(null)
       setUndo([])
       setReceipt(null)
       setArmed(false)
       setShipTrouble(null)
-      /* THE RUN'S FILES AND ITS PHASE. Its own try, and its own trouble state: a failure here
-         must not blank the pricing table, which is the thing this screen is for. */
-      try {
-        setDetail(await getRun(name))
-      } catch (err) {
+      /* THE RUN'S FILES AND ITS PHASE — ONLY WHERE THERE IS ONE RUN. `emit` is per run (D48)
+         and so is everything this detail feeds; a worklist over several has no single answer
+         to "which files", and drawing one run's would be a caption over the wrong list. Its
+         own try, and its own trouble state: a failure here must not blank the pricing table,
+         which is the thing this screen is for. */
+      if (answer.runs.length === 1) {
+        try {
+          setDetail(await getRun(answer.runs[0]?.run as string))
+        } catch (err) {
+          setDetail(null)
+          setShipTrouble(describeFailure(err))
+        }
+      } else {
         setDetail(null)
-        setShipTrouble(describeFailure(err))
       }
     } catch (err) {
-      setPayload(null)
+      if (mine !== loadWalk.current) return
+      setWork(null)
+      setBook(null)
       setSunkHolds(new Set())
       setFailure(describeFailure(err))
+    } finally {
+      if (mine === loadWalk.current) setLoading(false)
     }
   }, [])
 
+  /* THE WORKLIST LOADS ON ARRIVAL, WITH NO SELECTION AND NO PRESS. That is the change D86
+     is: an empty `picked` is a real question — "what still has pricing in it" — and the
+     server answers it, so a screen built for a hundred decisions in a sitting stops opening
+     on a menu. Re-runs whenever the selection changes, which is what makes the picker a
+     filter over the list rather than a gate in front of it. */
   useEffect(() => {
-    if (run !== null) void load(run)
-  }, [run, load])
+    void load(picked)
+  }, [picked, load])
+
+  /** The runs actually drawn, in the server's order — ascending by name and so by date.
+   *  This and never `picked`: with no selection the server chose, and every fan-out, every
+   *  merge and every write walks what came back rather than what was asked for. */
+  const loaded = useMemo(() => (work?.runs ?? []).map((row) => row.run), [work])
+
+  /** The one run, where there is one. `null` for a worklist over several, which is what
+   *  disables `emit` and the run's file list without either of them needing to ask how many
+   *  runs there are: `emit` is per run (D48), so a press that had to choose between eight
+   *  would be the cross-run over-push this screen exists to surface. */
+  const run = loaded.length === 1 ? (loaded[0] as string) : null
+
+  /** The corpus as the document every reader here already understands. Read-only; writes go
+   *  through `write` below, into the corpus itself. */
+  const doc = useMemo(() => corpusAsDoc(book), [book])
 
   /* UNSAVED IS A COMPARISON, NOT A FLAG: the document on screen is not the document the
      server confirmed. Derived rather than stored so it cannot be cleared for a write that
-     did not carry it. */
-  const dirty = doc !== null && doc !== savedDoc.current
+     did not carry it.
+
+     COMPUTED INLINE AND DELIBERATELY NOT MEMOISED, WHICH IS THE ONE THING THIS LINE CANNOT
+     DO. `savedBook` is a REF, so it changes without a render — that is the whole reason it is
+     a ref, and it is what the completion of a write updates. A `useMemo` over it therefore
+     never recomputes when a write LANDS: the screen stayed dirty after the PUT succeeded and
+     the effect below re-fired on its own `saving` dependency forever. Measured as an endless
+     unsaved → saving… → unsaved oscillation against the three race cases this file pins. A
+     plain boolean recomputed every render reads the ref fresh and is stable by VALUE, which is
+     what the effect's dependency needs. */
+  const dirty = book !== null && book !== savedBook.current
 
   /* ONE PUT IN FLIGHT, COALESCING. The route replaces the document wholesale, so the screen
      round-trips every key it does not understand — including `_note` and anything a later
@@ -492,19 +781,22 @@ export function Pricing() {
      when it lands — which is now true of this loop rather than merely intended, because the
      write clears only the document it sent. */
   useEffect(() => {
-    if (!dirty || doc === null || run === null) return
-    if (inFlight.current || doc === failedDoc.current) return
-    const sent = doc
+    /* ONE ANSWER, ONE PUT — and this is what centralising the corpus bought at the write path.
+       It was one PUT per run holding the card, over N documents that could disagree; there is
+       one document now, so there is one write and nothing to reconcile after it. */
+    if (!dirty || book === null) return
+    if (inFlight.current || book === failedBook.current) return
+    const sent = book
     inFlight.current = true
     setSaving(true)
     void (async () => {
       try {
-        await putDecisions(run, sent as Record<string, unknown>)
-        savedDoc.current = sent
-        failedDoc.current = null
+        await putPricingCorpus(sent)
+        savedBook.current = sent
+        failedBook.current = null
         setFailure(null)
       } catch (err) {
-        failedDoc.current = sent
+        failedBook.current = sent
         setFailure(describeFailure(err))
       } finally {
         inFlight.current = false
@@ -512,14 +804,14 @@ export function Pricing() {
       }
     })()
     /* `saving` IS IN THE LIST TO RE-FIRE THE EFFECT WHEN A WRITE LANDS, AND IT IS ONLY SAFE
-       THERE BECAUSE THE GUARD IS A REF. Everything the completion changes is a ref — the
-       saved document and the in-flight flag — so a re-render is the only thing that can ask
-       "is there more to send?", and lowering `saving` is that re-render. What made this
-       dependency a hazard before was the CLEANUP: the effect owned an in-flight closure, so
-       the extra run tore that closure down mid-write and the response landed on a dead one.
-       There is no cleanup now, the early return above is what the extra runs hit, and the
-       write outlives every one of them. */
-  }, [dirty, doc, run, saving])
+       THERE BECAUSE THE GUARD IS A REF. Everything the completion changes is a ref — the saved
+       document and the in-flight flag — so a re-render is the only thing that can ask "is there
+       more to send?", and lowering `saving` is that re-render. What made this dependency a
+       hazard before was the CLEANUP: the effect owned an in-flight closure, so the extra run
+       tore that closure down mid-write and the response landed on a dead one. There is no
+       cleanup now, the early return above is what the extra runs hit, and the write outlives
+       every one of them. */
+  }, [dirty, book, saving])
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -534,8 +826,8 @@ export function Pricing() {
   /** What pricing still owes, recomputed live from the document on screen — never fetched.
    *  See `app/src/readiness.ts` for why this is a second implementation and what audits it. */
   const owes = useMemo(
-    () => owed(doc, subThresholdSkus(payload?.pricing.skus ?? [])),
-    [doc, payload],
+    () => owed(doc, subThresholdSkus(work?.skus ?? [])),
+    [doc, work],
   )
 
   /** What THIS RUN'S JOIN sent to review, from the run list already in hand. Zero new fetches.
@@ -565,9 +857,21 @@ export function Pricing() {
    *  The spread is what round-trips `_note`, `rule`, `basis`, `overrides` and every key a
    *  later `decisions.py` adds — `PUT .../decisions` replaces the document wholesale and
    *  validates nothing, so this is the only thing standing between a press and a lost block. */
-  const setSubThreshold = useCallback((answer: string | { flat: string } | null) => {
-    setDoc((current) => ({ ...(current ?? {}), sub_threshold: answer }))
-  }, [])
+  const setSubThreshold = useCallback(
+    (answer: string | { flat: string } | null) => {
+      /* ONE PRESS, ONE ANSWER, FOR THE WHOLE STORE. It was one write per loaded run, over
+         files that could disagree — the 2026-09-01 sitting answered `sub_threshold` three
+         times in eleven minutes and gave two different answers. The policy is the corpus's
+         now; a lot that genuinely wants its own keeps a per-run override, which is D48's
+         argument surviving in the one place it is actually about. */
+      setBook((current) =>
+        current === null
+          ? current
+          : { ...current, policy: { ...current.policy, sub_threshold: answer } },
+      )
+    },
+    [],
+  )
 
   /* THE PRESS SEQUENCES RATHER THAN GATING ON `dirty`, AND THIS IS THE WRITE RACE CLOSED.
    *
@@ -585,7 +889,7 @@ export function Pricing() {
    * than adding one. */
   useEffect(() => {
     if (ship !== 'waiting' || run === null) return
-    if (doc !== null && failedDoc.current === doc) {
+    if (book !== null && failedBook.current === book) {
       // THE SAVE LOOP DELIBERATELY STOPS RETRYING A REFUSED DOCUMENT, so without this the
       // wait would never end. Emitting against answers the server does not have would be
       // worse than saying so.
@@ -598,6 +902,11 @@ export function Pricing() {
       })
       return
     }
+    /* A BOOLEAN AGAIN. It was briefly one entry per run, and an empty `Set` is TRUTHY — so
+       this guard, written against the boolean, went from "a write is in flight" to "always"
+       and the emit press silently did nothing at all. Caught by four cases in this file that
+       had been green for the whole life of the boolean; recorded here because the corpus made
+       it a boolean again and the trap would be re-set by anything that makes it a collection. */
     if (dirty || saving || inFlight.current) return
     setShip('sending')
     void (async () => {
@@ -616,7 +925,7 @@ export function Pricing() {
         setShip('idle')
       }
     })()
-  }, [ship, dirty, doc, run, saving])
+  }, [ship, dirty, doc, book, run, saving])
 
   /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo
    *  stack. Recording absence is what lets an undo DELETE a key and return the row to its
@@ -626,35 +935,38 @@ export function Pricing() {
    *  where changing the preset silently changed nothing. */
   const write = useCallback(
     (sku: string, bucket: PricingSku['bucket'], value: unknown) => {
-      const target = targetOf(bucket)
-      setDoc((held) => {
-        // BUILT AS A LOOSE RECORD AND RETURNED AS THE DOCUMENT, which is the honest shape
-        // rather than a cast fighting itself. The two tables hold different value types —
-        // `overrides` takes a price OR a hold, `no_market_data` a price or `"unlisted"` —
-        // and `targetOf` is what decides which, per section. Indexing the typed document by
-        // a union of both keys asks TypeScript for the INTERSECTION of their value types,
-        // which nothing satisfies; narrowing instead would mean two near-identical writers,
-        // and two writers is how one of them drifts into writing the wrong file.
-        const next: Record<string, unknown> = { ...(held ?? {}) }
-        const table = { ...((next[target] as Record<string, unknown>) ?? {}) }
-        setUndo((stack) =>
-          [{ sku, target, before: table[sku] }, ...stack].slice(0, UNDO_DEPTH),
-        )
-        if (value === undefined) delete table[sku]
-        else table[sku] = value
-        // CAST AT THE ONE SEAM, and the looseness is the point rather than a shortcut. The
-        // two tables hold different value types — `overrides` takes a price OR a hold,
-        // `no_market_data` takes a price or `"unlisted"` — and `targetOf` is what decides
-        // which, per section. Narrowing here would mean two near-identical writers, which is
-        // exactly the duplication that lets one of them drift into writing the wrong file.
-        next[target] = table
-        return next as DecisionsDocument
+      /* ONE ANSWER, ONE KEY, AND NO FAN-OUT — which is the amendment to D86 as it lands in
+         this function. It briefly wrote the same value into every run holding the card,
+         because the answer lived in each run's own `decisions.json`; the owner retired that
+         shape and the corpus keys by SKU, so a card has one answer by construction. The
+         conflict this file used to detect and draw cannot occur.
+
+         THE UNDO REMEMBERS THE PREVIOUS VALUE, INCLUDING ITS ABSENCE. Recording absence is
+         what lets an undo DELETE the key and return the row to its suggestion rather than
+         writing the suggestion into the file — which is the one thing this screen may never
+         do: an override is layer 1 of the ladder and beats the rule at layer 4, so a screen
+         that wrote its hundred suggestions would produce a run where changing the preset
+         silently changed nothing. */
+      const channel: 'price' | 'unknown' =
+        targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price'
+      setBook((current) => {
+        if (current === null) return current
+        return setAnswer(current, sku, value, channel)
       })
+      setUndo((stack) =>
+        [{ sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH),
+      )
     },
-    [],
+    [book],
   )
 
-  const table = payload?.pricing ?? null
+  /** Every box the loaded runs touch, for the header's count. Ascending, deduped. */
+  const boxesLoaded = useMemo(
+    () => [...new Set((work?.runs ?? []).map((row) => row.box).filter((box) => box !== null))]
+      .sort((a, b) => (a as number) - (b as number)),
+    [work],
+  )
+  const table = work?.skus ?? null
   /* MEMOISED BECAUSE `?? {}` BUILDS A NEW OBJECT EVERY RENDER, and both of these are read as
      dependencies rather than as values — `answerFor` and `held` below, and the key handler
      through them. Unmemoised they defeated every memo downstream: `answerFor` was rebuilt on
@@ -673,7 +985,7 @@ export function Pricing() {
     [doc],
   )
 
-  const rows = useMemo(() => table?.skus ?? [], [table])
+  const rows = useMemo(() => table ?? [], [table])
 
   /** THE LIST AS IT IS DRAWN, SECTION BY SECTION, AND THE ONLY PLACE THAT ORDER IS DECIDED.
    *
@@ -714,8 +1026,8 @@ export function Pricing() {
       SECTIONS.map((section) => {
         const inSection = rows.filter((row) => row.bucket === section.bucket)
         const items: Drawn[] = []
-        const holds: PricingSku[] = []
-        const closed = new Map<string, PricingSku[]>()
+        const holds: MergedSku[] = []
+        const closed = new Map<string, MergedSku[]>()
         for (const sku of inSection) {
           const why = groupOf(sku)
           if (why !== null) {
@@ -876,7 +1188,12 @@ export function Pricing() {
       const chosen = PRESETS.find((row) => row.key === key)
       if (chosen === undefined) return
       const missing = rows.filter((row) => row.presets[key] === null)
-      setDoc((current) => ({ ...(current ?? {}), rule: chosen.rule, basis: chosen.basis }))
+      /* THE RULE AND THE BASIS ARE THE CORPUS'S, for `setSubThreshold`'s reason. */
+      setBook((current) =>
+        current === null
+          ? current
+          : { ...current, policy: { ...current.policy, rule: chosen.rule, basis: chosen.basis } },
+      )
       for (const row of rows) {
         const input = inputs.current.get(row.sku)
         if (input && answerFor(row) === undefined) input.value = row.presets[key] ?? ''
@@ -927,13 +1244,12 @@ export function Pricing() {
   const undoLast = useCallback(() => {
     const [top, ...rest] = undo
     if (top === undefined) return
-    setDoc((current) => {
-      const next: Record<string, unknown> = { ...(current ?? {}) }
-      const tableFor = { ...((next[top.target] as Record<string, unknown>) ?? {}) }
-      if (top.before === undefined) delete tableFor[top.sku]
-      else tableFor[top.sku] = top.before
-      next[top.target] = tableFor
-      return next as DecisionsDocument
+    setBook((current) => {
+      if (current === null) return current
+      const skus = { ...(current.skus ?? {}) }
+      if (top.before === undefined) delete skus[top.sku]
+      else skus[top.sku] = top.before
+      return { ...current, skus }
     })
     setUndo(rest)
   }, [undo])
@@ -1413,11 +1729,29 @@ export function Pricing() {
               name stays because it is what `emit` and `join` are pointed at and what
               `decisions.json` is written under; what goes in front of it is the answer to
               which drawer these hundred prices are for. */}
+          {/* THE SCOPE NAMES WHAT IS LOADED, AND A WORKLIST OVER SEVERAL RUNS SAYS SO RATHER
+              THAN NAMING ONE. `scopeName` is the single-run answer and stays exactly as it
+              was; the multi-run line counts the drawers, because there is no one drawer these
+              prices are for and picking one to print would be a caption over the wrong list. */}
           <span className="pricing-scope">
-            {run === null
-              ? 'Pick a run.'
-              : [scopeName, run, `${rows.length} SKUs`].filter((part) => part !== null).join(' · ')}
+            {loaded.length === 0
+              ? 'Nothing loaded.'
+              : run !== null
+                ? [scopeName, run, `${rows.length} SKUs`]
+                    .filter((part) => part !== null)
+                    .join(' · ')
+                : [
+                    `${boxesLoaded.length || loaded.length} ${
+                      boxesLoaded.length === 1 ? 'box' : 'boxes'
+                    }`,
+                    `${loaded.length} runs`,
+                    `${rows.length} SKUs`,
+                    picked.size === 0 ? 'everything unpriced' : null,
+                  ]
+                    .filter((part) => part !== null)
+                    .join(' · ')}
           </span>
+
           {held.length === 0 ? null : (
             <button
               type="button"
@@ -1434,21 +1768,28 @@ export function Pricing() {
           <button
             type="button"
             className="pricing-plain"
-            onClick={() => run !== null && void load(run)}
-            disabled={run === null}
+            onClick={() => void load(picked)}
+            disabled={loading}
           >
             Reload
           </button>
         </div>
       </div>
       <p className="pricing-lede">
-        Sets what every SKU this run matched will list at. Answers are saved to{' '}
-        <code>decisions.json</code>; <a href="#/runs">emit on Runs</a> is what writes the CSVs.
+        Sets what every SKU here will list at. One answer per card, for the whole store, in{' '}
+        <code>inventory/prices.json</code> — a price is a fact about the card, not about the
+        drawer it came out of. <a href="#/runs">Emit on Runs</a> writes one run&rsquo;s CSVs;
+        the press below writes one file for everything on screen.
       </p>
     </header>
   )
 
-  if (run === null || payload === null) {
+  /* THE PICKER SHOWS WHEN THERE IS NOTHING TO DRAW, NOT WHEN NOTHING IS PICKED. Before
+     D86 this read `run === null`, so the screen's opening state was always the menu; now an
+     empty selection is answered by the server and the list is what lands. What is left here
+     is the genuine empty: the fetch failed, or every open run has been answered. */
+  if (work === null || work.runs.length === 0) {
+    const joined = work?.roster ?? []
     return (
       <main className="pricing">
         {chrome}
@@ -1458,58 +1799,36 @@ export function Pricing() {
             <p className="pricing-machine">{failure.code}</p>
           </div>
         )}
-        <div className="pricing-runs" role="group" aria-label="Which run to price">
-          {runs.filter((row) => row.joined).length === 0 ? (
-            <p className="pricing-empty">
-              No joined runs yet. Identify and join a box on <a href="#/runs">Runs</a> first.
-            </p>
-          ) : (
-            runs
-              .filter((row) => row.joined)
-              .map((row) => {
-                /* THE DRAWER LARGE, THE DIRECTORY SMALL BENEATH IT (D56). This chip drew the
-                   run name over a SKU count — a date, a box digit and a number — and the owner
-                   named it exactly: *"not just the date and the raw box number."* It is
-                   `docs/DESIGN.md`'s human-label-large, machine-string-small rule, which the
-                   review queue already applies to its reason codes, pointed at a picker: the
-                   box is what a person is choosing between, and the run directory is the
-                   greppable identity of the thing they are choosing.
-
-                   THE RUN NAME IS NOT DEMOTED OUT OF USEFULNESS, and it must not be. Two runs
-                   over one box draw the SAME headline — box 1 does exactly this on the owner's
-                   store today — so the date on the second line is the only thing telling them
-                   apart. It stays in the utility face at the metadata size rather than
-                   dropping to the 10px a count can afford.
-
-                   A RUN WITH NO BOX FALLS BACK TO ITS OWN NAME AS THE HEADLINE, rather than
-                   drawing an empty line above one. No run on this machine is in that state; a
-                   manifest with neither a scope block nor a box-shaped capture directory would
-                   be. */
-                const label = runBoxLabel(row)
-                const day = runDay(row.created_at)
-                return (
-                  <button
-                    key={row.run}
-                    type="button"
-                    className={`pricing-run${row.run === run ? ' pricing-run-on' : ''}`}
-                    aria-pressed={row.run === run}
-                    onClick={() => setRun(row.run)}
-                  >
-                    <span className="pricing-run-name">
-                      {label ?? row.run}
-                      {label === null || day === null ? null : ` · ${day}`}
-                    </span>
-                    <span className="pricing-run-meta">
-                      {label === null ? null : (
-                        <span className="pricing-run-id">{row.run}</span>
-                      )}
-                      <span>{row.counts?.skus ?? '?'} SKUs</span>
-                    </span>
-                  </button>
-                )
-              })
-          )}
-        </div>
+        {loading ? (
+          <p className="pricing-empty">Reading the runs…</p>
+        ) : joined.length === 0 ? (
+          <p className="pricing-empty">
+            No joined runs yet. Identify and join a box on <a href="#/runs">Runs</a> first.
+          </p>
+        ) : picked.size > 0 ? (
+          /* A NARROWING THAT MATCHED NOTHING IS NOT THE SAME EMPTY AS HAVING NO WORK, and
+             saying so is the difference between "you are done" and "you filtered it away". */
+          <p className="pricing-empty">
+            Nothing to price in the runs you picked.{' '}
+            <button type="button" className="pricing-plain" onClick={() => setPicked(new Set())}>
+              Show everything unpriced
+            </button>
+          </p>
+        ) : (
+          /* THE TERMINAL STATE D49 PREDICTED AND THE SCREEN NEVER GOT. That entry read the
+             history — 596 cards, 153 SKUs, zero per-item decisions available — and said in as
+             many words that the honest reading was *"a screen whose job is to report there is
+             nothing to do"*. It could never say it: the only empty state fired when NO run had
+             ever been joined, so eight fully-answered runs drew eight chips and cost ~909KB and
+             sixteen round trips to discover they owed nothing. */
+          <p className="pricing-empty">
+            Nothing owes a pricing answer. Every joined run has been priced and emitted — pick
+            one below to look at it again, or <a href="#/runs">join a box on Runs</a>.
+          </p>
+        )}
+        {joined.length === 0 ? null : (
+          <PickRuns runs={joined} picked={picked} onToggle={toggleRun} />
+        )}
       </main>
     )
   }
@@ -1517,6 +1836,26 @@ export function Pricing() {
   return (
     <main className="pricing">
       {chrome}
+
+      {/* THE PICKER IS A FILTER OVER THE LIST, NOT A GATE IN FRONT OF IT (D86). It used to be
+          the screen's whole first state; it stays visible now because narrowing is something
+          an operator does DURING a sitting — "just box 3 for a minute" — and a control you
+          have to empty the screen to reach is one nobody uses. Un-ticking the last run returns
+          the worklist to everything unpriced rather than to nothing. */}
+      <PickRuns runs={work.roster} picked={picked} onToggle={toggleRun} />
+
+      {work.skipped.length === 0 ? null : (
+        /* A RUN THAT COULD NOT BE READ IS NAMED, NEVER DROPPED. An eight-run worklist must not
+           silently become a seven-run one because a directory predates `pricing.json` — that
+           is the silent drop `CLAUDE.md` forbids, wearing a shorter list. */
+        <div className="pricing-note-block">
+          {work.skipped.map((row) => (
+            <p className="pricing-machine" key={row.run}>
+              {row.run} skipped · {row.code}
+            </p>
+          ))}
+        </div>
+      )}
 
       {failure === null ? null : (
         <div className="pricing-note-block">
@@ -1851,6 +2190,44 @@ export function Pricing() {
                         `flex: none`, because it is the greppable half — a `withheld: nex…`
                         finds nothing in `decisions.json`. Which way the line breaks under
                         pressure is a decision, and this is it. */}
+                    {/* WHERE THIS CARD IS, WHEN IT IS IN MORE THAN ONE DRAWER — and the
+                        disagreement, where the runs already answered it two ways.
+
+                        THIS IS THE ROW THAT PAYS FOR THE WORKLIST. 78 of 423 SKUs on this
+                        machine sit in more than one run, 8 carried two answers, and 3 of those
+                        were a `withheld` hold answered with a price in a later sitting: SKU
+                        9191210 was held `bullish` above $5 out of box 3 and listed at $3.45 out
+                        of box 4 the next day. Nothing could have said so — a hold lives in its
+                        run and dies with it (D49) — and this line is what says it.
+
+                        THE BOXES AND NOT THE RUN NAMES. A person owns drawers, not
+                        directories; the runs are on the chips above. Deduped and ascending,
+                        which is the order the shelf is in. */}
+                    {sku.in.length < 2 && !sku.over_cap ? null : (
+                      <p className="pricing-row-span">
+                        <span className="pricing-span-where">
+                          {(() => {
+                            const boxes = [
+                              ...new Set(sku.positions.map((place) => place.box)),
+                            ].sort((a, b) => a - b)
+                            return boxes.length === 0
+                              ? `${sku.in.length} runs`
+                              : `${boxes.length === 1 ? 'Box' : 'Boxes'} ${boxes.join(', ')} · ${sku.in.length} runs`
+                          })()}
+                        </span>
+                        {/* THE CAP, WHERE THE RUNS SEPARATELY CLAIM MORE THAN CAN GO. Each run
+                            spends `live_cap - copies_out` believing it is alone, so runs joined
+                            before either emitted double-spend the same room — measured, two SKUs
+                            reached `pushed: 6` against a cap of 4. The Qty cell already shows the
+                            true figure; this says the runs disagree with it. */}
+                        {!sku.over_cap ? null : (
+                          <span className="pricing-span-cap">
+                            runs claim {sku.claimed_add}, {sku.add_to_quantity} can go
+                          </span>
+                        )}
+                      </p>
+                    )}
+
                     {why === null && !withheld ? null : (
                       <p className="pricing-row-note">
                         {why === null ? null : (
@@ -1950,13 +2327,96 @@ export function Pricing() {
           hand-maintained `padding-bottom` on `.pricing` equal to a height that changes, which
           is the two-declarations-that-must-agree drift this stylesheet already argues against
           for its grid template. */}
+      {/* THE MERGED PRESS — one import file over every run on screen (D86).
+          `emit` is per run and stays so; what this adds is a send, because the CAP has to be
+          re-derived across it. `pipeline/join.py` spends `live_cap - copies_out` per run
+          against a cap that is global, so pressing the per-run button N times IS the
+          over-push: measured from an identical cleared ledger, three separate emits over
+          three real runs wrote two SKUs past the cap of four and one merged emit wrote none.
+          The bar only exists for a send of more than one, because for one run the press
+          below is that same command with nothing to merge. */}
+      {loaded.length < 2 ? null : (
+        <aside
+          className="pricing-ship"
+          ref={measureShip}
+          role="region"
+          aria-label="Ship these runs"
+        >
+          <div className="pricing-ship-row">
+            <span className="pricing-ship-key">
+              {loaded.length} runs · {boxesLoaded.length}{' '}
+              {boxesLoaded.length === 1 ? 'box' : 'boxes'} · one file
+            </span>
+            <span className="pricing-ship-says">
+              The cap is spent once across the send, so a card in three drawers gets one row.
+            </span>
+            <label className="pricing-ship-only">
+              <input
+                type="checkbox"
+                checked={listedOnly}
+                onChange={(event) => setListedOnly(event.currentTarget.checked)}
+              />
+              just the above-threshold cards
+            </label>
+            <button
+              type="button"
+              className="pricing-emit"
+              disabled={sendingAll}
+              onClick={() => {
+                setSendingAll(true)
+                setShipTrouble(null)
+                void (async () => {
+                  try {
+                    const result = await emitMerged(loaded, { listedOnly })
+                    setReceipt({
+                      ok: result.ok,
+                      console: result.console,
+                      files: result.files,
+                    })
+                  } catch (err) {
+                    setShipTrouble(describeFailure(err))
+                  } finally {
+                    setSendingAll(false)
+                  }
+                })()
+              }}
+            >
+              {sendingAll ? 'Writing…' : 'Write one import file'}
+            </button>
+          </div>
+          {receipt === null ? null : (
+            <div className="pricing-ship-receipt">
+              <pre className="pricing-console">{receipt.console}</pre>
+              {(receipt.files ?? [])
+                .filter((file) => file.is_import)
+                .map((file) => (
+                  <a
+                    key={file.name}
+                    className="pricing-plain"
+                    href={runFileUrl(loaded[loaded.length - 1] as string, file.name)}
+                    download={file.name}
+                  >
+                    {file.name}
+                  </a>
+                ))}
+            </div>
+          )}
+          {shipTrouble === null ? null : (
+            <div className="pricing-note-block">
+              <p className="pricing-note-text">{shipTrouble.message}</p>
+              <p className="pricing-machine">{shipTrouble.code}</p>
+            </div>
+          )}
+        </aside>
+      )}
+
       {run === null ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run">
-          {subThresholdSkus(payload?.pricing.skus ?? []).length === 0 ? null : (
+          {subThresholdSkus(work?.skus ?? []).length === 0 ? null : (
             <div className="pricing-ship-row">
               <span className="pricing-ship-key">
-                Below ${payload?.pricing.threshold ?? '0.40'} ·{' '}
-                {subThresholdSkus(payload?.pricing.skus ?? []).length} SKUs
+                Below ${work?.threshold ?? '0.40'} ·{' '}
+                {subThresholdSkus(work?.skus ?? []).length} SKUs
               </span>
               {/* THE ANSWER `emit` REFUSES WITHOUT, ON THE SCREEN WHERE PRICING IS DONE. It
                   was settable only by typing JSON on another route, and `blocking` never
@@ -1972,7 +2432,7 @@ export function Pricing() {
                   )
                 }
               >
-                At the ${payload?.pricing.floor ?? '0.40'} floor
+                At the ${work?.floor ?? '0.40'} floor
               </button>
               <button
                 type="button"
@@ -2012,23 +2472,6 @@ export function Pricing() {
                     if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
                   }}
                 />
-              )}
-              {payload?.remembered_sub_threshold == null ? null : (
-                /* A LABEL AND NEVER A DEFAULT — D9 forbids answering this on the operator's
-                   behalf, so this removes the time spent DECIDING and not the press. */
-                <button
-                  type="button"
-                  className="pricing-plain"
-                  onClick={() =>
-                    setSubThreshold(payload.remembered_sub_threshold?.answer ?? null)
-                  }
-                >
-                  {payload.remembered_sub_threshold.run} answered{' '}
-                  {typeof payload.remembered_sub_threshold.answer === 'string'
-                    ? payload.remembered_sub_threshold.answer
-                    : `$${payload.remembered_sub_threshold.answer.flat}`}{' '}
-                  · use it
-                </button>
               )}
             </div>
           )}

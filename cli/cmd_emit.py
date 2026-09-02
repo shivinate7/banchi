@@ -42,9 +42,11 @@ Everything past it is confirmed by something outside this pipeline — see `pkmn
 
 from __future__ import annotations
 
+from collections import OrderedDict
+
 from cli import resolve, runs
-from pipeline import decisions, join, pricing, tcgcsv
-from store import master
+from pipeline import corpus, decisions, join, merge, pricing, routing, tcgcsv
+from store import master, files
 from store.session import Store
 
 
@@ -156,16 +158,18 @@ def _write(game_join, path, only, choice, say, label):
 
 
 def run(args, say) -> int:
-    run_dir = runs.open_run(args.run_dir)
+    # ONE RUN OR SEVERAL, AND THE SINGLE-RUN PATH IS UNTOUCHED. A send of one still writes the
+    # two per-game files it always did, so every run already on disk, every harness case and
+    # every reconcile written before D86 behaves identically. `run_merged` is reached only by
+    # naming more than one run, which is a thing nobody could do until now.
+    named = args.run_dir if isinstance(args.run_dir, list) else [args.run_dir]
+    if len(named) > 1:
+        return run_merged(args, say)
+    run_dir = runs.open_run(named[0])
     try:
         plan = resolve.exports_for(run_dir, args.export)
     except join.EmptyCatalog as refusal:
         say(str(refusal))
-        return 1
-
-    decisions_path = run_dir.path(runs.DECISIONS)
-    if not decisions_path.is_file():
-        say(f"no {runs.DECISIONS} in this run — run `pkmnscan join` first")
         return 1
 
     # ------------------------------------------------------- READ BEFORE RESOLVING, AND WHY
@@ -190,18 +194,32 @@ def run(args, say) -> int:
     # nothing above `cli/__main__.py` caught them, and `PUT /pipeline/runs/<name>/decisions`
     # writes this document with no validation at all — so a screen could put a run into a state
     # where `emit` answered with a traceback instead of a sentence.
+    # THE CORPUS IS THE ANSWER AND THE RUN DIRECTORY IS NOT (D86). See `cli/cmd_join.py` at the
+    # same seam and `pipeline/corpus.py`'s header for why the per-SKU half of `decisions.json`
+    # left the run: a price is a fact about a SKU, and one stored per drawer was one answer per
+    # drawer. A legacy run file is not read as a fallback — that would put the duplication back
+    # on the next re-emit of an old run — it is folded in once by `pkmnscan prices adopt`.
     try:
-        choice = decisions.Decisions.read(decisions_path)
+        book = corpus.Corpus.read()
     except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
-        say(f"{runs.DECISIONS} is unusable: {exc}")
+        say(f"{corpus.FILENAME} is unusable: {exc}")
         return 1
+    if not book.answers and run_dir.path(runs.DECISIONS).is_file():
+        say(f"this run has a legacy {runs.DECISIONS} and the corpus is empty")
+        say("Run `pkmnscan prices adopt` to fold every run's answers into one file first.")
+        return 1
+    # THE POLICY BEFORE THE RESOLVE, THE ANSWERS AFTER IT. `resolve.load` needs the rule and
+    # the basis to price a match at all; the per-SKU narrowing below needs the match list,
+    # which does not exist until it has run. Two reads of one document rather than a document
+    # read twice.
+    policy = book.policy_for(run_dir.name)
 
     try:
         resolved = resolve.load(
             run_dir,
             plan.by_game,
-            rule=choice.rule,
-            basis=choice.basis,
+            rule=pricing.Rule.parse(policy["rule"]),
+            basis=pricing.check_basis(policy["basis"]),
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
@@ -233,6 +251,18 @@ def run(args, say) -> int:
         say(str(refusal))
         return 1
 
+    # SCOPED TO THIS RUN'S OWN MATCHES, WHICH IS NOT OPTIONAL. The refusal below —
+    # `sku_dispositions names SKUs not in this batch` — is right for a run file, where a name
+    # matching nothing is a typo, and wrong for a corpus that holds every card this operator
+    # has ever priced and is expected to name thousands this run does not. Narrowed here
+    # rather than by weakening the check, which is what catches a real typo.
+    choice = book.scoped_to(
+        set(resolved.matches),
+        run_name=run_dir.name,
+        unpriced=resolved.no_market_data_skus,
+    )
+
+
     store = Store()
     snapshot = store.read()
 
@@ -254,7 +284,7 @@ def run(args, say) -> int:
     # ------------------------------------------------------------------ decisions gate
     blocking = choice.blocking(resolved.sub_threshold_skus)
     if blocking:
-        say(f"REFUSING to write. Nothing was written. Edit {decisions_path}:")
+        say(f"REFUSING to write. Nothing was written. Answer it on #/pricing, or edit\n{files.prices_path()}:")
         for reason in blocking:
             say(f"    - {reason}")
         _warn_stale(run_dir, say)
@@ -515,4 +545,232 @@ def run(args, say) -> int:
     say(f"next: import {listed_names} to Staged in TCGplayer, "
         f"then Export From Staged and run")
     say(f"      pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
+    return 0
+
+
+# ------------------------------------------------------------------- one file, several runs
+
+
+def _resolve_one(run_dir, book, say):
+    """One run resolved the way `run` resolves it, for the merged path. Returns None on refusal."""
+    try:
+        plan = resolve.exports_for(run_dir, None)
+    except join.EmptyCatalog as refusal:
+        say(f"{run_dir.name}: {refusal}")
+        return None
+    policy = book.policy_for(run_dir.name)
+    try:
+        return resolve.load(
+            run_dir,
+            plan.by_game,
+            rule=pricing.Rule.parse(policy["rule"]),
+            basis=pricing.check_basis(policy["basis"]),
+            review_below=run_dir.manifest.get("review_below_confidence", routing.CONFIDENCE_LOW),
+            # THE RUN'S OWN BYPASS, for the reason the single-run path gives at length: `emit`
+            # re-derives rather than reads, so every input to that derivation has to come from
+            # the run or it re-derives a different run than the one on disk.
+            trust_claim=bool(run_dir.manifest.get("bypass_detection", False)),
+        )
+    except join.EmptyCatalog as refusal:
+        say(f"{run_dir.name}: {refusal}")
+        return None
+
+
+def run_merged(args, say) -> int:
+    """`pkmnscan emit <run> <run> ...` — one import file over several runs (D86).
+
+    THE CAP IS THE WHOLE REASON THIS IS NOT A CONCATENATION OF THE FILES `emit` ALREADY WROTE.
+    `pipeline/join.py:SkuMatch.add_to_quantity` spends `live_cap - copies_out` per RUN against a
+    cap that is global, so runs joined before either emitted each believe the whole cap is
+    theirs. Measured on this store: five SKUs' per-run claims summed past four, and two reached
+    `pushed: 6` against a cap of 4. `pipeline/merge.py` re-derives the figure over the union;
+    this command writes the file and the store.
+
+    IT REFUSES EXACTLY WHAT THE SINGLE-RUN PATH REFUSES, per run, before anything is written —
+    an unresolved queue, an unanswered no-market-data card, a sub-threshold bucket with no
+    disposition. What it adds is one refusal of its own: two runs carrying different per-run
+    policy overrides, which one file cannot honour.
+    """
+    book = corpus.Corpus.read()
+    # OLDEST FIRST, WHICH DECIDES WHICH COPIES GO. Run names are date-prefixed, so this is
+    # chronological; `merge.plan` slices the cap off the front of the union, so the copies that
+    # reach the file are the ones that have been waiting longest.
+    dirs = [runs.open_run(path) for path in args.run_dir]
+    dirs.sort(key=lambda d: d.name)
+    if len({d.name for d in dirs}) != len(dirs):
+        say("the same run was named twice")
+        return 1
+
+    resolved_by_run: "OrderedDict[str, object]" = OrderedDict()
+    policies = {}
+    matched = set()
+    for run_dir in dirs:
+        resolved = _resolve_one(run_dir, book, say)
+        if resolved is None:
+            say("REFUSING to write. Nothing was written.")
+            return 1
+        resolved_by_run[run_dir.name] = resolved
+        policies[run_dir.name] = book.policy_for(run_dir.name)
+        matched |= set(resolved.matches)
+        for game_join in resolved.joins.values():
+            if not game_join.report.ok:
+                say(f"{run_dir.name}: output suppressed; unmatched must be reported first")
+                for reason in game_join.report.blocking_reasons:
+                    say(f"  - {reason}")
+                say("REFUSING to write. Nothing was written.")
+                return 1
+
+    choice = book.scoped_to(matched)
+    say(f"send             {len(dirs)} run(s): {', '.join(d.name for d in dirs)}")
+    say(f"decisions        {files.prices_path()}")
+    say(f"                 {choice.describe}")
+
+    try:
+        merged_plan = merge.plan(resolved_by_run, choice, policies)
+    except (merge.Disagreement, join.Undecided, join.OutputSuppressed) as refusal:
+        say(str(refusal))
+        say("REFUSING to write. Nothing was written.")
+        return 1
+
+    rows = merged_plan.rows(listed_only=args.listed_only)
+    if not rows:
+        say("nothing to write — every matched SKU is held back, unlisted, or has no room")
+        for sku, why in list(merged_plan.dropped.items())[:8]:
+            say(f"  {sku} — {why}")
+        return 1
+
+    corrected = [row for row in merged_plan.skus if row.over_cap]
+    if corrected:
+        # NAMED AND NOT COUNTED (D59). A row whose per-run claims summed past the cap is a row
+        # a concatenation would have over-listed, and the operator is entitled to know which.
+        say("")
+        say(f"cap              {len(corrected)} SKU(s) the runs separately over-claimed:")
+        for row in corrected[:8]:
+            say(f"  {row.sku} {row.match.name} — runs claim {row.claimed}, "
+                f"{row.match.add_to_quantity} can go")
+
+    by_game = {None: rows}
+    if args.split_games:
+        by_game = OrderedDict(
+            (game, [row for row in rows if row.game == game])
+            for game in merge.games_in(rows)
+        )
+
+    # THE HEADER IS THE CATALOG'S, AND A MERGED FILE NEEDS ONE. Every game's export is read
+    # into a catalog carrying its own column list; TCGplayer's format is fixed in practice, so
+    # they agree — but a file whose rows came from two different headers is malformed in a way
+    # no reader here would notice, so it is checked rather than assumed. The newest run that
+    # holds a game is where that game's header comes from, for `_merged_match`'s reason.
+    catalogs = {}
+    for name in resolved_by_run:
+        for game, game_join in resolved_by_run[name].joins.items():
+            catalogs[game] = game_join.catalog
+
+    say("")
+    written = []
+    for game, group in by_game.items():
+        if not group:
+            continue
+        games = merge.games_in(group)
+        headers = {tuple(catalogs[one].header) for one in games if one in catalogs}
+        if len(headers) > 1:
+            say("REFUSING: these games' exports carry different columns, and one file needs")
+            say(f"one header. Re-run with --split-games. ({', '.join(games)})")
+            return 1
+        catalog = catalogs[games[0]]
+        target = dirs[-1].path(runs.import_merged_name(game))
+        csv_rows = merge.import_rows(group)
+        try:
+            # `write_import` OWNS THE DUPLICATE-SKU GATE, and it is reused rather than
+            # restated. `merge.plan` is keyed by SKU so two rows with one `TCGplayer Id`
+            # cannot be built here — and a property nothing checks is a comment, which is
+            # exactly what that function exists to stop this file from writing.
+            join.write_import(catalog, target, csv_rows)
+        except join.OutputSuppressed as refusal:
+            say(f"REFUSING: {refusal}. Nothing more was written.")
+            return 1
+        copies = sum(row.match.add_to_quantity for row in group)
+        say(f"import           {len(csv_rows)} row(s), {copies} card(s) -> {target}")
+        written.append((target, group))
+
+    # --------------------------------------------------------------------- the store
+    #
+    # ONE PASS OVER THE MERGED PLAN, AND THE COPY BELONGS TO THE RUN THAT HOLDS IT. Every
+    # position is in exactly one run, so `set_state` still stamps the run it came from — the
+    # audit trail is unchanged. What is merged is the DECISION about which copies reach the
+    # file: `live_keys` is sliced once over the union, so two runs cannot both count the same
+    # room toward `pushed`.
+    pushed = 0
+    pushed_skus = 0
+    shipped = {row.sku for _, group in written for row in group}
+    store = Store()
+    with store.write() as writable:
+        for row in merged_plan.skus:
+            if row.sku not in shipped:
+                continue
+            live_keys = merged_plan.live_keys.get(row.sku, set())
+            copies = 0
+            # ONE PASS PER POSITION, NOT PER LEG, AND THE DEDUPE IS THE COUNT. Box 3 has been
+            # joined three times on this machine, so its cards are in three of this send's
+            # runs and every one of them carries the same `(box, index)`. Walking the legs
+            # naively stamped each copy once per leg and counted it toward `pushed` each time
+            # — measured against a cleared ledger, that pushed 11 SKUs past the cap of 4 where
+            # three separate emits pushed 2. The merged path was WORSE than the thing it
+            # exists to fix, which is what a head-to-head against the old path is for.
+            #
+            # THE FIRST LEG HOLDING A COPY OWNS IT, and legs are in run order, so the stamp
+            # names the oldest run that could have listed it — the same first-come rule
+            # `merge.plan` spends the cap by.
+            owner = {}
+            for leg in row.legs:
+                for position in leg.match.uncommitted_positions:
+                    key = master.position_key(position.box, position.index)
+                    owner.setdefault(key, (leg.run, position))
+            for key, (run_name, position) in owner.items():
+                writable.inventory.record_capture(
+                    master.Card(
+                        box=position.box,
+                        index=position.index,
+                        photo=resolved_by_run[run_name].photos.get(key),
+                    )
+                )
+                stamped = writable.inventory.set_state(
+                    key,
+                    master.IDENTIFIED,
+                    sku=row.sku,
+                    condition=row.match.condition,
+                    run=run_name,
+                )
+                if stamped and key in live_keys:
+                    copies += 1
+            if copies:
+                writable.inventory.listing(row.sku, condition=row.match.condition).bump(
+                    master.PUSHED, copies
+                )
+                pushed += copies
+                pushed_skus += 1
+        queue_line = writable.queue_summary
+        stages = writable.inventory.listing_counts()
+
+    # THE RECEIPT IS PER RUN AND ADDS, NEVER SUBTRACTS (D54). Each run in the send records the
+    # SKUs it contributed, so `reconcile` on any of them still knows what it sent.
+    for run_dir in dirs:
+        own = sorted(
+            row.sku
+            for _, group in written
+            for row in group
+            if any(leg.run == run_dir.name for leg in row.legs)
+        )
+        if own:
+            run_dir.record_emit(listed=own, sub_threshold=[], pushed=pushed)
+
+    say("")
+    say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> {master.PUSHED}")
+    listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
+    if listings:
+        say(f"listings         {listings}")
+    say(f"standing queues  {queue_line}")
+    say("")
+    say("next: import the file above to Staged in TCGplayer, then Export From Staged and run")
+    say(f"      pkmnscan reconcile {dirs[-1].path('')} <staged-export.csv>")
     return 0

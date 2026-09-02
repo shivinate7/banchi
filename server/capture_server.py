@@ -8750,6 +8750,30 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_tcg_sets(wanted[0])
                 )
+            if path == "/pricing":
+                # THE CORPUS (D86, amended). A read, free, and the same document whatever the
+                # screen is showing — which is the whole difference from `/pipeline/pricing`
+                # one branch down: that one answers which cards are in front of the operator,
+                # this one answers what has been decided about them.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pricing_corpus())
+            if path == "/pipeline/pricing":
+                # THE CROSS-RUN WORKLIST (D86). A read, free, and it presses nothing — the
+                # per-run route one block down is what it delegates each leg to.
+                #
+                # `run` REPEATS rather than carrying a comma list, which is `_RUN_TRENDS_RE`'s
+                # rule two routes down and `_RUN_SCOPE_RE`'s beside it, for their reason: a
+                # comma inside a value is indistinguishable from the separator. With none, the
+                # handler chooses every run that still has pricing work in it, which is the
+                # state this screen opens in.
+                #
+                # A STATIC PATH AND THEREFORE NO REGEX, and it is declared ABOVE
+                # `/pipeline/runs` for the reader rather than for the matcher: the two are
+                # different literals and neither can swallow the other, but the pricing
+                # worklist is the broader question and reads first.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("run") or []
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_worklist(asked)
+                )
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             match = _RUN_FILE_RE.match(path)
@@ -8971,6 +8995,19 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_crop_preview(self._body())
                 )
+            if path == "/pipeline/emit":
+                # ONE IMPORT FILE OVER SEVERAL RUNS (D86). FREE — it reads runs, writes a CSV
+                # and raises `pushed`; the route that can cause money to be spent is the one
+                # directly below and is still named for it.
+                #
+                # A LIST AND NOT A WIDENED PER-RUN ROUTE, because the cap has to be re-derived
+                # across the send: `pipeline/join.py` spends `live_cap - copies_out` per run
+                # against a cap that is global, so N per-run presses ARE the over-push this
+                # exists to prevent. Measured, three separate emits over three real runs wrote
+                # two SKUs past the cap of four.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_merged_emit(self._body())
+                )
             if path == "/pipeline/identify":
                 status, body = pipeline_routes.do_pipeline_identify(self._body())
                 return self._json(status, body)
@@ -9045,6 +9082,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 return self._json(
                     HTTPStatus.OK, do_put_box(int(match.group(1)), self._body())
+                )
+            if path == "/pricing":
+                # THE CORPUS, REPLACED WHOLESALE (D86, amended) — the same read-modify-write
+                # `PUT .../decisions` used, over one document for the store instead of one per
+                # run. Wholesale because the screen round-trips every key it does not
+                # understand, which is what keeps a hand-written `_note` alive.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pricing_corpus_write(self._body())
                 )
             # D9's sub-threshold answer, which gates `emit` and nothing else. Matched
             # before nothing — `/pipeline/runs/<name>/decisions` shares no prefix with the

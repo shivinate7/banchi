@@ -39,6 +39,8 @@ import type {
   RunDetail,
   PriceHistoryPayload,
   PricingPayload,
+  PricingCorpus,
+  PricingWorklist,
   RunLeg,
   RunPreflight,
   RunStarted,
@@ -1709,6 +1711,81 @@ export async function getPricing(name: string): Promise<PricingPayload> {
     `/pipeline/runs/${encodeURIComponent(name)}/pricing`,
     NO_CACHE,
   )) as PricingPayload
+}
+
+/**
+ * The pricing corpus — every listing answer this operator has given, and the policy (D86).
+ *
+ * ONE READ AND ONE WRITE FOR THE WHOLE SCREEN, whatever is on it. `#/pricing` used to fetch a
+ * `decisions.json` per run it was showing and fan every answer back out to each of them; there
+ * is one document now, so there is one of each.
+ *
+ * SEPARATE FROM `getPricingWorklist` BELOW ON PURPOSE. That answers which cards are in front
+ * of the operator, out of which runs, with which export rows — it changes as the selection
+ * does. This answers what has been decided, and it is the same document either way.
+ */
+export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path: string }> {
+  return (await request('/pricing', NO_CACHE)) as { corpus: PricingCorpus; path: string }
+}
+
+/**
+ * Replace the corpus. Wholesale, for `putDecisions`' reason: the screen round-trips every key
+ * it does not understand, so a hand-written `_note` survives a client that never heard of it.
+ */
+export async function putPricingCorpus(
+  corpus: PricingCorpus,
+): Promise<{ ok: boolean; written: string; answers: number }> {
+  return (await request('/pricing', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ corpus }),
+  })) as { ok: boolean; written: string; answers: number }
+}
+
+/**
+ * One import file over several runs — free, and it writes the CSV and raises `pushed` (D86).
+ *
+ * A LIST AND NOT N PRESSES OF THE PER-RUN EMIT, because the cap is re-derived across the send:
+ * `pipeline/join.py` spends `live_cap - copies_out` per run against a cap that is global, so N
+ * separate presses ARE the over-push this prevents. Measured, three separate emits over three
+ * real runs wrote two SKUs past the cap of four; one merged emit wrote none.
+ */
+export async function emitMerged(
+  runs: readonly string[],
+  options: { listedOnly?: boolean; splitGames?: boolean } = {},
+): Promise<RunStepResult & { runs: string[] }> {
+  return (await request('/pipeline/emit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      runs,
+      listed_only: Boolean(options.listedOnly),
+      split_games: Boolean(options.splitGames),
+    }),
+  })) as RunStepResult & { runs: string[] }
+}
+
+/**
+ * The cross-run pricing worklist — one list of cards over several runs (D86).
+ *
+ * WITH NO ARGUMENT IT ASKS FOR THE WORK, NOT FOR EVERYTHING. The server picks every run that
+ * still has pricing in it: joined and never emitted, or emitted and still blocking `emit`.
+ * That is the state `#/pricing` opens in, and it is why the screen needs no scope on arrival.
+ *
+ * `run` REPEATS rather than carrying a comma list, matching `getPriceTrends` above and
+ * `/scope` beside it, for their reason: a comma inside a value is indistinguishable from the
+ * separator. A named run is drawn whether or not the server would have chosen it — asking for
+ * one has already answered the question the filter exists to ask.
+ *
+ * IT IS A READ AND IT SPENDS NOTHING. The write path is unchanged and still per run:
+ * `putDecisions` below, once per run holding the SKU being answered.
+ */
+export async function getPricingWorklist(runs: readonly string[] = []): Promise<PricingWorklist> {
+  const query = runs.map((run) => `run=${encodeURIComponent(run)}`).join('&')
+  return (await request(
+    `/pipeline/pricing${query === '' ? '' : `?${query}`}`,
+    NO_CACHE,
+  )) as PricingWorklist
 }
 
 /**

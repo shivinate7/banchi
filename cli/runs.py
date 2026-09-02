@@ -35,6 +35,23 @@ PRICING = "pricing.json"
 RECONCILE = "reconcile.txt"
 IMPORT_LISTED = "import-listed.csv"
 IMPORT_SUBTHRESHOLD = "import-subthreshold.csv"
+# ONE FILE OVER A WHOLE SEND (D86). The owner's ask, in their words: *"i frankly want one
+# export csv from the emit no per run nonsense and/or multi csvs"*. Written into the NEWEST run
+# of the send rather than into a directory of its own, because `GET /pipeline/runs/<n>/file`
+# already serves a run's artefacts and a new home would need a new route to be reachable at
+# all — which `CLAUDE.md`'s route-is-not-a-feature rule would then make a second job.
+#
+# `--split-games` PUTS THE PER-GAME NAMES BACK, and that flag exists because one question here
+# is genuinely unanswered: `import_listed_name` below has said since it was written that nobody
+# has established whether Import to Staged accepts a file spanning two `Product Line`s, and
+# `fixtures/staged-import-accepted.csv` proves it for one line only. The owner asked for one
+# file and said they would test it. This is the one-flag way back if the portal refuses.
+IMPORT_MERGED = "import.csv"
+
+
+def import_merged_name(game: Optional[str] = None) -> str:
+    """The merged import file, for a whole send. Suffixed only when games are kept apart."""
+    return IMPORT_MERGED if game is None else f"import-{game}.csv"
 
 
 def import_listed_name(game: str) -> str:

@@ -200,6 +200,7 @@ from harness.tests import Checks, Result  # noqa: E402
 from cli import resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
 from pipeline import (  # noqa: E402
+    corpus,
     games,
     join,
     orders,
@@ -8693,15 +8694,16 @@ def check_cli_refusals(checks: Checks) -> None:
 
     from cli import __main__ as entry
 
-    # FIVE SINCE 2026-08-30, and `scan` is the only one of them that is free AND writes.
-    # Still an exact match rather than a superset check: the point of this line is that a
-    # command cannot appear in the dispatch without somebody editing this list, and a
-    # membership test would let one arrive unnoticed — which matters most for a command
+    # SIX SINCE 2026-09-02, and `scan` is still the only one that is free AND writes to the
+    # store. `prices` writes the CORPUS — `prices adopt` previews unless given `--write`, and
+    # `prices show` reads. Still an exact match rather than a superset check: the point of this
+    # line is that a command cannot appear in the dispatch without somebody editing this list,
+    # and a membership test would let one arrive unnoticed — which matters most for a command
     # that touches the store, as `scan` does.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["emit", "identify", "join", "reconcile", "scan"],
-        "five commands are registered, and only five",
+        ["emit", "identify", "join", "prices", "reconcile", "scan"],
+        "six commands are registered, and only six",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -9004,18 +9006,31 @@ def check_pricing_authority(checks: Checks) -> None:
     assert over their own fixtures.
     """
     checks.note("")
-    checks.note("PRICING AUTHORITY — decisions.json decides, join records")
+    checks.note("PRICING AUTHORITY — the corpus decides, the run records")
 
     cards = [(3, 1, "Articuno", "161", None)]
 
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
-        path = run_dir.path(runs.DECISIONS)
+        path = files.prices_path()
+        checks.ok(
+            path.is_file(),
+            "a first join writes the CORPUS and not a per-run answer file (D86, amended). "
+            "The answer left the run directory because a price is a fact about a SKU: stored "
+            "per run, one card carried one answer per box it had ever been photographed in — "
+            "measured on the owner's store, 66 SKUs with 8 answered twice, 3 of those a hold "
+            "overridden by a later price",
+        )
+        checks.ok(
+            not run_dir.path(runs.DECISIONS).exists(),
+            "and the run directory carries NO decisions.json — a second copy is the thing "
+            "this move exists to delete, so writing one as a record would put it back",
+        )
         seeded = json.loads(path.read_text())
         checks.equal(
-            (seeded["rule"], seeded["basis"]),
+            (seeded["policy"]["rule"], seeded["policy"]["basis"]),
             ("match", "market"),
-            "a first join SEEDS the file from the run's own flags — `--rule` is how a run's "
+            "the corpus SEEDS from the run's own flags when it is empty — `--rule` is how "
             "pricing starts, and a file with no rule in it would be a document that cannot "
             "answer the question it exists to ask",
         )
@@ -9025,8 +9040,8 @@ def check_pricing_authority(checks: Checks) -> None:
         export = tcgcsv.read_export(run_dir.path("export.csv"))
         market = export.by_sku()[ARTICUNO_SKU][tcgcsv.MARKET_PRICE_COLUMN]
 
-        seeded["rule"] = "markup:100"
-        seeded["sub_threshold"] = "floor"
+        seeded["policy"]["rule"] = "markup:100"
+        seeded["policy"]["sub_threshold"] = "floor"
         path.write_text(json.dumps(seeded))
 
         said = command(checks, "emit", str(run_dir.directory))
@@ -9037,9 +9052,9 @@ def check_pricing_authority(checks: Checks) -> None:
         checks.equal(
             written.get(ARTICUNO_SKU),
             tcgcsv.format_price(Decimal(market) * 2),
-            "A RULE SET IN `decisions.json` REACHES THE EMITTED PRICE. `markup:100` doubles "
-            "the market price into the import file — the whole content of the first bug, "
-            "which priced at market while printing the rule it had been given",
+            "A RULE SET IN THE CORPUS REACHES THE EMITTED PRICE. `markup:100` doubles the "
+            "market price into the import file — the whole content of the first bug, which "
+            "priced at market while printing the rule it had been given",
         )
         checks.ok(
             "rule=markup:100" in said,
@@ -9050,29 +9065,24 @@ def check_pricing_authority(checks: Checks) -> None:
 
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
-        path = run_dir.path(runs.DECISIONS)
+        path = files.prices_path()
         edited = json.loads(path.read_text())
-        edited["rule"] = "undercut:5"
-        edited["basis"] = "low"
-        edited["sub_threshold"] = "floor"
+        edited["policy"]["rule"] = "undercut:5"
+        edited["policy"]["basis"] = "low"
+        edited["policy"]["sub_threshold"] = "floor"
         path.write_text(json.dumps(edited))
 
-        said = command(
+        command(
             checks, "join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))
         )
-        after = json.loads(path.read_text())
+        after = json.loads(path.read_text())["policy"]
         checks.equal(
             (after["rule"], after["basis"], after["sub_threshold"]),
             ("undercut:5", "low", "floor"),
-            "A RE-JOIN KEEPS THE EDITED RULE, which is what the sentence it prints has always "
-            "promised. Two assignments used to run immediately after that sentence and reset "
-            "exactly the two fields most likely to have been edited — measured, `markup:100` "
-            "on `low` went back to `match` on `market` while `sub_threshold` beside it "
-            "survived, so the file looked merged and was not",
-        )
-        checks.ok(
-            "your edits are kept" in said,
-            "and it still says so — the sentence was not the bug, the two lines under it were",
+            "A RE-JOIN KEEPS THE EDITED RULE. Two assignments used to run immediately after "
+            "the sentence promising it and reset exactly the two fields most likely to have "
+            "been edited — measured, `markup:100` on `low` went back to `match` on `market` "
+            "while `sub_threshold` beside it survived, so the file looked merged and was not",
         )
         checks.equal(
             run_dir.manifest.get("rule"),
@@ -9084,8 +9094,10 @@ def check_pricing_authority(checks: Checks) -> None:
 
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
-        path = run_dir.path(runs.DECISIONS)
-        path.write_text(json.dumps({"rule": "undercut:not-a-number", "sub_threshold": "floor"}))
+        path = files.prices_path()
+        path.write_text(
+            json.dumps({"policy": {"rule": "undercut:not-a-number", "sub_threshold": "floor"}})
+        )
         from cli import __main__ as entry
 
         for argv, label in (
@@ -9101,9 +9113,9 @@ def check_pricing_authority(checks: Checks) -> None:
                     str(run_dir.path("export.csv")),
                 ],
                 "and so does join — `UnknownRule` is a ValueError and NOT a "
-                "`MalformedDecisions`, nothing above `cli/__main__.py` caught it, and `PUT "
-                "/pipeline/runs/<name>/decisions` writes this document with no validation at "
-                "all, so a screen can reach every one of these states",
+                "`MalformedDecisions`, nothing above `cli/__main__.py` caught it, and the "
+                "route that writes this document validates nothing, so a screen can reach "
+                "every one of these states",
             ),
         ):
             with quiet() as said:
@@ -9113,6 +9125,96 @@ def check_pricing_authority(checks: Checks) -> None:
                 (1, True),
                 label,
             )
+
+
+def check_merged_emit_cap(checks: Checks) -> None:
+    """Two runs, one SKU, one cap — the arithmetic a merged file has to re-derive (D86).
+
+    THIS IS D59's DEFECT ONE REGISTER UP, AND IT SHIPPED. `pipeline/join.py:add_to_quantity`
+    spends `live_cap - copies_out` per RUN against a cap that is GLOBAL, so two runs joined
+    before either emitted each believe the whole cap is theirs. D59 fixed the per-BOX version
+    of exactly this inside one join; the per-RUN version survived it, because no code path had
+    ever looked at two runs together.
+
+    IT IS NOT HYPOTHETICAL AND THE NUMBERS ARE OFF THE OWNER'S OWN STORE. The 2026-09-01 cart
+    joined boxes 3, 4 and 5 in the same second; five SKUs' claims summed past four, and two
+    reached `pushed: 6` against a cap of 4 in `inventory/inventory.json`. Replayed from a
+    cleared ledger, three separate emits wrote 2 SKUs over the cap and one merged emit wrote
+    none.
+
+    WHAT IS ASSERTED IS THE FILE AND THE STORE, NOT THE PLAN. A plan that computes the right
+    figure and a command that writes the wrong one is the failure mode this whole entry is
+    about, so the checks read the CSV that was written and the `pushed` count that followed it.
+    """
+    checks.note("")
+    checks.note("MERGED EMIT — one cap across the send")
+
+    with isolated_home():
+        # Four copies of one SKU in one box and three in another: seven copies of a card whose
+        # cap is four. Each run alone is under the cap; together they are not.
+        first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 5)])
+        second, _ = seam_run(checks, [(4, i, "Articuno", "161", None) for i in range(1, 4)])
+
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+
+        claims = []
+        for run_dir in (first, second):
+            table = json.loads(run_dir.path(runs.PRICING).read_text())
+            row = next(r for r in table["skus"] if r["sku"] == ARTICUNO_SKU)
+            claims.append(row["add_to_quantity"])
+        checks.ok(
+            sum(claims) > join.LIVE_QUANTITY_CAP,
+            f"THE TWO RUNS SEPARATELY CLAIM {claims[0]} + {claims[1]} = {sum(claims)} COPIES "
+            f"of a SKU capped at {join.LIVE_QUANTITY_CAP}. Neither run is wrong on its own — "
+            f"each spends `live_cap - copies_out` and neither can see the other. This is the "
+            f"state a concatenation of their two import files would write",
+        )
+
+        said = command(checks, "emit", str(first.directory), str(second.directory))
+        target = second.path(runs.IMPORT_MERGED)
+        checks.ok(
+            target.is_file() and not first.path(runs.IMPORT_MERGED).exists(),
+            "ONE FILE FOR THE SEND, in the newest run of it — the owner's ask, and it lands "
+            "where `GET /pipeline/runs/<name>/file` already serves a run's artefacts",
+        )
+        rows = tcgcsv.read_export(target).rows
+        ids = [row[tcgcsv.SKU_COLUMN] for row in rows]
+        checks.equal(
+            len(ids),
+            len(set(ids)),
+            "NO DUPLICATE SKU ROW, which is a property here rather than a rule a writer has to "
+            "keep: the plan is keyed by SKU, so a card in four runs is one row carrying the "
+            "summed quantity and there is no shape in which it could be two",
+        )
+        written = int(
+            next(row for row in rows if row[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU)[
+                tcgcsv.QUANTITY_COLUMN
+            ]
+        )
+        checks.equal(
+            written,
+            join.LIVE_QUANTITY_CAP,
+            f"AND THE ROW CARRIES {join.LIVE_QUANTITY_CAP} COPIES AND NOT {sum(claims)}. The "
+            f"cap is spent ONCE over the union of both runs' positions — this is the whole of "
+            f"what a merged emit has to do that a concatenation cannot",
+        )
+        checks.ok(
+            "runs claim" in said,
+            "and the command NAMES the SKUs whose runs over-claimed rather than counting them "
+            "(D59): a card that quietly stopped being over-listed is a number nobody can check",
+        )
+
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        checks.equal(
+            listing.pushed if listing else 0,
+            join.LIVE_QUANTITY_CAP,
+            "THE STORE AGREES WITH THE FILE. `pushed` is a commitment that a CSV row was "
+            "written, so a merged emit that wrote four copies and pushed seven would be the "
+            "same over-listing one seam further on — and the first build of this command did "
+            "exactly that, stamping every copy once per run that held it",
+        )
 
 
 def check_pricing_route(checks: Checks) -> None:
@@ -9209,22 +9311,22 @@ def check_pricing_route(checks: Checks) -> None:
                 "price fresh forever",
             )
 
-            # A second run whose answer is on disk, so the label has something to find.
-            answered = run_dir.path(runs.DECISIONS)
-            payload_doc = json.loads(answered.read_text())
-            payload_doc["sub_threshold"] = "floor"
-            answered.write_text(json.dumps(payload_doc))
+            # THE ANSWER IS THE CORPUS'S, AND A LATER RUN DOES NOT HAVE TO BE REMINDED OF IT.
+            # `remembered_sub_threshold` walked up to five sibling run directories looking for
+            # the newest answer, because each run held its own — a label offered so the
+            # operator did not have to re-decide, which D9 forbids defaulting. With one
+            # document there is nothing to remember: the answer IS the policy, and the next run
+            # is priced by it without a screen offering anything.
+            book = corpus.Corpus.read()
+            book.sub_threshold = "floor"
+            book.write()
             later, _ = seam_run(checks, cards)
-            status, body, _ = request(
-                port, "GET", f"/pipeline/runs/{later.directory.name}/pricing"
-            )
-            remembered = json.loads(body)["remembered_sub_threshold"]
             checks.equal(
-                (remembered or {}).get("answer"),
+                corpus.Corpus.read().policy_for(later.directory.name)["sub_threshold"],
                 "floor",
-                "and a LATER run reads the last answer off the newest OTHER run — "
-                "'remember that I said so' with no new storage, no migration and no file "
-                "that can disagree with the runs it claims to summarise",
+                "A LATER RUN IS PRICED BY THE STANDING ANSWER, with no per-run copy of it. "
+                "The sibling-walk that used to offer it as a label is gone with the thing it "
+                "worked around — eight files that could disagree about one question",
             )
 
             status, body, _ = request(
@@ -9429,17 +9531,19 @@ def check_withholding(checks: Checks) -> None:
 
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
-        path = run_dir.path(runs.DECISIONS)
-        answers = json.loads(path.read_text())
-        answers["sub_threshold"] = "floor"
-        answers["overrides"] = {
-            ARTICUNO_SKU: {
+        # THE HOLD IS THE CORPUS'S AND OUTLIVES THE RUN (D86, amended). D49 named the absence
+        # of a durable home for a hold as work it had not done; this is that home, and the
+        # shapes it stores are D49's own, unchanged.
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.answers[ARTICUNO_SKU] = corpus.Answer(
+            value={
                 "withheld": "bullish",
                 "watch_above": "30.00",
                 "note": "holding for rotation",
             }
-        }
-        path.write_text(json.dumps(answers))
+        )
+        book.write()
 
         said = command(checks, "emit", str(run_dir.directory))
         listed = tcgcsv.read_export(run_dir.path(runs.import_listed_name("pokemon")))
@@ -9485,9 +9589,9 @@ def check_withholding(checks: Checks) -> None:
             "is an alert nobody reads",
         )
 
-        answers = json.loads(path.read_text())
-        answers["overrides"][ARTICUNO_SKU]["watch_above"] = "1.00"
-        path.write_text(json.dumps(answers))
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU].value["watch_above"] = "1.00"
+        book.write()
         said = command(
             checks, "join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))
         )
@@ -9498,9 +9602,8 @@ def check_withholding(checks: Checks) -> None:
             "has moved and the only moment a watch has anything to say",
         )
 
-        after = json.loads(path.read_text())
         checks.equal(
-            after["overrides"][ARTICUNO_SKU],
+            corpus.Corpus.read().answers[ARTICUNO_SKU].value,
             {"withheld": "bullish", "watch_above": "1.00", "note": "holding for rotation"},
             "and the hold ROUND-TRIPS through the re-join unchanged — reason, watch and note. "
             "`join` rewrites this file on every run, so a hold that lost its note would lose "
@@ -9516,9 +9619,9 @@ def check_withholding(checks: Checks) -> None:
         # copies not already sent — because TCGplayer's Import to Staged ADDS quantity, so a
         # file repeating already-imported rows double-stages them. That is Gate B's recorded
         # 37-copy defect, and it is why a re-emit may not simply rewrite the whole file.
-        answers = json.loads(path.read_text())
-        del answers["overrides"][ARTICUNO_SKU]
-        path.write_text(json.dumps(answers))
+        book = corpus.Corpus.read()
+        del book.answers[ARTICUNO_SKU]
+        book.write()
         command(
             checks, "join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))
         )
@@ -15951,6 +16054,7 @@ def run() -> Result:
     check_emit_bypass(checks)
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
+    check_merged_emit_cap(checks)
     check_withholding(checks)
     check_pricing_route(checks)
     check_pricing_labels(checks)

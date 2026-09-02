@@ -101,7 +101,21 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
                                    #   --dry-run  preview both queues, write nothing
                                    #   --bypass   trust the finish claim over the photo (D3)
-./pkmnscan emit     <run-dir>       # write import CSVs. Free, re-runnable.
+./pkmnscan emit     <run-dir> [<run-dir> ...]
+                                   # write import CSVs. Free, re-runnable. SEVERAL RUNS WRITE
+                                   #   ONE FILE and the live cap is spent ONCE across them
+                                   #   (D86) — `add_to_quantity` is per-run against a GLOBAL
+                                   #   cap, so N separate emits over one SKU is an over-push.
+                                   #   Measured: three separate emits over three real runs
+                                   #   wrote 2 SKUs past the cap of 4; one merged emit wrote 0.
+                                   #   --listed-only  above-threshold rows only
+                                   #   --split-games  one file per game
+./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
+                                   #   Previews by default; newest-wins, and it NAMES the holds
+                                   #   a later price replaced rather than counting them.
+./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
+                                   #   what is held back — D49 named its absence, D62 repeated
+                                   #   it, and it is one line now that the answers are one file.
 ./pkmnscan reconcile <run-dir> <staged-export.csv>
 ```
 
@@ -199,8 +213,44 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 
   `GET /pipeline/runs/<name>/scope` draws all of it before the button is pressed and presses
   nothing; `#/runs` renders it, and `asked.reason` says which voice chose. **`--rule` and
-  `--basis` are deliberately NOT on that screen** — D49 makes `decisions.json` the one place a
-  pricing answer is written and `#/pricing` the press that writes it.
+  `--basis` are deliberately NOT on that screen** — D49 makes ONE FILE the place a pricing
+  answer is written and `#/pricing` the press that writes it. That file is
+  `inventory/prices.json` since D86's amendment, not `runs/<n>/decisions.json`; the ruling is
+  unchanged and the file moved.
+
+- **THE PRICING ANSWER IS ONE FILE FOR THE WHOLE STORE, KEYED BY SKU** (D86, amended
+  2026-09-02 on the owner's question). `pipeline/corpus.py` over `inventory/prices.json` holds
+  every listing answer — a price, or a hold with its reason, watch and note — plus the standing
+  `rule`/`basis`/`sub_threshold`. A run directory carries NO pricing answer any more.
+
+  **Why it moved: a run's `decisions.json` held two different kinds of fact.** `rule`, `basis`
+  and `sub_threshold` are arguably properties of the lot (D48); `overrides` and
+  `no_market_data` are properties of the CARD (D7 — *"price is per-SKU and shared across
+  copies"*). Stored per run, one card carried one answer per drawer it had been photographed
+  in: **66 SKUs, 8 answered twice, 3 of those a `withheld` hold answered by a later price** —
+  SKU 9191210 held bullish above $5 out of box 3 and listed at $3.45 out of box 4 the next day,
+  drawn as an ordinary row with no note anywhere.
+
+  **The migration is `pkmnscan prices adopt` and it previews first.** Newest-wins, and it names
+  the holds a later price replaced rather than counting them. **A legacy run file is never read
+  as a fallback** — that would put the duplication back on the first re-join of an old run — so
+  `join` and `emit` refuse with a sentence naming the command.
+
+  **What is per-run still: a POLICY override**, `Corpus.overrides`, for the lot that genuinely
+  wants its own `sub_threshold`. Nothing writes one today; D86 names that as a reopening
+  condition rather than leaving it to be discovered.
+
+- **`emit` OVER SEVERAL RUNS WRITES ONE FILE, AND THE CAP IS SPENT ONCE ACROSS THEM** (D86).
+  `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a cap that
+  is GLOBAL, so runs joined before either emitted each believe the whole cap is theirs. This is
+  D59's defect one register up — that entry fixed the per-BOX version inside one join, and the
+  per-RUN version survived it because nothing had ever looked at two runs together.
+
+  **Measured, from an identical cleared ledger over three real runs**: three separate emits
+  wrote 6 files, 511 copies and **2 SKUs past the cap of 4** — the same two that sit at
+  `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and **none**.
+  `pipeline/merge.py` re-derives the figure over the union of positions, deduped on
+  `(box, index)`; **a merged file can never be a concatenation of the per-run CSVs.**
 
 - **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
@@ -545,6 +595,7 @@ D82  Ruff is adopted on the slice this session measured, not on what it enables 
 D83  A card leaves a box through a third door: moved, not sold or retired
 D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 D85  The corner is settled by geometry, and a variable nothing sets is not a fallback
+D86  The pricing answer is one file for the store, and the worklist spans runs
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

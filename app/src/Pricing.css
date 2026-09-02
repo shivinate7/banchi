@@ -193,6 +193,34 @@
   letter-spacing: 0.04em;
 }
 
+/* WHAT IS LEFT, ON THE CHIP (D86). The picker drew `counts.skus` and nothing else — the SIZE
+   of a job, never the job. Box 2's 109 SKUs are one `floor` press and box 3's 199 are 117 real
+   decisions, so the one number on the chip could not answer the only question being asked of
+   it: which of these is worth opening. `owes` is `Decisions.blocking`'s own words.
+
+   THE ANSWERED STATE IS DRAWN RATHER THAN LEFT BLANK. A chip saying nothing would be
+   indistinguishable from a chip whose figure had not loaded, and "answered" is the sentence
+   that saves the press. */
+.pricing-run-owes {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+.pricing-run-done {
+  color: var(--muted);
+}
+
+/* A RUN WITH WORK IN IT, MARKED ON ITS EDGE. Not a colour: `docs/DESIGN.md` spends hue on two
+   states already, and this is a third fact rather than a third alarm. The left border is the
+   cheapest mark that survives both themes and does not move the chip by a pixel — a border
+   WIDTH change would reflow the strip every time a run was answered. */
+.pricing-run-open {
+  border-left-width: 3px;
+  border-left-color: var(--ink);
+}
+
 .pricing-empty,
 .pricing-note-text,
 .pricing-refusal {
@@ -732,6 +760,90 @@
   flex: none;
   margin: 0;
   white-space: nowrap;
+}
+
+/* ---------------------------------------------------- the card across runs (D86)
+ *
+ * THE LEFT HALF OF THE LINE THE NOTE ALREADY OWNS, AND THAT IS WHY THE ROW DOES NOT GROW.
+ * `.pricing-row` is `grid-template-rows: 32px 13px` and `.pricing-row-note` sits at
+ * `6 / -1` on the second of them, flush right. This takes `1 / 6` on the SAME row, flush
+ * left, so a card in three drawers and a card in one are the same height — which is what
+ * `app/tests/pricing.spec.ts` pins twice, once for a note and once for a hold, and what
+ * D38's own rule about the row asks for. A third line would have broken both.
+ *
+ * MUTED BY DEFAULT AND LOUD ONLY WHERE SOMETHING IS WRONG. Where a card simply sits in two
+ * boxes there is nothing to answer and the line is metadata; where the runs answered it two
+ * ways, or claim more copies than may go, it is the one thing on the row worth the eye. */
+.pricing-row-span {
+  grid-column: 1 / 6;
+  grid-row: 2;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  min-width: 0;
+  margin: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* THE ADDRESS YIELDS AND THE WARNINGS NEVER DO, which is `.pricing-row-why`'s ruling on the
+   other half of this same line. "Boxes 3, 4 · 2 runs" is restatable from the row above it;
+   "held in 1, priced in 1" is not restatable from anywhere on this screen. */
+.pricing-span-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pricing-span-clash,
+.pricing-span-cap {
+  flex: none;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+/* A HOLD ANSWERED WITH A PRICE IS THE ONE STATE HERE THAT HAS ALREADY COST MONEY, so it is
+   the one that gets weight. Measured on 2026-09-01: three of eleven holds were overridden in
+   a later run, including a card held above $5 and listed at $3.45.
+
+   WEIGHT AND NOT COLOUR. `docs/DESIGN.md` keeps hue for the two states the product already
+   spends it on, and a fourth accent here would be a fourth vocabulary an operator has to
+   learn. The underline is the same device `.pricing-run-open` uses one screen up. */
+.pricing-span-clash[data-kind='hold_overridden'] {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* THE MERGED SEND'S OWN CONTROLS (D86). The bar itself is `.pricing-ship`, unchanged and
+   reused: one run or several, the operator is looking at the same place for the same act.
+
+   THE CHECKBOX IS THE ONE NEW AFFORDANCE and it is drawn as a label rather than a chip
+   because it is a modifier on the press beside it, not a choice between presses — the owner
+   asked for *"a checkmark to export just the valuable cards ... otherwise it defaults to
+   all"*, and a chip pair would make the default look like a decision they had to take. */
+.pricing-ship-only {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pricing-ship-says {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
 }
 
 /* ------------------------------------------------------------------- the hold panel */
