@@ -1714,6 +1714,27 @@ export async function getPricing(name: string): Promise<PricingPayload> {
 }
 
 /**
+ * The whole store against one live TCGplayer export — the fourth command, unscoped (D87).
+ *
+ * FREE, AND IT WRITES ONLY WHEN `write` IS TRUE. The preview is the default: it moves the
+ * quantities the cap arithmetic reads, over every SKU at once.
+ *
+ * NOT `runStep(name, 'reconcile')`, WHICH STAYS. That answers one import against one Export
+ * From Staged; this answers the store against a full live export, which is the only document
+ * that can report the other direction — what TCGplayer holds that this pipeline never sent.
+ */
+export async function reconcileLive(
+  file: CsvUpload,
+  options: { write?: boolean } = {},
+): Promise<{ ok: boolean; exit_code: number; wrote: boolean; console: string }> {
+  return (await request('/pipeline/reconcile-live', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ export: file, write: Boolean(options.write) }),
+  })) as { ok: boolean; exit_code: number; wrote: boolean; console: string }
+}
+
+/**
  * The pricing corpus — every listing answer this operator has given, and the policy (D86).
  *
  * ONE READ AND ONE WRITE FOR THE WHOLE SCREEN, whatever is on it. `#/pricing` used to fetch a

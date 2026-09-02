@@ -60,6 +60,8 @@ pkmnscan identify   <capture-dir>   submit, wait, collect, cache. Costs money.
 pkmnscan join       <run-dir>       resolve against the export. Free, re-runnable.
 pkmnscan emit       <run-dir>       write import CSVs. Free, re-runnable.
 pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer actually staged.
+pkmnscan reconcile  --live <my-pricing.csv>        the WHOLE store, both directions (D87).
+                      Previews; --write settles `live`. Reachable on #/runs.
 ```
 
 Each is independently resumable and re-runnable. `join` and `emit` cost nothing, so
@@ -494,6 +496,19 @@ outside this script:
 | `pushed` | `emit` wrote the row into an import file. |
 | `staged` | **Export From Staged** download, diffed by `reconcile`. |
 | `live` | Quantity against that SKU in a later Filtered Export (`Total Quantity`). |
+
+**`reconcile --live` IS THE SECOND FORM AND IT IS NOT RUN-SCOPED (D87).** One full My Pricing
+export against every SKU in the store, whatever run or box it came from. It reports **both
+directions** — copies this pipeline sent that TCGplayer no longer holds, and SKUs it holds that
+were never sent from here — and the second half is the one a per-run reconcile cannot have,
+because a run only knows what it sent.
+
+**What it writes is `live`, and only `live`.** `pushed` is the cumulative record of what was
+sent and `_copies_out` already corrects a stuck one against the physical ceiling (below);
+rewriting it would destroy the only cumulative record there is, since an import file holds the
+last delta only (D54). Measured on the owner's store the first time it ran: **405 of 443 SKUs
+read `live: 0` while carrying pushed copies**, so this table's third row was a state nothing
+had ever written. The cap arithmetic went from seeing 93 live copies to 1,079.
 
 Collapsing `staged` and `live` would make D7's refill math wrong — `Add to Quantity =
 min(cap - live, backstock)` reads the *live* number, and an import staged but never moved

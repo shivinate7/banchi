@@ -9127,6 +9127,148 @@ def check_pricing_authority(checks: Checks) -> None:
             )
 
 
+def check_live_reconcile(checks: Checks) -> None:
+    """The whole store against one live export, both directions (D87).
+
+    WHY THIS IS NOT THE PER-RUN RECONCILE'S JOB. That command scopes its diff to one run's
+    `emitted_skus`, and the thing it diffs against — `store/master.py:Listing` — has never been
+    run-scoped: D7 amended makes the three stages quantities held against a SKU across every
+    box and run. The scoping was a property of the command.
+
+    MEASURED ON THE OWNER'S STORE, 2026-09-01, BEFORE THIS EXISTED. Reconcile had effectively
+    never run: 405 of 443 SKUs read `live: 0` while carrying pushed copies, `staged` was 0
+    everywhere, and two SKUs sat at `pushed: 6` against a cap of 4 with nothing in the product
+    able to see it. One live export settled 1,125 copies and tied out exactly — the export's
+    live total for known SKUs and the ledger's both 1,079, zero per-SKU mismatches.
+
+    THE FOUR ANSWERS ARE ASSERTED SEPARATELY BECAUSE THEY HAVE FOUR DIFFERENT REMEDIES. A copy
+    that is live is settled; one this pipeline never sent is not its business; one TCGplayer
+    holds more of than was sent is somebody else's listing; and one pushed that is neither live
+    nor marked sold is the only ambiguous case, and it is REPORTED rather than cleared.
+    """
+    checks.note("")
+    checks.note("LIVE RECONCILE — the whole store against one export")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "normal"),
+        (3, 3, "Articuno", "161", None),
+    ]
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        before = Store().read().inventory.listings
+        pushed = {sku: entry.pushed for sku, entry in before.items()}
+        checks.ok(
+            sum(pushed.values()) > 0,
+            f"the emit left {sum(pushed.values())} copy(ies) at `{master.PUSHED}` and "
+            f"{sum(e.live for e in before.values())} at `{master.LIVE}` — which is the state "
+            f"the owner's store was in for 443 SKUs, because nothing had ever reconciled",
+        )
+
+        # A LIVE EXPORT BUILT FROM THE RUN'S OWN, so every column is the real shape. Articuno
+        # comes back fully live; Dunsparce comes back with ONE copy short of what was pushed.
+        source = tcgcsv.read_export(run_dir.path("export.csv"))
+        rows = []
+        for row in source.rows:
+            sku = row[tcgcsv.SKU_COLUMN]
+            if sku not in pushed:
+                continue
+            out = dict(row)
+            out[tcgcsv.LIVE_QUANTITY_COLUMN] = str(
+                pushed[sku] - 1 if sku == DUNSPARCE_SKU else pushed[sku]
+            )
+            rows.append(out)
+        # AND ONE ROW THIS STORE HAS NEVER SEEN — sealed product, or a single listed by hand.
+        # It must be reported and never touched: the pipeline did not put it there.
+        stranger = dict(source.rows[0])
+        stranger[tcgcsv.SKU_COLUMN] = "1234567"
+        stranger[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        rows.append(stranger)
+        live_path = run_dir.path("live.csv")
+        tcgcsv.write_csv(live_path, source.header, rows)
+
+        said = command(checks, "reconcile", "--live", str(live_path))
+        checks.ok(
+            "DRY RUN" in said,
+            "IT PREVIEWS BY DEFAULT. It moves quantities the cap arithmetic reads, over every "
+            "SKU at once — `pkmnscan prices adopt`'s reason, and a settlement nobody watched "
+            "is how a wrong number becomes the new floor",
+        )
+        unchanged = Store().read().inventory.listings
+        checks.equal(
+            {sku: entry.pushed for sku, entry in unchanged.items()},
+            pushed,
+            "and the preview WROTE NOTHING — every pushed count is where the emit left it",
+        )
+        checks.ok(
+            "never seen here" in said and "1234567" in said,
+            "the stranger row is reported by SKU. `seen` is every SKU a CARD carries and is "
+            "deliberately wider than the listing ledger: a withheld or sub-threshold card has "
+            "a SKU and no listing, and judging against the ledger alone would accuse the "
+            "operator of listing it outside pkmnscan the moment it went live",
+        )
+
+        said = command(checks, "reconcile", "--live", str(live_path), "--write")
+        after = Store().read().inventory.listings
+        checks.equal(
+            after[ARTICUNO_SKU].live,
+            pushed[ARTICUNO_SKU],
+            "`live` COMES FROM THE EXPORT AND IS NOT NEGOTIATED — D8 and D11 make it "
+            "authoritative about what TCGplayer holds, which is the same authority "
+            "`cli/resolve.py:_copies_out` already grants `Total Quantity` as a floor",
+        )
+        checks.equal(
+            {sku: entry.pushed for sku, entry in after.items()},
+            pushed,
+            "AND `pushed` IS READ AND NEVER REWRITTEN. It is the CUMULATIVE count of copies "
+            "ever written into an import file — an import file holds the last delta only "
+            "(D54), so this is the one cumulative record there is. What was missing was a "
+            "real `live`, which nothing in this repo had ever written: 405 of 443 SKUs read "
+            "zero while carrying pushed copies",
+        )
+        checks.equal(
+            after[DUNSPARCE_SKU].live,
+            pushed[DUNSPARCE_SKU] - 1,
+            "a SKU TCGplayer holds fewer of than were sent takes the export's figure like any "
+            "other — the discrepancy is a SENTENCE, not an adjustment",
+        )
+        said_again = command(checks, "reconcile", "--live", str(live_path))
+        checks.ok(
+            "0 copy(ies) of `live` would be corrected" in said_again,
+            "AND IT IS IDEMPOTENT. A second pass over the same export corrects nothing, which "
+            "is the property a settlement that rewrote `pushed` could not have: that one "
+            "destroys the cumulative record it read, so its own second pass answers a "
+            "different question",
+        )
+        checks.ok(
+            "unexplained" in said and DUNSPARCE_SKU in said,
+            "and it is REPORTED by SKU rather than counted (D59's rule): a copy that quietly "
+            "stopped being accounted for is a number nobody can check",
+        )
+        checks.equal(
+            sum(1 for c in Store().read().inventory.cards.values() if c.state == master.SOLD),
+            0,
+            "AND NOT ONE CARD WAS MARKED SOLD. This moves quantities and never cards (D7) — "
+            "which physical copy sold is deliberately unrecorded, and a command that picked "
+            "one from a quantity would be inventing the address D7 refuses to invent",
+        )
+        checks.ok(
+            "1234567" not in json.dumps(
+                {k: v.to_json() for k, v in after.items()}
+                if hasattr(next(iter(after.values())), "to_json")
+                else {k: v.pushed for k, v in after.items()}
+            ),
+            "and the stranger SKU gained no listing record — reporting it is the whole of "
+            "what this command may do about a listing it did not make",
+        )
+
+
 def check_merged_emit_cap(checks: Checks) -> None:
     """Two runs, one SKU, one cap — the arithmetic a merged file has to re-derive (D86).
 
@@ -16055,6 +16197,7 @@ def run() -> Result:
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
     check_merged_emit_cap(checks)
+    check_live_reconcile(checks)
     check_withholding(checks)
     check_pricing_route(checks)
     check_pricing_labels(checks)

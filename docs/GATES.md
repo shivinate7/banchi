@@ -327,6 +327,13 @@ at a temporary directory, so nothing here touches the real inventory.
 - **What it checks that T1–T6 cannot.** They check rules and this checks wiring. A wrong
   rule gives a wrong answer you can see; a wrong position gives a card that is exactly where
   the inventory says it is not, found weeks later by a person opening the wrong slot.
+- **Two blocks measure a defect against the path it replaces rather than against a fixture
+  (2026-09-02).** `check_merged_emit_cap` asserts the CSV and the `pushed` count a merged emit
+  writes, not the plan behind them — the first build of that command computed the right figure
+  and wrote the wrong one, and only a head-to-head against three separate emits caught it.
+  `check_live_reconcile` asserts that the store-wide reconcile writes `live` and leaves
+  `pushed` alone, and that a **second pass corrects nothing**: idempotence is the property that
+  separates it from the first build, which rewrote the cumulative record it had just read.
 - **Concurrency is small-N on purpose.** Two and four simultaneous captures over real
   sockets, matching D5's two devices. The twenty-way case that found the listen backlog
   proved something about a socket option and is not worth paying for at every turn end.
