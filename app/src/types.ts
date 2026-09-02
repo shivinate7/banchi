@@ -1823,11 +1823,6 @@ export type RunSummary = {
   collected: boolean
   joined: boolean
   counts: Record<string, number>
-  /** The run was joined with D3 rung 3 switched off, and how many cards that resolved.
-   *  Reported rather than inferred from a smaller queue: these are the cards the operator
-   *  took responsibility for. */
-  bypass_detection: boolean
-  bypassed: number | null
   usage: { input_tokens?: number; output_tokens?: number }
 }
 

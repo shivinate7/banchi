@@ -384,8 +384,6 @@ export function RunPanel({ cart }: RunPanelProps) {
     setPreviewBox(box)
   }, [])
 
-  const [bypass, setBypass] = useState(false)
-
   /* ------------------------------------------------------ D76: the fetch's scope, as a lever
    *
    * `scopeInfo` is the server's own answer to "what would a press ask for, and why" — the
@@ -1031,7 +1029,6 @@ export function RunPanel({ cart }: RunPanelProps) {
       setFetched(answer)
       const result = await runStep(openRun, 'join', {
         fetched: [answer.file],
-        bypass,
         reviewBelowConfidence: reviewBelow,
       })
       setStepOut({ step: 'join', ok: result.ok, console: result.console })
@@ -1053,7 +1050,6 @@ export function RunPanel({ cart }: RunPanelProps) {
       const uploads = await Promise.all(chosen.map(readUpload))
       const result = await runStep(openRun, 'join', {
         exports: uploads,
-        bypass,
         reviewBelowConfidence: reviewBelow,
       })
       setStepOut({ step: 'join', ok: result.ok, console: result.console })
@@ -1260,8 +1256,8 @@ export function RunPanel({ cart }: RunPanelProps) {
 
             EVERY BOX IN THE CART IS ITS OWN RUN. One press starts several children, and
             nothing downstream learns a new shape: each box gets a run directory, a manifest,
-            a queue, its own `--bypass` decision at join and its own `decisions.json`. What is
-            new is a fact about the REQUEST, not about a run.
+            a queue and its own `decisions.json`. What is new is a fact about the REQUEST, not
+            about a run.
 
             THE READING IS DRAWN AS A PAIR RATHER THAN AS TWO CONTROLS — see `READINGS` above
             for the measurement that decides it, and for why a checkbox beside a free number
@@ -1855,17 +1851,6 @@ export function RunPanel({ cart }: RunPanelProps) {
             </dl>
           )}
 
-          {detail.bypass_detection && (
-            /* NAMED ON THE RUN, not only in its log. D3's amendment: a run joined with the
-               detection cross-check off resolved some cards by the operator's own claim, and
-               they chose "resolved by the claim, and the run report says so". A count that
-               appeared only in a file nobody opened would not be that. */
-            <p className="run-flagged">
-              Joined with the photo cross-check off — {count(detail.bypassed)} card
-              {detail.bypassed === 1 ? '' : 's'} resolved by your finish claim.
-            </p>
-          )}
-
           <Console text={detail.console} label={`What ${detail.run} printed`} />
         </div>
       )}
@@ -1919,23 +1904,12 @@ export function RunPanel({ cart }: RunPanelProps) {
 
               {step.key === 'join' && detail !== null && (
                 <>
-                  <label className="run-toggle">
-                    <input
-                      type="checkbox"
-                      checked={bypass}
-                      onChange={(event) => setBypass(event.target.checked)}
-                    />
-                    {/* The plain-English form of D3's amendment, and it is the sentence the
-                        owner asked for when they said the question had not been put in plain
-                        English. The rule underneath it is one line: where a finish claim
-                        exists, the photo may not contradict it. */}
-                    Trust my finish claim over the photo
-                  </label>
-                  <p className="run-step-note run-step-fine">
-                    Box 2 measured this: 230 of 544 cards had the photo disagreeing with a
-                    claim that was right every time. Cards with no claim are unaffected —
-                    there is nothing to resolve them by.
-                  </p>
+                  {/* THERE WAS A CHECKBOX HERE — "Trust my finish claim over the photo" — and
+                      it is gone because it was ticked on every run since Gate B (D3, amended
+                      2026-09-02). A switch every run flips is a default wearing a flag, so
+                      the rule it encoded is the ladder's own now: where a finish claim
+                      exists, the photo may not contradict it. Nothing on this screen has to
+                      say so, because there is no longer a way to ask for the alternative. */}
 
                   {/* ------------------------------------------------- D76: the routing lever
                       HERE AND NOT ON `#/pricing`, because it is not a pricing answer. It
@@ -2076,7 +2050,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                       onClick={() =>
                         void doStep('join', {
                           dryRun: true,
-                          bypass,
                           reviewBelowConfidence: reviewBelow,
                         })
                       }
@@ -2088,7 +2061,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                       className="run-button"
                       disabled={busy !== null}
                       onClick={() =>
-                        void doStep('join', { bypass, reviewBelowConfidence: reviewBelow })
+                        void doStep('join', { reviewBelowConfidence: reviewBelow })
                       }
                     >
                       Join again

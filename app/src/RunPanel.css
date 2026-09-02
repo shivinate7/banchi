@@ -726,15 +726,6 @@
   color: var(--ink);
 }
 
-/* A whole sentence, so the body face — and ink, because a sentence in accent is the third
-   job that stops the colour meaning anything. */
-.run-flagged {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-}
-
 /* NOTHING LEFT TO PAINT. This repainted `--surface` onto a bordered card that already sat on
    `--surface`; with the border gone a step is a row on the panel's own ground and a fill here
    would be the one thing that made the four look enclosed again. */
@@ -1052,8 +1043,8 @@
  *
  * ONE BLOCK, INSIDE THE JOIN STEP, ABOVE ITS BUTTONS. The scope is a decision about the
  * press below it, so it sits between the note that explains the step and the row that runs
- * it — the same placement the bypass toggle already has, for the same reason: a control
- * separated from the button it governs reads as unrelated configuration.
+ * it — the placement the finish-claim toggle had until D3 retired it, for the same reason: a
+ * control separated from the button it governs reads as unrelated configuration.
  *
  * NO COLOUR OF ITS OWN. Every value here is a token (the `raw colour` audit row blocks
  * otherwise), and the panel is separated by a rule and a background step rather than by an

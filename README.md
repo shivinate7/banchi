@@ -114,13 +114,14 @@ human. One blocking command would put a person in the middle of a poll loop.
 malformed sidecar and an unreadable photo all surface for nothing. `join` and `emit` cost
 nothing and are re-runnable, so fixing a review or changing a price is free.
 
-**`join` has two flags worth knowing.** `--dry-run` walks the ladder twice — once trusting
-the capture-time finish claim over a disagreeing photo and once not — diffs the two queues by
-reason code, and returns before the first write. `--bypass` is the trusting half, kept for a
-run rather than made a default: *where a finish claim exists, the photo may not contradict it,
-though it may still choose inside a multi-finish one.* A card with no claim is untouched,
-because there is nothing to resolve it by. It exists because box 2 measured detection wrong on
-**42% of a box whose truth the owner confirmed** — see `docs/GATES.md` and D3.
+**`join` has one flag worth knowing.** `--dry-run` walks the ladder once, counts what would
+queue by reason code, and returns before the first write. It had two until 2026-09-02:
+`--bypass` let the capture-time finish claim outrank a disagreeing photograph for one run, and
+every run since Gate B was joined with it — 256 cards, 16 of 16 rulings to the claim, box 2
+measuring detection wrong on **42% of a box whose truth the owner confirmed** — so that rule is
+the ladder's own now and the flag is gone (D3, amended). *Where a finish claim exists, the
+photo may not contradict it, though it may still choose inside a multi-finish one.* A card with
+no claim is untouched, because there is nothing to resolve it by.
 
 **Since 2026-08-24 none of this needs a terminal.** `#/inventory` carries a folded Runs panel
 over the same four commands: a free preflight that prints the card count and the estimate, a

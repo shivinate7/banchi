@@ -11,11 +11,13 @@ Resolve normal / holo / reverse holo per card, in order:
                      Primary path.
   2. CATALOG_FORCED  one condition row for that number in the fixture, so the row decides.
                      Most SV-era rares are holofoil-only; a single row is itself evidence.
-  3. DETECTION       Haiku's `finish` field. Runs as a CROSS-CHECK even when metadata
-                     exists: a normal card mis-sorted into the reverse stack still matches
-                     a valid catalog row, so only detection catches it.
-  4. REVIEW          still ambiguous, detection disagrees with metadata, or no matching
-                     catalog row.
+  3. DETECTION       Haiku's `finish` field. Decides where NO claim exists, and chooses
+                     INSIDE a multi-member claim. It never contradicts one (D3, amended
+                     2026-09-02): it ran as a cross-check over a one-member claim until
+                     then, and across every disagreement a human ruled on the claim was
+                     right, so a read outside the claimed set is dropped rather than argued
+                     with.
+  4. REVIEW          still ambiguous, or no matching catalog row.
 
 THE TOGGLE IS TRUSTED (owner's call, 2026-08-03). It is set per stack, not left on a
 default, so metadata is a claim and not a hint. Two consequences, and they are the whole
@@ -31,9 +33,10 @@ shape of the ladder:
     before the toggle was set, or a batch run without it. One condition row and no claim
     to contradict, so the row decides.
 
-Both review paths carry a distinct reason so the queue can be triaged: a run full of
-METADATA_NOT_STOCKED means a stack is misfiled, while METADATA_DETECTION_DISAGREEMENT
-scattered across a run means individual cards are mis-sorted.
+The review reasons carry distinct strings so the queue can be triaged: a run full of
+METADATA_NOT_STOCKED means a stack is misfiled or misidentified. The sibling it used to be
+read against, `metadata_detection_disagreement`, is retired (2026-09-02): the 16 a human
+ruled on all went to the claim, and box 2's 230 were all wrong.
 
 Guards v1 bug #1: variant mispricing from blindly taking holofoil || reverseHolofoil ||
 normal.
@@ -111,7 +114,6 @@ NO_CATALOG_ROW = "no_catalog_row"
 # all about the finish toggle, and `rarity_not_claimed` parses as the empty case.
 RARITY_CLAIM_MISMATCH = "rarity_claim_mismatch"
 METADATA_NOT_STOCKED = "metadata_not_stocked"
-METADATA_DETECTION_DISAGREEMENT = "metadata_detection_disagreement"
 DETECTED_FINISH_NOT_STOCKED = "detected_finish_not_stocked"
 AMBIGUOUS_NO_SIGNAL = "ambiguous_no_signal"
 DUPLICATE_CONDITION = "duplicate_condition"
@@ -128,11 +130,6 @@ class Resolution:
     row: Optional[tcgcsv.Row] = None
     condition: Optional[str] = None
     market_price: Optional[Decimal] = None
-    # This card resolved only because `trust_claim` was on — the detection cross-check
-    # would have sent it to review. Carried on the resolution rather than counted at the
-    # call site so the run report can say how many cards the operator's claim answered
-    # for, which is the whole of what they are accepting when they turn the flag on.
-    bypassed: bool = False
 
     @property
     def needs_review(self) -> bool:
@@ -189,14 +186,13 @@ def _check_claim(
     return tuple(finish for finish in stocked if finish in members)
 
 
-def _resolved(stage: str, row: tcgcsv.Row, bypassed: bool = False) -> Resolution:
+def _resolved(stage: str, row: tcgcsv.Row) -> Resolution:
     return Resolution(
         stage=stage,
         reason=stage,
         row=row,
         condition=row[tcgcsv.CONDITION_COLUMN],
         market_price=tcgcsv.parse_price(row[tcgcsv.MARKET_PRICE_COLUMN]),
-        bypassed=bypassed,
     )
 
 
@@ -217,23 +213,8 @@ def resolve(
     detected_finish: Optional[str] = None,
     rarity_claim: Optional[Sequence[str]] = None,
     game: Optional[str] = None,
-    trust_claim: bool = False,
 ) -> Resolution:
     """Walk the ladder for one card. `candidates` are the catalog rows for its number.
-
-    `trust_claim` is the operator's pre-emptive bypass, and it is ONE RULE: **detection may
-    not contradict a finish claim, but may still choose inside one.** It does nothing at all
-    to a card with no claim — there is no claim to resolve by, so rungs 2 and 3 run exactly
-    as they always do. Where a claim exists and detection lands outside it, detection is
-    dropped for that card rather than overruled selectively: a signal the operator has just
-    declared untrustworthy for this run may not go on to pick a row further down the ladder.
-
-    It costs D3 rung 3's cross-check on the cards it touches, and that is the whole of the
-    trade — it is not a softening of rung 1, which already trusts the toggle. The evidence
-    it was built for is in `docs/GATES.md`'s box-2 section: 230 of 544 cards contradicted a
-    claim that the owner confirmed was right every time, at a measured 42% false-positive
-    rate, with the same photograph reading differently at two downscales. A cross-check that
-    is wrong more often than the thing it checks is not a cross-check.
 
     `rarity_claim` is D23's multi-select stack claim: the exact `Rarity` cells the operator
     says this stack holds. None or empty narrows nothing — the compatibility guarantee that
@@ -310,20 +291,21 @@ def resolve(
             # {holo, reverse_holo} against a normal-only number is the same fact as
             # claiming `holo` against it, which is why this needs no reason code of its own.
             return Resolution(stage=REVIEW, reason=METADATA_NOT_STOCKED)
-        # Rung 3 as a cross-check, before trusting rung 1. Detection outside the claimed set
-        # is the disagreement whatever the set's size — with one member this is the identity
-        # test it has always been.
-        contradicted = detected_finish is not None and detected_finish not in claimed
-        if contradicted and not trust_claim:
-            return Resolution(stage=REVIEW, reason=METADATA_DETECTION_DISAGREEMENT)
-        if contradicted:
-            # Dropped, not merely not-reported. Leaving it live would let it fire at rung 3
-            # against the narrowed rows below and answer DETECTED_FINISH_NOT_STOCKED — a
-            # refusal sourced from the signal this flag just set aside, wearing a reason
-            # code that would send the operator looking at the catalog instead.
+        # DETECTION OUTSIDE THE CLAIMED SET IS DROPPED, NOT ARGUED WITH (D3, amended
+        # 2026-09-02). This was rung 3's cross-check — `metadata_detection_disagreement`,
+        # switchable off per run by `--bypass` — and the measurement retired it: 16 of 16
+        # rulings went to the claim, box 2's 230 disagreements were all wrong, and every run
+        # since Gate B was joined with the flag on. A switch every run flips is a default
+        # wearing a flag, so the rule the flag encoded is the ladder's rule now.
+        #
+        # Dropped rather than left live, because a live read would fire at rung 3 against
+        # the narrowed rows below and answer DETECTED_FINISH_NOT_STOCKED — a refusal sourced
+        # from the signal the claim outranks, wearing a reason code that sends the operator
+        # to look at the catalog instead.
+        if detected_finish is not None and detected_finish not in claimed:
             detected_finish = None
         if len(claimed) == 1:
-            return _resolved(METADATA, next(iter(kept.values())), bypassed=contradicted)
+            return _resolved(METADATA, next(iter(kept.values())))
         # TWO OR MORE: narrow and FALL THROUGH. Deliberately the same move D23's rarity
         # filter makes a few lines above — narrow the rows, then let every rung below run on
         # what is left. Rung 2 fires when the claim leaves exactly one row, rung 3 picks
@@ -332,19 +314,18 @@ def resolve(
         # the ladder to disagree with itself.
         candidates = list(kept.values())
         by_condition = kept
-    else:
-        contradicted = False
 
     # Rung 2 — catalog-forced. Reached with no metadata to contradict, or with a set-valued
     # claim that narrowed to one row.
     if len(candidates) == 1:
-        return _resolved(CATALOG_FORCED, candidates[0], bypassed=contradicted)
+        return _resolved(CATALOG_FORCED, candidates[0])
 
-    # Rung 3 — detection.
+    # Rung 3 — detection. Reached with no claim, or with a multi-member claim it lands
+    # inside of; a read outside the claim never gets here.
     if detected_finish is not None:
         wanted_row = condition_by_finish[detected_finish]
         if wanted_row in by_condition:
-            return _resolved(DETECTION, by_condition[wanted_row], bypassed=contradicted)
+            return _resolved(DETECTION, by_condition[wanted_row])
         return Resolution(stage=REVIEW, reason=DETECTED_FINISH_NOT_STOCKED)
 
     # Rung 4 — review.

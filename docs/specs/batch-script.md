@@ -324,20 +324,22 @@ short-circuit in front of it, because every rung `resolve` walks infers a finish
 evidence and an answer is not an inference. It falls through to the ladder when the current
 export no longer carries that SKU, or carries it under a different Condition.
 
-**And one thing can now be switched off inside it: rung 3, per run, by `--bypass`** (added
-2026-08-24; D3 amended). `resolve` gains `trust_claim`, and the rule is that where a finish
-claim exists detection may not contradict it — though it may still choose inside a
-multi-member one. Nothing else moves: a card with no claim walks the identical ladder,
-`metadata_not_stocked` and `no_catalog_row` still refuse, and a bypassed card resolves at
-rung 1 carrying `Resolution.bypassed` so the run can count it. The measurement that bought
-it is `docs/GATES.md`'s box-2 section — 42% of a 544-card box contradicting a claim the owner
-confirmed correct on every card.
+**Rung 3 no longer contradicts a finish claim, and the flag that used to switch that off is
+gone** (`--bypass`, added 2026-08-24; retired 2026-09-02, D3 amended). For nine days
+`resolve` took `trust_claim` and, where a finish claim existed, let detection choose inside it
+but not against it. Every run since Gate B was joined with the flag on — 256 cards, 16 of 16
+rulings to the claim, box 2's 230 disagreements all wrong — and a switch every run flips is a
+default wearing a flag. So the rule is the ladder's now: a detection outside the claimed set is
+dropped, `metadata_detection_disagreement` is retired, and `Resolution.bypassed` and the
+manifest's `bypass_detection`/`bypassed` keys went with it — old manifests keep them, unread.
+Nothing else moves: a card with no claim walks the identical ladder, and `metadata_not_stocked`
+and `no_catalog_row` still refuse.
 
-**`--dry-run` previews it and writes nothing.** It walks the ladder twice — with the flag and
-without — diffs the two queues by reason code, and returns before the first write: no queues,
-no `decisions.json`, no `report.txt`, no manifest. Walking twice is free, and a preview built
-from a different source than the write is a preview that can be wrong in the one way that
-matters, so the counts come off `entries_for` — the same function the write uses.
+**`--dry-run` previews the join and writes nothing.** It walks the ladder once, counts what
+would queue by reason code, and returns before the first write: no queues, no
+`decisions.json`, no `report.txt`, no manifest. A preview built from a different source than
+the write is a preview that can be wrong in the one way that matters, so the counts come off
+`entries_for` — the same function the write uses.
 
 **Raw reason codes, no gloss table.** `app/src/ReviewQueue.tsx` holds the only label map in
 the product and says in its own comment that nothing keeps it in step with the Python
@@ -590,7 +592,6 @@ report — catching an import that was staged and never moved live.
 | `--max-edge` | 1568 | image downscale, longest edge |
 | `--retry-budget` | 1 | per-card retries after a batch failure |
 | `--review-below-confidence` | `low` | `none` \| `low` \| `medium` |
-| `--bypass` | off | `join` only — rung 3 may not contradict a finish claim (D3) |
 | `--dry-run` (join) | off | preview both queues, write nothing |
 | `--basis` | `market` | `market` \| `low` |
 | `--rule` | `match` | `decisions.json`, seeded by the flag |

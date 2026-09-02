@@ -59,7 +59,8 @@ one fact.
   all today — one by construction and one for want of a producer.** Six
   come from `pipeline/variant.py` (`no_catalog_row`, `metadata_not_stocked`,
   `metadata_detection_disagreement`, `detected_finish_not_stocked`, `ambiguous_no_signal`,
-  `duplicate_condition`) and six from `pipeline/routing.py` (`low_confidence`, `no_position`,
+  `duplicate_condition`) (`metadata_detection_disagreement` retired 2026-09-02, D3) and six
+  from `pipeline/routing.py` (`low_confidence`, `no_position`,
   `identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`).
   `docs/DESIGN.md` requires each on screen as a human label with the machine string small
   beneath it, so twelve human labels now exist — and each one is a translation of a string

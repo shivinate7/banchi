@@ -147,15 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
     joined.add_argument(
         "--dry-run",
         action="store_true",
-        help="report what WOULD queue and what --bypass would clear, and write nothing. "
-        "Free and side-effect-free: no queues, no decisions.json, no report, no manifest.",
-    )
-    joined.add_argument(
-        "--bypass",
-        action="store_true",
-        help="trust the capture-time finish claim over a disagreeing photo (D3 rung 3 is "
-        "not consulted where a claim exists). Cards with NO claim are unaffected — there "
-        "is nothing to resolve them by. Recorded in the manifest and in the run report.",
+        help="report what WOULD queue and write nothing. Free and side-effect-free: no "
+        "queues, no decisions.json, no report, no manifest.",
     )
 
     # ----------------------------------------------------------------------------- emit

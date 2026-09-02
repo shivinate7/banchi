@@ -2046,7 +2046,6 @@ export async function runStep(
     basis?: 'market' | 'low'
     reviewBelowConfidence?: 'none' | 'low' | 'medium'
     dryRun?: boolean
-    bypass?: boolean
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2060,7 +2059,6 @@ export async function runStep(
       basis: options.basis,
       review_below_confidence: options.reviewBelowConfidence,
       dry_run: options.dryRun,
-      bypass: options.bypass,
     }),
   })) as RunStepResult
 }

@@ -101,7 +101,6 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
                                    #   --dry-run  preview both queues, write nothing
-                                   #   --bypass   trust the finish claim over the photo (D3)
 ./pkmnscan emit     <run-dir> [<run-dir> ...]
                                    # write import CSVs. Free, re-runnable. SEVERAL RUNS WRITE
                                    #   ONE FILE and the live cap is spent ONCE across them

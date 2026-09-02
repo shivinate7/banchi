@@ -307,6 +307,10 @@ def entry(box: int, index: int, **extra) -> queues.QueueEntry:
         "index": index,
         "label": join.Position(box, index).label,
         "photo": str(capture_server.photo_path(box, index)),
+        # RETIRED as a reason the pipeline emits (D3, amended 2026-09-02), and kept here on
+        # purpose: the owner's store holds 16 history events carrying this string, the
+        # routes validate only `STAND_DOWN_REASONS`, and a fixture wearing the code a real
+        # queue once wore is a truer seed than one rewritten to a code that never fired.
         "reason": "metadata_detection_disagreement",
         "candidates": [dict(row) for row in CANDIDATES],
     }
@@ -9198,35 +9202,33 @@ def _stages(inventory) -> str:
     return ", ".join(f"{k} {v}" for k, v in inventory.listing_counts().items() if v)
 
 
-def check_emit_bypass(checks: Checks) -> None:
-    """`emit` re-derives the run, so every input to that derivation comes from the run.
+def check_emit_claim_decides(checks: Checks) -> None:
+    """`join` and `emit` re-derive ONE answer for a contradicted claim, and it is the claim's SKU.
 
-    THE DEFECT, FOUND BY THE OWNER PRESSING `Write the import files` ON A BOX THEY HAD JOINED.
-    `cli/cmd_emit.py` called `resolve.load` without `trust_claim`, so it walked the ladder with
-    D3 rung 3 LIVE over a run joined with `--bypass` — inventing a queued position for every
-    bypassed card, finding none of them in either queue file (join deliberately never wrote
-    them), and refusing with *"Run `pkmnscan join` first"* at an operator who had. Re-running
-    join could not clear it, because join was right.
+    REDUCED FROM `check_emit_bypass` ON 2026-09-02, when D3's amendment retired `--bypass`.
+    That case guarded a seam: `emit` re-derives the run rather than reading it, and for six
+    days it re-derived with rung 3 live over a run joined with the flag — inventing a queued
+    position for every bypassed card, finding none of them on disk, and refusing with *"Run
+    `pkmnscan join` first"* at an operator who had (measured on the owner's box 1: 39 of 39).
+    The fix read the flag off the manifest. The amendment deletes the flag, so there is nothing
+    left for `emit` to forget; what remains to assert is that the two commands still agree,
+    and agree on the CLAIM's row rather than the photograph's.
 
-    Measured on the owner's box 1 before the fix: `bypassed: 39` in the manifest, 39 positions
-    invented, 39 absent from disk, and the refusal's first ten positions matched what the screen
-    printed character for character.
-
-    THE REFUSAL WAS THE SECOND-WORST OUTCOME, which is why the case asserts the OUTPUT and not
-    just the exit code. That same resolution is what writes the import files, so had the check
-    passed, those cards would have been routed to review and left out of the CSV — the bypass
-    silently void at the one step that produces output. So this asserts the bypassed card is IN
-    the file, at the SKU its claim names.
+    THE ASSERTION IS THE OUTPUT AND NOT THE EXIT CODE, for the reason the old case gave: the
+    refusal was the second-worst outcome, and had the check passed with the wrong resolution
+    the card would have been routed to review and left out of the CSV. So the contradicted
+    card must be IN the file, at the SKU its claim names, and NOT at the one detection read.
 
     Its own isolated home, this file's own lesson yet again: it emits, which writes `pushed`
     counts that `check_listing_commands` and `check_cli_seams` assert over their own fixtures.
     """
     checks.note("")
-    checks.note("EMIT BYPASS — the run's own resolution decides, not this command's defaults")
+    checks.note("EMIT, CLAIM DECIDES — join and emit re-derive one answer, and it is the claim's")
 
     # Dunsparce 120/159 stocks two condition rows, so a claim of `normal` is a claim the
-    # catalog cannot settle on its own and detection is what contradicts it — D3 rung 3, the
-    # exact rung `--bypass` switches off. A holofoil-only number could not produce the case.
+    # catalog cannot settle on its own, and a `reverse_holo` read is the photograph
+    # disagreeing with it — the exact shape D3's retired cross-check used to review. A
+    # holofoil-only number could not produce the case.
     cards = [(3, 1, "Dunsparce", "120", "normal")]
 
     with isolated_home():
@@ -9234,7 +9236,7 @@ def check_emit_bypass(checks: Checks) -> None:
             while Store().read().inventory.next_index(box) <= index:
                 capture_server.do_capture(capture_payload(box))
 
-        run_dir = runs.create("t7-bypass")
+        run_dir = runs.create("t7-claim-decides")
         payload = identifications_for(cards)
         # THE CLAIM AND THE DETECTION MUST DISAGREE, and `identifications_for` sets both from
         # one field by design — a null finish is its rung-2 case. Patched here rather than by
@@ -9243,37 +9245,22 @@ def check_emit_bypass(checks: Checks) -> None:
         run_dir.write_identifications(payload)
         export = write_export(run_dir.path("export.csv"))
 
-        said = command(
-            checks, "join", str(run_dir.directory), "--export", str(export), "--bypass"
-        )
+        command(checks, "join", str(run_dir.directory), "--export", str(export))
         run_dir = runs.open_run(run_dir.directory)
-
-        checks.ok(
-            run_dir.manifest.get("bypass_detection") is True,
-            "the run RECORDS that it was joined with --bypass. Without this on the manifest "
-            "there is nothing for a later command to read, and every later command re-derives",
-        )
-        checks.equal(
-            run_dir.manifest.get("bypassed"),
-            1,
-            "and records how many cards it cleared, so the count is reported rather than "
-            "inferred from a smaller queue (D3)",
-        )
 
         snapshot = Store().read()
         checks.equal(
             (len(snapshot.review.entries), len(snapshot.parked.entries)),
             (0, 0),
-            "A BYPASSED CARD IS QUEUED NOWHERE, which is the whole point of the flag and the "
-            "fact that made emit refuse: the position emit invented could not be on disk",
+            "A CONTRADICTED CLAIM IS QUEUED NOWHERE — the photograph may no longer put a "
+            "claimed card in front of a human (D3, amended 2026-09-02)",
         )
 
         said = command(checks, "emit", str(run_dir.directory))
         checks.ok(
             "REFUSING to write" not in said,
-            "`emit` DOES NOT REFUSE a run joined with --bypass. It read the flag off the "
-            "manifest exactly as it already read `review_below_confidence`, rather than "
-            "defaulting rung 3 back on and re-deriving a run that is not the one on disk",
+            "`emit` DOES NOT REFUSE: it re-derives the identical resolution join wrote, "
+            "because there is no per-run flag left for it to forget",
         )
 
         # GUARDED, because the failure this case exists for is a REFUSAL — and a refusal
@@ -9293,14 +9280,15 @@ def check_emit_bypass(checks: Checks) -> None:
         checks.ok(
             DUNSPARCE_SKU in written,
             "AND THE CARD IS IN THE FILE AT THE SKU ITS CLAIM NAMES. This is the assertion "
-            "that matters: the refusal was the second-worst outcome, and a fix that only "
-            "silenced it would have left the card routed to review and out of the CSV — the "
-            "bypass void at the one step that writes",
+            "that matters: a resolution that merely stopped refusing could still have routed "
+            "the card to review and left it out of the CSV — the claim void at the one step "
+            "that writes",
         )
         checks.ok(
             DUNSPARCE_REVERSE_SKU not in written,
-            "and NOT at the finish detection claimed. `--bypass` is one rule — detection may "
-            "not contradict a claim — so the claim decides, and rung 3's other job is untouched",
+            "and NOT at the finish detection read. The rule is one line — detection may not "
+            "contradict a claim — so the claim decides, and rung 3's other job, choosing "
+            "inside a multi-member claim, is untouched",
         )
 
 
@@ -10910,7 +10898,7 @@ def check_listing_commands(checks: Checks) -> None:
     # --- the cap is a QUANTITY, and a sold copy gives its slot back (D59) -----------------
     #
     # ITS OWN `isolated_home`, and this file has now recorded that lesson four times — the
-    # sharpest being `check_emit_bypass`, which emits and therefore writes `pushed` counts
+    # sharpest being `check_emit_claim_decides`, which emits and therefore writes `pushed` counts
     # that the block above asserts as absolute dicts over its own fixtures. This one emits
     # three times.
     #
@@ -17225,7 +17213,7 @@ def check_order_fill(checks: Checks) -> None:
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
-    check_emit_bypass(checks)
+    check_emit_claim_decides(checks)
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
     check_merged_emit_cap(checks)

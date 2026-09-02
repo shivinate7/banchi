@@ -272,15 +272,6 @@ function sentence(entry: QueueEntryWire): Segment[] {
         : [...head, say(', and the export stocks only '), claim(only), say(' for this number.')]
     }
 
-    case 'metadata_detection_disagreement':
-      return [
-        say('You sorted this stack as '),
-        claim(toggle ?? 'a finish this entry does not record'),
-        say(', and the photograph reads as '),
-        claim(detected ?? 'something else'),
-        say('.'),
-      ]
-
     case 'detected_finish_not_stocked': {
       const head = [say('The photograph reads as '), claim(detected ?? 'a finish this entry does not record')]
       return only === null

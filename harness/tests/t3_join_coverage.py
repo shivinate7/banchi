@@ -1237,8 +1237,8 @@ def run() -> Result:
         name="Articuno",
         number="161",
         printed_total="159",
-        # The exact disagreement that parks a card: the toggle claims one finish, the
-        # photograph reads another. Without rung 0 this is METADATA_DETECTION_DISAGREEMENT.
+        # The toggle claims one finish, the photograph reads another. Without rung 0 the
+        # toggle would decide this card; the answer outranks the toggle.
         metadata_finish="normal",
         detected_finish="reverse_holo",
         photo=f"captures/box{BOX}/0090.jpg",

@@ -28,8 +28,8 @@ conflict detection on the row, and an agreement refusal before a merged file cou
 — all of which exists only to reconcile a duplication that a single store does not have. The
 conflict class stops existing here rather than being reported.
 
-D48 IS NARROWED, NOT REPEALED. That entry's subject is a RUN: one reading, one `--bypass`
-ruling, one queue, one join. All of that stays per run and is untouched. What leaves the run
+D48 IS NARROWED, NOT REPEALED. That entry's subject is a RUN: one reading, one queue, one
+join. All of that stays per run and is untouched. What leaves the run
 directory is the pricing ANSWER. The policy fields go too, on the owner's instruction, with a
 per-run override kept for the lot that genuinely differs — see `for_run`.
 

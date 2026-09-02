@@ -332,9 +332,9 @@ class Leg:
     convenience bought with accuracy, which is the trade this repo does not make.
 
     EVERY LEG IS STILL ONE RUN OVER ONE BOX. Nothing downstream learns a new shape: a run
-    directory, its manifest scope, `join`, `emit`, `reconcile`, the queue it writes and the
-    `--bypass` decision taken over it are all exactly what they were. What is new is that one
-    press can start several, which is a fact about the REQUEST and not about a run.
+    directory, its manifest scope, `join`, `emit`, `reconcile` and the queue it writes are
+    all exactly what they were. What is new is that one press can start several, which is a
+    fact about the REQUEST and not about a run.
     """
 
     directory: Path
@@ -1357,8 +1357,6 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "collected": bool(manifest.get("collected")),
         "joined": bool(manifest.get("joined")),
         "counts": manifest.get("counts") or {},
-        "bypass_detection": bool(manifest.get("bypass_detection")),
-        "bypassed": manifest.get("bypassed"),
         "usage": manifest.get("usage") or {},
     }
 
@@ -1715,8 +1713,8 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
 
     THE WORKLIST SPANS RUNS; THE ANSWER FILE DOES NOT. That is D48's own resolution applied
     one register over: there, a send is a cart of boxes and a run is still one box, because a
-    run carries a reading, a `--bypass` ruling and a `decisions.json` that are all properties
-    of what is in the drawer. Every word of that stays true. What this route adds is a VIEW
+    run carries a reading and a `decisions.json` that are both properties of what is in the
+    drawer. Every word of that stays true. What this route adds is a VIEW
     across them, and the write path is untouched — `PUT /pipeline/runs/<name>/decisions` is
     still per run, and one answer to a merged row is one PUT per run holding that SKU.
 
@@ -3400,8 +3398,6 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         argv += _pricing_flags(payload)
         if payload.get("dry_run"):
             argv.append("--dry-run")
-        if payload.get("bypass"):
-            argv.append("--bypass")
     elif step == "emit":
         argv += _exports_for_join(directory, payload)
         argv += _pricing_flags(payload)

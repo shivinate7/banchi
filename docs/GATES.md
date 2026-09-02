@@ -185,7 +185,7 @@ it by refusing to write while any unmatched card has not been routed.
 
 For a card with normal, holo, and reverse rows in the fixture, assert each ladder stage
 resolves to the correct condition string and price: metadata-driven, catalog-forced,
-detection-driven, and the disagreement → review path.
+detection-driven, and the claim-decides path.
 
 Also the routing table (batch script v2 §5.4) — which queue a card lands in, since that is
 the other thing that decides whether a resolved card is listed:
@@ -198,8 +198,8 @@ the other thing that decides whether a resolved card is listed:
   swept into the sub-threshold flat price
 - `--review-below-confidence=none` restores "confidence never routes on its own"
 
-- **Pass**: all four stages correct, review fires on metadata/detection disagreement, and
-  every routing row sends the card to the queue named
+- **Pass**: all four stages correct, a finish claim is never contradicted by the photograph,
+  and every routing row sends the card to the queue named
 
 **The ladder's vocabulary became PER GAME on 2026-08-23, and this test caught nothing about
 it because nothing had asked.** `variant.resolve` checked every game's finish against

@@ -625,10 +625,13 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-fourteen strings — seven from the variant ladder in `pipeline/variant.py`
-(`no_catalog_row`, `metadata_not_stocked`, `metadata_detection_disagreement`,
-`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and seven from
+thirteen strings — six from the variant ladder in `pipeline/variant.py`
+(`no_catalog_row`, `metadata_not_stocked`, `detected_finish_not_stocked`,
+`ambiguous_no_signal`, `duplicate_condition`, and D23's `rarity_claim_mismatch`, the stack
+claim contradicting every candidate row) — a seventh, `metadata_detection_disagreement`, was
+retired 2026-09-02 when D3 stopped letting the photograph contradict a finish claim, and the
+screen keeps a label for it under `RETIRED_REASON_LABELS` because the owner's store still
+holds 16 answered events that carry it — and seven from
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
 `set_ambiguous`, `card_not_detected`, `no_market_data`, and D35's
 `number_unread_name_matched` — the only reason the JOIN writes over a successful ladder

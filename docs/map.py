@@ -330,8 +330,8 @@ COMPONENTS = [
                                     "argument parsing and the printed report here are not.",
                             "governed_by": ["D14", "D21", "D24"]},
             "cmd_identify.py": {"does": "submit, wait, collect, cache. The one that costs money.", "governed_by": ["D1", "D2", "D21", "D23"]},
-            "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews, "
-                                    "--bypass trusts the finish claim. SEEDS decisions.json on the "
+            "cmd_join.py": {"does": "resolve identifications against the export; --dry-run previews. "
+                                    "SEEDS decisions.json on the "
                                     "first join and never touches its rule again (D49) — the two "
                                     "lines that did ran under the sentence promising your edits "
                                     "were kept.",
@@ -3067,7 +3067,7 @@ COMPONENTS = [
                                          "operator can answer.",
                                  # D1 is why one step spawns and three answer in the request. D9 is
                                  # the decisions document this panel edits as text rather than as a
-                                 # form. D3 is the finish-claim bypass its join control offers. D31
+                                 # form. D3 is the ladder the join walks. D31
                                  # is why it WAS a panel on #/inventory rather than a route; D39 is
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
@@ -3385,8 +3385,8 @@ COMPONENTS = [
                         "one of these routes costs money. D64's fetch is covered the same "
                         "way and for the same reason: the case that matters is the ABSENCE of "
                         "the acknowledging control for a refusal an operator cannot answer.",
-                # D1 is the two-phase split the four steps make visible; D3 is the finish-claim
-                # bypass the join control offers; D9 is the pricing answer that gates emit;
+                # D1 is the two-phase split the four steps make visible; D3 is the ladder the
+                # join walks; D9 is the pricing answer that gates emit;
                 # D31 is why this is a panel on #/inventory rather than a seventh route.
                 "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D39", "D48", "D54", "D56", "D64", "D65", "D49", "D76"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "

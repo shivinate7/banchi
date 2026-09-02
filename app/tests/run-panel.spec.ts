@@ -135,8 +135,6 @@ function runRow(overrides: Record<string, unknown> = {}) {
     collected: true,
     joined: false,
     counts: {},
-    bypass_detection: false,
-    bypassed: null,
     usage: {},
     ...overrides,
   }
@@ -655,8 +653,8 @@ test('the reading is explained before Check cost is pressed, not after', async (
   const says = page.locator('.run-step .run-step-fine').first()
   await expect(says).toContainText('Finds the card in each photograph')
   await expect(says).toContainText('never touched')
-  /* The measurement, in the house voice this class already uses one step down — the bypass
-     switch's sentence cites box 2's 230 of 544 rather than asserting a rule. */
+  /* The measurement, in the house voice: a number the rig produced rather than a rule
+     asserted about it. */
   await expect(says).toContainText('$0.62')
 })
 
@@ -963,24 +961,23 @@ test('a live run over the same cards blocks the confirm rather than racing it', 
 
 // ------------------------------------------------------------------------- the free steps
 
-test('join offers a preview that writes nothing, and the trust switch in plain English', async ({
-  page,
-}) => {
+test('join offers a preview that writes nothing', async ({ page }) => {
   const wire = await open(page)
   await openPanel(page)
   await page.locator('.run-row').first().click()
 
-  /* D3's amendment, stated the way the owner asked for it — they said the question had not
-     been put in plain English, and this is the sentence that answers it. */
-  const trust = page.getByRole('checkbox', { name: 'Trust my finish claim over the photo' })
-  await expect(trust).toBeVisible()
-  await trust.check()
+  /* THE TRUST SWITCH IS GONE, ASSERTED AS AN ABSENCE. "Trust my finish claim over the photo"
+     was a checkbox here until D3's amendment of 2026-09-02 made its rule the ladder's own;
+     a body carrying `bypass` again would mean the choice had come back. */
+  await expect(
+    page.getByRole('checkbox', { name: 'Trust my finish claim over the photo' }),
+  ).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Preview' }).click()
   const join = wire.find((row) => row.path.endsWith('/join'))
   const body = join?.body as Record<string, unknown>
   expect(body.dry_run).toBe(true)
-  expect(body.bypass).toBe(true)
+  expect(body.bypass).toBeUndefined()
 })
 
 test('this run\'s own receipts download here; the import CSVs do not', async ({ page }) => {
@@ -1003,17 +1000,6 @@ test('this run\'s own receipts download here; the import CSVs do not', async ({ 
      not quietly undo — which is what an absence is for, and why this is not a weakening of
      the case it replaces. */
   await expect(page.locator('.run-file-import')).toHaveCount(0)
-})
-
-test('a bypassed run says so on the run itself, not only in its log', async ({ page }) => {
-  await open(page, { detail: { bypass_detection: true, bypassed: 209 } })
-  await openPanel(page)
-  await page.locator('.run-row').first().click()
-  await expect(page.locator('.run-open')).toBeVisible()
-
-  /* The owner's choice, in their words: "resolved by the claim, and the run report says so."
-     A count that appeared only in a file nobody opened would not be that. */
-  await expect(page.locator('.run-flagged')).toContainText('209 cards resolved by your finish claim')
 })
 
 // ------------------------------------------------------------- which drawer a run was over
