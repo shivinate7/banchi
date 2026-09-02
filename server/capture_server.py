@@ -8750,6 +8750,24 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_tcg_sets(wanted[0])
                 )
+            if path == "/pipeline/pricing":
+                # THE CROSS-RUN WORKLIST (D86). A read, free, and it presses nothing — the
+                # per-run route one block down is what it delegates each leg to.
+                #
+                # `run` REPEATS rather than carrying a comma list, which is `_RUN_TRENDS_RE`'s
+                # rule two routes down and `_RUN_SCOPE_RE`'s beside it, for their reason: a
+                # comma inside a value is indistinguishable from the separator. With none, the
+                # handler chooses every run that still has pricing work in it, which is the
+                # state this screen opens in.
+                #
+                # A STATIC PATH AND THEREFORE NO REGEX, and it is declared ABOVE
+                # `/pipeline/runs` for the reader rather than for the matcher: the two are
+                # different literals and neither can swallow the other, but the pricing
+                # worklist is the broader question and reads first.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("run") or []
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_worklist(asked)
+                )
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
             match = _RUN_FILE_RE.match(path)

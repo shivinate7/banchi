@@ -158,11 +158,17 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * `--self-test` until somebody updates this record, which is a deliberate act with a diff. The
  * ordinary run prints the counts in its summary line instead, so drift is visible without being
  * fatal. */
+/* FIVE NAMES ARRIVED IN ONE UPDATE ON 2026-09-01, AND FOUR OF THEM WERE ALREADY OVERDUE.
+ * `getPriceTrends` (D79), `getExportScope` (D76), `moveCard` and `moveCards` (D83) all landed
+ * before `getPricingWorklist` (D86) and none of them updated this record, so the ordinary run
+ * had been printing "classification has moved since it was recorded" for days with nobody
+ * acting on it. That is exactly the drift the comment above predicts and the reason the record
+ * is not on the audit path — it is meant to be updated by a deliberate act, and this is one. */
 const RECORDED = {
   reads: [
     'getStatus', 'getInventory', 'getQueues', 'reviewCatalog', 'search', 'getGames', 'getBoxes',
     'getBoxListings', 'getPricing', 'getPriceHistory', 'getRuns', 'getRun', 'getTcgSets',
-    'getOrders',
+    'getOrders', 'getPriceTrends', 'getExportScope', 'getPricingWorklist',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
@@ -170,6 +176,7 @@ const RECORDED = {
     'undoRetire', 'createBox', 'updateBox', 'openSection', 'applyBoxClaims', 'removeCardInPlace',
     'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep', 'putDecisions',
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
+    'moveCard', 'moveCards',
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders'],
   nonRequests: [
@@ -862,26 +869,62 @@ function recognisers(screens) {
       const sent = new Set(
         ctx.site.node.arguments.map(rootIdentifier).filter((name) => name !== null),
       )
+      /* THE SENT DOCUMENT REACHES THE REF EITHER WHOLE OR KEYED, AND BOTH ARE THE SAME
+       * MECHANISM. One screen holding one document assigns `ref.current = sent`. `Pricing.tsx`
+       * has held one document PER RUN since D86 — the worklist merges the view and never the
+       * file — so it folds the same value into a map: `ref.current = { ...ref.current, [run]:
+       * sent }`. The evidence this recogniser wants is unchanged: the exact object that was
+       * sent is what the ref ends up holding, and the ref is compared with `===`.
+       *
+       * DELIBERATELY NOT "ANY ASSIGNMENT TO `.current`". The spread of the ref's own current
+       * value and a property whose value IS the sent identifier are both required, so a screen
+       * that assigned something else — a fresh object, a server echo, a boolean — is still a
+       * finding. Loosening this to any right-hand side would retire the check rather than
+       * extend it, which is the one thing a guard must never do to get a commit through. */
+      const foldsSent = (right) => {
+        if (ts.isIdentifier(right)) return sent.has(right.text)
+        if (!ts.isObjectLiteralExpression(right)) return false
+        const spreadsSelf = right.properties.some(
+          (prop) =>
+            ts.isSpreadAssignment(prop) &&
+            ts.isPropertyAccessExpression(prop.expression) &&
+            prop.expression.name.text === 'current',
+        )
+        const carriesSent = right.properties.some(
+          (prop) =>
+            ts.isPropertyAssignment(prop) &&
+            ts.isIdentifier(prop.initializer) &&
+            sent.has(prop.initializer.text),
+        )
+        return spreadsSelf && carriesSent
+      }
       for (const node of ctx.scope.nodes) {
         const assignments = collect(node, (n) =>
           ts.isBinaryExpression(n) &&
           n.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
           ts.isPropertyAccessExpression(n.left) &&
           n.left.name.text === 'current' &&
-          ts.isIdentifier(n.right) &&
-          sent.has(n.right.text))
+          foldsSent(n.right))
         for (const assignment of assignments) {
           const ref = rootIdentifier(assignment.left)
+          /* THE COMPARISON READS THE REF WHOLE OR BY KEY, matching the two shapes the fold
+           * above accepts: `doc !== ref.current` for one document, and `docs[run] !==
+           * ref.current[run]` for one per run. Both are the same claim — staleness is a
+           * comparison against what the server confirmed, not a fetch — and a screen that
+           * stored into the ref and never compared it is still a finding either way. */
+          const readsRef = (side) => {
+            const target = ts.isElementAccessExpression(side) ? side.expression : side
+            return (
+              ts.isPropertyAccessExpression(target) &&
+              target.name.text === 'current' &&
+              rootIdentifier(target) === ref
+            )
+          }
           const compared = collect(ctx.screen.src, (n) =>
             ts.isBinaryExpression(n) &&
             (n.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
               n.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken) &&
-            [n.left, n.right].some(
-              (side) =>
-                ts.isPropertyAccessExpression(side) &&
-                side.name.text === 'current' &&
-                rootIdentifier(side) === ref,
-            ))
+            [n.left, n.right].some(readsRef))
           if (compared.length > 0) return `against ${ref}.current`
         }
       }

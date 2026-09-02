@@ -39,6 +39,7 @@ import type {
   RunDetail,
   PriceHistoryPayload,
   PricingPayload,
+  PricingWorklist,
   RunLeg,
   RunPreflight,
   RunStarted,
@@ -1709,6 +1710,29 @@ export async function getPricing(name: string): Promise<PricingPayload> {
     `/pipeline/runs/${encodeURIComponent(name)}/pricing`,
     NO_CACHE,
   )) as PricingPayload
+}
+
+/**
+ * The cross-run pricing worklist — one list of cards over several runs (D86).
+ *
+ * WITH NO ARGUMENT IT ASKS FOR THE WORK, NOT FOR EVERYTHING. The server picks every run that
+ * still has pricing in it: joined and never emitted, or emitted and still blocking `emit`.
+ * That is the state `#/pricing` opens in, and it is why the screen needs no scope on arrival.
+ *
+ * `run` REPEATS rather than carrying a comma list, matching `getPriceTrends` above and
+ * `/scope` beside it, for their reason: a comma inside a value is indistinguishable from the
+ * separator. A named run is drawn whether or not the server would have chosen it — asking for
+ * one has already answered the question the filter exists to ask.
+ *
+ * IT IS A READ AND IT SPENDS NOTHING. The write path is unchanged and still per run:
+ * `putDecisions` below, once per run holding the SKU being answered.
+ */
+export async function getPricingWorklist(runs: readonly string[] = []): Promise<PricingWorklist> {
+  const query = runs.map((run) => `run=${encodeURIComponent(run)}`).join('&')
+  return (await request(
+    `/pipeline/pricing${query === '' ? '' : `?${query}`}`,
+    NO_CACHE,
+  )) as PricingWorklist
 }
 
 /**

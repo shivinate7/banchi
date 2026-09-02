@@ -4637,3 +4637,64 @@ for the panels and the bar and nothing else, and the answer would not be another
 would be moving one of them to a corner it can have alone.
 
 [#95]: https://github.com/shivinate7/pkmnscan/pull/95
+
+---
+
+## D86 — The pricing worklist spans runs; the answer file does not
+
+**`#/pricing` opens on every run that still has pricing in it, merges the same SKU across them into one row, and writes one answer into every run's own `decisions.json`.** Built 2026-09-01 on the owner's instruction: *"if I capture from multiple boxes, they ought to be processed in pricing at the same time"*, with the general form beside it — *"items that aren't processed ought to have the functionality of being processed all at once"* — and the boundary they set on it, that pricing by box is good too and must not be lost.
+
+**This is D48's own resolution one register over, and it overturns nothing.** That entry ruled a send is a cart of boxes and a run is still one box, because *"a run carries a reading, a `--bypass` ruling and a `decisions.json`, and all three are properties of what is IN the drawer"*. Every word stays true. The **view** merges; the **file** does not. One answer to a merged row is one `PUT /pipeline/runs/<name>/decisions` per run holding that SKU, the route is untouched, and nothing downstream learns a new shape — the property D48 spends its length protecting.
+
+**Nothing in D49 argued for the single-select this replaces.** That entry defends where the run comes from — *"a picker here cannot disagree with anything"*, because `GET /pipeline/runs` is the single source — and says nothing about how many may be picked. A set over that same single source has the identical property. D39's one-mass-select rule is about **cards** and is untouched; `#/inventory` still owns the only one. `useState<string | null>` was the cheapest thing to write on 2026-08-30 and no entry defended it.
+
+### What it costs today, measured rather than argued
+
+Across the eight runs in `runs/` on 2026-09-01, **78 of 423 SKUs sit in more than one run** and **8 carry an answer in more than one**. Three of those eight are a `withheld` hold answered with a price in a later sitting:
+
+| SKU | Card | Earlier run | Later run |
+|---|---|---|---|
+| 9191210 | LeBlanc, Everywhere At Once | box3 08-31 `{withheld: bullish, watch_above: "5"}` | box4 09-01 **`"3.45"`** |
+| 9405228 | Death Mark | box3 08-31 `{withheld: bullish}` | box3 09-01 `"2.29"` |
+| 9422429 | Public Execution | box3 08-31 `{withheld: bullish}` | box3 09-01 `"2.29"` |
+
+LeBlanc was held bullish above $5 out of one drawer and listed at $3.45 out of another the next day, below the operator's own watch. That row drew as an ordinary listable one — `at_cap: false`, `nothing_to_add: null`, no note anywhere — because a hold lives in its run and dies with it (D49) and no screen had ever read two runs at once.
+
+**D49's stated reopening measurement was the other direction and has never fired.** It watched for *"the same SKU withheld in two runs over one box"*; that count is zero. It is the asymmetric case that bites, and **this entry replaces the measurement rather than repealing it**: what to watch is a hold in one run answered with a price in another.
+
+**Four of the eight pairs were not disagreements at all** — `0.5` against `.5`, the same figure typed with and without its leading zero. `_same_price` compares as `Decimal`, so the flag means something when it fires.
+
+### The cap is D59's defect one register up
+
+`pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` **per run** against a cap that is **global**, so runs joined before either emitted each spend the same room. The 2026-09-01 cart joined boxes 3, 4 and 5 in the same second; five SKUs' per-run claims sum past four, and two reached `pushed: 6` in `inventory/inventory.json` against `LIVE_QUANTITY_CAP = 4`:
+
+    Void Assault (9197754):  pushed: 6, live: 1
+    Deathgrip    (9038187):  pushed: 6, live: 1
+
+D59 fixed per-**box** capping inside one join and this survived per-**run** across joins that never saw each other. `GET /pipeline/pricing` computes the figure once — `min(claimed, cap - copies_out, copies)` — and reports `claimed_add` beside it so the row says the runs disagree with it. **It corrects nothing on disk**: this route writes no import file, and the emitter is where the arithmetic has to change.
+
+**`copies` is the distinct positions and not the sum.** Box 3 has been joined three times, so summing each run's count made Void Assault twelve copies of a card there are seven of.
+
+### What the picker became
+
+**A filter over the list rather than a gate in front of it**, and it draws a **remainder**. `counts.skus` is the size of a job and never the job — box 2's 109 SKUs are one `floor` press and box 3's 199 are 117 real decisions. `counts.sub_threshold` and `counts.no_market_data` had ridden every poll since the manifest gained them and were read by nothing; the roster asks `Decisions.blocking`, the Python that actually refuses an emit, so the chip cannot claim a refusal Python does not make (D49's rule over `readiness.ts`, applied to the server).
+
+**The terminal state D49 predicted and the screen never got.** That entry read the history and said the honest reading was *"a screen whose job is to report there is nothing to do"*. It could never say it: the only empty state fired when NO run had ever been joined, so eight fully-answered runs drew eight chips and cost ~909KB and sixteen round trips to discover they owed nothing.
+
+**Boxes ascending inside a sitting.** `GET /pipeline/runs` sorts by directory name reversed, so within one day the picker drew box 5, box 4, box 3 — backwards against the rule `Runs.tsx` states for the same choice, *"the order they sit on a shelf"*. Two screens ordering the same drawers two ways is drift; it is pinned now because it is otherwise invisible.
+
+### Three defects found on the way, two of them live before this entry
+
+- **`inFlight` became a `Set` and an empty `Set` is truthy.** The emit guard read `if (dirty || saving || inFlight.current) return`, written against a boolean, and so became *always return* — the press silently did nothing. Caught by four cases already in `app/tests/pricing.spec.ts`.
+- **The hash was read in an effect, so mount fired two loads.** Whichever landed last won `docs`, but `savedDocs` is a ref written outside React's batching, so a render could see the first load's documents against the second's saved marker: `dirty` went true with nothing typed and the screen PUT a document the operator never touched — **the one write D49 calls the load-bearing absence of the whole screen**. The hash is now read in the `useState` initialiser and a generation guard drops a stale response.
+- **`unsaved` must not be memoised.** `savedDocs` is a ref, so a `useMemo` keyed on `[loaded, docs]` never recomputes when a write *lands*; the save loop oscillated unsaved → saving… → unsaved forever.
+
+### What is NOT built, named rather than left to be discovered
+
+**The merged emit is not built.** The owner asked for one CSV — across runs, across the listed/sub-threshold split, and across games, with a checkbox to peel off just the above-threshold rows. It is a real change to `pipeline/join.py`, `cli/resolve.py` and `cli/cmd_emit.py`, because **a merged file cannot be a concatenation of the CSVs already on disk**: the cap has to be recomputed across the union or it writes the over-push above into a file. Until it lands, `emit` stays per run and the press is **absent** on a worklist of more than one — absent rather than disabled, which is D33's rule for the control that spends applied to the one that writes files.
+
+**Whether TCGplayer's Import to Staged accepts a file spanning two `Product Line`s is still unknown.** `cli/runs.py:import_listed_name` has said so since it was written and `fixtures/staged-import-accepted.csv` proves it for one line only. The owner has said they will test it. Nothing here depends on the answer.
+
+**The two already-over-pushed SKUs are not corrected.** Fixing the arithmetic does not un-list what TCGplayer already holds; that is the owner's to reconcile.
+
+**What would reopen this: a worklist that is never used with more than one run.** The whole cost of this entry is the merge and the per-run write fan-out; if every sitting is one box forever, the honest simplification is the single-select again. The measurement is whether any `GET /pipeline/pricing` is answered with more than one run in it.

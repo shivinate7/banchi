@@ -98,9 +98,11 @@ import shutil
 import subprocess
 import sys
 import time
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
@@ -110,7 +112,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
-from pipeline import games as game_registry, join, tcgcsv  # noqa: E402
+from pipeline import decisions, games as game_registry, join, tcgcsv  # noqa: E402
 from server import tcg_export  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
 # reaches `json`, `time`, `urllib`, `dataclasses`, `datetime`, `decimal` and `pathlib`
@@ -1609,6 +1611,401 @@ def do_pipeline_pricing(name: str) -> dict:
         # from the bytes it describes. What it does not survive is the run directory being
         # copied, which resets it; nothing in this repo copies one.
         "written_at": int(table.stat().st_mtime),
+    }
+
+
+# ----------------------------------------------------------- the cross-run worklist (D86)
+
+
+def _run_is_open(manifest: dict, pricing: dict, answers: Optional[dict]) -> bool:
+    """Whether this run still has pricing work in it — the default worklist's filter.
+
+    TWO WAYS TO BE OPEN AND THE FIRST IS THE COMMON ONE. A joined run that has never emitted
+    is work by definition: nothing has been shipped out of it. A run that HAS emitted is open
+    only while `emit` would still refuse it, which is `Decisions.blocking` and nothing else —
+    the same question `app/src/readiness.ts:owed` asks the other side of the wire, asked here
+    against the Python that actually refuses rather than against a third implementation of it.
+
+    A MALFORMED ANSWERS FILE READS AS OPEN. `do_pipeline_pricing` already rules that an
+    unreadable `decisions.json` must not stop a screen drawing — the operator has to be able
+    to SEE the file that is wrong. The same argument decides this: a run whose answers cannot
+    be parsed is exactly the run somebody needs to open.
+    """
+    return bool(_run_owes(manifest, pricing, answers))
+
+
+def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:
+    """Why this run still has pricing work in it, in the words `emit` would refuse it with.
+
+    THE PICKER DRAWS A REMAINDER RATHER THAN A TOTAL BECAUSE OF THIS FUNCTION. Every chip used
+    to carry `counts.skus`, which is the SIZE of the job and never the job — box 2 at 109 SKUs
+    is one `floor` press and box 3 at 199 is 117 real decisions. `counts.sub_threshold` and
+    `counts.no_market_data` have ridden every poll since the manifest gained them and are read
+    by nothing; they are the DENOMINATOR, and what a person wants is what is left.
+
+    IT ASKS THE PYTHON THAT ACTUALLY REFUSES. `Decisions.blocking` is the one authority on
+    what stops an `emit`; `app/src/readiness.ts` already mirrors it for the open screen and is
+    audited against it, and a third implementation here to answer the same question would be
+    the drift that audit exists to catch.
+    """
+    if not manifest.get("joined"):
+        return []
+    try:
+        answered = decisions.Decisions.parse(answers or {})
+    except decisions.MalformedDecisions:
+        return ["answers file cannot be read"]
+    below = [
+        row.get("sku")
+        for row in pricing.get("skus") or []
+        if row.get("bucket") == "sub_threshold"
+    ]
+    owes = list(answered.blocking(below))
+    if not manifest.get("emitted"):
+        # NEVER EMITTED IS WORK, AND IT IS THE COMMON CASE. Nothing has been shipped out of
+        # this run, so it is open whatever its answers say — but it is listed AFTER the
+        # blocking reasons, because a refusal names something to fix and this names something
+        # to press.
+        owes.append("never emitted")
+    return owes
+
+
+def _answer_for(answers: Optional[dict], sku: str) -> Optional[object]:
+    """This run's raw answer for one SKU, or None where it has not been answered.
+
+    RAW AND UNPARSED, DELIBERATELY. `Decisions.parse` normalises a hold into a `Withheld` and
+    a price into a `Decimal`, and both are the wrong shape for a screen that has to draw what
+    is IN the file — D49 spends a line of chrome on `withheld: <reason>` precisely so it can
+    be grepped from the screen into `decisions.json`. Two runs whose answers differ only in
+    spelling (`0.5` against `.5`) are not in conflict and this is what lets `_conflict` say so.
+    """
+    for table in ("overrides", "no_market_data"):
+        held = (answers or {}).get(table) or {}
+        if sku in held and held[sku] is not None:
+            return held[sku]
+    return None
+
+
+def _is_hold(answer: object) -> bool:
+    """Whether an answer is a hold rather than a price — D49's two shapes, read loosely.
+
+    A dict is a hold with a reason; the bare string `unlisted` is a hold without one, which is
+    the spelling a terminal user types and the one `no_market_data` has accepted since D9.
+    """
+    if isinstance(answer, dict):
+        return True
+    return str(answer).strip().lower() == "unlisted"
+
+
+def _same_price(left: object, right: object) -> bool:
+    """Whether two price answers are the same money written two ways.
+
+    `0.5` AND `.5` ARE ONE ANSWER AND MUST NOT BE REPORTED AS A DISAGREEMENT. Four of the
+    eight cross-run pairs measured on 2026-09-01 were exactly this — the same figure typed
+    with and without its leading zero, in two sittings. A screen that flagged them would
+    spend the operator's attention on nothing and teach them to ignore the flag that matters.
+    Compared as `Decimal` through `str` because that is how `pipeline/decisions.py:_price`
+    reads both, so this cannot disagree with what `emit` will do with them.
+    """
+    try:
+        return Decimal(str(left).strip()) == Decimal(str(right).strip())
+    except (ArithmeticError, ValueError):
+        return str(left).strip() == str(right).strip()
+
+
+def _conflict(answered: Dict[str, object]) -> Optional[dict]:
+    """What two runs disagree about for one SKU, or None where they do not.
+
+    THIS IS THE WHOLE REASON THE WORKLIST IS WORTH BUILDING, and it is a measurement rather
+    than a guess. Across the eight runs on disk on 2026-09-01, 66 SKUs carried an answer, 8
+    of them in more than one run, and THREE were a `withheld` hold answered with a price in a
+    later run — SKU 9191210 (LeBlanc, Everywhere At Once) held `bullish` with `watch_above`
+    $5 in box 3 on 08-31, then listed at $3.45 out of box 4 on 09-01. That row drew as an
+    ordinary listable one: `at_cap: false`, `nothing_to_add: null`, no note anywhere. Nothing
+    on the screen could have said otherwise, because a hold lives in its run and dies with it
+    (D49) and no screen had ever read two runs at once.
+
+    `hold_overridden` RANKS ABOVE `price` BECAUSE ONE OF THEM COSTS MONEY. Two prices that
+    differ by a cent is an inconsistency; a hold answered with a price is the operator's own
+    deliberate decision reversed by a later sitting that could not see it. Where a SKU is both
+    — held in one run, and priced differently in two others — the hold is what gets reported.
+
+    D49's OWN REOPENING MEASUREMENT WAS THE OTHER DIRECTION AND FOUND NOTHING. It watched for
+    "the same SKU withheld in two runs over one box", which has never happened. It is the
+    asymmetric case that fires, and D86 replaces the measurement rather than repealing it.
+    """
+    if len(answered) < 2:
+        return None
+    holds = {run: value for run, value in answered.items() if _is_hold(value)}
+    prices = {run: value for run, value in answered.items() if not _is_hold(value)}
+    if holds and prices:
+        return {
+            "kind": "hold_overridden",
+            "held_by": sorted(holds),
+            "priced_by": sorted(prices),
+            "answers": dict(answered),
+        }
+    if not holds:
+        first = next(iter(prices.values()))
+        if all(_same_price(first, value) for value in prices.values()):
+            return None
+        return {
+            "kind": "price",
+            "held_by": [],
+            "priced_by": sorted(prices),
+            "answers": dict(answered),
+        }
+    return None
+
+
+def _pricing_constant(chosen: Sequence[str], field: str) -> Optional[str]:
+    """One run-wide figure off the newest readable table — `threshold` or `floor`.
+
+    NEWEST FIRST AND THE FIRST ANSWER WINS, because these are `pipeline/pricing.py` constants
+    rather than per-run choices: every table on this machine carries the same pair, and the
+    newest is simply the one most likely to still be right if that ever stops being true. A
+    run whose table cannot be read is skipped rather than answered `None`, which would blank
+    a figure on the screen because of a file nobody was looking at.
+    """
+    root = files.runs_dir()
+    for name in reversed(list(chosen)):
+        table = root / name / run_files.PRICING
+        if not table.is_file():
+            continue
+        try:
+            value = json.loads(table.read_text("utf-8")).get(field)
+        except (OSError, ValueError):
+            continue
+        if value is not None:
+            return str(value)
+    return None
+
+
+def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
+    """`GET /pipeline/pricing` — one pricing worklist over several runs (D86).
+
+    THE WORKLIST SPANS RUNS; THE ANSWER FILE DOES NOT. That is D48's own resolution applied
+    one register over: there, a send is a cart of boxes and a run is still one box, because a
+    run carries a reading, a `--bypass` ruling and a `decisions.json` that are all properties
+    of what is in the drawer. Every word of that stays true. What this route adds is a VIEW
+    across them, and the write path is untouched — `PUT /pipeline/runs/<name>/decisions` is
+    still per run, and one answer to a merged row is one PUT per run holding that SKU.
+
+    WHY A ROUTE RATHER THAN N FETCHES FROM THE CLIENT. Two reasons and the second is the one
+    that matters. The default landing is every open run, which on this machine is eight tables
+    totalling ~909KB — eight round trips before a screen draws. And two tables fetched either
+    side of a `join` describe different worlds: `do_pipeline_pricing` already spends a
+    paragraph on why its own two files are read together, and a client-side union would
+    reintroduce exactly that straddle between runs instead of within one.
+
+    `?run=` REPEATS RATHER THAN CARRYING A COMMA LIST — `/trends` and `/scope`'s rule, for
+    their reason: a comma inside a value is indistinguishable from the separator. With none,
+    the handler picks every OPEN run itself; see `_run_is_open`. An explicitly named run is
+    taken whether or not it is open, because a screen asking for a specific run has already
+    answered the question this filter exists to answer.
+
+    IT IS A READ AND IT PRESSES NOTHING. No child, no socket, no write — the same posture as
+    `do_pipeline_pricing`, which this delegates the per-run half of the work to rather than
+    re-implementing. A run that refuses (never joined, unreadable table) is REPORTED in
+    `skipped` and does not take the others down with it: an operator whose eight-run worklist
+    would not draw because one directory is half-written is worse off than one who is told
+    which directory that is.
+    """
+    root = files.runs_dir()
+    if not root.is_dir():
+        return {
+            "runs": [],
+            "skus": [],
+            "decisions": {},
+            "defaults": {},
+            "roster": [],
+            "skipped": [],
+            "asked": list(wanted),
+            "remembered_sub_threshold": None,
+            "live_cap": join.LIVE_QUANTITY_CAP,
+            "threshold": None,
+            "floor": None,
+        }
+
+    names = _box_names()
+    asked = [str(name) for name in wanted if str(name).strip()]
+
+    # EVERY JOINED RUN AND WHAT IT STILL OWES — the picker's own list, and deliberately not
+    # the worklist's. The picker has to draw runs that are NOT loaded (that is what makes it a
+    # picker), and it has to say which of them are worth loading. One pass, reusing the reads
+    # the chooser below needs anyway.
+    roster: List[dict] = []
+    owed_by_run: Dict[str, List[str]] = {}
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir() or not (entry / run_files.MANIFEST).is_file():
+            continue
+        manifest = _manifest(entry)
+        if not manifest.get("joined"):
+            continue
+        table = entry / run_files.PRICING
+        parsed: dict = {}
+        answers: Optional[dict] = None
+        try:
+            if table.is_file():
+                parsed = json.loads(table.read_text("utf-8"))
+            answers_path = entry / run_files.DECISIONS
+            if answers_path.is_file():
+                answers = json.loads(answers_path.read_text("utf-8"))
+        except (OSError, ValueError):
+            owed_by_run[entry.name] = ["run files cannot be read"]
+            roster.append(
+                {**_summary(entry, names), "owes": owed_by_run[entry.name], "open": True}
+            )
+            continue
+        owes = _run_owes(manifest, parsed, answers)
+        owed_by_run[entry.name] = owes
+        roster.append({**_summary(entry, names), "owes": owes, "open": bool(owes)})
+    # AN EXPLICIT ASK WINS OVER THE FILTER, whether or not the run is open: naming a run has
+    # already answered the question `open` exists to ask, and an answered run has to stay
+    # openable — that is how a price gets looked at again.
+    chosen = asked or [row["run"] for row in roster if row["open"]]
+
+    summaries: List[dict] = []
+    answers_by_run: Dict[str, Optional[dict]] = {}
+    defaults: Dict[str, dict] = {}
+    written_at: Dict[str, int] = {}
+    skipped: List[dict] = []
+    # sku -> merged row. An `OrderedDict` because the ORDER IS THE HIERARCHY on this screen
+    # (D78) and the first run to mention a SKU is what seeds its place; the sort that decides
+    # the final order is the client's, over the same fields it already sorts one run by.
+    merged: Dict[str, dict] = OrderedDict()
+
+    for name in chosen:
+        try:
+            payload = do_pipeline_pricing(name)
+        except PipelineRefusal as exc:
+            skipped.append({"run": name, "code": exc.code, "message": str(exc)})
+            continue
+        directory = _open_run(name)
+        summaries.append(_summary(directory, names))
+        answers = payload.get("decisions")
+        answers_by_run[name] = answers
+        defaults[name] = {
+            "rule": payload["pricing"].get("rule"),
+            "basis": payload["pricing"].get("basis"),
+        }
+        if payload.get("written_at") is not None:
+            written_at[name] = payload["written_at"]
+        for row in payload["pricing"].get("skus") or []:
+            sku = str(row.get("sku") or "")
+            if not sku:
+                continue
+            leg = dict(row)
+            leg["run"] = name
+            here = merged.get(sku)
+            if here is None:
+                # THE WHOLE ROW, NOT A CHOSEN SUBSET. A merged entry has to BE a `PricingSku`
+                # — `app/src/Pricing.tsx` draws sixteen export cells, a snap table, a presets
+                # map and a positions list off it, and a server that lifted "the fields the
+                # screen needs today" would be choosing what matters from the wrong file, the
+                # thing D49 wrote `row` verbatim to avoid. The aggregate fields below are the
+                # only ones that differ from a single run's, and each says why.
+                merged[sku] = dict(row)
+                merged[sku]["in"] = [leg]
+            else:
+                # NEWEST RUN WINS EVERY CARD FACT. `chosen` walks the runs directory in
+                # ascending name order and run names are date-prefixed, so the last leg
+                # appended is the newest — it read the newest export, and the bucket is
+                # decided by that export's Market cell alone (`pipeline/join.py:prices_for`).
+                # Taking the row and the bucket together keeps them one reading rather than
+                # two halves of different ones.
+                legs = here["in"] + [leg]
+                # POSITIONS CONCATENATE AND DEDUPE ON `(box, index)`, AND THE DEDUPE IS NOT
+                # DEFENSIVE — IT IS THE COUNT. Box 3 has been joined three times on this
+                # machine, so its cards appear in three runs; summing each run's `copies`
+                # made Void Assault twelve copies of a card there are seven of. The physical
+                # copies are the distinct positions and nothing else, which is also how
+                # `pipeline/join.py:uncommitted_positions` counts them.
+                seen = {(p.get("box"), p.get("index")) for p in here.get("positions") or []}
+                positions = list(here.get("positions") or [])
+                for place in row.get("positions") or []:
+                    if (place.get("box"), place.get("index")) not in seen:
+                        seen.add((place.get("box"), place.get("index")))
+                        positions.append(place)
+                merged[sku] = dict(row)
+                here = merged[sku]
+                here["in"] = legs
+                here["positions"] = positions
+                here["copies"] = len(positions)
+
+    for sku, row in merged.items():
+        answered: Dict[str, object] = OrderedDict()
+        for leg in row["in"]:
+            answer = _answer_for(answers_by_run.get(leg["run"]), sku)
+            leg["answer"] = answer
+            if answer is not None:
+                answered[leg["run"]] = answer
+        row["conflict"] = _conflict(answered)
+        # THE CAP, COMPUTED ONCE ACROSS THE RUNS THIS SCREEN IS SHOWING.
+        #
+        # `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a
+        # cap that is global, so two runs joined before either emitted each spend the same
+        # room. Measured on 2026-09-01: a cart joined boxes 3, 4 and 5 in the same second, five
+        # SKUs' per-run claims summed past four, and two of them went on to reach `pushed: 6`
+        # in the store against a cap of 4. That is D59's defect one register up — it fixed
+        # per-BOX capping inside one join, and this is per-RUN capping across joins that never
+        # saw each other.
+        #
+        # `claimed_add` IS WHAT THE RUNS SEPARATELY BELIEVE AND `add_to_quantity` IS WHAT CAN
+        # ACTUALLY GO. Drawing the sum would put "7" in the Qty column of a card four of which
+        # may be listed, which is the same false-sentence failure D59 named. `copies_out` comes
+        # off the NEWEST leg because it read the newest export; the two older `pricing.json`
+        # shapes on this machine predate that field, so `live_before` is the documented
+        # fallback and never a guess.
+        #
+        # REPORTED HERE, CORRECTED IN `emit`. This route writes nothing, so the honest thing it
+        # can do is show the true figure and flag that the runs disagree with it.
+        claimed = sum(leg.get("add_to_quantity") or 0 for leg in row["in"])
+        newest = row["in"][-1]
+        out_now = newest.get("copies_out")
+        if out_now is None:
+            out_now = newest.get("live_before") or 0
+        room = max(0, join.LIVE_QUANTITY_CAP - int(out_now))
+        row["claimed_add"] = claimed
+        row["add_to_quantity"] = min(claimed, room, len(row.get("positions") or []))
+        row["over_cap"] = claimed > row["add_to_quantity"]
+        # A MERGED ROW THAT CAN ADD MUST NOT CARRY ONE RUN'S REASON FOR ADDING NOTHING.
+        # `nothing_to_add` reads "every copy in this run is already listed or has left the
+        # box" — true of that leg, false of the merge the moment another leg can add.
+        if row["add_to_quantity"] > 0:
+            row["nothing_to_add"] = None
+            row["at_cap"] = False
+
+    return {
+        "runs": summaries,
+        "skus": list(merged.values()),
+        "decisions": answers_by_run,
+        # EACH RUN'S OWN `rule` AND `basis`, FOR SEEDING A DOCUMENT THAT DOES NOT EXIST YET.
+        # D54: a screen that seeded `{}` sent a document with no rule, and `Decisions.parse`
+        # then defaulted it to match/market while `cli/cmd_join.py` treats the FILE as
+        # authoritative — one keystroke from silently resetting a run joined at `markup:100`.
+        # PER RUN and never one seed for the worklist, which is D48: box 3 has been joined at
+        # `undercut:1` on `low` and at `match` on `market` on different days.
+        "defaults": defaults,
+        "written_at": written_at,
+        "roster": roster,
+        "skipped": skipped,
+        "asked": asked,
+        # THE TWO RUN-WIDE FIGURES A ROW IS DRAWN AGAINST, OFF THE NEWEST RUN DRAWN. The
+        # screen prints "Below $X" over the sub-threshold section and "At the $Y floor" on a
+        # button; both are `pipeline/pricing.py` constants that every run on this machine
+        # agrees about, and taking them off the newest table rather than restating them here
+        # keeps the one place they are decided the one place they are read.
+        "threshold": (
+            summaries and _pricing_constant(chosen, "threshold")
+        ) or None,
+        "floor": (summaries and _pricing_constant(chosen, "floor")) or None,
+        # ONE RUN'S REMEMBERED ANSWER IS STILL ONE RUN'S. Offered from the newest chosen run
+        # so the label means something on a worklist; D9 forbids defaulting it either way, and
+        # this stays a label rather than becoming a default here exactly as it is there.
+        "remembered_sub_threshold": (
+            _remembered_sub_threshold(_open_run(chosen[-1])) if chosen else None
+        ),
+        "live_cap": join.LIVE_QUANTITY_CAP,
     }
 
 

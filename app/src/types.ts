@@ -1614,6 +1614,81 @@ export type PricingPayload = {
   written_at?: number
 }
 
+/* ------------------------------------------------- the cross-run pricing worklist (D86) */
+
+/** One run's own row for a SKU the worklist merged — the whole `PricingSku` that run wrote,
+ *  plus which run it is and what that run's `decisions.json` answers for it.
+ *
+ *  THE ANSWER IS RAW AND UNPARSED, which is what lets the screen show a disagreement in the
+ *  spelling it is written in. `0.5` and `.5` are one answer and the server says so; `12.75`
+ *  and `13` are two, and the operator has to see both to pick one. */
+export type PricingLeg = PricingSku & {
+  run: string
+  answer: string | number | WithheldRecord | null
+}
+
+/** What two runs disagree about for one SKU.
+ *
+ *  `hold_overridden` RANKS ABOVE `price` BECAUSE ONE OF THEM COSTS MONEY. Two prices a cent
+ *  apart is an inconsistency; a hold answered with a price is the operator's own decision
+ *  reversed by a later sitting that could not see it. Measured on 2026-09-01: SKU 9191210 was
+ *  held `bullish` above $5 in box 3 and listed at $3.45 out of box 4. */
+export type PricingConflict = {
+  kind: 'hold_overridden' | 'price'
+  held_by: string[]
+  priced_by: string[]
+  answers: Record<string, string | number | WithheldRecord>
+}
+
+/** One card across every run in the worklist. A `PricingSku` in its own right — every field
+ *  is the NEWEST run's, so the screen draws one reading rather than halves of several — with
+ *  the physical copies unioned and three fields the merge adds. */
+export type MergedSku = PricingSku & {
+  /** Every run holding this SKU, oldest first. The write fans out over exactly this list. */
+  in: PricingLeg[]
+  conflict: PricingConflict | null
+  /** What the runs SEPARATELY believe they may add. `add_to_quantity` beside it is what can
+   *  actually go — `min(claimed, cap - copies_out, copies)`. They differ when runs joined
+   *  before either emitted each spent the same room against a global cap. */
+  claimed_add: number
+  over_cap: boolean
+}
+
+/** `GET /pipeline/pricing` — one worklist over several runs.
+ *
+ *  `decisions` IS KEYED BY RUN AND STAYS THAT WAY. D48 rules that a run's answer file is a
+ *  property of what is in the drawer; this route merges the VIEW and never the file, and one
+ *  answer to a merged row is one `PUT` per run in that row's `in`. */
+export type RosterRun = RunSummary & {
+  /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. */
+  owes: string[]
+  open: boolean
+}
+
+export type PricingWorklist = {
+  runs: RunSummary[]
+  /** EVERY joined run and what it still owes — the picker's list, not the worklist's. The
+   *  picker has to draw runs that are not loaded (that is what makes it a picker) and say
+   *  which are worth loading, so this is deliberately wider than `runs` above. */
+  roster: RosterRun[]
+  skus: MergedSku[]
+  decisions: Record<string, DecisionsDocument | null>
+  written_at: Record<string, number>
+  /** A run that could not be read, named rather than dropped — an eight-run worklist must not
+   *  fail to draw because one directory predates `pricing.json`. */
+  skipped: { run: string; code: string; message: string }[]
+  asked: string[]
+  remembered_sub_threshold: PricingPayload['remembered_sub_threshold']
+  live_cap: number
+  /** Each run's own `rule`/`basis`, for seeding a document that does not exist yet (D54).
+   *  Per run and never one seed for the worklist — D48 makes both a property of the lot. */
+  defaults: Record<string, { rule: string | null; basis: string | null }>
+  /** The two run-wide figures a row is drawn against, off the newest run in the list. Null
+   *  where no table could be read, which the screen falls back on rather than blanks. */
+  threshold: string | null
+  floor: string | null
+}
+
 /** What a run was scoped to. `whole_box` is the common case and costs no temporary
  *  anything; a selection builds a directory of symlinks that is swept after 48 hours. */
 export type RunScope = {

@@ -127,7 +127,13 @@ async function open(
     /** The run LIST, for cases about the picker rather than about a table. Each entry is the
      *  handful of `RunSummary` fields a chip draws; everything else is filled in below, so a
      *  case names what it is about and nothing more. */
-    runs?: { run: string; box: number | null; box_name: string | null; skus: number }[]
+    runs?: {
+      run: string
+      box: number | null
+      box_name: string | null
+      skus: number
+      created_at?: string | null
+    }[]
     /** Land with NO run selected, which is the only state the picker is drawn in. The default
      *  route carries `?run=` and goes straight to the table. */
     noRun?: boolean
@@ -138,6 +144,21 @@ async function open(
      *  payload, because the client CHUNKS the walk and the interesting cases are about which
      *  SKUs each request carries. */
     trends?: (skus: string[]) => unknown
+    /** THE WORKLIST OVER SEVERAL RUNS (D86). A case that names this is asking about the merge
+     *  itself — which run holds which copy, and what each one answers — so it hands over the
+     *  whole thing rather than being assembled from `skus` and `runs` above. Every other case
+     *  gets a one-run worklist synthesised from those two, which is what keeps the fifty cases
+     *  written before D86 passing unchanged against a screen that now reads a different route. */
+    worklist?: {
+      runs: { run: string; box: number | null; box_name: string | null; skus: number }[]
+      skus: (PricingSku & {
+        in: { run: string; answer: unknown; add_to_quantity?: number }[]
+        conflict?: unknown
+        claimed_add?: number
+        over_cap?: boolean
+      })[]
+      decisions: Record<string, Record<string, unknown> | null>
+    }
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -234,6 +255,81 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(options.history ?? history()),
+    })
+  })
+
+  /* THE CROSS-RUN WORKLIST — the route the screen actually reads since D86.
+     `/pipeline/runs/<name>/pricing` below is left registered and is no longer called by the
+     app; it stays because `do_pipeline_pricing` is still a route the server serves and one
+     case still exercises the refusal shape through it.
+
+     A ONE-RUN WORKLIST IS THE DEFAULT, AND THAT IS WHY THE OLDER CASES STILL READ. Each SKU
+     becomes a merged row over a single leg, which is exactly what the server answers for a
+     worklist of one — so `skus`, `decisions`, `runs` and `emitted` keep meaning what they
+     meant, and only a case that hands over `worklist` is testing the merge. */
+  await page.route(/\/pipeline\/pricing/, async (route) => {
+    const listed = options.worklist?.runs ??
+      options.runs ?? [{ run: RUN, box: 7, box_name: 'Riftbound epics', skus: 1 }]
+    const rows =
+      options.worklist?.skus ??
+      ((options.skus ?? [sku()]) as PricingSku[]).map((row) => ({
+        ...row,
+        in: [{ ...row, run: RUN, answer: null }],
+        conflict: null,
+        claimed_add: row.add_to_quantity,
+        over_cap: false,
+      }))
+    const answers =
+      options.worklist?.decisions ??
+      ({
+        [RUN]:
+          options.decisions === undefined
+            ? { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} }
+            : options.decisions,
+      } as Record<string, unknown>)
+    const summary = (row: {
+      run: string
+      box: number | null
+      box_name: string | null
+      skus: number
+      created_at?: string | null
+    }) => ({
+      run: row.run,
+      path: `/tmp/runs/${row.run}`,
+      box: row.box,
+      box_name: row.box_name,
+      created_at: row.created_at ?? null,
+      live: false,
+      phase: options.emitted === true ? 'reconcile' : 'emit',
+      joined: true,
+      collected: true,
+      counts: { skus: row.skus, cards_in: 3, queued_main: 0, queued_parked: 0 },
+      batch_ids: [],
+      usage: {},
+    })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        runs: options.noRun === true && listed.length === 0 ? [] : listed.map(summary),
+        roster: listed.map((row) => ({
+          ...summary(row),
+          owes: options.emitted === true ? [] : ['never emitted'],
+          open: options.emitted !== true,
+        })),
+        skus: options.noRun === true && listed.length === 0 ? [] : rows,
+        decisions: answers,
+        defaults: Object.fromEntries(
+          listed.map((row) => [row.run, { rule: 'match', basis: 'market' }]),
+        ),
+        written_at: {},
+        skipped: [],
+        asked: [],
+        remembered_sub_threshold: null,
+        live_cap: 4,
+        threshold: '0.40',
+        floor: '0.40',
+      }),
     })
   })
 
@@ -462,29 +558,51 @@ test('the run picker leads with the box, and the directory is what tells two run
      already applies to its reason codes, pointed at a picker. */
   await open(page, {
     runs: [
-      { run: '2026-08-30-box3-01', box: 3, box_name: 'RB Epics', skus: 15 },
-      { run: '2026-08-29-box1-01', box: 1, box_name: 'UNL Rares', skus: 50 },
-      { run: '2026-08-22-box1-03', box: 1, box_name: 'UNL Rares', skus: 45 },
+      /* ONE SITTING OVER TWO DRAWERS, WHICH IS D48's CART AS IT ACTUALLY LANDS — the owner's
+         2026-09-01 send joined three boxes in the same SECOND, so `created_at` cannot separate
+         them and the box number is what orders them. Given here out of order deliberately: the
+         server answers in directory order and the strip is what puts them on a shelf. */
+      { run: '2026-08-30-box3-01', box: 3, box_name: 'RB Epics', skus: 15, created_at: '2026-08-30T07:37:30+00:00' },
+      { run: '2026-08-30-box1-04', box: 1, box_name: 'UNL Rares', skus: 20, created_at: '2026-08-30T07:37:30+00:00' },
+      { run: '2026-08-29-box1-01', box: 1, box_name: 'UNL Rares', skus: 50, created_at: '2026-08-29T22:37:47+00:00' },
       /* A BOX WITH NO NAME. D20 leaves a name optional, so this is an ordinary box and its
          chip must draw the number ALONE — no separator, no placeholder. */
-      { run: '2026-08-24-box2-01', box: 2, box_name: null, skus: 108 },
+      { run: '2026-08-24-box2-01', box: 2, box_name: null, skus: 108, created_at: '2026-08-24T01:55:52+00:00' },
     ],
     noRun: true,
   })
 
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(4)
-  await expect(chips.nth(0).locator('.pricing-run-name')).toHaveText('Box 3 · RB Epics')
-  await expect(chips.nth(1).locator('.pricing-run-name')).toHaveText('Box 1 · UNL Rares')
-  await expect(chips.nth(2).locator('.pricing-run-name')).toHaveText('Box 1 · UNL Rares')
-  await expect(chips.nth(3).locator('.pricing-run-name')).toHaveText('Box 2')
+
+  /* NEWEST SITTING FIRST, AND BOXES ASCENDING INSIDE IT (D86). `GET /pipeline/runs` sorts by
+     directory name REVERSED, so within one day the picker drew box 5, box 4, box 3 — backwards
+     against the rule `Runs.tsx` states for the same choice: *"Boxes ascending, which is the
+     order they sit on a shelf and the order the strip on `#/inventory` already draws."* Two
+     screens ordering the same drawers two ways is the drift; this is the fix, and it is pinned
+     here because it is otherwise invisible. */
+  await expect(chips.nth(0).locator('.pricing-run-name')).toContainText('Box 1 · UNL Rares')
+  await expect(chips.nth(1).locator('.pricing-run-name')).toContainText('Box 3 · RB Epics')
+  await expect(chips.nth(2).locator('.pricing-run-name')).toContainText('Box 1 · UNL Rares')
+  await expect(chips.nth(3).locator('.pricing-run-name')).toContainText('Box 2')
 
   /* THE DIRECTORY IS STILL DRAWN, and on the two chips whose headline is identical it is the
      whole of the difference. An assertion on the headline alone would go green against a chip
      that had dropped the run name entirely. */
-  await expect(chips.nth(1).locator('.pricing-run-id')).toHaveText('2026-08-29-box1-01')
-  await expect(chips.nth(2).locator('.pricing-run-id')).toHaveText('2026-08-22-box1-03')
-  await expect(chips.nth(0)).toContainText('15 SKUs')
+  await expect(chips.nth(0).locator('.pricing-run-id')).toHaveText('2026-08-30-box1-04')
+  await expect(chips.nth(2).locator('.pricing-run-id')).toHaveText('2026-08-29-box1-01')
+  await expect(chips.nth(1)).toContainText('15 SKUs')
+
+  /* AN UNNAMED BOX DRAWS ITS NUMBER ALONE — no separator, no placeholder (D20). Asserted on
+     the whole headline rather than with `toContainText`, because that is the half a
+     `Box 2 · —` regression would still satisfy. The day is appended by the chip, so the
+     assertion names it. */
+  await expect(chips.nth(3).locator('.pricing-run-name')).toHaveText('Box 2 · Aug 23')
+
+  /* WHAT IS LEFT, WHICH THE CHIP COULD NOT SAY BEFORE D86. `counts.skus` is the SIZE of a job
+     and never the job: box 2's 108 SKUs are one `floor` press. This fixture's runs have not
+     emitted, so every chip owes that. */
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('never emitted')
 })
 
 test('every export column that carries data is on the row', async ({ page }) => {
@@ -1161,37 +1279,55 @@ test('a hold taken now does not move its row, and has moved it by the next load'
   await expect(page.locator('.pricing-group-head')).toHaveCount(0)
 
   /* THE SECOND OPENING, WITH THE SERVER NOW CARRYING THE ANSWER. Registered after `open`,
-     which is what makes it win — Playwright matches handlers newest first. */
-  await page.route(/\/pipeline\/runs\/[^/]+\/pricing$/, async (route) => {
+     which is what makes it win — Playwright matches handlers newest first. Re-registered on
+     `/pipeline/pricing` since D86: that is the route the screen reads, and pointing this at
+     the per-run one left the reload serving the FIRST fixture, so the hold never sank and the
+     case failed on the half it exists to prove. */
+  await page.route(/\/pipeline\/pricing/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        run: RUN,
-        pricing: {
-          run: RUN,
-          threshold: '0.40',
-          floor: '0.40',
-          rule: 'match',
-          basis: 'market',
-          presets: ['market_match', 'market_undercut_5', 'low_undercut_1'],
-          games: [
-            {
-              game: 'pokemon',
-              import_listed: 'import-listed.csv',
-              import_subthreshold: 'import-subthreshold.csv',
-            },
-          ],
-          skus,
-          bands: [],
-        },
+        runs: [
+          {
+            run: RUN,
+            path: `/tmp/runs/${RUN}`,
+            box: 7,
+            box_name: 'Riftbound epics',
+            created_at: null,
+            live: false,
+            phase: 'emit',
+            joined: true,
+            collected: true,
+            counts: { skus: 3, cards_in: 3, queued_main: 0, queued_parked: 0 },
+            batch_ids: [],
+            usage: {},
+          },
+        ],
+        roster: [],
+        skus: skus.map((row) => ({
+          ...row,
+          in: [{ ...row, run: RUN, answer: null }],
+          conflict: null,
+          claimed_add: row.add_to_quantity,
+          over_cap: false,
+        })),
         decisions: {
-          rule: 'match',
-          basis: 'market',
-          sub_threshold: null,
-          overrides: { '8608459': { withheld: 'keeping' } },
+          [RUN]: {
+            rule: 'match',
+            basis: 'market',
+            sub_threshold: null,
+            overrides: { '8608459': { withheld: 'keeping' } },
+          },
         },
+        defaults: { [RUN]: { rule: 'match', basis: 'market' } },
+        written_at: {},
+        skipped: [],
+        asked: [],
         remembered_sub_threshold: null,
+        live_cap: 4,
+        threshold: '0.40',
+        floor: '0.40',
       }),
     })
   })
@@ -2060,4 +2196,206 @@ test('an open reading covers no ship-bar control and no row draws through it', a
     return panel.getBoundingClientRect().left >= button.getBoundingClientRect().right
   })
   expect(clears).toBe(true)
+})
+
+// ------------------------------------------- the worklist spans runs, the file does not (D86)
+
+/* THE CASE THAT PAYS FOR THE WHOLE FEATURE, and it is a real one off the owner's disk.
+ *
+ * Measured 2026-09-01 across the eight runs in `runs/`: 78 of 423 SKUs sit in more than one
+ * run, 8 carried an answer in more than one, and THREE were a `withheld` hold answered with a
+ * price in a later sitting. SKU 9191210 — LeBlanc, Everywhere At Once — was held `bullish`
+ * with `watch_above: "5"` out of box 3 on 08-31 and listed at **$3.45** out of box 4 on 09-01,
+ * below the operator's own watch. It drew as an ordinary listable row: `at_cap: false`,
+ * `nothing_to_add: null`, no note anywhere. Nothing could have said otherwise, because a hold
+ * lives in its run and dies with it (D49) and no screen had ever read two runs at once.
+ *
+ * D49's OWN REOPENING MEASUREMENT WAS THE OTHER DIRECTION AND FOUND NOTHING. It watched for
+ * "the same SKU withheld in two runs over one box", which has never happened once. It is the
+ * asymmetric case that fires. */
+const CLASH = {
+  runs: [
+    { run: '2026-08-31-box3-01', box: 3, box_name: 'RB Epics', skus: 2 },
+    { run: '2026-09-01-box4-01', box: 4, box_name: 'WB1 R2', skus: 2 },
+  ],
+  skus: [
+    {
+      ...sku({
+        sku: '9191210',
+        name: 'LeBlanc, Everywhere At Once',
+        copies: 3,
+        add_to_quantity: 3,
+        positions: [
+          { box: 3, index: 4, label: 'Box 3 · Section 1 · Card 4' },
+          { box: 3, index: 9, label: 'Box 3 · Section 1 · Card 9' },
+          { box: 4, index: 2, label: 'Box 4 · Section 1 · Card 2' },
+        ],
+      }),
+      in: [
+        {
+          run: '2026-08-31-box3-01',
+          answer: { withheld: 'bullish', watch_above: '5' },
+          add_to_quantity: 2,
+        },
+        { run: '2026-09-01-box4-01', answer: '3.45', add_to_quantity: 2 },
+      ],
+      conflict: {
+        kind: 'hold_overridden',
+        held_by: ['2026-08-31-box3-01'],
+        priced_by: ['2026-09-01-box4-01'],
+        answers: {
+          '2026-08-31-box3-01': { withheld: 'bullish', watch_above: '5' },
+          '2026-09-01-box4-01': '3.45',
+        },
+      },
+      claimed_add: 4,
+      over_cap: true,
+    },
+    {
+      /* A CARD IN ONE DRAWER ONLY, so the case also proves the line is NOT drawn where there
+         is nothing to say — a marker on every row is a marker nobody reads. */
+      ...sku({ sku: '8608459', name: 'Dunsparce' }),
+      in: [{ run: '2026-09-01-box4-01', answer: null, add_to_quantity: 3 }],
+      conflict: null,
+      claimed_add: 3,
+      over_cap: false,
+    },
+  ],
+  decisions: {
+    '2026-08-31-box3-01': {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      overrides: { '9191210': { withheld: 'bullish', watch_above: '5' } },
+    },
+    '2026-09-01-box4-01': {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      overrides: { '9191210': '3.45' },
+    },
+  },
+}
+
+test('one answer is written into every run holding the card, and the files stay separate', async ({
+  page,
+}) => {
+  const wire = await open(page, { worklist: CLASH })
+
+  await field(page).first().focus()
+  await page.keyboard.type('12.00')
+  await page.keyboard.press('Enter')
+
+  /* TWO PUTs, ONE PER RUN, AND NEITHER IS A MERGED FILE. This is the whole of D86's write
+     path and the whole of what keeps D48 intact: the view merges, `decisions.json` does not.
+     A single PUT here would mean one answer file had been invented for two drawers; three
+     would mean a run that does not hold the card was written to. */
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
+  const puts = wire.filter((row) => row.method === 'PUT')
+  expect(puts.map((row) => row.path.split('/').at(-2)).sort()).toEqual([
+    '2026-08-31-box3-01',
+    '2026-09-01-box4-01',
+  ])
+
+  /* THE SAME PRICE IN BOTH, AND THE HOLD IS GONE FROM THE ONE THAT HELD IT. That second half
+     is the actual repair: before this, answering the card in box 4 left box 3 still holding
+     it, and the two files disagreed with nothing on any screen able to say so. */
+  for (const put of puts) {
+    const sent = put.body as { decisions?: { overrides?: Record<string, unknown> } }
+    expect(sent.decisions?.overrides?.['9191210']).toBe('12.00')
+  }
+  await expect(page.locator('.pricing-save')).toHaveText('saved')
+})
+
+test('a card in two drawers says so, and a card in one says nothing', async ({ page }) => {
+  await open(page, { worklist: CLASH })
+
+  const rows = page.locator('.pricing-row')
+  await expect(rows).toHaveCount(2)
+
+  /* THE BOXES AND NOT THE RUN NAMES. A person owns drawers, not directories; the runs are on
+     the chips above. Deduped and ascending, which is the order the shelf is in. */
+  await expect(rows.nth(0).locator('.pricing-span-where')).toHaveText('Boxes 3, 4 · 2 runs')
+  await expect(rows.nth(0).locator('.pricing-span-clash')).toHaveText(
+    'held in 1, priced in 1',
+  )
+  await expect(rows.nth(0).locator('.pricing-span-clash')).toHaveAttribute(
+    'data-kind',
+    'hold_overridden',
+  )
+
+  /* THE ABSENCE, WHICH IS THE HALF A MARKER-ON-EVERY-ROW REGRESSION WOULD STILL SATISFY. */
+  await expect(rows.nth(1).locator('.pricing-row-span')).toHaveCount(0)
+})
+
+test('the cap is what can go, and the row says the runs disagree with it', async ({ page }) => {
+  await open(page, { worklist: CLASH })
+
+  /* `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a cap
+     that is GLOBAL, so two runs joined before either emitted each spend the same room. D59
+     fixed this one register down — per BOX inside one join — and it survived per RUN across
+     joins that never saw each other. Measured on the owner's store: five SKUs' claims sum past
+     four, and two reached `pushed: 6` against a cap of 4 in `inventory/inventory.json`.
+
+     THE QTY CELL DRAWS WHAT CAN ACTUALLY GO. Drawing the sum would put a 4 in the column of a
+     card three of which may be listed — D59's own named-rather-than-counted rule, which exists
+     because a count under a false sentence is worse than no count. */
+  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-qty')).toHaveText(
+    '3 of 3',
+  )
+  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
+    'runs claim 4, 3 can go',
+  )
+})
+
+test('the emit press is absent while more than one run is loaded', async ({ page }) => {
+  await open(page, { worklist: CLASH })
+
+  /* ABSENT RATHER THAN DISABLED, which is D33's own rule for the control that spends applied
+     to the one that writes files. `emit` is per run (D48), so a press over a worklist of two
+     would have to choose one — and a press that emitted each in turn is exactly the cross-run
+     over-push the row above reports. One run at a time, from its own view. */
+  await expect(page.locator('.pricing-ship')).toHaveCount(0)
+})
+
+test('the emit press is there for one run, so its absence above is the multi-run case', async ({
+  page,
+}) => {
+  /* THE OTHER HALF, AS ITS OWN CASE. Calling `open` twice in one test re-registers every route
+     on the same page and the two fixtures then race; the pair only means anything if both
+     halves actually run, so they are two tests rather than one flaky one. */
+  await open(page, { skus: [sku()] })
+  await expect(page.locator('.pricing-ship')).toHaveCount(1)
+})
+
+test('an undo returns each run to what IT said, not to one answer for both', async ({
+  page,
+}) => {
+  const wire = await open(page, { worklist: CLASH })
+
+  await field(page).first().focus()
+  await page.keyboard.type('12.00')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
+
+  /* `u` ON THE ROW, which is this screen's own undo — the price field's alphabet is closed to
+     `[0-9.]` precisely so a letter can be a command (D49), and that closure is the whole safety
+     argument for it. Not `Meta+z`: nothing binds that here. */
+  await field(page).first().focus()
+  await page.keyboard.press('u')
+
+  /* THE RUNS DID NOT AGREE BEFORE THE WRITE — that disagreement is the thing this screen
+     exists to show — so an undo that restored ONE value to both would silently resolve a
+     conflict the operator never answered. Box 3 goes back to its hold; box 4 to its price. */
+  await expect
+    .poll(() => wire.filter((row) => row.method === 'PUT').length)
+    .toBeGreaterThanOrEqual(4)
+  const byRun = new Map<string, unknown>()
+  for (const put of wire.filter((row) => row.method === 'PUT')) {
+    const run = put.path.split('/').at(-2) as string
+    const sent = put.body as { decisions?: { overrides?: Record<string, unknown> } }
+    byRun.set(run, sent.decisions?.overrides?.['9191210'])
+  }
+  expect(byRun.get('2026-08-31-box3-01')).toEqual({ withheld: 'bullish', watch_above: '5' })
+  expect(byRun.get('2026-09-01-box4-01')).toBe('3.45')
 })

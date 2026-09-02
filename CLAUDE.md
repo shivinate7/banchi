@@ -545,6 +545,7 @@ D82  Ruff is adopted on the slice this session measured, not on what it enables 
 D83  A card leaves a box through a third door: moved, not sold or retired
 D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 D85  The corner is settled by geometry, and a variable nothing sets is not a fallback
+D86  The pricing worklist spans runs; the answer file does not
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

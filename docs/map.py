@@ -1010,7 +1010,7 @@ COMPONENTS = [
                 # so a stale screen shows a number that now belongs to a different card. D18
                 # decides where it runs: node, like port-agreement.py, so `make check` and never
                 # the git hook. D14 is why it excludes the code-card track, by banner.
-                "governed_by": ["D13", "D14", "D18", "D58"],
+                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86"],
             },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
@@ -1537,7 +1537,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1627,7 +1627,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D62", "D64", "D65", "D68", "D76", "D79"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1924,11 +1924,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2429,7 +2429,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85", "D86"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -2446,7 +2446,7 @@ COMPONENTS = [
                                         "the same button width the grid reads, and both fixed "
                                         "panels start after it, so no panel is ever over a row "
                                         "control and nothing has to win a stacking order.",
-                                "governed_by": ["D5", "D9", "D28", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79", "D85"]},
+                                "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79", "D85", "D86"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -2989,7 +2989,7 @@ COMPONENTS = [
                                               "ask while the screen was a pile. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
