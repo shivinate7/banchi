@@ -690,8 +690,12 @@ function OrderLineRow({
       <div className="orders-line-top">
         <span className="orders-line-name">{line.line.name ?? line.sku}</span>
         <span className="orders-line-sku">{line.sku}</span>
+        {/* FOUND OF OWED, THEN WHAT IS ALREADY PULLED. The resolver is asked for what the ledger
+            still owes, so `fulfilled` is measured against `owed`; the buyer's number is the
+            order's figure above, and the difference is what this line has already recorded. */}
         <span className="orders-line-figure">
-          {line.fulfilled} of {line.wanted}
+          {line.fulfilled} of {line.owed}
+          {line.owed < line.wanted ? ` · ${line.wanted - line.owed} pulled` : ''}
         </span>
       </div>
 

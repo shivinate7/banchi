@@ -14198,6 +14198,20 @@ def check_order_ledger(checks: Checks) -> None:
             "AND POSITION 3/3 NOW HOLDS A CARD THAT WAS NEVER PULLED — a ledger storing "
             "['3/2', '3/3'] would name o4 here and send that card to the buyer",
         )
+        drawn = answers(checks, capture_server.do_orders, "GET /orders answers after the shift")
+        if drawn is not None:
+            shifted = next(order for order in drawn["orders"] if order["key"] == key)
+            checks.equal(
+                sorted(
+                    (entry["capture_id"], entry["box"], entry["index"])
+                    for entry in shifted["progress"][0]["pulled"]
+                ),
+                [("o2", 3, 1), ("o3", 3, 2)],
+                "AND THE POSITIONS THE SCREEN DRAWS FOR THE PULLED COPIES FOLLOWED THE CARDS: "
+                "joined at read time off the capture id, so o2 reads 3/1 now and o4's slot is "
+                "named for nobody — a stored position would have pointed the copies panel at "
+                "the card that inherited the slot (D36)",
+            )
         recorded = moved.ledger.recorded(key, "9191486")
         checks.equal(
             sorted(recorded.copies),
@@ -14746,10 +14760,10 @@ def check_order_screen(checks: Checks) -> None:
             )
             checks.equal(
                 sorted(by_number["OLD"]),
-                ["fulfilled", "line", "on_hand", "order", "order_key", "outstanding",
+                ["fulfilled", "line", "on_hand", "order", "order_key", "outstanding", "owed",
                  "picks", "pooled", "reason", "retired", "sku", "sold", "wanted"],
                 "and a LINE is the reason, the breakdown behind it and the copies it found "
-                "— thirteen keys, no lane and no stamp among them",
+                "— fourteen keys, no lane and no stamp among them",
             )
 
             inventory = Store().read().inventory
@@ -14872,6 +14886,31 @@ def check_order_screen(checks: Checks) -> None:
                 "POSITION. The two differ, and the response carries the FIRST: a sale moves "
                 "the box's occupancy (D58), so a receipt composed afterwards would name "
                 "where the box has closed up to rather than the slot the card came out of",
+            )
+
+        after_screen = answers(
+            checks, capture_server.do_orders, "GET /orders after the pull answers"
+        )
+        if after_screen is not None:
+            row = after_screen["resolution"]["orders"][0]["lines"][0]
+            checks.equal(
+                (
+                    row["wanted"], row["owed"], row["fulfilled"], row["outstanding"],
+                    row["reason"], sorted(pick["index"] for pick in row["picks"]),
+                ),
+                (3, 2, 2, 0, "resolved", [2, 3]),
+                "THE RESOLVER IS ASKED FOR WHAT IS STILL OWED. One of three is recorded, so "
+                "the line wants two more, finds two and is `resolved` — not `short` with a "
+                "third pick the buyer is not owed. `wanted` stays the order's quantity and "
+                "`owed` is the ledger's; before this the resolver was handed the raw quantity "
+                "and over-allocated against every other order for the SKU",
+            )
+            checks.equal(
+                after_screen["orders"][0]["progress"][0]["pulled"],
+                [{"capture_id": "p1", "box": 3, "index": 1}],
+                "AND THE PULLED COPY'S POSITION IS JOINED AT READ TIME off its capture id — "
+                "composed for this answer and stored nowhere (D36) — so the copies panel can "
+                "mark the slot a pulled card came out of",
             )
 
         refusal(
@@ -16934,6 +16973,228 @@ def check_order_fetch_route(checks: Checks) -> None:
         dotenv.unlink(missing_ok=True)
 
 
+def check_order_fill(checks: Checks) -> None:
+    """`POST /orders/fill` — the envelope: every line of one order in one transaction, and its
+    undo. The order walk's one write.
+
+    The owner's failure at the drawer was moving on to the next card and only then wondering
+    whether the last one was marked sold. So the walk writes nothing per card, and this route
+    records the whole envelope on one press — every copy still aimed by its own `capture_id`
+    (D36), the whole thing refused if one target is wrong, the whole thing reversible in one
+    press. D29's validate-all-then-write-all at envelope scale, through the same two phases
+    `/orders/pull` uses, lifted into `_prepare_targets` and `_ledger_pull` so the aim check is
+    one implementation behind both doors.
+    """
+    checks.note("")
+    checks.note("ORDER FILL — POST /orders/fill, the envelope in one transaction")
+
+    def target(box: int, index: int, capture_id: str) -> dict:
+        return {"box": box, "index": index, "capture_id": capture_id}
+
+    def stock(box: int, count: int, sku: str, prefix: str) -> None:
+        for at in range(1, count + 1):
+            capture_server.do_capture(
+                {
+                    "box": box,
+                    "capture_id": f"{prefix}{at}",
+                    "image": base64.b64encode(
+                        b"\xff\xd8\xff" + bytes([at]) * 64
+                    ).decode("ascii"),
+                }
+            )
+        with Store().write() as snapshot:
+            for at in range(1, count + 1):
+                snapshot.inventory.record_identification(
+                    f"{box}/{at}", name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"{box}/{at}"].sku = sku
+
+    with isolated_home():
+        stock(3, 3, "9191486", prefix="a")
+        stock(4, 2, "9199579", prefix="b")
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9191486").set(master.LIVE, 3)
+        capture_server.do_order_ingest(
+            {
+                "orders": [
+                    {
+                        "source": "TCGplayer",
+                        "number": "E-1",
+                        "placed_at": "2026-09-01T10:00:00.000+00:00",
+                        "lines": [
+                            {"sku": "9191486", "quantity": 2, "name": "Moonfall"},
+                            {"sku": "9199579", "quantity": 1, "name": "Brutalizer"},
+                        ],
+                    }
+                ]
+            }
+        )
+        key = order_store.order_key("TCGplayer", "E-1")
+        envelope = {
+            "source": "TCGplayer",
+            "number": "E-1",
+            "lines": [
+                {"sku": "9191486", "targets": [target(3, 1, "a1"), target(3, 2, "a2")]},
+                {"sku": "9199579", "targets": [target(4, 1, "b1")]},
+            ],
+        }
+
+        # ---- 1. one refused target refuses the whole envelope, and line one is not written
+        wrong = json.loads(json.dumps(envelope))
+        wrong["lines"][1]["targets"][0]["capture_id"] = "not-the-card-on-screen"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(wrong),
+            "fill_entry_refused",
+            "ONE REFUSED TARGET REFUSES THE WHOLE ENVELOPE — a mis-aimed copy on line two "
+            "is answered as one refusal naming the line and the position",
+        )
+        snapshot = Store().read()
+        checks.equal(
+            (
+                snapshot.ledger.recorded(key, "9191486").fulfilled,
+                snapshot.inventory.cards["3/1"].state,
+                snapshot.inventory.cards["3/2"].state,
+            ),
+            (0, master.IDENTIFIED, master.IDENTIFIED),
+            "and line one's two good targets were NOT written — the envelope is one "
+            "transaction, so a half-recorded envelope cannot exist",
+        )
+
+        # ---- 2. the fill
+        filled = answers(
+            checks, lambda: capture_server.do_order_fill(envelope), "the envelope fills"
+        )
+        if filled is not None:
+            checks.equal(
+                sorted(filled),
+                ["complete", "lines", "order_key", "places", "sales", "undone"],
+                "the answer's key set, whole",
+            )
+            checks.equal(
+                (
+                    filled["complete"],
+                    filled["undone"],
+                    [(row["sku"], row["newly"], row["recorded"], row["outstanding"])
+                     for row in filled["lines"]],
+                ),
+                (True, False, [("9191486", 2, 2, 0), ("9199579", 1, 1, 0)]),
+                "three copies over two lines recorded on ONE press, and the order is complete",
+            )
+            checks.equal(
+                [place["label"] for place in filled["places"]],
+                ["Box 3 · Section 1 · Card 1", "Box 3 · Section 1 · Card 2",
+                 "Box 4 · Section 1 · Card 1"],
+                "the PRE-WRITE places, one per target in request order across the lines — "
+                "where the operator just was, for the receipt (D58)",
+            )
+            snapshot = Store().read()
+            checks.equal(
+                [snapshot.inventory.cards[k].state for k in ("3/1", "3/2", "4/1")],
+                [master.SOLD, master.SOLD, master.SOLD],
+                "every copy is sold, in the same write as the ledger rows",
+            )
+            checks.equal(
+                snapshot.inventory.listings["9191486"].live,
+                1,
+                "and the SKU's `live` fell by the two copies that left",
+            )
+            checks.equal(
+                snapshot.ledger.unfulfilled(), [], "the order owes nothing — `unfulfilled` is empty"
+            )
+            checks.equal(
+                capture_server._Places(snapshot.inventory).of(3, 1)["label"],
+                join.departed_label(3, 1),
+                "a `_Places` built after the write reads the slot as departed — the answer "
+                "carried the label from before",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(envelope),
+            "already_sold",
+            "pressing the envelope again refuses — the ledger dedups the capture ids and "
+            "`_sell` will not sell one card twice",
+        )
+        checks.equal(
+            Store().read().ledger.recorded(key, "9191486").fulfilled,
+            2,
+            "and the refusal cost the line nothing",
+        )
+
+        # ---- 3. the undo reverses the whole envelope in one press
+        undone = answers(
+            checks,
+            lambda: capture_server.do_order_fill({"undo": True, **envelope}),
+            "the undo reverses the whole envelope",
+        )
+        if undone is not None:
+            checks.equal(
+                (
+                    undone["undone"],
+                    undone["complete"],
+                    [(row["sku"], row["newly"], row["recorded"], row["outstanding"])
+                     for row in undone["lines"]],
+                ),
+                (True, False, [("9191486", 2, 0, 2), ("9199579", 1, 0, 1)]),
+                "every line forgotten and every copy owed again, in one write",
+            )
+            snapshot = Store().read()
+            checks.equal(
+                [snapshot.inventory.cards[k].state for k in ("3/1", "3/2", "4/1")],
+                [master.IDENTIFIED, master.IDENTIFIED, master.IDENTIFIED],
+                "every copy is back on hand",
+            )
+            checks.equal(
+                snapshot.inventory.listings["9191486"].live, 3, "and `live` is back to three"
+            )
+
+        # ---- 4. an undo under the wrong line
+        answers(checks, lambda: capture_server.do_order_fill(envelope), "filled again")
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(
+                {
+                    "undo": True, "source": "TCGplayer", "number": "E-1",
+                    "lines": [{"sku": "9199579", "targets": [target(3, 1, "a1")]}],
+                }
+            ),
+            "fill_line_mismatch",
+            "AN UNDO NAMES ITS LINES AND THE LEDGER MUST AGREE — a copy sent under the wrong "
+            "SKU is refused rather than forgotten off the line that holds it",
+        )
+        checks.equal(
+            Store().read().inventory.cards["3/1"].state,
+            master.SOLD,
+            "and the copy stayed sold",
+        )
+
+        # ---- 5. the door
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(
+                {"source": "TCGplayer", "number": "E-1", "lines": []}
+            ),
+            "lines_required",
+            "an envelope of nothing is refused",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill({**envelope, "sku": "9191486"}),
+            "field_not_settable",
+            "a field from the per-line route is refused by name",
+        )
+        doubled = json.loads(json.dumps(envelope))
+        doubled["lines"][1]["sku"] = "9191486"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(doubled),
+            "duplicate_line",
+            "one SKU on two lines of an envelope is refused",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -16988,6 +17249,7 @@ def run() -> Result:
     check_order_ledger(checks)
     check_order_screen(checks)
     check_order_fetch_route(checks)
+    check_order_fill(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
     check_price_history(checks)

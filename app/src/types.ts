@@ -2251,6 +2251,9 @@ export type OrderLineProgress = {
    *  underneath a legitimate pull is what makes it non-zero. */
   over: number
   copies: string[]
+  /** Where each recorded copy sits RIGHT NOW, joined at read time off its capture id and
+   *  stored nowhere (D36). Nulls where the card is gone. The copies panel's `pulled` mark. */
+  pulled: OrderPulledCopy[]
   at: string | null
 }
 
@@ -2317,6 +2320,9 @@ export type ResolvedLine = {
   sku: string
   reason: OrderLineReason
   wanted: number
+  /** What the ledger still owes on this line, and what the resolver was asked to find.
+   *  `wanted` is the buyer's number; `wanted - owed` is what has been recorded as pulled. */
+  owed: number
   fulfilled: number
   outstanding: number
   on_hand: number
@@ -2424,6 +2430,25 @@ export type OrdersFetched = {
  *  `capture_id` is the aim check on the way in (a mid-box delete or a re-shoot changes which
  *  physical card sits at a slot) and the WHOLE of the lookup on the way back. */
 export type PullTarget = { box: number; index: number; capture_id: string }
+
+/** One pulled copy's current position, composed per `GET /orders` answer. */
+export type OrderPulledCopy = { capture_id: string; box: number | null; index: number | null }
+
+/** One line of an envelope: the SKU and the copies taken for it, each aimed by capture id. */
+export type FillLine = { sku: string; targets: PullTarget[] }
+
+/** What `POST /orders/fill` answered — the whole envelope in one write, both directions.
+ *  `places` are the PRE-write places, one per target across the lines in request order, for
+ *  the receipt (D58: a post-write label reads departed). `complete` is the ledger's answer
+ *  for the whole order after the write. */
+export type FillResult = {
+  undone: boolean
+  order_key: string
+  complete: boolean
+  lines: { sku: string; newly: number; recorded: number; outstanding: number }[]
+  places: Place[]
+  sales: SaleResult[]
+}
 
 /** What a pull or its undo did.
  *

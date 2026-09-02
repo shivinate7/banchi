@@ -109,6 +109,7 @@ function line(over: Partial<ResolvedLine> = {}): ResolvedLine {
     sku: SKU,
     reason: 'resolved',
     wanted: 1,
+    owed: 1,
     fulfilled: 1,
     outstanding: 0,
     on_hand: 1,
@@ -145,7 +146,7 @@ function order(over: Partial<OrderRow> = {}): OrderRow {
     open: true,
     lines: [line().line],
     progress: [
-      { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null },
+      { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null },
     ],
   }
   return { ...base, ...over }
