@@ -1018,7 +1018,7 @@
   color: var(--muted);
 }
 
-.run-preview-slot {
+.run-preview-key {
   font-weight: 600;
   color: var(--ink);
 }

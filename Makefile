@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -66,11 +66,12 @@ help:
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
+	@echo "  make sigil-check   a bare \`#\` on a screen is a COUNT, never a store key (D92)."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
 	@echo "                    merge-selftest + port-agreement + set-hint-agreement +"
-	@echo "                    screen-freshness +"
+	@echo "                    screen-freshness + sigil-check +"
 	@echo "                    ignore-check + lint + vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
@@ -348,6 +349,7 @@ check:
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
+	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory vale
@@ -362,6 +364,15 @@ ignore-check:
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
 audit-self-test:
 	@python3 scripts/docs-audit.py --self-test
+
+# D92 — a bare `#` on an owner-side screen is D58's COUNT, and three renderers spelled the
+# store key the same way. ON THE COMMIT PATH, unlike its neighbours here: it writes nothing,
+# needs no venv and no node, and reads only tracked source, so none of D18's reasons apply.
+# Its own self-test runs with it — cheap enough (16 cases over strings) that splitting them
+# into a second target would cost more to explain than to run.
+sigil-check:
+	@python3 scripts/sigil-check.py --self-test
+	@python3 scripts/sigil-check.py
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing

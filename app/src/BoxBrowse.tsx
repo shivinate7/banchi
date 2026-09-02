@@ -277,6 +277,10 @@ function rowSlot(row: Row): string {
  *  `${box}/${index}` — the same two numbers, in the shape that reads as a fraction — so the two
  *  looked interchangeable and were, right up until one of them became a thing a person reads. */
 function departedKey(card: InventoryCard): string {
+  // sigil-ok: D92 exempts the `B<box> #` form BY NAME. This is the one place a store key is
+  // MEANT to be drawn: a departed card has no slot to draw instead (`Position.slot` answers
+  // null for one by design), and the `B` is what marks the number as a key rather than a
+  // count — which is D68's whole argument and the reason this is not a bare `#`.
   return `B${card.box} #${card.index}`
 }
 

@@ -2044,10 +2044,21 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             moved_entry is not None
             and after.review.entries.get("3/5") is None
             and moved_entry.index == 4
-            and moved_entry.label == join.Position(3, 4).label
             and moved_entry.photo == str(capture_server.photo_path(3, 4)),
-            "the queue entry is re-keyed whole: position, box, index, rendered label, and "
-            "the photo path it names",
+            "the queue entry is re-keyed: position, box, index, and the photo path it names",
+            f"entry was: {moved_entry!r}",
+        )
+        checks.ok(
+            moved_entry is not None and moved_entry.label == join.Position(3, 5).label,
+            "AND ITS STORED LABEL IS NOT REWRITTEN, which is D92 and is the reverse of what "
+            "this case asserted until then. The re-key composed one with `join.Position` and "
+            "no `occupied`, so it was in INDEX space while every route serves a label "
+            "`_queue_row` re-renders in COUNT space — a plausible wrong rendering in the same "
+            "field as the correct ones `cli/resolve.py` writes, one forgotten `places` "
+            "argument from reaching a screen. It keeps the string it arrived with (D56: a "
+            "rendering nobody can correct is joined at read time, not stored), and the "
+            "assertion is written against the OLD position on purpose — that is what a stale "
+            "stored label looks like, and no route may serve it",
             f"entry was: {moved_entry!r}",
         )
         checks.ok(
@@ -6565,13 +6576,21 @@ def check_box_claims(checks: Checks) -> None:
 def check_place_neighbors(checks: Checks) -> None:
     """D30's digital half on the wire: `neighbors` and `section_gaps` in the place block.
 
-    `Card 17` IS THE SEVENTEENTH SLOT, NOT THE SEVENTEENTH CARD YOU CAN COUNT. Every sale
-    and every retirement leaves a permanent gap (D10), and once a section has one, those
-    two numbers diverge for every label behind it. D30's ruling is that a located place
-    block also carries what makes the label countable by hand again: the nearest
-    NON-TERMINAL records on either side, and how many permanent holes this card's own
-    section holds. Asserted on `GET /inventory`'s rows — the route the app polls — because
-    the block is wire-only and the wire is the only place the claim exists.
+    `Card 17` IS THE SEVENTEENTH CARD YOU CAN COUNT, WHICH IS D58 AND IS THE REVERSE OF WHAT
+    THIS PARAGRAPH SAID UNTIL D92. It read "the seventeenth SLOT, not the seventeenth card
+    you can count", which was true when D30 wrote it and was made false on 2026-08-30 by the
+    entry that answered D30. Every sale and every retirement leaves a permanent gap in the
+    INDEX (D10) and the label closes over it, so what diverges behind a gap is the label and
+    the store key — not the label and the hand. D30's ruling still stands and its reason
+    moved: a located place block carries the nearest NON-TERMINAL records on either side, and
+    how many permanent holes this card's own section holds. Asserted on `GET /inventory`'s
+    rows — the route the app polls — because the block is wire-only and the wire is the only
+    place the claim exists.
+
+    BOTH NUMBERS RIDE EACH NEIGHBOUR SINCE D92, and the assertions below pin them together on
+    purpose. This fixture's box already separates them — a sale at 2 and a retirement at 4
+    make index 3 the second card and index 5 the third — so an implementation that sent the
+    key twice, or the count twice, cannot pass.
 
     THE CONSTRUCTION UNDER TEST IS "RECORDS, NOT INDICES", read from three sides. A
     terminal record is skipped as a landmark and counted as a hole — one ruling, two
@@ -6607,10 +6626,15 @@ def check_place_neighbors(checks: Checks) -> None:
         rows = capture_server.do_inventory()["cards"]
         checks.equal(
             rows["4/3"]["place"]["neighbors"],
-            {"prev": {"index": 1, "name": "Mantine"}, "next": {"index": 5, "name": None}},
+            {
+                "prev": {"index": 1, "slot": 1, "name": "Mantine"},
+                "next": {"index": 5, "slot": 3, "name": None},
+            },
             "a card between two gaps names the nearest NON-TERMINAL records — the sold "
             "card at 2 and the retired card at 4 are skipped as landmarks, never named: "
-            "a departed card cannot be the thing you count from (D30)",
+            "a departed card cannot be the thing you count from (D30) — and each side "
+            "carries BOTH numbers (D92): the store key and D58's count, which this box "
+            "has already pulled apart (index 5 is the third card you can count to)",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -6631,11 +6655,14 @@ def check_place_neighbors(checks: Checks) -> None:
         )
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
-            {"index": 3, "name": None},
-            "a neighbour nothing has identified degrades to its index: `name` is null ON "
-            "THE WIRE, and the null is the wire's whole job — the `#3` a screen shows for "
-            "it is the app's rendering, and a placeholder string minted here would be a "
-            "second vocabulary nothing audits",
+            {"index": 3, "slot": 2, "name": None},
+            "a neighbour nothing has identified sends BOTH numbers and no name: `name` is "
+            "null ON THE WIRE, and the null is the wire's whole job — the `#2` a screen "
+            "shows for it is the app's rendering, and a placeholder string minted here "
+            "would be a second vocabulary nothing audits. THE TWO NUMBERS DIVERGE HERE "
+            "(D92) and that is the point of asserting them together: the card at index 3 "
+            "is the SECOND card in this box, because the sale at 2 closed up in front of "
+            "it, and `#3` was what the neighbour row drew until D92",
         )
 
         # --- an unallocated tail is not a gap --------------------------------------------

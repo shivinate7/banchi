@@ -5596,6 +5596,14 @@ _RUNS_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:py|sh|mjs)")
 # the same file in different modes, and the hook runs a third — so a path match alone answers
 # "on the commit path" for both, which this row caught on its first run against the tree it
 # was written for. A check is on that path when the hook invokes its script IN ITS MODE.
+#
+# MATCHED PER LINE, AND IT WAS MATCHED OVER THE WHOLE FILE UNTIL D92. The sentence above is
+# what this always meant; `path in hook and flag in hook` is not that, because the two can sit
+# on different lines and mean nothing about each other. Adding a SECOND self-testing check to
+# the hook proved it: `--self-test` then appeared in the file for `sigil-check`, and this row
+# immediately reported `audit-self-test` — which the hook does not run, and which D18 requires
+# it not to — as being on the commit path. A false negative would be worse than the loose
+# match: it would report a check as gating commits when nothing runs it.
 _RUNS_FLAG_RE = re.compile(r"--[a-z][a-z-]*")
 
 CHECK_ENTRY_KEYS = (
@@ -5753,7 +5761,10 @@ def check_commit_path(report: Report) -> None:
         where = "{0} — {1}".format(rel(CHECKS_REGISTRY), name)
         paths = _RUNS_PATH_RE.findall(entry["runs"])
         flags = _RUNS_FLAG_RE.findall(entry["runs"])
-        invoked = any(path in hook for path in paths) and all(flag in hook for flag in flags)
+        invoked = any(
+            any(path in line for path in paths) and all(flag in line for flag in flags)
+            for line in hook.splitlines()
+        )
         claimed = bool(entry["commit_path"])
 
         if claimed and not invoked:

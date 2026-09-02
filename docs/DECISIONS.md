@@ -5040,3 +5040,51 @@ All 104 of those sales went through `#/inventory`'s plain sale — the write thi
 **Two presses where there was one, and a table to read between them.** The first press is the price of not guessing at the vocabulary. **The status strings are TCGplayer's, seen once.** The filter and the delta both compare the summary's `orderStatus` against the ledger's stored `status`, which came from the detail; if the two endpoints ever spell one state differently, `skip_known` re-details that order on every press. The preview would show the doubled string, so the operator would see it. **The `Custom` range is still not captured**, so the window is three months or two years and nothing between. **No cooldown**: the budget is the operator's to respect across presses. **And `detail` is still unexercised against the live host** — the summary walk is proven by the very refusal that opened this entry, and the projection of a buyer's name and address is proven against fixtures only. The first filtered fetch the owner presses is the measurement, and the transport's STATUS block says so.
 
 **What would reopen this: a status spelled two ways between the summary and the detail, `Custom` captured off the wire, or orders arriving faster than a person presses.** The first is the delta re-detailing an order every press; the second gives the window a date and makes the status table smaller; the third is an unattended fetch, which is its own entry with its own argument about a cookie that expires under D53's supervisor with nobody watching the refusal.
+
+## D92 — A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
+
+**A bare `#` on an owner-side screen draws D58's count of the cards in a box, never the store key; a key is drawn only with the `B<box>` sigil D68 gave it.** Recorded and built 2026-09-02, after the owner reported the index on box 3 card 27 as wrong. It was not wrong. Box 3 was carrying two numbering systems and one sigil, and `#27` named two different cards on one screen.
+
+**The two numbers are D58's and they are both correct.** `Place.index` is the store key — the `/inventory/<box>/<index>` path, the `<index>.jpg` the photograph is named after, what every write aims by. `Place.slot` is the number a person counts to, and it moves as cards leave the box in front of it. Both ride the wire because they answer different questions. What had never been decided is which one owns the `#`.
+
+### What box 3 measured
+
+| | |
+|---|---|
+| stored indices in box 3 (`RB Epics`) | 723 |
+| cards on hand | 647 |
+| departed — sold | **76** |
+| index 27 | a sold `Astral Heron` |
+| card 27 | index 63, `Master Yi, Unstoppable` |
+| the two spaces at the top of the box | **76 apart** |
+| on-hand cards in box 3 carrying no name, which is what made the row draw at all | 5 |
+
+**Three renderers spelled both spaces `#`, on one screen.** `BoxBrowse.tsx`'s sticky header drew `Section 1 · #1–#82` from `section_start`/`section_end`, which are counts. `PlaceNeighbors.tsx` drew `#41` from `PlaceNeighbor.index`, which is a key. `join.departed_label` drew `B3 #27`, which is a key and says so. Only the third had ever argued its spelling.
+
+### The sigil goes to the count, and D68 is not reopened
+
+**`slot` is what a renderer draws and `index` is what a caller addresses with.** `_company` sends both per neighbour — the slot is the record's ordinal in `occupants`, which is already every on-hand index ascending, so it is `Position.slot` by the same bisect rather than a second derivation. `index` stays on the wire unread, because D45 makes a copies list a way back into the walk and a click target needs the key.
+
+**D68's `B3 #27` is exempt BY NAME, and the exemption is the rule rather than a hole in it.** A departed card has no count — `Position.slot` answers null for one by design — so a key is the only number it has. The `B` is what marks it, which is D68's own argument, and it is why that form is not a bare `#`. The rule is therefore: **a bare `#` is a count; `B<box> #` is a key.**
+
+**A FROZEN COUNT WAS PROPOSED AND MEASURED AND REJECTED ON THE MEASUREMENT.** The owner's first instinct was to give a departed card the count it held when it left, accepting that a historical number could collide with a live one. It collides essentially always: of 105 departed records across the store, **104 carry a number a live card in the same box holds right now**, and box 3 has 26 records sharing 18 numbers with each other. That is structural — any frozen count is by construction below the box's live card total, so a live card always holds it — and it is D68's own complaint (*"I'm seeing two box 1's"*) reproduced against live cards, which is the more dangerous direction, because a live card is one somebody walks to. **The frozen count survives as a FACT and not as an identifier**: it is worth drawing in the card panel, where nothing can mistake it for somewhere to reach, and that half is NOT BUILT — see the cost below.
+
+### What is checked, and what the check cannot do
+
+**`scripts/sigil-check.py` refuses a `#` composed from an expression naming `index`, on the commit path.** Narrow on purpose: it cannot tell a count from a key in general, and a check claiming to would be worse than none. What it catches is the one repeated mistake — reaching for the field called `index` when drawing a figure a hand is meant to count to.
+
+**It found three sites nobody had looked at, on its first run.** `BoxOps.tsx`'s machine receipt naming skipped terminal rows, and `RunPanel.tsx` twice over a capture-directory preview. All three are legitimate — a departed record is in no slot, and `CropSample` carries no slot at all because nothing there has consulted the store — so each now carries a `sigil-ok:` marker with the reason. That is the check's real value: it did not find bugs in those three, it forced them to be *examined* rather than assumed. It also found a CSS class named `run-preview-slot` that had been drawing a key since it was written.
+
+**Two prose statements of these facts were the exact reverse of the truth.** `types.ts` told every reader that the neighbour index "is a slot a hand can count to, not a store key". `t7_store_and_seams.py` told every reader that `Card 17` "IS THE SEVENTEENTH SLOT, NOT THE SEVENTEENTH CARD YOU CAN COUNT" — true when D30 wrote it, made false by D58 on 2026-08-30. `server.ts` had it right, as a recorded hazard, one screen away from `types.ts` having it backwards, and neither reader checked the other. **That is why this is a check and not a paragraph.**
+
+### Two things this deleted, and one it fixed by accident
+
+**The two stored `entry.label` writes are gone** — the mid-box delete's re-key and D83's move. Both composed a label in INDEX space while every route serves one re-rendered in count space by `_queue_row`; nothing read them, so no wrong number ever reached a screen. What they left was a field holding a plausible wrong rendering, indistinguishable from the correct ones `cli/resolve.py` writes, one forgotten `places` argument from being served. D56's rule already covers it: a rendering nobody can correct is joined at read time and not stored. The move was the worse of the two — the entry crosses INTO ANOTHER BOX, so the stale string named a section and card number from a different box's layout.
+
+**`docs-audit.py`'s `commit path` row was matching flags across the whole hook file**, so adding a second self-testing check made `audit-self-test` — which D18 requires the hook not to run — report as being on the commit path. Its own comment already said what it meant (*"a check is on that path when the hook invokes its script IN ITS MODE"*); the match is per line now. A false positive there is worse than a loose one: it reports a check as gating commits when nothing runs it.
+
+### What it costs
+
+**The check is text, so a renamed local walks past it** — `const n = side.index` and then `#{n}` is invisible to it. A nominal type over the two numbers is the fix that could not be evaded, and it was rejected on blast radius: `slot` and `index` are plain numbers across the wire contract and forty call sites. The ceiling is in `docs/DEBTS.md` rather than left for someone to discover. **`PlaceNeighbor.index` is now sent and read by nothing**, which is a deliberate unread field and not an oversight. **And the departed card's frozen count is RECORDED AND NOT BUILT**: it needs the event log, because current state plus `state_at` does not reconstruct it — tested, and 31 of 105 records come out wrong that way, box 1 uniformly by one (a sale that was later undone) and box 3 indices 37–39 in both directions (a reindex). That makes it a route on `getPriceHistory`'s shape, and it carries a semantic question nobody has answered: what a re-sold card's frozen count means.
+
+**What would reopen this: a neighbour row that becomes a click target, a screen that needs to draw a key inside a count column, or the frozen-count panel.** The first is why `index` is still on the wire. The second is what `sigil-ok:` is for. The third is the one piece of this entry that is a want rather than a build.

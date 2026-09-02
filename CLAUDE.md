@@ -68,7 +68,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + port-agreement + set-hint-agreement +
-                    #   screen-freshness + ignore-check + lint + vale + typecheck.
+                    #   screen-freshness + sigil-check + ignore-check + lint + vale +
+                    #   typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
@@ -665,6 +666,7 @@ D88  The store of record is SQLite, and a write is one transaction
 D89  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
 D90  The envelope is the unit of the write, and an order drives the walk as a mode of the inventory screen
 D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
+D92  A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
