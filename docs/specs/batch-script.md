@@ -60,6 +60,8 @@ pkmnscan identify   <capture-dir>   submit, wait, collect, cache. Costs money.
 pkmnscan join       <run-dir>       resolve against the export. Free, re-runnable.
 pkmnscan emit       <run-dir>       write import CSVs. Free, re-runnable.
 pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer actually staged.
+pkmnscan reconcile  --live <my-pricing.csv>        the WHOLE store, both directions (D87).
+                      Previews; --write settles `live`. Reachable on #/runs.
 ```
 
 Each is independently resumable and re-runnable. `join` and `emit` cost nothing, so
@@ -74,7 +76,7 @@ deleting one must never cost money or state.
 
 ```
 inventory/
-  store.sqlite          MASTER, since D87 (2026-09-01). One SQLite file: cards, boxes,
+  store.sqlite          MASTER, since D88 (2026-09-01). One SQLite file: cards, boxes,
                         listings, the identification cache, both standing queues, the
                         order ledger and the history — one table each, one transaction
                         per write. store.sqlite-wal and -shm beside it are the database.
@@ -99,7 +101,7 @@ runs/<YYYY-MM-DD>-<label>-<nn>/
 
 **Write discipline.** Every `Store.write()` is one SQLite transaction over every table,
 opened inside an exclusive lock on `.lock` and committed whole on a clean exit or not at
-all (D87). The lock is still needed, because atomicity prevents torn writes but not lost
+all (D88). The lock is still needed, because atomicity prevents torn writes but not lost
 updates: two writers each reading, each modifying, each writing back means the second
 silently erases the first, so the session reads inside the lock. The capture server (step
 5) uses the same lock and the same transaction; it is a second writer, not a second owner.
@@ -107,7 +109,7 @@ silently erases the first, so the session reads inside the lock. The capture ser
 **This section said the opposite until 2026-09-01.** It read: *"`inventory.json` is
 rewritten whole: to a temp file in the same directory, then `os.replace()` into position"*,
 and, under a bold **Not SQLite**, that *"D13 settles inventory as server-side JSON ... A
-later session that 'upgrades' inventory to SQLite is re-litigating D13."* D87 re-litigated
+later session that 'upgrades' inventory to SQLite is re-litigating D13."* D88 re-litigated
 it in the open. The per-file atomic replace was real and the SET of five files was never one
 transaction — a kill between two writes left the inventory and a queue disagreeing — and
 every capture re-read and rewrote every card in the store, which crossed the feeder's own
@@ -117,7 +119,7 @@ written through the capture server — is unchanged; the file format behind it m
 The history is the `events` table and is still append-only and still the audit trail —
 when a card was captured, identified, pushed, staged, live, sold. D10 makes this worth
 keeping: positions are never renumbered and sold cards leave permanent gaps, so the history
-*is* inventory truth over time. Since D87 the rows describing a change commit in the same
+*is* inventory truth over time. Since D88 the rows describing a change commit in the same
 transaction as the change, where `history.jsonl` was appended afterwards.
 
 ---
@@ -504,6 +506,19 @@ outside this script:
 | `pushed` | `emit` wrote the row into an import file. |
 | `staged` | **Export From Staged** download, diffed by `reconcile`. |
 | `live` | Quantity against that SKU in a later Filtered Export (`Total Quantity`). |
+
+**`reconcile --live` IS THE SECOND FORM AND IT IS NOT RUN-SCOPED (D87).** One full My Pricing
+export against every SKU in the store, whatever run or box it came from. It reports **both
+directions** — copies this pipeline sent that TCGplayer no longer holds, and SKUs it holds that
+were never sent from here — and the second half is the one a per-run reconcile cannot have,
+because a run only knows what it sent.
+
+**What it writes is `live`, and only `live`.** `pushed` is the cumulative record of what was
+sent and `_copies_out` already corrects a stuck one against the physical ceiling (below);
+rewriting it would destroy the only cumulative record there is, since an import file holds the
+last delta only (D54). Measured on the owner's store the first time it ran: **405 of 443 SKUs
+read `live: 0` while carrying pushed copies**, so this table's third row was a state nothing
+had ever written. The cap arithmetic went from seeing 93 live copies to 1,079.
 
 Collapsing `staged` and `live` would make D7's refill math wrong — `Add to Quantity =
 min(cap - live, backstock)` reads the *live* number, and an import staged but never moved

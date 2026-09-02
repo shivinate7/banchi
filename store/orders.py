@@ -388,12 +388,12 @@ class IngestReport:
 @dataclass
 class Ledger:
     """Two maps, and the split between them is the guard — see the header. `orders.json`
-    until D87; the `orders` and `fulfilment` tables of `store.sqlite` since."""
+    until D88; the `orders` and `fulfilment` tables of `store.sqlite` since."""
 
     orders: "Rows" = field(default_factory=lambda: Rows(Ledger.ORDERS))
     fulfilment: "Rows" = field(default_factory=lambda: Rows(Ledger.FULFILMENT))
 
-    # THE TWO TABLES (D87), and the split the header argues survives the move exactly:
+    # THE TWO TABLES (D88), and the split the header argues survives the move exactly:
     # `ingest` still cannot name `fulfilment`, because it is a different mapping bound to
     # a different table. A fulfilment row is one order's whole per-SKU map, which is the
     # unit `record_pull` reads and writes.

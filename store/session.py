@@ -17,14 +17,14 @@ THE RE-READ INSIDE `write()` IS STILL THE POINT, and it is cheaper than it was. 
 a snapshot taken before the lock was acquired loses updates exactly as quietly as no lock at
 all: you would be writing back state that predates whatever the other writer just committed.
 So the snapshot handed to the block is built INSIDE the lock, on a transaction opened inside
-the lock — and since D87 it is built lazily: a capture reads the box it is capturing into and
+the lock — and since D88 it is built lazily: a capture reads the box it is capturing into and
 the one `capture_id` it is replaying, and never the other 99,000 cards. `store/rows.py` is
 what makes `s.inventory.cards` a dict to every caller and a set of queries to the database.
 
 EVERYTHING A SESSION TOUCHED IS COMMITTED ON A CLEAN EXIT AS ONE TRANSACTION, AND NOTHING IS
 WRITTEN ON AN EXCEPTION. That sentence used to have a paragraph after it — five files, each
 atomic alone, "the set of them is not one transaction", the ledger written last so a torn
-write lost the order feed rather than the inventory, "a decision nobody has argued". D87
+write lost the order feed rather than the inventory, "a decision nobody has argued". D88
 argued it. There is one file, `BEGIN IMMEDIATE` is issued before the block runs and `COMMIT`
 after `flush` has written every table's diff, so a kill anywhere in between leaves the store
 as it was in every table at once, and the history rows describing the change commit with the
@@ -35,7 +35,7 @@ WHAT IS NOT IN THE TRANSACTION, and it is the same list it always was: photograp
 sidecars under `captures/`, and `codes.jsonl`. Callers write those inside the block on the
 strength of the flock, and a crash between a file write and the commit still leaves a file
 the store does not describe — `do_delete_box`'s docstring carries the money rule for that
-case and it is unchanged. The lock is why the flock survives D87 at all.
+case and it is unchanged. The lock is why the flock survives D88 at all.
 """
 
 from __future__ import annotations

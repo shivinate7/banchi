@@ -833,9 +833,9 @@ def icloud() -> List[str]:
 
 
 def store() -> List[str]:
-    """The store's two directories, and the shape of the store inside the first (D87).
+    """The store's two directories, and the shape of the store inside the first (D88).
 
-    `store.sqlite` is the master since D87 and the six JSON files before it are moved to
+    `store.sqlite` is the master since D88 and the six JSON files before it are moved to
     `legacy-json/` on the first open. Three states are worth telling apart here, because
     two of them look identical from a directory listing: a database, a legacy store nobody
     has opened on the new code yet (the next open migrates it), and a legacy file sitting
@@ -861,17 +861,17 @@ def store() -> List[str]:
                 cards = conn.execute("SELECT COUNT(*) FROM cards").fetchone()[0]
                 boxes = conn.execute("SELECT COUNT(*) FROM boxes").fetchone()[0]
                 conn.close()
-                out.append(cont(f"store.sqlite: {cards} cards in {boxes} boxes (D87)"))
+                out.append(cont(f"store.sqlite: {cards} cards in {boxes} boxes (D88)"))
             except Exception as exc:  # noqa: BLE001 — status reports, never raises
                 out.append(cont(f"store.sqlite: could not be read ({exc})"))
             if legacy:
                 out.append(cont(f"AND {', '.join(legacy)} beside it — READ BY NOTHING. Move "
                                 f"them into legacy-json/ or delete them; a legacy file is "
-                                f"never a fallback (D86, D87)."))
+                                f"never a fallback (D86, D88)."))
         elif legacy:
             out.append(cont(f"legacy JSON store ({', '.join(legacy)}) — the next `Store()` "
                             f"open migrates it to store.sqlite and moves these to "
-                            f"legacy-json/ (D87)"))
+                            f"legacy-json/ (D88)"))
     return out
 
 

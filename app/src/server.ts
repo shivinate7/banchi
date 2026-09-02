@@ -1563,7 +1563,7 @@ export async function getBoxListings(box: number): Promise<BoxListingPlan> {
 
 /**
  * What a photo reclaim over this box would delete: the sold cards whose photograph is still
- * on disk, and the bytes. FREE and read-only (D88).
+ * on disk, and the bytes. FREE and read-only (D89).
  *
  * THE STEP THAT COMES FIRST, exactly as `getBoxListings` is for the release: the control that
  * deletes is not drawn until this has answered, so the count and the megabytes are on screen
@@ -1576,7 +1576,7 @@ export async function getBoxPhotos(box: number): Promise<BoxPhotoPlan> {
 
 /**
  * Delete the photographs of every sold card in this box. The records stay, sold, each keeping
- * the digest of the photograph it had (D88).
+ * the digest of the photograph it had (D89).
  *
  * THERE IS NO UNDO — the bytes are gone and the card is not in your hand — so this sits with
  * `deleteBox` under docs/DESIGN.md's "genuinely destructive actions may still gate" clause.
@@ -1746,6 +1746,27 @@ export async function getPricing(name: string): Promise<PricingPayload> {
     `/pipeline/runs/${encodeURIComponent(name)}/pricing`,
     NO_CACHE,
   )) as PricingPayload
+}
+
+/**
+ * The whole store against one live TCGplayer export — the fourth command, unscoped (D87).
+ *
+ * FREE, AND IT WRITES ONLY WHEN `write` IS TRUE. The preview is the default: it moves the
+ * quantities the cap arithmetic reads, over every SKU at once.
+ *
+ * NOT `runStep(name, 'reconcile')`, WHICH STAYS. That answers one import against one Export
+ * From Staged; this answers the store against a full live export, which is the only document
+ * that can report the other direction — what TCGplayer holds that this pipeline never sent.
+ */
+export async function reconcileLive(
+  file: CsvUpload,
+  options: { write?: boolean } = {},
+): Promise<{ ok: boolean; exit_code: number; wrote: boolean; console: string }> {
+  return (await request('/pipeline/reconcile-live', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ export: file, write: Boolean(options.write) }),
+  })) as { ok: boolean; exit_code: number; wrote: boolean; console: string }
 }
 
 /**

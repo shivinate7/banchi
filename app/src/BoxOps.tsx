@@ -1078,7 +1078,7 @@ export function BoxOps({
         {/* ABOVE THE DELETE AND BELOW THE RELEASE, because it destroys less than the one and
             more than the other. A release edits counts; this deletes photographs nothing can
             regenerate; the delete takes the records with them. It draws nothing at all unless
-            this box holds a sold card (D88). */}
+            this box holds a sold card (D89). */}
         <ReclaimPhotos record={record} onChanged={onChanged} />
 
         <DeleteBox record={record} onChanged={onChanged} />
@@ -1841,7 +1841,7 @@ function ReleaseListings({
   )
 }
 
-/* PHOTO RECLAMATION — D88's third shape, between capture-undo and the terminal states.
+/* PHOTO RECLAMATION — D89's third shape, between capture-undo and the terminal states.
  *
  * Undo deletes the record AND the photograph; `sold` and `retired` keep both. What the 100k
  * pile needs is the record kept and the photograph reclaimed, once the card has sold through:

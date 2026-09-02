@@ -1,7 +1,7 @@
-"""A keyed table of records that behaves as a dict and loads only what is asked for (D87).
+"""A keyed table of records that behaves as a dict and loads only what is asked for (D88).
 
 `Inventory.cards`, `Cache.entries`, `Queue.entries` and the ledger's two maps were plain
-dicts, parsed whole out of a JSON file on every read. That was the cost D87 measured: every
+dicts, parsed whole out of a JSON file on every read. That was the cost D88 measured: every
 capture re-read and re-serialised every card in the store, and at ~48,000 cards the write
 cycle crossed the feeder's own cadence. This class is what lets those fields stay dicts to
 every caller — `.get`, `[]`, `in`, `del`, `.items()`, `.pop` — while a session bound to the

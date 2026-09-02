@@ -1,4 +1,4 @@
-"""The store of record is one SQLite file, and a session is one transaction (D87).
+"""The store of record is one SQLite file, and a session is one transaction (D88).
 
     inventory/
       store.sqlite          MASTER. Every table below, in one file, written in one
@@ -15,7 +15,7 @@ for a week and called closing it "a decision nobody has argued". A kill between 
 `write_json` calls left the inventory saying one thing and a queue that was meant to move
 with it saying another, and the exposure was Ctrl-C frequency rather than theoretical.
 `BEGIN IMMEDIATE ... COMMIT` over every table is what closes it, and nothing narrower
-does. The write cost D87 measured — every capture re-serialising and fsyncing the whole
+does. The write cost D88 measured — every capture re-serialising and fsyncing the whole
 store, crossing the feeder's cadence at ~48,000 cards — is the second argument, and it is
 second on purpose: write-behind would have fixed that alone, at the cost of durability on
 data that names photographs nothing can regenerate.
@@ -41,7 +41,7 @@ contention the flock cannot see, a checkpoint.
 WAL, `synchronous=FULL`. Readers never block the writer and the writer never blocks a
 reader, which is what lets `Store.read()` stay lock-free; FULL keeps the durability the
 per-file fsync had — every commit reaches the disk before the request answers — measured
-rather than assumed, and the number is in D87.
+rather than assumed, and the number is in D88.
 
 THE LEGACY IMPORT RUNS ONCE, ON THE FIRST OPEN, UNDER THE LOCK, AND MOVES THE FILES ASIDE.
 It is lossless — `Inventory.parse` (which still carries the v1->v2 card-state migration)
@@ -156,7 +156,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     `Store(snapshot.directory).history()` opens a second connection inside a write
     session, and a DDL or an `INSERT OR IGNORE` here would be a second writer waiting
     on the first until `busy_timeout` — measured as a 30-second stall on the first sale
-    T7 recorded after D87."""
+    T7 recorded after D88."""
     if _schema_present(conn):
         return
     for table, columns in TABLES.items():

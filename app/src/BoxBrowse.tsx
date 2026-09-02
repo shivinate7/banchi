@@ -2711,7 +2711,7 @@ type PhotoPanelProps = {
  *                                never photographed, and `store/master.py` keeps the field
  *                                null for it.
  *   `photo_reclaimed_at` set   — the photograph was deleted ON PURPOSE after the card sold
- *                                (D88), and the record kept its digest. Checked before the
+ *                                (D89), and the record kept its digest. Checked before the
  *                                404 branch because the route WILL 404 for this card, and the
  *                                404 sentence would call a deliberate reclaim a loss.
  *   the route 404s             — the record claims a photo and the file is not there. That
@@ -2740,7 +2740,7 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce }: PhotoPanelProps) {
     return (
       <div className="browse-absent">
         <p className="browse-note-text">
-          Photograph reclaimed after the sale — deleted on purpose, record kept (D88).
+          Photograph reclaimed after the sale — deleted on purpose, record kept (D89).
         </p>
         <p className="browse-machine">
           reclaimed {row.card.photo_reclaimed_at}

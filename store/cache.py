@@ -95,7 +95,7 @@ def _parse_entry(key: str, record: dict) -> Optional[CacheEntry]:
 class Cache:
     entries: "Rows" = field(default_factory=lambda: Rows(Cache.ENTRIES))
 
-    # The `identifications` table (D87): the answer whole in the payload, the digest and
+    # The `identifications` table (D88): the answer whole in the payload, the digest and
     # the cleared flag beside it so `sqlite3` can ask which answers a person vouched for.
     ENTRIES = TableSpec(
         "identifications",

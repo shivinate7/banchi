@@ -1,5 +1,5 @@
 """The inventory — cards, positions, SKUs, listing states. The `cards`, `boxes` and
-`listings` tables of `inventory/store.sqlite` since D87; `inventory.json` before it.
+`listings` tables of `inventory/store.sqlite` since D88; `inventory.json` before it.
 
 One record per PHYSICAL CARD, keyed by position, never per SKU. D7 collapses copies to one
 import row but keeps every copy as its own position with its own photo, because that is what
@@ -74,7 +74,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 # The comment beside `BadPosition` below explains why nothing here reaches `store/files.py`;
 # `store/rows.py` imports nothing and touches nothing, and it is what lets `Inventory.cards`
 # stay a dict to every caller while a session bound to the database loads one box at a time
-# (D87). The table specs at the bottom of `Inventory` are the other half of that contract.
+# (D88). The table specs at the bottom of `Inventory` are the other half of that contract.
 from store.rows import Rows, TableSpec, int_or_none
 
 VERSION = 2
@@ -112,7 +112,7 @@ RETIRED = "retired"
 # reusing that convention here rather than minting a second word for one fact.
 MOVED = "moved"
 
-# THE HISTORY EVENT A RECLAIMED PHOTOGRAPH WRITES (D88). An event and not a state: the card
+# THE HISTORY EVENT A RECLAIMED PHOTOGRAPH WRITES (D89). An event and not a state: the card
 # stays `sold`, and what changed is that the bytes behind `photo` are gone. Not a member of
 # `STATES` for D26's reason — `_state_before_sale` filters history against that tuple, and
 # an event sharing a state's word would make a reversal restorable to it.
@@ -199,7 +199,7 @@ class CardNotFound(ValueError):
 
 
 class CardNotSold(ValueError):
-    """`record_photo_reclaimed` was asked about a card that has not sold (D88)."""
+    """`record_photo_reclaimed` was asked about a card that has not sold (D89)."""
 
 
 class CardDeparted(ValueError):
@@ -375,7 +375,7 @@ class Card:
     # nor clear it.
     moved_to: Optional[str] = None
     run: Optional[str] = None
-    # THE PHOTOGRAPH'S DIGEST, KEPT AFTER THE PHOTOGRAPH IS GONE (D88). Set by
+    # THE PHOTOGRAPH'S DIGEST, KEPT AFTER THE PHOTOGRAPH IS GONE (D89). Set by
     # `record_photo_reclaimed` and by nothing else; None on every card whose photograph is
     # still on disk, because while the file exists the file is the fact and a copy of its
     # digest here would be a second thing to keep true through D26's re-shoot. Once the bytes
@@ -763,7 +763,7 @@ class Listing:
 
 
 def _card_columns(card: "Card") -> Dict[str, object]:
-    """The indexed columns beside a card's payload (D87). `box`/`idx` are NULL where the
+    """The indexed columns beside a card's payload (D88). `box`/`idx` are NULL where the
     stored value will not coerce, which is how `next_index` finds such a record without a
     scan — see `int_or_none`."""
     return {
@@ -791,7 +791,7 @@ def _known(cls, record: dict) -> dict:
 class Inventory:
     """The master record. Written through `store.session`, one transaction per session.
 
-    `cards`, `boxes` and `listings` are `Rows` (D87): a dict to every caller, and to a
+    `cards`, `boxes` and `listings` are `Rows` (D88): a dict to every caller, and to a
     session bound to the database a set of queries that load only the rows a method names.
     The methods below that used to walk every card — the high-water scan, the capture-id
     replay, the SKU walk, the box-number allocator — ask the mapping for the rows they want
@@ -917,7 +917,7 @@ class Inventory:
         """`(key, index)` of every record in `box`, refusing on any record that will not
         coerce — ANYWHERE in the store, which is the rule `next_index` has always had.
 
-        Asked of the mapping as three indexed queries rather than a walk (D87): the rows
+        Asked of the mapping as three indexed queries rather than a walk (D88): the rows
         whose `box` column is this box, plus the rows whose `box` or `idx` column is NULL —
         which is exactly the set of records `int()` refuses, since the columns are derived
         by the same coercion. A record that will not coerce is then LOADED so the refusal
@@ -946,7 +946,7 @@ class Inventory:
     def records_in(self, box) -> List[Tuple[int, str, Card]]:
         """`(index, key, card)` for every record in `box`, ascending, coerced the way
         `next_index` coerces and refusing the same way. What the box-scoped routes walk
-        instead of the whole store (D87)."""
+        instead of the whole store (D88)."""
         box = _as_position_int(box, "box")
         self._positions_in(box)  # the refusal, before anything is built
         out = [
@@ -1159,7 +1159,7 @@ class Inventory:
         return True
 
     def record_photo_reclaimed(self, key: str, *, sha256: str, size: int) -> bool:
-        """Record that this card's photograph has been deleted on purpose (D88).
+        """Record that this card's photograph has been deleted on purpose (D89).
 
         The FILE is the route's to remove, inside the same lock; this writes the two facts
         the record keeps once it is gone — the digest of what was there and when it went —
@@ -1614,7 +1614,7 @@ class Inventory:
 
     # ------------------------------------------------------------------- the tables
 
-    # HOW EACH MAPPING BECOMES ROWS (D87). `parse` is the same annotation-filtered
+    # HOW EACH MAPPING BECOMES ROWS (D88). `parse` is the same annotation-filtered
     # construction `Inventory.parse` has always done per record, so a row and a JSON record
     # are read by one rule; `dump` is `asdict`, the same as `to_payload`; `columns` is the
     # handful of indexed fields `store/db.py` declares beside the payload. Declared here and

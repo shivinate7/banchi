@@ -116,7 +116,21 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
-./pkmnscan reconcile <run-dir> <staged-export.csv>
+./pkmnscan reconcile <run-dir> <staged-export.csv>   # one import, one Export From Staged
+./pkmnscan reconcile --live <my-pricing.csv> [--write]
+                                   # THE WHOLE STORE against one live export (D87). Previews
+                                   #   by default. Reports BOTH directions — copies this
+                                   #   pipeline sent that TCGplayer no longer holds, and SKUs
+                                   #   it holds that were never sent from here.
+                                   #   WHAT IT WRITES IS `live`, AND ONLY `live`. `pushed` is
+                                   #   the cumulative record of what was sent, and
+                                   #   `cli/resolve.py:_copies_out` already corrects a stuck
+                                   #   one against the physical ceiling. Nothing had ever
+                                   #   written `live`: 405 of 443 SKUs read 0 while carrying
+                                   #   pushed copies, so the cap arithmetic saw 93 live copies
+                                   #   where there were 1,079.
+                                   #   It moves QUANTITIES and marks no card sold (D7).
+                                   #   Reachable on `#/runs`, under the run panel.
 ```
 
 ## Things you will get wrong without being told
@@ -241,7 +255,7 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   condition rather than leaving it to be discovered.
 
 - **THE STORE OF RECORD IS ONE SQLITE FILE, AND `inventory.json` IS A LEGACY FILE READ BY
-  NOTHING** (D87, 2026-09-01). `inventory/store.sqlite` holds cards, boxes, listings, the
+  NOTHING** (D88, 2026-09-01). `inventory/store.sqlite` holds cards, boxes, listings, the
   identification cache, both standing queues, the order ledger and the history, one table
   each, and every `Store.write()` is ONE transaction over all of them — the five-file torn set
   `store/session.py` spent a week calling "a decision nobody has argued" cannot happen
@@ -255,7 +269,7 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   What is NOT in the transaction is what never was: photographs, sidecars and `codes.jsonl`,
   written inside the flock, which is why the flock survives.
 
-- **A SOLD CARD'S PHOTOGRAPH IS RECLAIMED ON PURPOSE, AND THAT IS A THIRD SHAPE** (D88).
+- **A SOLD CARD'S PHOTOGRAPH IS RECLAIMED ON PURPOSE, AND THAT IS A THIRD SHAPE** (D89).
   Capture-undo deletes the record and the photograph (D10); `sold` and `retired` keep both
   (D26). `POST /boxes/<box>/photos/reclaim` deletes the photographs of a box's SOLD cards and
   keeps every record, each carrying `photo_sha256` and `photo_reclaimed_at` from then on. Sold
@@ -622,8 +636,9 @@ D83  A card leaves a box through a third door: moved, not sold or retired
 D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
 D85  The corner is settled by geometry, and a variable nothing sets is not a fallback
 D86  The pricing answer is one file for the store, and the worklist spans runs
-D87  The store of record is SQLite, and a write is one transaction
-D88  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
+D87  The reconcile is store-wide, and what it writes is `live`
+D88  The store of record is SQLite, and a write is one transaction
+D89  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

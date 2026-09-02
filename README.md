@@ -28,7 +28,7 @@ pipeline/                  CSV, variant ladder, pricing, join, routing, decision
 identify/                  prompt, Batch API transport, sidecars, image prep
 geometry/                  find the card in the frame; crop-retry bands
 store/                     the master store: inventory, cache, standing queues, the order
-                           ledger and the history — one SQLite file since D87
+                           ledger and the history — one SQLite file since D88
 server/                    capture server: /capture, /status, /photo, inventory state,
                            and the pipeline seam — the one place a route can spend money
 app/                       the web app. Vite + React + TS. Ten screens — capture, runs,
@@ -106,6 +106,8 @@ human. One blocking command would put a person in the middle of a poll loop.
                                                       inventory/prices.json. Previews first.
 ./pkmnscan prices     show [--held]                   the corpus, and what is held back.
 ./pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
+./pkmnscan reconcile  --live <my-pricing.csv>         the WHOLE store against one live
+                        export, both directions. Previews; --write settles `live`.
 ```
 
 `identify --dry-run` does everything except the API call, so a mistyped directory, a

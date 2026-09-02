@@ -388,7 +388,7 @@ export type InventoryCard = {
   captured_at: string | null
   capture_id: string | null
 
-  /** D88. Set together by the reclaim and by nothing else: the digest of the photograph that
+  /** D89. Set together by the reclaim and by nothing else: the digest of the photograph that
    *  used to be at `photo`, and when it was deleted. Both null while the file is on disk —
    *  the file is the fact then, and a copy of its digest here would be a second thing to
    *  keep true through a re-shoot. A screen that finds these set draws "reclaimed", which is
@@ -676,7 +676,7 @@ export type BoxDeleteResult = {
   directory_removed: boolean
 }
 
-/** `GET /boxes/<box>/photos` — what a reclaim over this box would delete (D88). FREE and
+/** `GET /boxes/<box>/photos` — what a reclaim over this box would delete (D89). FREE and
  *  read-only, and the step that comes first: the control that deletes does not exist until
  *  this has answered, D34's preflight shape applied to bytes instead of counts.
  *
@@ -692,7 +692,7 @@ export type BoxPhotoPlan = {
   on_hand_photos: number
 }
 
-/** `POST /boxes/<box>/photos/reclaim`'s receipt (D88). `keys` is every record whose
+/** `POST /boxes/<box>/photos/reclaim`'s receipt (D89). `keys` is every record whose
  *  photograph went, so the claim is checkable afterwards — each of those records now carries
  *  `photo_sha256` and `photo_reclaimed_at`. There is no undo: the bytes are gone. */
 export type PhotoReclaimResult = {

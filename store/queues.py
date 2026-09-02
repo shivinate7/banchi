@@ -168,7 +168,7 @@ class QueueEntry:
 
 def _parse_entry(key: str, record: dict) -> Optional[QueueEntry]:
     """One queued card from its stored record, or None for a shape that will not construct.
-    One rule for a JSON record and a database row (D87)."""
+    One rule for a JSON record and a database row (D88)."""
     if str(key).startswith("_"):
         return None
     known = {k: v for k, v in record.items() if k in QueueEntry.__annotations__}
@@ -180,7 +180,7 @@ def _parse_entry(key: str, record: dict) -> Optional[QueueEntry]:
 
 @dataclass
 class Queue:
-    """One standing queue. Was one file each; both are the `queues` table since D87,
+    """One standing queue. Was one file each; both are the `queues` table since D88,
     told apart by the `queue` column that `store/session.py` binds each mapping to."""
 
     name: str

@@ -158,11 +158,12 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * `--self-test` until somebody updates this record, which is a deliberate act with a diff. The
  * ordinary run prints the counts in its summary line instead, so drift is visible without being
  * fatal. */
-/* D88's pair — `getBoxPhotos` (a read) and `reclaimBoxPhotos` (a write) — were added the day
+/* D89's pair — `getBoxPhotos` (a read) and `reclaimBoxPhotos` (a write) — were added the day
  * they landed, 2026-09-01, which is the deliberate act the paragraph below asks for. D86's
  * amendment had left three unrecorded the same day (`getPricingCorpus`, `putPricingCorpus`,
- * `emitMerged`), so `--self-test` was red on main while the ordinary run printed the drift
- * line; they are recorded here too, and the `check` target is what runs the self-test.
+ * `emitMerged`) and D87's reconcile a fourth (`reconcileLive`), so `--self-test` was red on
+ * main while the ordinary run printed the drift line; they are recorded here too, and the
+ * `check` target is what runs the self-test.
  *
  * FIVE NAMES ARRIVED IN ONE UPDATE ON 2026-09-01, AND FOUR OF THEM WERE ALREADY OVERDUE.
  * `getPriceTrends` (D79), `getExportScope` (D76), `moveCard` and `moveCards` (D83) all landed
@@ -183,7 +184,7 @@ const RECORDED = {
     'undoRetire', 'createBox', 'updateBox', 'openSection', 'applyBoxClaims', 'removeCardInPlace',
     'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep', 'putDecisions',
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
-    'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reclaimBoxPhotos',
+    'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders'],
   nonRequests: [

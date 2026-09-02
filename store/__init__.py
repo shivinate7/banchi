@@ -1,5 +1,5 @@
 """The master store — inventory, the identification cache, the standing queues, the order
-ledger and the history, in one SQLite file (D87).
+ledger and the history, in one SQLite file (D88).
 
 Runs are immutable inputs; this is the thing they feed. Deleting a run directory must never
 cost money or state, which is only true if the answers already paid for and the decisions
@@ -36,9 +36,9 @@ turns the old `set_state(key, PUSHED)` into a raised `UnknownState` rather than 
 per-position flag. `Inventory.parse` migrates a v1 file: a card wearing a stage becomes
 `identified` and hands that stage to its SKU as a count.
 
-SQLITE, AS OF D87 — AND THE PARAGRAPH THIS REPLACES SAID THE OPPOSITE FOR THREE WEEKS. It
+SQLITE, AS OF D88 — AND THE PARAGRAPH THIS REPLACES SAID THE OPPOSITE FOR THREE WEEKS. It
 read "NOT SQLITE. D13 settles inventory as server-side JSON ... a later session that
-'upgrades' inventory to SQLite is re-litigating D13, not improving it." D87 re-litigated it
+'upgrades' inventory to SQLite is re-litigating D13, not improving it." D88 re-litigated it
 in the open, with the argument D13 never made: the five JSON files were each replaced
 atomically and the SET of them was not one transaction, and every capture re-read and
 rewrote every card in the store. D13's sentence — one truth, server-side, on the Mac, read
@@ -60,7 +60,7 @@ a stale snapshot loses the update just as quietly.
 THE HISTORY IS A TABLE NOW AND STILL APPEND-ONLY, and it is the audit trail. D10 makes it
 worth keeping: positions are never renumbered and sold cards leave permanent gaps IN THE
 INDEX — D58 closes the gap in the LABEL and touches nothing here — so the history IS
-inventory truth over time, in a way the current-state tables cannot be. Since D87 the rows
+inventory truth over time, in a way the current-state tables cannot be. Since D88 the rows
 describing a change commit in the same transaction as the change, where `history.jsonl`
 was appended after the files and could under-report a change the store had made.
 """

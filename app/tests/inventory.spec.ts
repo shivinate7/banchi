@@ -109,8 +109,8 @@ function card(input: {
    *  every fixture in this file until 2026-08-30, which is how the ranked block's whole
    *  vocabulary shipped unasserted. */
   neighbors?: { prev: Neighbor | null; next: Neighbor | null } | null
-  /** D88: when this card's photograph was reclaimed after its sale, or null while the file is
-   *  on disk — the default, and what every case written before D88 assumed. */
+  /** D89: when this card's photograph was reclaimed after its sale, or null while the file is
+   *  on disk — the default, and what every case written before D89 assumed. */
   reclaimed?: string | null
 }) {
   const box = input.box ?? 2
@@ -660,7 +660,7 @@ async function open(
     })
   })
 
-  /* D88's two, the free count and the reclaim, registered here for the same prefix reason as
+  /* D89's two, the free count and the reclaim, registered here for the same prefix reason as
      D34's pair below them. The count answers two reclaimable photographs — the fixture's one
      sold card and one more — so the panel has a number to draw before the press exists. */
   await page.route(/\/boxes\/\d+\/photos$/, async (route) => {
@@ -2280,7 +2280,7 @@ test('a box with no listing hold is offered no release at all', async ({ page })
   await expect(page.getByRole('button', { name: /Release the listing hold/ })).toHaveCount(0)
 })
 
-// ----------------------------------------------------------- photo reclamation (D88)
+// ----------------------------------------------------------- photo reclamation (D89)
 
 test('a box that has sold nothing is offered no photo reclaim at all', async ({ page }) => {
   await open(page, { boxes: [{ ...BOXES.boxes[0], sold: 0 }] })
@@ -2349,7 +2349,7 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
 test('a reclaimed photograph is drawn as reclaimed, not as a photo the store lost', async ({
   page,
 }) => {
-  /* THE SOLD CARD, because only a sold card's photograph is ever reclaimed (D88): Eiscue at
+  /* THE SOLD CARD, because only a sold card's photograph is ever reclaimed (D89): Eiscue at
      2/4, the same fixture row every departed-card case in this file walks to. */
   const cards: Cards = {
     ...CARDS,

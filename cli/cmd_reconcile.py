@@ -25,12 +25,150 @@ from __future__ import annotations
 from pathlib import Path
 
 from cli import runs
-from pipeline import join, tcgcsv
+from pipeline import join, livecheck, tcgcsv
 from store import master
 from store.session import Store
 
 
+def _card_counts(inventory):
+    """Per SKU: copies marked sold, copies still on hand, and every SKU ever seen.
+
+    `seen` IS WIDER THAN THE LISTING LEDGER AND HAS TO BE. A card can carry a SKU that was
+    never pushed — withheld (D49), sub-threshold and not yet emitted, or simply queued. Judging
+    "listed outside pkmnscan" against the ledger alone would accuse the operator of every one
+    of them the moment it showed up live.
+    """
+    sold, hand, seen = {}, {}, set()
+    for card in inventory.cards.values():
+        sku = getattr(card, "sku", None)
+        if not sku:
+            continue
+        seen.add(sku)
+        state = getattr(card, "state", None)
+        if state == master.SOLD:
+            sold[sku] = sold.get(sku, 0) + 1
+        elif state not in master.TERMINAL_STATES:
+            hand[sku] = hand.get(sku, 0) + 1
+    return sold, hand, seen
+
+
+def _say_rows(say, rows, head, note, limit=20):
+    if not rows:
+        return
+    say("")
+    say(head)
+    say(f"  {note}")
+    say(f"  {'copies':>6} {'sku':>10} {'push':>4} {'live':>4} {'sold':>4} {'hand':>4}  card")
+    for row in rows[:limit]:
+        n = row.unexplained or row.live
+        say(f"  {n:>6} {row.sku:>10} {row.pushed:>4} {row.live:>4} {row.sold:>4} "
+            f"{row.on_hand:>4}  {(row.name or row.condition)[:38]}")
+    if len(rows) > limit:
+        say(f"  ... and {len(rows) - limit} more")
+
+
+def run_live(args, say) -> int:
+    """`pkmnscan reconcile --live <export.csv>` — the whole store against one live export.
+
+    PREVIEWS BY DEFAULT, for `pkmnscan prices adopt`'s reason: it moves quantities the cap
+    arithmetic reads, over every SKU at once, and a migration nobody watched is how a wrong
+    number becomes the new floor.
+    """
+    path = Path(args.live)
+    if not path.is_file():
+        say(f"live export not found: {path}")
+        return 1
+
+    export = tcgcsv.read_export(path)
+    source = runs.describe_source(path)
+    store = Store()
+    snapshot = store.read()
+    sold, hand, seen = _card_counts(snapshot.inventory)
+    report = livecheck.compare(
+        export.rows, snapshot.inventory.listings, sold, hand, seen
+    )
+
+    say("")
+    say(f"live export      {source['path']}")
+    say(f"                 {source['mtime']}, sha256 {source['sha256'][:12]}")
+    say(f"                 {len(export.rows)} row(s)")
+    say(f"ledger           {len(snapshot.inventory.listings)} SKU(s) with a listing record")
+    say("")
+    say(f"agreed           {len(report.agreed)} SKU(s) — every pushed copy is live or marked sold")
+
+    _say_rows(
+        say, report.unexplained,
+        f"unexplained      {report.unexplained_copies} copy(ies) across "
+        f"{len(report.unexplained)} SKU(s)",
+        "this pipeline pushed them, TCGplayer does not hold them, and no card is marked sold. "
+        "Sold and unmarked, pulled by hand, or a row the portal rejected.",
+    )
+    _say_rows(
+        say, report.beyond,
+        f"beyond this pipeline  {len(report.beyond)} SKU(s)",
+        "TCGplayer holds more than this pipeline ever sent. Left alone — it did not put it there.",
+    )
+    _say_rows(
+        say, report.unknown,
+        f"never seen here  {len(report.unknown)} SKU(s) live at TCGplayer",
+        "sealed product, or singles listed outside pkmnscan. Nothing to reconcile.",
+    )
+    _say_rows(
+        say, report.absent,
+        f"absent           {len(report.absent)} SKU(s) in the ledger, not in the export at all",
+        "not even a zero-quantity row — check the export covers every Product Line you sell.",
+    )
+
+    if not args.write:
+        say("")
+        say(f"DRY RUN — nothing written. {report.corrected} copy(ies) of `{master.LIVE}` would "
+            f"be corrected from the export.")
+        say("`pushed` is left alone: it is the cumulative record of what was sent, and")
+        say("`cli/resolve.py:_copies_out` already corrects a stuck one against the physical")
+        say("ceiling. Re-run with --write.")
+        return 0
+
+    moved = 0
+    touched = 0
+    with store.write() as writable:
+        for row in report.agreed + report.unexplained + report.beyond:
+            listing = writable.inventory.listings.get(row.sku)
+            if listing is None:
+                continue
+            # `live` COMES FROM THE EXPORT AND IS NOT NEGOTIATED. D8 and D11 make the export
+            # authoritative about what TCGplayer holds, and `cli/resolve.py:_copies_out`
+            # already treats `Total Quantity` as a floor that "cannot be argued below". This
+            # is the one field the reconcile writes — see `pipeline/livecheck.py`'s header for
+            # why `pushed` is read and never rewritten.
+            if listing.live == row.live:
+                continue
+            moved += abs(row.live - listing.live)
+            listing.live = row.live
+            listing.at = master.now()
+            touched += 1
+        stages = writable.inventory.listing_counts()
+
+    say("")
+    say(f"settled          {touched} listing(s); {moved} copy(ies) of `{master.LIVE}` "
+        f"corrected from the export")
+    counted = ", ".join(f"{k} {v}" for k, v in stages.items() if v) or "empty"
+    say(f"listings         {counted}")
+    if report.unexplained_copies:
+        say("")
+        say(f"{report.unexplained_copies} copy(ies) were sent and are neither live nor marked "
+            f"sold.")
+        say("Mark the sold ones on #/inventory; what is left is a listing you pulled or a")
+        say("row TCGplayer refused. Nothing here adjusts them — `pushed` is a record.")
+    return 0
+
+
 def run(args, say) -> int:
+    if getattr(args, "live", None):
+        return run_live(args, say)
+    if not args.run_dir or not args.staged_export:
+        say("give a run directory and a staged export, or --live <export.csv> for the "
+            "whole store")
+        return 1
     run_dir = runs.open_run(args.run_dir)
     staged_path = Path(args.staged_export)
     if not staged_path.is_file():

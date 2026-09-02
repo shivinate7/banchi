@@ -26,7 +26,7 @@
     GET    /boxes/<box>/listings           what this box's SKUs are believed to be holding,
                                            and what a release would give up. FREE (D34)
     GET    /boxes/<box>/photos             what a reclaim would delete: sold cards whose
-                                           photograph is still on disk, and the bytes (D88)
+                                           photograph is still on disk, and the bytes (D89)
     POST   /boxes/<box>/photos/reclaim     delete those photographs, keep every record, keep
                                            each one's digest. `confirm: true`. No undo.
     POST   /boxes/<box>/listings/release   give up what this box's copies could account for,
@@ -506,7 +506,7 @@ _BOX_LISTINGS_RELEASE_RE = re.compile(r"^/boxes/(\d+)/listings/release$")
 # nothing at all — the index comes from `next_index` inside the lock, which is the only
 # place it can be read without a round trip that could go stale between the two halves.
 _BOX_SECTIONS_RE = re.compile(r"^/boxes/(\d+)/sections$")
-# D88's pair: the free count of what a reclaim would delete, and the reclaim itself.
+# D89's pair: the free count of what a reclaim would delete, and the reclaim itself.
 _BOX_PHOTOS_RE = re.compile(r"^/boxes/(\d+)/photos$")
 _BOX_PHOTOS_RECLAIM_RE = re.compile(r"^/boxes/(\d+)/photos/reclaim$")
 
@@ -708,7 +708,7 @@ MOVE_CARDS_FIELDS = ("indices", "to_box")
 # this route asserts a fact about a system this process cannot see, so a request that did
 # not say so deliberately must not be able to make the assertion by accident.
 RELEASE_FIELDS = ("confirm",)
-# D88's reclaim takes the same one field, for the same reason: the route's whole content is
+# D89's reclaim takes the same one field, for the same reason: the route's whole content is
 # a person's decision that these photographs are disposable, and a request that did not say
 # so on purpose must not make it by accident.
 RECLAIM_FIELDS = ("confirm",)
@@ -1744,7 +1744,7 @@ class _Places:
         # has run at all. Cached for the same reason `_cache` above is: this class is
         # instantiated per request, so `do_inventory` renders 5,000 rows against one walk
         # rather than 5,000.
-        # PER BOX SINCE D87, and lazily: `Inventory.records_in` answers one box out of the
+        # PER BOX SINCE D88, and lazily: `Inventory.records_in` answers one box out of the
         # `cards` table without building the other boxes' records, which is what keeps a
         # capture's `_card_summary` from loading the whole store to label one card. The
         # degrade is still whole-store — `records_in` refuses on an unreadable record
@@ -4181,7 +4181,7 @@ def do_release_box_listings(box: int, payload: dict) -> dict:
 def _reclaimable(inventory: master.Inventory, box: int) -> Tuple[list, list]:
     """`(reclaimable, reclaimed)` — the sold cards in `box` whose photograph is still on disk,
     each as `(index, key, card, path, bytes)`, and the ones already reclaimed as `(index, key,
-    card)`. One walk, shared by the count and the write so the two cannot disagree (D88).
+    card)`. One walk, shared by the count and the write so the two cannot disagree (D89).
 
     SOLD ONLY, AND THE OTHER DOORS ARE LEFT ALONE ON PURPOSE. A retired card's photograph is
     what lets the retirement be questioned later (D26); a moved tombstone has none; a card on
@@ -4247,7 +4247,7 @@ def do_box_photos(box: int) -> dict:
 
 
 def do_reclaim_box_photos(box: int, payload: dict) -> dict:
-    """Delete the photographs of every sold card in this box, keeping every record (D88).
+    """Delete the photographs of every sold card in this box, keeping every record (D89).
 
     THE THIRD SHAPE, and the one this store did not have. Capture-undo deletes the record AND
     the photograph (D10); `sold` and `retired` keep both (D26). What the 100k pile needs is a
@@ -4257,7 +4257,7 @@ def do_reclaim_box_photos(box: int, payload: dict) -> dict:
     WHAT THE RECORD KEEPS IS THE DIGEST, and it is computed here, from the bytes, in the
     moment before they go. D36 makes the photograph the truth and `photo_sha256` the binding
     between a run and a slot; a box whose sold photographs are gone can no longer be checked
-    that way FOR THOSE CARDS, and D88 gives that up on purpose for cards that have left the
+    that way FOR THOSE CARDS, and D89 gives that up on purpose for cards that have left the
     box. The digest on the record is what keeps the history able to say what was there, and
     what a dispute about which copy sold can still be answered with.
 
@@ -7364,7 +7364,7 @@ def _box_row(
 def _boxes_named(inventory: master.Inventory) -> List[int]:
     """Every box number a card names, ascending — refusing on a record whose box is not one.
 
-    One `DISTINCT` over the indexed column since D87 rather than a walk over every record,
+    One `DISTINCT` over the indexed column since D88 rather than a walk over every record,
     and the refusal is kept: a NULL in that column is exactly a record `int()` refused, so
     it is loaded and coerced to raise `BadPosition` naming the card, as the walk did.
     """
@@ -8872,7 +8872,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             match = _BOX_LISTINGS_RE.match(path)
             if match:
                 return self._json(HTTPStatus.OK, do_box_listings(int(match.group(1))))
-            # D88's free count, the read that comes before the reclaim.
+            # D89's free count, the read that comes before the reclaim.
             match = _BOX_PHOTOS_RE.match(path)
             if match:
                 return self._json(HTTPStatus.OK, do_box_photos(int(match.group(1))))
@@ -9113,7 +9113,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_release_box_listings(int(match.group(1)), self._body())
                 return self._json(HTTPStatus.OK, body)
-            # D88's reclaim: the photographs of every sold card in the box, records kept.
+            # D89's reclaim: the photographs of every sold card in the box, records kept.
             match = _BOX_PHOTOS_RECLAIM_RE.match(path)
             if match:
                 body = do_reclaim_box_photos(int(match.group(1)), self._body())
@@ -9155,6 +9155,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/crop-preview":
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_crop_preview(self._body())
+                )
+            if path == "/pipeline/reconcile-live":
+                # THE FOURTH COMMAND, OVER THE WHOLE STORE (D87). Free, and it writes only
+                # when asked — the preview is the default. Not run-scoped: this is the one
+                # shape that can report what TCGplayer holds and this pipeline never sent.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_reconcile_live(self._body())
                 )
             if path == "/pipeline/emit":
                 # ONE IMPORT FILE OVER SEVERAL RUNS (D86). FREE — it reads runs, writes a CSV

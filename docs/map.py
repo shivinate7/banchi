@@ -230,12 +230,12 @@ SHIPPED = [
               "order read as if nothing had happened since 2026-08-24 while `make status` reported step "
               "9 of 15."},
     {"n": 21, "on": "2026-09-01", "title": "The store of record is SQLite, and a sold card's photograph is reclaimed",
-     "note": "D87, D88. One SQLite file replaces the five JSON documents and the history log; every "
+     "note": "D88, D89. One SQLite file replaces the five JSON documents and the history log; every "
               "Store.write() is one transaction over every table, so the five-file torn set is "
               "cannot happen; and a session loads only the rows it names. MEASURED on a synthetic "
               "100,000-card copy of the owner's store: a capture's store cycle went from ~4.4 s under "
               "the JSON files to ~3 ms, building one card object. The owner's real store migrated "
-              "without loss in 0.13 s, six files moved to legacy-json/ with a receipt. D88 is the third "
+              "without loss in 0.13 s, six files moved to legacy-json/ with a receipt. D89 is the third "
               "shape between capture-undo and the terminal states — record kept, photograph reclaimed, "
               "digest kept — on #/inventory's box operations, gated like the delete. WHAT THIS STEP DID "
               "NOT DO: the 2,000-card probe that decides whether the 100k run is worth making is work "
@@ -319,7 +319,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -362,7 +362,7 @@ COMPONENTS = [
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D54"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
                                    "reason `pipeline/orders.py` may not hold it: it reads a run "
@@ -560,6 +560,20 @@ COMPONENTS = [
                                   "run files in, newest-wins, reporting every choice.",
                           "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86"],
                           "tested_by": ["T7"]},
+            "livecheck.py": {"does": "the whole store against one live TCGplayer export "
+                                     "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
+                                     "scopes its diff to one run's emitted_skus while "
+                                     "`store/master.py:Listing` is already per SKU across every "
+                                     "box and run (D7 amended), so the scoping was the command's "
+                                     "and not the data's. Reads and writes nothing — it diffs. "
+                                     "What the caller writes from it is `live` and ONLY `live`: "
+                                     "`pushed` is the cumulative record of what was sent and "
+                                     "`_copies_out` already corrects a stuck one against the "
+                                     "physical ceiling. Measured: 405 of 443 SKUs read live 0 "
+                                     "while carrying pushed copies, and the cap arithmetic went "
+                                     "from seeing 93 live copies to 1,079.",
+                             "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87"],
+                             "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and the live cap spent ONCE over that union. "
                                  "D59's defect one register up — add_to_quantity spends "
@@ -741,8 +755,8 @@ COMPONENTS = [
         "path": "store/",
         "status": "built",
         "does": "the master store: inventory, cache, standing queues, order ledger and the "
-                "history, in one SQLite file since D87",
-        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D87", "D88"],
+                "history, in one SQLite file since D88",
+        "governed_by": ["D4", "D7", "D9", "D10", "D13", "D15", "D63", "D88", "D89"],
         "note": "T7 reaches this package as of 2026-08-13 — the allocator, the lock and "
                 "the atomic replace — and as of 2026-08-22 asserts queues.apply_run "
                 "outright: check_queue_supersede calls it directly rather than watching it "
@@ -754,13 +768,13 @@ COMPONENTS = [
             "master.py": {"does": "the cards, boxes and listings tables — cards, positions, SKUs, "
                                   "listing states, `open_section`, which puts one divider in front "
                                   "of the next card at the index only the store can read (D10), and "
-                                  "D88's `record_photo_reclaimed`. Its three mappings are `Rows`: the "
+                                  "D89's `record_photo_reclaimed`. Its three mappings are `Rows`: the "
                                   "high-water scan, the capture-id replay and the SKU walk ask the "
                                   "mapping for the rows they want rather than walking every card",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D58", "D59", "D83", "D87", "D88"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D58", "D59", "D83", "D88", "D89"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
-                          "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D87"], "tested_by": ["T7"]},
+                          "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
             # THE DURABLE HALF OF THE ORDER FLOW, and the split from pipeline/orders.py is
             # the design rather than a packaging choice: the resolver's answer is true of
             # one Inventory snapshot and of no other (D36), so it is recomputed on every
@@ -785,8 +799,8 @@ COMPONENTS = [
                                   "session.py writes it, fifth and last of five files whose set is "
                                   "not atomic.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
-                                          "D29", "D36", "D53", "D63", "D87"], "tested_by": ["T7"]},
-            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D87"]},
+                                          "D29", "D36", "D53", "D63", "D88"], "tested_by": ["T7"]},
+            "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
                          "governed_by": ["D13", "D15", "D43", "D86"], "tested_by": ["T7"]},
@@ -798,19 +812,19 @@ COMPONENTS = [
             "session.py": {"does": "lock-free read, or locked read-modify-write, over one SQLite "
                                    "transaction — `Snapshot` is the API and every field of it "
                                    "loads only the rows a caller names",
-                           "governed_by": ["D13", "D53", "D63", "D87"], "tested_by": ["T7"]},
+                           "governed_by": ["D13", "D53", "D63", "D88"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
                                 "A flush is a diff over what was loaded. NO SQL, NO I/O, NO "
                                 "PACKAGE IMPORT — the one thing master.py is allowed to import",
-                        "governed_by": ["D87"], "tested_by": ["T7"]},
+                        "governed_by": ["D88"], "tested_by": ["T7"]},
             "db.py": {"does": "the SQLite file: the schema (one payload column per row with a few "
                               "indexed columns derived beside it), `SqliteSource` behind every "
                               "`Rows`, the per-session flush, the events table that is the "
                               "history, and the one-time lossless import of a legacy JSON store "
                               "into it — under the lock, files moved to legacy-json/ with a receipt",
-                      "governed_by": ["D86", "D87"], "tested_by": ["T7"]},
+                      "governed_by": ["D86", "D88"], "tested_by": ["T7"]},
         },
     },
     {
@@ -1074,7 +1088,7 @@ COMPONENTS = [
                 # so a stale screen shows a number that now belongs to a different card. D18
                 # decides where it runs: node, like port-agreement.py, so `make check` and never
                 # the git hook. D14 is why it excludes the code-card track, by banner.
-                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D88"],
+                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D87", "D89"],
             },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
@@ -1415,7 +1429,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D87"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -1601,7 +1615,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87", "D88"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1691,7 +1705,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -1988,11 +2002,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D88"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D88"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2209,7 +2223,7 @@ COMPONENTS = [
                     "The store holds no price at all (D8), so this is the only place one can "
                     "come from, and the age of the reading is drawn with it because `join` is "
                     "re-run against refreshed exports.",
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D88"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -2362,7 +2376,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D83", "D88"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D83", "D89"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -2442,6 +2456,28 @@ COMPONENTS = [
             # The pipeline moved off #/inventory onto a route of its own at the owner's
             # instruction. RunPanel.tsx did not change shape for it: these three files are the
             # scope it used to get from the walk, answered where there is no walk.
+            "src/LiveReconcile.tsx": {"does": "the store-wide reconcile panel on #/runs (D87) — "
+                                              "upload one live export, preview, settle. On this "
+                                              "screen because its own lede names the four "
+                                              "commands and this is the fourth in the shape that "
+                                              "is not run-scoped; NOT on #/inventory, which is "
+                                              "where a card's state changes and this changes "
+                                              "none. Two presses: the settle control is ABSENT "
+                                              "until a preview has answered (D33's gate pointed "
+                                              "at the ledger), and the same bytes are sent twice "
+                                              "rather than re-picked.",
+                                      "governed_by": ["D7", "D13", "D33", "D87"],
+                                      # `app/tests/live-reconcile.spec.ts` is the check the hard
+                                      # rule says does not otherwise exist — it runs under
+                                      # `make design-check`, not at turn end, so it is named
+                                      # here in prose rather than in `tested_by`.
+                                      },
+            "src/LiveReconcile.css": {"does": "the store-wide reconcile panel's own styles — "
+                                             "quieter than the run panel above it on purpose, "
+                                             "and the stdout block is `white-space: pre` with "
+                                             "its own overflow because the report draws "
+                                             "fixed-width columns a wrap would break.",
+                                     "governed_by": ["D50", "D87"]},
             "src/Runs.tsx": {"does": "#/runs: the page chrome and the box picker, with RunPanel "
                                      "beneath them. Owns the SCOPE and nothing else — a strip of "
                                      "boxes from GET /boxes, and the ticked selection handed over "
@@ -2455,7 +2491,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -3054,6 +3090,14 @@ COMPONENTS = [
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
                                       "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86"]},
+            "tests/live-reconcile.spec.ts": {
+                "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
+                        "#/runs at all, that the preview asks for no write, and that the settle "
+                        "control does not EXIST until the preview has answered — absent rather "
+                        "than disabled, D33's shape applied to the press that settles the "
+                        "ledger. The route is intercepted and its body read; no real request is "
+                        "made and no store is touched.",
+                "governed_by": ["D7", "D33", "D87"]},
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "
@@ -3104,7 +3148,7 @@ COMPONENTS = [
                         "row it can name. THE MOVE'S OWN WRITE IS STILL UNASSERTED HERE — the "
                         "FOUR WRITES above are the four this file sends; D83 shipped its "
                         "control with no file under app/tests/ touched.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71", "D83", "D88"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71", "D83", "D89"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
