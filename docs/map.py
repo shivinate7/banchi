@@ -2095,7 +2095,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",

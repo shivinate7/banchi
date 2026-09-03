@@ -2416,10 +2416,16 @@ export async function undoPull(targets: readonly PullTarget[]): Promise<PullResu
  * The body is the `CsvUpload` object itself and nothing more.
  */
 export async function readShippingExport(upload: CsvUpload): Promise<ShippingBatch> {
+  // NAME AND CONTENT ONLY — `modified` is `CsvUpload`'s newest field (D59/D87 amended), added
+  // for a fetched or uploaded PRICING export so `live` can be arbitrated by which reading is
+  // newer. This batch touches no disk and settles nothing against `live`; carrying the file's
+  // timestamp here would be a field this route reads for no reason, which is exactly the
+  // opsec argument above the read side of this wire ("what comes back carries no buyer" —
+  // the same discipline applies to what goes out).
   return (await request('/shipping/batches', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: upload.name, content: upload.content, modified: upload.modified }),
+    body: JSON.stringify({ name: upload.name, content: upload.content }),
   })) as ShippingBatch
 }
 
