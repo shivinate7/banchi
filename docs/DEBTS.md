@@ -576,42 +576,6 @@ restatement may be the right answer, and that argument belongs in `docs/DESIGN.m
 in `docs/design-refs/` stay unchecked for a settled reason — they are drawings of the spec and
 are allowed to lose to it.
 
-### Every decision-id check goes vacuous at three digits
-
-Found 2026-08-30 while building D72's renumber check, by reading the regex it reuses rather
-than by anything failing.
-
-`scripts/docs-audit.py:_DECISION_RE` is `\bD([1-9][0-9]?)\b`, and `decision_heading_lines`
-matches `^##\s+(D[1-9][0-9]?)\b`. Both cap at two digits. One entry past that ceiling the
-heading is not a heading to this file and the citation is not a citation, so **four rows go quietly
-green over a file they can no longer see**: `decision ids`, `decision ids in code`,
-`decision index` and `renumbered ids`. `check_map`'s `governed_by` reader is not separately
-broken — it compares against `decision_headings`, so it simply never finds the entry either,
-which is the same silence one layer down.
-
-**The cap is not an accident and is worth keeping until it costs something.** `# noqa: D102`
-appears in `server/tcg_export.py` and `server/order_transport.py`, and a three-digit rule
-reads both as citations of a decision that does not exist — a real false positive today
-against a real blind spot someday.
-
-**THE TRIGGER HAS FIRED AND THE DISCHARGE HAS NOT HAPPENED (noted 2026-09-02, D92).** The
-sentence below said "the highest entry is D72" and the highest entry is **D92** — D90, D91 and
-D92 all landed without anyone widening the patterns, which is the failure mode this file exists
-to prevent, recorded here rather than fixed because the widening is its own change with its own
-self-test cases and was not in the scope of the session that noticed. **Eight entries of margin
-remain.** At D100 the four rows named above go silently green.
-
-**Unfixed because the fix cannot be tested against this tree.**
-Widening now means loosening a pattern on a guess, with the `noqa` collision as the only
-observable effect. The discharge is triggered rather than open: **at the ninetieth entry** —
-the last point at which both patterns still agree — widen them to three digits, exclude a
-`noqa:` on the same line, and add a `--self-test` case for each.
-
-**The trigger is written as a word and not as an id on purpose.** Spelling it the other way
-makes this sentence a citation of an entry that does not exist, and `decision ids` blocks the
-commit for it — correctly, and it did while this entry was being written. A debt about four
-citation checks cannot be recorded in a form one of them has to refuse.
-
 
 ## 9 — The sigil check matches text, so a renamed local walks past it
 
