@@ -7016,6 +7016,16 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
     A COPY WHOSE POSITION WILL NOT RENDER STILL APPEARS, with a null `place`. Same rule
     `do_inventory` works under and for the same reason: the row is what the operator asked
     for, and dropping it would answer a search with silence about a card that matched.
+
+    `capture_id` IS HERE FOR ONE READER AND IT IS THE ONE D90 NAMED (D93). The order walk aims
+    every copy it records by this string — it is checked against the card actually at the slot
+    (`capture_id_mismatch`), which is what makes a write survive a mid-box delete — and without
+    it on this row the walk could aim only at the copies the resolver had already picked, so
+    choosing a different copy meant walking to it first. The carve-out this reopens is the one
+    in `app/src/types.ts:SearchCopy`, and it is narrower than it reads: what was refused there
+    is a SECOND INVENTORY VIEW growing inside a search result — `confidence`, the run, the
+    metadata. An identity is not a view. It is null for a record captured before ids were
+    written, and a screen that needs one has to handle its absence.
     """
     try:
         key = card.key
@@ -7031,6 +7041,7 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
         "state": card.state,
         "state_at": card.state_at,
         "has_photo": has_photo,
+        "capture_id": card.capture_id,
         "place": place,
     }
 
@@ -7801,8 +7812,12 @@ def _pulled_positions(inventory: master.Inventory, copies) -> List[dict]:
     """Where each pulled copy sits RIGHT NOW: `{capture_id, box, index}`, composed per answer.
 
     THE JOIN THE COPIES PANEL NEEDS AND NOTHING STORES (D36). The ledger holds capture ids,
-    the walk is keyed by position, and a pulled copy is sold — so it is in no pick and the
-    panel's `GET /search` rows carry no capture id to meet it on. `card_by_capture_id` is an
+    the walk is keyed by position, and a pulled copy is sold — so it is in no pick, and the
+    walk has nothing but this to say which slot it came out of. The panel's `GET /search` rows
+    do carry a capture id since D93, so a client COULD match them here; that would be a second
+    implementation of a join the store is already indexed for, and the one that ran in the
+    browser would be the one with no `card_by_capture_id` to be right about duplicates.
+    `card_by_capture_id` is an
     indexed lookup under D88 and is answered here, once per recorded copy; a card that is
     gone, or a duplicate id the store refuses to guess between, answers nulls rather than
     taking `GET /orders` down.

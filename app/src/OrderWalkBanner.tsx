@@ -31,8 +31,8 @@ import './OrderWalkBanner.css'
  *
  * NO `--accent` FILL, AND THE ARGUMENT IS docs/DESIGN.md'S OWN. The fill is for a screen whose
  * state reduces to ONE action — D29's group confirm, D33's spending press that does not exist
- * until a preflight has answered. At no moment here is the state one action: `Not here`, `Take
- * this one instead`, `Retire`, the walk itself and `Stop walking` are all live beside the
+ * until a preflight has answered. At no moment here is the state one action: `Take`,
+ * `Don't take`, `Retire`, the walk itself and `Stop walking` are all live beside the
  * envelope. A fill drawn from stop 1 on a button that should not yet be pressed teaches the
  * colour to mean "the important one", which is the drift that ends with accent meaning nothing.
  * The end of an order is carried structurally instead: the arrows stop, the counter reads `n of
@@ -42,14 +42,14 @@ import './OrderWalkBanner.css'
 
 /** One order's envelope as the screen counts it: the lines the press would send, how many copies
  *  that is, how many the ledger still owes, and the two shortfalls a person has to see before
- *  they press — copies the resolver never found, and copies they said were not in the drawer. */
+ *  they press — copies the resolver never found, and copies it found that they have not taken. */
 export type EnvelopeView = {
   readonly envelope: Envelope
   readonly lines: readonly FillLine[]
   readonly count: number
   readonly owed: number
   readonly short: number
-  readonly notHere: number
+  readonly notTaken: number
 }
 
 /** An envelope already recorded in this session, kept in the list rather than vanishing from
@@ -60,7 +60,12 @@ export type FilledEnvelope = { readonly orderKey: string; readonly order: string
 /** What the banner needs about the stop the walk is standing on. Computed by the screen from the
  *  same `targetsOf` the press uses, so the figure on the banner and the figure in the button
  *  cannot disagree. */
-export type StopFacts = { readonly take: number; readonly short: number; readonly notHere: number }
+export type StopFacts = {
+  readonly take: number
+  readonly owed: number
+  readonly short: number
+  readonly notTaken: number
+}
 
 export function OrderWalkBanner({
   ask,
@@ -206,13 +211,19 @@ export function OrderWalkBanner({
                     Back to the stop
                   </button>
                 ) : null}
+                {/* `take 2 of 2` AND NOT `take 2` (D93). The copies are picked off the panel
+                    now, so what the operator is checking at the drawer is whether the line is
+                    FULL — a bare numerator answers that only for somebody who remembers what
+                    the buyer asked for, and the two figures sit one word apart. */}
                 <span className="inventory-walk-key">take</span>
-                <span className="inventory-walk-count">{facts?.take ?? 0}</span>
+                <span className="inventory-walk-count">
+                  {facts?.take ?? 0} of {facts?.owed ?? 0}
+                </span>
                 {facts !== null && facts.short > 0 ? (
                   <span className="inventory-walk-key">{facts.short} short</span>
                 ) : null}
-                {facts !== null && facts.notHere > 0 ? (
-                  <span className="inventory-walk-key">{facts.notHere} not here</span>
+                {facts !== null && facts.notTaken > 0 ? (
+                  <span className="inventory-walk-key">{facts.notTaken} not taken</span>
                 ) : null}
               </>
             )}
@@ -278,8 +289,8 @@ export function OrderWalkBanner({
                 {row.view.short > 0 ? (
                   <span className="inventory-walk-key">{row.view.short} short</span>
                 ) : null}
-                {row.view.notHere > 0 ? (
-                  <span className="inventory-walk-key">{row.view.notHere} not here</span>
+                {row.view.notTaken > 0 ? (
+                  <span className="inventory-walk-key">{row.view.notTaken} not taken</span>
                 ) : null}
                 <span className="inventory-walk-end">
                   <FillButton
@@ -319,7 +330,8 @@ export function OrderWalkBanner({
 /** The envelope press. Its label carries the count, so the glance and the press agree and the
  *  verb keeps its name from `Envelope filled` through `Marking…` to `filled`. Disabled with
  *  nothing to record, and the reason IS the label — a row this tight has no room for a second
- *  span, and every excluded copy already reads `not here` with a `Back in` beside it. */
+ *  span, and every copy the operator dropped already reads `not taking` with its `Take` beside
+ *  it. */
 function FillButton({
   view,
   busy,
@@ -351,8 +363,8 @@ function FillButton({
         ? `Marking ${view.count} sold…`
         : nothing
           ? /* THE REASON IS THE LABEL, so it may not name the wrong one. `owed` is what the ledger
-               wants, not what the operator excluded — a line owed three with one copy in the store
-               that was then marked not-here read `all 3 not here` over one press. */
+               wants, not what the operator left in the drawer — a line owed three with one copy in
+               the store that was then dropped read `all 3 not here` over one press. */
             'Nothing to mark — no copy in hand'
           : `Envelope filled — mark ${view.count} of ${view.owed} sold`}
     </button>

@@ -1653,7 +1653,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -2058,7 +2058,7 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89", "D90", "D91", "D92"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89", "D90", "D91", "D92", "D93"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2362,7 +2362,9 @@ COMPONENTS = [
                 "does": "the banner over #/inventory while an order drives the walk (D90) — "
                         "presentation only, and ONE ROW that never becomes two. Left to right it "
                         "answers the question in the order it arrives at the drawer: which order, "
-                        "stop k of n, the card, `take n` and the two shortfalls, then a "
+                        "stop k of n, the card, `take k of n` and the two shortfalls — `short` "
+                        "for copies the resolver never found and `not taken` for copies it found "
+                        "that the operator has left in the drawer (D93) — then a "
                         "right-packed end cluster holding the envelope press — whose label "
                         "carries `mark k of n sold`, so the glance and the press cannot disagree "
                         "— and, ALWAYS LAST, a quiet `Stop walking`. That order is the rule: when "
@@ -2378,7 +2380,7 @@ COMPONENTS = [
                         "NO --accent FILL, and the argument is docs/DESIGN.md's own: the fill is "
                         "for a screen whose state reduces to ONE action (D29's group confirm, "
                         "D33's spending press behind a preflight), and at no moment here is it "
-                        "one — `Not here`, `Take this one instead`, `Retire`, the walk itself and "
+                        "one — `Take`, `Don't take`, `Retire`, the walk itself and "
                         "the exit are all live beside the envelope.",
                 # D28 is the rule the whole layout exists to satisfy, applied to the strip above
                 # a list somebody is arrowing through: `flex-wrap: nowrap` and one shrinking
@@ -2386,7 +2388,7 @@ COMPONENTS = [
                 # comment. D39 is the same ruling one node above, over the header row that may
                 # never become two. D90 is the mode and the envelope it presses.
                 "governed_by": ["D28", "D29", "D31", "D33", "D39", "D45", "D50", "D57", "D58",
-                                "D69", "D90"],
+                                "D69", "D90", "D93"],
                 "note": "MEASURED IN A BROWSER AT 1280 ON 2026-09-02 RATHER THAN ESTIMATED: the "
                         "banner is 50px in every state, its inner row 32px, and `scrollWidth` "
                         "equals `clientWidth` at 1222 — no overflow and no sideways page scroll. "
@@ -2405,12 +2407,14 @@ COMPONENTS = [
                 "does": "THE WHOLE ORDER-WALK MODE'S STYLESHEET, which is more than the banner: "
                         "the banner off .inventory-note's shape, the util register for its facts, "
                         "the 2px ink rail on the current envelope row and the dashed border on a "
-                        "filled one — and also the COPIES ROWS' marks, the one sentence that says "
-                        "why an unmarked copy is still takeable, and the envelope receipt's stack "
-                        "of places. The marks are two tones and the split is the instruction "
-                        "rather than a ranking: ink where the mark tells the hand what to do with "
-                        "this card (`for this order`, `taken instead`), muted where it reports "
-                        "somebody else's fact (`for order N`, `pulled for order N`). That is "
+                        "filled one — and also the COPIES ROWS' marks, the muted note that says "
+                        "why a row has no control beside it (`2 of 2 taken`, `no capture id` — "
+                        "D93), the one sentence carrying the capacity rule, and the envelope "
+                        "receipt's stack of places. The marks are two tones and the split is the "
+                        "instruction rather than a ranking: ink where the mark tells the hand what "
+                        "to do with this card (`taking`), muted where it reports a fact about "
+                        "somebody else's or about a copy being left (`for order N`, "
+                        "`pulled for order N`, `not taking`). That is "
                         ".orders-pick-held's own register, so one fact reads the same on both "
                         "screens that draw it, and it costs no second color. The receipt's "
                         "places are a block of one line each rather than laid into the wrapping "
@@ -2418,10 +2422,10 @@ COMPONENTS = [
                         "and the whitespace between two of them would be the whitespace inside "
                         "one — a list you can check off against the cards in your hand needs the "
                         "line breaks.",
-                # D28 is why the row is `nowrap` with one shrinking child; D45 is why a copy with
-                # no control beside it is still reachable — its position label is a walk-to; D50
-                # is why nothing here changes size on hover. D90 is the mode.
-                "governed_by": ["D28", "D45", "D50", "D90"],
+                # D28 is why the row is `nowrap` with one shrinking child; D45 is why a copy is
+                # reachable from the list at all — its position label is a walk-to; D50 is why
+                # nothing here changes size on hover. D90 is the mode, D93 the picker on its rows.
+                "governed_by": ["D28", "D45", "D50", "D90", "D93"],
             },
             "src/orderWalk.ts": {
                 "does": "THE ORDER WALK'S QUEUE AS PURE FUNCTIONS over one GET /orders answer: "
@@ -2429,15 +2433,17 @@ COMPONENTS = [
                         "stops — one per order LINE the ledger still owes on, standing at its "
                         "next pullable copy (T6's first determination) — in order-mode or wave "
                         "order, the marks the copies panel draws (pulled, held, target, pick, "
-                        "spoken), each envelope's targets after the operator's re-aims and "
-                        "exclusions, and where the cursor stands after a re-read. Holds no "
+                        "spoken), each envelope's targets after the operator has picked the "
+                        "copies they are taking (D93), and where the cursor stands after a "
+                        "re-read. Holds no "
                         "state, calls no server, imports no React: the queue is re-derived "
                         "from every read (D36), and the URL is the handoff rather than "
                         "sessionStorage (D49's argument for #/pricing?run=). A line the ledger "
                         "still owes on with no aimable copy is `unfillable`: the banner counts "
                         "it and points at #/orders, and the walk never lands on a place that "
                         "does not exist.",
-                "governed_by": ["D7", "D36", "D45", "D49", "D57", "D58", "D63", "D69", "D90"],
+                "governed_by": ["D7", "D36", "D45", "D49", "D57", "D58", "D63", "D69", "D90",
+                                "D93"],
                 "note": "WAVE MODE DOES NOT VIOLATE `a stop is a line, not a position`. It sorts "
                         "the same line-stops by `(landing.box, landing.index)` so the pass "
                         "through the drawers is one direction, and because a landing is "
@@ -2470,9 +2476,11 @@ COMPONENTS = [
                         "moves and no published count changes. What this file adds for it is the "
                         "hash-driven ask, the queue and cursor memos over one GET /orders answer, "
                         "the effect that lands the walk on each stop through the same `goTo`, the "
-                        "two corrections the operator makes with their hands (take another copy "
-                        "instead — in ANY box, on the owner's 2026-09-02 ruling that D7 already "
-                        "settles it — and `Not here`), and the one write. "
+                        "PICKER over the copies panel (D93: `Take` / `Don't take` on every unsold "
+                        "copy of the line's SKU, in ANY box on the owner's 2026-09-02 ruling that "
+                        "D7 already settles, with the resolver's picks as the default and a full "
+                        "line refusing the take rather than dropping one of its own), and the one "
+                        "write. "
                         "THE WALK WRITES NOTHING PER CARD: `Mark sold` is drawn on NO row while "
                         "an order drives, because the plain sale writes card state and not the "
                         "ledger, so a card sold under a walk leaves its line owed forever. "
@@ -2518,7 +2526,7 @@ COMPONENTS = [
                 # URL as the handoff; D90 is the order-driven mode and its envelope.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90"],
+                                "D58", "D68", "D71", "D90", "D93"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -2614,7 +2622,7 @@ COMPONENTS = [
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5"]},
             "src/Gallery.tsx": {"does": "every state on one page — what `make screenshot` renders",
-                                "governed_by": ["D5", "D67"]},
+                                "governed_by": ["D5", "D67", "D93"]},
             "src/Gallery.css": {"does": "the gallery sheet's own layout. Not a product screen.",
                                 "governed_by": ["D5"]},
 
@@ -3302,8 +3310,9 @@ COMPONENTS = [
                         "not change height across an arrow step (D28), and `Stop walking` does "
                         "not move into the rectangle a filled envelope vacated. The rest walk the "
                         "mode end to end: the arrows stepping the queue across boxes and stopping "
-                        "at both ends, a cross-box swap that the stop then follows, a copy "
-                        "excluded as `not here` with the walk advancing on its own, the receipt "
+                        "at both ends, a full line refusing the take and a cross-box copy taken "
+                        "off the list without the walk moving to it (D93), a copy dropped with "
+                        "the walk advancing on its own, the receipt "
                         "reversing the whole envelope through the same route, wave mode "
                         "interleaving two orders in (box, index) order with one envelope each, a "
                         "key the ledger does not hold falling through to the plain walk, and a "
@@ -3313,11 +3322,11 @@ COMPONENTS = [
                         "would pass — and the fall-through case asserts the plain walk's own "
                         "landing for the same reason. Not a harness test: it starts a browser, so "
                         "`make design-check` runs it and `make harness` does not.",
-                # D7 is the fungibility the cross-box swap case rests on; D36 is why the fixture
+                # D7 is the fungibility the cross-box take case rests on; D36 is why the fixture
                 # re-derives rather than stores; D45 is the walk-to a copy row still offers; D49
                 # is the URL-as-handoff the entry links use; D52 and D58 are the photo and the
                 # label the landing assertions read.
-                "governed_by": ["D7", "D28", "D36", "D45", "D49", "D52", "D58", "D90"],
+                "governed_by": ["D7", "D28", "D36", "D45", "D49", "D52", "D58", "D90", "D93"],
                 "note": "TWO THINGS IT DOES NOT COVER, NAMED SO NEITHER IS MISTAKEN FOR ASSERTED. "
                         "The `held` mark — `spoken for by order N`, drawn where a pick carries "
                         "`held_by` — is uncovered: the fixture's competing pick deliberately "

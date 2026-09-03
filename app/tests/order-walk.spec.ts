@@ -78,8 +78,8 @@ type Wire = { method: string; path: string; body: unknown }
  *   2/2, 2/3   SKU A, the resolver's picks for the order being walked
  *   2/4        SKU A, already recorded against that order and still on hand — the `pulled` mark
  *   7/40       SKU A in ANOTHER BOX, spoken for by a second open order — refused to the swap
- *   7/41       SKU A in that box and claimed by nothing — the swap's target, reachable in two
- *              presses because `SearchCopy` carries no capture id and the walk-to supplies one
+ *   7/41       SKU A in that box and claimed by nothing — the copy the picker takes, in one
+ *              press from the list and without the walk moving to it first (D93)
  *   7/3        SKU B, the walk's second stop, which is what makes the arrows cross a box
  */
 
@@ -252,6 +252,10 @@ function searchAnswer(query: string, cards: Cards) {
           state: held.state,
           state_at: held.state_at,
           has_photo: true,
+          /* THE AIM, ON EVERY COPY (D93). `GET /search` carries it since the panel became the
+             picker; a fixture that omitted it would draw a screen where nothing can be taken and
+             pass every assertion about the marks. */
+          capture_id: held.capture_id,
           place: held.place,
         }))
       const on_hand = copies.filter((copy) => !GONE.includes(copy.state)).length
@@ -712,6 +716,19 @@ function copyRow(page: Page, label: string) {
     .filter({ has: page.locator(`[aria-label="${label}"]`) })
 }
 
+/** The picker's two presses, matched on the ACCESSIBLE NAME AND EXACTLY. Playwright's default
+ *  name match is a case-insensitive substring, and `Take the copy at X` is a substring of
+ *  `Don’t take the copy at X` — so a loose match here would find the wrong control and the two
+ *  cases below would pass with the presses swapped. The apostrophe is the typographic one, which
+ *  is what the label renders. */
+function takeButton(page: Page, label: string) {
+  return copyRow(page, label).getByRole('button', { name: `Take the copy at ${label}`, exact: true })
+}
+
+function dropButton(page: Page, label: string) {
+  return copyRow(page, label).getByRole('button', { name: `Don’t take the copy at ${label}`, exact: true })
+}
+
 const AT_2_1 = 'Box 2 · Section 1 · Card 1'
 const AT_2_2 = 'Box 2 · Section 1 · Card 2'
 const AT_2_3 = 'Box 2 · Section 1 · Card 3'
@@ -720,7 +737,7 @@ const AT_7_3 = 'Box 7 · Section 1 · Card 3'
 const AT_7_40 = 'Box 7 · Section 1 · Card 40'
 const AT_7_41 = 'Box 7 · Section 1 · Card 41'
 
-/** The banner's two figures, in the order the row draws them: `stop k of n` then `take n`. */
+/** The banner's two figures, in the order the row draws them: `stop k of n` then `take k of n`. */
 function counts(page: Page) {
   return page.locator('.inventory-walk-row .inventory-walk-count')
 }
@@ -824,21 +841,26 @@ test('every copy carries whose it is, and no row offers the plain sale', async (
   await expect(page.locator('.card-locations-owner .card-locations-row')).toHaveCount(5)
 
   /* The two the envelope will record — ink, because they are what the hand is for. */
-  await expect(copyRow(page, AT_2_2).locator('.inventory-copy-mark')).toHaveText('for this order')
+  await expect(copyRow(page, AT_2_2).locator('.inventory-copy-mark')).toHaveText('taking')
   await expect(copyRow(page, AT_2_2).locator('.inventory-copy-mark')).toHaveClass(/inventory-copy-mark-take/)
-  await expect(copyRow(page, AT_2_3).locator('.inventory-copy-mark')).toHaveText('for this order')
+  await expect(copyRow(page, AT_2_3).locator('.inventory-copy-mark')).toHaveText('taking')
 
   /* Another open order's pick, outside this queue — muted, and not the take tone. */
   await expect(copyRow(page, AT_7_40).locator('.inventory-copy-mark')).toHaveText(`for order ${ORDER_M}`)
   await expect(copyRow(page, AT_7_40).locator('.inventory-copy-mark')).not.toHaveClass(/inventory-copy-mark-take/)
 
-  /* THE SLOT A RECORDED CARD CAME OUT OF. `SearchCopy` carries no capture id, so
-     `progress.pulled` joined at read time is the only way this row can be marked at all. */
+  /* THE SLOT A RECORDED CARD CAME OUT OF. A pulled copy is sold, so the resolver offers it in
+     no pick and `progress.pulled` — joined at read time off the capture id, stored nowhere
+     (D36) — is what marks this row. */
   await expect(copyRow(page, AT_2_4).locator('.inventory-copy-mark')).toHaveText(`pulled for order ${ORDER_N}`)
 
   /* AND A COPY NOBODY HAS CLAIMED CARRIES NO MARK AT ALL — an empty slot rather than a word
-     saying nothing, because five rows of prose is what makes the ink ones unreadable. */
+     saying nothing, because five rows of prose is what makes the ink ones unreadable. What it
+     carries instead is the reason its take is missing: the line already has the two it is owed
+     (D93), and the count is the remedy stated rather than a control that has gone quiet. */
   await expect(copyRow(page, AT_7_41).locator('.inventory-copy-mark')).toHaveCount(0)
+  await expect(copyRow(page, AT_7_41).locator('.inventory-copy-note')).toHaveText('2 of 2 taken')
+  await expect(counts(page).nth(1)).toHaveText('2 of 2')
 
   /* ASSERTED AS AN ABSENCE ACROSS THE WHOLE SCREEN, not row by row: a control that is merely not
      visible is one CSS rule from being back. */
@@ -992,88 +1014,99 @@ test('a filled order says so, and the way out has not moved', async ({ page }) =
 
 /* -------------------------------------------------------------------------------------- 7
  *
- * THE OWNER'S OWN RULING, 2026-09-02: "You're giving boxes too much independence", said when told
- * the swap would be fenced to the copy under the photograph and "never one in another box". D7
- * already says why there is no fence — every unsold copy of a SKU is equally sellable, which is
- * the whole reason the copies panel draws them across boxes. So this case crosses a box on
- * purpose, and the stop FOLLOWS the copy taken rather than snapping back to the drawer the
- * resolver happened to pick.
+ * THE PANEL IS THE PICKER, AND THE COPY IS TAKEN WITHOUT WALKING TO IT (D93). The owner's
+ * complaint is what this case is the answer to: "when I have an order of 2 cards and I have
+ * inventory for 3, I basically should be able to pick which two I sell, instead currently it's
+ * like predetermined". Every copy on the wire carries its own `capture_id` now, so the take is a
+ * press on the row rather than a correction made after arriving at the drawer.
  *
- * IT TAKES TWO PRESSES AND THAT IS THE FEATURE, not a step to remove later. `SearchCopy` carries
- * no `capture_id`, so a copy no order picked cannot be aimed at from the list — but its position
- * label is a walk-to (D45), and the copy under the photograph always has an id. Walk to it, look
- * at it, take it. The panel says so in a sentence, and this asserts the sentence is true.
+ * A FULL LINE REFUSES THE TAKE (the owner's ruling, 2026-09-02). At `2 of 2` the third copy
+ * draws the count where its control would be, and dropping one is what makes room — nothing
+ * leaves the envelope on a press aimed at something else.
+ *
+ * AND THE WALK DOES NOT FOLLOW A TAKE. The list is appended to, so what the walk is standing on
+ * is still the first copy the envelope records; a screen that jumped to box 7 because a row in
+ * box 7 was ticked would move under the finger doing the ticking. Dropping the copy it is
+ * standing on DOES move it, to the next copy the envelope is taking, which is the errand.
  *
  * WHAT IS DELIBERATELY REFUSED, in the same case so the two rules cannot drift apart: a copy
  * another open order's resolver has already been allocated. That is not a box fence — `7/40` and
  * `7/41` sit in the same drawer and only one of them is offered — it is `resolve_all`'s
  * allocation over the whole open set, which exists so two envelopes cannot name one card. */
 
-test('a copy in another box can be taken instead, and the walk follows it there', async ({ page }) => {
+test('a copy in another box is taken off the list, and the take does not move the walk', async ({ page }) => {
   const wire = await open(page, { hash: orderRoute(KEY_N) })
   await standingOn(page, AT_2_2)
 
-  /* NEITHER BOX-7 COPY IS AIMABLE FROM THE LIST YET, and the two are refused for different
-     reasons: `7/41` has no capture id on the wire, and `7/40` is spoken for. */
-  await expect(page.locator('.inventory-walk-hint')).toContainText('any box')
-  await expect(copyRow(page, AT_7_41).getByRole('button', { name: 'Take this one instead' })).toHaveCount(0)
+  /* THE LINE IS FULL, SO THE FREE COPY CARRIES THE COUNT AND NO CONTROL. `7/40` in the same
+     drawer carries a different reason: it is somebody else's. */
+  await expect(takeButton(page, AT_7_41)).toHaveCount(0)
+  await expect(copyRow(page, AT_7_41).locator('.inventory-copy-note')).toHaveText('2 of 2 taken')
+  await expect(copyRow(page, AT_7_40).locator('.inventory-copy-note')).toHaveCount(0)
 
-  await copyRow(page, AT_7_41).getByRole('button', { name: `Walk to ${AT_7_41}` }).click()
-  await standingOn(page, AT_7_41)
-  await expect(currentBox(page)).toHaveAttribute('aria-label', 'Box 7')
+  /* MAKE ROOM. The walk moves to the copy that is now first in the envelope — one move, not two,
+     which is why the take appends rather than inserting at the front. */
+  await dropButton(page, AT_2_2).click()
+  await standingOn(page, AT_2_3)
+  await expect(copyRow(page, AT_2_2).locator('.inventory-copy-mark')).toHaveText('not taking')
 
-  /* THE WALK IS OFF ITS STOP, and one press puts it back — without it the only way is Right then
-     Left, which nobody would find. */
-  await expect(page.getByRole('button', { name: 'Back to the stop' })).toBeVisible()
-
-  await copyRow(page, AT_7_41).getByRole('button', { name: 'Take this one instead' }).click()
-
-  /* THE STOP IS NOW STANDING WHERE YOU ARE. The landing is the stop's first TARGET and not the
-     server's first pick, which is what makes the correction feel like a correction. */
-  await expect(page.getByRole('button', { name: 'Back to the stop' })).toHaveCount(0)
-  await expect(copyRow(page, AT_7_41).locator('.inventory-copy-mark')).toHaveText('taken instead')
-  await expect(copyRow(page, AT_7_41).locator('.inventory-copy-mark')).toHaveClass(/inventory-copy-mark-take/)
-  await expect(copyRow(page, AT_2_2).locator('.inventory-copy-mark')).toHaveText('not taken')
-
-  /* A COPY ANOTHER ORDER IS ALLOCATED IS STILL REFUSED, in the same drawer as the one just
-     taken — which is what says the rule is about the allocation and not about the box. */
+  /* AND NOW THE COPY IN THE OTHER BOX IS ONE PRESS AWAY, from a row the walk has never been to.
+     `7/40` is still refused with the drawer unchanged, which is what says the rule is about the
+     allocation and not about the box. */
+  await expect(takeButton(page, AT_7_40)).toHaveCount(0)
   await expect(copyRow(page, AT_7_40).locator('.inventory-copy-mark')).toHaveText(`for order ${ORDER_M}`)
-  await expect(copyRow(page, AT_7_40).getByRole('button', { name: 'Take this one instead' })).toHaveCount(0)
+
+  await takeButton(page, AT_7_41).click()
+
+  await expect(copyRow(page, AT_7_41).locator('.inventory-copy-mark')).toHaveText('taking')
+  await expect(copyRow(page, AT_7_41).locator('.inventory-copy-mark')).toHaveClass(/inventory-copy-mark-take/)
+  await expect(counts(page).nth(1)).toHaveText('2 of 2')
+
+  /* THE WALK STAYED WHERE IT WAS. The copy it is standing on is still the first the envelope
+     records, and the box strip never left box 2. */
+  await standingOn(page, AT_2_3)
+  await expect(currentBox(page)).toHaveAttribute('aria-label', 'Box 2')
 
   await page.locator('.inventory-walk-fill').click()
 
   const sent = wire.find((call) => call.path === '/orders/fill')?.body as { lines: FillLine[] }
   const lineA = sent.lines.find((line) => line.sku === SKU_A)
   expect(lineA?.targets).toEqual([
-    { box: 7, index: 41, capture_id: 'cap-7-41' },
     { box: 2, index: 3, capture_id: 'cap-2-3' },
+    { box: 7, index: 41, capture_id: 'cap-7-41' },
   ])
 })
 
 /* -------------------------------------------------------------------------------------- 8
  *
  * TWO SHORTFALLS AND THEY ARE DIFFERENT FACTS. `short` is copies the resolver never found — the
- * ledger's problem — and `not here` is copies the operator says are not in the drawer, which is
- * the shelf's. One number covering both would send a person to the wrong place. The line stays
- * owed and the envelope reports `k of n`, and the walk moves to the next copy of the same card on
- * its own, which is the whole errand. */
+ * ledger's problem — and `not taken` is copies it DID find that the operator has not put in the
+ * envelope, which is the shelf's. One number covering both would send a person to the wrong
+ * place. The line stays owed and the envelope reports `k of n`, and the walk moves to the next
+ * copy of the same card on its own, which is the whole errand. */
 
-test('a copy that is not in the drawer is excluded, and the walk moves to the next one', async ({ page }) => {
+test('a copy dropped from the envelope is counted, and the walk moves to the next one', async ({ page }) => {
   await open(page, { hash: orderRoute(KEY_N) })
   await standingOn(page, AT_2_2)
 
-  await copyRow(page, AT_2_2).getByRole('button', { name: 'Not here' }).click()
+  await dropButton(page, AT_2_2).click()
 
-  await expect(copyRow(page, AT_2_2).locator('.inventory-copy-mark')).toHaveText('not here')
-  await expect(copyRow(page, AT_2_2).getByRole('button', { name: 'Back in' })).toBeVisible()
+  await expect(copyRow(page, AT_2_2).locator('.inventory-copy-mark')).toHaveText('not taking')
+  await expect(takeButton(page, AT_2_2)).toBeVisible()
   await standingOn(page, AT_2_3)
 
   /* `take` FALLS AND THE OWED FIGURE DOES NOT, which is the pair the button and the banner are
      both drawn from — both off `targetsOf`, the same function the press sends, so neither can
      disagree with the other. Three owed across the two lines, two still in hand. */
-  await expect(counts(page).nth(1)).toHaveText('1')
-  await expect(page.locator('.inventory-walk-row')).toContainText('1 not here')
+  await expect(counts(page).nth(1)).toHaveText('1 of 2')
+  await expect(page.locator('.inventory-walk-row')).toContainText('1 not taken')
   await expect(page.locator('.inventory-walk-fill')).toHaveText('Envelope filled — mark 2 of 3 sold')
+
+  /* AND IT IS REVERSIBLE WITHOUT A SERVER. The take and its reversal share a rectangle, so the
+     press that undoes an overshoot is the one that made it. */
+  await takeButton(page, AT_2_2).click()
+  await expect(counts(page).nth(1)).toHaveText('2 of 2')
+  await expect(page.locator('.inventory-walk-row')).not.toContainText('not taken')
 })
 
 /* -------------------------------------------------------------------------------------- 9

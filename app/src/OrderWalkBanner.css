@@ -216,8 +216,9 @@
 
 /* `.orders-pick-held`'s register exactly, so a fact reads the same on both screens that draw
    one. TWO TONES AND THE SPLIT IS THE INSTRUCTION: muted informs (this copy is somebody else's,
-   this one has gone), ink tells the hand to act (this is the one, this is the one you swapped
-   in). Ink-against-muted is this screen's own selection idiom and costs no second colour. */
+   this one has gone, this one you are not taking), ink tells the hand to act (this is one of the
+   ones going in the envelope). Ink-against-muted is this screen's own selection idiom and costs
+   no second colour. */
 .inventory-copy-mark {
   flex: none;
   align-self: center;
@@ -233,10 +234,23 @@
   font-weight: 600;
 }
 
-/* WHY A COPY WITH NO CONTROL BESIDE IT IS STILL TAKEABLE. `SearchCopy` carries no `capture_id`
-   on purpose, so a copy no order picked cannot be aimed at from this list — but its position
-   label is a walk-to (D45), and the copy under the photograph always has one. One sentence,
-   drawn only while a stop's own group is on screen. */
+/* WHY A ROW HAS NO CONTROL BESIDE IT (D93). The mark's own register, so a reason reads as one
+   rather than as a control that has stopped working — a full line's `2 of 2 taken`, and a record
+   with no capture id to aim by. Not a button: there is nothing to press, and a disabled button
+   would say there is. */
+.inventory-copy-note {
+  flex: none;
+  align-self: center;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* THE ONE RULE NO ROW CAN SHOW ON ITS OWN. Every copy carries its own take since D93, so this
+   stopped being "how to reach a copy" and became the capacity rule: a full line refuses the
+   take. One sentence, drawn only while a stop's own group is on screen. */
 .inventory-walk-hint {
   margin: 0;
   font-family: var(--body);
