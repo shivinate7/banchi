@@ -150,11 +150,14 @@ const GROUP: SearchGroup = {
   /* min(cap, on_hand) — the fixture exists to draw the case where the SHELF binds rather than
      the cap, which is most of the store and was the bug: `of 4` on three copies. */
   listable: 3,
+  /* `capture_id` ON EVERY ROW BUT ONE, and the null is the specimen (D93): a record written
+     before ids were kept cannot be aimed at, so the order walk draws a reason where the take
+     would be. A gallery whose every copy carried one would never show that row. */
   copies: [
-    { key: '3/40', state: 'identified', state_at: null, has_photo: true, place: CLOSED_BOX },
-    { key: '7/12', state: 'identified', state_at: null, has_photo: true, place: OPEN_BOX },
-    { key: '9/4', state: 'captured', state_at: null, has_photo: false, place: SINGLE_SECTION },
-    { key: '4/1', state: 'sold', state_at: null, has_photo: true, place: NO_FRACTION },
+    { key: '3/40', state: 'identified', state_at: null, has_photo: true, capture_id: 'cap-3-40', place: CLOSED_BOX },
+    { key: '7/12', state: 'identified', state_at: null, has_photo: true, capture_id: 'cap-7-12', place: OPEN_BOX },
+    { key: '9/4', state: 'captured', state_at: null, has_photo: false, capture_id: null, place: SINGLE_SECTION },
+    { key: '4/1', state: 'sold', state_at: null, has_photo: true, capture_id: 'cap-4-1', place: NO_FRACTION },
   ],
 }
 

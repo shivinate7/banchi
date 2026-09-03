@@ -302,6 +302,11 @@ function loneCopy(row: Row): SearchCopy | null {
        panel treats it as a hint and still handles the image failing to load, which is what
        makes this coercion safe. */
     has_photo: row.card.photo !== null,
+    /* THE ONE FIELD THIS FALLBACK CAN ANSWER EXACTLY (D93). The record it is built from is the
+       card itself, so the aim is the record's own id rather than a coercion — and this branch is
+       reached by a card with no SKU and no name, which no order line can name either, so nothing
+       aims at it today. It is right rather than useful. */
+    capture_id: row.card.capture_id,
     place,
   }
 }
@@ -381,17 +386,21 @@ function useWalkAsk(): WalkAsk {
   return ask
 }
 
-/** What the copies rows need from the walk while an order drives: the marks, the capture ids
- *  the aim needs, the current stop, and the three presses a row may offer. */
+/** What the copies rows need from the walk while an order drives: the marks, the current stop,
+ *  how full the line already is, and the one press a row may offer.
+ *
+ *  `taking` AND `owed` ARE HERE BECAUSE THE ROW CANNOT ANSWER ITS OWN QUESTION (D93). Whether
+ *  this copy may be taken depends on how many OTHER copies are, and the owner's ruling is that
+ *  a full line refuses the take rather than quietly dropping one of its own to make room: at
+ *  `2 of 2` the control is a sentence saying so, and un-taking one is what makes room. */
 type WalkSlot = {
   sku: string | null
   marks: ReadonlyMap<string, CopyMark>
-  captureIds: ReadonlyMap<string, string>
   stop: Stop | null
-  excluded: ReadonlySet<string>
+  taking: number
+  owed: number
   onTake: (copy: SearchCopy, captureId: string) => void
-  onExclude: (captureId: string) => void
-  onInclude: (captureId: string) => void
+  onDrop: (captureId: string) => void
 }
 
 export function Inventory() {
@@ -482,9 +491,9 @@ export function Inventory() {
    * An order drives this walk when the URL says so. Everything below is derived from ONE
    * `GET /orders` answer on every read and stored nowhere (D36): the stops, their order, the
    * marks on the copies rows, and each envelope's targets. What the screen carries across reads
-   * is the cursor — which stop is current — and two things the operator said with their hands:
-   * a copy taken instead of the one the walk showed, and a copy that was not there. Both fall
-   * back to the resolver's picks on a reload, a cost the decision entry names.
+   * is the cursor — which stop is current — and one thing the operator said with their hands:
+   * which copies of a line they are taking (D93). That falls back to the resolver's picks on a
+   * reload, a cost the decision entry names.
    *
    * THE WALK WRITES NOTHING PER CARD. The one write is the envelope — `POST /orders/fill`, every
    * line of one order in one transaction — pressed when the buyer's cards are in hand. That is
@@ -495,10 +504,12 @@ export function Inventory() {
   const askKey = ask === null ? '' : ask.kind === 'order' ? `order:${ask.key}` : 'wave'
   const [orders, setOrders] = useState<OrdersPayload | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
-  const [retargets, setRetargets] = useState<ReadonlyMap<string, readonly PullTarget[]>>(
-    () => new Map(),
-  )
-  const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => new Set())
+  /* THE COPIES THE OPERATOR TOOK, per stop, and this is the whole of what the picker stores
+   * (D93). It was two maps until the panel became the picker — a replacement list and a set of
+   * capture ids said to be missing from the drawer — because the gesture was a correction to
+   * the resolver rather than a choice. A stop absent from this map is one the operator has said
+   * nothing about, and its copies are the resolver's picks. */
+  const [chosen, setChosen] = useState<ReadonlyMap<string, readonly PullTarget[]>>(() => new Map())
   const [ordersFailed, setOrdersFailed] = useState(false)
 
   /* ENVELOPES ALREADY RECORDED IN THIS SESSION. A filled envelope leaves the queue at once — its
@@ -536,8 +547,7 @@ export function Inventory() {
     if (askKey === '') {
       setOrders(null)
       setCursor(null)
-      setRetargets(new Map())
-      setExcluded(new Set())
+      setChosen(new Map())
       setFilledEnvelopes([])
       setSequence([])
       setOrdersFailed(false)
@@ -619,12 +629,8 @@ export function Inventory() {
    * are the same list. */
   const targets = useMemo(
     () =>
-      new Map(
-        (queue?.stops ?? []).map(
-          (one) => [one.id, targetsOf(one, retargets, excluded)] as const,
-        ),
-      ),
-    [queue, retargets, excluded],
+      new Map((queue?.stops ?? []).map((one) => [one.id, targetsOf(one, chosen)] as const)),
+    [queue, chosen],
   )
   const stopTargets = useMemo(
     () => (stop === null ? [] : targets.get(stop.id) ?? []),
@@ -632,18 +638,20 @@ export function Inventory() {
   )
 
   /* THE LANDING IS THE STOP'S FIRST TARGET AND NOT THE SERVER'S FIRST PICK, which is what makes
-   * the two corrections feel like corrections. Take a copy from another box and the stop is now
-   * standing where you are — no snap back to the drawer the resolver happened to pick, because a
-   * copy is a copy wherever it sits (D7) and the box boundary is not a fence. Say `Not here` and
-   * the walk moves to the next copy of the same card on its own, which is the whole errand. */
+   * the picker move the walk (D93). Drop the copy under the photograph and the walk moves to the
+   * next copy the envelope is taking — in another box if that is where it is, because a copy is a
+   * copy wherever it sits (D7) and the box boundary is not a fence. Take one somewhere else while
+   * standing here and the walk does NOT move: the list is appended to, so what it is standing on
+   * is still the first copy the envelope records, and a screen that jumped on every tick would
+   * move under the finger doing the ticking. */
   const landedAt = useRef<string | null>(null)
   const landingKey =
     stopTargets[0] !== undefined
       ? keyOf(stopTargets[0])
-      /* NOWHERE TO GO IS NOT A REASON TO GO BACK. With every copy of the stop excluded there is
+      /* NOWHERE TO GO IS NOT A REASON TO GO BACK. With every copy of the stop dropped there is
        * no target to stand on, and falling through to the resolver's first pick would walk the
-       * operator to the drawer they have just said the card is not in — while they are holding
-       * one. Stay where the walk is. */
+       * operator to the drawer they have just emptied — while they are standing at it. Stay
+       * where the walk is. */
       : landedAt.current !== null
         ? landedAt.current
         : stop?.landing
@@ -696,62 +704,56 @@ export function Inventory() {
     () => (orders === null || queue === null ? null : marksOf(orders, queue, targets)),
     [orders, queue, targets],
   )
-  /* Every capture id the aim can use, by store key: the resolver's picks, plus the card the
-   * walk is standing on (its own record carries one). `SearchCopy` deliberately does not. */
-  const captureIds = useMemo(() => {
-    const known = new Map<string, string>()
-    for (const answer of orders?.resolution.orders ?? []) {
-      for (const line of answer.lines) {
-        for (const pick of line.picks) {
-          if (pick.capture_id !== null && pick.capture_id.trim() !== '') known.set(keyOf(pick), pick.capture_id)
-        }
-      }
-    }
-    if (selected !== null && selected.card.capture_id) known.set(selected.key, selected.card.capture_id)
-    return known
-  }, [orders, selected])
-
   /* TWO SHORTFALLS AND THEY ARE DIFFERENT FACTS. `short` is copies the resolver never found — the
-   * store does not hold them, or another order holds them — and `not here` is copies the operator
-   * says are not in the drawer. One is the ledger's problem and one is the shelf's, and a single
-   * number covering both would send a person to the wrong place. Both come off `targetsOf`, the
-   * same function the press sends, so neither can disagree with the button. */
+   * store does not hold them, or another order holds them — and `not taken` is copies it DID
+   * find that the operator has not put in the envelope. One is the ledger's problem and one is
+   * the shelf's, and a single number covering both would send a person to the wrong place.
+   *
+   * DERIVED IN THAT ORDER, WHICH IS WHAT KEEPS THEM FROM DOUBLE-COUNTING (D93). What is missing
+   * is `owed - take`, and the split asks how much of it the operator could still fix by taking
+   * a copy the resolver offered: that much is `not taken`, and the rest is `short`. A copy taken
+   * that the resolver never offered — a free copy in another drawer — therefore closes the gap
+   * rather than being counted against it. `take` comes off `targetsOf`, the same function the
+   * press sends, so the figure and the button cannot disagree. */
   const shortfalls = (stops: readonly Stop[]) => {
     let take = 0
-    let notHere = 0
+    let owed = 0
+    let notTaken = 0
     let short = 0
     for (const one of stops) {
-      const all = targetsOf(one, retargets, new Set())
-      const kept = targetsOf(one, retargets, excluded)
+      const kept = targetsOf(one, chosen)
       take += kept.length
-      notHere += all.length - kept.length
-      short += Math.max(0, one.owed - all.length)
+      owed += one.owed
+      const missing = Math.max(0, one.owed - kept.length)
+      const couldStill = Math.max(0, Math.min(one.available, one.owed) - kept.length)
+      notTaken += Math.min(missing, couldStill)
+      short += missing - Math.min(missing, couldStill)
     }
-    return { take, short, notHere }
+    return { take, owed, short, notTaken }
   }
 
   const stopFacts = useMemo<StopFacts | null>(
     () => (stop === null ? null : shortfalls([stop])),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [stop, retargets, excluded],
+    [stop, chosen],
   )
 
   const envelopes = useMemo<EnvelopeView[]>(
     () =>
       (queue?.envelopes ?? []).map((envelope) => {
-        const lines = envelopeLines(envelope, retargets, excluded)
+        const lines = envelopeLines(envelope, chosen)
         const counts = shortfalls(envelope.stops)
         return {
           envelope,
           lines,
           count: lines.reduce((sum, line) => sum + line.targets.length, 0),
-          owed: envelope.stops.reduce((sum, one) => sum + one.owed, 0),
+          owed: counts.owed,
           short: counts.short,
-          notHere: counts.notHere,
+          notTaken: counts.notTaken,
         }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [queue, retargets, excluded],
+    [queue, chosen],
   )
 
   const askedOrder =
@@ -783,50 +785,61 @@ export function Inventory() {
     setGoTo((asked) => ({ key: landingKey, at: (asked?.at ?? 0) + 1 }))
   }, [landingKey])
 
-  /* THE OPERATOR'S TWO CORRECTIONS. `take` swaps the copy the walk showed for the one in their
-   * hand — the resolver's pick is a hint, never a permission set (D7) — and `exclude` says a
-   * copy is not where the record says; the line stays owed and the envelope reports `k of n`. */
+  /* THE PICKER'S TWO PRESSES, AND THEY ARE ONE GESTURE IN TWO DIRECTIONS (D93). `take` puts a
+   * copy in the envelope and `drop` takes it back out; between them they are how the operator
+   * says which copies of a line they are actually holding. The resolver's picks are the default
+   * and nothing here is a correction to them — a line owed two with two copies on the shelf is
+   * still zero presses.
+   *
+   * THE BOX HAS NO SAY IN EITHER. The owner's ruling of 2026-09-02: fencing the choice to one
+   * drawer gives boxes too much independence, and D7 already says why they have none here —
+   * every unsold copy of a SKU is equally sellable, which is the whole reason the copies panel
+   * draws them across boxes in the first place.
+   *
+   * APPENDED, NEVER INSERTED AT THE FRONT. The landing is the stop's first target, so a copy
+   * pushed to the front would walk the operator to whatever they had just ticked — and under the
+   * owner's ruling below a swap is two presses, so a front insert would move the walk twice for
+   * one correction. Appending keeps the walk standing where it is until the copy it is standing
+   * on is dropped, and then it moves once. */
   const take = useCallback(
     (copy: SearchCopy, captureId: string) => {
       if (stop === null) return
-      const chosen: PullTarget = { box: copy.place.box, index: copy.place.index, capture_id: captureId }
-      /* IT REPLACES THE COPY UNDER THE PHOTOGRAPH — the stop's first target — AND THE BOX HAS NO
-       * SAY IN IT. The owner's ruling of 2026-09-02: fencing the swap to one box gives boxes too
-       * much independence, and D7 already says why they have none here — every unsold copy of a
-       * SKU is equally sellable, which is the whole reason the copies panel draws them across
-       * boxes in the first place. The chosen copy goes to the FRONT, so it becomes the landing
-       * and the walk is already standing on it. */
-      setRetargets((held) => {
-        /* SEEDED WITHOUT THE EXCLUSIONS, which is the difference between `Back in` working and
-         * `Back in` being a word. `targetsOf` applies `excluded` on the way OUT, so a list seeded
-         * from the filtered answer has the excluded copies missing from the STORED list — and
-         * because a stored list short-circuits the resolver's picks entirely, clearing the
-         * exclusion afterwards restores nothing. Say `not here` to one copy, swap another in, and
-         * the first could never come back. */
-        const current = targetsOf(stop, held, new Set())
-        const replaced = targetsOf(stop, held, excluded)[0]?.capture_id ?? current[0]?.capture_id ?? null
-        const kept = current.filter(
-          (target) => target.capture_id !== replaced && target.capture_id !== captureId,
-        )
+      setChosen((held) => {
+        const current = targetsOf(stop, held)
+        /* THE LINE REFUSES RATHER THAN MAKING ROOM (the owner's ruling, 2026-09-02). At `2 of 2`
+         * the row draws the count instead of a control, so this is the same rule twice — but it
+         * is stored state and a re-read can lower `owed` under a list already taken, so the
+         * guard is here as well as in the button. A ring that dropped the longest-standing copy
+         * to admit a new one was the alternative and it was declined: nothing may leave the
+         * envelope on a press aimed at something else. */
+        if (current.length >= stop.owed) return held
+        if (current.some((target) => target.capture_id === captureId)) return held
         const next = new Map(held)
-        next.set(stop.id, [chosen, ...kept])
+        next.set(stop.id, [
+          ...current,
+          { box: copy.place.box, index: copy.place.index, capture_id: captureId },
+        ])
         return next
       })
     },
-    [stop, excluded],
+    [stop],
   )
-  const exclude = useCallback(
-    (captureId: string) => setExcluded((held) => new Set([...held, captureId])),
-    [],
-  )
-  const include = useCallback(
-    (captureId: string) =>
-      setExcluded((held) => {
-        const next = new Set(held)
-        next.delete(captureId)
+  const drop = useCallback(
+    (captureId: string) => {
+      if (stop === null) return
+      /* AN EMPTY LIST IS AN ANSWER. `targetsOf` reads this map with `??`, so a stop dropped to
+       * nothing stays at nothing rather than falling back to the picks it was seeded from —
+       * which is what lets an operator say "none of these" and have the envelope agree. */
+      setChosen((held) => {
+        const next = new Map(held)
+        next.set(
+          stop.id,
+          targetsOf(stop, held).filter((target) => target.capture_id !== captureId),
+        )
         return next
-      }),
-    [],
+      })
+    },
+    [stop],
   )
 
   /* ONE TIMER FOR THE WHOLE LIST, armed at the soonest deadline rather than one per write.
@@ -1071,7 +1084,11 @@ export function Inventory() {
           ...held.filter((one) => one.orderKey !== envelope.orderKey),
           { orderKey: envelope.orderKey, order: envelope.order, count: view.count },
         ])
-        setRetargets((held) => {
+        /* THE FILLED STOPS FORGET WHAT WAS TAKEN. Their lines owe nothing now, so they leave the
+         * queue on the re-read — and a stale list against a stop id that came back (a partly
+         * filled line, an undo) would be the operator's old choice standing in for one they never
+         * made. */
+        setChosen((held) => {
           const next = new Map(held)
           for (const one of envelope.stops) next.delete(one.id)
           return next
@@ -1100,8 +1117,15 @@ export function Inventory() {
     () =>
       ask === null || marks === null || walkNote !== null
         ? null
-        : { marks, captureIds, stop, excluded, onTake: take, onExclude: exclude, onInclude: include },
-    [ask, marks, walkNote, captureIds, stop, excluded, take, exclude, include],
+        : {
+            marks,
+            stop,
+            taking: stopTargets.length,
+            owed: stop?.owed ?? 0,
+            onTake: take,
+            onDrop: drop,
+          },
+    [ask, marks, walkNote, stop, stopTargets, take, drop],
   )
 
   const soldKeys = useMemo(() => new Set(sold), [sold])
@@ -1545,13 +1569,14 @@ function CopiesPanel({
       ) : null}
 
       {walk === null || walk.stop === null || group === null || group.sku !== walk.stop.sku ? null : (
-        /* THE ONE SENTENCE THAT MAKES THE UNMARKED COPIES REACHABLE. `SearchCopy` carries no
-           `capture_id` on purpose, so a copy no order picked cannot be aimed at from this list —
-           but its position label is a walk-to (D45), and the copy under the photograph always
-           has an id. So the two-press flow is the feature: walk to it, look at it, take it. */
+        /* THE ONE SENTENCE THAT SAYS THE LIST IS THE PICKER (D93). Every copy carries its own
+           take now, in any box, so what this has to explain is no longer how to REACH a copy —
+           it is the one rule that no row can show on its own: a full line refuses the take, and
+           dropping one is what makes room. */
         <p className="inventory-walk-hint">
-          Walk to a copy to take it instead — any box. The one under the photograph is the one the
-          envelope records.
+          The copies marked <strong>taking</strong> are what the envelope records — any box, and
+          the walk stands at the first of them. At {walk.owed} of {walk.owed} the line is full:
+          press <strong>Don&rsquo;t take</strong> on one to make room for another.
         </p>
       )}
 
@@ -1609,19 +1634,21 @@ function skuOrName(card: InventoryCard): string | null {
  *
  *  THE OPTIMISTIC OVERLAYS ARE READ HERE and not only on the wire's `state`, so a row stops
  *  offering to sell a card in the seconds between the write returning and the re-read landing. */
-/** What a copy's mark says when the row has no correction to offer — a departed copy, or one
- *  claimed by somebody else. The on-hand branch composes its own, because only there do
- *  `taken instead` and `not taken` exist. */
-function markSaid(mark: CopyMark, stop: Stop | null): string {
+/** What a copy's mark says when the row has no press to offer — a departed copy, or one claimed
+ *  by somebody else. The on-hand branch composes its own, because only there do `taking` and
+ *  `not taking` exist. */
+function markSaid(mark: CopyMark): string {
   switch (mark.kind) {
     case 'pulled':
       return `pulled for order ${mark.order}`
     case 'held':
       return `spoken for by order ${mark.order}`
-    case 'spoken':
-      return `for order ${mark.order}`
+    /* `for order N` FOR THE REST, INCLUDING THIS STOP'S OWN (D93). The two marks about the stop
+       the walk is standing on — taking it, or offering it — are composed by the on-hand branch,
+       which is the only place they can be drawn beside the press that changes them. What reaches
+       here is somebody else's claim, and every one of those is the same sentence. */
     default:
-      return stop !== null && mark.stopId === stop.id ? 'for this order' : `for order ${mark.order}`
+      return `for order ${mark.order}`
   }
 }
 
@@ -1659,7 +1686,7 @@ function Action({
   if (walk !== null && walkMark !== null && gone) {
     return (
       <span className="inventory-copy-actions">
-        <span className="inventory-copy-mark">{markSaid(walkMark, walk.stop)}</span>
+        <span className="inventory-copy-mark">{markSaid(walkMark)}</span>
         <span className="card-locations-gone">{departed ? 'sold' : 'retired'}</span>
       </span>
     )
@@ -1706,83 +1733,95 @@ function Action({
        The plain sale writes card state and not the ledger, so a card sold here while an order
        drives leaves its line owed forever; the envelope is the one write, and the plain sale is
        one `Stop walking` away. `Retire` stays: a damaged copy is retired whoever it was promised
-       to. What the slot draws instead is the mark — whose copy this is — and the one correction
-       this row can make.
+       to. What the slot draws instead is the mark — whose copy this is — and the press that puts
+       this copy in the envelope or takes it back out.
 
        TWO TONES, AND THE SPLIT IS THE INSTRUCTION RATHER THAN A RANKING. Ink where the mark
        tells the hand what to do with this card; muted where it reports a fact about somebody
        else's. A person scanning five rows for "which one do I pick up" reads the ink ones. */
     const mark = walkMark
-    const captureId = walk.captureIds.get(copy.key) ?? null
     const stop = walk.stop
+    const captureId = copy.capture_id === null || copy.capture_id.trim() === '' ? null : copy.capture_id
     const mine = stop !== null && mark !== null && 'stopId' in mark && mark.stopId === stop.id
     const sameSku = stop !== null && walk.sku !== null && walk.sku === stop.sku
-    const offered = stop !== null && stop.picks.some((pick) => `${pick.box}/${pick.index}` === copy.key)
-    const out = captureId !== null && walk.excluded.has(captureId)
-    const aimed = mine && mark !== null && mark.kind === 'target'
+    const taking = mine && mark !== null && mark.kind === 'target'
+    const full = walk.taking >= walk.owed
 
     /* A COPY IS A COPY WHEREVER IT SITS (D7, and the owner's ruling of 2026-09-02). Nothing here
-       asks which box: what a swap needs is the line's own SKU and an id to aim by.
+       asks which box: what the take needs is the line's own SKU and an id to aim by, and since
+       D93 the wire carries that id on every copy — so the panel is a picker over every copy of
+       the card rather than a correction to the two the resolver happened to allocate.
 
        WHAT IT DOES ASK IS WHETHER THE COPY IS SPOKEN FOR, and only two kinds are free — one no
-       mark claims, and one of THIS stop's own picks that a swap displaced (so a swap can be put
+       mark claims, and one of THIS stop's own picks that has been dropped (so it can be put
        back). A copy another stop targets is refused, and in wave mode that is not a nicety: two
        envelopes naming one card would each count it, the first press would take it, and the
        second would refuse at the server with the operator holding a card the screen had promised
        them. `resolve_all` allocates over the whole open set precisely so that cannot happen, and
-       a hand-swap that could undo the allocation would put the defect back one register up. The
-       mark says `for order N` beside the missing button, which is the reason. */
-    const takeable =
-      !aimed && !out && sameSku && captureId !== null && (mark === null || (mine && mark.kind === 'pick'))
+       a hand-pick that could undo the allocation would put the defect back one register up. The
+       mark says `for order N` beside the missing button, which is the reason.
 
-    const said = out
-      ? 'not here'
-      : aimed
-        ? offered
-          ? 'for this order'
-          : 'taken instead'
-        : mine
-          ? 'not taken'
-          : mark === null
-            ? ''
-            : mark.kind === 'held'
-              ? `spoken for by order ${mark.order}`
-              : mark.kind === 'pulled'
-                ? `pulled for order ${mark.order}`
-                : `for order ${mark.order}`
-    const loud = aimed && !out
+       AND WHETHER IT IS A PLACE AT ALL. A pooled copy (D24) is a count rather than a location,
+       so there is no slot for `capture_id_mismatch` to check the aim against; it is refused here
+       for the same reason `stopsOf` will not land on one. */
+    const free = mark === null || (mine && mark !== null && mark.kind === 'pick')
+    const located = copy.place !== null && copy.place.located !== false
+    const mayTake = !taking && sameSku && free && located
+
+    const said = taking
+      ? 'taking'
+      : mine
+        ? 'not taking'
+        : mark === null
+          ? ''
+          : markSaid(mark)
+    const loud = taking
+    const at = copy.place?.label ?? copy.key
 
     return (
       <span className="inventory-copy-actions">
         {said === '' ? null : (
           <span className={`inventory-copy-mark${loud ? ' inventory-copy-mark-take' : ''}`}>{said}</span>
         )}
-        {out && captureId !== null ? (
+        {taking && captureId !== null ? (
+          /* THE TAKE AND ITS REVERSAL SHARE A RECTANGLE, WHICH IS THE POINT. Neither press
+             reaches the server, so an overshoot is not a write — and because the two labels are
+             one word apart in width, the second press lands inside the first one's footprint and
+             puts the copy back. That is the property `Mark sold` on this screen does not have and
+             pays for with `busyKey`. */
           <button
             className="card-locations-sell"
             type="button"
+            aria-label={`Don’t take the copy at ${at}`}
             disabled={busyKey !== null}
-            onClick={() => walk.onInclude(captureId)}
+            onClick={() => walk.onDrop(captureId)}
           >
-            Back in
+            Don&rsquo;t take
           </button>
-        ) : aimed && captureId !== null ? (
+        ) : mayTake && captureId === null ? (
+          /* NO ID TO AIM BY, AND THE ROW SAYS SO RATHER THAN OFFERING A PRESS THE SERVER WOULD
+             REFUSE. A record written before capture ids were kept, or one `emit` created rather
+             than the camera, has nothing for `capture_id_mismatch` to check — so it cannot be
+             put in an envelope, and a button that failed at the drawer would be worse than a
+             sentence saying why here. */
+          <span className="inventory-copy-note">no capture id</span>
+        ) : mayTake && full ? (
+          /* THE LINE IS FULL AND THE COUNT IS WHAT SAYS SO (the owner's ruling, 2026-09-02).
+             Nothing leaves the envelope on a press aimed at something else: a ring that dropped
+             the longest-standing copy to admit this one would change a row the finger was not
+             on. Drop one and the control comes back on every row at once. */
+          <span className="inventory-copy-note">
+            {walk.taking} of {walk.owed} taken
+          </span>
+        ) : mayTake && captureId !== null ? (
           <button
             className="card-locations-sell"
             type="button"
-            disabled={busyKey !== null}
-            onClick={() => walk.onExclude(captureId)}
-          >
-            Not here
-          </button>
-        ) : takeable && captureId !== null ? (
-          <button
-            className="card-locations-sell"
-            type="button"
+            aria-label={`Take the copy at ${at}`}
             disabled={busyKey !== null}
             onClick={() => walk.onTake(copy, captureId)}
           >
-            Take this one instead
+            Take
           </button>
         ) : null}
         <button
@@ -1796,6 +1835,7 @@ function Action({
       </span>
     )
   }
+
   return (
     <span className="inventory-copy-actions">
       {/* No accent fill on either, and since D57 there is none on this screen at all.

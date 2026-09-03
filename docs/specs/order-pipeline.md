@@ -529,36 +529,49 @@ still there.
 **Done, and this is what was built.** An open order is walked from `#/orders` — `Walk this order`
 per row, `Walk every open order` in the header, both plain links to the parameter. Each line lands
 under its own photograph and the arrows step the queue. Every copy is aimed by its own
-`capture_id`, and the operator may re-aim one (`Take this one instead`, any copy of the SKU in any
-box) or set it aside (`Not here`) before the press. One press per order records the whole envelope
-— pulled and sold — with its own receipt and a distinct undo label, and the next order is not
-offered until it has been pressed. **Reachable at both ends**, which is `CLAUDE.md`'s
+`capture_id`, and **which copies fill the line is picked off the copies panel** — `Take` and
+`Don't take` on every unsold copy of the SKU, in any box (D93). One press per order records the
+whole envelope — pulled and sold — with its own receipt and a distinct undo label, and the next
+order is not offered until it has been pressed. **Reachable at both ends**, which is `CLAUDE.md`'s
 route-is-not-a-feature rule: the entry controls on `#/orders`, the banner and its exit on
 `#/inventory`.
 
-**`make design-check` is where the reachability half is evidenced, and it does not yet cover this
-one — that is a gap, named here rather than left to be discovered.** It is the only check in this
-repo that can see whether a human can reach a thing, which is why the STATUS table above says
-`built` on its say-so and why it is deliberately off the commit path. `app/tests/orders.spec.ts`
-and `app/tests/inventory.spec.ts` are the two specs the walk crosses and neither asserts a stop,
-an arrow step or the envelope press today, so the mode is in exactly the position the route
-rosters were before they got a reader: green, and asserted by nothing. Harness T7's
-`check_order_fill` covers the SERVER half and cannot see a screen. **A session that adds those
-assertions may strike this paragraph and not before.**
+**`make design-check` is where the reachability half is evidenced, and it covers this one** —
+`app/tests/order-walk.spec.ts`, thirteen cases in a browser over a stubbed wire: the parameter
+reaching the screen, the landing, the arrows stepping the queue across a box, `Mark sold` absent
+from every row, the picker taking a copy in another box without moving the walk, a full line
+refusing the take, one press sending one `POST /orders/fill` and zero `/sold`, the receipt
+reversing the whole envelope, and the wave. It is the only check in this repo that can see whether
+a human can reach a thing, which is why the STATUS table above says `built` on its say-so and why
+it is deliberately off the commit path. Harness T7's `check_order_fill` covers the SERVER half and
+cannot see a screen. **The paragraph this replaces said the mode was asserted by nothing, and it
+was true on the day it was written** — the spec landed with D90's own commit and the sentence was
+never struck.
 
-**The swap is box-agnostic, on the owner's ruling of 2026-09-02.** `Take this one instead` was
+**The choice is box-agnostic, on the owner's ruling of 2026-09-02.** The swap it grew out of was
 going to be fenced to the copy under the photograph and never one in another box; the owner:
 *"You're giving boxes too much independence."* D7 already says why they have none here — every
 unsold copy of a SKU is equally sellable, which is the whole reason the copies panel draws them
-across boxes at all. The chosen copy goes to the front of the stop's targets, so the LANDING
-follows it and nothing snaps back to the drawer the resolver happened to pick.
+across boxes at all.
+
+**AND THE SWAP ITSELF DID NOT SURVIVE THE FIRST WALK (D93, the same day).** It aimed at one copy
+at a time, replaced the stop's first target, and — because `SearchCopy` carried no `capture_id` —
+could only be pressed on a copy the operator had already walked to. The owner: *"when I have an
+order of 2 cards and I have inventory for 3, I basically should be able to pick which two I sell,
+instead currently it's like predetermined, and using the `take this one instead` system is not
+intuitive."* The panel is the picker now: every copy carries `Take` / `Don't take`, the ink mark
+`taking` says what the envelope will record, and the resolver's picks are the DEFAULT rather than
+the answer. **A full line refuses the take** — at `2 of 2` the other rows draw the count where
+their control would be, because nothing may leave the envelope on a press aimed at something else
+— and a take APPENDS, so the walk stands still; dropping the copy it is standing on is what moves
+it. This was D90's own third reopening condition, taken.
 
 **What this does not decide.** Nothing whatsoever about postage, which is D61's ruling and
 `#/shipping`'s answer, computed from a file this ledger has never seen. **The reload question IS
 decided**, and it was the open one this section left: the ask is in the URL, so a reload re-reads
 `GET /orders` and lands on the first stop still owed. What a reload does drop is this session's own
-corrections — the re-aims and the set-asides — because they are the screen's and not the store's,
-and the resolver's picks stand in again.
+choice of copies, because it is the screen's and not the store's, and the resolver's picks stand
+in again.
 
 ---
 

@@ -1141,10 +1141,16 @@ export type PlaceNeighbor = {
 
 // ------------------------------------------------------------------------------- the search
 
-/** One physical copy in a search result: the store's own key, its pipeline state, and where
- *  it is. Deliberately NOT the whole `InventoryCard` — the search answers "where are my
- *  copies of this card", and a screen that also received `confidence` and `capture_id` would
- *  invite a second inventory view to grow inside a search result. */
+/** One physical copy in a search result: the store's own key, its pipeline state, where it is,
+ *  and the id a write aims by.
+ *
+ *  STILL NOT THE WHOLE `InventoryCard`, AND THAT RULE IS INTACT: the search answers "where are
+ *  my copies of this card", and a row carrying `confidence`, the run and the metadata would
+ *  invite a second inventory view to grow inside a search result. What this comment said until
+ *  D93 was that `capture_id` was one of the fields being kept out, and that cost the order walk
+ *  the ability to aim at any copy but the ones the resolver had already picked — so choosing a
+ *  different copy meant walking to it first, which is the flow the owner called unintuitive.
+ *  An identity is not a view. */
 export type SearchCopy = {
   /** `"<box>/<index>"`, `store.master.position_key`. Identity for React, and the string a
    *  `curl /inventory` is grepped with. Never parsed into a position — a store key and a
@@ -1175,6 +1181,16 @@ export type SearchCopy = {
    *  broken image, never a guarantee: undo deletes a photo, so a screen still has to handle
    *  the load failing. */
   has_photo: boolean
+
+  /** THE ID EVERY WRITE AIMS BY, and the reason a copy can be picked off this list at all (D93).
+   *
+   *  `POST /orders/fill` checks it against the card actually at the slot and refuses
+   *  `capture_id_mismatch` rather than selling whatever slid into the index after a mid-box
+   *  delete (D10 ruling 1, D58) — so an id, and not a `(box, index)`, is what a copy is chosen
+   *  BY. Null for a record written before ids were kept and for one `emit` created rather than
+   *  the camera; a copy carrying null cannot be taken, and the screen says so rather than
+   *  sending a target the server would refuse. */
+  capture_id: string | null
 
   place: Place
 }

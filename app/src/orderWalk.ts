@@ -32,6 +32,12 @@ import type {
  * is re-derived per read, a three-copy line whose first copy was just filled stands at its
  * next unfilled copy. The pass through the boxes is a property of the read, not a list.
  *
+ * THE PANEL IS THE PICKER (D93). Every unsold copy of the stop's SKU carries its own take, in
+ * any box, so which copies an envelope records is CHOSEN from the list rather than corrected one
+ * at a time against the resolver's answer. `targetsOf` is where the operator's list meets that
+ * answer, and the resolver's picks are still the default — the picker costs a press only when
+ * the operator has an opinion about which copies.
+ *
  * THE URL IS THE HANDOFF, NOT `sessionStorage` (D49's argument for `#/pricing?run=`): an
  * order key has one source of truth — the ledger — and is validated against the payload on
  * every read, so it needs no second key with its own clearing rules. What that buys is a
@@ -85,6 +91,11 @@ export type Stop = {
   readonly owed: number
   /** The resolver's allocation for what is still owed, in `(box, index)` order. */
   readonly picks: readonly PickRow[]
+  /** How many of those picks the walk could actually aim at. The DENOMINATOR OF THE SHORTFALL
+   *  (D93): a line owed 2 that the resolver could only find 1 copy for is short by one whatever
+   *  the operator does with their hands, and that is a different fact from a copy they chose
+   *  not to take. `Inventory.tsx:shortfalls` is the only reader and it splits the two. */
+  readonly available: number
   /** The first pick with a capture id that no other line has already recorded, or null. */
   readonly landing: PickRow | null
   /** `(order position, line position)` in the payload — the order-mode order and the wave tiebreak. */
@@ -121,6 +132,7 @@ function stopOf(
   sequence: readonly [number, number],
 ): Stop {
   const progress = row.progress.find((one) => one.sku === line.sku)
+  const offered = line.picks.filter(aimable)
   return {
     id: `${row.key}/${line.sku}`,
     orderKey: row.key,
@@ -132,7 +144,8 @@ function stopOf(
     recorded: progress?.recorded ?? 0,
     owed: progress?.outstanding ?? line.owed,
     picks: line.picks,
-    landing: line.picks.find(aimable) ?? null,
+    available: offered.length,
+    landing: offered[0] ?? null,
     sequence,
   }
 }
@@ -260,42 +273,52 @@ export function marksOf(
 }
 
 /**
- * The targets an envelope will record for one stop: the resolver's picks, aimed by their own
- * capture ids, unless the operator re-aimed or excluded one. `retargets` maps a stop to the
- * targets the operator chose; `excluded` names capture ids they said were not there. Both are
- * this screen's and this session's — lost on a reload, when the picks stand in again.
+ * The copies an envelope will record for one stop: the resolver's picks, aimed by their own
+ * capture ids, until the operator says otherwise. `chosen` maps a stop to the copies they took
+ * with their hands — this screen's and this session's, lost on a reload, when the picks stand
+ * in again.
+ *
+ * ONE MAP AND NOT TWO (D93). This took `retargets` and `excluded` — a stop's replacement list
+ * and a set of capture ids the operator had said were not in the drawer — because the two
+ * corrections it served were `Take this one instead` and `Not here`, each a note against the
+ * resolver's answer. The panel is the picker now: a copy is taken or it is not, so what the
+ * operator said is ONE list per stop, and an empty list is a real answer rather than an absent
+ * one. `?? ` and not `||` for exactly that: a stop the operator has emptied stays empty and
+ * does not fall back to the picks.
+ *
+ * THE DEFAULT IS STILL THE RESOLVER'S, which is what keeps the common case free. A line owed
+ * two with two copies on the shelf is zero presses; the picker costs a press only when the
+ * operator has an opinion about WHICH copies.
  */
 export function targetsOf(
   stop: Stop,
-  retargets: ReadonlyMap<string, readonly PullTarget[]>,
-  excluded: ReadonlySet<string>,
+  chosen: ReadonlyMap<string, readonly PullTarget[]>,
 ): PullTarget[] {
-  const chosen =
-    retargets.get(stop.id) ??
+  const taken =
+    chosen.get(stop.id) ??
     stop.picks.filter(aimable).map((pick) => ({
       box: pick.box,
       index: pick.index,
       capture_id: pick.capture_id as string,
     }))
-  /* CLAMPED TO WHAT THE LEDGER STILL OWES, and the clamp is about the swaps rather than the
-   * picks. The resolver never returns more picks than the line is owed, but `retargets` is this
-   * screen's own state and survives every re-read: another device pulling one copy of the line
-   * brings `owed` down to 1 while the operator's two hand-picked targets are still stored, and
-   * the press would then send two copies for a line owing one — `record_pull` refuses
-   * `over_fulfilled` and nothing is clamped there on purpose, so the whole envelope is lost at
-   * the drawer. Trimming from the end keeps the copy the walk is standing on, which is the
-   * first one. */
-  return chosen.filter((target) => !excluded.has(target.capture_id)).slice(0, Math.max(0, stop.owed))
+  /* CLAMPED TO WHAT THE LEDGER STILL OWES, and the clamp is about the operator's list rather
+   * than the picks. The resolver never returns more picks than the line is owed, and the picker
+   * refuses a take at capacity — but `chosen` is this screen's own state and survives every
+   * re-read: another device pulling one copy of the line brings `owed` down to 1 while the
+   * operator's two hand-picked copies are still stored, and the press would then send two copies
+   * for a line owing one — `record_pull` refuses `over_fulfilled` and nothing is clamped there
+   * on purpose, so the whole envelope is lost at the drawer. Trimming from the end keeps the
+   * copy the walk is standing on, which is the first one. */
+  return taken.slice(0, Math.max(0, stop.owed))
 }
 
-/** What one envelope press sends: one `FillLine` per stop with at least one target. */
+/** What one envelope press sends: one `FillLine` per stop with at least one copy taken. */
 export function envelopeLines(
   envelope: Envelope,
-  retargets: ReadonlyMap<string, readonly PullTarget[]>,
-  excluded: ReadonlySet<string>,
+  chosen: ReadonlyMap<string, readonly PullTarget[]>,
 ): FillLine[] {
   return envelope.stops
-    .map((stop) => ({ sku: stop.sku, targets: targetsOf(stop, retargets, excluded) }))
+    .map((stop) => ({ sku: stop.sku, targets: targetsOf(stop, chosen) }))
     .filter((line) => line.targets.length > 0)
 }
 

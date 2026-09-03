@@ -444,3 +444,7 @@ Paldean
 unphotographed
 [Dd]ownsampl\w*
 dBase
+
+[Aa]imable
+[Ff]illable
+[Uu]nintuitive

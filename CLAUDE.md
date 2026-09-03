@@ -341,12 +341,20 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   feature turns on.** `POST /inventory/<box>/<index>/sold` writes card state and **not** the
   ledger, so a card sold that way while an order is driving leaves its line owed forever and
   the operator ships a card the ledger still wants. `Retire` stays — it is a claim about a
-  card and belongs to nobody's order. **A copy is taken by walking to it**: any unsold copy of
-  the line's SKU in ANY box may be swapped in with `Take this one instead` (D7 — every unsold
-  copy is sellable), and the stop then follows the copy taken rather than snapping back to the
-  drawer the resolver picked. **What the swap costs if you skip it**: lift a different copy out of
-  the drawer without pressing it and the envelope records the slot the walk was standing on — the
-  right SKU at the wrong address, and nothing can tell.
+  card and belongs to nobody's order.
+
+  **WHICH COPIES FILL A LINE IS PICKED OFF THE COPIES PANEL, ONE PRESS PER COPY, IN ANY BOX**
+  (D93, 2026-09-02, on the owner's *"I basically should be able to pick which two I sell"*).
+  The resolver's allocation is the DEFAULT and not the answer: every unsold copy of the line's
+  SKU carries `Take` / `Don't take` (D7 — every unsold copy is sellable), the ink mark `taking`
+  says what the envelope will record, and `GET /search` sends a `capture_id` per copy so the aim
+  works without walking to it first. **A full line refuses the take** — at `2 of 2` the other
+  rows draw the count where their control would be, because nothing may leave the envelope on a
+  press aimed at something else; don't-take one to make room. Taking APPENDS, so the walk stands
+  still; dropping the copy it is standing on moves it to the next copy the envelope is taking.
+  **What the picker costs if you skip it**: lift a different copy out of the drawer without
+  pressing `Take` and the envelope records the slot the walk was standing on — the right SKU at
+  the wrong address, and nothing can tell.
 
 - **The app has ten screens and ten routes** — nine the owner's, one the Fulfiller's. It
   said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
@@ -667,6 +675,7 @@ D89  A sold card's photograph is reclaimed on purpose, and the record keeps its 
 D90  The envelope is the unit of the write, and an order drives the walk as a mode of the inventory screen
 D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
 D92  A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
+D93  The copies panel is the picker, and a full line refuses the take
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
