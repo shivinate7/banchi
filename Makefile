@@ -568,12 +568,22 @@ design-check:
 #
 # A missing binary reports and does not fail, so `make check` still runs on a machine
 # without it — the same shape NPM_GUARD takes, minus the exit.
+#
+# ONE RECIPE LINE, DELIBERATELY. Split across two — a guard line ending `exit 0`, then a
+# bare `git ls-files | xargs vale` — the guard's `exit 0` only ends ITS OWN shell; each `@`
+# line is a separate invocation, and make advances to the next line on any zero exit, guard
+# or not. So the message printed, the target reported nothing wrong, and `xargs` ran anyway
+# with no `vale` to run — `xargs: vale: No such file or directory`, exit 127, `make check`
+# failing on the one row this comment says cannot fail it. Measured, not hypothetical: that
+# is the exact output a binary-less machine produced. One `if` keeps the run inside the
+# branch that only exists once the guard has already passed.
 vale:
-	@command -v vale >/dev/null || { \
+	@if command -v vale >/dev/null; then \
+		git ls-files '*.md' | xargs vale --no-exit; \
+	else \
 		echo "vale is not installed — prose style unchecked."; \
 		echo "  Fix: brew install vale"; \
-		exit 0; }
-	@git ls-files '*.md' | xargs vale --no-exit
+	fi
 
 lint:
 	$(NPM_GUARD)
