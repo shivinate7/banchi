@@ -409,7 +409,9 @@ def run(args, say) -> int:
             f"no photographs, no record carrying a digest, or none of this run's digests "
             f"among the photographs there (a re-shoot replaces the bytes). This run's slot "
             f"numbers were taken as recorded. If a card was deleted mid-box since it was "
-            f"identified, they are wrong and nothing here can tell."
+            f"identified, they are wrong and nothing here can tell. A box whose number was "
+            f"deleted and reused after this run is refused before this point rather than "
+            f"reported here (D36, amended)."
         )
         say("")
 

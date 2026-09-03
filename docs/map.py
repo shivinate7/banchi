@@ -393,8 +393,12 @@ COMPONENTS = [
                                    "wrote 47 box-2 queue entries one position off. `_copies_out`'s "
                                    "floor under the cap is the NEWEST reading of `live`, the "
                                    "store's or the export's by `Listing.live_reading`, and it "
-                                   "carries that figure to the join as `live_now` (D87 amended).",
-                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D58", "D59", "D64", "D87"], "tested_by": ["T7"]},
+                                   "carries that figure to the join as `live_now` (D87 amended). "
+                                   "`refuse_reallocated` refuses a run over a box whose number was "
+                                   "deleted and reused since (D36 amended), on the rule "
+                                   "`_box_name_for` withholds a name by (D56) — `realign` reads "
+                                   "photographs and not the store, and cannot see that case.",
+                           "governed_by": ["D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -814,8 +818,12 @@ COMPONENTS = [
                                   "mapping for the rows they want rather than walking every card. "
                                   "`Listing.observe_live` arbitrates `live` by `live_as_of` — the "
                                   "newer reading wins, an older export is kept out — and "
-                                  "`Listing.live_reading` is the same rule for the cap (D87 amended)",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D58", "D59", "D83", "D87", "D88", "D89"], "tested_by": ["T7"]},
+                                  "`Listing.live_reading` is the same rule for the cap (D87 amended). "
+                                  "`box_disowns_run` is the one rule for whether a reused box "
+                                  "number is still a run's own drawer, read off the store by "
+                                  "`Inventory.box_disowns_run` — the route withholds the name on "
+                                  "it (D56) and the join refuses on it (D36 amended)",
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},

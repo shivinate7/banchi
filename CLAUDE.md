@@ -165,7 +165,12 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   every record to the slot its `photo_sha256` is at now, before anything reads a position.
   It refuses on an ambiguous digest, on two records carrying one digest, and on a
   digest-less record in a box that has moved; it reports a box it cannot check against its
-  photographs as unverified rather than treating its cards as gone.
+  photographs as unverified rather than treating its cards as gone. **A box whose number was
+  deleted and reused after the run is refused outright** (D36 amended) — box 1 held 53 Pokemon
+  cards on 2026-08-22 and 133 Riftbound cards since 2026-08-29 — by
+  `cli/resolve.py:refuse_reallocated`, on `store/master.py:box_disowns_run`, the rule the
+  route already withheld a box's name by (D56): `realign` reads photographs and not the store,
+  and passed such a run through as unverified onto another drawer's records.
 - **Only two columns are ever written**: `Add to Quantity`, `TCG Marketplace Price`.
   `TCGplayer Id` is never modified. Everything else round-trips byte-identical.
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:

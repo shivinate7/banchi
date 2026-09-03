@@ -8778,6 +8778,184 @@ def check_run_realignment(checks: Checks) -> None:
         )
 
 
+def check_reused_box_refusal(checks: Checks) -> None:
+    """D36 (amended) — a run over a box whose number was deleted and reused is refused outright.
+
+    THE CASE `check_run_realignment` CANNOT REACH, because `realign` never opens the store.
+    Box 1 was deleted 2026-08-25 with 53 Pokemon cards and its number reused 2026-08-29 for
+    133 Riftbound cards (`next_box_number`, D20 amended); `2026-08-22-box1-03` still describes
+    the old drawer, none of its digests are among the new box's photographs, so `realign`
+    answers `unverified` and passes the keys through — after which the loader reads the
+    CURRENT box's records at those keys. Observed on the owner's store: the refusal that fired
+    said *"this run holds 53 riftbound card(s) and no export covers that game"* over a Pokemon
+    run, because the run predates D21's `game` field and the store rung read the Riftbound
+    cards now sitting at its keys, and it sent the operator to change the game on live records
+    that were never this run's.
+
+    THE RULE IS `_box_name_for`'s (D56), hoisted to `store/master.py:box_disowns_run` and read
+    off the store by `Inventory.box_disowns_run`: the registry entry was made AFTER the run
+    started AND the box's cards came from somewhere else. `check_pipeline_routes` asserts the
+    route half over the same rule; this asserts the refusal on both paths and through the
+    command, the two honest pass-throughs, and the rule's branches directly.
+    """
+    checks.note("")
+    checks.note("REUSED BOX NUMBER — a run over a reallocated box is refused (D36 amended)")
+
+    from cli import __main__ as entry
+
+    def payload_for(with_game: bool) -> dict:
+        # Records at keys the NEW box also uses, photographed to bytes on no disk: `realign`
+        # finds no `captures/cards/box1` and answers `unverified`, which is exactly the
+        # pass-through the refusal has to fire in front of. `with_game=False` is the shape
+        # of the real run — it predates D21, so the store rung decides its game.
+        cards = {}
+        for i, (name, number) in {1: ("Dunsparce", "120"), 2: ("Alpha", "001")}.items():
+            record = {
+                "box": 1,
+                "index": i,
+                "photo": f"captures/cards/box1/{i:04d}.jpg",
+                "photo_sha256": hashlib.sha256(f"old-box-1-card-{i}".encode()).hexdigest(),
+                "identification": {
+                    "name": name,
+                    "number": number,
+                    "printed_total": "159",
+                    "confidence": "high",
+                    "finish": None,
+                },
+            }
+            if with_game:
+                record["game"] = "pokemon"
+            cards[f"1/{i}"] = record
+        return {"prompt_fingerprint": "t7-reused", "cards": cards}
+
+    def says(caught, label: str, *needles: str) -> None:
+        text = str(caught) if caught is not None else ""
+        missing = [needle for needle in needles if needle not in text]
+        checks.ok(not missing, label, f"missing {missing!r} in:\n{text}")
+
+    other = "2026-08-29-box1-01"
+    with isolated_home() as home:
+        run = runs.create("box1")
+        run.set(
+            capture_dir=str(home / "captures" / "cards" / "box1"),
+            created_at="2000-01-01T00:00:00+00:00",
+        )
+        run.write_identifications(payload_for(with_game=False))
+        export = write_export(run.path("export.csv"))
+
+        # An EMPTY box disowns nobody, even one registered after the run: the name-it-later
+        # flow `check_pipeline_routes` asserts is the same flow for the join.
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1)
+        plan = resolve.exports_for(run, [str(export)])
+        checks.equal(
+            list(plan.by_game),
+            ["pokemon"],
+            "a box registered after the run but holding no cards is still this run's — an "
+            "empty box is not evidence that the drawer changed",
+        )
+
+        # The number is reused: three Riftbound cards from another run, at the keys this
+        # run's records also use. `ensure_box` stamped the entry above, well after 2000.
+        with Store().write() as snapshot:
+            for n in (1, 2, 3):
+                card, _ = snapshot.inventory.allocate_capture(
+                    1, capture_id=f"reused-{n}", game="riftbound"
+                )
+                snapshot.inventory.record_identification(
+                    card.key,
+                    name="Moonfall",
+                    number="198/219",
+                    printed_total="219",
+                    confidence="high",
+                    run=other,
+                )
+        born = Store().read().inventory.box(1).created_at
+        checks.ok(
+            isinstance(born, str) and born > "2000",
+            "fixture: the registry entry is stamped after the run started",
+            f"created_at: {born!r}",
+        )
+
+        # (a) THE REFUSAL, ON BOTH PATHS AND THROUGH THE COMMAND. The `exports_for` path is
+        # the one that used to fire the misleading refusal: with no `game` on the records,
+        # `_games_needed`'s store rung read `riftbound` off the foreign cards and refused for
+        # want of a Riftbound export. It never gets there now.
+        caught = checks.raises(
+            runs.RunError,
+            lambda: resolve.exports_for(run, [str(export)]),
+            "a run over a box whose number was deleted and reused since is refused on the "
+            "`exports_for` path, before the store rung reads a foreign card's game",
+        )
+        says(
+            caught,
+            "and the refusal names the box, the reuse, the registry stamp, the run whose "
+            "cards are there now, and that nothing was touched",
+            "box 1", "reused", str(born), other, "Nothing was joined",
+        )
+        checks.ok(
+            caught is not None and "riftbound" not in str(caught),
+            "and it is NOT the 'no export covers riftbound' refusal — that one blamed the "
+            "operator's export for the store's reallocation",
+            str(caught),
+        )
+        caught = checks.raises(
+            runs.RunError,
+            lambda: resolve.load(run, {"pokemon": export}),
+            "and on `load` with a mapping handed straight in, which skips `exports_for`",
+        )
+        says(caught, "with the same sentence", "box 1", "reused", str(born), other)
+
+        with quiet() as said:
+            code = entry.main(["join", str(run.directory), "--export", str(export)])
+        checks.equal(code, 1, "`pkmnscan join` over that run exits 1")
+        says(said.getvalue(), "and prints the refusal", "REFUSING", "reused", other)
+        tables = store_tables()
+        checks.equal(
+            (tables["queues"], tables["listings"]),
+            ([], []),
+            "and both queues are empty and no listing was written — refused before anything "
+            "was read at this run's keys, let alone written",
+        )
+
+        # (b) THE TWO HONEST PASS-THROUGHS. The records carry `game` now, so the store rung
+        # is not consulted and the join can be shown to proceed.
+        run.write_identifications(payload_for(with_game=True))
+        with Store().write() as snapshot:
+            snapshot.inventory.box(1).created_at = "1999-01-01T00:00:00+00:00"
+        resolved = resolve.load(run, {"pokemon": export})
+        checks.equal(
+            resolved.unverified_boxes,
+            [1],
+            "a box registered BEFORE the run passes through as `unverified` — photographs "
+            "missing, box unchanged: still the honest pass-through, and `unverified` still "
+            "means what it meant",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.box(1).created_at = born
+            snapshot.inventory.cards.get("1/1").run = run.name
+        resolved = resolve.load(run, {"pokemon": export})
+        checks.equal(
+            resolved.unverified_boxes,
+            [1],
+            "and a box holding this run's cards is this run's drawer, however young the "
+            "registry entry — the card set is what carries it",
+        )
+
+    # (c) THE RULE ITSELF, branch by branch, with the stamps the real case carries.
+    ran = "2026-08-22T22:40:24+00:00"
+    made = "2026-08-29T21:32:35.944+00:00"
+    for label, args, expected in (
+        ("an empty box disowns nobody", (made, [], "r", ran), False),
+        ("a box holding this run's cards is its own", (made, [other, "r"], "r", ran), False),
+        ("an unparseable registry stamp abstains", ("last week", [other], "r", ran), False),
+        ("an absent run stamp abstains", (made, [other], "r", None), False),
+        ("born before the run, holding others' cards: still its own", (ran, [other], "r", made), False),
+        ("born after the run AND holding only others' cards: disowned", (made, [other], "r", ran), True),
+    ):
+        checks.equal(master.box_disowns_run(*args), expected, f"box_disowns_run: {label}")
+
+
 def check_printed_code_profiles(checks: Checks) -> None:
     """`riftbound_card_v1` and `one_piece_card_v1`: the wiring, and the one seam that lies.
 
@@ -9210,6 +9388,25 @@ def check_cli_refusals(checks: Checks) -> None:
                 f"and {label} names the path it could not use",
                 f"said: {said.getvalue().strip()!r}",
             )
+
+    # A MANIFEST WHOSE EXPORT HAS GONE. `2026-08-22-box1-03` recorded its export under
+    # `~/Downloads`, where it no longer is, and the refusal said `export not found: <path>`
+    # and nothing else — the one `exports_for` refusal with no remedy in it, beside three
+    # siblings that each name what to do next.
+    with isolated_home() as home:
+        gone = runs.create("gone-export")
+        gone.write_identifications({"prompt_fingerprint": "t7", "cards": {}})
+        gone.set(exports={"pokemon": {"path": str(home / "Downloads" / "export.csv")}})
+        with quiet() as said:
+            code = entry.main(["join", str(gone.directory)])
+        checks.equal(code, 1, "join over a manifest whose recorded export is gone exits 1")
+        text = said.getvalue()
+        checks.ok(
+            "--export" in text and "#/runs" in text and "manifest" in text,
+            "and the refusal says the manifest recorded it, and names both remedies — "
+            "`--export` and the fetch on #/runs",
+            f"said: {text.strip()!r}",
+        )
 
     # argparse exits 2 on a usage error, and that is the right code — it is a different
     # failure from a run that could not proceed, and a caller scripting these needs to tell
@@ -17711,6 +17908,7 @@ def run() -> Result:
     check_review_stand_down(checks)
     check_review_catalog(checks)
     check_run_realignment(checks)
+    check_reused_box_refusal(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)

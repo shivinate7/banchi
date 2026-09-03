@@ -68,7 +68,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 # THE ONE INTRA-PACKAGE IMPORT THIS MODULE MAKES, and it is a container rather than a disk.
 # The comment beside `BadPosition` below explains why nothing here reaches `store/files.py`;
@@ -314,6 +314,41 @@ def newer_stamp(a: Optional[str], b: Optional[str]) -> Optional[bool]:
     if left is None or right is None:
         return None
     return left > right
+
+
+def box_disowns_run(
+    created_at: Optional[str],
+    runs_present: Iterable[str],
+    run: str,
+    ran_at: Optional[str],
+) -> bool:
+    """True iff the box under this number is a different drawer from the one `run` was over.
+
+    THE RULE `server/pipeline_routes.py:_box_name_for` HAS HELD SINCE D56, LIFTED HERE BECAUSE
+    A SECOND CALLER REFUSES ON IT. `next_box_number` allocates the lowest FREE integer (D20
+    amended), so a box that is deleted and a box that arrives later share a number, and a run
+    over the first keeps describing it: `2026-08-22-box1-03` is over 53 Pokemon cards that
+    `do_delete_box` removed on 2026-08-25, and box 1 has held 133 Riftbound cards since
+    2026-08-29. The route withholds the newcomer's name from that run; `cli/resolve.py:
+    refuse_reallocated` refuses to join it at all (D36 amended). Both decide by this function,
+    so the screen and the command cannot disagree about which drawer a run was over.
+
+    TWO CONDITIONS, BOTH REQUIRED, AND EACH RULES OUT THE OTHER'S FALSE POSITIVE:
+
+      the registry entry was made AFTER the run started
+      and the box's cards DISOWN the run — it holds some, and none of them is this run's
+
+    The stamp alone would refuse a box named after its run, which is ordinary. The card set
+    alone would refuse a fresh run over a box already holding another run's cards, since
+    `run` is written onto a card by `identify` and a live run owns none until then. An empty
+    box disowns nobody. Either stamp absent or unparseable is "cannot tell", and this
+    abstains towards the box being the run's own — the claim it can least afford to make
+    about runs it knows nothing about.
+    """
+    present = set(runs_present)
+    if not present or run in present:
+        return False
+    return newer_stamp(created_at, ran_at) is True
 
 
 @dataclass
@@ -1444,6 +1479,34 @@ class Inventory:
     def box(self, number) -> Optional[Box]:
         """The registry entry for this box, or None. Never invents one."""
         return self.boxes.get(str(_as_position_int(number, "box")))
+
+    def box_disowns_run(self, box, run: str, ran_at: Optional[str]) -> Optional[str]:
+        """The sentence refusing `run` over `box`, or None when the box is the run's own.
+
+        `box_disowns_run` (module-level) is the rule; this reads its inputs off the store —
+        the registry entry's `created_at` and the `run` column of every card in the box, one
+        column read and no card objects (D88). The sentence names what the rule saw, because
+        the operator has to be able to check it against the `sqlite3` CLI: the entry's stamp,
+        the count, and the runs whose cards are there now. A box the registry has never seen
+        is nobody's to disown.
+        """
+        entry = self.box(box)
+        if entry is None:
+            return None
+        number = int(entry.box)
+        present = [
+            value
+            for _, (value,) in self.cards.select(("run",), box=number)
+            if isinstance(value, str) and value.strip()
+        ]
+        if not box_disowns_run(entry.created_at, present, run, ran_at):
+            return None
+        others = ", ".join(sorted(set(present)))
+        return (
+            f"box {number} was deleted and its number reused after this run (registry "
+            f"entry created {entry.created_at}, holding {len(present)} card(s) from run "
+            f"{others})"
+        )
 
     def ensure_box(self, number, *, name: Optional[str] = None) -> Box:
         """The box, creating an undeclared one if the registry has never seen it.

@@ -946,9 +946,18 @@ def _check_game_partition(c, export) -> None:
                 "the refusal names the card's position",
                 message,
             )
+            # The remedy names the SCREEN and its controls (`Correct claims` on a card in
+            # `app/src/BoxBrowse.tsx`, `Set claims` on `app/src/BoxOps.tsx`'s panel), not
+            # the `PUT /inventory/<box>/<index>` route it used to send the operator to by
+            # hand — a route is not a remedy, and one wrong on a reused box number would
+            # have edited another drawer's live records (D36 amended).
             c.ok(
-                "PUT /inventory/" in message,
-                "and points at the correction route for a wrong game claim",
+                "#/inventory" in message
+                and "Correct claims" in message
+                and "Set claims" in message
+                and "PUT /inventory/" not in message,
+                "and points at the claim editor on #/inventory for a wrong game claim, not "
+                "at the raw route",
                 message,
             )
 

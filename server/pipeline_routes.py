@@ -101,7 +101,6 @@ import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
@@ -1294,6 +1293,11 @@ def _box_name_for(
     IT ABSTAINS TOWARDS NAMING. An unparseable or absent timestamp means this cannot tell,
     and withholding on ignorance would strip the name off every run whose manifest predates
     the field — a claim of its own, made about runs this knows nothing about.
+
+    THE RULE LIVES IN THE STORE, `store/master.py:box_disowns_run`, because
+    `cli/resolve.py:refuse_reallocated` refuses the JOIN on it (D36 amended) — one function,
+    so the screen that withholds the name and the command that refuses the run cannot decide
+    the same case two ways. The argument above is the argument for that function.
     """
     if box is None:
         return None
@@ -1301,18 +1305,7 @@ def _box_name_for(
     if found is None:
         return None
     name, made_at, runs_present = found
-    if not runs_present or run in runs_present:
-        return name
-    if not isinstance(ran_at, str) or not isinstance(made_at, str):
-        return name
-    try:
-        born = datetime.fromisoformat(made_at)
-        ran = datetime.fromisoformat(ran_at)
-    except ValueError:
-        # Not lexicographic: `...:24+00:00` and `...:24.500+00:00` differ in a character
-        # class before the offset, so string order is only accidentally time order.
-        return name
-    return None if born > ran else name
+    return None if master.box_disowns_run(made_at, runs_present, run, ran_at) else name
 
 
 def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:

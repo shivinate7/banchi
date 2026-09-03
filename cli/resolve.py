@@ -658,6 +658,11 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
     # later — so this reads the payload raw rather than paying for the photo digests twice.
     payload = run.read_identifications()
     inventory = Store().read().inventory
+    # D36 (amended) — BEFORE the loop reads a record out of the store at this run's keys. A
+    # box whose number was deleted and reused since this run is somebody else's drawer, and
+    # the `held.game` fallback below would read a foreign card's game as this card's — which
+    # is how the first refusal to fire named 53 riftbound cards in a Pokemon run.
+    refuse_reallocated(payload, inventory, run)
     held_cards = inventory.cards
     # The same coordinates `load` renders in, off the same store, so a refusal names cards
     # by the numbers the operator will see on the screen they go looking on (D58).
@@ -668,6 +673,10 @@ def _games_needed(run: runs.Run) -> "OrderedDict[str, List[str]]":
         if box is None or index is None or not record.get("identification"):
             continue
         held = held_cards.get(key)
+        # The store rung reads a live record at this run's RAW key, and it is safe against
+        # a reused box number only because `refuse_reallocated` fired above. Residual, and
+        # pre-existing: a pre-D21 record with no `game` in a box that had a mid-box delete
+        # reads its NEIGHBOUR's game here, since this pass deliberately skips `realign`.
         game = (
             record.get("game")
             or (held.game if held is not None else None)
@@ -711,9 +720,14 @@ def _refuse_uncovered(
         "--export per game; each file says which game it prices through its own "
         "Product Line column."
     )
+    # The controls named are `app/src/BoxBrowse.tsx`'s `Correct claims` on a card and
+    # `app/src/BoxOps.tsx`'s `Set claims` on the box operations panel; both open
+    # `ClaimEditor`, whose `Game` picker is the D21 claim. The route they post to is not the
+    # remedy — this used to send the operator to `PUT /inventory/<box>/<index>` by hand.
     lines.append(
-        "If a card's game claim is wrong, correct it first with the capture server's "
-        "PUT /inventory/<box>/<index> route (field: game), then join again."
+        "If a card's game claim is wrong, correct it on #/inventory: open the card and "
+        "press Correct claims, then pick the Game, or Set claims on the box operations "
+        "panel for many cards at once. Then join again."
     )
     lines.append("Nothing was joined, nothing was written, and no queue was touched.")
     raise runs.RunError("\n".join(lines))
@@ -784,11 +798,32 @@ def exports_for(
         if path not in distinct:
             distinct.append(path)
 
+    # THE RUN IS JUDGED BEFORE ITS FILES. `_games_needed` opens the store and refuses a run
+    # over a box whose number was deleted and reused (D36 amended), and it does so here,
+    # ahead of the file loop, on purpose: measured on `2026-08-22-box1-03`, whose recorded
+    # export is gone from `~/Downloads`, `export not found` fired first and sent the
+    # operator to fetch a fresh export for a drawer that no longer exists. A refusal about
+    # the run itself is terminal; a refusal about its inputs asks for work, and that work is
+    # wasted on a dead run. `read_identifications` refuses a run never identified the same
+    # way, and that too is the run's own fault before any file's.
+    needed = _games_needed(run)
     claimed_by: Dict[str, List[Path]] = {}
     lines_of: Dict[Path, Tuple[str, ...]] = {}
     for path in distinct:
         if not path.is_file():
-            raise runs.RunError(f"export not found: {path}")
+            recorded = (
+                ""
+                if overrides
+                else " — this run's manifest recorded it there and it has since moved or "
+                "been deleted"
+            )
+            raise runs.RunError(
+                f"export not found: {path}{recorded}. Pass --export <filtered-export.csv> "
+                f"to name another file, or fetch a fresh one on #/runs (Fetch from "
+                f"TCGplayer), which writes it into the run directory where it cannot go "
+                f"missing.\n"
+                f"Nothing was joined, nothing was written, and no queue was touched."
+            )
         export = tcgcsv.read_export(path)
         lines = tcgcsv.product_lines(export)
         lines_of[path] = lines
@@ -828,7 +863,6 @@ def exports_for(
         lines.append("Nothing was joined, nothing was written, and no queue was touched.")
         raise runs.RunError("\n".join(lines))
 
-    needed = _games_needed(run)
     _refuse_uncovered(needed, list(claimed_by))
 
     by_game: "OrderedDict[str, Path]" = OrderedDict(
@@ -1061,6 +1095,61 @@ def realign(payload: dict) -> Tuple[dict, Dict[str, str], List[str], List[int]]:
     return rebound, moved, departed, unverified
 
 
+def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run) -> None:
+    """Refuse a run over a box whose number was deleted and reused since (D36, amended).
+
+    THE CASE `realign` CANNOT SEE, BECAUSE IT NEVER OPENS THE STORE. Box 1 was deleted on
+    2026-08-25 with 53 Pokemon cards and its number was reused on 2026-08-29 for 133
+    Riftbound cards — `next_box_number` allocates the lowest free integer (D20 amended) —
+    and `2026-08-22-box1-03` still describes the old drawer. `realign` reads the run's
+    digests and the photographs on disk: none of the run's digests are among the new box's
+    photographs, so it answers `unverified` and passes the run's keys through, and
+    everything after it then reads the CURRENT box's records at those keys — `held.game`
+    stands in for a record with no game, `answered` adopts a foreign card's SKU and
+    condition, `committed` adopts a foreign card's sold state, and `box_views` draws labels
+    from the wrong box. The refusal that fired first said *"this run holds 53 riftbound
+    card(s) and no export covers that game"* and sent the operator to change the game on
+    live records that were never this run's.
+
+    THE RULE IS THE STORE'S OWN RECORD, `Inventory.box_disowns_run`: the registry entry was
+    made AFTER the run started AND the box's cards came from somewhere else. It is the rule
+    `server/pipeline_routes.py:_box_name_for` has withheld the box's NAME on since D56,
+    shared from `store/master.py:box_disowns_run` rather than copied, so the screen and the
+    command decide one case one way.
+
+    `unverified` IS DELIBERATELY NOT AN INPUT. The store's record decides this case whatever
+    the photographs say: `do_delete_box` deletes a box's cards with its registry entry, so a
+    box `realign` CAN verify — one holding this run's photographs — cannot satisfy the rule,
+    and the honest `unverified` case (photographs missing, box unchanged) fails the time
+    test or the membership test and passes through exactly as before. Coupling the two would
+    make a refusal depend on which photographs happen to be on disk.
+
+    CALLED TWICE ON ONE STORE READ EACH, AND WHICHEVER RUNS FIRST RAISES: `_games_needed`
+    on the `exports_for` path, before its own store rung, and `load` right after its
+    snapshot, for a caller handing a mapping straight in. One refusal, not three. Raises
+    `RunError` before anything is joined, written or queued; returns None otherwise.
+    """
+    boxes = sorted(
+        {
+            int(record["box"])
+            for record in (payload.get("cards") or {}).values()
+            if isinstance(record, dict) and record.get("box") is not None
+        }
+    )
+    for box in boxes:
+        sentence = inventory.box_disowns_run(box, run.name, run.created_at)
+        if sentence is None:
+            continue
+        raise runs.RunError(
+            f"REFUSING: {sentence}. This run describes a drawer that no longer exists and "
+            f"cannot be joined.\n"
+            f"Re-identify the box as it is now (`pkmnscan identify`, or Identify on #/runs) "
+            f"if that is what you want joined; this run's directory is a record of the old "
+            f"drawer and is left as it is.\n"
+            f"Nothing was joined, nothing was written, and no queue was touched."
+        )
+
+
 def paperwork_for(run: runs.Run) -> List[orders.PaperworkEntry]:
     """A run's `pricing.json`, read back as SKU -> the positions those copies are at NOW.
 
@@ -1192,6 +1281,10 @@ def load(
             sources[_path] = runs.describe_source(_path)
 
     snapshot = Store().read()
+    # D36 (amended) — the same refusal `_games_needed` raises on the `exports_for` path, as
+    # the backstop for a caller handing a mapping straight in. Before `held_cards` is read:
+    # every read below at this run's keys assumes the box is this run's drawer.
+    refuse_reallocated(payload, snapshot.inventory, run)
     held_cards = snapshot.inventory.cards
     copies_out, live_now = _copies_out(
         snapshot.inventory,
@@ -1233,6 +1326,9 @@ def load(
         # pooled ruling reached the reports: a pre-join failure's line needs the game to
         # know whether a position label may be printed for it, and a pooled card that
         # failed identification is still a pooled card.
+        #
+        # The store rung is safe against a reused box number only because
+        # `refuse_reallocated` fired above (D36 amended); `realign` cannot see that case.
         game = (
             record.get("game")
             or (held.game if held is not None else None)
