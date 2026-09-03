@@ -9,6 +9,13 @@ answered twice and 3 of the pairs are a `withheld` hold against a later price.
 SO IT IS EXPLICIT, IT PREVIEWS BY DEFAULT, AND IT REPORTS EVERY CHOICE IT MAKES. `adopt`
 without `--write` reads and prints; the owner's ruling on the contested rows is newest-wins,
 and the three that lose a hold are named in as many words rather than counted.
+
+AND IT RETIRES WHAT IT FOLDED (D86, amended 2026-09-02). `--write` renames each folded file
+to `decisions.json.adopted` (`cli/runs.py:retire_decisions`), because `join` and `emit`
+refuse unconditionally on a run still carrying the live name — the refusal was gated on an
+EMPTY corpus before, and on the owner's store eight files sat ignored behind it. A re-adopt
+over a corpus that already holds answers keeps the corpus's and retires the files without
+`--force`; `--force` is only for the file's answer winning where the two differ.
 """
 
 from __future__ import annotations
@@ -44,25 +51,45 @@ def _run_answers():
 
 
 def _adopt(args, say) -> int:
-    book = corpus.Corpus.read()
-    if book.answers and not args.force:
-        say(f"{corpus.FILENAME} already holds {len(book.answers)} answer(s).")
-        say("Adopting again would fold the run files over them. Pass --force if that is what")
-        say("you want; the run files are legacy and are read by nothing else.")
+    try:
+        book = corpus.Corpus.read()
+    except decisions.MalformedDecisions as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
         return 1
 
     found, broken = _run_answers()
     for name, why in broken:
         say(f"SKIPPED {name}/{runs.DECISIONS}: {why}")
     if not found:
-        say(f"no run carries a {runs.DECISIONS} — nothing to adopt")
+        say(f"no run carries a readable {runs.DECISIONS} — nothing to adopt")
+        for name, why in broken:
+            say(f"not retired      {files.runs_dir() / name / runs.DECISIONS} — {why}; "
+                f"fix it or delete it")
         return 0
 
-    folded, changes = corpus.adopt(found, corpus.Corpus() if args.force else book)
-    say(f"{len(found)} run file(s) -> {len(folded.answers)} answer(s)")
+    # THE BASE IS ALWAYS THE CORPUS, AND `--force` DECIDES WHO WINS, NOT WHERE TO START. The
+    # first form of this command folded `--force` into a FRESH corpus, which would have dropped
+    # every answer written on `#/pricing` since the first adoption. Without `--force` a corpus
+    # that already holds answers keeps them and the run files are folded around them; with
+    # it the files win where the two differ. An empty corpus has nothing to keep, so the first
+    # adoption is newest-wins whichever way it is asked for.
+    replace = args.force or not book.answers
+    folded, changes, kept = corpus.adopt(found, book, replace=replace)
+    retire = corpus.retirable(found, folded)
+    say(f"{len(found)} run file(s) -> {len(folded.answers)} answer(s), "
+        + ("the run files winning" if replace else "the corpus keeping what it already answers"))
     say(f"policy           rule={folded.rule} basis={folded.basis} sub_threshold={folded.sub_threshold}")
     holds = sum(1 for answer in folded.answers.values() if answer.is_hold)
-    say(f"holds            {holds} card(s) held back, and they now outlive their run")
+    say(f"holds            {holds} card(s) held back, and they outlive their run")
+
+    if kept:
+        differing = [row for row in kept if row.in_file != row.in_corpus]
+        say("")
+        say(f"{len(kept)} answer(s) kept as the corpus has them — the corpus is the newer "
+            f"sitting, and --force is how a run file overrides it. "
+            f"{len(differing)} differ from the file:")
+        for row in differing:
+            say(f"  {row.sku}  kept {row.in_corpus} (corpus) — file said {row.in_file} ({row.run})")
 
     if changes:
         say("")
@@ -84,6 +111,21 @@ def _adopt(args, say) -> int:
             for change in lost:
                 say(f"  {change.sku}")
 
+    # WHAT LEAVES THE RUN DIRECTORY, NAMED BEFORE IT MOVES. A file is retired only when every
+    # SKU it answers is answered in the corpus this fold produced; a file that could not be
+    # parsed was never folded and is never retired — it is the one an operator most needs to
+    # be told about, and a migration that moved it aside would hide it.
+    say("")
+    root = files.runs_dir()
+    for name in retire:
+        say(f"would retire     {root / name / runs.DECISIONS}")
+    for name, _payload in found:
+        if name not in retire:
+            say(f"not retired      {root / name / runs.DECISIONS} — answers in it the corpus "
+                f"does not hold")
+    for name, why in broken:
+        say(f"not retired      {root / name / runs.DECISIONS} — {why}; fix it or delete it")
+
     if not args.write:
         say("")
         say("DRY RUN — nothing written. Re-run with --write to adopt.")
@@ -92,7 +134,11 @@ def _adopt(args, say) -> int:
     written = folded.write()
     say("")
     say(f"written          {written}")
-    say("                 the run files are legacy now and are read by nothing.")
+    for name in retire:
+        old = root / name / runs.DECISIONS
+        say(f"retired          {old} -> {runs.retire_decisions(root / name)}")
+    say("                 a retired file is history: nothing reads it, and join and emit no")
+    say("                 longer refuse the run for carrying it.")
     return 0
 
 

@@ -59,7 +59,8 @@ one fact.
   all today — one by construction and one for want of a producer.** Six
   come from `pipeline/variant.py` (`no_catalog_row`, `metadata_not_stocked`,
   `metadata_detection_disagreement`, `detected_finish_not_stocked`, `ambiguous_no_signal`,
-  `duplicate_condition`) and six from `pipeline/routing.py` (`low_confidence`, `no_position`,
+  `duplicate_condition`) (`metadata_detection_disagreement` retired 2026-09-02, D3) and six
+  from `pipeline/routing.py` (`low_confidence`, `no_position`,
   `identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`).
   `docs/DESIGN.md` requires each on screen as a human label with the machine string small
   beneath it, so twelve human labels now exist — and each one is a translation of a string
@@ -71,7 +72,8 @@ one fact.
   pipeline rather than about the run that has not happened: `no_market_data` is routing's
   fourth destination beside listed, main and parked, and `pipeline/join.py` writes a queue
   entry only for `routing.MAIN` and `routing.PARKED`. A card with a blank or $0.00 market
-  cell is priced by hand in `decisions.json` (D9) and never appears on that screen.
+  cell is priced by hand on `#/pricing` (`inventory/prices.json`, D9/D86) and never appears on
+  that screen.
   Separately, `card_not_detected` is a constant nothing in `pipeline/`, `cli/` or `identify/`
   ever assigns — it is reachable in principle and has no producer in the repo today. Neither
   is a defect in the screen and neither costs more than a line in a lookup table; both are

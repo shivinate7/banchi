@@ -681,8 +681,8 @@ function marketTable(payload: PricingPayload): MarketRead {
  * to prevent: rendering it as `$0.00` is what hands a chase card away at the floor. Spelled
  * `no market data` it is neither the machine string nor a human label, which is the second
  * vocabulary D22 refuses and D16 exists to catch — and it would grep to nothing on the day
- * somebody holds this screen against `decisions.json`'s own `no_market_data` block, which is
- * where such a card is priced by hand.
+ * somebody holds this screen against the `no_market_data` block `GET .../pricing` serves, which
+ * is where such a card is priced by hand.
  *
  * THE SPLIT IN THIS FUNCTION IS THEREFORE: plain English where THIS SCREEN has nothing (the
  * shape every other fallback in the list takes — `not identified yet`, `none recorded`), and the

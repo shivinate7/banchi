@@ -73,7 +73,7 @@ class Rule:
 
     @classmethod
     def parse(cls, text) -> "Rule":
-        """`match`, `undercut:5`, `markup:12.5`. The spelling used in decisions.json."""
+        """`match`, `undercut:5`, `markup:12.5`. The spelling `inventory/prices.json`'s policy uses."""
         if isinstance(text, Rule):
             return text
         raw = str(text).strip().lower()

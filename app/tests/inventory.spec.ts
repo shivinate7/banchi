@@ -412,7 +412,6 @@ const PRICING = {
     ],
   },
   decisions: null,
-  remembered_sub_threshold: null,
   written_at: PRICED_AT,
 }
 
@@ -3441,8 +3440,8 @@ test('the card carries what its run said the market was, and how old that readin
      UNDERSCORE AND ALL, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and
      DESIGN.md's owner-screen rule is the machine string. Spelled `no market data` it would be
      neither the constant nor a human label — the second vocabulary D22 refuses — and would grep
-     to nothing against `decisions.json`'s own `no_market_data` block, which is where a card in
-     this state is actually priced. */
+     to nothing against the `no_market_data` block `GET .../pricing` serves, which is where a
+     card in this state is actually priced. */
   await page.locator('.browse-row').nth(3).click()
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
     'no_market_data',

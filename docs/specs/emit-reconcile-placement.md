@@ -1,9 +1,11 @@
 # Where `emit` and `reconcile` belong
 
+**Status 2026-09-02 — the textarea, `PUT /pipeline/runs/<name>/decisions` and `remembered_sub_threshold` are deleted (D86 amended); the sub-threshold answer is a store policy with a default (D9 amended); every line below naming them is history.**
+
 **STATUS — the placement answer stands; three of the six items have since been built.**
 Re-checked against the tree 2026-08-30. **Items 1, 2 and 3 of §6 are BUILT**: the preset now
 moves `rule`/`basis` and `pricing presets` is a blocking audit row guarding it; `#/pricing`
-draws the sub-threshold answer and reads `remembered_sub_threshold`; and `app/src/readiness.ts`
+draws the sub-threshold answer and reads `remembered_sub_threshold` (overtaken 2026-09-02); and `app/src/readiness.ts`
 computes what a run owes. **Items 5 and 6 are NOT built** — no `#/runs?run=<name>` link exists
 and `.run-phase-identifying` still has no `reconcile` sibling. §2.1 and §2.2 are therefore the
 record of two defects that were fixed, not two that are live; both are written in the present
@@ -67,25 +69,25 @@ time, 29 minutes was the review queue, and 6m44s was the external TCGplayer erra
 These are the reason the two unfinished runs are unfinished. Neither is a layout question and
 neither is fixed by moving a button.
 
-### 2.1 `emit`'s commonest refusal has no control anywhere but a raw textarea
+### 2.1 `emit`'s commonest refusal has no control anywhere but a raw textarea (overtaken 2026-09-02)
 
 `pipeline/decisions.py:332` refuses `emit` while `sub_threshold is None` and any sub-threshold
 SKU exists. **That check never consults `overrides`** — so pricing all 108 of box 2's SKUs by
 hand on `#/pricing` still leaves `emit` refusing. The run-wide answer is settable only by typing
-into the `decisions.json` textarea behind the Emit step's "Pricing answers" button on `#/runs`.
+into the `decisions.json` textarea behind the Emit step's "Pricing answers" button on `#/runs` (overtaken 2026-09-02).
 
 D9 makes this disposition a deliberate per-run choice, and it is right to. What is wrong is that
 the screen built to answer pricing cannot express it, and the screen that can expresses it as
 JSON.
 
 **The server already serves the answer and nothing draws it.**
-`server/pipeline_routes.py:1192` computes `_remembered_sub_threshold`, `:1279` puts it on the
+`server/pipeline_routes.py:1192` computes `_remembered_sub_threshold` (overtaken 2026-09-02), `:1279` puts it on the
 pricing payload, and `app/src/types.ts:1304` declares it. No component reads it. The control was
 designed for that screen and never built there — `CLAUDE.md`'s route-is-not-a-feature rule, one
 field rather than one route.
 
 > **Half of this is fixed, checked 2026-08-30.** `app/src/Pricing.tsx` now draws the
-> sub-threshold control and reads `remembered_sub_threshold`, so the textarea is no longer the
+> sub-threshold control and reads `remembered_sub_threshold` (overtaken 2026-09-02), so the textarea is no longer the
 > only way to answer — §6 item 2. **The refusal itself is unchanged**: `Decisions.blocking`
 > still tests `sub_threshold is None` against the sub-threshold SKUs and still never consults
 > `overrides`, so pricing every SKU by hand leaves `emit` refusing exactly as described.
@@ -194,7 +196,7 @@ re-runnable, one-press step whose output is a set of files rendered on `#/runs`.
 
 Three further costs make it worse than the link it would replace:
 
-- **A write race that does not exist today.** `Pricing.tsx` autosaves `decisions.json` on every
+- **A write race that does not exist today.** `Pricing.tsx` autosaves `inventory/prices.json` on every
   commit with in-flight coalescing; `emit` reads that file server-side. An emit button adjacent
   to the autosave loop can fire against the pre-write document. The two writers are currently on
   different routes.

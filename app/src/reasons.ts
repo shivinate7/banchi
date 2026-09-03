@@ -13,13 +13,16 @@
  * up as a machine string on screen rather than as a blank line.
  */
 
-/* The FOURTEEN, transcribed from the two modules that emit them: seven from
+/* The THIRTEEN, transcribed from the two modules that emit them: six from
  * `pipeline/variant.py` (the D3 ladder's review reasons, including D23's
  * `rarity_claim_mismatch`) and seven from `pipeline/routing.py` (v2 §5.4's routing reasons,
  * including D35's `number_unread_name_matched`). It read "twelve, six and six" until
- * 2026-08-25, having been written before either of those two landed. docs/DESIGN.md requires each on screen as a human label with
- * the machine string small beneath it, because a friendly label alone is a second vocabulary
- * that nothing audits and a raw string alone is honest and unreadable.
+ * 2026-08-25, having been written before either of those two landed, and "fourteen, seven and
+ * seven" until 2026-09-02, when D3's amendment retired `metadata_detection_disagreement` —
+ * see `RETIRED_REASON_LABELS` below for where that one went. docs/DESIGN.md requires each on
+ * screen as a human label with the machine string small beneath it, because a friendly label
+ * alone is a second vocabulary that nothing audits and a raw string alone is honest and
+ * unreadable.
  *
  * NOTHING KEEPS THIS MAP IN STEP WITH THOSE MODULES, and pretending otherwise would be
  * worse than saying so. A TypeScript file cannot import a Python constant, and no check in
@@ -30,10 +33,11 @@
  * than as a blank line.
  *
  * The labels are still the least tested copy in the product, and Gate B narrowed that rather
- * than closing it. TWO of the fourteen have now fired against a photograph of a card:
- * `metadata_detection_disagreement`, 16 times out of 53 at Gate B, and `no_catalog_row`, which
- * box 2 left standing in the live queue — the case D35 and D37 were both written for. That is
- * two labels with evidence behind them and none at all for the other twelve. (`no_catalog_row`
+ * than closing it. TWO codes have now fired against a photograph of a card:
+ * `metadata_detection_disagreement`, 16 times out of 53 at Gate B — and retired since, because
+ * all 16 rulings went to the toggle — and `no_catalog_row`, which box 2 left standing in the
+ * live queue — the case D35 and D37 were both written for. That is one live label with
+ * evidence behind it and none at all for the other twelve. (`no_catalog_row`
  * ALSO fired 23 times at Gate B against a commons-only export and zero times against the full
  * one, which was a fact about that export rather than about the label; box 2's is not.) A label written for a code that fires weekly and one written
  * for a code that fires once a year are different pieces of copy, and after a real run the
@@ -43,7 +47,6 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   // pipeline/variant.py — the ladder could not settle the finish.
   no_catalog_row: 'Not in the export',
   metadata_not_stocked: 'Toggle names a finish that is not stocked',
-  metadata_detection_disagreement: 'Toggle and photo disagree',
   /* D23's stack claim contradicted the catalog: every candidate row's Rarity sits outside
    * what the operator claimed the stack holds. Deliberately NOT `metadata_*` — those three
    * are about the finish toggle, and a fourth reading as one at a glance is why the name
@@ -68,11 +71,25 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   number_unread_name_matched: 'Number unreadable, matched by name',
   /* Reachable on screen only if the route puts it in a queue. `cli/resolve.py:entries_for`
    * queues `routing.MAIN` and `routing.PARKED`, and `no_market_data` is neither — it is its
-   * own destination, priced by hand in decisions.json. Kept because docs/DESIGN.md names
-   * fourteen, and a map that quietly held thirteen would be the drift this comment is about. */
+   * own destination, priced by hand on #/pricing. Kept because docs/DESIGN.md names
+   * thirteen, and a map that quietly held twelve would be the drift this comment is about. */
   no_market_data: 'No market price',
 }
 
+/* CODES THE PIPELINE NO LONGER EMITS AND THE STORE STILL HOLDS. A separate map on purpose:
+ * `make docs-audit`'s `reason codes` row reconciles `REASON_LABELS` against the two Python
+ * modules, and a retired code left in that map would be reported as a label for a string the
+ * pipeline cannot emit — which is exactly the finding it should be. But the owner's store
+ * carries 16 `answered` events under `metadata_detection_disagreement`, and the history they
+ * belong to renders the reason; the raw-string fallback would draw those as drift when they
+ * are a record. So the label says "retired", with the date, and the audit does not read
+ * this map. */
+export const RETIRED_REASON_LABELS: Readonly<Record<string, string>> = {
+  /* D3, amended 2026-09-02: the photograph may no longer contradict a finish claim. Every one
+   * of the 16 Gate B rulings under this code went to the toggle. */
+  metadata_detection_disagreement: 'Toggle and photo disagreed (retired 2026-09-02)',
+}
+
 export function reasonLabel(reason: string): string {
-  return REASON_LABELS[reason] ?? reason
+  return REASON_LABELS[reason] ?? RETIRED_REASON_LABELS[reason] ?? reason
 }

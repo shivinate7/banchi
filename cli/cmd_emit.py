@@ -76,7 +76,7 @@ def _warn_stale(run_dir, say) -> None:
 def _scoped(dispositions, report):
     """The per-SKU dispositions that belong to this game's report.
 
-    `decisions.json` is run-wide and SKUs are TCGplayer-global, so with one report per
+    The answers are scoped to the run and SKUs are TCGplayer-global, so with one report per
     game a disposition for a pokemon SKU must not reach the riftbound pricing pass —
     `prices_for` would refuse it as naming a SKU "not in this batch", which is true of the
     slice and false of the run. The run-level version of that refusal still stands: `run`
@@ -166,6 +166,9 @@ def run(args, say) -> int:
     if len(named) > 1:
         return run_merged(args, say)
     run_dir = runs.open_run(named[0])
+    if _legacy_refusal(run_dir, say):
+        say("Nothing was written.")
+        return 1
     try:
         plan = resolve.exports_for(run_dir, args.export)
     except join.EmptyCatalog as refusal:
@@ -175,7 +178,7 @@ def run(args, say) -> int:
     # ------------------------------------------------------- READ BEFORE RESOLVING, AND WHY
     #
     # THE PRICING ANSWER IS ONE FILE, AND THIS BLOCK USED TO SIT BELOW `resolve.load`. That
-    # ordering is what made `decisions.json`'s `rule` and `basis` INERT: the resolve above read
+    # ordering is what made the answer file's `rule` and `basis` INERT: the resolve above read
     # them from the run MANIFEST, `prices_for` prices from `SkuMatch.rule` which the resolve
     # sets, and this file's `rule` reached exactly one consumer — the `pricing` line printed a
     # few lines down. So an operator editing `"rule": "undercut:5"` here got a run that PRINTED
@@ -191,22 +194,18 @@ def run(args, say) -> int:
     #
     # `UnknownRule` and `UnknownBasis` are caught here as well as `MalformedDecisions`, and that
     # is not tidiness: they are `ValueError`s and NOT `MalformedDecisions` (pipeline/pricing.py),
-    # nothing above `cli/__main__.py` caught them, and `PUT /pipeline/runs/<name>/decisions`
-    # writes this document with no validation at all — so a screen could put a run into a state
-    # where `emit` answered with a traceback instead of a sentence.
+    # nothing above `cli/__main__.py` caught them, and the policy is typed by hand into
+    # `inventory/prices.json` as often as it is pressed on `#/pricing` — so a document can
+    # reach every one of these states, and each has to be a sentence rather than a traceback.
     # THE CORPUS IS THE ANSWER AND THE RUN DIRECTORY IS NOT (D86). See `cli/cmd_join.py` at the
-    # same seam and `pipeline/corpus.py`'s header for why the per-SKU half of `decisions.json`
+    # same seam and `pipeline/corpus.py`'s header for why the per-SKU half of the old run file
     # left the run: a price is a fact about a SKU, and one stored per drawer was one answer per
-    # drawer. A legacy run file is not read as a fallback — that would put the duplication back
-    # on the next re-emit of an old run — it is folded in once by `pkmnscan prices adopt`.
+    # drawer. A legacy run file is not read as a fallback — `_legacy_refusal` refused on it
+    # above, before anything was read — it is folded in once by `pkmnscan prices adopt`.
     try:
         book = corpus.Corpus.read()
     except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
         say(f"{corpus.FILENAME} is unusable: {exc}")
-        return 1
-    if not book.answers and run_dir.path(runs.DECISIONS).is_file():
-        say(f"this run has a legacy {runs.DECISIONS} and the corpus is empty")
-        say("Run `pkmnscan prices adopt` to fold every run's answers into one file first.")
         return 1
     # THE POLICY BEFORE THE RESOLVE, THE ANSWERS AFTER IT. `resolve.load` needs the rule and
     # the basis to price a match at all; the per-SKU narrowing below needs the match list,
@@ -223,29 +222,6 @@ def run(args, say) -> int:
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
-            # THE RUN'S BYPASS IS PART OF ITS RESOLUTION, AND DROPPING IT MADE THIS COMMAND
-            # RE-DERIVE A DIFFERENT RUN THAN THE ONE ON DISK. `join --bypass` resolves a
-            # contradicted claim at rung 1 (D3) and queues nothing; this call defaulted
-            # `trust_claim` to False, so it walked the ladder with rung 3 live, invented a
-            # queued position for every bypassed card, found none of them in either queue file
-            # — because join deliberately never wrote them — and refused with "Run `pkmnscan
-            # join` first" at an operator who had.
-            #
-            # Measured on the owner's box 1: `bypassed: 39` in the manifest, 39 positions
-            # invented here, 39 absent from disk, emit refused every time. Re-running join
-            # could not clear it, because join was right.
-            #
-            # The refusal was the SECOND-worst outcome and that is why it is worth stating:
-            # had the check passed, this resolution is also what writes the import files, so
-            # those 39 cards would have been routed to review and left out of the CSV — the
-            # bypass silently void at the one step that produces output.
-            #
-            # Read from the manifest exactly as `review_below` above is, and for the same
-            # reason: both are per-run choices the run recorded, and `emit` re-derives rather
-            # than reads, so every input to that derivation has to come from the run. There is
-            # no `--bypass` flag here on purpose — D3 makes it a join-time decision, and a
-            # second place to state it is a second thing that can disagree.
-            trust_claim=bool(run_dir.manifest.get("bypass_detection", False)),
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
@@ -303,8 +279,8 @@ def run(args, say) -> int:
     # a partial emit that looks complete. So every game is priced and gated first, and
     # only a run that will fully succeed writes anything.
     multi = len(resolved.joins) > 1
-    # BOUND ONCE FOR THE WHOLE RUN. Held SKUs are run-wide — `decisions.json` is one document
-    # per run and a SKU is TCGplayer-global — and unlike `dispositions` they are never scoped
+    # BOUND ONCE FOR THE WHOLE RUN. Held SKUs are store-wide — a hold is one corpus row and a
+    # SKU is TCGplayer-global — and unlike `dispositions` they are never scoped
     # per game, because nothing refuses on an unknown one.
     withheld = set(choice.withheld())
     say("")
@@ -551,8 +527,25 @@ def run(args, say) -> int:
 # ------------------------------------------------------------------- one file, several runs
 
 
+def _legacy_refusal(run_dir, say) -> bool:
+    """Refuse a run still carrying `decisions.json`, by name, before anything is read (D86).
+
+    UNCONDITIONAL, AND THE SAME SENTENCE ON BOTH PATHS. The single-run guard used to fire only
+    while the corpus was EMPTY, and the merged path had no guard at all — so on a store with
+    answers in it, a legacy file was silently ignored by one and never seen by the other.
+    """
+    legacy = run_dir.path(runs.DECISIONS)
+    if not legacy.is_file():
+        return False
+    say(f"{legacy} is a legacy pricing file; run `pkmnscan prices adopt --write` to fold "
+        f"and retire it.")
+    return True
+
+
 def _resolve_one(run_dir, book, say):
     """One run resolved the way `run` resolves it, for the merged path. Returns None on refusal."""
+    if _legacy_refusal(run_dir, say):
+        return None
     try:
         plan = resolve.exports_for(run_dir, None)
     except join.EmptyCatalog as refusal:
@@ -566,10 +559,6 @@ def _resolve_one(run_dir, book, say):
             rule=pricing.Rule.parse(policy["rule"]),
             basis=pricing.check_basis(policy["basis"]),
             review_below=run_dir.manifest.get("review_below_confidence", routing.CONFIDENCE_LOW),
-            # THE RUN'S OWN BYPASS, for the reason the single-run path gives at length: `emit`
-            # re-derives rather than reads, so every input to that derivation has to come from
-            # the run or it re-derives a different run than the one on disk.
-            trust_claim=bool(run_dir.manifest.get("bypass_detection", False)),
         )
     except join.EmptyCatalog as refusal:
         say(f"{run_dir.name}: {refusal}")
@@ -622,7 +611,7 @@ def run_merged(args, say) -> int:
 
     choice = book.scoped_to(matched)
     say(f"send             {len(dirs)} run(s): {', '.join(d.name for d in dirs)}")
-    say(f"decisions        {files.prices_path()}")
+    say(f"prices           {files.prices_path()}")
     say(f"                 {choice.describe}")
 
     try:

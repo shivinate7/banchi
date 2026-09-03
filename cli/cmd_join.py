@@ -5,8 +5,8 @@ refresh the export, change the rule, run it again. Nothing here spends money and
 writes an import file.
 
 WHAT IT PRODUCES. The report, in both directions and in full. The standing queues, updated
-with every card that did not list. And `decisions.json`, pre-filled with every SKU that needs
-an answer and the run-wide choice left UNSET — `emit` refuses until you set it.
+with every card that did not list. And the corpus, `inventory/prices.json`, seeded with every
+SKU the catalog has no price for (D86) — `emit` refuses until each of those is answered.
 
 REVIEWS DO NOT BLOCK. An unresolved card sits at a known position in a box: it is not lost
 and it is not urgent, and holding 400 good cards hostage to 7 ambiguous ones is the wrong
@@ -43,9 +43,7 @@ def _reason_counts(resolved: resolve.Resolved) -> Counter:
     Raw reason strings, never a friendly gloss. `app/src/ReviewQueue.tsx` carries the only
     label table in the product and says in its own comment that nothing keeps it in step
     with the Python constants; a second table here would be a third vocabulary with even
-    less holding it together, which is exactly the drift D16 exists to catch. The plain
-    English the operator needs is about the BYPASS RULE, not about each code, and that is
-    one sentence printed once — see `_preview`.
+    less holding it together, which is exactly the drift D16 exists to catch.
     """
     main, parked = resolve.entries_for(resolved)
     return Counter(entry.reason for entry in main + parked)
@@ -150,6 +148,10 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
                     "add_to_quantity": match.add_to_quantity,
                     "backstock": match.backstock,
                     "live_before": match.live_before,
+                    # THE LIVE FIGURE THE CAP WAS COMPUTED FROM: the newer of the store's
+                    # reading and this export's (D87, amended). `live_before` beside it is
+                    # the export's column alone, kept because it is what the CSV says.
+                    "live_now": match.live_now,
                     "committed": len(match.committed_positions),
                     # WHAT TCGPLAYER ACTUALLY HOLDS, AND WHY `live_before` BESIDE IT IS NOT
                     # THAT NUMBER. `live_before` is the export's live column alone, which
@@ -157,9 +159,10 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
                     # measured at 167 pushed copies across 72 SKUs of the owner's store,
                     # zero of them live, so a screen drawing it said TCGplayer holds
                     # nothing about SKUs it holds several of. `copies_out` is live plus
-                    # pending, per SKU and across every box. Both ship: the screen names
-                    # the export's own figure where it means the export, and this one
-                    # where it means the shelf (D59).
+                    # pending, per SKU and across every box. All three ship: the screen
+                    # names the export's own figure where it means the export, `live_now`
+                    # where it means what was believed, and this one where it means the
+                    # shelf (D59).
                     "copies_out": match.copies_out,
                     "at_cap": match.add_to_quantity == 0,
                     # The SENTENCE, composed where the numbers are, never re-derived from
@@ -250,55 +253,36 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
 def _preview(args, run_dir, plan, resolved, say) -> int:
     """`--dry-run`: everything the join would compute, and nothing it would write.
 
-    The comparison is the point. It walks the ladder a SECOND time with the bypass flipped
-    and diffs the two queues, so the operator sees what the flag buys on their own cards
-    before spending a decision on it — rather than reading a description of what it does
-    and guessing. Walking twice is free: the ladder is local arithmetic over an export
-    already parsed and a store already read.
+    ONE walk of the ladder, counted by reason code off the same function the write reads.
+    It walked twice until 2026-09-02 — once with the finish cross-check and once without,
+    diffing the two queues so the operator could see what `--bypass` would buy — and the
+    second walk went with the cross-check it was measuring (D3, amended). What is left is
+    the preview: the queue this join would write, before it writes it.
     """
     mine = _reason_counts(resolved)
     say("")
-    say(f"DRY RUN          nothing written — no queues, no {runs.DECISIONS}, no "
+    say(f"DRY RUN          nothing written — no queues, no {corpus.FILENAME} change, no "
         f"{runs.REPORT}, no manifest")
     say(f"would queue      {sum(mine.values())} card(s)")
     _counts_block(say, mine)
-
-    try:
-        other = resolve.load(
-            run_dir,
-            plan.by_game,
-            rule=args.rule,
-            basis=args.basis,
-            review_below=args.review_below_confidence,
-            trust_claim=not args.bypass,
-        )
-    except join.EmptyCatalog:  # pragma: no cover — the first load would have refused first
-        return 0
-
-    theirs = _reason_counts(other)
-    with_bypass, without = (mine, theirs) if args.bypass else (theirs, mine)
-    cleared = sum(without.values()) - sum(with_bypass.values())
     say("")
-    if args.bypass:
-        say(f"without --bypass {sum(without.values())} would queue instead — "
-            f"--bypass is clearing {cleared}")
-    else:
-        say(f"with --bypass    {cleared} of these resolve by the finish claim you made at "
-            f"capture,")
-        say(f"                 and {sum(with_bypass.values())} still need you: they have no "
-            f"claim to fall back on,")
-        say("                 so answering them for you would mean inventing a row rather "
-            "than trusting you.")
-        if with_bypass:
-            _counts_block(say, with_bypass)
-    say("")
-    say(f"next: pkmnscan join {run_dir.directory} --export <file>"
-        f"{'' if args.bypass else ' --bypass'}  (to write it)")
+    say(f"next: pkmnscan join {run_dir.directory} --export <file>  (to write it)")
     return 0
 
 
 def run(args, say) -> int:
     run_dir = runs.open_run(args.run_dir)
+    # A LEGACY ANSWER FILE REFUSES HERE, BEFORE ANYTHING IS READ OR WRITTEN (D86, amended
+    # 2026-09-02). `runs/<n>/decisions.json` is never read as a fallback — that would put the
+    # per-run duplication back on the first re-join of an old run — and the refusal used to
+    # sit AFTER the store write, gated on the corpus being EMPTY, so on the owner's store eight
+    # such files were silently ignored while the docs described a refusal. Unconditional now,
+    # and before the export plan, so "Nothing was joined" is true where it is printed.
+    legacy = run_dir.path(runs.DECISIONS)
+    if legacy.is_file():
+        say(f"{legacy} is a legacy pricing file; run `pkmnscan prices adopt --write` to "
+            f"fold and retire it. Nothing was joined.")
+        return 1
     # The file->game mapping, read off each file's own Product Line cells, and every
     # refusal it can raise — two files claiming one game, a game in the run with no
     # export, a file naming no registered game — fires HERE, before the store is opened,
@@ -335,7 +319,6 @@ def run(args, say) -> int:
             rule=args.rule,
             basis=args.basis,
             review_below=args.review_below_confidence,
-            trust_claim=args.bypass,
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
@@ -372,15 +355,6 @@ def run(args, say) -> int:
         say(f"                 {note}")
     say(f"pricing          rule={resolved.rule} basis={resolved.basis} "
         f"review-below-confidence={args.review_below_confidence}")
-    if args.bypass:
-        # Named on every run it is on, and named as a LOSS rather than as a setting. The
-        # operator chose "resolved by the claim, and the run report says so", and a line
-        # that read `bypass=True` would satisfy the letter of that while telling a reader
-        # six weeks later nothing about what the run gave up to get its small queue.
-        say("cross-check      OFF (--bypass): where a finish claim exists, the photo may "
-            "not contradict it.")
-        say("                 D3 rung 3 is not consulted for those cards. Cards with no "
-            "claim are unaffected.")
     say("")
 
     # ------------------------------------------------- the report itself, game by game
@@ -435,7 +409,9 @@ def run(args, say) -> int:
             f"no photographs, no record carrying a digest, or none of this run's digests "
             f"among the photographs there (a re-shoot replaces the bytes). This run's slot "
             f"numbers were taken as recorded. If a card was deleted mid-box since it was "
-            f"identified, they are wrong and nothing here can tell."
+            f"identified, they are wrong and nothing here can tell. A box whose number was "
+            f"deleted and reused after this run is refused before this point rather than "
+            f"reported here (D36, amended)."
         )
         say("")
 
@@ -470,11 +446,22 @@ def run(args, say) -> int:
         # quantity against it on TCGplayer has been moved live by a human, and nothing else
         # in this pipeline would ever notice.
         #
-        # IT IS SET, NOT INCREMENTED, AND IT IS SET FROM THE EXPORT. D8 and D11 put the
-        # authority in the export, so the stored number is the optimistic local estimate
-        # `master.Listing` describes and this is the line that corrects it. A count that
-        # walked up on its own would be a second source of truth competing with the file
-        # the whole join is built on.
+        # IT IS SET, NOT INCREMENTED, AND IT IS SET FROM WHICHEVER READING IS NEWER (D87,
+        # amended 2026-09-02). D8 and D11 put the authority in the export, and it keeps it
+        # for the moment the file was read; the store's own `live` is a reading with its
+        # own time (`Listing.live_as_of` — a sale, a D34 release, a `reconcile --live`), and
+        # `Listing.observe_live` adopts the export's figure only where the file is newer.
+        # An export the store has since overtaken is KEPT and the report says so, per
+        # game, because "Join again" on `#/runs` reuses the run's recorded export — which
+        # for run 2026-09-01-box3-01 was fetched fifteen minutes BEFORE the emit, read a
+        # blank `Total Quantity` on every SKU it had just listed, and took the store from
+        # 1,072 live copies to 700 on the ordinary path. A count that walked up on its own
+        # would still be a second source of truth; a reading dated later than the file is
+        # not a second source, it is the same fact observed later.
+        #
+        # PER GAME, because the time is the FILE's and two games may have been joined
+        # against two files. `resolved.matches` is the union of these per-game maps, so
+        # the SKUs visited are the same ones it would have visited.
         #
         # This block used to choose WHICH positions went live — the first `live_before`
         # copies in box-walk order took a `live` state and the rest stayed `staged`. That
@@ -482,32 +469,42 @@ def run(args, say) -> int:
         # that copies of one SKU are fungible), and it could not represent the ordinary
         # case of a SKU showing more live quantity than this pipeline ever pushed.
         moved_live = []
-        for match in resolved.matches.values():
-            quantity = max(0, int(match.live_before))
-            # Peeked rather than got-or-created: `Inventory.listing` creates on read, and
-            # calling it for every matched SKU would fill the file with empty records whose
-            # only content is that the SKU exists — which the export already says, better.
-            if writable.inventory.listings.get(match.sku) is None and quantity == 0:
-                continue
-            listing = writable.inventory.listing(match.sku, condition=match.condition)
-            before = listing.live
-            if quantity == before:
-                continue
-            listing.live = quantity
-            listing.at = master.now()
-            moved_live.append((match.sku, before, quantity))
+        kept_live: dict = {}
+        for game_join in resolved.joins.values():
+            as_of = str(game_join.source["mtime"])
+            for match in game_join.report.matches.values():
+                quantity = max(0, int(match.live_before))
+                # Peeked rather than got-or-created: `Inventory.listing` creates on read,
+                # and calling it for every matched SKU would fill the file with empty
+                # records whose only content is that the SKU exists — which the export
+                # already says, better.
+                if writable.inventory.listings.get(match.sku) is None and quantity == 0:
+                    continue
+                listing = writable.inventory.listing(match.sku, condition=match.condition)
+                before = listing.live
+                verdict = listing.observe_live(quantity, as_of)
+                if verdict == master.UNCHANGED:
+                    continue
+                if verdict == master.KEPT:
+                    kept_live.setdefault(game_join.game, []).append(
+                        (match.sku, before, listing.live_observed_at, quantity)
+                    )
+                    continue
+                moved_live.append((match.sku, before, quantity))
 
-            # Copies that just went live are no longer staged. `reconcile` is the only thing
-            # that puts a copy in `staged` and nothing else would ever take it out, so
-            # without this drawdown `staged_stale` names every SKU that has ever staged,
-            # forever — a warning that fires on success is a warning nobody reads.
-            #
-            # Drawn down by the RISE in live quantity, never by the absolute reading. The
-            # absolute number would also erase copies staged since the last join, which are
-            # exactly the copies the stale warning exists to find.
-            newly_live = quantity - before
-            if newly_live > 0 and listing.staged > 0:
-                listing.bump(master.STAGED, -min(listing.staged, newly_live))
+                # Copies that just went live are no longer staged. `reconcile` is the only
+                # thing that puts a copy in `staged` and nothing else would ever take it
+                # out, so without this drawdown `staged_stale` names every SKU that has
+                # ever staged, forever — a warning that fires on success is a warning
+                # nobody reads.
+                #
+                # Drawn down by the RISE in live quantity, never by the absolute reading.
+                # The absolute number would also erase copies staged since the last join,
+                # which are exactly the copies the stale warning exists to find. Only on an
+                # ADOPTED reading: a kept one moved nothing, so nothing went live.
+                newly_live = quantity - before
+                if newly_live > 0 and listing.staged > 0:
+                    listing.bump(master.STAGED, -min(listing.staged, newly_live))
 
         queue_line = writable.queue_summary
         counts = writable.inventory.counts()
@@ -516,9 +513,6 @@ def run(args, say) -> int:
     say("")
     say(f"queued           +{added_main} main, +{added_parked} parked, "
         f"-{len(released)} resolved and released")
-    if resolved.bypassed:
-        say(f"bypassed         {resolved.bypassed} card(s) resolved by the finish claim "
-            f"over a disagreeing photo")
     say(f"standing queues  {queue_line}")
     if moved_live:
         rose = sum(after - before for _, before, after in moved_live if after > before)
@@ -527,6 +521,14 @@ def run(args, say) -> int:
             f"read from the export")
         for sku, before, after in moved_live[:8]:
             say(f"                   {sku}  {before} -> {after}")
+    for game, kept in kept_live.items():
+        # NAMED, NOT COUNTED (D59's rule): which SKUs the store outranked this file on, and
+        # by what reading — a kept figure with no line is a settlement nobody can check.
+        mtime = resolved.joins[game].source["mtime"]
+        say(f"live             {len(kept)} SKU(s) kept: store newer than this export "
+            f"(fetched {mtime})")
+        for sku, before, stamp, offered in kept[:8]:
+            say(f"                   {sku}  store {before} (as of {stamp}) vs export {offered}")
     held = ", ".join(f"{k} {v}" for k, v in counts.items() if v)
     if held:
         say(f"inventory        {held}")
@@ -546,20 +548,14 @@ def run(args, say) -> int:
     # been photographed in: 66 SKUs, 8 of them answered twice, 3 of those a hold overridden by
     # a later price. See `pipeline/corpus.py` and D86.
     #
-    # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ. `pkmnscan prices adopt` folds it
-    # in, once, with a report of every answer it had to choose between. Reading it here as a
-    # fallback would put the duplication back the moment somebody re-joined an old run.
+    # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ — this command refused on one at
+    # its top, before the store was opened. `pkmnscan prices adopt --write` folds it in, once,
+    # with a report of every answer it had to choose between, and retires it.
     try:
         book = corpus.Corpus.read()
     except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
         say(f"{corpus.FILENAME} is unusable: {exc}")
         say("Fix it, or delete it and let this join write a fresh one.")
-        return 1
-
-    legacy = run_dir.path(runs.DECISIONS)
-    if legacy.is_file() and not book.answers:
-        say(f"this run has a legacy {runs.DECISIONS} and the corpus is empty")
-        say("Run `pkmnscan prices adopt` to fold every run's answers into one file first.")
         return 1
 
     # SEEDED, NEVER PRUNED, AND THE ASYMMETRY IS THE WHOLE POINT OF CENTRALISING. `prune` used
@@ -586,8 +582,15 @@ def run(args, say) -> int:
         unpriced=resolved.no_market_data_skus,
     )
 
-    say(f"decisions        {written}")
+    say(f"prices           {written}")
     say(f"                 {choice.describe}")
+    # THE STANDING DISPOSITION, NAMED ON EVERY JOIN. It is the store's policy and not this
+    # run's, it has a default (`pipeline/corpus.py:DEFAULT_SUB_THRESHOLD`, D9 amended), and
+    # the press that changes it is on `#/pricing` — so the line says all three rather than
+    # leaving an operator to wonder why the report stopped asking for an answer.
+    sub = choice.sub_threshold
+    say(f"sub-threshold    {'UNSET' if sub is None else sub.describe} — the store's standing "
+        f"policy ({corpus.FILENAME}); change it on #/pricing")
     say(f"                 {len(book.answers)} answer(s) in the corpus, {len(resolved.matches)} matched here")
     if added:
         say(f"                 +{len(added)} unpriced SKU(s) need a hand-entered answer")
@@ -605,7 +608,7 @@ def run(args, say) -> int:
         say(f"                 EMIT WILL REFUSE: {reason}")
 
     # ---------------------------------------------------------------- pricing.json (D49)
-    # WRITTEN AFTER `decisions.json`, so the rule it records is the one this join resolved
+    # WRITTEN AFTER THE CORPUS, so the rule it records is the one this join resolved
     # with and the one the screen will draw as the source of every suggestion. Written on
     # every join for the same reason the report is: it describes THIS join, and a stale copy
     # beside a fresh report would be the two-files-from-two-moments problem the pricing route
@@ -632,11 +635,6 @@ def run(args, say) -> int:
         rule=str(resolved.rule),
         basis=resolved.basis,
         review_below_confidence=args.review_below_confidence,
-        # The manifest is what explains a result months later, so the flag is recorded
-        # beside the count it produced. `bypassed: 0` on a `--bypass` run is a real and
-        # different fact from the key being absent, which is why both are written.
-        bypass_detection=bool(args.bypass),
-        bypassed=resolved.bypassed,
         joined=True,
         counts={
             "cards_in": sum(g.report.cards_in for g in resolved.joins.values()),
@@ -663,12 +661,6 @@ def run(args, say) -> int:
         + [
             f"rule={resolved.rule} basis={resolved.basis}",
         ]
-        + (
-            [f"cross-check: OFF (--bypass) — {resolved.bypassed} card(s) resolved by the "
-             f"finish claim over a disagreeing photo"]
-            if args.bypass
-            else []
-        )
         + [
             "",
             report_text,

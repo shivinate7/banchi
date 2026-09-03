@@ -429,10 +429,13 @@ export type InventoryCard = {
  * `store/master.py:check_state` now refuses them as card states — which is why a screen that
  * wants "how many of this are listed" reads it here and cannot count it off the copies.
  *
- * `live` IS AN ESTIMATE BETWEEN RUNS, deliberately. D8 and D11 put the authority in the
- * TCGplayer export's `Total Quantity`, which `./pkmnscan join` reads on every run; a sale
- * decrements this locally and the next join corrects it. Do not render it as a fact about
- * the marketplace — render it as what this store last believed. */
+ * `live` IS THE STORE'S LAST OBSERVATION, WITH ITS TIME. D8 and D11 put the authority in the
+ * TCGplayer export's `Total Quantity`, which `./pkmnscan join` and `reconcile --live` read; a
+ * sale decrements this locally and stamps it now, and an export corrects it only where the
+ * export was read LATER than `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
+ * Do not render it as a fact about the marketplace — render it as what this store last saw,
+ * and `live_as_of` is when. Null on a record nothing has read `live` for yet — an emit's
+ * record before any join or reconcile — and the export then answers whatever its age. */
 export type Listing = {
   sku: string
   condition: string | null
@@ -441,6 +444,7 @@ export type Listing = {
   live: number
   at: string | null
   staged_at: string | null
+  live_as_of: string | null
 }
 
 export type Inventory = {
@@ -1647,9 +1651,10 @@ export type WithheldRecord = {
   note?: string
 }
 
-/** `decisions.json` as it sits on disk. Deliberately loose: `PUT .../decisions` replaces the
- *  document wholesale, so the screen round-trips every key it does not understand rather
- *  than rebuilding the file from what it happens to know about. */
+/** One run's pricing decision, as `GET .../pricing` projects the corpus for one run (D86).
+ *  Deliberately loose, for the reason the corpus type below gives: every reader on `#/pricing`
+ *  takes this shape, and the corpus is projected into it rather than each reader learning a
+ *  new one. */
 export type DecisionsDocument = {
   rule?: string
   basis?: string
@@ -1663,10 +1668,6 @@ export type PricingPayload = {
   run: string
   pricing: PricingTable
   decisions: DecisionsDocument | null
-  /** The sub-threshold answer the newest OTHER run gave. A LABEL and never a default — D9
-   *  forbids defaulting this on the operator's behalf, so this removes the time spent
-   *  deciding and not the press. */
-  remembered_sub_threshold: { answer: string | { flat: string }; run: string } | null
   /** When `pricing.json` was last written, as a UNIX SECOND — `cli/cmd_join.py` rewrites it on
    *  every join, so this is the moment a join last read an export and therefore the age of
    *  every figure under `snap`.
@@ -1756,17 +1757,12 @@ export type PricingWorklist = {
    *  which are worth loading, so this is deliberately wider than `runs` above. */
   roster: RosterRun[]
   skus: MergedSku[]
-  decisions: Record<string, DecisionsDocument | null>
   written_at: Record<string, number>
   /** A run that could not be read, named rather than dropped — an eight-run worklist must not
    *  fail to draw because one directory predates `pricing.json`. */
   skipped: { run: string; code: string; message: string }[]
   asked: string[]
-  remembered_sub_threshold: PricingPayload['remembered_sub_threshold']
   live_cap: number
-  /** Each run's own `rule`/`basis`, for seeding a document that does not exist yet (D54).
-   *  Per run and never one seed for the worklist — D48 makes both a property of the lot. */
-  defaults: Record<string, { rule: string | null; basis: string | null }>
   /** The two run-wide figures a row is drawn against, off the newest run in the list. Null
    *  where no table could be read, which the screen falls back on rather than blanks. */
   threshold: string | null
@@ -1823,11 +1819,6 @@ export type RunSummary = {
   collected: boolean
   joined: boolean
   counts: Record<string, number>
-  /** The run was joined with D3 rung 3 switched off, and how many cards that resolved.
-   *  Reported rather than inferred from a smaller queue: these are the cards the operator
-   *  took responsibility for. */
-  bypass_detection: boolean
-  bypassed: number | null
   usage: { input_tokens?: number; output_tokens?: number }
 }
 
@@ -1998,16 +1989,14 @@ export type RunStepResult = {
 /** An uploaded CSV. Uploaded rather than named by path: a screen cannot know what is on
  *  the server's disk, and a route that opened any absolute path a request named would be a
  *  file-read primitive guarded by an origin header. */
-export type CsvUpload = { name: string; content: string }
+/** `modified` is `File.lastModified` — milliseconds since the epoch, the file's own time — and
+ *  the server sets the stored copy's mtime from it (`_store_upload`), because that mtime is
+ *  when the export's `Total Quantity` was read and the store arbitrates `live` by that time
+ *  (D87 amended). Optional: a caller without a `File` sends none and the write time stands. */
+export type CsvUpload = { name: string; content: string; modified?: number }
 
 /** What `POST /pipeline/runs/<name>/export` fetched, in the terms the operator filters the
  *  portal in (D64). Free: it downloads the owner's own Filtered Export and spends nothing.
- *
- *  `verified` and `unverified` are the halves of the guard's answer and both are lists, so a
- *  mixed-game run can report per game. A game in `unverified` was accepted on the operator's
- *  acknowledgement because this run had no previous export to compare against — an absence of
- *  evidence rather than evidence, which is why it is reported separately rather than folded
- *  into `verified`.
  *
  *  `file` is the name the join is then handed. It is a name and not the bytes: the server
  *  already holds them, and sending a megabyte back through the browser to arrive at them is
@@ -2033,9 +2022,9 @@ export type ExportFetched = {
   sets: string[]
   conditions: string[]
   product_lines: string[]
-  verified: string[]
-  unverified: string[]
-  accepted_narrower: boolean
+  /** What the last join used, per game this file answers for, beside what arrived. Always
+   *  present and `{}` on a run's first fetch; information only — nothing refuses on it. */
+  previous: Record<string, { file: string; rows: number; skus: number }>
   source: string
   /** What was ASKED FOR, beside what arrived (D65). The scope is derived from the box's own
    *  capture claims — its game, and the set hints the operator set — so this is the half they

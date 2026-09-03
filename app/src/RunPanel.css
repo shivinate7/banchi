@@ -225,15 +225,6 @@
   color: var(--ink);
 }
 
-.run-field-wide {
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--s1);
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
 .run-field input[type='number'] {
   width: 5.5em;
   padding: var(--s1) var(--s2);
@@ -726,15 +717,6 @@
   color: var(--ink);
 }
 
-/* A whole sentence, so the body face — and ink, because a sentence in accent is the third
-   job that stops the colour meaning anything. */
-.run-flagged {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-}
-
 /* NOTHING LEFT TO PAINT. This repainted `--surface` onto a bordered card that already sat on
    `--surface`; with the border gone a step is a row on the panel's own ground and a fill here
    would be the one thing that made the four look enclosed again. */
@@ -773,35 +755,6 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
-}
-
-.run-decisions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.run-textarea {
-  width: 100%;
-  padding: var(--s2);
-  font-family: var(--util);
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--ink);
-  background: var(--bg);
-  /* --field: a boundary you type inside — and this one holds `decisions.json`, which D33 keeps
-     as text rather than as a form precisely so it is edited by hand. See tokens.css. */
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-  resize: vertical;
-}
-
-/* The edge darkens under the pointer (D50). `border-color` only — never width, which
-   would reflow the box and move a target under a finger already travelling toward it.
-   Focus is an outline drawn
-   outside this border, so the two compose rather than compete. */
-.run-textarea:hover:not(:disabled) {
-  border-color: var(--field-hover);
 }
 
 /* ------------------------------------------------------------------------------- files */
@@ -1052,8 +1005,8 @@
  *
  * ONE BLOCK, INSIDE THE JOIN STEP, ABOVE ITS BUTTONS. The scope is a decision about the
  * press below it, so it sits between the note that explains the step and the row that runs
- * it — the same placement the bypass toggle already has, for the same reason: a control
- * separated from the button it governs reads as unrelated configuration.
+ * it — the placement the finish-claim toggle had until D3 retired it, for the same reason: a
+ * control separated from the button it governs reads as unrelated configuration.
  *
  * NO COLOUR OF ITS OWN. Every value here is a token (the `raw colour` audit row blocks
  * otherwise), and the panel is separated by a rule and a background step rather than by an
@@ -1112,8 +1065,9 @@
   color: var(--ink);
 }
 
-/* A label and its control on one line — the shape a `select` wants and the column-stacked
-   `.run-field-wide` does not. */
+/* A label and its control on one line — the shape a `select` wants. (`.run-field-wide`, the
+   column-stacked form this contrasted with, went with the `decisions.json` textarea that was
+   its only user — D86, amended 2026-09-02.) */
 .run-field-inline {
   flex-direction: row;
   align-items: center;

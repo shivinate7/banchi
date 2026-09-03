@@ -71,8 +71,8 @@ import './Pricing.css'
 /** How long a receipt stands. A COUNT would be wrong here and a clock is right, which is the
  *  opposite of the review queue's ruling and for a reason that inverts cleanly: there, an
  *  answer is irreversible at the store and the window is the only way back. Here the write
- *  is `decisions.json`, `join` merges it and `emit` is free and re-runnable, so the receipt
- *  is a courtesy and the undo stack behind it is what matters. */
+ *  is `inventory/prices.json`, `join` reads it and `emit` is free and re-runnable, so the
+ *  receipt is a courtesy and the undo stack behind it is what matters. */
 const UNDO_DEPTH = 10
 
 /** How many SKUs one batched trend request asks about — D79.
@@ -91,8 +91,9 @@ const TREND_CHUNK = 8
  *  THE `rule`/`basis` PAIR IS HERE BECAUSE A PRESS HAS TO WRITE IT, and it is duplicated
  *  under the same guard D49 put on `WITHHOLD_REASONS`: `scripts/docs-audit.py`'s
  *  `pricing presets` row reconciles this table against that tuple and BLOCKS on a mismatch.
- *  `PUT /pipeline/runs/<name>/decisions` validates nothing, so two declarations agreeing is
- *  the only thing standing between this screen and a `decisions.json` that `emit` refuses.
+ *  `PUT /pricing` validates the policy's rule and basis, but a refusal there is a save that
+ *  did not land, so two declarations agreeing is still what stands between this screen and
+ *  an `inventory/prices.json` that `emit` refuses.
  *
  *  It is not arithmetic and must never become arithmetic. `cli/cmd_join.py:PRESETS` prices
  *  every row in Python precisely so `Rule.apply` + `round_money` + `clamp_floor` are not
@@ -226,8 +227,8 @@ function groupOf(sku: PricingSku): string | null {
 
 /** THE HEADING OVER THE ROWS THE OPERATOR HAS ALREADY ANSWERED WITH A HOLD. The screen's own
  *  sentence and not the server's, because a hold is this screen's answer (D49) and
- *  `decisions.json` records the reason per SKU rather than one for the group — the machine
- *  token stays on each row, which is where a `withheld: bullish` is greppable from. */
+ *  `inventory/prices.json` records the reason per SKU rather than one for the group — the
+ *  machine token stays on each row, which is where a `withheld: bullish` is greppable from. */
 const HELD_HEAD = 'held back from this run'
 
 /** THE SKUs DRAWN AS HELD WHEN THE PAGE OPENED — a snapshot, taken in `load` and untouched
@@ -830,6 +831,92 @@ export function Pricing() {
     [doc, work],
   )
 
+  /* IT CLAIMS ONLY WHAT IT CHECKED. `readiness.ts` sees two of emit's roughly eight refusals,
+     so "ready to emit" would be a promise this screen cannot keep — and a screen that
+     overstates a check is worse than one that runs none. Drawn in BOTH ship bars: `owes` is
+     computed over the union of every run on screen, so the line says whether a MERGED emit
+     would refuse, and until 2026-09-02 nothing drew it on the multi-run landing at all. */
+  const readyLine = (
+    <p className="pricing-ready">
+      {owes.length === 0
+        ? 'Pricing is answered. Emit can still refuse for a reason this line cannot see.'
+        : `Emit will refuse: still needs ${owes
+            .map((o) => `${OWED_LABELS[o.reason]} (${o.count})`)
+            .join(', ')}.`}
+    </p>
+  )
+
+  /* THE SUB-THRESHOLD CONTROL, ON WHICHEVER LANDING HAS A SUB-THRESHOLD ROW. It is the STORE'S
+     standing policy (D86; D9 amended 2026-09-02 with a default of flat $0.49), not one run's,
+     so gating it behind "exactly one run loaded" — which is where it sat — hid the only press
+     that changes it from the landing the screen opens on. Gated on the union instead: a row
+     under the threshold anywhere on screen is what makes the policy worth drawing.
+
+     THE FLOOR BUTTON NEVER WRITES NULL. It used to toggle, and a second press put `null` back
+     into a policy whose null now means "take the default" — a press that looked like an undo
+     and was a no-op at the file. Pressing floor when floor is already set sends nothing. */
+  const subThresholdRow =
+    subThresholdSkus(work?.skus ?? []).length === 0 ? null : (
+      <div className="pricing-ship-row">
+        <span className="pricing-ship-key">
+          Below ${work?.threshold ?? '0.40'} · {subThresholdSkus(work?.skus ?? []).length} SKUs
+          · standing policy for the store
+        </span>
+        {/* THE ANSWER `emit` REFUSES WITHOUT, ON THE SCREEN WHERE PRICING IS DONE. It was
+            settable only by typing JSON on another route, and `blocking` never consults
+            `overrides` — so hand-pricing every row still left emit refusing. Two of the
+            three runs on disk were parked on exactly this before the default landed. */}
+        <button
+          type="button"
+          className="pricing-plain"
+          aria-pressed={doc?.sub_threshold === FLOOR_CHOICE}
+          onClick={() => {
+            if (doc?.sub_threshold !== FLOOR_CHOICE) setSubThreshold(FLOOR_CHOICE)
+          }}
+        >
+          At the ${work?.floor ?? '0.40'} floor
+        </button>
+        <button
+          type="button"
+          className="pricing-plain"
+          aria-pressed={flatOpen || typeof doc?.sub_threshold === 'object'}
+          onClick={() => setFlatOpen((on) => !on)}
+        >
+          A flat price
+        </button>
+        {!flatOpen && typeof doc?.sub_threshold !== 'object' ? null : (
+          <input
+            className="pricing-ship-flat"
+            /* DELIBERATELY NOT MATCHING `/^Price for /`: `pricing.spec.ts` locates the
+               row field by that name and asserts a held row has none of them. */
+            aria-label="A flat price for every sub-threshold card"
+            defaultValue={
+              typeof doc?.sub_threshold === 'object' && doc.sub_threshold !== null
+                ? doc.sub_threshold[FLAT_KEY]
+                : ''
+            }
+            onBeforeInput={(event) => {
+              const next = event.currentTarget.value + (event as { data?: string }).data
+              if (!PRICE.test(next)) event.preventDefault()
+            }}
+            /* WRITES ONLY ON A COMMITTED, NON-EMPTY, WELL-FORMED VALUE. `{"flat": ""}`
+               reaches `Decimal("")` and raises `MalformedDecisions` at the next join —
+               an hour later, on another screen, about a keystroke nobody remembers. */
+            onBlur={(event) => {
+              const text = event.currentTarget.value.trim()
+              if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              const text = event.currentTarget.value.trim()
+              if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
+            }}
+          />
+        )}
+      </div>
+    )
+
   /** What THIS RUN'S JOIN sent to review, from the run list already in hand. Zero new fetches.
    *
    *  IT IS A JOIN-TIME FIGURE AND THE COPY SAYS SO. `counts` is written by `join` and nothing
@@ -854,9 +941,9 @@ export function Pricing() {
    *  a label: `pipeline/decisions.py` compares with a bare `==` and does no trim or case
    *  fold, so a value derived from a button's text is a `MalformedDecisions` at the next join.
    *
-   *  The spread is what round-trips `_note`, `rule`, `basis`, `overrides` and every key a
-   *  later `decisions.py` adds — `PUT .../decisions` replaces the document wholesale and
-   *  validates nothing, so this is the only thing standing between a press and a lost block. */
+   *  The spread is what round-trips `_note`, `rule`, `basis`, every answer and every key a
+   *  later `corpus.py` adds — `PUT /pricing` replaces the document wholesale, so this is the
+   *  only thing standing between a press and a lost block. */
   const setSubThreshold = useCallback(
     (answer: string | { flat: string } | null) => {
       /* ONE PRESS, ONE ANSWER, FOR THE WHOLE STORE. It was one write per loaded run, over
@@ -1149,8 +1236,8 @@ export function Pricing() {
    *
    *  `rule_price` WAS COMPUTED BY THE LAST JOIN AND CAN BE STALE (D54). Pressing a preset now
    *  writes `rule`/`basis` into the document, and `pricing.json` is not rewritten until the
-   *  next join — so a screen that only ever read `rule_price` would say `decisions.json`
-   *  prices at `undercut:5` while every suggestion on it showed `match`. Where the document's
+   *  next join — so a screen that only ever read `rule_price` would say the policy prices
+   *  at `undercut:5` while every suggestion on it showed `match`. Where the document's
    *  pair matches a served preset, that preset's own per-SKU figure is the honest suggestion.
    *
    *  STILL NO ARITHMETIC ON MONEY: both numbers came pre-rounded out of `pricing.json`, which
@@ -1726,9 +1813,8 @@ export function Pricing() {
           {/* THE DRAWER, THEN THE RUN, THEN THE COUNT (D56). It read `<run> · N SKUs`, which
               names the directory and the size of the job and never says what is in the box —
               the owner's complaint, in the place they were looking when they made it. The run
-              name stays because it is what `emit` and `join` are pointed at and what
-              `decisions.json` is written under; what goes in front of it is the answer to
-              which drawer these hundred prices are for. */}
+              name stays because it is what `emit` and `join` are pointed at; what goes in
+              front of it is the answer to which drawer these hundred prices are for. */}
           {/* THE SCOPE NAMES WHAT IS LOADED, AND A WORKLIST OVER SEVERAL RUNS SAYS SO RATHER
               THAN NAMING ONE. `scopeName` is the single-run answer and stays exactly as it
               was; the multi-run line counts the drawers, because there is no one drawer these
@@ -1873,7 +1959,7 @@ export function Pricing() {
             /* THE ACTIVE CHIP IS DERIVED FROM `rule`/`basis`, NEVER STORED. A remembered
                selection would be a second answer to "what will an untouched row list at", and
                the pair the pipeline reads is the only one that can be right — so a rule typed
-               by hand into `decisions.json` on `#/runs` correctly lights no chip rather than
+               by hand into `inventory/prices.json` correctly lights no chip rather than
                lighting a stale one. It is drawn at all because nothing on this screen said
                which rule was live, which is most of why the dead write survived: pressing a
                chip appeared to work, because the suggestions really did change. */
@@ -1885,9 +1971,11 @@ export function Pricing() {
           </button>
         ))}
         <span className="pricing-preset-says">
-          A preset only fills rows you have not set, and sets the run’s rule. Anything else —
-          a different rule or basis — is typed into <code>decisions.json</code> on{' '}
-          <a href="#/runs">Runs</a>.
+          A preset only fills rows you have not set, and sets the store’s rule. Anything else
+          — a different rule or basis — is typed by hand into <code>inventory/prices.json</code>{' '}
+          under <code>policy</code> (<code>rule</code>: match | undercut:PCT | markup:PCT;{' '}
+          <code>basis</code>: market | low); the next join or save reads it, and{' '}
+          <code>pkmnscan prices show</code> prints it.
         </span>
       </div>
 
@@ -2188,7 +2276,7 @@ export function Pricing() {
                         THE SENTENCE YIELDS AND THE TOKEN NEVER DOES. `pricing-row-why`
                         ellipsizes and carries its full text in `title`; the token is
                         `flex: none`, because it is the greppable half — a `withheld: nex…`
-                        finds nothing in `decisions.json`. Which way the line breaks under
+                        finds nothing in `inventory/prices.json`. Which way the line breaks under
                         pressure is a decision, and this is it. */}
                     {/* WHERE THIS CARD IS, WHEN IT IS IN MORE THAN ONE DRAWER — and the
                         disagreement, where the runs already answered it two ways.
@@ -2342,6 +2430,8 @@ export function Pricing() {
           role="region"
           aria-label="Ship these runs"
         >
+          {subThresholdRow}
+          <div className="pricing-ship-row">{readyLine}</div>
           <div className="pricing-ship-row">
             <span className="pricing-ship-key">
               {loaded.length} runs · {boxesLoaded.length}{' '}
@@ -2412,81 +2502,10 @@ export function Pricing() {
 
       {run === null ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run">
-          {subThresholdSkus(work?.skus ?? []).length === 0 ? null : (
-            <div className="pricing-ship-row">
-              <span className="pricing-ship-key">
-                Below ${work?.threshold ?? '0.40'} ·{' '}
-                {subThresholdSkus(work?.skus ?? []).length} SKUs
-              </span>
-              {/* THE ANSWER `emit` REFUSES WITHOUT, ON THE SCREEN WHERE PRICING IS DONE. It
-                  was settable only by typing JSON on another route, and `blocking` never
-                  consults `overrides` — so hand-pricing every row still left emit refusing.
-                  Two of the three runs on disk are parked on exactly this. */}
-              <button
-                type="button"
-                className="pricing-plain"
-                aria-pressed={doc?.sub_threshold === FLOOR_CHOICE}
-                onClick={() =>
-                  setSubThreshold(
-                    doc?.sub_threshold === FLOOR_CHOICE ? null : FLOOR_CHOICE,
-                  )
-                }
-              >
-                At the ${work?.floor ?? '0.40'} floor
-              </button>
-              <button
-                type="button"
-                className="pricing-plain"
-                aria-pressed={flatOpen || typeof doc?.sub_threshold === 'object'}
-                onClick={() => setFlatOpen((on) => !on)}
-              >
-                A flat price
-              </button>
-              {!flatOpen && typeof doc?.sub_threshold !== 'object' ? null : (
-                <input
-                  className="pricing-ship-flat"
-                  /* DELIBERATELY NOT MATCHING `/^Price for /`: `pricing.spec.ts` locates the
-                     row field by that name and asserts a held row has none of them. */
-                  aria-label="A flat price for every sub-threshold card"
-                  defaultValue={
-                    typeof doc?.sub_threshold === 'object' && doc.sub_threshold !== null
-                      ? doc.sub_threshold[FLAT_KEY]
-                      : ''
-                  }
-                  onBeforeInput={(event) => {
-                    const next =
-                      event.currentTarget.value + (event as { data?: string }).data
-                    if (!PRICE.test(next)) event.preventDefault()
-                  }}
-                  /* WRITES ONLY ON A COMMITTED, NON-EMPTY, WELL-FORMED VALUE. `{"flat": ""}`
-                     reaches `Decimal("")` and raises `MalformedDecisions` at the next join —
-                     an hour later, on another screen, about a keystroke nobody remembers. */
-                  onBlur={(event) => {
-                    const text = event.currentTarget.value.trim()
-                    if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return
-                    event.preventDefault()
-                    const text = event.currentTarget.value.trim()
-                    if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
-                  }}
-                />
-              )}
-            </div>
-          )}
+          {subThresholdRow}
 
           <div className="pricing-ship-row">
-            {/* IT CLAIMS ONLY WHAT IT CHECKED. `readiness.ts` sees two of emit's roughly eight
-                refusals, so "ready to emit" would be a promise this screen cannot keep — and
-                a screen that overstates a check is worse than one that runs none. */}
-            <p className="pricing-ready">
-              {owes.length === 0
-                ? 'Pricing is answered. Emit can still refuse for a reason this line cannot see.'
-                : `Emit will refuse: still needs ${owes
-                    .map((o) => `${OWED_LABELS[o.reason]} (${o.count})`)
-                    .join(', ')}.`}
-            </p>
+            {readyLine}
             {queued === 0 ? null : (
               /* WHAT *JOIN* QUEUED, worded as such: nothing rewrites `counts` until the next
                  join, so this is a fact about the run rather than a live queue depth. A
@@ -2659,8 +2678,8 @@ function HoldPanel({
         </button>
       </div>
       <p className="pricing-holdpanel-fine">
-        Holds live in this run&rsquo;s <code>decisions.json</code>. A new run over this box
-        starts with none.
+        A hold is one answer for the whole store (<code>inventory/prices.json</code>) and
+        outlives every run over this box.
       </p>
     </div>
   )

@@ -1736,14 +1736,14 @@ export async function startRun(cart: readonly RunLeg[]): Promise<RunStarted> {
 }
 
 /**
- * The per-SKU pricing table for one run, with this run's answers and the last run's
- * sub-threshold choice. FREE and read-only: it creates nothing and prices nothing.
+ * The per-SKU pricing table for one run, with the corpus's answers scoped to it. FREE and
+ * read-only: it creates nothing and prices nothing.
  *
- * TWO FILES IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE. `pricing.json` and
- * `decisions.json` are both downloadable through `GET .../file` already, so a screen could
- * fetch them separately and need no server change at all — but two fetches can straddle a
- * re-join, and a table describing one join beside answers written against another is a
- * screen quietly pricing the wrong set of cards.
+ * THE TABLE AND THE ANSWERS IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE.
+ * `pricing.json` is downloadable through `GET .../file` and the corpus has `getPricingCorpus`,
+ * so a screen could fetch them separately and need no server change at all — but two fetches
+ * can straddle a re-join, and a table describing one join beside answers written against
+ * another is a screen quietly pricing the wrong set of cards.
  *
  * Refusals worth branching on: `pricing_not_written` (the run predates the file, or has not
  * been joined — the remedy is a re-join and the message says so) and `no_such_run`.
@@ -1792,8 +1792,10 @@ export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path:
 }
 
 /**
- * Replace the corpus. Wholesale, for `putDecisions`' reason: the screen round-trips every key
- * it does not understand, so a hand-written `_note` survives a client that never heard of it.
+ * Replace the corpus. Wholesale, for D49's reason: the screen round-trips every key it does
+ * not understand, so a hand-written `_note` survives a client that never heard of it. This is
+ * the ONE pricing write in the app — the per-run `PUT .../decisions` it replaced is deleted
+ * (D86, amended 2026-09-02).
  */
 export async function putPricingCorpus(
   corpus: PricingCorpus,
@@ -1840,8 +1842,8 @@ export async function emitMerged(
  * separator. A named run is drawn whether or not the server would have chosen it — asking for
  * one has already answered the question the filter exists to ask.
  *
- * IT IS A READ AND IT SPENDS NOTHING. The write path is unchanged and still per run:
- * `putDecisions` below, once per run holding the SKU being answered.
+ * IT IS A READ AND IT SPENDS NOTHING. The write path is `putPricingCorpus` above — one
+ * document for the store, however many runs are on screen.
  */
 export async function getPricingWorklist(runs: readonly string[] = []): Promise<PricingWorklist> {
   const query = runs.map((run) => `run=${encodeURIComponent(run)}`).join('&')
@@ -1956,17 +1958,13 @@ export async function getRun(name: string): Promise<RunDetail> {
  * (D64). Free: it spends nothing, and `POST /pipeline/identify` is still the only route that
  * can. Reported separately from the join so a failure is attributable to one or the other.
  *
- * THE TWO ACKNOWLEDGEMENTS ARE NOT DEFAULTS AND MUST NOT BECOME ONE. `acceptUnverified` says
- * this run has no previous export to check against; `acceptNarrower` says this file covers
- * less than the last one and the operator means it. Sending either unasked would turn a guard
- * that refuses a silently variant-thinned export — the one that mislists a reverse holo at
- * the normal row's price — into a field nobody reads.
- *
- * Refusals worth branching on: `export_unverified` and `export_narrower`, which are the two
- * an operator can answer, and which the screen answers by calling this again with the
- * matching flag. Everything else — `tcg_cookie_missing`, `tcg_session_expired`,
- * `tcg_blocked`, `export_wrong_game` — is a `ServerError` carrying a sentence to read and no
- * control to press.
+ * EVERY REFUSAL IS A SENTENCE WITH NOTHING TO PRESS. `tcg_cookie_missing`,
+ * `tcg_session_expired`, `tcg_blocked`, `export_wrong_game` and `export_scope_incomplete`
+ * each arrive as a `ServerError` carrying a sentence to read, and each is fixed somewhere
+ * other than this screen. The two acknowledgements this once took — `acceptUnverified` and
+ * `acceptNarrower` — went with the delta guard they answered (D64, amended 2026-09-02): D65
+ * names the scope, so the file is checked for what was asked, and the receipt's `previous`
+ * says what the last join used beside what arrived.
  */
 /**
  * The real set names for a game (D65), for the capture screen's hint field.
@@ -2010,8 +2008,6 @@ export async function getExportScope(
 export async function fetchExport(
   name: string,
   options: {
-    acceptUnverified?: boolean
-    acceptNarrower?: boolean
     /** Which category to ask for. Required only where the run holds more than one game —
      *  one fetch answers for one category, because `CategoryId` is scalar in the portal. */
     game?: string
@@ -2026,8 +2022,6 @@ export async function fetchExport(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      accept_unverified: options.acceptUnverified,
-      accept_narrower: options.acceptNarrower,
       game: options.game,
       scope: options.scope,
       set_ids: options.setIds,
@@ -2046,7 +2040,6 @@ export async function runStep(
     basis?: 'market' | 'low'
     reviewBelowConfidence?: 'none' | 'low' | 'medium'
     dryRun?: boolean
-    bypass?: boolean
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2060,13 +2053,12 @@ export async function runStep(
       basis: options.basis,
       review_below_confidence: options.reviewBelowConfidence,
       dry_run: options.dryRun,
-      bypass: options.bypass,
     }),
   })) as RunStepResult
 }
 
 /**
- * Where a run artefact can be downloaded. The import CSVs, the report, `decisions.json`.
+ * Where a run artefact can be downloaded. The import CSVs, the report, `pricing.json`.
  *
  * A URL rather than a fetch, because the browser's own download is what the operator wants
  * — this is the file that goes into TCGplayer's Import to Staged, and a string in a text
@@ -2075,25 +2067,6 @@ export async function runStep(
  */
 export function runFileUrl(name: string, file: string): string {
   return `${base}/pipeline/runs/${encodeURIComponent(name)}/file?name=${encodeURIComponent(file)}`
-}
-
-/**
- * D9's sub-threshold answer, which gates `emit` and nothing else.
- *
- * Replaces the whole document, because it is one file the operator is editing and a merge
- * would need this route to understand a schema it deliberately does not own — `emit` owns
- * what a disposition MEANS and refuses on it. Read the current file through `runFileUrl`
- * first; that is the same read-modify-write the run report tells a terminal user to do.
- */
-export async function putDecisions(
-  name: string,
-  decisions: Record<string, unknown>,
-): Promise<{ ok: boolean; run: string; written: string }> {
-  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/decisions`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ decisions }),
-  })) as { ok: boolean; run: string; written: string }
 }
 
 /* ------------------------------------------------------------------ the code-card track */
@@ -2443,6 +2416,12 @@ export async function undoPull(targets: readonly PullTarget[]): Promise<PullResu
  * The body is the `CsvUpload` object itself and nothing more.
  */
 export async function readShippingExport(upload: CsvUpload): Promise<ShippingBatch> {
+  // NAME AND CONTENT ONLY — `modified` is `CsvUpload`'s newest field (D59/D87 amended), added
+  // for a fetched or uploaded PRICING export so `live` can be arbitrated by which reading is
+  // newer. This batch touches no disk and settles nothing against `live`; carrying the file's
+  // timestamp here would be a field this route reads for no reason, which is exactly the
+  // opsec argument above the read side of this wire ("what comes back carries no buyer" —
+  // the same discipline applies to what goes out).
   return (await request('/shipping/batches', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -27,7 +27,7 @@
    * the buttons then drew over the panel they were escaping AND over the ship bar, so a row
    * scrolled behind the bar punched its two letters through it and took the clicks landing
    * there. A press at the bar's left edge opened a hold on a card nobody could see, and a
-   * hold writes `decisions.json`.
+   * hold writes `inventory/prices.json`.
    *
    * These two properties are the settlement. The row keeps its gutter and the panels start
    * after it, so no panel is ever over a T or an H and no `z-index` has to say who wins.
@@ -243,7 +243,7 @@
 }
 
 /* The greppable token beneath the sentence — docs/DESIGN.md's human-label-large,
-   machine-string-small rule. It is the string as it sits in decisions.json, so grepping
+   machine-string-small rule. It is the string as it sits in `inventory/prices.json`, so grepping
    `withheld` finds the screen, the file and the run report at once. */
 .pricing-machine {
   margin: var(--s1) 0 0;
@@ -747,7 +747,7 @@
 
 /* THE SENTENCE YIELDS. It is prose and it has a `title` carrying every word of it, so an
    ellipsis costs a hover; the token beside it is a string somebody greps for, and
-   `withheld: nex…` matches nothing in `decisions.json`. Which half gives way under a narrow
+   `withheld: nex…` matches nothing in `inventory/prices.json`. Which half gives way under a narrow
    window is a decision rather than an accident of source order, and this is it. */
 .pricing-row-why {
   min-width: 0;
@@ -1116,7 +1116,7 @@
    IT IS `pricing-plain` AND NOT `pricing-preset`, which is the distinction worth keeping. A
    preset WRITES — it fills unset rows and sets the run's rule, and `aria-pressed` says which
    one is live. This reads. Drawing them alike would put a request to a public mirror in the
-   same register as an answer that ends up in `decisions.json`. */
+   same register as an answer that ends up in `inventory/prices.json`. */
 .pricing-trendbar {
   display: flex;
   align-items: baseline;

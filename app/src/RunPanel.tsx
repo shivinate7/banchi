@@ -10,8 +10,6 @@ import {
   getTcgSets,
   photoUrl,
   preflightRun,
-  putDecisions,
-  runFileUrl,
   runStep,
   startRun,
   type Failure,
@@ -118,22 +116,6 @@ export function runningFor(row: { created_at?: string | null }): string {
  * `phase`, because `phase` answers "what is this run waiting for" and this answers "what are
  * the four things there are" — a screen that only drew the current step would leave the
  * operator unable to see that emit exists until join had finished. */
-/* The two fetch refusals an operator may answer, and the field each is answered with (D64).
- *
- * A MAP RATHER THAN TWO CONDITIONS IN THE JSX, which is what makes "absent for everything
- * else" structural. `POST .../export` has ten refusal codes and only these two have an answer
- * a press can give: the rest — an expired session, a WAF block, an export for the wrong
- * product line — are things to go and fix elsewhere. A screen that drew a control for an
- * unlisted code would be offering to wave through a refusal it does not understand.
- *
- * `docs/DESIGN.md` puts the control ABSENT rather than disabled until the refusal that earns
- * it has arrived, which is D33's money gate one register down: a disabled button is one
- * attribute away from pressable, and that attribute is what a later refactor drops. */
-const FETCH_ACK: Record<string, { send: 'acceptUnverified' | 'acceptNarrower'; label: string }> = {
-  export_unverified: { send: 'acceptUnverified', label: 'Fetch anyway — nothing to compare' },
-  export_narrower: { send: 'acceptNarrower', label: 'Fetch anyway — I narrowed it' },
-}
-
 /* WHY THE FETCH IS ASKING FOR WHAT IT IS ASKING FOR (D76), in the operator's words.
  *
  * THE SAME TWO-SIZE RULE THE REVIEW QUEUE'S REASONS FOLLOW: a sentence a person reads, with
@@ -161,8 +143,8 @@ const SCOPE_CHOICES = [
 type ScopeChoice = (typeof SCOPE_CHOICES)[number]['key']
 
 /* D76's one join lever with no other home. `--rule` and `--basis` are NOT here and must not
- * be: D49 makes `decisions.json` the one place a pricing answer is written, `#/pricing` is
- * the press that writes it, and `check_pricing_presets` exists in `scripts/docs-audit.py`
+ * be: D49 makes `inventory/prices.json` the one place a pricing answer is written, `#/pricing`
+ * is the press that writes it, and `check_pricing_presets` exists in `scripts/docs-audit.py`
  * because a SECOND place to say `rule` already produced 48 cards about to list at a price
  * nobody had chosen. Confidence routing is a routing question, it is written nowhere else,
  * and it was reachable only from a terminal. */
@@ -383,8 +365,6 @@ export function RunPanel({ cart }: RunPanelProps) {
      * than four call sites each remembering to do it. */
     setPreviewBox(box)
   }, [])
-
-  const [bypass, setBypass] = useState(false)
 
   /* ------------------------------------------------------ D76: the fetch's scope, as a lever
    *
@@ -676,15 +656,13 @@ export function RunPanel({ cart }: RunPanelProps) {
 
   /* PER-RUN STATE BELONGS TO THE RUN IT WAS PRODUCED AGAINST, and none of it was cleared when
    * the open run changed. Opening run A, pressing Preview, then clicking run B left A's answer
-   * on screen under B — and `saveDecisions` posts the textarea to whatever `openRun` is at the
-   * moment of the press, so A's edited `decisions.json` could be written into B. Rendering a
-   * step's answer inside its own step box makes a stale one MORE believable, not less, which is
-   * what turns this from latent into worth fixing. One effect rather than an edit at each
-   * `setOpenRun` call site, so a later caller cannot forget it. */
+   * on screen under B. Rendering a step's answer inside its own step box makes a stale one
+   * MORE believable, not less, which is what turns this from latent into worth fixing. One
+   * effect rather than an edit at each `setOpenRun` call site, so a later caller cannot forget
+   * it. (The per-run `decisions.json` textarea that once shared this reset is deleted — D86,
+   * amended 2026-09-02 — which took with it the sharper hazard, A's edit written into B.) */
   useEffect(() => {
     setStepOut(null)
-    setDecisions(null)
-    setDecisionsBad(null)
     /* THE RECEIPT IS THE WORSE OF THE TWO TO LEAVE BEHIND. It names a file, and a file fetched
        into one run is not a file another run holds — `fetched` is the name the join is handed,
        so a stale one would ask the server to join a run against a name it does not have. */
@@ -866,10 +844,10 @@ export function RunPanel({ cart }: RunPanelProps) {
    * card do the same thing because a key with no visible control is a key nobody finds.
    *
    * GUARDED ON THE EVENT'S TARGET, which is the whole subtlety. This panel holds a number
-   * input (Custom's max edge) and a textarea (`decisions.json`), and an unguarded window
-   * listener would steal the caret keys from both — the operator would be unable to move
-   * through a number they were editing. Modifier chords are left alone too: they belong to
-   * the browser and to `App.tsx`'s route chords. */
+   * input (Custom's max edge), and an unguarded window listener would steal the caret keys
+   * from it — the operator would be unable to move through a number they were editing. The
+   * guard is written for any text field, so a control added later is covered. Modifier chords
+   * are left alone too: they belong to the browser and to `App.tsx`'s route chords. */
   useEffect(() => {
     if (!scoped) return
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1002,28 +980,18 @@ export function RunPanel({ cart }: RunPanelProps) {
    * press Export Filtered CSV, wait, find the download, come back, pick it. The fetch reports
    * first and separately, and the join runs only if it landed — a fetch that refused has
    * written nothing, so joining after one would silently re-use the previous export and look
-   * like the fetch had worked.
-   *
-   * `ack` is undefined on the ordinary press. It carries a value only when the operator
-   * answers one of the two refusals `FETCH_ACK` lists, which is why this takes the field name
-   * rather than a boolean: a signature of two booleans is one that can be called with both. */
-  const doFetchExport = (ack?: 'acceptUnverified' | 'acceptNarrower') =>
+   * like the fetch had worked. */
+  const doFetchExport = () =>
     guard('fetch', async () => {
       if (openRun === null) return
       setFetchRefusal(null)
       let answer: ExportFetched
       try {
-        /* THE SCOPE TRAVELS WITH THE ACKNOWLEDGEMENT, NOT INSTEAD OF IT (D76). A retry
-           after `export_narrower` must ask for the same scope the first press did, or the
-           operator answers a question about one file and gets another. */
-        answer = await fetchExport(openRun, {
-          ...scopeOptions,
-          ...(ack === undefined ? {} : { [ack]: true }),
-        })
+        answer = await fetchExport(openRun, scopeOptions)
       } catch (err) {
-        /* Caught here rather than left to `guard`, because this is the refusal the operator
-           may be able to ANSWER and the control that answers it is drawn from this state. A
-           panel-wide banner would put the sentence a long way from the button it earns. */
+        /* Caught here rather than left to `guard`, because the refusal is drawn beside the
+           control that earned it. A panel-wide banner would put the sentence a long way from
+           the button — and every fetch refusal is a sentence with nothing to press. */
         setFetched(null)
         setFetchRefusal(describeFailure(err))
         return
@@ -1031,20 +999,12 @@ export function RunPanel({ cart }: RunPanelProps) {
       setFetched(answer)
       const result = await runStep(openRun, 'join', {
         fetched: [answer.file],
-        bypass,
         reviewBelowConfidence: reviewBelow,
       })
       setStepOut({ step: 'join', ok: result.ok, console: result.console })
       setDetail(await getRun(openRun))
       await loadRuns()
     })
-
-  /* WHETHER THE STANDING FETCH REFUSAL IS ONE AN OPERATOR MAY ANSWER — resolved once here
-   * rather than indexed twice inside the JSX. `undefined` is the ordinary answer and it draws
-   * no control at all: `FETCH_ACK` holds only the two codes that have an answer, so every
-   * other refusal renders its sentence and nothing to press. */
-  const acknowledgement =
-    fetchRefusal === null ? undefined : FETCH_ACK[fetchRefusal.code]
 
   const pickExports = () =>
     guard('exports', async () => {
@@ -1053,7 +1013,6 @@ export function RunPanel({ cart }: RunPanelProps) {
       const uploads = await Promise.all(chosen.map(readUpload))
       const result = await runStep(openRun, 'join', {
         exports: uploads,
-        bypass,
         reviewBelowConfidence: reviewBelow,
       })
       setStepOut({ step: 'join', ok: result.ok, console: result.console })
@@ -1070,57 +1029,6 @@ export function RunPanel({ cart }: RunPanelProps) {
       setStepOut({ step: 'reconcile', ok: result.ok, console: result.console })
       setDetail(await getRun(openRun))
       if (stagedPick.current !== null) stagedPick.current.value = ''
-    })
-
-  /* ------------------------------------------------------ D9's pricing answer, as a document
-   *
-   * A TEXT EDITOR AND NOT A FORM, and that is a considered choice rather than a shortcut. The
-   * route it writes through says in its own comment that it does not validate what a
-   * disposition MEANS — `emit` owns that refusal — and a typed form here would have to encode
-   * the schema a second time, in TypeScript, where nothing audits it against
-   * `pipeline/decisions.py`. That is the drift D16 exists to catch, and the same argument
-   * `docs/DESIGN.md` makes for showing reason codes verbatim.
-   *
-   * The file already explains itself: `join` writes a `_note` block naming every field and
-   * what `emit` will refuse without. Showing the operator that block is worth more than any
-   * label this component could write over the top of it. */
-  const [decisions, setDecisions] = useState<string | null>(null)
-  const [decisionsBad, setDecisionsBad] = useState<string | null>(null)
-
-  const openDecisions = () =>
-    guard('decisions-read', async () => {
-      if (openRun === null) return
-      const response = await fetch(runFileUrl(openRun, 'decisions.json'), { cache: 'no-store' })
-      if (!response.ok) {
-        setTrouble({
-          code: 'decisions_not_written',
-          message:
-            'This run has no decisions.json yet. Join is what writes it, with every SKU that ' +
-            'needs an answer already filled in.',
-        })
-        return
-      }
-      setDecisions(await response.text())
-      setDecisionsBad(null)
-    })
-
-  const saveDecisions = () =>
-    guard('decisions-write', async () => {
-      if (openRun === null || decisions === null) return
-      let parsed: Record<string, unknown>
-      try {
-        parsed = JSON.parse(decisions) as Record<string, unknown>
-      } catch (err) {
-        /* Parsed HERE rather than sent, because a body that is not JSON would come back as
-         * `body_invalid` from the request layer and the operator would have lost their edit in
-         * the round trip. The message is the browser's own parse error, which names the
-         * character — the one thing this side of the wire knows better than the server. */
-        setDecisionsBad(err instanceof Error ? err.message : String(err))
-        return
-      }
-      await putDecisions(openRun, parsed)
-      setDecisionsBad(null)
-      setDecisions(null)
     })
 
   /* ------------------------------------------------------------------------------- render */
@@ -1259,9 +1167,8 @@ export function RunPanel({ cart }: RunPanelProps) {
             card is sent as, and the crop and the max edge are what decide those.
 
             EVERY BOX IN THE CART IS ITS OWN RUN. One press starts several children, and
-            nothing downstream learns a new shape: each box gets a run directory, a manifest,
-            a queue, its own `--bypass` decision at join and its own `decisions.json`. What is
-            new is a fact about the REQUEST, not about a run.
+            nothing downstream learns a new shape: each box gets a run directory, a manifest
+            and a queue. What is new is a fact about the REQUEST, not about a run.
 
             THE READING IS DRAWN AS A PAIR RATHER THAN AS TWO CONTROLS — see `READINGS` above
             for the measurement that decides it, and for why a checkbox beside a free number
@@ -1855,17 +1762,6 @@ export function RunPanel({ cart }: RunPanelProps) {
             </dl>
           )}
 
-          {detail.bypass_detection && (
-            /* NAMED ON THE RUN, not only in its log. D3's amendment: a run joined with the
-               detection cross-check off resolved some cards by the operator's own claim, and
-               they chose "resolved by the claim, and the run report says so". A count that
-               appeared only in a file nobody opened would not be that. */
-            <p className="run-flagged">
-              Joined with the photo cross-check off — {count(detail.bypassed)} card
-              {detail.bypassed === 1 ? '' : 's'} resolved by your finish claim.
-            </p>
-          )}
-
           <Console text={detail.console} label={`What ${detail.run} printed`} />
         </div>
       )}
@@ -1919,23 +1815,12 @@ export function RunPanel({ cart }: RunPanelProps) {
 
               {step.key === 'join' && detail !== null && (
                 <>
-                  <label className="run-toggle">
-                    <input
-                      type="checkbox"
-                      checked={bypass}
-                      onChange={(event) => setBypass(event.target.checked)}
-                    />
-                    {/* The plain-English form of D3's amendment, and it is the sentence the
-                        owner asked for when they said the question had not been put in plain
-                        English. The rule underneath it is one line: where a finish claim
-                        exists, the photo may not contradict it. */}
-                    Trust my finish claim over the photo
-                  </label>
-                  <p className="run-step-note run-step-fine">
-                    Box 2 measured this: 230 of 544 cards had the photo disagreeing with a
-                    claim that was right every time. Cards with no claim are unaffected —
-                    there is nothing to resolve them by.
-                  </p>
+                  {/* THERE WAS A CHECKBOX HERE — "Trust my finish claim over the photo" — and
+                      it is gone because it was ticked on every run since Gate B (D3, amended
+                      2026-09-02). A switch every run flips is a default wearing a flag, so
+                      the rule it encoded is the ladder's own now: where a finish claim
+                      exists, the photo may not contradict it. Nothing on this screen has to
+                      say so, because there is no longer a way to ask for the alternative. */}
 
                   {/* ------------------------------------------------- D76: the routing lever
                       HERE AND NOT ON `#/pricing`, because it is not a pricing answer. It
@@ -2076,7 +1961,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                       onClick={() =>
                         void doStep('join', {
                           dryRun: true,
-                          bypass,
                           reviewBelowConfidence: reviewBelow,
                         })
                       }
@@ -2088,7 +1972,7 @@ export function RunPanel({ cart }: RunPanelProps) {
                       className="run-button"
                       disabled={busy !== null}
                       onClick={() =>
-                        void doStep('join', { bypass, reviewBelowConfidence: reviewBelow })
+                        void doStep('join', { reviewBelowConfidence: reviewBelow })
                       }
                     >
                       Join again
@@ -2137,10 +2021,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                           <dd>{fetched.conditions.length}</dd>
                         </div>
                       </dl>
-                      {/* WHICH GAMES WERE CHECKED AND WHICH WERE NOT, never folded together.
-                          An unverified game was accepted because this run had no previous
-                          export to compare against — an absence of evidence, which reads as a
-                          clean bill of health if it is reported as one. */}
                       {/* WHAT WAS ASKED FOR, ABOVE WHAT ARRIVED (D65). The export is scoped
                           by this box's own capture claims, so this line is the operator's own
                           input read back — and the place a wrong hint becomes visible. */}
@@ -2168,14 +2048,25 @@ export function RunPanel({ cart }: RunPanelProps) {
                           ? ''
                           : ` (${fetched.asked.hinted} of ${fetched.asked.cards} hinted).`}
                       </p>
-                      <p className="run-step-note run-step-fine">
-                        {fetched.verified.length > 0
-                          ? `Checked against this run's last export: ${fetched.verified.join(', ')}.`
-                          : null}{' '}
-                        {fetched.unverified.length > 0
-                          ? `Not checked — this run had no previous export for ${fetched.unverified.join(', ')}.`
-                          : null}
-                      </p>
+                      {/* WHAT THE LAST JOIN USED, BESIDE WHAT ARRIVED. The export this run
+                          was last joined against, per game, next to this one's figures — so
+                          a narrower file is visible to the operator who asked for it.
+                          Nothing here refuses: D65 names the scope, the server's positive
+                          check is the whole guard, and the delta that used to refuse a
+                          narrower file is retired (D64, amended 2026-09-02). */}
+                      {Object.entries(fetched.previous).length === 0 ? (
+                        <p className="run-step-note run-step-fine">
+                          First export for this run — nothing earlier to set beside it.
+                        </p>
+                      ) : (
+                        Object.entries(fetched.previous).map(([game, was]) => (
+                          <p className="run-step-note run-step-fine" key={game}>
+                            Last export this run was joined against for {game}: {was.rows}{' '}
+                            rows / {was.skus} SKUs ({was.file}); this one: {fetched.rows} /{' '}
+                            {fetched.skus}.
+                          </p>
+                        ))
+                      )}
                     </div>
                   )}
 
@@ -2183,22 +2074,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                     <div className="run-note run-result-refused">
                       <p className="run-note-text">{fetchRefusal.message}</p>
                       <p className="run-machine">{fetchRefusal.code}</p>
-                      {/* ABSENT UNLESS THE REFUSAL IS ONE OF THE TWO AN OPERATOR CAN ANSWER.
-                          Everything else here — an expired session, a WAF block, an export for
-                          the wrong product line — is fixed somewhere other than this screen,
-                          and a button would be offering to wave it through. */}
-                      {acknowledgement === undefined ? null : (
-                        <div className="run-actions">
-                          <button
-                            type="button"
-                            className="run-button"
-                            disabled={busy !== null}
-                            onClick={() => void doFetchExport(acknowledgement.send)}
-                          >
-                            {acknowledgement.label}
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )}
                   <p className="run-step-note run-step-fine">
@@ -2208,63 +2083,6 @@ export function RunPanel({ cart }: RunPanelProps) {
                     a TCGplayer session in <code>.env</code>, and answers for one game per
                     press.
                   </p>
-                </>
-              )}
-
-              {step.key === 'emit' && detail !== null && (
-                <>
-                  <div className="run-actions">
-                    <button
-                      type="button"
-                      className="run-button"
-                      disabled={busy !== null}
-                      onClick={() => void openDecisions()}
-                    >
-                      The rule and basis…
-                    </button>
-                  </div>
-                  <p className="run-step-note run-step-fine">
-                    The advanced door, not the pricing door: a rule outside the three presets
-                    — <code>undercut:7</code> — is typed here. Prices, holds and the
-                    sub-threshold answer are on Pricing.
-                  </p>
-                  {decisions === null ? null : (
-                    <div className="run-decisions">
-                      <label className="run-field run-field-wide">
-                        decisions.json
-                        <textarea
-                          className="run-textarea"
-                          rows={16}
-                          spellCheck={false}
-                          value={decisions}
-                          onChange={(event) => setDecisions(event.target.value)}
-                        />
-                      </label>
-                      {decisionsBad === null ? null : (
-                        <p className="run-blocked">{decisionsBad}</p>
-                      )}
-                      <div className="run-actions">
-                        <button
-                          type="button"
-                          className="run-button"
-                          disabled={busy !== null}
-                          onClick={() => void saveDecisions()}
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          className="run-plain"
-                          onClick={() => {
-                            setDecisions(null)
-                            setDecisionsBad(null)
-                          }}
-                        >
-                          Close
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
 

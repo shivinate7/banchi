@@ -135,8 +135,6 @@ function runRow(overrides: Record<string, unknown> = {}) {
     collected: true,
     joined: false,
     counts: {},
-    bypass_detection: false,
-    bypassed: null,
     usage: {},
     ...overrides,
   }
@@ -655,8 +653,8 @@ test('the reading is explained before Check cost is pressed, not after', async (
   const says = page.locator('.run-step .run-step-fine').first()
   await expect(says).toContainText('Finds the card in each photograph')
   await expect(says).toContainText('never touched')
-  /* The measurement, in the house voice this class already uses one step down — the bypass
-     switch's sentence cites box 2's 230 of 544 rather than asserting a rule. */
+  /* The measurement, in the house voice: a number the rig produced rather than a rule
+     asserted about it. */
   await expect(says).toContainText('$0.62')
 })
 
@@ -755,10 +753,10 @@ test('arrow keys walk the box, and a text field keeps its own caret keys', async
     offset: 1,
   })
 
-  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input and a textarea, and
-     an unguarded window listener would steal the caret keys from both — the operator would be
-     unable to move through a value they were editing. Reveal `Custom`, put the caret in its
-     number field, and the walk must not move.
+  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input, and an unguarded
+     window listener would steal the caret keys from it — the operator would be unable to move
+     through a value they were editing. Reveal `Custom`, put the caret in its number field, and
+     the walk must not move.
 
      WAITED FOR RATHER THAN ASSERTED IMMEDIATELY, and the first draft of this case got that
      wrong in a way worth recording: `toContainText` passes the instant the text matches, so
@@ -963,24 +961,23 @@ test('a live run over the same cards blocks the confirm rather than racing it', 
 
 // ------------------------------------------------------------------------- the free steps
 
-test('join offers a preview that writes nothing, and the trust switch in plain English', async ({
-  page,
-}) => {
+test('join offers a preview that writes nothing', async ({ page }) => {
   const wire = await open(page)
   await openPanel(page)
   await page.locator('.run-row').first().click()
 
-  /* D3's amendment, stated the way the owner asked for it — they said the question had not
-     been put in plain English, and this is the sentence that answers it. */
-  const trust = page.getByRole('checkbox', { name: 'Trust my finish claim over the photo' })
-  await expect(trust).toBeVisible()
-  await trust.check()
+  /* THE TRUST SWITCH IS GONE, ASSERTED AS AN ABSENCE. "Trust my finish claim over the photo"
+     was a checkbox here until D3's amendment of 2026-09-02 made its rule the ladder's own;
+     a body carrying `bypass` again would mean the choice had come back. */
+  await expect(
+    page.getByRole('checkbox', { name: 'Trust my finish claim over the photo' }),
+  ).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Preview' }).click()
   const join = wire.find((row) => row.path.endsWith('/join'))
   const body = join?.body as Record<string, unknown>
   expect(body.dry_run).toBe(true)
-  expect(body.bypass).toBe(true)
+  expect(body.bypass).toBeUndefined()
 })
 
 test('this run\'s own receipts download here; the import CSVs do not', async ({ page }) => {
@@ -1003,17 +1000,6 @@ test('this run\'s own receipts download here; the import CSVs do not', async ({ 
      not quietly undo — which is what an absence is for, and why this is not a weakening of
      the case it replaces. */
   await expect(page.locator('.run-file-import')).toHaveCount(0)
-})
-
-test('a bypassed run says so on the run itself, not only in its log', async ({ page }) => {
-  await open(page, { detail: { bypass_detection: true, bypassed: 209 } })
-  await openPanel(page)
-  await page.locator('.run-row').first().click()
-  await expect(page.locator('.run-open')).toBeVisible()
-
-  /* The owner's choice, in their words: "resolved by the claim, and the run report says so."
-     A count that appeared only in a file nobody opened would not be that. */
-  await expect(page.locator('.run-flagged')).toContainText('209 cards resolved by your finish claim')
 })
 
 // ------------------------------------------------------------- which drawer a run was over
@@ -1228,7 +1214,7 @@ test('nothing is scoped on arrival, and the free preflight refuses until a box i
 
 // ----------------------------------------- the export, fetched rather than downloaded (D64)
 
-/** The control that fetches. A helper because four cases press it or assert its absence. */
+/** The control that fetches. A helper because several cases press it. */
 function fetchButton(page: Page) {
   return page.getByRole('button', { name: 'Fetch from TCGplayer' })
 }
@@ -1246,9 +1232,9 @@ function fetchedBody(over: Record<string, unknown> = {}) {
     sets: ['Origins', 'Unleashed'],
     conditions: ['Near Mint', 'Near Mint Foil'],
     product_lines: ['Riftbound League of Legends Trading Card Game'],
-    verified: ['riftbound'],
-    unverified: [],
-    accepted_narrower: false,
+    previous: {
+      riftbound: { file: 'export-tcgplayer-20260829-100000-9f9f9f9f.csv', rows: 2008, skus: 1900 },
+    },
     source: 'https://store.tcgplayer.com/admin/pricing/downloadexportcsv',
     asked: {
       game: 'riftbound',
@@ -1273,7 +1259,7 @@ function fetchedBody(over: Record<string, unknown> = {}) {
 /** Register the fetch route for one case. Not in `open()`: every case here wants a different
  *  answer from it, and registering per case avoids depending on Playwright's precedence
  *  between two patterns that could both match. Pushes into `wire` so an assertion can read
- *  what the screen SENT, which is the whole point of the acknowledgement cases. */
+ *  what the screen SENT, which is what the join-by-name case reads. */
 async function routeFetch(
   page: Page,
   wire: { method: string; path: string; body: unknown }[],
@@ -1320,88 +1306,91 @@ test('the export is fetched, and the join is handed the file rather than the byt
   expect((join?.body as { exports?: unknown }).exports).toBeUndefined()
 })
 
-test('the acknowledging control does not exist until a refusal earns it', async ({ page }) => {
-  const wire = await open(page)
-  await openPanel(page)
-  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
-  await page.locator('.run-row').first().click()
-
-  /* THE LOAD-BEARING ABSENCE. `docs/DESIGN.md` puts a control that commits ABSENT rather than
-     disabled, which is D33's money gate one register down: a disabled button is one attribute
-     away from pressable and that attribute is what a later refactor drops. Asserted at rest
-     AND after a clean fetch, because a control that appeared once the panel had merely been
-     used would be just as wrong as one that was always there. */
-  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
-  await fetchButton(page).click()
-  await expect(page.locator('.run-fetched')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
-})
-
-test('a refusal an operator can answer draws the control that answers it', async ({ page }) => {
-  const wire = await open(page)
-  await openPanel(page)
-  await routeFetch(page, wire, {
-    status: 409,
-    body: {
-      error: {
-        code: 'export_unverified',
-        message:
-          'This run has never been joined against a riftbound export, so there is nothing '
-          + 'to check this one against.',
-      },
-    },
-  })
-  await page.locator('.run-row').first().click()
-  await fetchButton(page).click()
-
-  /* The server's sentence verbatim, which is `docs/DESIGN.md`'s copy rule for owner screens,
-     with the machine string beneath it so what was seen can be grepped. */
-  await expect(page.locator('.run-result-refused')).toContainText('nothing to check this one')
-  await expect(page.locator('.run-result-refused')).toContainText('export_unverified')
-
-  /* A REFUSED FETCH MUST NOT JOIN. It wrote nothing, so joining after one would silently
-     re-use the previous export and look exactly like the fetch had worked. */
-  expect(wire.filter((row) => row.path.endsWith('/join'))).toHaveLength(0)
-
-  const ack = page.getByRole('button', { name: /Fetch anyway/ })
-  await expect(ack).toBeVisible()
-  await ack.click()
-
-  /* THE ACKNOWLEDGEMENT IS THE FIELD THE REFUSAL NAMES, and never the other one. Sending
-     `accept_narrower` for an unverified run would wave through a different fact than the one
-     the operator was shown. */
-  const second = wire.filter((row) => row.path.endsWith('/export')).pop()
-  expect(second?.body).toMatchObject({ accept_unverified: true })
-  expect((second?.body as { accept_narrower?: unknown }).accept_narrower).toBeUndefined()
-})
-
-test('a refusal an operator cannot answer draws a sentence and nothing to press', async ({
+test('the receipt says what the last export held beside what this one holds', async ({
   page,
 }) => {
   const wire = await open(page)
   await openPanel(page)
-  await routeFetch(page, wire, {
-    status: 502,
-    body: {
-      error: {
-        code: 'tcg_session_expired',
-        message:
-          'TCGplayer redirected the download to its login page, which means the session in '
-          + 'TCGPLAYER_STORE_COOKIE has expired.',
-      },
-    },
-  })
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
   await page.locator('.run-row').first().click()
   await fetchButton(page).click()
 
-  await expect(page.locator('.run-result-refused')).toContainText('has expired')
-
-  /* An expired session, a WAF block and an export for the wrong product line are all fixed
-     somewhere other than this screen. A button here would be offering to wave through a
-     refusal the screen does not understand — which is why `FETCH_ACK` lists two codes rather
-     than being a boolean on the refusal. */
-  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+  /* WHAT THE LAST JOIN USED, BESIDE WHAT ARRIVED. The delta guard that used to refuse a
+     narrower file is retired (D64, amended 2026-09-02); what it compared is on the receipt
+     instead, so a narrower file is visible without a refusal in the way. The figures are
+     drawn as `String(value)` with no thousands separator, so the raw numbers are what the
+     text contains. And there is nothing to press: nothing refused. */
+  await expect(page.locator('.run-fetched')).toContainText('2008')
+  await expect(page.locator('.run-fetched')).toContainText('1900')
+  await expect(page.locator('.run-fetched')).toContainText('153')
+  await expect(page.locator('.run-fetched')).toContainText(
+    'export-tcgplayer-20260829-100000-9f9f9f9f.csv',
+  )
+  await expect(page.locator('.run-fetched button')).toHaveCount(0)
 })
+
+test('a first fetch says there is nothing earlier to set beside it', async ({ page }) => {
+  const wire = await open(page)
+  await openPanel(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody({ previous: {} }) })
+  await page.locator('.run-row').first().click()
+  await fetchButton(page).click()
+
+  /* A run directory is new per run, so every run's first fetch has no previous export. That
+     used to be `export_unverified`, a refusal the operator answered with a press and a second
+     download of the same file; it is a sentence on the receipt now. */
+  await expect(page.locator('.run-fetched')).toContainText('First export for this run')
+  await expect(page.locator('.run-result-refused')).toHaveCount(0)
+})
+
+/* EVERY FETCH REFUSAL IS A SENTENCE WITH NOTHING TO PRESS. An expired session is fixed in
+ * `.env`; a set that was asked for and did not arrive is fixed in the capture claims or the
+ * registry. Neither is fixed on this screen, so a button here would be offering to wave
+ * through a refusal the screen does not understand. The two refusals that once drew one —
+ * `export_unverified` and `export_narrower` — are gone with the delta guard they answered
+ * (D64, amended 2026-09-02), so the absence is asserted over EVERY refusal rather than over
+ * the ones a list happened to omit. */
+for (const refusal of [
+  {
+    status: 502,
+    code: 'tcg_session_expired',
+    message:
+      'TCGplayer redirected the download to its login page, which means the session in '
+      + 'TCGPLAYER_STORE_COOKIE has expired.',
+    shown: 'has expired',
+  },
+  {
+    status: 409,
+    code: 'export_scope_incomplete',
+    message:
+      'This export was asked for Unleashed and came back without Unleashed. Every card of a '
+      + 'missing set would queue as no_catalog_row. Nothing was kept.',
+    shown: 'came back without',
+  },
+]) {
+  test(`a refusal draws a sentence and nothing to press: ${refusal.code}`, async ({ page }) => {
+    const wire = await open(page)
+    await openPanel(page)
+    await routeFetch(page, wire, {
+      status: refusal.status,
+      body: { error: { code: refusal.code, message: refusal.message } },
+    })
+    await page.locator('.run-row').first().click()
+    await fetchButton(page).click()
+
+    /* The server's sentence verbatim, which is `docs/DESIGN.md`'s copy rule for owner
+       screens, with the machine string beneath it so what was seen can be grepped. */
+    await expect(page.locator('.run-result-refused')).toContainText(refusal.shown)
+    await expect(page.locator('.run-result-refused')).toContainText(refusal.code)
+
+    /* A REFUSED FETCH MUST NOT JOIN. It wrote nothing, so joining after one would silently
+       re-use the previous export and look exactly like the fetch had worked. */
+    expect(wire.filter((row) => row.path.endsWith('/join'))).toHaveLength(0)
+
+    await expect(page.locator('.run-result-refused button')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+  })
+}
 
 test('the receipt says what was asked for, not only what arrived', async ({ page }) => {
   const wire = await open(page)
@@ -1496,7 +1485,7 @@ test('the routing lever reaches join', async ({ page }) => {
   await page.getByRole('button', { name: 'Join again' }).click()
 
   /* `--review-below-confidence` was reachable only from a terminal. `--rule` and `--basis`
-     are deliberately NOT here: D49 makes decisions.json the one place a pricing answer is
+     are deliberately NOT here: D49 makes `inventory/prices.json` the one place a pricing answer is
      written, and a second place to say `rule` already cost 48 cards a price nobody chose. */
   const join = wire.filter((row) => row.path.endsWith('/join')).pop()
   expect(join?.body).toMatchObject({ review_below_confidence: 'medium' })

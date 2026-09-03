@@ -147,7 +147,7 @@ has no entry.
 
 ## 3 — The claim chain
 
-**Two entries, overlapping files. Not parallel with each other.**
+**Three entries. The first two overlap in files; none is parallel with another.**
 
 ### A capture-time claim crosses ten hops and nothing binds them together
 
@@ -198,6 +198,27 @@ is a stack label. Doing it properly means `Profile` growing a note clause and `u
 parameter — a prompt-contract change with its own fingerprint questions, since
 `prompt_fingerprint` hashes both user turns and T1's recorded scores are evidence about the
 bytes that exist today.
+
+### `app/src/readiness.ts` is a second `blocking`, and nothing reconciles the two
+
+`app/src/readiness.ts:owed` is a second implementation of `pipeline/decisions.py:blocking` so
+`#/pricing`'s ready line settles on the keystroke that satisfies it, with no round trip — D54's
+choice, and the right one for a line whose whole value is that it is instant. **Its header
+claimed an `emit readiness` row in `scripts/docs-audit.py` and a Makefile target,
+`readiness-agreement`, until 2026-09-02, and neither has ever existed.** `OWED_REASONS` was shaped as a flat
+literal for a parser nobody wrote.
+
+**What it costs.** The two can disagree and nothing says so: when `blocking` gains a refusal,
+the line keeps saying *Pricing is answered* while `emit` refuses, and the operator learns it
+from the emit's stdout. The one live defense is the roster on `GET /pipeline/pricing`, which
+asks the Python that actually refuses — so a chip and the line can disagree, and the chip is
+the one that is right.
+
+**Why not fixed.** The honest check reconciles a vocabulary — `OWED_REASONS` against the
+reasons `blocking` can return — and `blocking` builds its reasons as sentences rather than off
+a tuple, so the row needs a roster the Python does not publish. That is cluster 1's decision
+again, asked of one more module. Until it is settled the header says nothing audits it, which
+is the claim this file exists to keep true.
 
 ---
 

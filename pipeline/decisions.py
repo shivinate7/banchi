@@ -1,21 +1,15 @@
-"""`decisions.json` — the pricing decision, as a file rather than as a flag.
+"""The pricing decision, parsed — the corpus's parser, and the shape one run is priced with.
 
 D9 forbids the pipeline from guessing what happens to a sub-threshold card. That could have
-been a `--sub-threshold` flag, and it deliberately is not: build-order step 7 puts a React
-screen in front of the same choice, and a flag would make that screen a second code path
-reimplementing a decision the CLI already knows how to make. A file makes it an editor for
-a contract that already exists.
+been a `--sub-threshold` flag, and it deliberately is not: a screen (`#/pricing`) sits in
+front of the same choice, and a flag would make that screen a second code path
+reimplementing a decision the CLI already knows how to make. A DOCUMENT makes it an editor
+for a contract that already exists.
 
-`join` writes this file pre-filled with every SKU that needs an answer and the run-wide
-choice UNSET. You edit it; `emit` reads it and refuses to write while anything is still
-unanswered. Nothing here is ever defaulted on your behalf — that is the entire point.
-
-MERGE, NEVER CLOBBER. `join` is free and re-runnable (v2 §2), so it will be re-run after a
-review is cleared or an export is refreshed, and a re-run that overwrote this file would
-silently discard the decisions you made between the two. So a second write adds newly
-discovered SKUs, preserves every existing value, and reports what it added. The same
-instinct as "a human-cleared identification is permanent" in §4.6: a human answer outranks
-a machine's willingness to ask again.
+THE DOCUMENT IS `inventory/prices.json` (`pipeline/corpus.py`, D86) AND NOT A RUN FILE. This
+module owns what an answer MEANS: `pipeline/corpus.py` projects the store-wide corpus into
+one `Decisions` per run through `parse`, and `GET /pipeline/runs/<name>/pricing` answers a
+screen with `to_payload` of exactly that projection. Nothing here reads or writes a file.
 
 Two answers are not the same as no answer, and the distinction is the whole reason `emit`
 can refuse:
@@ -23,12 +17,13 @@ can refuse:
   null        nobody has decided. `emit` refuses.
   "unlisted"  decided: leave it out of the import file. `emit` proceeds.
 
-Shape:
+Shape, as the corpus projects it for a run:
 
     {
-      "rule": "match",              // match | undercut:PCT | markup:PCT
-      "basis": "market",            // market | low
-      "sub_threshold": null,        // "floor" | {"flat": "0.25"} — MUST be set
+      "rule": "match",                     // match | undercut:PCT | markup:PCT
+      "basis": "market",                   // market | low
+      "sub_threshold": {"flat": "0.49"},   // "floor" | {"flat": "0.25"} — the store default
+                                           // is flat $0.49 (D9, amended 2026-09-02)
       "overrides": {"8823901": "0.35"},
       "no_market_data": {"8823944": null}
     }
@@ -36,18 +31,18 @@ Shape:
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from pipeline import pricing
 
-FILENAME = "decisions.json"
-
 FLOOR_CHOICE = "floor"
 FLAT_KEY = "flat"
+# WHERE THE POLICY LIVES, for the sentences below that name it. A string here rather than
+# `corpus.FILENAME` because `pipeline/corpus.py` imports this module, so this one cannot
+# import it back; the path is `store/files.py:prices_path()`'s, spelled for a person.
+POLICY_FILE = "inventory/prices.json"
 
 # ------------------------------------------------------------------------ withholding (D49)
 #
@@ -77,23 +72,6 @@ WITHHOLD_REASONS = ("bullish", "keeping", "next_batch")
 # has accepted it since D9 — a second word for one idea is the drift D16 exists to catch.
 UNSPECIFIED = ""
 
-# Keys the writer emits to explain the file to whoever opens it. JSON has no comments, and
-# `.claude/settings.json` already establishes the `_`-prefixed convention in this repo.
-_NOTE = "_note"
-_NOTES = {
-    "rule": "match | undercut:PCT | markup:PCT",
-    "basis": "market (TCG Market Price) | low (TCG Low Price)",
-    "sub_threshold": (
-        'REQUIRED before emit: "floor" for every sub-threshold card at the $0.40 floor, '
-        'or {"flat": "0.25"} for a price chosen for this run.'
-    ),
-    "overrides": "Per-SKU price. Works above or below the threshold.",
-    "no_market_data": (
-        "The catalog has no price for these. Give each a price, or \"unlisted\" to leave "
-        "it out of the file. null means undecided and emit will refuse."
-    ),
-}
-
 
 class MalformedDecisions(ValueError):
     """The file is not the contract this module reads."""
@@ -106,8 +84,15 @@ def _price(value, label: str) -> Decimal:
         raise MalformedDecisions(f"{label}: {value!r} is not a price") from exc
 
 
-def _parse_sub_threshold(value) -> Optional[pricing.Disposition]:
-    """`None` means unset, which is not an error here — it is what `emit` refuses on."""
+def parse_sub_threshold(value) -> Optional[pricing.Disposition]:
+    """`None` means unset, which is not an error here — it is what `blocking` refuses on.
+
+    PUBLIC BECAUSE THE CORPUS VALIDATES WITH IT AT READ TIME (`pipeline/corpus.py:Corpus.parse`),
+    so a malformed policy refuses where a command already catches `MalformedDecisions` rather
+    than in the middle of an `emit`. From the CLI the `None` branch is unreachable now — the
+    corpus applies its default before this is called — and it stays because T5 pins the
+    parser's contract independently of who calls it.
+    """
     if value is None:
         return None
     if value == FLOOR_CHOICE:
@@ -137,11 +122,12 @@ class Withheld:
     photograph, and is sellable the moment the hold is lifted — what is refused is the
     LISTING, for this run, and nothing else.
 
-    IT LIVES IN THE RUN AND DIES WITH IT. `decisions.json` is per-run (`cli/runs.py`), so a
-    hold survives every re-join of its own run — which is where it does its work, since a box
-    is identified once and re-joined many times — and a SECOND run over the same box starts
-    with none. That is a real limit rather than an oversight; the screen says so in words and
-    D49 records the durable-home options it deliberately did not build.
+    IT IS A CORPUS ROW KEYED BY SKU AND IT OUTLIVES EVERY RUN (D86). A hold used to live in
+    the run's own file and die with it, so a second run over the same box started with none —
+    the limit D49 recorded and the one that put three deliberate holds under a later price.
+    It is one answer for the store now: every run over the card is held until the hold is
+    lifted on `#/pricing`, and `pkmnscan prices show --held` is the cross-run view of what is
+    being held.
     """
 
     reason: str = UNSPECIFIED
@@ -156,8 +142,8 @@ class Withheld:
         out = {WITHHELD_KEY: self.reason}
         if self.watch_above is not None:
             out[WATCH_KEY] = str(self.watch_above)
-        # OMITTED RATHER THAN WRITTEN EMPTY, so a re-join cannot accrete `"note": ""` on every
-        # held SKU forever — `join` is free and re-runnable and rewrites this file every time.
+        # OMITTED RATHER THAN WRITTEN EMPTY, so a save cannot accrete `"note": ""` on every
+        # held SKU forever — the corpus is rewritten on every `#/pricing` save and every join.
         if self.note:
             out[NOTE_KEY] = self.note
         return out
@@ -244,23 +230,20 @@ class Decisions:
         return cls(
             rule=pricing.Rule.parse(payload.get("rule", pricing.RULE_MATCH)),
             basis=pricing.check_basis(payload.get("basis", pricing.BASIS_MARKET)),
-            sub_threshold=_parse_sub_threshold(payload.get("sub_threshold")),
+            sub_threshold=parse_sub_threshold(payload.get("sub_threshold")),
             overrides=overrides,
             no_market_data=unpriced,
         )
 
-    @classmethod
-    def read(cls, path) -> "Decisions":
-        path = Path(path)
-        try:
-            payload = json.loads(path.read_text("utf-8"))
-        except json.JSONDecodeError as exc:
-            raise MalformedDecisions(f"{path}: {exc}") from exc
-        return cls.parse(payload)
-
-    # --------------------------------------------------------------------- writing
+    # --------------------------------------------------------------------- the wire shape
 
     def to_payload(self) -> dict:
+        """This decision as the document a screen reads — `GET /pipeline/runs/<name>/pricing`.
+
+        THE BARE FORMS ROUND-TRIP BYTE-IDENTICALLY, deliberately: a hold typed by hand as
+        `"unlisted"` comes back as `"unlisted"` and a price as the string it was typed as, so
+        a screen drawing this beside the corpus draws the same spelling the file holds.
+        """
         if self.sub_threshold is None:
             sub = None
         elif self.sub_threshold.kind == pricing.FLAT_FLOOR:
@@ -269,7 +252,6 @@ class Decisions:
             sub = {FLAT_KEY: str(self.sub_threshold.price)}
 
         return {
-            _NOTE: _NOTES,
             "rule": str(self.rule),
             "basis": self.basis,
             "sub_threshold": sub,
@@ -286,40 +268,6 @@ class Decisions:
             },
         }
 
-    def write(self, path) -> None:
-        Path(path).write_text(
-            json.dumps(self.to_payload(), indent=2) + "\n", "utf-8"
-        )
-
-    # --------------------------------------------------------------------- merging
-
-    def add_unpriced(self, skus) -> List[str]:
-        """Record SKUs the catalog has no price for. Existing answers are never touched."""
-        added = []
-        for sku in skus:
-            if sku not in self.no_market_data:
-                self.no_market_data[sku] = None
-                added.append(sku)
-        return added
-
-    def prune(self, known_skus) -> List[str]:
-        """Drop `no_market_data` entries for SKUs this run does not contain.
-
-        Only unanswered (`null`) entries are dropped. An answered one is kept even when the
-        SKU is absent, because a card that failed to identify this run will identify next
-        run, and re-asking a question you already answered is the merge failure this class
-        exists to avoid.
-        """
-        known = set(known_skus)
-        stale = [
-            sku
-            for sku, value in self.no_market_data.items()
-            if sku not in known and value is None
-        ]
-        for sku in stale:
-            del self.no_market_data[sku]
-        return stale
-
     # --------------------------------------------------------------------- checking
 
     @property
@@ -333,12 +281,12 @@ class Decisions:
             reasons.append(
                 f"{len(list(sub_threshold_skus))} sub-threshold SKU(s) and "
                 f'sub_threshold is still null — set it to "{FLOOR_CHOICE}" or '
-                f'{{"{FLAT_KEY}": "0.25"}} in {FILENAME}'
+                f'{{"{FLAT_KEY}": "0.49"}} under policy in {POLICY_FILE}, or on #/pricing'
             )
         if self.unanswered:
             reasons.append(
                 f"{len(self.unanswered)} SKU(s) with no market price are unanswered in "
-                f'{FILENAME}: give each a price or "{pricing.UNLISTED}" '
+                f'{POLICY_FILE}: give each a price or "{pricing.UNLISTED}" on #/pricing '
                 f"({', '.join(self.unanswered[:6])})"
             )
         return reasons
@@ -355,7 +303,7 @@ class Decisions:
         ):
             out.append(
                 f"sub_threshold is ${sub.price}, below the ${pricing.FLOOR} floor — "
-                f"deliberate, since it is written in {FILENAME}, but D9 says a sale there "
+                f"deliberate, since it is written in {POLICY_FILE}, but D9 says a sale there "
                 f"loses money including labor"
             )
         # `isinstance` GUARD, AND IT IS A CRASH FIX RATHER THAN TIDINESS. This comparison ran
@@ -434,20 +382,6 @@ class Decisions:
             if isinstance(value, Withheld)
         }
 
-    def stale_overrides(self, known_skus) -> List[str]:
-        """Price overrides naming a SKU this run does not contain.
-
-        REPORTED, NEVER DROPPED. `prune`'s rule is about an UNANSWERED entry and an override is
-        an answer — but a stale one is a hard refusal at emit time (`sku_dispositions names
-        SKUs not in this batch`) naming a bare SKU with no card, no name and no box, and any
-        of a retirement, a mid-box delete, a narrower export or a re-routed review can produce
-        one. Naming them is what lets a screen offer to clear them.
-
-        Holds are not included, because `dispositions()` excludes them and they cannot refuse.
-        """
-        known = set(known_skus)
-        return sorted(sku for sku in self.dispositions() if sku not in known)
-
     def watches(self, matches) -> List[str]:
         """Withheld SKUs whose market price has passed the number the operator named.
 
@@ -459,8 +393,7 @@ class Decisions:
         moved and therefore the only moment a watch has anything to say.
 
         A method and not a `warnings` entry: `warnings` is a zero-argument property and cannot
-        see a price. `matches` is `{sku: SkuMatch}`, the same shape `stale_overrides` is given
-        the keys of.
+        see a price. `matches` is `{sku: SkuMatch}`, `cli/resolve.py:Resolved.matches`.
         """
         out: List[str] = []
         for sku, value in sorted(self.withheld().items()):

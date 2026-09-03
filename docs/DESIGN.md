@@ -161,7 +161,7 @@ it must not become.
 **So the split is by JOB, and the job is narrow enough to be checkable.** `line` separates and
 fills, and stays exactly as quiet as it was. `field` draws the boundary of a control you type
 into — `app/src/SearchField.css`'s box, `app/src/BoxOps.css`'s fields, the run panel's number
-input and its `decisions.json` textarea — and nowhere else. That is the case where the low
+input — and nowhere else. That is the case where the low
 contrast genuinely bites: an empty text input is a rectangle and nothing else, so a border at
 1.24:1 leaves it findable only by its placeholder, while a button at the same contrast is
 findable by the ink label inside it at 19.9:1.
@@ -625,10 +625,13 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-fourteen strings — seven from the variant ladder in `pipeline/variant.py`
-(`no_catalog_row`, `metadata_not_stocked`, `metadata_detection_disagreement`,
-`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and seven from
+thirteen strings — six from the variant ladder in `pipeline/variant.py`
+(`no_catalog_row`, `metadata_not_stocked`, `detected_finish_not_stocked`,
+`ambiguous_no_signal`, `duplicate_condition`, and D23's `rarity_claim_mismatch`, the stack
+claim contradicting every candidate row) — a seventh, `metadata_detection_disagreement`, was
+retired 2026-09-02 when D3 stopped letting the photograph contradict a finish claim, and the
+screen keeps a label for it under `RETIRED_REASON_LABELS` because the owner's store still
+holds 16 answered events that carry it — and seven from
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
 `set_ambiguous`, `card_not_detected`, `no_market_data`, and D35's
 `number_unread_name_matched` — the only reason the JOIN writes over a successful ladder
@@ -647,7 +650,7 @@ chrome and keeps the string greppable across the screen, the run report and `rev
 used to say otherwise.** It is not a queue reason: `pipeline/routing.py` makes it the fourth
 destination beside listed, main and parked, and `pipeline/join.py` writes a queue entry only
 for `routing.MAIN` and `routing.PARKED` — so a card with a blank or $0.00 market cell is
-priced by hand in `decisions.json` (D9) and never appears here. The screen carries a label
+priced by hand on `#/pricing` (`inventory/prices.json`, D9/D86) and never appears here. The screen carries a label
 for it all the same, which is right: one line of a lookup table is cheaper than a bare
 machine string rendered the first time routing ever queues one. The claim to keep out of
 this file is the count — fourteen are defined, thirteen are reachable, and the two numbers

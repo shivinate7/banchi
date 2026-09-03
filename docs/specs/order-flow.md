@@ -136,7 +136,9 @@ A sale decrements the SKU's `live` count, floored at zero, before any join runs.
 estimate, and D7 is explicit that this is not a weakness of it: D8 and D11 already put the
 authority in the export's `Total Quantity`, which `join` reads every run, so this number was
 never a second source of truth competing with the export. A run corrects whatever drift a
-between-run sale introduced.
+between-run sale introduced — where its export was read AFTER the sale: the sale stamps
+`live_as_of`, and an export older than that stamp is kept out rather than putting the sold
+copy back (D87 amended).
 
 The failure the ordering prevents is the opposite one. Holding the count back until a join
 would make the app disagree with the shelf the operator is standing in front of, which is the

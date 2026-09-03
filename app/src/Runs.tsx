@@ -41,8 +41,8 @@ import './Runs.css'
  * THE PICKER TAKES SEVERAL BOXES AS OF 2026-08-29, AND EACH IS STILL ITS OWN RUN. The owner
  * asked for boxes to be "individualized" and sent together, and the split that answers it is
  * this: one press, one request, one `confirm`, one total — and N run directories, because a
- * run over several boxes would force one reading, one `--bypass` and one `decisions.json`
- * across drawers that deserve their own. What is a cart is the REQUEST; a run is unchanged.
+ * run over several boxes would force one reading across drawers that deserve their own. What
+ * is a cart is the REQUEST; a run is unchanged.
  *
  * WHICH BOXES IS THIS FILE'S; HOW EACH IS READ IS THE PANEL'S. The reading moves the estimate,
  * so it belongs beside the estimate and under the same confirm — see `RunPanel.tsx`'s cart
