@@ -350,7 +350,7 @@ def do_this_next(mapdata: Dict[str, object], gists: Dict[str, Tuple[str, List[st
         if i:
             out.append("")
         out.append(field(f"{step.get('n')}.", str(step.get("title"))))
-        governed = sorted(set(re.findall(r"\bD[1-9][0-9]?\b", str(step.get("note") or ""))),
+        governed = sorted(set(re.findall(r"\bD[1-9][0-9]{0,2}\b", str(step.get("note") or ""))),
                           key=lambda d: int(d[1:]))
         for name in governed[:3]:
             title, _ = gists.get(name, ("(no such entry in docs/DECISIONS.md)", []))
