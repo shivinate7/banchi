@@ -9,12 +9,23 @@ import type { CsvUpload } from './types'
  *  and because reading it here means the app can refuse an obviously-wrong file before it costs
  *  a round trip. The encoding is the browser's default UTF-8, which is what the export is;
  *  `pipeline/tcgcsv.py` is the only thing in this repo allowed to have an opinion about the
- *  bytes beyond that. */
+ *  bytes beyond that.
+ *
+ *  `modified` IS THE FILE'S OWN TIME, AND IT IS THE READING'S TIME. An export's `Total Quantity`
+ *  is a reading of what TCGplayer held when the file was made, and the store arbitrates that
+ *  against its own `live_as_of` by time (D87 amended, `store/master.py:Listing.observe_live`).
+ *  Without this the server stamped an upload with the moment it was copied in, which dated
+ *  a week-old export to now and let it outrank every reading the store took since. */
 export function readUpload(file: File): Promise<CsvUpload> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(new Error(`Could not read ${file.name}.`))
-    reader.onload = () => resolve({ name: file.name, content: String(reader.result ?? '') })
+    reader.onload = () =>
+      resolve({
+        name: file.name,
+        content: String(reader.result ?? ''),
+        modified: file.lastModified,
+      })
     reader.readAsText(file)
   })
 }

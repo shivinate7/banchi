@@ -148,6 +148,10 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
                     "add_to_quantity": match.add_to_quantity,
                     "backstock": match.backstock,
                     "live_before": match.live_before,
+                    # THE LIVE FIGURE THE CAP WAS COMPUTED FROM: the newer of the store's
+                    # reading and this export's (D87, amended). `live_before` beside it is
+                    # the export's column alone, kept because it is what the CSV says.
+                    "live_now": match.live_now,
                     "committed": len(match.committed_positions),
                     # WHAT TCGPLAYER ACTUALLY HOLDS, AND WHY `live_before` BESIDE IT IS NOT
                     # THAT NUMBER. `live_before` is the export's live column alone, which
@@ -155,9 +159,10 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
                     # measured at 167 pushed copies across 72 SKUs of the owner's store,
                     # zero of them live, so a screen drawing it said TCGplayer holds
                     # nothing about SKUs it holds several of. `copies_out` is live plus
-                    # pending, per SKU and across every box. Both ship: the screen names
-                    # the export's own figure where it means the export, and this one
-                    # where it means the shelf (D59).
+                    # pending, per SKU and across every box. All three ship: the screen
+                    # names the export's own figure where it means the export, `live_now`
+                    # where it means what was believed, and this one where it means the
+                    # shelf (D59).
                     "copies_out": match.copies_out,
                     "at_cap": match.add_to_quantity == 0,
                     # The SENTENCE, composed where the numbers are, never re-derived from
@@ -439,11 +444,22 @@ def run(args, say) -> int:
         # quantity against it on TCGplayer has been moved live by a human, and nothing else
         # in this pipeline would ever notice.
         #
-        # IT IS SET, NOT INCREMENTED, AND IT IS SET FROM THE EXPORT. D8 and D11 put the
-        # authority in the export, so the stored number is the optimistic local estimate
-        # `master.Listing` describes and this is the line that corrects it. A count that
-        # walked up on its own would be a second source of truth competing with the file
-        # the whole join is built on.
+        # IT IS SET, NOT INCREMENTED, AND IT IS SET FROM WHICHEVER READING IS NEWER (D87,
+        # amended 2026-09-02). D8 and D11 put the authority in the export, and it keeps it
+        # for the moment the file was read; the store's own `live` is a reading with its
+        # own time (`Listing.live_as_of` — a sale, a D34 release, a `reconcile --live`), and
+        # `Listing.observe_live` adopts the export's figure only where the file is newer.
+        # An export the store has since overtaken is KEPT and the report says so, per
+        # game, because "Join again" on `#/runs` reuses the run's recorded export — which
+        # for run 2026-09-01-box3-01 was fetched fifteen minutes BEFORE the emit, read a
+        # blank `Total Quantity` on every SKU it had just listed, and took the store from
+        # 1,072 live copies to 700 on the ordinary path. A count that walked up on its own
+        # would still be a second source of truth; a reading dated later than the file is
+        # not a second source, it is the same fact observed later.
+        #
+        # PER GAME, because the time is the FILE's and two games may have been joined
+        # against two files. `resolved.matches` is the union of these per-game maps, so
+        # the SKUs visited are the same ones it would have visited.
         #
         # This block used to choose WHICH positions went live — the first `live_before`
         # copies in box-walk order took a `live` state and the rest stayed `staged`. That
@@ -451,32 +467,42 @@ def run(args, say) -> int:
         # that copies of one SKU are fungible), and it could not represent the ordinary
         # case of a SKU showing more live quantity than this pipeline ever pushed.
         moved_live = []
-        for match in resolved.matches.values():
-            quantity = max(0, int(match.live_before))
-            # Peeked rather than got-or-created: `Inventory.listing` creates on read, and
-            # calling it for every matched SKU would fill the file with empty records whose
-            # only content is that the SKU exists — which the export already says, better.
-            if writable.inventory.listings.get(match.sku) is None and quantity == 0:
-                continue
-            listing = writable.inventory.listing(match.sku, condition=match.condition)
-            before = listing.live
-            if quantity == before:
-                continue
-            listing.live = quantity
-            listing.at = master.now()
-            moved_live.append((match.sku, before, quantity))
+        kept_live: dict = {}
+        for game_join in resolved.joins.values():
+            as_of = str(game_join.source["mtime"])
+            for match in game_join.report.matches.values():
+                quantity = max(0, int(match.live_before))
+                # Peeked rather than got-or-created: `Inventory.listing` creates on read,
+                # and calling it for every matched SKU would fill the file with empty
+                # records whose only content is that the SKU exists — which the export
+                # already says, better.
+                if writable.inventory.listings.get(match.sku) is None and quantity == 0:
+                    continue
+                listing = writable.inventory.listing(match.sku, condition=match.condition)
+                before = listing.live
+                verdict = listing.observe_live(quantity, as_of)
+                if verdict == master.UNCHANGED:
+                    continue
+                if verdict == master.KEPT:
+                    kept_live.setdefault(game_join.game, []).append(
+                        (match.sku, before, listing.live_observed_at, quantity)
+                    )
+                    continue
+                moved_live.append((match.sku, before, quantity))
 
-            # Copies that just went live are no longer staged. `reconcile` is the only thing
-            # that puts a copy in `staged` and nothing else would ever take it out, so
-            # without this drawdown `staged_stale` names every SKU that has ever staged,
-            # forever — a warning that fires on success is a warning nobody reads.
-            #
-            # Drawn down by the RISE in live quantity, never by the absolute reading. The
-            # absolute number would also erase copies staged since the last join, which are
-            # exactly the copies the stale warning exists to find.
-            newly_live = quantity - before
-            if newly_live > 0 and listing.staged > 0:
-                listing.bump(master.STAGED, -min(listing.staged, newly_live))
+                # Copies that just went live are no longer staged. `reconcile` is the only
+                # thing that puts a copy in `staged` and nothing else would ever take it
+                # out, so without this drawdown `staged_stale` names every SKU that has
+                # ever staged, forever — a warning that fires on success is a warning
+                # nobody reads.
+                #
+                # Drawn down by the RISE in live quantity, never by the absolute reading.
+                # The absolute number would also erase copies staged since the last join,
+                # which are exactly the copies the stale warning exists to find. Only on an
+                # ADOPTED reading: a kept one moved nothing, so nothing went live.
+                newly_live = quantity - before
+                if newly_live > 0 and listing.staged > 0:
+                    listing.bump(master.STAGED, -min(listing.staged, newly_live))
 
         queue_line = writable.queue_summary
         counts = writable.inventory.counts()
@@ -493,6 +519,14 @@ def run(args, say) -> int:
             f"read from the export")
         for sku, before, after in moved_live[:8]:
             say(f"                   {sku}  {before} -> {after}")
+    for game, kept in kept_live.items():
+        # NAMED, NOT COUNTED (D59's rule): which SKUs the store outranked this file on, and
+        # by what reading — a kept figure with no line is a settlement nobody can check.
+        mtime = resolved.joins[game].source["mtime"]
+        say(f"live             {len(kept)} SKU(s) kept: store newer than this export "
+            f"(fetched {mtime})")
+        for sku, before, stamp, offered in kept[:8]:
+            say(f"                   {sku}  store {before} (as of {stamp}) vs export {offered}")
     held = ", ".join(f"{k} {v}" for k, v in counts.items() if v)
     if held:
         say(f"inventory        {held}")

@@ -560,10 +560,12 @@ SKUs at `pushed`, with `staged` and `live` both zero.**
 
     min(live + pushed + staged, max(live, copies not sold))
 
-- **The export is a FLOOR and cannot be argued below.** D8 and D11 put the authority in
-  `Total Quantity`, so the store may never talk the live quantity down — which is also
-  what makes a stale export harmless here, since the store's own claim is still standing
-  beside it.
+- **The NEWER reading of `live` is a FLOOR and cannot be argued below.** D8 and D11 put
+  the authority in `Total Quantity` for the moment the file was read, so the store may
+  never talk the live quantity down on an older reading — and, since 2026-09-02 (D87
+  amended), an older export may not talk it down either: `Listing.live_reading` picks
+  whichever of the store's `live_as_of` and the file's mtime is later, which is what makes
+  a stale export harmless here in both directions.
 - **The physical count is a CEILING, and it is the only thing that can correct a claim
   with no drawdown.** TCGplayer cannot be holding more copies of a SKU than this Mac owns
   and has not sold. No write, no second CSV, and no inference about whether an import
@@ -583,7 +585,9 @@ that did not land. This is the machine-checkable round trip against the real sys
 GATES.md calls the highest-value finding from Gate A.
 
 `live` is refreshed whenever `join` loads a fresh export — the `Total Quantity` column is
-already read for refill math (`SkuMatch.live_before`), so this costs nothing new.
+already read for refill math (`SkuMatch.live_before`), so this costs nothing new — and only
+where the export is the NEWER reading: one older than the store's own `live_as_of` is kept
+out, and the join report names each SKU it kept (D87 amended).
 
 Cards sitting in `staged` for more than **14 days** (configurable) are named in the run
 report — catching an import that was staged and never moved live.

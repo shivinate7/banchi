@@ -2501,7 +2501,23 @@ def _store_upload(directory: Path, upload: dict, prefix: str) -> Path:
     stem = re.sub(r"[^A-Za-z0-9._-]", "-", Path(raw).name) or "export.csv"
     target = directory / f"{prefix}{stem}"
     target.write_text(content, encoding="utf-8")
+    # THE STORED COPY WEARS THE FILE'S OWN TIME, because that mtime is when the export's
+    # `Total Quantity` was read and the store arbitrates `live` by it (D87 amended,
+    # `store/master.py:Listing.observe_live`). `modified` is the browser's `File.lastModified`
+    # — MILLISECONDS since the epoch — and without it every upload was dated to the moment it
+    # was copied in, so a week-old export outranked every reading the store had taken since.
+    # Sanity-bounded rather than trusted: a stamp before 2000 or past tomorrow is nonsense,
+    # and nonsense that reads as "newer than everything" would settle the whole store.
+    modified = upload.get("modified")
+    if isinstance(modified, (int, float)) and not isinstance(modified, bool):
+        seconds = float(modified) / 1000.0
+        if _UPLOAD_MTIME_FLOOR <= seconds <= time.time() + 86400:
+            os.utime(target, (seconds, seconds))
     return target
+
+
+# 2000-01-01T00:00:00Z. A `File.lastModified` below this is not a time anybody exported at.
+_UPLOAD_MTIME_FLOOR = 946684800.0
 
 
 def _exports_for_join(directory: Path, payload: dict) -> List[str]:

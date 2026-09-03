@@ -132,13 +132,21 @@ def describe_source(path) -> Dict[str, Any]:
 
     A stale export is a judgment call the operator can make for themselves, and a hard stop
     on a snapshot's age blocks a legitimate run for a reason that is already on the screen.
+
+    `mtime` IS TO THE MILLISECOND, for `store/master.py:now`'s reason one register over: it
+    is the time an export's `Total Quantity` was read, and `Listing.live_reading` weighs it
+    against `live_as_of`, which `now()` stamps to the millisecond. Truncated to the second it
+    read as OLDER than a store stamp taken earlier in the same second, so a file written
+    right after a sale lost to the sale — a coin flip inside every second, and in a fixture
+    a certainty. `datetime.fromisoformat` reads both forms, so every manifest on disk still
+    parses.
     """
     path = Path(path)
     stat = path.stat()
     modified = datetime.fromtimestamp(stat.st_mtime, timezone.utc)
     return {
         "path": str(path),
-        "mtime": modified.isoformat(timespec="seconds"),
+        "mtime": modified.isoformat(timespec="milliseconds"),
         "age_days": (datetime.now(timezone.utc) - modified).days,
         "sha256": sha256_of(path),
         "bytes": stat.st_size,
@@ -250,6 +258,11 @@ class Run:
     @property
     def collected(self) -> bool:
         return bool(self.manifest.get("collected"))
+
+    @property
+    def created_at(self) -> Optional[str]:
+        """When this run directory was made — the manifest's own stamp: UTC, to the second."""
+        return self.manifest.get("created_at")
 
     @property
     def exports_by_game(self) -> Dict[str, Path]:

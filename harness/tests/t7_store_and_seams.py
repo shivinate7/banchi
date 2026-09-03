@@ -910,6 +910,32 @@ def check_store_of_record(checks: Checks) -> None:
             Store().read().inventory.positions_for_sku("none") , [],
             "a SKU nothing carries answers an empty list through the index",
         )
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("4040", condition="Near Mint").observe_live(
+                3, "2026-09-01T12:00:00+00:00"
+            )
+        back = Store().read().inventory.listing_for("4040")
+        checks.equal(
+            (back.live, back.live_as_of),
+            (3, "2026-09-01T12:00:00+00:00"),
+            "`live_as_of` round-trips through the listings table — it rides the payload "
+            "column, and `Inventory.parse` filters on `Listing.__annotations__`, so a new "
+            "field needs no schema bump (D88)",
+        )
+        parsed = master.Inventory.parse(
+            {"version": master.VERSION, "cards": {},
+             "listings": {
+                 "111": {"sku": "111", "pushed": 2, "live": 1, "at": "2026-09-01T12:00:00+00:00"},
+                 "222": {"sku": "222", "pushed": 2, "live": 1},
+             }}
+        ).listings
+        checks.equal(
+            (parsed["111"].live_as_of, parsed["222"].live_as_of),
+            ("2026-09-01T12:00:00+00:00", None),
+            "and a payload written before the field existed parses its `at` INTO it — the "
+            "settlement time on D87's rows — and one with no `at` either parses to None, "
+            "the stampless case where the export keeps its authority",
+        )
 
     # ------------------------------------------------ the legacy import, whole and aside
     with isolated_home():
@@ -9954,6 +9980,44 @@ def check_live_reconcile(checks: Checks) -> None:
             "destroys the cumulative record it read, so its own second pass answers a "
             "different question",
         )
+
+        # AN OLDER EXPORT CANNOT UNSETTLE IT (D87 amended, 2026-09-02). The settlement dated
+        # every listing to the file's mtime; a second export with different numbers, dated
+        # an hour before it, is a reading the store has already overtaken — kept in the
+        # preview, kept in the write. Moved forward past the settlement, the same file wins.
+        settled_at = live_path.stat().st_mtime
+        older_rows = [
+            dict(row, **{tcgcsv.LIVE_QUANTITY_COLUMN: str(pushed[row[tcgcsv.SKU_COLUMN]] + 1)})
+            for row in rows
+            if row[tcgcsv.SKU_COLUMN] in pushed
+        ]
+        older_path = run_dir.path("older.csv")
+        tcgcsv.write_csv(older_path, source.header, older_rows)
+        os.utime(older_path, (settled_at - 3600, settled_at - 3600))
+        preview = command(checks, "reconcile", "--live", str(older_path))
+        checks.ok(
+            f"{len(older_rows)} SKU(s) kept: store newer than this export" in preview
+            and "0 copy(ies) of `live` would be corrected" in preview,
+            "the preview says every differing SKU is KEPT — the store's reading is newer "
+            "than the file's — and promises no correction",
+            preview,
+        )
+        command(checks, "reconcile", "--live", str(older_path), "--write")
+        checks.equal(
+            {sku: entry.live for sku, entry in Store().read().inventory.listings.items()},
+            {sku: entry.live for sku, entry in after.items()},
+            "and the write, computed by the same rule as the preview, changes no `live`",
+        )
+        os.utime(older_path, (settled_at + 3600, settled_at + 3600))
+        written = command(checks, "reconcile", "--live", str(older_path), "--write")
+        checks.equal(
+            {sku: Store().read().inventory.listings[sku].live for sku in pushed},
+            {sku: pushed[sku] + 1 for sku in pushed},
+            "dated after the settlement, the same file is adopted — the export keeps D8 and "
+            "D11's authority for the moment it was read, and loses it only to a reading the "
+            "store took later",
+        )
+        checks.ok("0 listing(s) kept" in written, "and nothing was kept that time", written)
         checks.ok(
             "unexplained" in said and DUNSPARCE_SKU in said,
             "and it is REPORTED by SKU rather than counted (D59's rule): a copy that quietly "
@@ -10841,7 +10905,12 @@ def check_listing_commands(checks: Checks) -> None:
             "and the COUNT onto the SKU: three copies pushed, nothing further, at the "
             "condition the ladder resolved",
         )
-        checks.ok(listing.at, "stamped, so `join`'s stale warning has something to read")
+        checks.ok(
+            listing.at and listing.live_as_of is None,
+            "`at` is stamped — the touch stamp, which nothing reads — and `live_as_of` is "
+            "not: an emit takes no reading of `live`, and that stamp is what the arbitration "
+            "reads (D87 amended), so a forged one here would outrank a real export",
+        )
         checks.equal(
             inventory.listing_counts(),
             {master.PUSHED: 4, master.STAGED: 0, master.LIVE: 0},
@@ -11159,18 +11228,52 @@ def check_listing_commands(checks: Checks) -> None:
             said,
         )
 
-        # DOWNWARD TOO. The export is the authority (D8, D11) and the stored number is an
-        # optimistic local estimate, so a join that only ever raised it would let a sale on
-        # TCGplayer leave this Mac permanently overstating what is for sale.
+        # DOWNWARD TOO — WHERE THE EXPORT IS THE NEWER READING. The export is the authority
+        # (D8, D11) for the moment it was read, and a join that only ever raised the stored
+        # number would let a sale on TCGplayer leave this Mac permanently overstating what is
+        # for sale. BOTH DIRECTIONS ARE DATED WITH `os.utime` RATHER THAN RELIED ON: `set`
+        # stamps `live_as_of` to the millisecond and the file is written after it, so the
+        # order would hold in practice — and a case about ordering should say which order.
+        # Articuno is pinned at the store's own 4 so the counts below are Dunsparce alone.
         with Store().write() as snapshot:
             snapshot.inventory.listing(DUNSPARCE_SKU).set(master.LIVE, 9)
-        fell = write_export(run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2})
-        command(checks, "join", str(run_dir.directory), "--export", str(fell))
+        fell = write_export(
+            run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2, ARTICUNO_SKU: 4}
+        )
+        later = time.time() + 3600
+        os.utime(fell, (later, later))
+        said = command(checks, "join", str(run_dir.directory), "--export", str(fell))
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
         checks.equal(
-            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
-            2,
-            "a stored 9 against an export that says 2 becomes 2 — set from the export, never "
-            "nudged toward it",
+            (listing.live, listing.live_as_of),
+            (2, runs.describe_source(fell)["mtime"]),
+            "a stored 9 against a NEWER export that says 2 becomes 2, dated to the FILE'S "
+            "time — a newer export sets `live`, never nudges it",
+        )
+        checks.ok("1 SKU(s) moved" in said, "and the report counts it as moved", said)
+
+        # AND NOT WHERE THE STORE'S READING IS THE NEWER ONE (D87 amended, 2026-09-02).
+        with Store().write() as snapshot:
+            snapshot.inventory.listing(DUNSPARCE_SKU).set(master.LIVE, 9)
+        stamped = Store().read().inventory.listing_for(DUNSPARCE_SKU).live_as_of
+        earlier = time.time() - 3600
+        os.utime(fell, (earlier, earlier))
+        said = command(checks, "join", str(run_dir.directory), "--export", str(fell))
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (listing.live, listing.live_as_of),
+            (9, stamped),
+            "an OLDER export cannot overwrite a reading the store took after it, and the "
+            "stamp stands too — the measured re-join with a run's recorded export, fetched "
+            "fifteen minutes before the emit, took the owner's store from 1,072 live copies "
+            "to 700 on exactly this path",
+        )
+        checks.ok(
+            "1 SKU(s) kept: store newer than this export" in said
+            and f"{DUNSPARCE_SKU}  store 9 (as of {stamped}) vs export 2" in said,
+            "and the report NAMES what it kept, with both readings and the store's stamp, "
+            "rather than counting it (D59's rule)",
+            said,
         )
 
     # --- the cap is a QUANTITY, and a sold copy gives its slot back (D59) -----------------
@@ -11229,32 +11332,62 @@ def check_listing_commands(checks: Checks) -> None:
             "two sales take the live count to two, which is the room the cap now has",
         )
 
-        # A STALE EXPORT CANNOT RE-OPEN THE CAP, and this is the assertion for the `max()` in
-        # `cli/resolve.py:_copies_out`. The export still says four — the operator has not
-        # downloaded a fresh one since the sales — and D8 and D11 make that column
-        # authoritative, so it is a FLOOR the store's own smaller physical count may not
-        # argue below. Offering two copies here would list against slots TCGplayer is still
-        # holding, on the strength of a reading that has gone backwards.
+        # A STALE EXPORT CANNOT CLOSE THE CAP AGAINST THE STORE'S NEWER READING (D87
+        # amended, 2026-09-02). The export still says four — the operator has not
+        # downloaded a fresh one since the sales — and until this date that reading was a
+        # FLOOR the store could not argue below, so this case pinned "every copy in this
+        # run is already listed" and its own comment admitted THE SENTENCE WAS THE COMMITTED
+        # ONE, NOT THE CAP ONE. The two sales are observations the store made AFTER the
+        # file (`bump(LIVE, -1)` stamps `live_as_of`), the file is dated an hour before them
+        # so the ordering is asserted rather than relied on, and the store's 2 is the newer
+        # reading: TCGplayer holds two, the cap has room for two, and the two backstock
+        # copies are exactly what it should offer.
+        earlier = time.time() - 3600
+        os.utime(landed, (earlier, earlier))
         stale = command(checks, "join", str(run_dir.directory), "--export", str(landed))
         checks.ok(
-            "8608459 Dunsparce copies=6 — every copy in this run is already listed "
-            "or has left the box" in stale,
-            # THE SENTENCE IS THE COMMITTED ONE, NOT THE CAP ONE, AND THAT IS THIS FIXTURE
-            # BEING HONEST ABOUT WHAT IT CAN PROVE. Six copies with two sold leaves four,
-            # and TCGplayer holds four — so `uncommitted_positions` is EMPTY and
-            # `nothing_to_add` answers on that before it ever reaches the cap. This case
-            # pinned `4 live, at the cap of 4` until D59, which asserted a branch the
-            # fixture cannot reach; the floor itself is demonstrated by the eight-copy
-            # partial-import case below, where two copies really are still offerable.
-            "a STALE export reporting four live offers nothing and SAYS WHY — a reading "
-            "taken before the sales cannot free a slot, and every copy this run still "
-            "holds is one TCGplayer is holding too",
+            "1 SKU(s) kept: store newer than this export" in stale,
+            "a STALE export reporting four live is KEPT OUT and the report says so — a "
+            "reading taken before the sales cannot put the sold copies back",
             stale,
+        )
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
+            2,
+            "and the store's own two stands",
+        )
+        held = resolve.load(
+            runs.open_run(run_dir.directory), landed
+        ).matches[DUNSPARCE_SKU]
+        checks.equal(
+            (held.copies_out, held.add_to_quantity),
+            (2, 2),
+            "a stale export cannot CLOSE the cap against the store's newer reading: "
+            "`copies_out` is the newer 2, not the file's 4 — `SkuMatch.copies_out` used to "
+            "`max` the row's own column back over `_copies_out`'s answer, which put the 4 "
+            "back — and the two backstock copies have room",
+        )
+        # AND IT CANNOT RE-OPEN IT EITHER, which is the D59 hazard `_copies_out` said it did
+        # not close: after a reconcile `pushed` and `staged` are both zero, and an export
+        # that under-reports would compute `room = cap - 0` and send the SKU again.
+        reopened = write_export(run_dir.path("reopened.csv"), live={DUNSPARCE_SKU: 0})
+        os.utime(reopened, (earlier, earlier))
+        held = resolve.load(
+            runs.open_run(run_dir.directory), reopened
+        ).matches[DUNSPARCE_SKU]
+        checks.equal(
+            (held.copies_out, held.add_to_quantity),
+            (2, 2),
+            "an older export reading ZERO cannot re-open the cap either — two, not four: "
+            "the store's newer reading is the floor, closed by time rather than by trusting "
+            "either side",
         )
 
         # --- and the fresh one refills ---------------------------------------------------
         before_bytes = run_dir.path(runs.IMPORT_LISTED).read_bytes()
         fresh = write_export(run_dir.path("fresh.csv"), live={DUNSPARCE_SKU: 2})
+        later = time.time() + 3600
+        os.utime(fresh, (later, later))
         refilled = command(checks, "join", str(run_dir.directory), "--export", str(fresh))
         checks.ok(
             # THE SKU MUST BE ABSENT FROM THE no-room BLOCK, NOT MERELY UNNAMED BY ONE
@@ -11651,6 +11784,109 @@ def check_boxes_and_listings(checks: Checks) -> None:
         master.UnknownState,
         lambda: listing.bump("captured"),
         "and a position state is not a listing stage — bump refuses it",
+    )
+
+    # --- `live` is a DATED observation, and an older reading cannot overwrite it ---------
+    # D87 amended, 2026-09-02. `live_as_of` is when the reading was taken, `at` is when the
+    # record was last touched, and the two are separate so that no other write can forge a
+    # fresher live observation than anything made. Its own record, because the round trip
+    # below asserts `listing` as the bumps above left it.
+    listing = master.Listing(sku="dated")
+    checks.equal(
+        listing.live_observed_at, None,
+        "a record nothing has read `live` for has NO observation time — `at` is not one, "
+        "and a fresh record given `at` as a fallback outranked every export older than "
+        "its own creation",
+    )
+    listing.set(master.LIVE, 4)
+    stamped = listing.live_as_of
+    checks.ok(
+        stamped is not None and stamped == listing.at,
+        "`set(LIVE)` dates the reading now — an observation this process made",
+    )
+    listing.set(master.STAGED, 1)
+    checks.equal(
+        listing.live_as_of, stamped,
+        "and `set(STAGED)` leaves it alone: `at` moved, the reading's stamp did not",
+    )
+    checks.equal(
+        listing.observe_live(4, "2999-01-01T00:00:00+00:00"), master.UNCHANGED,
+        "a reading equal to the stored figure is UNCHANGED whatever its age — nothing to "
+        "arbitrate, nothing touched, which is what keeps `reconcile --live` idempotent",
+    )
+    checks.equal(
+        (listing.observe_live(2, "2000-01-01T00:00:00+00:00"), listing.live, listing.live_as_of),
+        (master.KEPT, 4, stamped),
+        "an OLDER reading is KEPT out: the store's figure and its stamp both stand",
+    )
+    checks.equal(
+        (listing.observe_live(2, "2999-01-01T00:00:00+00:00"), listing.live, listing.live_as_of),
+        (master.ADOPTED, 2, "2999-01-01T00:00:00+00:00"),
+        "a NEWER one is ADOPTED and `live_as_of` takes the FILE'S time, never now — dating "
+        "an export's reading to the moment it was copied in would forge a fresher "
+        "observation than the file made",
+    )
+    checks.equal(
+        listing.live_reading(None, None), 2,
+        "no export row at all keeps the stored number — the SKU a run's export does not cover",
+    )
+    checks.equal(
+        listing.live_reading(7, "2999-01-01T00:00:00+00:00"), 2,
+        "and a tie goes to the store: an equal-second reading cannot be shown newer",
+    )
+    listing.bump(master.LIVE, -1)
+    checks.ok(
+        listing.live_as_of == listing.at and listing.live_as_of != "2999-01-01T00:00:00+00:00",
+        "`bump(LIVE)` — a sale's ±1 — dates the reading now, so the store then knows more "
+        "than any export fetched before the sale",
+    )
+    legacy = master.Listing.from_record(
+        {"sku": "legacy", "live": 3, "at": "2026-09-01T12:00:00+00:00"}
+    )
+    checks.equal(
+        legacy.live_observed_at, legacy.at,
+        "a STORED record written before `live_as_of` existed reads `at` as its observation "
+        "time, materialised at the parse — D87's settlement rows, whose `at` IS the "
+        "settlement time",
+    )
+    checks.equal(
+        master.Listing.from_record(
+            {"sku": "unread", "live": 0, "at": "2026-09-01T12:00:00+00:00", "live_as_of": None}
+        ).live_observed_at,
+        None,
+        "while one that carries the key as null is read as written: absent is legacy, null "
+        "is unread, and the parse is the one place that tells them apart",
+    )
+    checks.equal(
+        legacy.live_reading(0, "2026-09-01T11:45:00+00:00"), 3,
+        "so a file fetched fifteen minutes before that settlement loses to it — the measured "
+        "defect, at the size it occurred",
+    )
+    checks.equal(
+        legacy.live_reading(0, "2026-09-01T12:15:00+00:00"), 0,
+        "and one fetched after it wins",
+    )
+    stampless = master.Listing(sku="stampless", live=3)
+    checks.equal(
+        stampless.live_reading(0, "2026-09-01T12:00:00+00:00"), 0,
+        "no stamp on the store's side is the stampless case, and the export keeps the "
+        "authority it always had — T3's hand-built fixtures",
+    )
+    releasing = master.Listing(
+        sku="releasing", pushed=2, live=2,
+        at="2020-01-01T00:00:00+00:00", live_as_of="2020-01-01T00:00:00+00:00",
+    )
+    releasing.release(1)
+    checks.equal(
+        releasing.live_as_of, "2020-01-01T00:00:00+00:00",
+        "a D34 release that stopped at `pushed` learned nothing about `live` and leaves its "
+        "stamp where the last reading put it",
+    )
+    releasing.release(3)
+    checks.ok(
+        releasing.live == 0 and releasing.live_as_of == releasing.at
+        and releasing.live_as_of != "2020-01-01T00:00:00+00:00",
+        "and one that reached `live` dates the reading now — an observation like a sale",
     )
     checks.raises(
         master.UnknownState,
@@ -12306,6 +12542,42 @@ def check_pipeline_routes(checks: Checks) -> None:
         finally:
             httpd.shutdown()
             thread.join(timeout=5)
+
+    # --- an uploaded export carries its own time, and the stored copy wears it ------------
+    # D87 amended: the stored file's mtime is when its `Total Quantity` was read, and the
+    # store arbitrates `live` by it. Both `join`'s uploads and the `--live` upload land here.
+    with isolated_home():
+        directory = files.inventory_dir() / ".reconcile"
+        directory.mkdir(parents=True, exist_ok=True)
+        content = "TCGplayer Id,Total Quantity\n1,2\n"
+        when = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+        stored = pipeline_routes._store_upload(
+            directory,
+            {"name": "my.csv", "content": content, "modified": int(when.timestamp() * 1000)},
+            "live-",
+        )
+        checks.equal(
+            runs.describe_source(stored)["mtime"],
+            "2026-09-01T12:00:00.000+00:00",
+            "an upload sent with `modified` — `File.lastModified`, in MILLISECONDS — lands "
+            "with THAT mtime, because the write time would date a week-old export to now and "
+            "let it outrank every reading the store has taken since",
+        )
+        plain = pipeline_routes._store_upload(
+            directory, {"name": "plain.csv", "content": content}, "live-"
+        )
+        checks.ok(
+            abs(plain.stat().st_mtime - time.time()) < 60,
+            "and one sent without it still lands, at the write time",
+        )
+        odd = pipeline_routes._store_upload(
+            directory, {"name": "odd.csv", "content": content, "modified": 12}, "live-"
+        )
+        checks.ok(
+            abs(odd.stat().st_mtime - time.time()) < 60,
+            "an unsane stamp — before 2000 here — is ignored rather than trusted: a bogus "
+            "one reading as newer than everything would settle the whole store",
+        )
 
 
 def check_open_section(checks: Checks) -> None:

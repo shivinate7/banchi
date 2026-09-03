@@ -337,8 +337,12 @@ COMPONENTS = [
                                     "your edits were kept. REFUSES on a legacy decisions.json "
                                     "before anything is read or written, naming `prices adopt "
                                     "--write`, and names the store's standing sub-threshold "
-                                    "policy on its own line every join (D9 amended 2026-09-02).",
-                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D36", "D49", "D54", "D58", "D59", "D86"], "tested_by": ["T4", "T7"]},
+                                    "policy on its own line every join (D9 amended 2026-09-02). "
+                                    "Writes `live` only where the export is NEWER than the "
+                                    "store's own reading — `Listing.observe_live`, per game, "
+                                    "against the file's mtime — and says what it kept, by SKU "
+                                    "with both readings (D87 amended).",
+                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87"], "tested_by": ["T4", "T7"]},
             "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "
@@ -373,7 +377,12 @@ COMPONENTS = [
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged; "
+                                         "`--live` settles the whole store's `live` against one "
+                                         "My Pricing export (D87), through `Listing.observe_live`, "
+                                         "so a reading older than the store's own is kept and "
+                                         "named — preview and write computed by one rule",
+                                 "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
                                    "reason `pipeline/orders.py` may not hold it: it reads a run "
@@ -381,8 +390,11 @@ COMPONENTS = [
                                    "do. It reads `pricing.json` back as SKU -> positions THROUGH "
                                    "`realign` (D36), because that file stores position keys and a "
                                    "mid-box delete moves them — reading it raw is the defect that "
-                                   "wrote 47 box-2 queue entries one position off.",
-                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D36", "D49", "D58", "D59", "D64"], "tested_by": ["T7"]},
+                                   "wrote 47 box-2 queue entries one position off. `_copies_out`'s "
+                                   "floor under the cap is the NEWEST reading of `live`, the "
+                                   "store's or the export's by `Listing.live_reading`, and it "
+                                   "carries that figure to the join as `live_now` (D87 amended).",
+                           "governed_by": ["D4", "D8", "D10", "D11", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D58", "D59", "D64", "D87"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -434,7 +446,7 @@ COMPONENTS = [
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68", "D71"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68", "D71", "D87"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
             # are read out of games.py's `pokemon` entry, byte-identically, which is what
@@ -609,7 +621,7 @@ COMPONENTS = [
                                  "runs wrote two SKUs past the cap of 4; one merged emit wrote "
                                  "none. Writes nothing — cli/cmd_emit.py owns the file and the "
                                  "store.",
-                         "governed_by": ["D7", "D48", "D49", "D54", "D59", "D86"],
+                         "governed_by": ["D7", "D48", "D49", "D54", "D59", "D86", "D87"],
                          "tested_by": ["T7"]},
             "decisions.py": {"does": "the pricing decision, parsed — the corpus's parser (D86): "
                                      "pipeline/corpus.py projects inventory/prices.json into one "
@@ -799,8 +811,11 @@ COMPONENTS = [
                                   "of the next card at the index only the store can read (D10), and "
                                   "D89's `record_photo_reclaimed`. Its three mappings are `Rows`: the "
                                   "high-water scan, the capture-id replay and the SKU walk ask the "
-                                  "mapping for the rows they want rather than walking every card",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D58", "D59", "D83", "D88", "D89"], "tested_by": ["T7"]},
+                                  "mapping for the rows they want rather than walking every card. "
+                                  "`Listing.observe_live` arbitrates `live` by `live_as_of` — the "
+                                  "newer reading wins, an older export is kept out — and "
+                                  "`Listing.live_reading` is the same rule for the cap (D87 amended)",
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D58", "D59", "D83", "D87", "D88", "D89"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -2076,7 +2091,7 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D89", "D90", "D91", "D92", "D93"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D93"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2913,7 +2928,7 @@ COMPONENTS = [
                                          "disagree about. One decode, one refusal shape, one "
                                          "CsvUpload — a second reader is how a file that joins "
                                          "on one screen refuses on another.",
-                                 "governed_by": ["D33", "D61", "D69"]},
+                                 "governed_by": ["D33", "D61", "D69", "D87"]},
             "src/Orders.tsx": {"does": "#/orders: which copies this buyer gets, and where they "
                                        "are (D69). One read of GET /orders answers the order "
                                        "list and the resolution out of ONE store snapshot, so "

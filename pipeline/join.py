@@ -1423,6 +1423,10 @@ class SkuMatch:
     # `join_batch` in the harness — and the answer there is `live_before` alone, which is
     # D7's own `min(cap - live, backstock)` and what those cases have always asserted.
     held_out: Optional[int] = None
+    # `cli/resolve.py:_copies_out`'s `live_now` for this SKU: the NEWER of the store's own
+    # `live` reading and the export's, by `store/master.py:Listing.live_reading` (D87,
+    # amended). `None` for a store-less match, where the row alone answers — `live_before`.
+    live_out: Optional[int] = None
 
     @property
     def condition(self) -> str:
@@ -1474,14 +1478,32 @@ class SkuMatch:
         return [p for p in self.positions if (p.box, p.index) not in held]
 
     @property
+    def live_now(self) -> int:
+        """The live figure the cap was computed against: the newer of the store's reading
+        and this row's, or the row's alone where no store was consulted. What every
+        SENTENCE about live quantity reads, so "4 live, at the cap of 4" can never be
+        printed off a reading the store has since superseded — D59's own rule about a
+        count under a false sentence."""
+        if self.live_out is None:
+            return self.live_before
+        return self.live_out
+
+    @property
     def copies_out(self) -> int:
         """Copies TCGplayer is holding for this SKU right now — live plus pending, per SKU
-        and across every box. `max` because the export's `Total Quantity` is a FLOOR that
-        D8 and D11 make authoritative: the store may know about copies it cannot see, and
-        may never argue it down."""
+        and across every box.
+
+        THE FLOOR IS THE NEWEST READING OF `live`, AND `_copies_out` HAS ALREADY APPLIED IT.
+        This was `max(self.live_before, self.held_out)` until 2026-09-02, on the argument
+        that the export's `Total Quantity` is a floor the store may never argue down. It is
+        — for the moment it was read. `max` with the row's own column let an OLDER file
+        outrank a newer store observation: with the store newer and lower, `_copies_out`
+        answered 2 and the `max` put the file's 4 back, so a stale export closed the cap
+        against a reading the store took after it. `held_out` is the arbitrated figure and
+        it answers alone."""
         if self.held_out is None:
             return self.live_before
-        return max(self.live_before, self.held_out)
+        return self.held_out
 
     @property
     def add_to_quantity(self) -> int:
@@ -1519,14 +1541,16 @@ class SkuMatch:
             return None
         if not self.uncommitted_positions:
             return "every copy in this run is already listed or has left the box"
-        pending = self.copies_out - self.live_before
+        # `live_now`, never `live_before`: the sentence names the reading the cap was
+        # computed from, which is the newer of the store's and the export's (D87, amended).
+        pending = self.copies_out - self.live_now
         if pending <= 0:
-            return f"{self.live_before} live, at the cap of {self.live_cap}"
+            return f"{self.live_now} live, at the cap of {self.live_cap}"
         # `min` because `copies_out` is not clamped to the cap and a store can exceed it —
         # "6 of the 4 this SKU may have out" is not a sentence, and the operator's question
         # is how much of the cap is spoken for rather than by how much it is overrun.
         return (
-            f"{self.live_before} live and {pending} on an import this pipeline has not "
+            f"{self.live_now} live and {pending} on an import this pipeline has not "
             f"seen land — {min(self.copies_out, self.live_cap)} of the {self.live_cap} "
             f"this SKU may have out"
         )
@@ -1875,6 +1899,7 @@ def join_batch(
     rule: pricing.Rule = pricing.MATCH,
     basis: str = pricing.BASIS_MARKET,
     copies_out: Optional[Mapping[str, int]] = None,
+    live_now: Optional[Mapping[str, int]] = None,
 ) -> JoinReport:
     """Resolve every card to exactly one catalog row, aggregating copies by SKU.
 
@@ -2023,6 +2048,7 @@ def join_batch(
                 # A store fact, and `pipeline/` may not read the store, so it arrives as a
                 # value; absent means the export alone decides (D59).
                 held_out=None if copies_out is None else copies_out.get(sku),
+                live_out=None if live_now is None else live_now.get(sku),
             )
             report.matches[sku] = match
         match.positions.append(card.position)

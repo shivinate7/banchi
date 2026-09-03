@@ -133,6 +133,9 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   pushed copies, so the cap arithmetic saw 93 live copies
                                    #   where there were 1,079.
                                    #   It moves QUANTITIES and marks no card sold (D7).
+                                   #   A reading OLDER than the store's own `live_as_of` is
+                                   #   kept, not written, and named in the report — the
+                                   #   same rule `join` applies (D87 amended 2026-09-02).
                                    #   Reachable on `#/runs`, under the run panel.
 ```
 

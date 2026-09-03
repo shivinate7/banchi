@@ -51,6 +51,7 @@ Replace it the day a two-set export is committed.
 from __future__ import annotations
 
 import os
+import time
 import tempfile
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from decimal import Decimal
@@ -252,7 +253,12 @@ def _stock_at(box, sku, condition, copies, *, pushed=0, staged=0, live=0, sold=(
         for index in sold:
             snapshot.inventory.set_state(master.position_key(box, index), master.SOLD)
         entry = snapshot.inventory.listing(sku, condition=condition)
-        entry.pushed, entry.staged, entry.live = pushed, staged, live
+        entry.pushed, entry.staged = pushed, staged
+        # `set`, not assignment: a store holding a live count has READ it somewhen, and the
+        # reading is dated now (D87 amended) — the shape a sale leaves. Every export a case
+        # writes after this is newer by the file's own mtime, so the export still answers
+        # wherever it used to; the one case about the ORDER dates its file with `os.utime`.
+        entry.set(master.LIVE, live)
 
 
 def _stock(sku, condition, copies, **counts):
@@ -498,6 +504,33 @@ def _check_committed_from_counts(c, export) -> None:
             "and the rest is backstock, not lost — TWO, not five. Six copies, three live "
             "and one added leaves two unlisted; the old five counted the three live copies "
             "as backstock as well, which is the same double-count read from the other end",
+        )
+
+    # --- the store's reading and the export's are told apart by TIME (D87 amended) -------
+    # `_stock` dates its `live` reading now, as a sale would. The file is dated an hour on
+    # either side of that with `os.utime`, so the case asserts the ordering rather than
+    # relying on the order the fixture happened to write things in.
+    with _isolated_home() as home:
+        _stock(SEVEN_COPY_SKU, "Near Mint", 6, live=3)
+        path = _export_file(home / "export.csv", export, live_quantity=0)
+        past = time.time() - 3600
+        os.utime(path, (past, past))
+        held = _resolve_in(home, 6, path).report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            (held.copies_out, held.add_to_quantity, held.live_now),
+            (3, 1, 3),
+            "an export OLDER than the store's reading cannot re-open the cap: the store's "
+            "newer 3 reaches the cap, there is room for one, and `live_now` is the 3 the "
+            "cap was computed from — D59's post-reconcile hazard, closed by time",
+        )
+        future = time.time() + 3600
+        os.utime(path, (future, future))
+        held = _resolve_in(home, 6, path).report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            (held.copies_out, held.add_to_quantity, held.live_now),
+            (0, 4, 0),
+            "and the export wins when it is the NEWER reading — the rule that stood "
+            "unconditionally until 2026-09-02, now conditional on the file being newer",
         )
 
     # --- a copy that is ALREADY LISTED is not offered a second time --------------------

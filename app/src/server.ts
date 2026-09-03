@@ -2419,7 +2419,7 @@ export async function readShippingExport(upload: CsvUpload): Promise<ShippingBat
   return (await request('/shipping/batches', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: upload.name, content: upload.content }),
+    body: JSON.stringify({ name: upload.name, content: upload.content, modified: upload.modified }),
   })) as ShippingBatch
 }
 

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import (
-    Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union,
+    Dict, List, Mapping, NamedTuple, Optional, Sequence, Tuple, Union,
 )
 
 from cli import runs
@@ -422,44 +422,69 @@ def box_views(inventory: master.Inventory) -> Dict[int, join.BoxView]:
     return views
 
 
-def _live_by_sku(exports: Iterable[tcgcsv.Export]) -> Dict[str, int]:
-    """`Total Quantity` per SKU, across every export this run was handed (D59).
+class LiveReading(NamedTuple):
+    """One export's `Total Quantity` for a SKU, and WHEN that file was read (D87, amended).
+
+    The time is the file's mtime — `cli/runs.py:describe_source` — which is the fetch time
+    for a fetched export and the file's own for an upload. It is what `Listing.live_reading`
+    weighs the store's own `live_as_of` against, so a reading is never carried without it.
+    """
+
+    quantity: int
+    as_of: str
+
+
+def _live_by_sku(
+    exports: Mapping[Path, tcgcsv.Export], as_of: Mapping[Path, str]
+) -> Dict[str, LiveReading]:
+    """`Total Quantity` per SKU, with its time, across every export this run was handed (D59).
 
     Unioned across files without a per-game partition, which is safe for exactly one
     reason: a `TCGplayer Id` is unique across the marketplace, so two games' exports cannot
     collide on one. D25's partition is about which CATALOG a card is joined against, and
-    nothing here joins anything.
+    nothing here joins anything. A SKU present in two files takes the NEWER file's reading,
+    by `master.newer_stamp` — the same arbitration `_copies_out` then applies against the
+    store, one register down.
     """
-    out: Dict[str, int] = {}
-    for export in exports:
+    out: Dict[str, LiveReading] = {}
+    for path, export in exports.items():
+        stamp = as_of[path]
         for row in export.rows:
             sku = row.get(tcgcsv.SKU_COLUMN)
             if not sku:
                 continue
             try:
-                out[sku] = tcgcsv.parse_quantity(row[tcgcsv.LIVE_QUANTITY_COLUMN])
+                reading = LiveReading(
+                    tcgcsv.parse_quantity(row[tcgcsv.LIVE_QUANTITY_COLUMN]), stamp
+                )
             except (ValueError, TypeError, KeyError):
                 # AN UNREADABLE CELL ON A ROW THIS RUN NEVER TOUCHES MAY NOT TAKE THE JOIN
                 # DOWN. `live_before` used to read this column lazily, for matched SKUs
                 # only; walking every row of a 10,000-row export widens what one bad cell
                 # can reach, so the widening is paid for here rather than by the operator.
-                # SKIPPING AND DEFAULTING TO ZERO ARE THE SAME THING HERE, and an earlier
-                # version of this comment claimed otherwise: `_copies_out` reads this map
-                # with `.get(sku, 0)`, so an absent SKU and a zero one are indistinguishable
-                # to the only consumer. What is actually bought is narrower and worth
-                # stating plainly — an unreadable cell on a row this run never matches no
-                # longer decides anything, where before it took the whole join down. A cell
-                # on a row the run DOES match still raises, from `SkuMatch.live_before`, and
-                # that is right: the cap for a SKU being joined may not be computed from a
-                # number nobody could read.
+                # SKIPPING IS NOT DEFAULTING TO ZERO ANY MORE, and an earlier version of
+                # this comment said the two were the same: `_copies_out` used to read this
+                # map with `.get(sku, 0)`. An absent SKU now keeps the STORE's reading
+                # (`Listing.live_reading` with no quantity), and a zero is a reading of
+                # zero at the file's time, so a row nobody could read is left out rather
+                # than read as "nothing live". What is bought is the same as before and
+                # worth stating plainly — an unreadable cell on a row this run never matches
+                # decides nothing, where it once took the whole join down. A cell on a row
+                # the run DOES match still raises, from `SkuMatch.live_before`, and that is
+                # right: the cap for a SKU being joined may not be computed from a number
+                # nobody could read.
                 continue
+            held = out.get(sku)
+            if held is None or master.newer_stamp(reading.as_of, held.as_of):
+                out[sku] = reading
     return out
 
 
 def _copies_out(
-    inventory: master.Inventory, live_by_sku: Mapping[str, int]
-) -> Dict[str, int]:
-    """Per SKU: how many copies TCGplayer is holding right now, live AND pending (D59).
+    inventory: master.Inventory, live_by_sku: Mapping[str, LiveReading]
+) -> Tuple[Dict[str, int], Dict[str, int]]:
+    """Per SKU: how many copies TCGplayer is holding right now, live AND pending (D59) —
+    and, beside it, the `live` figure that answer was computed from.
 
     ONE NUMBER, TWO CONSUMERS, AND THAT IS THE WHOLE OF D59. `_committed_keys` below spends
     it on positions so a run knows which of its copies not to re-send, and
@@ -471,10 +496,16 @@ def _copies_out(
 
         min(live + pushed + staged, max(live, copies not sold))
 
-    THE FLOOR IS THE EXPORT AND IT CANNOT BE ARGUED BELOW. D8 and D11 put the authority in
-    `Total Quantity`, so `out` is never less than it — which is what makes a STALE export
-    harmless here. A reading that has gone backwards cannot re-open the cap, because the
-    store's own claim is still standing beside it.
+    THE FLOOR IS THE NEWEST READING OF `live`, AND IT CANNOT BE ARGUED BELOW. D8 and D11
+    put the authority in `Total Quantity`, and it keeps it — for the moment the file was
+    read. Where the store has read `live` LATER (a sale, a D34 release, a `reconcile
+    --live` against a fresher export), the store's figure is the floor instead, and the
+    older file cannot re-open the cap OR close it. `Listing.live_reading` is the one rule,
+    the store's `live_as_of` is what it reads, and `live_now` carries the figure it chose
+    to `SkuMatch.live_out` so no sentence downstream is printed off the reading it lost.
+
+    Returns `(copies_out, live_now)`: the first is what the cap subtracts, the second the
+    live figure it was built on, per SKU.
 
     THE CEILING IS PHYSICAL, AND IT IS WHAT CORRECTS A STUCK `pushed`. `Listing.held` is a
     claim this Mac made when it wrote a CSV; `cli/cmd_reconcile.py` is the only thing that
@@ -488,23 +519,35 @@ def _copies_out(
     closest thing this pipeline has to a spec for this arithmetic and it had no caller.
     """
     out: Dict[str, int] = {}
+    live_now: Dict[str, int] = {}
     for sku in set(live_by_sku) | set(inventory.listings):
         entry = inventory.listings.get(sku)
-        # THE STORE'S OWN `live` IS DELIBERATELY NOT A SECOND FLOOR, AND IT WAS TRIED.
-        # After the canonical cycle — emit, import, reconcile, join — `pushed` and `staged`
-        # are both zero, and a LATER join whose export under-reports then re-opens the cap
-        # and sends the SKU again. Taking `max(export, entry.live)` closes exactly that and
-        # opens its mirror image: `cli/cmd_join.py` sets `entry.live` from whatever export it
-        # was last handed, so a stale-HIGH stored value would then outrank a fresh-LOW export
-        # and the SKU would never refill after a sale. T7's own stale-export case is that
-        # shape, and it went red.
+        # THE STORE'S OWN `live` IS A SECOND READING, NOT A SECOND FLOOR, AND THE TWO ARE
+        # TOLD APART BY TIME. `max(export, entry.live)` was tried and reverted: it closed
+        # the post-reconcile hazard (pushed and staged both zero, a later under-reporting
+        # export re-opening the cap) and opened its mirror, where a stale-HIGH stored value
+        # outranked a fresh-LOW export and the SKU never refilled after a sale — T7's own
+        # stale-export case went red. Both directions were a `max` over two readings nobody
+        # had dated. `Listing.live_as_of` dates the store's, the file's mtime dates the
+        # export's, and `Listing.live_reading` picks the newer: the D59 hazard ("after a
+        # reconcile nothing is standing") is closed by time rather than by trusting either
+        # side, and the mirror cannot come back because an older store reading loses.
         #
-        # The two are indistinguishable from the data — nothing here knows which of the two
-        # readings is the newer one — so the tie goes to D8 and D11, which put the authority
-        # in the export and make `entry.live` an estimate the export corrects. What is left
-        # standing is a real hazard AFTER a reconcile, and D59 names it rather than claiming
-        # a protection this does not provide.
-        live = max(0, int(live_by_sku.get(sku, 0)))
+        # A SKU absent from every export keeps the store's figure — D87's settlement finally
+        # reaches the cap for the SKUs a run's own export does not cover. A row present with
+        # a BLANK cell is a reading of zero at the file's time, which is the measured defect
+        # (a recorded export fetched fifteen minutes before its emit), and it now loses to
+        # the newer settlement instead of overwriting it.
+        reading = live_by_sku.get(sku)
+        live = (
+            entry.live_reading(
+                reading.quantity if reading else None, reading.as_of if reading else None
+            )
+            if entry is not None
+            else (reading.quantity if reading else 0)
+        )
+        live = max(0, int(live))
+        live_now[sku] = live
         claim = entry.held if entry is not None else 0
         if live <= 0 and claim <= 0:
             continue
@@ -536,7 +579,7 @@ def _copies_out(
             else 0
         )
         out[sku] = max(live, claim - sold)
-    return out
+    return out, live_now
 
 
 def _committed_keys(inventory: master.Inventory, copies_out: Mapping[str, int]) -> set:
@@ -1137,13 +1180,23 @@ def load(
     # map its `Product Line` cells, and `_refuse_uncovered` still runs before a single
     # catalog is cut, still touches nothing, and still refuses on the same grounds.
     parsed: Dict[Path, tcgcsv.Export] = {}
+    # ONE `describe_source` PER DISTINCT FILE. It hashes the file, and it used to run once
+    # per GAME, so two games sharing one export paid for it twice. Its `mtime` is the time
+    # each reading of `Total Quantity` below was taken — re-read off the file here, exactly
+    # as the seven-day warning reads it, rather than off the manifest's stored copy, which
+    # would make a re-fetched file read as older than it is.
+    sources: Dict[Path, Dict[str, object]] = {}
     for _path in mapping.values():
         if _path not in parsed:
             parsed[_path] = tcgcsv.read_export(_path)
+            sources[_path] = runs.describe_source(_path)
 
     snapshot = Store().read()
     held_cards = snapshot.inventory.cards
-    copies_out = _copies_out(snapshot.inventory, _live_by_sku(parsed.values()))
+    copies_out, live_now = _copies_out(
+        snapshot.inventory,
+        _live_by_sku(parsed, {p: str(src["mtime"]) for p, src in sources.items()}),
+    )
     committed_keys = _committed_keys(snapshot.inventory, copies_out)
     # D58's label coordinates, off the same snapshot for the same reason — one read, and
     # every position this run renders counted against the box as it stands right now.
@@ -1323,6 +1376,7 @@ def load(
         file_export = parsed.get(path)
         if file_export is None:
             file_export = parsed[path] = tcgcsv.read_export(path)
+            sources[path] = runs.describe_source(path)
         # Per game, never merged — see `GameJoin`. Two games sharing one file (pokemon
         # and pokemon_code) each cut their own catalog from the one reading.
         catalog = join.Catalog.from_export(file_export, game)
@@ -1334,13 +1388,14 @@ def load(
             rule=rule,
             basis=basis,
             copies_out=copies_out,
+            live_now=live_now,
         )
         joins_out[game] = GameJoin(
             game=game,
             export=catalog.export,
             catalog=catalog,
             report=report,
-            source=runs.describe_source(path),
+            source=sources[path],
         )
 
     return Resolved(

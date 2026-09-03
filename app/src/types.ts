@@ -429,10 +429,13 @@ export type InventoryCard = {
  * `store/master.py:check_state` now refuses them as card states — which is why a screen that
  * wants "how many of this are listed" reads it here and cannot count it off the copies.
  *
- * `live` IS AN ESTIMATE BETWEEN RUNS, deliberately. D8 and D11 put the authority in the
- * TCGplayer export's `Total Quantity`, which `./pkmnscan join` reads on every run; a sale
- * decrements this locally and the next join corrects it. Do not render it as a fact about
- * the marketplace — render it as what this store last believed. */
+ * `live` IS THE STORE'S LAST OBSERVATION, WITH ITS TIME. D8 and D11 put the authority in the
+ * TCGplayer export's `Total Quantity`, which `./pkmnscan join` and `reconcile --live` read; a
+ * sale decrements this locally and stamps it now, and an export corrects it only where the
+ * export was read LATER than `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
+ * Do not render it as a fact about the marketplace — render it as what this store last saw,
+ * and `live_as_of` is when. Null on a record nothing has read `live` for yet — an emit's
+ * record before any join or reconcile — and the export then answers whatever its age. */
 export type Listing = {
   sku: string
   condition: string | null
@@ -441,6 +444,7 @@ export type Listing = {
   live: number
   at: string | null
   staged_at: string | null
+  live_as_of: string | null
 }
 
 export type Inventory = {
@@ -1985,7 +1989,11 @@ export type RunStepResult = {
 /** An uploaded CSV. Uploaded rather than named by path: a screen cannot know what is on
  *  the server's disk, and a route that opened any absolute path a request named would be a
  *  file-read primitive guarded by an origin header. */
-export type CsvUpload = { name: string; content: string }
+/** `modified` is `File.lastModified` — milliseconds since the epoch, the file's own time — and
+ *  the server sets the stored copy's mtime from it (`_store_upload`), because that mtime is
+ *  when the export's `Total Quantity` was read and the store arbitrates `live` by that time
+ *  (D87 amended). Optional: a caller without a `File` sends none and the write time stands. */
+export type CsvUpload = { name: string; content: string; modified?: number }
 
 /** What `POST /pipeline/runs/<name>/export` fetched, in the terms the operator filters the
  *  portal in (D64). Free: it downloads the owner's own Filtered Export and spends nothing.

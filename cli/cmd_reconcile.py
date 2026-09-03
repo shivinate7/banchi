@@ -67,6 +67,28 @@ def _say_rows(say, rows, head, note, limit=20):
         say(f"  ... and {len(rows) - limit} more")
 
 
+def _settlement(rows, listings, as_of: str):
+    """What a write over `rows` would do, by `Listing.live_reading` — the same rule the
+    write applies through `observe_live`, so the preview cannot promise a correction the
+    write then refuses. Returns `(adopt, kept)`: copies moved per SKU, and the rows the
+    store outranks as `(sku, stored, stored-as-of, offered)`."""
+    adopt = {}
+    kept = []
+    for row in rows:
+        listing = listings.get(row.sku)
+        if listing is None:
+            continue
+        stored = max(0, int(listing.live))
+        offered = max(0, int(row.live))
+        if offered == stored:
+            continue
+        if listing.live_reading(offered, as_of) == stored:
+            kept.append((row.sku, stored, listing.live_observed_at, offered))
+        else:
+            adopt[row.sku] = abs(offered - stored)
+    return adopt, kept
+
+
 def run_live(args, say) -> int:
     """`pkmnscan reconcile --live <export.csv>` — the whole store against one live export.
 
@@ -119,10 +141,22 @@ def run_live(args, say) -> int:
         "not even a zero-quantity row — check the export covers every Product Line you sell.",
     )
 
+    # THE READING'S TIME IS THE FILE'S, and the preview and the write are computed by one
+    # local so they cannot disagree about which rows the store outranks.
+    as_of = str(source["mtime"])
+    adopt, kept = _settlement(
+        report.agreed + report.unexplained + report.beyond,
+        snapshot.inventory.listings,
+        as_of,
+    )
+
     if not args.write:
         say("")
-        say(f"DRY RUN — nothing written. {report.corrected} copy(ies) of `{master.LIVE}` would "
-            f"be corrected from the export.")
+        say(f"DRY RUN — nothing written. {sum(adopt.values())} copy(ies) of `{master.LIVE}` "
+            f"would be corrected from the export; {len(kept)} SKU(s) kept: store newer than "
+            f"this export (fetched {source['mtime']}).")
+        for sku, stored, stamp, offered in kept[:8]:
+            say(f"                   {sku}  store {stored} (as of {stamp}) vs export {offered}")
         say("`pushed` is left alone: it is the cumulative record of what was sent, and")
         say("`cli/resolve.py:_copies_out` already corrects a stuck one against the physical")
         say("ceiling. Re-run with --write.")
@@ -130,27 +164,34 @@ def run_live(args, say) -> int:
 
     moved = 0
     touched = 0
+    kept_count = 0
     with store.write() as writable:
         for row in report.agreed + report.unexplained + report.beyond:
             listing = writable.inventory.listings.get(row.sku)
             if listing is None:
                 continue
-            # `live` COMES FROM THE EXPORT AND IS NOT NEGOTIATED. D8 and D11 make the export
-            # authoritative about what TCGplayer holds, and `cli/resolve.py:_copies_out`
-            # already treats `Total Quantity` as a floor that "cannot be argued below". This
-            # is the one field the reconcile writes — see `pipeline/livecheck.py`'s header for
-            # why `pushed` is read and never rewritten.
-            if listing.live == row.live:
-                continue
-            moved += abs(row.live - listing.live)
-            listing.live = row.live
-            listing.at = master.now()
-            touched += 1
+            # `live` COMES FROM THE EXPORT AND IS NOT NEGOTIATED BETWEEN READINGS OF EQUAL
+            # AGE. D8 and D11 make the export authoritative about what TCGplayer holds at
+            # the moment it was read, and `cli/resolve.py:_copies_out` treats the NEWEST
+            # reading as a floor that "cannot be argued below". A store observation made
+            # after this file — a sale, a later settlement — stands, and is reported (D87,
+            # amended). This is the one field the reconcile writes — see
+            # `pipeline/livecheck.py`'s header for why `pushed` is read and never rewritten.
+            before = listing.live
+            verdict = listing.observe_live(row.live, as_of)
+            if verdict == master.ADOPTED:
+                moved += abs(listing.live - before)
+                touched += 1
+            elif verdict == master.KEPT:
+                kept_count += 1
         stages = writable.inventory.listing_counts()
 
     say("")
     say(f"settled          {touched} listing(s); {moved} copy(ies) of `{master.LIVE}` "
-        f"corrected from the export")
+        f"corrected from the export; {kept_count} listing(s) kept: store newer than this "
+        f"export")
+    for sku, stored, stamp, offered in kept[:8]:
+        say(f"                   {sku}  store {stored} (as of {stamp}) vs export {offered}")
     counted = ", ".join(f"{k} {v}" for k, v in stages.items() if v) or "empty"
     say(f"listings         {counted}")
     if report.unexplained_copies:
