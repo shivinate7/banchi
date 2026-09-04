@@ -319,7 +319,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87", "D100"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -356,6 +356,25 @@ COMPONENTS = [
                                       "named as missing and D62 repeated.",
                               "governed_by": ["D9", "D49", "D62", "D86"],
                               "tested_by": ["T7"]},
+            "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
+                                        "not selling and writes a WORKLIST with a price already "
+                                        "proposed on every row; `reprice apply` reads the "
+                                        "operator's edited worklist back and writes the "
+                                        "price-only import CSV (D100). Both preview unless given "
+                                        "--write. EVERY ROW OF EVERY FILE IT WRITES CARRIES `Add "
+                                        "to Quantity` 0, and the upload is built from the "
+                                        "manifest's copy of the export row rather than from the "
+                                        "file handed back — only TCGplayer Id and TCG "
+                                        "Marketplace Price are read out of that, so a "
+                                        "spreadsheet's reformatting cannot reach TCGplayer. "
+                                        "Writes into inventory/markdowns/<stamp>/ and never "
+                                        "under runs/: a run directory is one box's disposable "
+                                        "input and a markdown is store-wide state. The new "
+                                        "prices go into the corpus keyed by SKU (D86), without "
+                                        "which the next emit re-lists at the rule price and "
+                                        "undoes the markdown.",
+                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86", "D100"],
+                               "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered. Prices "
                                     "from inventory/prices.json (D86) rather than from the run "
                                     "manifest (D49); refuses a run still carrying a legacy "
@@ -616,6 +635,27 @@ COMPONENTS = [
                                      "from seeing 93 live copies to 1,079.",
                              "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87"],
                              "tested_by": ["T7"]},
+            "reprice.py": {"does": "which live listings are not selling, and what each would be "
+                                   "re-priced to (D100). Pure — no I/O, no store import, no "
+                                   "network — the way livecheck.py is. THE QUANTITY IS NOT A "
+                                   "VARIABLE HERE: ADD_TO_QUANTITY is a module constant, not a "
+                                   "parameter and not reachable from a flag, because "
+                                   "`Add to Quantity` is a DELTA and a markdown that carried a "
+                                   "copy count would double a live listing. Measured: 72,701 "
+                                   "real export rows carry \"0\", 649 of them on rows TCGplayer "
+                                   "reported live; and nine SKUs on the owner's store sit at "
+                                   "2 x pushed - sold because one import file was uploaded "
+                                   "twice. The staleness predicate is live + no sale here in the "
+                                   "window + owned longer than the window, and the third term is "
+                                   "a PROXY for listing age that every report names as one — "
+                                   "Listing has no first_listed_at and live_as_of is absent from "
+                                   "all 443 stored payloads. BASIS_ASKING is local and "
+                                   "deliberately not in pricing.BASES: the column is populated "
+                                   "on 441 of 441 live My Pricing rows and blank on 7,787 of "
+                                   "7,802 wide-export rows, so a listing run reading it would "
+                                   "write no price with nothing raising.",
+                           "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D100", "D87"],
+                           "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and the live cap spent ONCE over that union. "
                                  "D59's defect one register up — add_to_quantity spends "
@@ -1696,7 +1736,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D100"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -2028,7 +2068,7 @@ COMPONENTS = [
                                     "with no model call and nothing to price, so it is reached "
                                     "when asked, which is what this table's own definition of "
                                     "that group says.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D69", "D70"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D69", "D70", "D100"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -2095,11 +2135,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D100"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D93"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D93", "D100"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2725,6 +2765,38 @@ COMPONENTS = [
                                              "its own overflow because the report draws "
                                              "fixed-width columns a wrap would break.",
                                      "governed_by": ["D50", "D87"]},
+            "src/Markdown.tsx": {"does": "the stale-listing markdown (D100), a section on #/runs "
+                                         "beneath the store-wide reconcile whose file it "
+                                         "also reads. Three "
+                                         "numbered steps down one column — upload the My "
+                                         "Pricing export and read what would move, write the "
+                                         "worklist, hand it back and write the import CSV. IT "
+                                         "WANTED A ROUTE ON D49's PRECEDENT — a worklist the "
+                                         "operator sits in over three presses is what earned "
+                                         "#/pricing one — AND THE NAV HAS NO ROOM: the strip "
+                                         "needs 1,484.9px for eleven links against the owner's "
+                                         "1,440, and the wrap that follows takes "
+                                         "review.spec.ts's between-cards floor red. App.tsx's "
+                                         "ROUTES table carries the measurement. Each "
+                                         "write control is ABSENT until the read before it has "
+                                         "answered (D33's gate, twice), the export is held in a "
+                                         "ref so the preview and the write describe one file, "
+                                         "and both the deletion answer and the ownership-age "
+                                         "proxy are stated on the screen rather than only in "
+                                         "the report.",
+                                 "governed_by": ["D7", "D9", "D13", "D33", "D49", "D86", "D100"],
+                                 # `app/tests/markdown.spec.ts` is the check the hard rule says
+                                 # does not otherwise exist — it runs under `make design-check`,
+                                 # not at turn end, so it is named here in prose rather than in
+                                 # `tested_by`.
+                                 },
+            "src/Markdown.css": {"does": "the markdown screen's own styles — deliberately plain "
+                                         "while a separate branch rewrites this app's design "
+                                         "system, and setting NO cursor anywhere because "
+                                         "base.css owns that question (D50). The stdout block is "
+                                         "`white-space: pre` with its own overflow, because the "
+                                         "report draws fixed-width columns a wrap would break.",
+                                 "governed_by": ["D50", "D100", "D33"]},
             "src/Runs.tsx": {"does": "#/runs: the page chrome and the box picker, with RunPanel "
                                      "beneath them. Owns the SCOPE and nothing else — a strip of "
                                      "boxes from GET /boxes, and the ticked selection handed over "
@@ -2738,7 +2810,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -3301,7 +3373,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D100"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -3406,6 +3478,16 @@ COMPONENTS = [
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
                                       "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86"]},
+            "tests/markdown.spec.ts": {
+                "does": "the stale-listing markdown in a browser (D100): that it is "
+                        "reachable from #/runs at all, that both previews ask for no write, "
+                        "that neither "
+                        "write control EXISTS until the read before it has answered, that the "
+                        "worklist press sends the bytes the preview read, and that the screen "
+                        "itself states the deletion answer and the ownership-age proxy. The "
+                        "last one is asserted here rather than left to the report because a "
+                        "screen that stopped saying it would be one that quietly started lying.",
+                "governed_by": ["D33", "D100", "D49"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "

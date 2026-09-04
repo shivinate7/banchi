@@ -4,6 +4,7 @@ import { describeFailure, getBoxes, type Failure } from './server'
 import { boxLabel } from './runScope'
 import type { BoxRecord } from './types'
 import { LiveReconcile } from './LiveReconcile'
+import { Markdown } from './Markdown'
 import { RunPanel, type CartBox } from './RunPanel'
 import { carriedScope, clearCarriedScope } from './runHandoff'
 import './Runs.css'
@@ -280,6 +281,13 @@ export function Runs() {
       {/* THE FOURTH COMMAND, UNSCOPED (D87). Below the run panel because everything
           above it is about a run and this deliberately is not. */}
       <LiveReconcile />
+
+      {/* THE STALE LISTINGS, ALSO UNSCOPED (D100). Below the reconcile because it reads the
+          same file — TCGplayer's My Pricing export — and because the order on this screen is
+          the order of the work: settle what TCGplayer holds, then decide what to do about the
+          part of it that is not moving. It wanted a route of its own and does not fit in the
+          nav; `App.tsx`'s ROUTES table carries the measurement. */}
+      <Markdown />
     </main>
   )
 }

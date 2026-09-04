@@ -189,6 +189,18 @@ const ROUTES: readonly Route[] = [
    * away from stranding whoever pressed it. */
   { path: '/orders', label: 'Orders', view: Orders, persona: 'owner', group: 'run', hotkey: 'o' },
   { path: '/shipping', label: 'Shipping', view: Shipping, persona: 'owner', group: 'run', hotkey: 's' },
+  /* THE STALE-LISTING MARKDOWN (D100) IS NOT A ROW HERE, AND THE REASON IS A MEASUREMENT.
+   * D100 wanted `#/markdown` on D49's precedent — a worklist the operator sits in is what
+   * earned `#/pricing` a route. It does not fit. This strip needs 1,484.9px to draw eleven
+   * links on one row and the owner's desk is 1,440: the aside group wraps, the nav doubles
+   * from 45.5px to 90px, and `app/tests/review.spec.ts`'s between-cards floor goes red as
+   * the web font swaps in and tips the wrap mid-screen. No label rescues it — the eleventh
+   * link would have to be 68px and `Runs` is 72.6 — so the choice was a route or the shell's
+   * layout, and the shell is being rewritten on another branch. The screen is a section on
+   * `#/runs` instead, beneath the store-wide reconcile it is a sibling of.
+   *
+   * WHAT WOULD MAKE IT A ROUTE: any nav that fits eleven. That is a change to this strip's
+   * design, not to the screen, and it is named in D100's reopening conditions. */
   {
     path: '/inventory',
     label: 'Inventory',

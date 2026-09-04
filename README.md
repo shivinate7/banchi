@@ -108,6 +108,13 @@ human. One blocking command would put a person in the middle of a poll loop.
 ./pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
 ./pkmnscan reconcile  --live <my-pricing.csv>         the WHOLE store against one live
                         export, both directions. Previews; --write settles `live`.
+./pkmnscan reprice    list <my-pricing.csv>           which live listings are not selling,
+                        and what each would be re-priced to. Previews; --write makes
+                        the worklist. --days, --percent, --above-market, --limit.
+./pkmnscan reprice    apply <worklist.csv>            the edited worklist back; --write
+                        writes the price-only import.csv you upload. Add to Quantity
+                        is 0 on every row it writes, so nothing is ever deleted at
+                        TCGplayer to lower a price, and a double upload is a no-op.
 ```
 
 `identify --dry-run` does everything except the API call, so a mistyped directory, a

@@ -57,6 +57,14 @@
     GET    /pipeline/runs/<name>/history   what one SKU has been selling for. Public hosts
     GET    /pipeline/runs/<name>/trends    many SKUs' shape at once, for the row strip
     POST   /pipeline/runs/<name>/<step>    join | emit | reconcile. Free, run in the request
+    GET    /pipeline/markdowns             every stale-listing markdown, newest first (D100)
+    POST   /pipeline/markdowns             which live listings are not selling, and what each
+                                           would be re-priced to. FREE; `write` makes the
+                                           worklist and uploads it nowhere
+    POST   /pipeline/markdowns/<stamp>/apply   the edited worklist back; `write` produces the
+                                           price-only import CSV. Every row it writes carries
+                                           `Add to Quantity` 0, so it cannot move a quantity
+    GET    /pipeline/markdowns/<stamp>/file    the worklist to edit, and the import to upload
 
 The first five are build-order step 5 in `docs/GATES.md`. The sixth is the capture app's
 undo, and it lives here rather than in the app because deleting a record, a sidecar, a
@@ -542,6 +550,15 @@ _RUN_TRENDS_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/trends$")
 # `no_such_step` if this were declared after it. GET only — it presses nothing.
 _RUN_SCOPE_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/scope$")
 _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
+
+# The stale-listing markdown (D100). A stamp is `YYYYMMDD-HHMMSS` and nothing else mints one,
+# so the character class here is narrower than the run patterns above and narrower still than
+# what `pipeline_routes._open_markdown` validates against — a path that reaches either
+# handler is already known to hold no separator, and is then checked for MEMBERSHIP as well.
+# The download is declared first for the reason its run-scoped sibling is: the more specific
+# path reads first, for whoever is following this list rather than the regex engine.
+_MARKDOWN_FILE_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/file$")
+_MARKDOWN_APPLY_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/apply$")
 
 # The shipping batches (D61). A batch id is 128 random bits rendered as hex by
 # `server/shipping_routes.py:_new_batch_id`, and the character class here is the alphabet
@@ -9322,6 +9339,23 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 )
             if path == "/pipeline/runs":
                 return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_runs())
+            if path == "/pipeline/markdowns":
+                # Every markdown this store has written (D100). Reads the directory and holds
+                # nothing, the way `/pipeline/runs` does.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_markdowns())
+            match = _MARKDOWN_FILE_RE.match(path)
+            if match:
+                # The worklist the operator edits and the import CSV they upload. Forced as a
+                # download rather than rendered, because a CSV shown in a browser tab is a
+                # file somebody then has to work out how to save.
+                wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
+                blob, kind = pipeline_routes.do_markdown_file(match.group(1), wanted[0])
+                return self._send(
+                    HTTPStatus.OK,
+                    blob,
+                    kind,
+                    (("Content-Disposition", f'attachment; filename="{wanted[0]}"'),),
+                )
             match = _RUN_FILE_RE.match(path)
             if match:
                 # The download. Matched BEFORE the run-item pattern, which would otherwise
@@ -9552,6 +9586,22 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # shape that can report what TCGplayer holds and this pipeline never sent.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_reconcile_live(self._body())
+                )
+            if path == "/pipeline/markdowns":
+                # THE STALE-LISTING MARKDOWN (D100). Free and store-wide, `reconcile-live`'s
+                # shape: the preview is the default and `write` produces a WORKLIST, which
+                # this process uploads nowhere. Every row it writes carries `Add to Quantity`
+                # 0, so no file on this path can add, remove or delete a copy.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_markdown_list(self._body())
+                )
+            match = _MARKDOWN_APPLY_RE.match(path)
+            if match:
+                # The edited worklist back, and the file the operator uploads to TCGplayer.
+                # Previews without `write`, like every other half of this pair.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_markdown_apply(match.group(1), self._body()),
                 )
             if path == "/pipeline/emit":
                 # ONE IMPORT FILE OVER SEVERAL RUNS (D86). FREE — it reads runs, writes a CSV

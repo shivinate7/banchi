@@ -1,0 +1,253 @@
+/* THE STALE-LISTING MARKDOWN (D100), drawn as three numbered steps down one column.
+ *
+ * DELIBERATELY PLAIN, and worth saying so rather than leaving it to read as neglect. A
+ * separate branch is rewriting every screen in this app into a new design system; this sheet
+ * exists so the screen is legible and correctly structured on the way there, not so it is
+ * finished. What is load-bearing rather than cosmetic is marked, and those marks are what
+ * should survive a restyle.
+ *
+ * NO CURSOR RULES ANYWHERE IN HERE, WHICH IS DELIBERATE. `app/src/base.css` owns the whole
+ * cursor question (D50) at a specificity a component sheet is not meant to reach, and
+ * `app/tests/cursor.spec.ts` asserts the rule rather than a roster — a control here that set
+ * its own would be the exact class of defect that sweep was written after.
+ *
+ * NO SOLID ACCENT FILL, which `app/tests/pricing.spec.ts` floors next door and
+ * `docs/DESIGN.md` states once for every screen: the product spends hue on two states and
+ * neither of them is "this is the important button". A border and the ink weight carry it.
+ */
+
+.markdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s5);
+  max-width: 74rem;
+}
+
+.markdown-head {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.markdown-says {
+  max-width: 62ch;
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* THE PROXY WARNING, AND IT IS NOT DECORATION. The command's own report carries this sentence
+   too; it is repeated here because a person acts from the screen and reads the report after,
+   and the age this feature ranks on is the one number in it that is not what it looks like. */
+.markdown-caveat {
+  max-width: 62ch;
+  margin: 0;
+  padding-left: var(--s3);
+  border-left: 2px solid var(--ink);
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.markdown-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.markdown-step-head {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.markdown-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s4);
+}
+
+.markdown-field,
+.markdown-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.markdown-label {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.markdown-field input {
+  width: 8rem;
+  padding: var(--s2);
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--field);
+  border-radius: var(--r);
+}
+
+.markdown-field input:hover {
+  border-color: var(--field-hover);
+}
+
+.markdown-check {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.markdown-pick input {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.markdown-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.markdown-again,
+.markdown-check-button,
+.markdown-write {
+  padding: var(--s2) var(--s3);
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+}
+
+.markdown-again {
+  border-color: var(--field);
+  font-weight: 400;
+}
+
+.markdown-again:hover:not(:disabled),
+.markdown-check-button:hover:not(:disabled),
+.markdown-write:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.markdown-again:disabled,
+.markdown-check-button:disabled,
+.markdown-write:disabled {
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+/* THE FILES, AS LINKS THAT LOOK LIKE THE BUTTONS BESIDE THEM, because that is what they are:
+   the worklist and the import CSV are the two things this screen exists to hand over, and an
+   underlined word in a paragraph would read as a footnote. */
+.markdown-file {
+  padding: var(--s2) var(--s3);
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+}
+
+.markdown-file:hover {
+  background: var(--hover);
+}
+
+/* THE COMMAND'S OWN STDOUT (D33). `pre` and its own overflow, never `pre-wrap`, for
+   `LiveReconcile.css`'s reason one screen over: the report draws fixed-width columns —
+   copies, sku, asking, new, vs mkt — and a wrap destroys the alignment they exist for. */
+.markdown-console {
+  max-height: 60vh;
+  margin: 0;
+  padding: var(--s3);
+  overflow: auto;
+  font-family: var(--util);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  white-space: pre;
+}
+
+.markdown-note {
+  padding: var(--s3);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+}
+
+.markdown-note-text {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.markdown-machine {
+  margin: var(--s1) 0 0;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.markdown-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.markdown-history-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.markdown-history-stamp {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.markdown-history-files {
+  display: flex;
+  gap: var(--s2);
+}

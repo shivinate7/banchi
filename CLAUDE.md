@@ -137,6 +137,38 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   kept, not written, and named in the report — the
                                    #   same rule `join` applies (D87 amended 2026-09-02).
                                    #   Reachable on `#/runs`, under the run panel.
+
+./pkmnscan reprice  list <my-pricing.csv> [--days N] [--percent P] [--write]
+                                   # WHICH LIVE LISTINGS ARE NOT SELLING, and what each would
+                                   #   be re-priced to (D100). Free, re-runnable, previews.
+                                   #   `--write` writes a WORKLIST — the stale rows in export
+                                   #   shape, with a price already proposed on every one — into
+                                   #   `inventory/markdowns/<stamp>/`. It is uploaded nowhere.
+                                   #   --days N          the window: nothing sold here inside
+                                   #                     it, and OWNED since before it
+                                   #   --percent P       cut off the asking price (default 10)
+                                   #   --above-market P  only listings asking more than P%
+                                   #                     above `TCG Market Price`
+                                   #   --limit N         the N rows worth the most; rest named
+                                   #   --again           override the ratchet
+./pkmnscan reprice  apply <worklist.csv> [--write]
+                                   # The edited worklist back; `--write` produces `import.csv`,
+                                   #   which is what you upload through My Pricing.
+                                   #   NOTHING IS EVER DELETED AT TCGPLAYER TO LOWER A PRICE.
+                                   #   `TCG Marketplace Price` edits the live listing in place —
+                                   #   282 of 288 live SKUs carry exactly the price this
+                                   #   pipeline last wrote — and `Add to Quantity` is a DELTA:
+                                   #   72,701 real export rows carry "0", 649 of them on rows
+                                   #   TCGplayer reported LIVE. Every row of every file this
+                                   #   command writes carries 0, so uploading one twice is a
+                                   #   no-op. That is not true of an `emit` file: nine SKUs on
+                                   #   this store sit at 2 x pushed - sold because one was.
+                                   #   Only `TCGplayer Id` and `TCG Marketplace Price` are read
+                                   #   out of the file you hand back; every other byte comes
+                                   #   from the manifest, so a spreadsheet cannot corrupt it.
+                                   #   Reachable on `#/runs`, under the store-wide
+                                   #   reconcile. It wanted a route and the nav has no
+                                   #   room for an eleventh link — see App.tsx's ROUTES.
 ```
 
 ## Things you will get wrong without being told
@@ -693,6 +725,7 @@ D90  The envelope is the unit of the write, and an order drives the walk as a mo
 D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
 D92  A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
 D93  The copies panel is the picker, and a full line refuses the take
+D100  Nothing is deleted to lower a price, the quantity is not a variable, and the age is a proxy that says so
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
@@ -729,6 +762,14 @@ D93  The copies panel is the picker, and a full line refuses the take
   the product claim that retires C2's OCR (BUILT), and the channel decision (RECORDED, and
   NOT executed — every researched venue came back marginal). Read its §8 before trusting a
   number: no real code card has ever been through this pipeline.
+- `docs/specs/stale-listings.md` — the live listings that are not selling, marked down and
+  pushed back (D100). SPECIFIED and BUILT, NOT VALIDATED: two commands, four routes, a screen
+  and a harness block, and **no file it writes has ever been uploaded to TCGplayer**. Read its
+  §2 before touching this path — the deletion question is answered there from 72,701 real
+  export rows, and the doubling it is shaped to prevent already happened on this store. Read
+  §3 before trusting the age it ranks on: it is how long the card has been OWNED, because
+  `Listing` has no first-listed stamp and `live_as_of` is absent from all 443 stored payloads.
+  §6 names the three things the first real upload would measure.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/capture-app.md` — step 7. 7a (capture screen, undo, pull preview, one new
   server route) was built to it. 7b (review queue, Fulfillment view, inventory view,

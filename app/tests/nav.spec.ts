@@ -94,6 +94,10 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
   await page.route(/\/status$/, (route) => json(route, { boxes: [], next: null }))
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
+  /* The markdown panel on #/runs reads its own history on mount (D100) and holds nothing else
+     until an export is uploaded. Empty is the honest answer here: this checkout has its own
+     store (D43) and no markdown has ever been written into it. */
+  await page.route(/\/pipeline\/markdowns$/, (route) => json(route, { markdowns: [] }))
   /* The code-card screen reads its ledger on mount (D70), and an EMPTY one is the honest
      answer here: this checkout has its own store (D43) and no code has ever been scanned into
      it. Every field the screen indexes is present rather than short, for the reason the order
