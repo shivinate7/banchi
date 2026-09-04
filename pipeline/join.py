@@ -1411,6 +1411,12 @@ class SkuMatch:
     live_cap: int = LIVE_QUANTITY_CAP
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
+    # The D9 cut-off this match was partitioned against — the operator's stored
+    # `policy.threshold` (`pipeline/corpus.py`), or the module constant for a store that has
+    # never set one. A FIELD BESIDE `rule` AND `basis` AND NOT A READ OF THE CONSTANT: a
+    # match carries the policy it was built under, so a report cannot answer `listable` with
+    # a figure that was changed after it was computed.
+    threshold: Decimal = pricing.THRESHOLD
     # Copies TCGplayer already holds, plus the copies that have left inventory — see
     # `IdentifiedCard.committed`. Subset of `positions`; they take nothing from the import
     # file, which is where `cli/cmd_emit.py`'s idempotence actually lives (D54).
@@ -1553,7 +1559,7 @@ class SkuMatch:
 
     @property
     def listable(self) -> bool:
-        return pricing.is_listable(self.market_price)
+        return pricing.is_listable(self.market_price, self.threshold)
 
 
 @dataclass(frozen=True)
@@ -1881,6 +1887,7 @@ def join_batch(
     basis: str = pricing.BASIS_MARKET,
     trust_claim: bool = False,
     copies_out: Optional[Mapping[str, int]] = None,
+    threshold: Decimal = pricing.THRESHOLD,
 ) -> JoinReport:
     """Resolve every card to exactly one catalog row, aggregating copies by SKU.
 
@@ -1896,6 +1903,10 @@ def join_batch(
     """
     pricing.check_basis(basis)
     rule = pricing.Rule.parse(rule)
+    # ONE PARSE FOR THE WHOLE BATCH, and the partition below reads the result rather than the
+    # constant. A stored threshold arrives as the string it was typed as; every match built
+    # here carries the same `Decimal`.
+    threshold = pricing.check_threshold(threshold)
     report = JoinReport(cards_in=len(cards), collisions=len(catalog.colliding_keys))
 
     for card in cards:
@@ -2035,6 +2046,7 @@ def join_batch(
                 live_cap=live_cap,
                 rule=rule,
                 basis=basis,
+                threshold=threshold,
                 # A store fact, and `pipeline/` may not read the store, so it arrives as a
                 # value; absent means the export alone decides (D59).
                 held_out=None if copies_out is None else copies_out.get(sku),
@@ -2056,7 +2068,8 @@ def join_batch(
     # A row with no market price is NOT sub-threshold — it is unpriced, which D9 keeps as
     # its own category precisely so it cannot be swept into a flat bulk price.
     report.below_threshold = SubThresholdBucket(
-        [m for m in report.matches.values() if m.has_market_data and not m.listable]
+        [m for m in report.matches.values() if m.has_market_data and not m.listable],
+        threshold=threshold,
     )
     return report
 

@@ -1,1519 +1,975 @@
-/* The review queue — docs/DESIGN.md's own section, which specifies this screen in more
- * detail than any other because it is the one the owner spends hours in.
- *
- * FOUR RULES DO ALL THE WORK IN THIS FILE, and they are the document's rather than this
- * file's:
- *
- *   1. One card at a time, photo first. THE PHOTOGRAPH AND THE CHOICES SIT SIDE BY SIDE
- *      above 900px and stack below it — the split this rule used to forbid, reversed on
- *      2026-08-24 with the owner's approval and the measurement docs/DESIGN.md now carries.
- *      The phone keeps the single column byte for byte, which was the half of the old rule
- *      that was ever about the phone.
- *   2. The sort has to be visible: a row's name size and its price size both step down as
- *      the price does, and a parked row is dimmed rather than merely lower.
- *   3. Accent has exactly two jobs. Outline and text weight where the system is unsure —
- *      the reason chip, and the two conflicting claims in the sentence, which is the common
- *      case here. Solid fill only where there is exactly one thing to do, WHICH IS EXACTLY
- *      ONE PLACE ON THIS SCREEN: the group state's confirm (.review-group-confirm), and
- *      nowhere in the one-card flow. There, a card with candidate rows has two answers or
- *      more, and a card with none has zero, because `POST /review/<box>/<index>/answer`
- *      refuses a no-candidates entry as `no_candidates` — it needs a re-shoot or a
- *      re-identify, not an answer. This rule read "nothing in this file is filled" until
- *      the group state existed, and that sentence was true of the screen it described: the
- *      group confirm earns the fill precisely because its eligibility rules reduce the
- *      state to one action — the argument is at the rule, and at `GroupConfirm` in the
- *      component. PullConfirm's fill stays the Fulfiller's loudest control.
- *   4. Mono carries all metadata. The body face is reserved for sentences a human reads,
- *      and this screen is mostly metadata, so the defaults below are inverted relative to
- *      PullPreview.css: dd is mono and the exception is marked.
- *
- * OWNER-SIDE. docs/DESIGN.md's Fulfillment floors — 20px body, 32px position labels, 44px
- * tap targets — govern the Fulfiller's view and not this one, and borrowing them here would
- * make this screen look like his and set the expectation that it is safe for him to use. It
- * is not: it speaks the pipeline's vocabulary out loud, which his banned-word list forbids
- * entirely.
- *
- * No shadow anywhere. The separation mechanism is the 1px --line hairline and nothing else.
- */
+/* ============================================================================
+   REVIEW — the judgement screen.
+   Stage (a dark well with the photograph) · verdict (the question, the evidence, one row
+   per answer with a keycap) · rail (the queue, inline when there is room for it and a
+   drawer when there is not). Every colour is a token; nothing here names one.
+   ========================================================================== */
 
-/* EVERY VERTICAL NUMBER ON THIS SCREEN IS SPENT AGAINST ONE MEASUREMENT, taken at 1280x900
-   in a browser rather than reasoned about: the photo, the position, the reason and the
-   sentence all sit above the candidate rows by docs/DESIGN.md's stated order, and the first
-   draft pushed the first candidate to y=806 of 900. A screen where the answer needs a scroll
-   costs that scroll once per card across hundreds of them.
-
-   So the chrome is tight — s5 vertically rather than s6, one line of lede, s3 between the
-   card's parts — and the photo carries a height cap.
-
-   THE SPLIT THIS PARAGRAPH REJECTED IS NOW WHAT SHIPS, AND THE REJECTION IS WHY IT TOOK SO
-   LONG. It read: "Rejected: the left/right split that would fix it outright, which
-   docs/DESIGN.md forbids by name so that one layout serves a laptop and a phone." The
-   forbidding was real; what nobody had was the price. Measured on 2026-08-24 against a
-   populated queue at 1440x900: the photograph drew 8.1% of the viewport, the third candidate
-   row was cut off by the fold, and 52% of the width was empty. One layout for two devices was
-   never free — the laptop was paying for it, on the screen that exists to look at a
-   photograph. The split is desktop-only and the phone below 900px is untouched.
-
-   THE CAP IN FORCE IS 48vh, DECLARED ONCE AS `--photo-cap` ON `.review` AND READ BY TWO
-   RULES: `.review-photo`'s max-height, and the min-height of the `.review-frame` that
-   reserves the space whether or not there is an image to put in it (D28). The argument for
-   the number is beside those rules, along with the 2026-08-22 measurement of what it costs.
-   This block argued for 38vh over 34vh on rows-above-the-fold grounds, and was left standing
-   when the cap was raised — a comment reasoning toward a number the file does not use, far
-   enough above the rule that contradicts it that neither reader meets both. Worse than no
-   comment, because it reads as the current thinking. Those measurements were real and the
-   trade that replaced them is recorded where the number is, which is the one place a session
-   changing it will look.
-
-   THE RULE IS docs/DESIGN.md'S NOW, AND ONLY THE NUMBER IS THIS FILE'S. That section carries
-   "photo as large as the viewport allows" — a cap on height with width free to bind first, so
-   a phone gets a genuinely full-width photo and a laptop keeps the sentence and a candidate
-   in view beneath it — and it names this file as where the judgement lives. Both halves bind:
-   the number may not be changed here without re-reading that paragraph, and the paragraph may
-   not be satisfied by a second cap declared somewhere else.
-
-   WORTH LOOKING AT ON THE OWNER'S OWN SCREEN before this is called done, and worth
-   re-measuring against a real rig frame: this was tuned against a 63x88 portrait stand-in,
-   and a Cam Link capture is a 16:9 frame with the card somewhere inside it (D13), which is a
-   different shape under the same cap. */
 .review {
-  /* 16px, which is the top of the owner's end of the spacing scale and the page-chrome floor
-     docs/DESIGN.md now states outright. It was 24/32 — the Fulfiller's end of the same scale,
-     on the screen whose own file header argues that every pixel of chrome pushes the candidate
-     rows further below the fold. Nothing about this screen ever asked for his density; it was
-     inherited from nowhere in particular. */
-  padding: var(--s4);
-  /* THE VERTICAL BUDGET, SPELLED OUT SO A LATER SESSION CAN CHECK IT RATHER THAN RE-MEASURE
-     IT. 162 = 46 (the nav strip, app/src/App.css — no token owns that number) + 16 (this
-     element's padding-top) + 68 (.review-head: the shared title/controls line, the lede, its
-     padding-bottom and its 1px rule) + 16 (.review-card's margin-top) + 16 (padding-bottom).
-     At 1440x900 that puts the frame's top at y=146 — UNCHANGED from the single-column layout,
-     which is what keeps docs/DESIGN.md's 150px first-content rule green — and leaves 738px
-     beneath it. */
-  --photo-h: calc(100vh - 162px);
+  /* The photograph's height: what the viewport leaves after the page chrome above and
+     below it. The stage's width follows from the rig's 9:16 frame (D13).
+     MEASURED, NOT ESTIMATED. 168px undercounted the real chrome by 40px at both 1440x900 and
+     1280x800, so the document ran 40px past the viewport and the decision surface sat under
+     the fold — and a click Playwright had to scroll to reach dragged the whole page under the
+     sticky stage, which is how a layout fault read as a moving photograph. 100dvh rather than
+     100vh so a phone's collapsing address bar is counted the same way. */
+  --rv-photo-h: calc(100dvh - var(--rv-chrome));
+  --rv-well-pad: 9px;
+  /* THE CHROME, COUNTED AND THEN CUT (D32: the pixel budget is spent on the card, not the desk).
+     Two defects met here and they pulled opposite ways. The subtrahend said 208 while the real
+     chrome was 258, so the document ran 950px tall in a 900px viewport — a 50px overflow. And
+     the photograph drew 692x389 at 1440x900, which is 20.8% of the screen against
+     `review.spec.ts`'s floor of 23%. Correcting the subtrahend alone would have fixed the
+     overflow by making the photograph SMALLER, to 17.9%, which is the wrong direction on the one
+     screen whose whole job is looking at a card.
 
-  /* 0.5625 IS THE RIG'S FRAME, NOT A CARD. D13: the Cam Link hands the browser a landscape
-     frame and the rotation is applied at encode time, so the STORED photo is 2160x3840 — 9/16.
-     Deriving the track width from the height is what stops the column reflowing when the image
-     decodes, and it is why the photograph grows with a taller screen rather than a wider one.
-     Every area figure computed from a bare card's 63:88 is wrong about this screen. */
-  --photo-w: calc(var(--photo-h) * 0.5625);
+     So the chrome was cut to 172px instead of the number being nudged, and every one of the 86px
+     came off the desk:
+        page padding-top     24 -> 16   (-8)   `.review.bn-page` below
+        pagehead margin      24 -> 12   (-12)
+        filter strip margin  24 -> 12   (-12)
+        well padding       2x12 -> 2x9  (-6)
+        page padding-bottom  64 -> 16   (-48)  the decision surface is the last thing on the page
+     172 leaves a 728px photograph at 1440x900: 728 x 409.5 = 23.0% of the screen, and a long
+     edge over the 700px the spec asserts beside the area.
 
-  /* THE TUNED MEASURE, UNCHANGED AND MOVED RATHER THAN WIDENED. 688 - 2x16 = 656px of content
-     is what the sentence, the candidate rows and the facts panel were all tuned against, and
-     they still sit inside a 688px box — only what is BESIDE them has changed. 688 rather than
-     720 for the reason this comment has always given: `box-sizing: border-box` puts the
-     padding inside the number, so 720 with 16px padding would have widened the sentence to
-     688 on the quiet. The measure is what was tuned and the measure is what is held. */
-  --choice-w: 688px;
-  --rail-w: 280px;
-
-  /* Binds only above the split, where it stops the head's controls flying off to the right on
-     a very wide display. It does not bind at 1440, where the grid's own tracks decide. */
-  max-width: calc(
-    var(--photo-w) + var(--s5) + var(--choice-w) + var(--s5) + var(--rail-w) + (var(--s4) * 2)
-  );
-
-  /* THE CAP, DECLARED ONCE AND READ TWICE — by the frame that reserves the space and by the
-     photograph that fills it. docs/DESIGN.md requires one cap and says this file is where the
-     number lives; two rules that both spell `60vh` would be two caps one edit away from
-     disagreeing, and the frame silently reserving a different height from the image it holds
-     is the exact defect D28 sent this session to remove. Not a design token: tokens.css owns
-     colour, type, spacing and radius, and this is a judgement about one screen.
-
-     REBASED FROM 48vh ON 2026-08-24, AND THE VARIABLE IS DELIBERATELY NOT RETIRED. Retiring
-     it was the instruction and it is refused: the two readers below are D28's reservation, and
-     THEIR BEING THE SAME EXPRESSION is the whole of why the frame reserves exactly what the
-     image fills. Delete the variable and the reservation goes with it. 48vh existed only
-     because the sentence and the first candidate row stacked UNDER the photograph and had to
-     stay in view; they sit beside it now, so the cap is simply the height that is left. An
-     uncapped photo at 9/16 in this column would draw 1152px tall and put page scroll straight
-     back, which is the thing the split exists to remove. */
-  --photo-cap: var(--photo-h);
+     THE PIECES AND THIS NUMBER MUST MOVE TOGETHER. There is no mechanism keeping them in step —
+     a padding changed above without changing this reintroduces exactly the overflow that stood
+     for a week, silently. `100dvh` rather than `100vh` so a phone's collapsing address bar is
+     counted the same way. */
+  --rv-chrome: 172px;
+  --rv-stage-w: calc(var(--rv-photo-h) * 0.5625 + var(--rv-well-pad) * 2);
+  --rv-rail-w: 292px;
+  /* The well is a dark neutral in both themes: a bright surround crushes the sheen the
+     operator is here to judge. */
+  --rv-well: var(--bn-ink);
+  --rv-well-ink: var(--bn-ink-4);
+  --rv-well-ink-strong: var(--bn-surface-2);
+  /* The well's own light: a sheen at the top, a shade at the bottom, a tint for a code
+     line sitting on it, and the loupe's outer ring. Mixed from the theme's tokens so the
+     light colour is the light one in both themes. */
+  --rv-well-sheen-hi: color-mix(in srgb, var(--bn-surface) 5%, transparent);
+  --rv-well-sheen-lo: color-mix(in srgb, var(--bn-ink) 18%, transparent);
+  --rv-well-tint: color-mix(in srgb, var(--bn-surface) 6%, transparent);
+  --rv-loupe-ring: color-mix(in srgb, var(--bn-surface) 25%, transparent);
+}
+:root[data-theme='dark'] .review {
+  --rv-well: var(--bn-surface-2);
+  --rv-well-ink: var(--bn-ink-3);
+  --rv-well-ink-strong: var(--bn-ink);
+  --rv-well-sheen-hi: color-mix(in srgb, var(--bn-ink) 5%, transparent);
+  --rv-well-sheen-lo: color-mix(in srgb, var(--bn-surface-2) 18%, transparent);
+  --rv-well-tint: color-mix(in srgb, var(--bn-ink) 6%, transparent);
+  --rv-loupe-ring: color-mix(in srgb, var(--bn-ink) 25%, transparent);
+}
+:root[data-theme='dark'] .review-well,
+:root[data-theme='dark'] .review-group-grid { box-shadow: var(--bn-shadow-2), inset 0 0 0 1px var(--bn-line-strong); }
+@media (max-width: 1199px) {
+  .review { --rv-photo-h: min(calc(100vh - 168px), 640px); }
+}
+@media (max-width: 1023px) {
+  .review { --rv-photo-h: min(calc(100vh - 216px), 620px); }
 }
 
-/* ---- head ----
- *
- * ONE ROW, NOT FOUR STACKED BLOCKS, and on this screen the argument is arithmetic rather than
- * taste. Measured at 1440x900 with three candidate rows before the change: the photograph's
- * reserved frame started at y=215 — a 46px nav and then 169px of title, lede, controls and
- * gaps — which is 24% of the viewport spent before the one thing this screen exists to show.
- * The candidate rows then began at y=807 and the Skip control was off the fold entirely.
- *
- * The title and the controls now share a line, which is where the bulk of it went: a 42px
- * title block plus a 57px controls block became one 45px row. `.review-head` owns the rule
- * under the whole header, because with the controls no longer the last child a border on
- * them would draw halfway up the header.
- *
- * THE LEDE SURVIVES AND IS DEMOTED, which is deliberate on both counts. It is the one line on
- * this screen that says the action is immediate and unasked-twice, and a screen that answers a
- * card per keystroke should say so somewhere; but it is also the least-read text here by a
- * wide margin, so it goes to the metadata size rather than sitting three points under the
- * heading. Deleting it was the other option and it buys 20px — not enough to pay for the one
- * sentence that explains the keyboard.
- */
+/* ---- head: the kit's page header — eyebrow, title, and the progress sentence as its lede
+   with the bar riding after the text. The reason lens is the row under it. ---- */
+.review-pagehead .bn-lede { max-width: none; }
+/* The desk's share, cut to leave the card 23% of the screen — the arithmetic is above the
+   `--rv-chrome` declaration and these four rules are the four lines of it. */
+.review.bn-page { padding-top: var(--bn-4); padding-bottom: var(--bn-4); }
+.review-pagehead { margin-bottom: var(--bn-3); }
+.review-progress { display: inline-flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; min-width: 0; }
+.review-progress-bar { width: 160px; height: 5px; flex: none; }
+.review-progress-text { color: var(--bn-ink-3); }
+.review-progress-text strong { color: var(--bn-ink); font-weight: 700; }
+.review-progress-parked { color: var(--bn-ink-3); }
 
-.review-head {
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-/* `wrap` rather than `nowrap`, and the worst case is what makes it safe: if the counts, the
-   Reload and a long group offer cannot fit beside the title, they wrap onto a second line
-   and the header is still shorter than the four stacked blocks it replaced. Nothing is ever
-   clipped and nothing overflows the column. */
-.review-head-top {
+/* The reason lens. Wide screens wrap it; below 1024px it is one scrolling strip with a
+   fade for the affordance. The mask's colour is alpha-only and names no colour. */
+.review-filters {
   display: flex;
   align-items: center;
+  gap: 3px;
   flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  margin: calc(-1 * var(--bn-2)) 0 var(--bn-3);
+  padding: 3px;
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
 }
-
-/* 20px, down from 28px, and it is the display face's own floor rather than a value picked to
-   be small — docs/DESIGN.md locks Cabinet Grotesk at 700/800 and only at >= 20px, so this is
-   as tight as the face is allowed to be drawn. 800 weight is kept: the size carries less, so
-   the weight carries more, and the title still reads as the heading of the row it now shares
-   with two controls. */
-.review-title {
-  /* Never squeezed to make room for a control beside it. */
-  flex: none;
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+@media (max-width: 1023px) {
+  .review-filters {
+    flex-wrap: nowrap;
+    width: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    mask-image: linear-gradient(90deg, var(--bn-mask) calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(90deg, var(--bn-mask) calc(100% - 28px), transparent);
+  }
+  .review-filters::-webkit-scrollbar { display: none; }
 }
-
-/* `display: contents`, SO THE CONTROLS WRAP AS FOUR THINGS AND NOT AS ONE BLOCK. Rendered,
-   looked at, changed — twice, and both readings are worth keeping because the second is only
-   obviously right once the first has been seen.
-
-   As an ordinary nested flex row this element is a single item of the row above, so its width
-   is its whole content: with the reason filter on and a group offer standing, that is over
-   900px, it cannot sit beside the title, and it takes a full line of its own — leaving the
-   title alone on a 30px line above it that says nothing. Head height in that state: 159px,
-   which is most of what the change was undoing.
-
-   `display: contents` removes this box from the layout and hands its four children straight to
-   `.review-head-top`, so the wrap happens between controls: title, Reload and the counts fill
-   the first line and whatever is left starts a second. The element stays in the DOM, which is
-   the point of using this rather than deleting it — it is what `answer`'s comments, the group
-   offer's and the filter reminder's all refer to by name, and it is the row's one semantic
-   group.
-
-   `margin-left: auto` moves to the first control, where it does the same job it did here: the
-   slack in the line collects between the heading and the controls, the `.app-nav-group-aside`
-   mechanism from App.css. On a wrapped second line it right-aligns that line, which is the
-   behaviour wanted there too. */
-.review-controls {
-  display: contents;
-}
-
-.review-controls > :first-child {
-  margin-left: auto;
-}
-
-/* `flex: none`, AND THIS IS THE RULE THE ROW DOES NOT WORK WITHOUT — also rendered, looked at,
-   fixed. Flex items shrink by default, so with the reason filter on, the four controls squeezed
-   instead of wrapping: `0 to review · 6 parked` broke over two lines and
-   `Answer all 6 as a group` over three, turning a 33px row into a 75px stack of ragged
-   fragments. Each of these is one indivisible thing — a button, a count, a reminder — so the
-   row wraps at the gaps between them and never inside one. */
-.review-controls > * {
-  flex: none;
-}
-
-.review-lede {
-  color: var(--muted);
-  margin-top: var(--s1);
-  font-size: 13px;
-}
-
-/* A word a human reads, so the body face. No fill: the solid accent is reserved for a screen
-   with exactly one thing to do, and reloading is not it.
-
-   inline-flex since 2026-08-22, to carry its key chip beside the word — the same shape
-   `.review-action` has always had, and for the same reason. */
-.review-reload {
+.review-filter {
   display: inline-flex;
   align-items: center;
-  gap: var(--s2);
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  cursor: pointer;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-
-/* Border rather than ground, and this is the one place this file departs from
-   PullPreview.css on purpose. tokens.css says --hover is ROW HOVER ONLY, and the token block
-   in docs/DESIGN.md names what a row is: choice rows, queue rows, panels. A candidate row is
-   a choice row and takes the ground below; a button is not, so it moves its border to --ink
-   and leaves the ground alone. */
-.review-reload:hover:not(:disabled) {
-  border-color: var(--ink);
+.review-filter:hover:not(:disabled) { color: var(--bn-ink); }
+.review-filter[aria-pressed='true'] { background: var(--bn-surface); color: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
+.review-filter:disabled { opacity: 0.5; }
+.review-filter-count {
+  font-family: var(--bn-font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  padding: 1px 5px;
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-surface);
 }
+.review-filter[aria-pressed='true'] .review-filter-count { color: var(--bn-accent); background: var(--bn-accent-tint); }
+.review-filter-clear { color: var(--bn-ink-3); }
+.review-queue-toggle .bn-pill { height: 18px; padding: 0 6px; }
 
-/* Disabled while a round trip is in flight, and it says so by going muted rather than by
-   disappearing: a control that vanishes for the length of a write is a control the owner
-   looks for at the moment he is least inclined to. Same treatment as `.review-action`,
-   because it is the same fact about the same window. */
-.review-reload:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-.review-count {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-/* ---- panels: a refusal, a missing photo, the end of the skip loop ----
-   The unwired seam was the fourth and is gone; ReviewQueue.tsx says why where it used to be
-   drawn. Named rather than counted, so this line survives the next panel. */
-
-.review-note,
-.review-absent {
-  padding: var(--s4);
-  margin-top: var(--s5);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* A sentence a human reads, so the body face. No margin of its own: inside a panel it is
-   the first child and the panel's padding is the space, and inside the card the flex gap
-   is. The one case that needs it is the same paragraph standing alone directly under the
-   header — "Reading the queues", "Nothing is waiting" — which the child combinator below
-   covers without giving every instance a margin to fight. */
-.review-note-text {
-  font-family: var(--body);
-  font-size: 15px;
-  color: var(--ink);
-}
-
-.review > .review-note-text {
-  margin-top: var(--s5);
-}
-
-/* A panel that carries an action as well as a sentence — the note that offers to clear the
-   skips, and the refusal panel's own Reload. The margin is the panel's rather than the
-   button's, for the reason the paragraph above has none of its own: the button is not the
-   first child, and giving `.review-action` a margin everywhere would fight the flex gap in
-   the card's own row. */
-.review-note .review-action {
-  margin-top: var(--s3);
-}
-
-/* THE REFUSAL PANEL, DRAWN INSIDE THE CARD BENEATH THE CANDIDATE ROWS. It used to sit between
-   the header and the card, which — when the photograph stood above the rows rather than beside
-   them — is some 700px above the rows the operator is looking at when he presses a digit — a refusal nobody sees, over a card that was
-   silently restored and is the next keypress's target. It cannot go ABOVE the rows, because
-   anything that appears there pushes every one of them down by its own height, which is the
-   movement this session was sent to remove.
-
-   The card is a flex column with its own gap, so the panel's standing top margin would double
-   the space; and `align-items: flex-start` means it must claim the width or it shrinks to its
-   own sentence. Both are the container's business rather than the panel's, which is why this
-   is a child rule and not an edit to `.review-note`. */
-.review-choice > .review-note {
-  width: 100%;
-  margin-top: 0;
-}
-
-/* The machine string beneath the human one — docs/DESIGN.md's reason-code rule, which exists
-   so that what you saw on screen is greppable against the run report and review.json.
-
-   IT CARRIES A TOKEN, NEVER THE SENTENCE ABOVE IT AGAIN. A reason code, a refusal's code,
-   the URL that 404'd — something the line above does not already say. And it is NOT
-   uppercased: the rest of this file's mono metadata is, but a reason code that reads
-   `METADATA_NOT_STOCKED` on screen and `metadata_not_stocked` in the file is a string you
-   have to translate before you can grep it, which is the one job this line has.
-
-   Owner-side only. The Fulfillment banned-word list forbids this register entirely and no
-   Fulfillment route renders this class. */
-.review-machine {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: var(--s2);
-  word-break: break-all;
-}
-
-/* ---- the body: the card (or the group offer), and the rail beside it ---- */
-
-/* The card and the group offer are alternatives in ONE slot, and the rail is their sibling —
-   so the outer grid cannot live on `.review-card`. This wrapper owns the margin the card used
-   to carry; leaving it on both would double the gap. */
+/* ---- body ------------------------------------------------------------------ */
 .review-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(200px, var(--rail-w));
-  gap: var(--s5);
+  grid-template-columns: minmax(0, 1fr) var(--rv-rail-w);
+  gap: var(--bn-5);
   align-items: start;
-  margin-top: var(--s4);
 }
-
-/* ---- the one card ---- */
-
-/* THE SPLIT ITSELF: the photograph in a track sized from its own height, the choices beside
-   it in the measure they were tuned in. docs/DESIGN.md's reversed rule is the argument. */
 .review-card {
   display: grid;
-  grid-template-columns: var(--photo-w) minmax(0, var(--choice-w));
-  gap: var(--s5);
+  grid-template-columns: var(--rv-stage-w) minmax(0, 1fr);
+  gap: var(--bn-6);
   align-items: start;
+  min-width: 0;
 }
 
-/* Sticky for the reason BoxBrowse.css gives one screen over: a column of rows long enough to
-   scroll must not push the thing being checked off the screen. The photograph is exactly
-   viewport-height, so it has no bottom of its own to reveal. */
+/* ---- stage ----------------------------------------------------------------- */
 .review-stage {
   position: sticky;
-  top: var(--s4);
-  align-self: start;
-  min-width: 0;
-}
-
-/* THIS IS WHAT `.review-card` USED TO BE, VERBATIM. Every child — the card head, the sentence,
-   the candidate rows, the refusal and receipt panels, the actions, the facts — keeps the exact
-   box it had in the single column, including `align-items: flex-start`, which four other rules
-   in this file depend on by name. */
-.review-choice {
+  top: var(--bn-6);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s3);
   min-width: 0;
 }
+.review-well {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(var(--rv-photo-h) + var(--rv-well-pad) * 2);
+  padding: var(--rv-well-pad);
+  border-radius: var(--bn-r-xl);
+  background: var(--rv-well);
+  box-shadow: var(--bn-shadow-2);
+  overflow: hidden;
+  transition: opacity var(--bn-t) var(--bn-ease);
+}
+.review-well::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, var(--rv-well-sheen-hi), transparent 40%, transparent 70%, var(--rv-well-sheen-lo));
+  pointer-events: none;
+}
+.review-card.is-loading .review-well { opacity: 0.55; }
 
-/* "Photo as large as the viewport allows" is the rule — docs/DESIGN.md's own words since
-   2026-08-13, when "full width at the top" was retired for being right on a phone and wrong
-   on a laptop. A card is 63x88mm; at this column's width a full-width photograph is over a
-   thousand pixels tall, which puts every candidate row below the fold and costs a scroll per
-   card across hundreds of them. So the cap wins on tall photographs and the width rule wins
-   on wide ones, and `max-width: 100%` still binds first on a phone — which is what keeps one
-   column working on both.
-
-   IT HUGS THE IMAGE RATHER THAN LETTERBOXING INSIDE A FULL-WIDTH BOX. The first draft set
-   `width: 100%` with `object-fit: contain`, which drew a correct photograph beside an equal
-   area of empty surface inside one border — a panel that looks like a bug. Rendered, looked
-   at, changed.
-
-   EVERYTHING FROM HERE TO THE END OF THIS COMMENT IS A DATED RECORD AND IS SUPERSEDED. It
-   argued a cap between 34vh and 60vh, and the argument was entirely about how much room the
-   sentence and the first candidate row needed BENEATH the photograph. They are beside it as
-   of 2026-08-24, so the whole trade dissolved: `--photo-cap` is now the height that is left
-   and the photograph draws 415x736. The measurements are kept because they are measurements —
-   this repo does not rewrite those to agree with a later tree — and the lead-in below is left
-   in place with this paragraph over it rather than edited, so the record still reads as what
-   it was. Read it as history; the live number is on `.review`.
-
-   60vh, NOT 38vh, AND EVERY MEASUREMENT IS HERE BECAUSE THIS IS WHERE THE NUMBER IS. Taken
-   at 1280x900 with three candidate rows: at 34vh the photo drew 220x306 with all three rows
-   whole and the actions exactly at the fold; at 38vh it drew 246x342 with the third row cut
-   24px short. Both were budgeted against rows-above-the-fold, and both are too small for the
-   one job this screen has — deciding whether the photograph agrees with a candidate row, and
-   whether the foil is what the toggle claimed. What is NOT in doubt is what it bought: 245px
-   of card at 38vh is not a card you can rule on.
-
-   THE UNMEASURED CLAIM WAS MEASURED ON 2026-08-22 AND IT IS FALSE. The session that raised
-   the cap recorded that 60vh keeps the sentence and the first candidate in view beneath it,
-   and this comment named that as the one thing nobody had re-measured. Against the 16 real
-   Gate B entries at 1440x900: the photograph draws 305x540 at y=211, the sentence at y=873
-   fits, and the first candidate row's top is at y=911 — eleven pixels past a 900px fold, so
-   NO candidate row is on screen with the photograph. Getting the whole first row above the
-   fold means about 50vh, which is 253px of card and back inside the width the 38vh session
-   rejected as unrulable.
-
-   THE OWNER SETTLED IT AT 48vh ON 2026-08-23, shown both renderings side by side and asked
-   which way the trade went: "do 48vh sure for now and i'll decide later if i want it bigger".
-   Provisional by his own words, so the measurements above are kept in full — they are what a
-   later session needs to raise it again, and the 34vh/38vh findings are the evidence that
-   going further DOWN was already tried and rejected as unrulable.
-
-   48 rather than the 50 the measurement suggested: 50vh clears the fold by roughly 40px, and
-   48 buys a little more margin for a two-line reason sentence without reaching the 38vh
-   territory the earlier session convicted. At 48vh the photo draws ~432px tall and the first
-   candidate row's top lands near y=803, comfortably inside a 900px fold.
-
-   The previous ruling read: the number is left at 60vh and the finding reported instead,
-   because which way that trade goes is the owner's and not a stylesheet's. That was right,
-   and it is what produced the question that got answered. Changing it without asking would
-   have been settling an interview question with
-   a stylesheet. What this session fixed is the thing that has no case for the defence: the row
-   MOVING. */
+/* The <img> box IS the drawn image — no object-fit — so the loupe maps the pointer to a
+   natural pixel with no letterbox arithmetic. */
 .review-photo {
+  position: relative;
   display: block;
   width: auto;
+  height: auto;
   max-width: 100%;
-  max-height: var(--photo-cap);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  max-height: var(--rv-photo-h);
+  border-radius: var(--bn-r);
+  box-shadow: var(--bn-shadow-3);
+  cursor: zoom-in;
+  animation: rv-photo-in var(--bn-t-slow) var(--bn-ease-out) both;
+}
+/* Opacity only: the <img> box is what the loupe aims off and what the spec measures, so
+   it must not be scaled while it enters. */
+@keyframes rv-photo-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* THE RESERVED BOX (D28). The photograph is the only thing on this screen whose height is not
-   known before it is drawn, and every card's candidate rows sat directly on top of it: the
-   next card's image is unloaded at the instant of the advance, so the rows jumped UP to fill
-   the gap and dropped back when it decoded. Measured at 1440x900 on the Gate B captures, one
-   skip: the first candidate row's top went 911 -> 373 within 5ms and back to 911 at ~50ms. A
-   538px round trip under a finger already travelling toward a digit, and the answer that
-   finger writes is one `Queue.upsert` will not let a human take back.
-
-   min-height RATHER THAN height, so nothing is ever clipped. The image can only be as tall as
-   --photo-cap because its own max-height is the same value, so the frame is exact in the
-   common case; an absent-photo panel that ran longer than the cap would grow the frame rather
-   than overflow it, which costs a one-off shift on a card that has no photograph at all and
-   never hides a sentence.
-
-   WHAT IT COSTS: a photograph wider than it is tall does not fill the box, and the difference
-   is dead space above the position label. Portrait is the rig's normal case and fills it
-   exactly — Gate B's frames are 2160x3840 and draw 305x540 in a 540px box — but D13 records
-   that the Cam Link hands the browser a LANDSCAPE frame however the camera is mounted, so an
-   un-rotated capture binds on width at 720px, draws 405px tall and leaves 135px empty. That is
-   the price of the rows not moving, and it is paid on frames the capture-time rotation setting
-   is there to stop producing.
-
-   WHAT IS STILL NOT RESERVED, MEASURED RATHER THAN ASSUMED: the sentence. It is prose, one
-   line for most reasons and two for `set_ambiguous`, and each line moves the rows below it by
-   26px. Against the 538px the photograph was moving them, that is the difference between a
-   hazard and a detail — and reserving it would cost the same vertical budget the fold is
-   already short of, to hold space for a line that is usually not there. A homogeneous queue
-   (Gate B's was one reason sixteen times) does not vary at all. Recorded so the next session
-   measuring this finds the 26px already explained and does not go looking for a second bug.
-
-   It draws nothing of its own — see the note in ReviewQueue.tsx's `Photo`. */
-/* `relative` so the 1:1 inset can sit in its corner. It changes nothing about the
-   reservation: the frame still holds `--photo-cap` whether or not an image loaded. */
-.review-frame {
-  position: relative;
-  width: 100%;
-  min-height: var(--photo-cap);
-}
-
-/* THE 1:1 LOUPE. `background-size: auto` paints the file at its natural size and the inline
-   `background-position` picks which natural pixel sits under the pointer — that pair IS 1:1,
-   with no scaling arithmetic to get wrong and no second request, because the browser already
-   has the bytes for the photograph beside it.
-
-   IT FOLLOWS THE POINTER AND IS ABSENT OTHERWISE (owner, 2026-08-24). It was a fixed 240x180
-   rectangle pinned bottom-right showing `background-position: center`, and the owner reported
-   not knowing what they were looking at. They were right: the centre of a 2160x3840 frame is
-   the middle of the card's artwork, which on the Crawdaunt they were looking at is the Pokedex
-   strip `NO. 0342 Rogue Pokemon HT: 3'7"`. It decided nothing — and `0342` is the very
-   National Pokedex number D35 records the model misreading as a collector number, so the glass
-   was magnifying the cause of the error it sat beside.
-
-   `left`/`top` are set inline per pointer move; only the size, the shape and the chrome live
-   here. Circular because it is a magnifier and should read as one at a glance — the old
-   rectangle read as a second photograph, which is half of why it confused.
-
-   Pointer-events stay off ON THE GLASS ITSELF, and that is now load-bearing rather than a
-   policy: the glass is centred under the cursor, so a glass that took the pointer would
-   swallow the very `pointermove` events that aim it and the loupe would stick to the first
-   pixel it was given.
-
-   `will-change: transform` is deliberately NOT set. The element moves by `left`/`top` on a
-   pointer move, and promoting a 220px circle with a 2160x3840 background to its own layer
-   costs more than it saves on the one screen whose photograph is already decoded. */
+/* The 1:1 loupe. `background-size: auto` paints the stored frame at natural size; the
+   position picks which natural pixel sits under the pointer. Hidden at rest. */
 .review-inset {
   position: absolute;
+  z-index: 3;
   width: 220px;
   height: 220px;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--bn-accent);
   border-radius: 50%;
   background-repeat: no-repeat;
   background-size: auto;
   pointer-events: none;
-  box-shadow: 0 0 0 1px var(--bg);
+  box-shadow: var(--bn-shadow-3), 0 0 0 1px var(--rv-loupe-ring);
+  animation: rv-loupe-in var(--bn-t-fast) var(--bn-ease-out) both;
+}
+@keyframes rv-loupe-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: none; }
 }
 
-/* The pointer is the aim, so say so on the thing being aimed at. `zoom-in` rather than
-   `crosshair`: the gesture reveals magnification, it does not select a point. */
-.review-photo {
-  cursor: zoom-in;
+.review-caption {
+  position: absolute;
+  z-index: 2;
+  left: var(--bn-5);
+  bottom: var(--bn-5);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-glass);
+  backdrop-filter: saturate(1.3) blur(10px);
+  -webkit-backdrop-filter: saturate(1.3) blur(10px);
+  box-shadow: var(--bn-shadow-1);
+  color: var(--bn-ink);
+  --pos-slot: 15px;
+  white-space: nowrap;
+  max-width: calc(100% - var(--bn-5) * 2);
+  overflow: hidden;
 }
-
+.review-caption > .bn-icon { color: var(--bn-accent); flex: none; }
+.review-caption .position-run { font-size: var(--pos-slot); line-height: 1; letter-spacing: 0; }
+.review-caption .position-run-path,
+.review-caption .position-run-key { font-family: var(--bn-font-ui); letter-spacing: 0.04em; }
+/* The address is a link back to its box on Inventory. */
+.review-caption-link { text-decoration: none; transition: color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
+.review-caption-link:hover { color: var(--bn-accent); box-shadow: var(--bn-shadow-2); }
+.review-caption-link:hover .position-run { color: inherit; }
+.review-caption-go { color: var(--bn-ink-3); flex: none; margin-left: -2px; }
+.review-caption-link:hover .review-caption-go { color: var(--bn-accent); }
+.review-stage-hint {
+  position: absolute;
+  z-index: 2;
+  top: var(--bn-5);
+  right: var(--bn-5);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bn-ink-3);
+  opacity: 0;
+  transition: opacity var(--bn-t) var(--bn-ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .review-stage-hint { display: inline-flex; }
+  .review-well:hover .review-stage-hint { opacity: 1; }
+}
 
 .review-absent {
-  width: 100%;
-  margin-top: 0;
-}
-
-/* ---- the card's own head: where it is, and why it is here ----
- *
- * ONE ROW, THE SAME TRADE THE PAGE HEAD MAKES AND FOR THE SAME BUDGET. Stacked, the position
- * and the reason spent 110px between the photograph and the first candidate row; measured at
- * 1440x900 with three candidates, that put the third row's bottom 12px past the fold. Side by
- * side they spend 68px and all three rows land above it — which is the state this screen wants
- * most, because comparing the photograph against the rows IS the job.
- *
- * `baseline` rather than `flex-start`: the position is 20px utility and the reason chip is 17px
- * body inside a border, so aligning the boxes leaves two texts sitting at different heights
- * with no rule joining them. Their baselines are the line the eye reads along.
- *
- * `wrap`, AND THE WORST CASE IS WHY THIS IS SAFE. A long position label beside a long reason —
- * `Box 12 · Section 14 · Card 137` against `Toggle names a finish that is not stocked` — drops
- * the reason to its own line and costs exactly what the stacked version always cost. It cannot
- * clip, it cannot overflow the column, and it cannot cost more than the layout it replaces.
- *
- * D28 IS UNAFFECTED, and it is worth being exact rather than reassuring. That rule is about the
- * candidate rows moving DURING one card's life — the unloaded photograph collapsing its own
- * frame and springing back 538px under a travelling finger, which is why the frame above
- * reserves its height. This row's height is fixed the moment the card is drawn and does not
- * change again until the card does; it is the same class of thing as the sentence's second
- * line, which ReviewQueue.css already records as a detail rather than a hazard. */
-.review-card-head {
-  /* `.review-card` is `align-items: flex-start`, so without this the row shrinks to its
-     contents and the push below has nothing to push against. */
-  align-self: stretch;
-
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
-
-  /* `space-between` RATHER THAN `margin-left: auto` ON THE REASON, and the phone is what
-     decides it. Both put the reason at the far end while the two share a line. They differ
-     when the line breaks: an auto margin keeps pushing, so at 375px — where the position
-     label alone takes two lines — the reason ended up stranded against the right edge of a
-     line it was the only thing on. `justify-content` is applied per flex LINE, and a line
-     holding one item starts it, so the wrapped phone layout packs left exactly as the
-     stacked version always did. */
-  justify-content: space-between;
-}
-
-/* `flex-end` so the machine string hangs under the right edge of its own chip rather than
-   trailing off it, wherever on the line the pair ends up. */
-.review-card-head .review-reason {
-  align-items: flex-end;
-}
-
-/* Where the card physically is. Utility face because it is a position, 20px because it is
-   read against a box across the desk. Not the Fulfillment view's 32px floor — see the file
-   header for why this screen does not borrow his numbers. */
-/* THE PREMISE ABOVE WAS FALSE AND IS DELETED WITH ITS CONCLUSION (2026-08-29, D41 amended).
-   The rule read "this screen's payload is the PHOTOGRAPH ... so the position label growing would
-   take from the one element that must not shrink". Measured: `.review-card` is a grid with
-   `align-items: start` and `--photo-cap` is viewport-derived, so the photograph is 415.1x736.4 —
-   23.59% of the viewport, long edge 736.4 — IDENTICALLY at every figure size from 24px to 44px,
-   with `.review-frame` at y=146 throughout. The label cannot take from it. Leaving a premise
-   deleted and a conclusion standing is the exact failure D41 records against BoxBrowse.css's own
-   630px-track comment, and this is the second instance found in two days.
-
-   WHAT ACTUALLY BINDS THE FIGURE IS THE REASON CHIP. The label sits on one baseline-aligned line
-   with `.review-reason`, whose box is 56px and whose CHIP is 35.5px. At a 32px figure the label
-   block is 34.0px; at 36px it is 37.8px and the address becomes the tallest object in the head,
-   out-shouting the thing that says WHY the card is queued. 32px is the largest figure under that
-   bound.
-
-   AND IT IS MOSTLY A SAVING. The treated label is 179.5px against 378px, -52.5%, in a 664.9px
-   `space-between` head. Untreated, 4 of the 14 reason strings are wider than the 270.9px left
-   over and wrap the head to 94px; at 1280 it is 12 of 14 and the page overflows by 33px. Treated,
-   0 of 14 wrap at either width and the head is a constant 62.5px — so a row no longer moves 38px
-   between one card and the next depending on which reason fired. */
-.review-position {
-  font-family: var(--util);
-  color: var(--ink);
-  letter-spacing: 0;
-  --pos-slot: 32px;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-/* THE BAIL PATH KEEPS THE SHIPPED 20px, and this is what the numeric guard is for. A pooled
-   entry (`Pokémon code cards · pooled`, D24) has no slot number, so the component renders the
-   string whole — and it must then be drawn as the string it is rather than at a figure size
-   nothing is filling. `:has()` asks whether the treatment actually applied. */
-.review-position:has(.position-parts) {
-  font-size: var(--pos-slot);
-  font-weight: 400;
-}
-
-/* ---- the reason: human label large, machine string small beneath it ---- */
-
-.review-reason {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s1);
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-2);
+  padding: var(--bn-6);
+  text-align: center;
+  color: var(--rv-well-ink);
 }
-
-/* Accent at OUTLINE AND TEXT WEIGHT — the system is unsure, which is what every card in this
-   queue has in common. Never filled: this screen has two or more answers on it, and
-   docs/DESIGN.md's rule is that a screen with two answers gets no fill. 8.5:1 on --bg. */
-.review-reason-label {
-  font-family: var(--body);
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: var(--r);
-  padding: var(--s1) var(--s3);
-}
-
-.review-reason .review-machine {
-  margin-top: 0;
-}
-
-/* ---- the sentence ---- */
-
-/* One sentence naming what the system found. The body face, because it is the one thing on
-   this screen a human reads rather than compares. */
-.review-sentence {
-  font-family: var(--body);
-  font-size: 17px;
-  line-height: 1.5;
-  color: var(--ink);
-}
-
-/* A pipeline value inside that sentence — a collector number, a finish, a condition string.
-   Mono, because docs/DESIGN.md gives every number and every machine value in the product to
-   the utility face and does not make an exception for values that happen to sit inside
-   prose. 0.88em rather than 1em: Martian Mono sets much wider and taller than Atkinson at
-   the same nominal size, and an inline run at parity reads as a different, louder sentence. */
-.review-value {
-  font-family: var(--util);
-  font-size: 0.88em;
-  color: var(--ink);
-}
-
-/* One of the two conflicting claims. Accent at text weight, which is the other half of
-   accent's unsure job — the toggle says one thing and the photograph says another, and the
-   colour is on both of them rather than on the one the screen would prefer you picked.
-   Marking a single finding this way was the first draft and was wrong: a colour that lands
-   on every noun stops carrying the fact that two things disagree. */
-.review-claim {
-  font-family: var(--util);
-  font-size: 0.88em;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-/* ---- the facts ---- */
-
-.review-facts {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  border-top: 1px solid var(--line);
-}
-
-/* 4px, the bottom of the scale, because the hairline is already doing the separating. Nine
-   rows of one-line metadata at 8px spent 333px on facts nobody reads twice; at 4px they spend
-   261px, and the row is still 29px tall — well clear of anything anyone has to hit, because
-   nothing in this list is a control.
-
-   REJECTED: TWO COLUMNS. It halves the height again and the values will not take it — the
-   `WAITING` row reads `1d · since 2026-08-22T03:08:22+00:00`, which is about 260px of utility
-   face and would wrap in a 206px cell. A wrapped value costs back most of the height and
-   reads worse than the loose version it replaced. */
-.review-fact {
+.review-absent-art {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--bn-r-xl);
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr);
-  gap: var(--s3);
-  align-items: baseline;
-  padding: var(--s1) 0;
-  border-bottom: 1px solid var(--line);
+  place-items: center;
+  border: 1px dashed var(--bn-ink-3);
+  color: var(--bn-ink-3);
+  margin-bottom: var(--bn-2);
 }
+.review-absent-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; color: var(--rv-well-ink-strong); }
+.review-absent-body { font-size: var(--bn-fs-md); max-width: 30ch; }
+.review-absent-detail { max-width: 100%; overflow-wrap: anywhere; background: var(--rv-well-tint); color: var(--rv-well-ink); }
 
-.review-fact dt {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* INVERTED RELATIVE TO PullPreview.css, and deliberately. There, dd is the body face and the
-   values that get compared carry .is-util. Here almost every value IS compared — a finish, a
-   confidence level, a queue name, a price, a date — so mono is the default and the card's
-   own name is the marked exception. Same rule, opposite default, because the balance of the
-   screen is opposite. */
-.review-fact dd {
-  font-family: var(--util);
-  font-size: 13px;
-  color: var(--ink);
+/* The lookahead: a glass pill in the well's top-left corner. */
+.review-next {
+  position: absolute;
+  z-index: 2;
+  top: var(--bn-5);
+  left: var(--bn-5);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-glass);
+  backdrop-filter: saturate(1.3) blur(10px);
+  -webkit-backdrop-filter: saturate(1.3) blur(10px);
+  box-shadow: var(--bn-shadow-1);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  max-width: calc(100% - var(--bn-5) * 2);
   min-width: 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
+.review-next-label { font-weight: 700; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
+.review-next-name { color: var(--bn-ink); font-weight: 600; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.review-next-price { color: var(--bn-ink-2); font-weight: 600; }
+.review-next-empty { color: var(--bn-ink-3); font-weight: 500; }
 
-.review-fact dd.is-body {
-  font-family: var(--body);
-  font-size: 15px;
-}
-
-/* ---- the candidate rows ---- */
-
-.review-candidates {
-  list-style: none;
+/* ---- verdict ---------------------------------------------------------------- */
+.review-verdict {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  width: 100%;
+  gap: var(--bn-4);
+  min-width: 0;
+  max-width: 760px;
+  /* `backwards`, never `both`: the close dialog and its scrim are `position: fixed` inside
+     this column, and a retained end-state transform would make this their containing block. */
+  animation: rv-verdict-in var(--bn-t) var(--bn-ease-out) backwards;
 }
-
-/* A choice row. Outlined, never filled, however many there are and whatever they cost —
-   docs/DESIGN.md: filling the pricier candidate teaches the queue to drift toward
-   over-listing, and filling the toggle's answer would make the fill mean two different
-   things on two screens.
-
-   The rows are also all drawn identically. Sizing them by price the way the worklist below
-   is sized would be the same bias wearing a type scale: the worklist is SORTED by price and
-   the sizing shows a sort that exists, while these are the rows one card could be and have
-   no ranking at all. */
-.review-candidate {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  column-gap: var(--s3);
-  row-gap: var(--s1);
-  width: 100%;
-  text-align: left;
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
-
-  /* SET HERE SO THE `inherit` ON THE CELLS BELOW HAS SOMETHING TO INHERIT. A button does not
-     take the page's colour: it starts at the UA's `buttontext`, which is pure #000000, so the
-     three cells inheriting from it rendered black rather than --ink. Measured in a browser —
-     `rgb(0, 0, 0)` where every other element on the screen reported `rgb(8, 9, 10)` — and
-     invisible by eye at 19:1 against 21:1, which is exactly why a screen full of tokens can
-     quietly contain a colour that is not one of them. The cells inherit rather than declaring
-     --ink each so that the :disabled rule below moves all three in one place. */
-  color: var(--ink);
+@keyframes rv-verdict-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
-
-/* Row hover, which is what --hover is for: the token block calls choice rows and queue rows
-   rows, and this is a choice row. */
-.review-candidate:hover:not(:disabled) {
-  background: var(--hover);
+.review-question { display: flex; flex-direction: column; gap: 6px; }
+.review-question-title {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--bn-ink);
 }
-
-.review-candidate:disabled {
-  cursor: not-allowed;
-  color: var(--muted);
+/* A retired question is a statement, not a demand: it keeps the display face and the size so
+   the column's rhythm holds, and steps back one ink so the rows below are the loudest thing
+   on the card. */
+.review-question-title[data-retired] {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  color: var(--bn-ink-2);
 }
-
-.review-candidate-name {
-  grid-column: 2;
-  grid-row: 1;
-  font-family: var(--body);
-  font-size: 15px;
-  font-weight: 700;
-  color: inherit;
+.review-question-mark { flex: none; color: var(--bn-ink-4); }
+.review-question-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex-wrap: wrap;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-3);
 }
-
-/* The field that actually distinguishes one candidate from another nine times out of ten —
-   Near Mint against Near Mint Holofoil against Near Mint Reverse Holofoil. Mono, because it
-   is a catalog string that has to match the export character for character. */
-.review-candidate-condition {
-  grid-column: 2;
-  grid-row: 2;
-  font-family: var(--util);
-  font-size: 12px;
-  color: inherit;
-}
-
-.review-candidate-price {
-  grid-column: 3;
-  grid-row: 1;
-  font-family: var(--util);
-  font-size: 15px;
-  font-weight: 600;
-  text-align: right;
-  color: inherit;
+.review-code {
+  display: inline-block;
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  color: var(--bn-ink-3);
+  background: var(--bn-surface-2);
+  padding: 2px 6px;
+  border-radius: var(--bn-r-xs);
+  line-height: 1.4;
   white-space: nowrap;
 }
 
-/* Words standing in for a number, set as words. Quieting the cell says the price is missing;
-   it must never be read as saying the card is cheap, which is why nothing else about the row
-   changes. */
-.review-candidate-price.is-unpriced {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--muted);
-}
-
-/* Set, collector number and the SKU that will be written into the import file. Small, and
-   present rather than hidden: this is the row that gets listed, and the SKU is what
-   `TCGplayer Id` matches on. */
-.review-candidate-meta {
-  grid-column: 2 / span 2;
-  grid-row: 3;
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
-/* ---- keys ---- */
-
-/* "Every choice shows its key." Owner-side only; the Fulfiller's screens are touch and show
-   none, which is why PullConfirm's keyHint is optional and omitted there. */
-.review-key {
-  grid-column: 1;
-  grid-row: 1 / span 3;
-  align-self: start;
-  font-family: var(--util);
-  font-size: 10px;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: var(--s1) var(--s2);
-  /* 26px, AND THE SAME FLOOR IS ON `.review-key-blank`, BECAUSE THIS ONE IS A COLUMN AND NOT
-     A CHIP. Each candidate row is its own grid, so column 1's width is whatever that row's
-     first cell measures — and at 24px the floor never bound on a chip (a digit in Martian
-     Mono plus 16px of padding and two 1px borders comes to 25) while it always bound on the
-     blank beside it. Measured: the names in keyed rows started at x=82 and the names in
-     keyless ones at x=81. One pixel, invisible, and it made the comment on the blank — that
-     it holds the column so the names stay on one axis — quietly false. A floor above both
-     natural widths binds on both, which is what makes it a column. */
-  min-width: 26px;
-  text-align: center;
-}
-
-/* The tenth candidate and beyond have no key — a two-key sequence is a vocabulary to learn
-   for a case this rare. It holds the column so the names stay on one axis; a row that shifted
-   left where the chip stopped would read as a different kind of row.
-
-   IT DRAWS A DASH NOW RATHER THAN NOTHING, and the behaviour is unchanged: still no key,
-   still the mouse. An empty box the exact size of a chip is indistinguishable from a chip
-   that failed to render, on a screen where every other row carries one and the operator's
-   whole vocabulary is digits. No border, so it cannot be mistaken for a key that could be
-   pressed — a mark in the metadata face, in --muted, saying this row is answered with the
-   pointer. The height calc is gone with the empty box: a line of text sets its own. */
-.review-key-blank {
-  grid-column: 1;
-  grid-row: 1 / span 3;
-  align-self: start;
-  /* The chip's floor, for the reason argued there. */
-  min-width: 26px;
-  font-family: var(--util);
-  font-size: 10px;
-  line-height: calc(2px + (var(--s1) * 2) + 12px);
-  color: var(--muted);
-  text-align: center;
-}
-
-/* ---- the closing actions ---- */
-
-.review-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s3);
-}
-
-.review-action {
+.review-claims { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+.review-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--s2);
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  min-height: 36px;
-  padding: var(--s2) var(--s3);
-  cursor: pointer;
-}
-
-/* Border, not ground — see .review-reload. */
-.review-action:hover:not(:disabled) {
-  border-color: var(--ink);
-}
-
-.review-action:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-/* A state, not a sentence, so the utility face. It replaces the spinner this screen does not
-   have: the controls beside it are disabled for the same window, and a word that says which
-   window it is beats an animation that says only that something is happening. */
-.review-busy {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* ---- what is waiting ---- */
-
-/* 24 above the rule and 12 below it, down from 32 and 16. The rule is what separates the card
-   from the list; the space either side of it only has to say which side of the rule a thing is
-   on, and 32px was the Fulfiller's end of the scale doing an owner's job. */
-/* IT IS A RAIL NOW, AND IT SCROLLS ITSELF RATHER THAN SCROLLING THE PAGE. This is the whole
-   of the 4,018px: the worklist was 47 rows in the page flow, 234px below the fold, so reading
-   it meant taking the photograph off the screen. Beside the card it costs no vertical budget
-   at all, and capping it at the viewport with its own overflow is what stops 47 rows — or 544
-   — putting page scroll back.
-
-   REPLACING IT WITH A LAST-TEN-DECISIONS LIST WAS THE PLAN AND IS DEFERRED, DELIBERATELY.
-   Prodigy and Zendesk both remove the pending queue at work time, and the argument is good;
-   but drawn here the list costs nothing, it is the only rendering of docs/DESIGN.md's
-   "the ordering is visible", and swapping it for a session-local list that empties on every
-   reload — including the `R` the server itself prescribes in six refusal messages — is a
-   trade the owner should make rather than one a stylesheet should. The scroll is fixed either
-   way, which is what this change was for.
-
-   The margin and rule that separated it from the card BELOW are gone: it sits beside the card
-   now, and a top border on a column is a line pointing the wrong way. */
-.review-waiting {
-  position: sticky;
-  top: var(--s4);
-  align-self: start;
-  /* THE SAME BUDGET THE PHOTOGRAPH GETS, and for the same reason: the rail's top is the
-     frame's top (y=146), so `100vh` minus the page's own padding would overrun by exactly the
-     header. One variable, two columns, no second arithmetic to drift. */
-  max-height: var(--photo-h);
-  overflow-y: auto;
-  /* The scrollbar lives inside the rail's 280px, so gaining one cannot narrow the row text
-     and reflow what is already on screen. */
-  scrollbar-gutter: stable;
-  min-width: 0;
-}
-
-/* A section label, so the utility face uppercase and tracked — the same treatment App.css
-   gives a route name. Not the display face: that is 700/800 at >= 20px only, and a 20px
-   heading over a list of 13px rows would outrank the card above it. */
-.review-waiting-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2) var(--s3);
-  font-family: var(--util);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* WHAT THE QUEUE IS MADE OF, on the heading of the list it describes. Reason codes are
-   machine strings and are NOT uppercased here for the reason `.review-machine` gives: a code
-   that reads one way on screen and another in review.json has to be translated before it can
-   be grepped. So it opts out of the heading's own text-transform, which is the only thing
-   this rule originally did — the size and the face were the heading's, until the chip
-   became a button and buttons inherit neither.
-
-   Ink rather than muted, and heavier: the heading says which list this is, and the shape is
-   the thing worth reading on it. Gate B's queue was one reason sixteen times over, which is a
-   fact about the rig's lighting and was not visible anywhere on this screen.
-
-   A BUTTON NOW — the reason filter, "work one reason at a time". The border is transparent
-   at rest rather than absent, so pressing a chip cannot shift its neighbours by two pixels;
-   the pressed state is surface-on-ink-border, which is this file's outlined-control
-   vocabulary and not a fill — a filter is not the one thing to do. */
-.review-waiting-shape {
-  font-family: var(--util);
-  font-size: 11px;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  border-radius: var(--bn-r);
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-sm);
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  color: var(--ink);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--r);
-  padding: var(--s1) var(--s2);
-  cursor: pointer;
+}
+/* The value is a word; the pipeline's spelling is in the chip's title. A set code stays mono. */
+.review-chip-value { font-family: var(--bn-font-ui); font-weight: 600; }
+.review-chip-value-mono { font-family: var(--bn-font-mono); font-weight: 600; }
+.review-chip-key {
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.review-chip-sorted { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.review-chip-photo { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2); color: var(--bn-accent); }
+.review-chip-warn { background: var(--bn-warn-tint); color: var(--bn-warn); font-family: var(--bn-font-ui); }
+
+.review-sentence { font-size: var(--bn-fs-base); line-height: 1.55; color: var(--bn-ink-2); max-width: 64ch; }
+/* A card queued under a question the product has since dropped. Drawn as an aside rather
+   than as the card's argument: nothing is wrong, the rows below are the whole of the work,
+   and the rule is there so the eye can skip it on the second one of these in a row. */
+.review-sentence[data-retired] {
+  position: relative;
+  padding: var(--bn-1) 0 var(--bn-1) var(--bn-4);
+  color: var(--bn-ink-3);
+}
+.review-sentence[data-retired]::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  border-radius: var(--bn-r-full);
+  /* ink rather than `--bn-line-strong`, which is an 8%-black hairline and disappears on the
+     dark page. At 40% this reads as a deliberate margin rule in both themes. */
+  background: var(--bn-ink-4);
+  opacity: 0.4;
+  animation: rv-retired-rule var(--bn-t-slow) var(--bn-ease-out) backwards;
+  transform-origin: top;
+}
+@keyframes rv-retired-rule {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.review-claim {
+  font-family: var(--bn-font-ui);
+  font-weight: 600;
+  color: var(--bn-accent);
+  background: var(--bn-accent-tint);
+  padding: 1px 6px;
+  border-radius: var(--bn-r-xs);
+}
+.review-value { font-family: var(--bn-font-mono); font-size: 0.9em; font-weight: 600; color: var(--bn-ink); }
+
+.review-shared { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; margin-bottom: calc(-1 * var(--bn-2)); }
+.review-shared-name { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 700; letter-spacing: var(--bn-tracking-tight); color: var(--bn-ink); }
+.review-shared-meta { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+/* ---- candidate rows ----------------------------------------------------------- */
+.review-candidates { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
+.review-candidates > li { animation: rv-row-in var(--bn-t-slow) var(--bn-ease-out) both; }
+@keyframes rv-row-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.review-candidate {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--bn-4);
+  width: 100%;
+  min-height: 62px;
+  padding: 10px var(--bn-4) 10px var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  color: var(--bn-ink);
+  text-align: left;
+  transition:
+    background-color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease),
+    transform var(--bn-t-fast) var(--bn-ease),
+    opacity var(--bn-t-fast) var(--bn-ease);
+}
+.review-candidate:hover:not(:disabled) { background: var(--bn-surface-3); box-shadow: var(--bn-shadow-2); transform: translateY(-1px); }
+.review-candidate:hover:not(:disabled) .review-key { color: var(--bn-accent); border-color: var(--bn-accent); }
+.review-candidate:active:not(:disabled) { transform: translateY(0) scale(0.995); background: var(--bn-accent-tint); }
+.review-candidate:disabled { opacity: 0.55; }
+.review-candidate-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.review-candidate-name { font-size: var(--bn-fs-lg); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.review-candidate-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-candidate-tags { display: flex; gap: 4px; }
+.review-tag {
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: var(--bn-r-full);
+  line-height: 1;
+}
+.review-tag-sorted { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.review-tag-photo { background: transparent; box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2); color: var(--bn-accent); }
+.review-candidate-price {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--bn-money);
+  white-space: nowrap;
+  min-width: 64px;
+  text-align: right;
+}
+.review-candidate-price.is-unpriced { font-family: var(--bn-font-ui); font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink-3); letter-spacing: 0; }
+.review-candidate-skeleton { height: 62px; border-radius: var(--bn-r-lg); }
+
+/* The kit's keycap (`<Kbd>`), scaled up for a row a finger or a digit lands on: only the
+   size is this sheet's; the border, the face and the ink are the kit's. */
+.review-key {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: var(--bn-fs-sm);
+  flex: none;
+  transition: color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
+}
+/* The tenth row and beyond have no digit: a dashed blank drawn to the same size. */
+.review-key-blank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px dashed var(--bn-line-strong);
+  background: var(--bn-surface);
+  font-family: var(--bn-font-mono);
+  line-height: 1;
+  color: var(--bn-ink-4);
 }
 
-/* Border, not ground — see .review-reload. */
-.review-waiting-shape:hover:not(:disabled) {
-  border-color: var(--ink);
+/* ---- actions ------------------------------------------------------------------- */
+.review-actions { position: relative; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.review-actions .bn-btn { color: var(--bn-ink-2); }
+.review-actions .bn-btn .bn-icon { color: var(--bn-ink-3); }
+.review-actions .bn-btn:hover { color: var(--bn-ink); }
+.review-actions .bn-btn[aria-expanded='true'] { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.review-actions .bn-btn[aria-expanded='true'] .bn-icon { color: inherit; }
+.review-busy { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.review-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--bn-line-strong);
+  border-top-color: var(--bn-accent);
+  animation: bn-spin 0.7s linear infinite;
 }
 
-.review-waiting-shape[aria-pressed='true'] {
-  background: var(--surface);
-  border-color: var(--ink);
+/* The close panel: a dialog on a desktop, a sheet on a phone. Digits and Escape are the
+   container's; the scrim is the pointer's way out. */
+.review-close { width: min(520px, calc(100vw - 32px)); padding: var(--bn-3); }
+.review-close-title { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); padding: 2px var(--bn-2) 6px; }
+.review-close-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); padding: 0 var(--bn-2) var(--bn-2); }
+.review-close-group { padding-top: 4px; }
+.review-close-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px var(--bn-2) 4px;
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
 }
+.review-close-note { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); font-size: var(--bn-fs-xs); }
+.review-close-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  padding: 7px var(--bn-2);
+  border-radius: var(--bn-r-sm);
+  color: var(--bn-ink);
+  text-align: left;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.review-close-choice:hover:not(:disabled) { background: var(--bn-surface-3); }
+.review-close-choice:hover:not(:disabled) .review-key { color: var(--bn-accent); border-color: var(--bn-accent); }
+.review-close-choice:disabled { opacity: 0.5; }
+.review-close-choice .review-key { width: 22px; min-width: 22px; height: 22px; font-size: var(--bn-fs-xs); }
+.review-close-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.review-close-label { font-size: var(--bn-fs-md); font-weight: 600; }
+.review-close-why { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.review-close-foot { margin-top: 6px; padding: 10px var(--bn-2) 4px; border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
-.review-waiting-shape:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
+/* ---- tray: what just happened, in a slot that is always there ------------------
+   The receipt is one line tall — its button is the tallest thing in it — so the reserve is
+   exactly the receipt's height and nothing below moves when one arrives. */
+.review-tray {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  min-height: calc(var(--bn-control-h-sm) + var(--bn-4));
+  /* The slot sits closer to the actions than the column's gap, so the reserve reads as
+     breathing room under the rows rather than a blank band between two rules. */
+  margin-top: calc(-1 * var(--bn-2));
 }
+.review-receipt { padding-right: var(--bn-2); }
+.review-receipt-icon { color: var(--bn-ok); flex: none; }
+.review-receipt-text { display: flex; align-items: baseline; gap: var(--bn-2); flex: 1 1 auto; min-width: 0; }
+.review-receipt-said { font-weight: 600; font-size: var(--bn-fs-md); white-space: nowrap; flex: none; }
+.review-receipt-label { font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.review-receipt .bn-receipt-bar { color: var(--bn-ok); }
+.review-refusal { animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both, rv-shake var(--bn-t-slow) var(--bn-ease) var(--bn-t-slow) 1; }
+@keyframes rv-shake {
+  0%, 100% { transform: none; }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+/* The refusal's remedies are its footer: the Notice draws children before the code line,
+   so the row holding them is ordered after it and ruled off from the message. */
+.review-refusal .bn-stack { flex: 1 1 auto; min-width: 0; }
+.review-refusal .bn-stack > div:has(> .review-refusal-actions) {
+  order: 2;
+  margin-top: var(--bn-2);
+  padding-top: var(--bn-2);
+  border-top: 1px solid color-mix(in srgb, var(--bn-danger) 20%, transparent);
+}
+.review-refusal-actions { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.review-tray-notice { animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both; }
+.review-tray-notice .bn-btn { margin-left: 6px; vertical-align: middle; }
+
+/* ---- details ------------------------------------------------------------------- */
+.review-details { margin-top: calc(-1 * var(--bn-2)); }
+.review-details-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  user-select: none;
+}
+.review-details-summary:hover { color: var(--bn-ink); }
+.review-details-caret { transition: transform var(--bn-t-fast) var(--bn-ease); }
+.review-details[open] .review-details-caret { transform: rotate(90deg); }
+.review-details-hint { font-weight: 400; color: var(--bn-ink-3); }
+.review-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px var(--bn-6);
+  padding: var(--bn-2) 0 var(--bn-2);
+}
+.review-fact { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: var(--bn-2); font-size: var(--bn-fs-sm); align-items: baseline; }
+.review-fact dt { color: var(--bn-ink-3); }
+.review-fact dd { color: var(--bn-ink); overflow-wrap: anywhere; }
+.review-fact dd.bn-mono { font-size: var(--bn-fs-xs); }
+
+/* ---- catalog ------------------------------------------------------------------- */
+.review-catalog { display: flex; flex-direction: column; gap: var(--bn-3); }
+.review-catalog-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-accent-tint);
+}
+.review-catalog-mode { display: flex; align-items: flex-start; gap: var(--bn-2); font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.45; }
+.review-catalog-mode > .bn-icon { color: var(--bn-accent); flex: none; margin-top: 3px; }
+.review-catalog-search { display: flex; gap: var(--bn-2); }
+.review-catalog-wrap { flex: 1 1 auto; }
+.review-catalog-empty { font-size: var(--bn-fs-md); color: var(--bn-ink-3); padding: var(--bn-3) 0; }
+.review-catalog-more { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+/* ---- rail (inline) --------------------------------------------------------------- */
+.review-rail {
+  position: sticky;
+  top: var(--bn-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  min-width: 0;
+  max-height: calc(var(--rv-photo-h) + var(--rv-well-pad) * 2 + 28px);
+}
+.review-rail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); min-height: 28px; }
+.review-rail-close { display: none; }
+.review-rail-scrim { display: none; }
+.review-queue-toggle { display: none; }
+
+.review-session { padding: 10px var(--bn-3); border-radius: var(--bn-r-lg); background: var(--bn-surface); box-shadow: var(--bn-shadow-1); flex: none; }
+.review-session-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); }
+.review-session-tally { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.review-session-list { list-style: none; display: flex; flex-direction: column; margin-top: 6px; }
+.review-session-row { display: flex; align-items: center; gap: var(--bn-2); padding: 6px 0; border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-sm); }
+.review-session-icon { color: var(--bn-ok); flex: none; }
+.review-session-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.review-session-said { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-session-label { font-size: var(--bn-fs-xs); font-variant-numeric: tabular-nums; color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-session-row .bn-btn { flex: none; }
+.review-session-more { padding: 6px 0 2px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-accent); }
 
 .review-waiting-list {
   list-style: none;
-  margin-top: var(--s3);
-}
-
-/* Not pressable, and that is the design rather than an omission: making a row navigable
-   would be the list -> detail -> back loop docs/DESIGN.md forbids by name. The list is here
-   to show an order, and the way past a card is to answer it. */
-.review-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--s4);
-  row-gap: var(--s1);
-  align-items: baseline;
-  /* 8px, down from 12. Nothing in this list is pressable — the rule above says why — so no tap
-     target is being shrunk, and the hairline separates the rows on its own. Eight pixels a row
-     is 128px over a sixteen-card queue, which is the difference between seeing the shape of a
-     run and scrolling to find it. The type scale is untouched: the bands are what make this
-     list worth having, and every one of them still steps. */
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.review-row-name {
-  grid-column: 1;
-  font-family: var(--body);
-  font-weight: 700;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.review-row-price {
-  grid-column: 2;
-  font-family: var(--util);
-  font-weight: 600;
-  color: var(--ink);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.review-row-position {
-  grid-column: 1;
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.review-row-reason {
-  grid-column: 2;
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  text-align: right;
-}
-
-/* THE SORT, DRAWN. `store/queues.py:sort_key` puts the expensive cards first, and these four
-   bands are that ordering made visible — name and price stepping down together, so a $40
-   card and a 3-cent one cannot look alike. Without this the queue is the dense grey table
-   docs/DESIGN.md names Collectr, Discogs and LibraryThing as the failure mode of.
-
-   THE BREAKPOINTS ARE A GUESS AND THE SIZES ARE NOT MEASURED. ReviewQueue.tsx:bandOf cuts
-   them at 25x, 5x and 1x D9's $0.40 threshold, and no real queue file has ever existed to
-   check that against. What would settle it is the price distribution of the first real run.
-
-   Unpriced sits at the mid size, not the bottom: `pipeline/routing.py` routes an unpriced
-   card to the main queue and never parks it, because no price is an unknown price and a
-   misread secret rare is exactly this case. Only its price cell is quieted, since there is
-   no number to show. */
-.review-row[data-band='top'] .review-row-name,
-.review-row[data-band='top'] .review-row-price {
-  font-size: 22px;
-}
-
-.review-row[data-band='high'] .review-row-name,
-.review-row[data-band='high'] .review-row-price {
-  font-size: 18px;
-}
-
-.review-row[data-band='mid'] .review-row-name,
-.review-row[data-band='mid'] .review-row-price,
-.review-row[data-band='unpriced'] .review-row-name {
-  font-size: 15px;
-}
-
-.review-row[data-band='low'] .review-row-name,
-.review-row[data-band='low'] .review-row-price {
-  font-size: 13px;
-}
-
-.review-row[data-band='unpriced'] .review-row-price {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-/* Parked is DIMMED, not merely lower. Both facts are true of these rows — they sort below
-   every main-queue card and they are drawn quieter — and docs/DESIGN.md asks for the second
-   because the first is invisible once you are looking at the bottom of the list. --muted
-   clears 7:1 on both grounds, so dimming here costs no legibility. */
-.review-row[data-parked='true'] .review-row-name,
-.review-row[data-parked='true'] .review-row-price {
-  color: var(--muted);
-}
-
-/* Behind the reason lens: still waiting, not being worked. The parked treatment, extended
-   to the row's metadata line as well — a parked row's position still matters to the walk
-   order the list shows, while a filtered-out row is outside the walk entirely for as long
-   as the lens is on. Dimmed and never hidden; the component says why. */
-.review-row[data-filtered-out='true'] .review-row-name,
-.review-row[data-filtered-out='true'] .review-row-price,
-.review-row[data-filtered-out='true'] .review-row-position,
-.review-row[data-filtered-out='true'] .review-row-reason {
-  color: var(--muted);
-}
-
-/* The card being worked, marked in weight and ink on its metadata line rather than by a
-   ground or an accent. A ground would need --hover, which is hover's alone; accent already
-   has two jobs and "which row am I on" is neither. */
-.review-row[aria-current='true'] .review-row-position {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* ---- the group state ---- */
-
-/* The one exception to one-card-at-a-time, and it borrows the card's own rhythm: a flex
-   column at the card's gap, in the card's slot. See GroupConfirm in the component for what
-   this state is and is not — everything here is only its clothes. */
-.review-group {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s3);
-  margin-top: var(--s4);
+  gap: 2px;
+  padding: var(--bn-1);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.review-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px 8px 14px;
+  border-radius: var(--bn-r);
+  transition: background-color var(--bn-t) var(--bn-ease), opacity var(--bn-t) var(--bn-ease);
+}
+.review-row[aria-current='true'] { background: var(--bn-accent-tint); }
+.review-row[aria-current='true']::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--bn-accent);
+}
+.review-row[data-rule='parked'] { margin-top: var(--bn-2); padding-top: 30px; }
+.review-row[data-rule='parked']::after {
+  content: 'Parked · under the threshold';
+  position: absolute;
+  top: 6px;
+  left: 14px;
+  right: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--bn-line);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+}
+.review-row-main { display: flex; justify-content: space-between; align-items: baseline; gap: var(--bn-2); }
+.review-row-name { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.review-row-price { font-family: var(--bn-font-display); font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
+.review-row-sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.review-row-position { white-space: nowrap; }
+.review-row-reason { color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.review-row-pill { font-size: var(--bn-fs-2xs); font-weight: 600; padding: 1px 6px; border-radius: var(--bn-r-full); background: var(--bn-surface-2); color: var(--bn-ink-3); line-height: 1.5; }
+
+/* The sort, visible: the type steps down with the price. */
+.review-row[data-band='top'] .review-row-name { font-size: var(--bn-fs-lg); font-weight: 700; }
+.review-row[data-band='top'] .review-row-price { font-size: var(--bn-fs-lg); font-weight: 800; }
+.review-row[data-band='high'] .review-row-name { font-size: var(--bn-fs-base); }
+.review-row[data-band='high'] .review-row-price { font-size: var(--bn-fs-base); }
+.review-row[data-band='low'] .review-row-name { font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink-2); }
+.review-row[data-band='low'] .review-row-price { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+.review-row[data-band='unpriced'] .review-row-price { font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); }
+.review-row[data-parked='true'] .review-row-name,
+.review-row[data-parked='true'] .review-row-price { color: var(--bn-ink-3); }
+.review-row[data-filtered-out='true'] { opacity: 0.38; }
+
+/* ---- rail (drawer) --------------------------------------------------------------------
+   Below the width that fits three tracks — 1500px beside the sidebar, 1320px beside the
+   rail — the queue becomes a sheet from the right, opened by the Queue button. Closed is
+   `display: none` rather than a translate: an off-screen fixed element still widens the
+   page's scroll width. */
+@media (max-width: 1499px) {
+  .bn-shell:not([data-rail='true']) .review-body { grid-template-columns: minmax(0, 1fr); }
+  .bn-shell:not([data-rail='true']) .review-queue-toggle { display: inline-flex; }
+  .bn-shell:not([data-rail='true']) .review-rail-close { display: inline-flex; }
+  .bn-shell:not([data-rail='true']) .review-rail-scrim { display: block; }
+  .bn-shell:not([data-rail='true']) .review-rail {
+    display: none;
+    position: fixed;
+    z-index: 61;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 100vw);
+    max-height: none;
+    padding: var(--bn-4);
+    padding-top: calc(var(--bn-4) + env(safe-area-inset-top));
+    background: var(--bn-surface);
+    box-shadow: var(--bn-shadow-3);
+    animation: bn-sheet-in var(--bn-t-slow) var(--bn-ease) both;
+  }
+  .bn-shell:not([data-rail='true']) .review[data-queue-open='true'] .review-rail { display: flex; }
+}
+@media (max-width: 1319px) {
+  .review-body { grid-template-columns: minmax(0, 1fr); }
+  .review-queue-toggle { display: inline-flex; }
+  .review-rail-close { display: inline-flex; }
+  .review-rail-scrim { display: block; }
+  .review-rail {
+    display: none;
+    position: fixed;
+    z-index: 61;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 100vw);
+    max-height: none;
+    padding: var(--bn-4);
+    padding-top: calc(var(--bn-4) + env(safe-area-inset-top));
+    background: var(--bn-surface);
+    box-shadow: var(--bn-shadow-3);
+    animation: bn-sheet-in var(--bn-t-slow) var(--bn-ease) both;
+  }
+  .review[data-queue-open='true'] .review-rail { display: flex; }
+}
+:root[data-theme='dark'] .review-rail { background: var(--bn-surface); }
+
+/* ---- the stage yields to the verdict on a narrow desktop, then stacks ------------------ */
+@media (max-width: 1199px) {
+  .review-card { grid-template-columns: minmax(0, 42%) minmax(0, 1fr); }
+}
+@media (max-width: 899px) {
+  /* Stacked, the column is wider than a 9:16 frame, so the well is sized to the photograph
+     it holds rather than to the column: a full-width well drew two black bands beside the
+     card (200px each at 820px). The height is the smaller of the viewport's share and what
+     the column's width can carry, so the photograph grows into the room it has. */
+  .review { --rv-photo-h: min(56vh, calc((100vw - 48px) * 1.7778)); }
+  .review-card { grid-template-columns: minmax(0, 1fr); gap: var(--bn-4); }
+  /* The whole stage narrows, not just the well: the lookahead pill is the stage's child and
+     has to stay over the photograph. */
+  .review-stage { position: relative; top: auto; width: min(100%, var(--rv-stage-w)); margin-inline: auto; }
+  .review-verdict { max-width: none; }
+  .review-group-bar .bn-btn { white-space: normal; height: auto; min-height: var(--bn-control-h-lg); padding-top: 8px; padding-bottom: 8px; text-align: left; }
+  .review-group-confirm { flex: 1 1 100%; justify-content: flex-start; }
 }
 
-/* "A group write still shows the photographs it is about to answer for." Thumbnails, not
-   judging-size photographs — the grid's question is "is anything here not like the others",
-   and sixteen cards at 96px answer it on one screen where sixteen at 60vh answer it over
-   sixteen scrolls. auto-fill against a minimum, so Gate B's sixteen make three rows at this
-   column's width and a 45-card group still fits without a rule change. */
+/* ---- group state ---------------------------------------------------------------- */
+.review-group { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+.review-group-head { display: flex; flex-direction: column; gap: var(--bn-3); }
 .review-group-grid {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: var(--s3);
-  width: 100%;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--bn-3);
+  max-height: calc(100vh - 420px);
+  min-height: 240px;
+  overflow: auto;
+  padding: var(--bn-4);
+  border-radius: var(--bn-r-xl);
+  background: var(--rv-well);
+  box-shadow: var(--bn-shadow-2);
 }
-
-.review-group-cell {
+.review-group-cell { display: flex; flex-direction: column; gap: 6px; animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) both; }
+.review-group-photo { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--bn-r); box-shadow: var(--bn-shadow-2); }
+.review-group-absent {
+  aspect-ratio: 9 / 16;
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
-}
-
-.review-group-photo {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--surface);
-}
-
-/* A photograph that is not there, holding the cell so the grid does not reflow around the
-   gap — the reserved-frame instinct at thumbnail scale. aspect-ratio rather than a fixed
-   height because the cells are fluid; 63/88 is the card. */
-.review-group-absent {
-  display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 63 / 88;
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--surface);
-  font-family: var(--util);
-  font-size: 10px;
-  color: var(--muted);
+  gap: 6px;
+  border-radius: var(--bn-r);
+  border: 1px dashed var(--bn-ink-3);
+  color: var(--rv-well-ink);
+  font-size: var(--bn-fs-xs);
 }
-
-/* The position under each photograph, because the grid's photographs are the write's whole
-   manifest: a tile you can point at has to name the slot it is about. */
-.review-group-pos {
-  font-family: var(--util);
-  font-size: 10px;
-  color: var(--muted);
-}
-
-/* THE FILL, AND THE ONLY ONE IN THIS FILE. The file header carries the argument; the short
-   form is that this state's eligibility rules reduce it to exactly one action, which is the
-   condition docs/DESIGN.md reserves the solid accent for — the same spec as PullConfirm's
-   default and pressed states, drawn from the same tokens. The key chip inside it moves to
-   on-accent for the same reason the label does: --muted on --accent is not a legible pair
-   and was never asked to be. */
-.review-group-confirm {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  font-family: var(--body);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--on-accent);
-  background: var(--accent);
-  border: none;
-  border-radius: var(--r);
-  min-height: 44px;
-  padding: var(--s2) var(--s4);
-  cursor: pointer;
-}
-
-.review-group-confirm:active:not(:disabled) {
-  background: var(--pressed);
-}
-
-/* Disabled while the write is in flight: PullConfirm's disabled spec, because it is the
-   same control family — surface, hairline, muted — rather than a dimmed fill that still
-   reads as pressable. */
-.review-group-confirm:disabled {
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  cursor: not-allowed;
-}
-
-.review-group-confirm .review-key {
-  color: var(--on-accent);
-  border-color: var(--on-accent);
-}
-
-.review-group-confirm:disabled .review-key {
-  color: var(--muted);
-  border-color: var(--line);
-}
-
-/* ---- narrower than the split ---- */
-
-/* THIS FILE'S FIRST MEDIA QUERIES, and they exist because docs/DESIGN.md's reversed rule is
-   scoped to the desktop rather than applied everywhere. Nothing moves in the DOM at any
-   width — the order is stage, choice, rail throughout — so a screen reader and the tab ring
-   read the same thing on a phone as on the rig. */
-
-/* The rail drops beneath the card first, because it is the one column that is beside the work
-   rather than part of it. */
-@media (max-width: 1200px) {
-  .review-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* THE PHONE IS THE PRE-SPLIT SCREEN, BYTE FOR BYTE, AND THAT IS THE POINT. Below this width
-   the declared numbers go back to what they were, the card collapses to one column, and the
-   order is photo, finding, candidates, panels, actions, facts — which is what this file
-   shipped with and what 375px was tuned against. The split is a desktop layout; the phone
-   gets no new rules to be wrong about, which is the half of the old rule worth keeping. */
-@media (max-width: 900px) {
-  .review {
-    max-width: 688px;
-    --photo-cap: 48vh;
-  }
-
-  .review-card {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .review-stage {
-    position: static;
-  }
-
-  /* AND THE RAIL GOES BACK INTO THE PAGE FLOW, which is the half of "byte for byte" that a
-     grid change alone does not deliver. Beside the card it is a column that must not scroll
-     the page; beneath the card on a phone it is the worklist again, and a sticky box with its
-     own scrollbar inside a page that already scrolls is two scrollbars arguing. */
-  .review-waiting {
-    position: static;
-    max-height: none;
-    overflow-y: visible;
-    margin-top: var(--s5);
-    border-top: 1px solid var(--line);
-    padding-top: var(--s3);
-  }
-}
-
-/* ---- focus ---- */
-
-/* A keyboard with no visible focus is a mouse with no pointer, and this screen is a keyboard
-   for an hour at a time. --ink rather than --accent for the reason App.css gives: accent's
-   outline weight already means "the system is unsure" on this very screen, and a keyboard
-   user tabbing through candidates is not being told anything of the kind. */
-.review-reload:focus-visible,
-.review-candidate:focus-visible,
-.review-action:focus-visible,
-.review-waiting-shape:focus-visible,
-.review-group-confirm:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-
-/* ---- D37: closing a card without answering it ----
- *
- * OUTLINES ONLY, NO FILL. docs/DESIGN.md reserves the solid accent for a screen with exactly
- * one thing to do, and this panel is by construction a screen with seven — plus the candidate
- * rows still readable above it. The group confirm earns its fill because D29's eligibility
- * reduces the state to one action; nothing here does.
- *
- * IT SITS BETWEEN THE ROWS AND THE ACTIONS rather than replacing either. The card it is about
- * stays on screen and so do the answers it is an alternative to — which is the whole argument
- * for the panel over a dialog: the operator is choosing NOT to take an option that is still
- * visible beside the choice.
- *
- * D28 IS NOT AT RISK HERE, and it is worth being exact rather than reassuring. That rule is
- * about the candidate rows moving under a finger already travelling toward a digit. This panel
- * opens BELOW the rows and only on a deliberate press, so nothing above it moves; the rows keep
- * the positions they had. */
-.review-close {
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: var(--s4);
-  margin-top: var(--s4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.review-close-lede {
-  margin: 0 0 var(--s2);
-  font-size: 17px;
-}
-
-/* The utility face, because these two words are a category and not a sentence — the same rule
-   that puts every reason code and position label in mono on this screen. */
-.review-close-head {
-  margin: var(--s3) 0 var(--s1);
-  font-family: var(--util);
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink);
-}
-
-.review-close-note {
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--muted);
-}
-
-.review-close-choice {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--s1) var(--s3);
-  align-items: baseline;
-  width: 100%;
-  text-align: left;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--surface);
-  cursor: pointer;
-}
-
-.review-close-choice:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-/* `not-allowed`, matching the other seventeen disabled controls in the product. See the same
-   correction on `Runs.css:.runs-plain:disabled` — these two were the only pair that disagreed,
-   and this screen is the one where a stand-down choice being refused most needs to read as
-   refused rather than as inert. */
-.review-close-choice:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.review-close-label {
-  font-size: 17px;
-  color: var(--ink);
-}
-
-/* Both spans sit in column 2 under the label, so the key chip keeps its own column and the
-   three lines of one choice read as one block rather than as three rows. */
-.review-close-choice .review-machine,
-.review-close-why {
-  grid-column: 2;
-}
-
-.review-close-why {
-  font-size: 15px;
-  color: var(--muted);
-}
-
-.review-close-elsewhere {
-  margin: var(--s3) 0 0;
-  font-size: 15px;
-  color: var(--muted);
-}
-
-/* ------------------------------------------------------------------ D46's catalog lookup
-
-   The panel drawn where the candidate rows would be, for an entry the pipeline found no row
-   for. It borrows `.review-candidates` and `.review-candidate` wholesale — see the component
-   — so nothing here restyles a row; what is below is only the frame, the prose and the
-   search control.
-
-   NO BORDER AND NO SURFACE OF ITS OWN, unlike `.review-close`. That panel is a second thing
-   you may do to the card and is boxed to say so; this one IS the card's rows, standing where
-   they always stand, and boxing it would draw a container around the primary content of the
-   screen. */
-.review-catalog {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  width: 100%;
-}
-
-.review-catalog-empty {
-  font-family: var(--body);
-  font-size: 15px;
-  color: var(--muted);
-  margin: 0;
-}
-
-.review-catalog-more {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  margin: 0;
-}
-
-.review-catalog-search {
+.review-group-pos { font-size: var(--bn-fs-xs); color: var(--rv-well-ink); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-group-bar {
+  position: sticky;
+  bottom: var(--bn-3);
   display: flex;
   align-items: center;
-  gap: var(--s2);
+  gap: var(--bn-3);
   flex-wrap: wrap;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+}
+.review-group-confirm { gap: var(--bn-2); }
+
+/* ---- the reward at zero, and the lone panels --------------------------------------- */
+.review-lone { max-width: 720px; margin: 0 auto var(--bn-6); }
+.review-done {
+  position: relative;
+  max-width: 720px;
+  margin: var(--bn-6) auto 0;
+  padding: var(--bn-4);
+  background:
+    radial-gradient(60% 50% at 50% 18%, var(--bn-ok-tint), transparent 70%),
+    var(--bn-surface);
+}
+.review-done-empty .bn-empty-art {
+  width: 84px;
+  height: 84px;
+  border-radius: 26px;
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+  animation: rv-pop var(--bn-t-slow) var(--bn-ease-spring) both;
+}
+.review-done-empty .bn-empty-art .bn-icon { width: 38px; height: 38px; }
+.review-done-empty .bn-empty-art path { stroke-dasharray: 32; stroke-dashoffset: 32; animation: rv-draw 560ms var(--bn-ease-out) 220ms forwards; }
+.review-done-empty .bn-empty-title { font-size: var(--bn-fs-3xl); font-weight: 800; letter-spacing: -0.02em; animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 120ms both; }
+.review-done-empty .bn-empty-body { animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 220ms both; }
+.review-done-empty .bn-empty-actions { animation: rv-verdict-in var(--bn-t-slow) var(--bn-ease-out) 320ms both; }
+.review-done-session { padding: 0 var(--bn-4) var(--bn-2); }
+.review-done-session .bn-rule { margin-bottom: var(--bn-2); }
+@keyframes rv-pop {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes rv-draw { to { stroke-dashoffset: 0; } }
+
+/* ---- touch ----------------------------------------------------------------------- */
+@media (hover: none) and (pointer: coarse) {
+  .review-key, .review .bn-kbd { display: none; }
+  .review-candidate { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .review-close-choice { grid-template-columns: minmax(0, 1fr) auto; min-height: 44px; }
+  /* A thumb presses these: 40px chips, 44px actions. The 767px block below is layout only. */
+  .review-filter { height: 40px; padding: 0 12px; }
+  .review-actions .bn-btn { height: 44px; }
+  .review-actions .bn-btn.bn-btn-icon { width: 44px; }
 }
 
-/* Visible, not sr-only. The operator arrives here from a dead end, and an unlabelled box is
-   the one control on this screen whose purpose cannot be guessed from what is beside it. */
-.review-catalog-label {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* `--field`, not `--line`: docs/DESIGN.md gives that token to the boundary of something you
-   TYPE INTO and nowhere else, on the finding that `line` measures 1.24:1 and an empty input
-   is a rectangle with nothing else to find it by. */
-.review-catalog-input {
-  flex: 1 1 16rem;
-  min-width: 0;
-  font-family: var(--body);
-  font-size: 15px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-  padding: var(--s2) var(--s3);
-}
-
-/* The edge darkens under the pointer (D50). `border-color` only — never width, which
-   would reflow the box and move a target under a finger already travelling toward it.
-   Focus is an outline drawn
-   outside this border, so the two compose rather than compete. */
-.review-catalog-input:hover:not(:disabled) {
-  border-color: var(--field-hover);
-}
-
-.review-catalog-input:disabled {
-  color: var(--muted);
+/* ---- phone ----------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .review-pagehead .bn-head-actions .bn-btn:not(.bn-btn-icon) { padding-left: var(--bn-3); padding-right: var(--bn-3); }
+  .review-group-bar { bottom: calc(64px + var(--bn-3) + env(safe-area-inset-bottom)); }
+  .review-progress-bar { width: 96px; }
+  /* The queue sheet keeps a band of scrim beside it: 380px in a 390px viewport left a 10px
+     sliver of the page, which reads as a misfit rather than as an overlay. */
+  .review[data-queue-open='true'] .review-rail { width: calc(100vw - var(--bn-7)); }
+  .review-filters { padding: 2px; margin-top: calc(-1 * var(--bn-3)); margin-bottom: var(--bn-5); }
+  .review-question-title { font-size: var(--bn-fs-xl); }
+  .review-candidate { min-height: 56px; padding: 10px var(--bn-3); gap: var(--bn-3); }
+  .review-candidate-price { font-size: var(--bn-fs-lg); min-width: 0; }
+  /* One row: the two labelled actions share the width and the icon-only Close sits at the
+     end of it, so nothing wraps into an orphan. */
+  .review-actions .bn-btn { flex: 1 1 0; min-width: 0; }
+  .review-actions .bn-btn.bn-btn-icon { flex: none; margin-left: auto; }
+  .review-busy { flex: 1 1 100%; justify-content: center; }
+  .review-close {
+    left: var(--bn-3);
+    right: var(--bn-3);
+    top: auto;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    width: auto;
+    /* The room above the tab bar, less the top bar: seven choices fit on an 844px phone
+       without the sheet scrolling inside itself (70vh left the last one below its fold). */
+    max-height: calc(100vh - 140px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 140px - env(safe-area-inset-bottom));
+    transform: none;
+    border-radius: var(--bn-r-2xl);
+    animation: bn-sheet-up var(--bn-t-slow) var(--bn-ease) both;
+  }
+  /* The machine spelling beside each choice costs the note a third line at 366px wide; the
+     label and the note are the choice, and the spelling is still in the receipt's title. */
+  .review-close-choice { grid-template-columns: auto minmax(0, 1fr); }
+  .review-close-choice .review-code { display: none; }
+  .review-facts { grid-template-columns: minmax(0, 1fr); }
+  .review-done { margin-top: var(--bn-4); padding: var(--bn-2); }
+  .review-done-empty { padding: var(--bn-7) var(--bn-3); }
+  .review-group-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); max-height: none; min-height: 0; overflow: visible; }
 }

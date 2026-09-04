@@ -1712,6 +1712,12 @@ export type PricingCorpus = {
   policy: {
     rule?: string
     basis?: string
+    /* D9's cut-off, as the operator set it: the market price at or above which a card goes in
+       the listed file. A string like the other money on this document. Always present on the
+       wire — `"0.40"` where the store has never set one — and what `pipeline/join.py` and
+       `pipeline/merge.py` partition by, so the split drawn on `#/pricing` is the split emit
+       writes. */
+    threshold?: string
     sub_threshold?: string | { flat: string } | null
     per_run?: Record<string, Record<string, unknown>>
   }

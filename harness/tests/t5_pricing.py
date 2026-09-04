@@ -115,6 +115,42 @@ def run() -> Result:
         "refuses a basis outside market | low",
     )
 
+    # --- the threshold is a stored figure, and it is validated like money ------------------
+    #
+    # D9 HAS ALWAYS SAID "BOTH CONFIGURABLE" AND NOTHING COULD CONFIGURE IT. The cut-off is
+    # `pipeline/corpus.py`'s `policy.threshold` now — one figure for the store, set on
+    # `#/pricing` — and `THRESHOLD` is what a store that has never set one reads.
+    c.equal(
+        pricing.check_threshold(None),
+        pricing.THRESHOLD,
+        "an unset threshold IS the constant, so a store that never touched it partitions "
+        "exactly as it did before the field existed",
+    )
+    c.equal(
+        pricing.check_threshold(" 1.25 "),
+        Decimal("1.25"),
+        "and a stored one comes back as the money it was typed as, whitespace and all",
+    )
+    for bad, why in [
+        ("", "an empty cell"),
+        ("free", "a word"),
+        ("0", "zero, which would list a $0.00 card"),
+        ("-1", "a negative cut-off"),
+        ("NaN", "a Decimal that is not a number"),
+    ]:
+        caught = c.raises(
+            pricing.InvalidThreshold,
+            lambda bad=bad: pricing.check_threshold(bad),
+            f"refuses {bad!r}: {why}",
+        )
+        if caught is not None:
+            c.ok(
+                repr(bad.strip()) in str(caught),
+                "and the refusal NAMES the value — a threshold nobody can see written down "
+                "is a threshold nobody can correct",
+                str(caught),
+            )
+
     # --- the rules themselves -------------------------------------------------------------
     market = Decimal("2.00")
     c.equal(pricing.Rule.parse("match").apply(market), market, "match returns the basis")
@@ -223,6 +259,57 @@ def run() -> Result:
         low_match.market_price,
         Decimal("22.03"),
         "market_price stays the threshold's number whatever the basis is",
+    )
+
+    # --- and the cut-off moves the boundary, in both directions ---------------------------
+    #
+    # ACCELGOR IS $0.07 MARKET, which is sub-threshold at $0.40 and listable at $0.05. The
+    # same row, the same reading, two partitions — which is the whole of what making the
+    # threshold a stored policy buys, and the thing that would silently stop working if
+    # `SkuMatch.listable` went back to reading the module constant.
+    accelgor_row = by_sku[ACCELGOR]
+    c.ok(
+        not join.SkuMatch(
+            sku=ACCELGOR, row=accelgor_row, positions=[join.Position(BOX, 1)]
+        ).listable,
+        "a $0.07 card is sub-threshold under the default $0.40",
+    )
+    c.ok(
+        join.SkuMatch(
+            sku=ACCELGOR,
+            row=accelgor_row,
+            positions=[join.Position(BOX, 1)],
+            threshold=Decimal("0.05"),
+        ).listable,
+        "and listable under a stored cut-off of $0.05 — the operator's figure, not the "
+        "module's",
+    )
+    c.ok(
+        not join.SkuMatch(
+            sku=ARTICUNO,
+            row=articuno,
+            positions=[join.Position(BOX, 1)],
+            threshold=Decimal("50.00"),
+        ).listable,
+        "and it moves the other way too: a $22.03 card is sub-threshold at $50.00, which "
+        "is what an operator raising the bar on a bulk box is asking for",
+    )
+    lowered = join.join_batch(
+        [_card(2, "Accelgor", "013", metadata="normal")],
+        catalog,
+        threshold=Decimal("0.05"),
+    )
+    c.equal(
+        (list(lowered.matches), lowered.below_threshold.skus),
+        ([ACCELGOR], []),
+        "THE FIGURE REACHES THE PARTITION AND NOT ONLY THE ROW. `join_batch` builds the "
+        "sub-threshold bucket from `listable`, so a threshold that stopped at the match "
+        "would price the card one way and file it the other",
+    )
+    c.equal(
+        lowered.below_threshold.threshold,
+        Decimal("0.05"),
+        "and the bucket's bands are cut as fractions of the SAME figure, so they follow it",
     )
 
     market_match = join.SkuMatch(

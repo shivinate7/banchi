@@ -251,7 +251,9 @@ test('the route resolves, and the nav offers it under its own chord', async ({ p
      this repo can tell — harness, lint, typecheck and docs-audit all stay green over it. */
   await expect(page.locator(VIEW)).toBeVisible()
 
-  await expect(page.locator('a.app-nav-link[href="#/orders"] kbd.app-nav-key')).toHaveText(',O')
+  /* The chord is still `,O`, and it is still printed on the nav link — the keycap's own class
+     went with the rebuild, so this reads the `kbd` inside the link for this route. */
+  await expect(page.locator('a.app-nav-link[href="#/orders"] kbd')).toHaveText(',O')
 })
 
 /* -------------------------------------------------------------------------------------- 2 */
@@ -392,14 +394,17 @@ test('the receipt names where the card just was, never the departed label the sa
 
   await page.locator('button.orders-pull').first().click()
 
-  const receipt = page.locator('.orders-receipt-text')
+  /* THE RECEIPT IS A TOAST NOW, which is the owner's ruling and changes nothing this case is
+     about: it is still composed at the moment of the press, it still has to name the place the
+     operator just walked to, and the way back still has to be on it. */
+  const receipt = page.locator('.bn-toast-receipt')
   await expect(receipt).toContainText('Box 3 · Section 2 · Card 17')
   await expect(receipt).not.toContainText('departed')
 
   /* THE WAY BACK IS ON THE RECEIPT AND NOT IN THE ROW, and that is forced rather than chosen: a
      successful pull marks the copy sold, the resolver stops offering it, and an Undo drawn
      inside the row would unmount with it. */
-  await expect(page.locator('.orders-receipt button.orders-plain')).toHaveText('Undo')
+  await expect(receipt.locator('button.bn-toast-action')).toHaveText('Undo')
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
@@ -449,13 +454,15 @@ test('a paste is projected before it is sent, and what was dropped is named', as
      WAY. A paste box drawn above the counts costs about 180px on every arrival for an errand
      that happens once a batch; the control never moves, only the panel. */
   await expect(page.locator('.orders-paste')).toHaveCount(0)
-  await page.locator('.orders-controls button.orders-plain').click()
+  const openWell = page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' })
+  await expect(openWell).toHaveAttribute('aria-expanded', 'false')
+  await openWell.click()
   await expect(page.locator('.orders-paste')).toHaveCount(1)
 
   /* AND THE FETCH IS INSIDE IT, not in the page header. It is the same errand with the copying
      done for you — `POST /orders/fetch` answers exactly the body the ingest accepts — so the
      screen has one way in and two sources rather than two ways in. */
-  await expect(page.locator('.orders-paste button.orders-plain', { hasText: 'Fetch from TCGplayer' })).toHaveCount(1)
+  await expect(page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' })).toHaveCount(1)
 
   /* A BUYER, A STREET AND AN EMAIL AT THE TOP LEVEL — the shape a real console copy has. None
      of the three may reach the wire, and the screen has to SAY it dropped them: a silent strip
@@ -471,7 +478,7 @@ test('a paste is projected before it is sent, and what was dropped is named', as
       lines: [{ sku: SKU, quantity: 1, name: 'Volcanion' }],
     }),
   )
-  await page.locator('.orders-paste button.orders-plain', { hasText: 'Read this paste' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Read this paste' }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length)

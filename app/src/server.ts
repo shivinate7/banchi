@@ -1808,7 +1808,9 @@ export async function putPricingCorpus(
  */
 export async function emitMerged(
   runs: readonly string[],
-  options: { listedOnly?: boolean; splitGames?: boolean } = {},
+  /* `splitThreshold` restores the old pair of files — `import-listed.csv` and
+     `import-subthreshold.csv` — around D9's cut-off. Emit writes ONE `import.csv` without it. */
+  options: { listedOnly?: boolean; splitGames?: boolean; splitThreshold?: boolean } = {},
 ): Promise<RunStepResult & { runs: string[] }> {
   return (await request('/pipeline/emit', {
     method: 'POST',
@@ -1817,6 +1819,7 @@ export async function emitMerged(
       runs,
       listed_only: Boolean(options.listedOnly),
       split_games: Boolean(options.splitGames),
+      split_threshold: Boolean(options.splitThreshold),
     }),
   })) as RunStepResult & { runs: string[] }
 }
@@ -2040,6 +2043,9 @@ export async function runStep(
     reviewBelowConfidence?: 'none' | 'low' | 'medium'
     dryRun?: boolean
     bypass?: boolean
+    listedOnly?: boolean
+    splitGames?: boolean
+    splitThreshold?: boolean
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2054,6 +2060,9 @@ export async function runStep(
       review_below_confidence: options.reviewBelowConfidence,
       dry_run: options.dryRun,
       bypass: options.bypass,
+      listed_only: options.listedOnly,
+      split_games: options.splitGames,
+      split_threshold: options.splitThreshold,
     }),
   })) as RunStepResult
 }

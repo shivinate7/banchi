@@ -405,6 +405,139 @@ type Mood = {
    *  two different parts of one screen: the cards can load while the search does not, and the
    *  list he already has must survive that. */
   searchFail?: boolean
+  /** THE LEDGER, WHICH THIS VIEW NOW READS BESIDE THE CARDS. `GET /orders` resolves every open
+   *  order to the copies that fill it, and the view draws those as "Orders to fill" above the
+   *  boxes. It defaults to a ledger with nothing open — the world every case below was written
+   *  in, where the boxes ARE the walk — so a case that wants an order says so. Stubbed rather
+   *  than left to fall through: an unrouted `/orders` reaches the real capture server, and this
+   *  file would then be measuring the owner's real open orders. */
+  orders?: unknown
+}
+
+/** THE ONE OPEN ORDER, waiting for the copy the fixture holds at 3/7.
+ *
+ *  Field for field the shape `do_orders` answers with — `pickSellable` refuses a copy that is
+ *  missing any of `label`, `located`, `state` or `capture_id`, so a partial fixture here does
+ *  not fail partially: it draws an order with no cards under it, which reads exactly like the
+ *  feature being broken. The one line resolves to one pick, which is the ordinary case. */
+const ORDER_NUMBER = 'A2FFC195-0000F4-006AC'
+const ORDER_SKU = '9191486'
+const ORDER_KEY = `TCGplayer:${ORDER_NUMBER}`
+
+const ORDER_PICK = {
+  box: 3,
+  index: 7,
+  capture_id: 'cap-charizard',
+  source: 'card',
+  run: null,
+  card_name: 'Charizard ex',
+  card_number: '006',
+  condition: 'Near Mint',
+  state: 'identified',
+  held_by: null,
+  place: {
+    label: 'Box 3 · Section 1 · Card 7',
+    located: true,
+    box: 3,
+    index: 7,
+    slot: 7,
+    section: 1,
+    card: 7,
+    box_name: null,
+    section_start: 1,
+    section_end: 25,
+    box_total: 25,
+    box_closed: true,
+    fraction: 0.28,
+    neighbors: null,
+    section_gaps: 0,
+  },
+}
+
+const ORDER_LINE = {
+  sku: ORDER_SKU,
+  quantity: 1,
+  name: 'Charizard ex',
+  number: '006',
+  printing: 'Normal',
+  condition: 'Near Mint',
+  rarity: 'Rare',
+  unit_price: '1.24',
+  kind: 'single',
+}
+
+const ONE_OPEN_ORDER = {
+  summary: '1 order',
+  orders: [
+    {
+      key: ORDER_KEY,
+      source: 'TCGplayer',
+      number: ORDER_NUMBER,
+      placed_at: '2026-08-29T10:00:00+00:00',
+      status: 'Ready to ship',
+      first_seen: '2026-08-30T09:00:00+00:00',
+      changed_at: null,
+      wanted: 1,
+      recorded: 0,
+      open: true,
+      lines: [ORDER_LINE],
+      progress: [
+        { sku: ORDER_SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null },
+      ],
+    },
+  ],
+  resolution: {
+    orders: [
+      {
+        key: ORDER_KEY,
+        number: ORDER_NUMBER,
+        complete: false,
+        outstanding: 1,
+        lines: [
+          {
+            order: ORDER_NUMBER,
+            order_key: ORDER_KEY,
+            sku: ORDER_SKU,
+            reason: 'resolved',
+            wanted: 1,
+            fulfilled: 1,
+            outstanding: 0,
+            on_hand: 1,
+            sold: 0,
+            retired: 0,
+            pooled: 0,
+            line: ORDER_LINE,
+            picks: [ORDER_PICK],
+          },
+        ],
+      },
+    ],
+    counts: {
+      resolved: 1,
+      short: 0,
+      no_copies_on_hand: 0,
+      sku_unknown: 0,
+      sku_unseen: 0,
+      not_a_single: 0,
+    },
+  },
+}
+
+/** A ledger with nothing open. Field for field the shape `do_orders` answers with. */
+const NO_ORDERS = {
+  summary: 'No open orders',
+  orders: [],
+  resolution: {
+    orders: [],
+    counts: {
+      resolved: 0,
+      short: 0,
+      no_copies_on_hand: 0,
+      sku_unknown: 0,
+      sku_unseen: 0,
+      not_a_single: 0,
+    },
+  },
 }
 
 async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<Store> {
@@ -462,6 +595,16 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(searchAnswer(asked, states)),
+    })
+  })
+
+  /* Before `/inventory`, and its own route: `/orders` is read on the same trigger the cards
+     are, so a sale re-reads both. */
+  await page.route(/\/orders$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mood.orders ?? NO_ORDERS),
     })
   })
 
@@ -565,11 +708,45 @@ type Run = { text: string; where: string; size: number; colour: string; ground: 
  */
 async function runsIn(view: Locator): Promise<Run[]> {
   return view.evaluate((root) => {
+    /* THE GROUND, COMPOSITED RATHER THAN THE FIRST COLOUR FOUND.
+     *
+     * A translucent layer is a real ground — what the eye reads is it painted over whatever is
+     * behind it — and this view has one that is only ever translucent for 120ms: a disclosure
+     * head with a hover transition from nothing to a surface colour. Read at the wrong instant,
+     * the first-colour-found form returned `rgba(247, 248, 250, 0.96)` and the opacity guard
+     * below failed on a screen that is fine, intermittently, under load. Compositing answers
+     * the same colour once the transition lands and the right one while it is running.
+     *
+     * THE GUARD IS UNTOUCHED: the walk still ends at a fully transparent answer when NOTHING
+     * behind the text is opaque, which is what a stylesheet that did not load looks like, and
+     * `noThinContrast` still refuses to measure that. */
+    const READ = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\s*\)$/
     const groundOf = (start: Element): string => {
+      // Front to back: each layer is painted over the one after it.
+      const layers: { r: number; g: number; b: number; a: number }[] = []
       let node: Element | null = start
       while (node !== null) {
-        const colour = window.getComputedStyle(node).backgroundColor
-        if (colour !== 'transparent' && !colour.startsWith('rgba(0, 0, 0, 0)')) return colour
+        const found = READ.exec(window.getComputedStyle(node).backgroundColor.trim())
+        if (found !== null) {
+          const a = found[4] === undefined ? 1 : Number(found[4])
+          if (a > 0) {
+            layers.push({ r: Number(found[1]), g: Number(found[2]), b: Number(found[3]), a })
+            if (a === 1) {
+              // Composite back to front onto the opaque layer we just reached.
+              let out = layers[layers.length - 1]!
+              for (let at = layers.length - 2; at >= 0; at -= 1) {
+                const over = layers[at]!
+                out = {
+                  r: over.r * over.a + out.r * (1 - over.a),
+                  g: over.g * over.a + out.g * (1 - over.a),
+                  b: over.b * over.a + out.b * (1 - over.a),
+                  a: 1,
+                }
+              }
+              return `rgb(${Math.round(out.r)}, ${Math.round(out.g)}, ${Math.round(out.b)})`
+            }
+          }
+        }
         node = node.parentElement
       }
       // The page ground itself is painted on <body>; reaching past it means the walk found
@@ -610,9 +787,22 @@ async function runsIn(view: Locator): Promise<Run[]> {
  *  The label carries the accessible name as well as the visible text, because the receipts
  *  put the position in an `aria-label` — and the destructive-wording check below reads these
  *  labels, so a control whose only name is an attribute must not be invisible to it. */
-async function targets(page: Page): Promise<{ where: string; box: DOMRect }[]> {
+async function targets(page: Page): Promise<{ where: string; box: DOMRect; floating: boolean }[]> {
   return page.evaluate(() => {
-    const out: { where: string; box: DOMRect }[] = []
+    /* WHICH LAYER THE CONTROL IS ON. A receipt sheet is `position: fixed` over the page and
+       takes every tap inside its own footprint, so a row it happens to be covering is not the
+       Undo's NEIGHBOUR — it is behind it, and the 12px rule is about two things a thumb can
+       land between. Recorded here rather than decided here: `fatTargets` is where it is used,
+       and every size check below still runs on every control whichever layer it is on. */
+    const onAnOverlay = (start: Element): boolean => {
+      let node: Element | null = start
+      while (node !== null) {
+        if (window.getComputedStyle(node).position === 'fixed') return true
+        node = node.parentElement
+      }
+      return false
+    }
+    const out: { where: string; box: DOMRect; floating: boolean }[] = []
     for (const element of document.querySelectorAll('button, a[href], input, select, textarea')) {
       if (!element.checkVisibility()) continue
       const classes = element.getAttribute('class')
@@ -621,6 +811,7 @@ async function targets(page: Page): Promise<{ where: string; box: DOMRect }[]> {
       out.push({
         where: `${element.tagName.toLowerCase()}${classes === null ? '' : `.${classes}`}: ${text.slice(0, 120)}`,
         box: element.getBoundingClientRect().toJSON() as DOMRect,
+        floating: onAnOverlay(element),
       })
     }
     return out
@@ -766,6 +957,13 @@ async function fatTargets(page: Page, where: string, hasControls = true): Promis
     for (let j = i + 1; j < found.length; j += 1) {
       const a = found[i]!
       const b = found[j]!
+      /* ONE LAYER AT A TIME. The receipt sheet floats over the list, so at any scroll position
+         it lies across rows it is not beside — and a rule read across that boundary reports a
+         0px gap between a control and something the sheet is sitting on top of, which is not a
+         mis-tap he can make. Both halves are still measured in full against their own layer:
+         every control in the sheet against every other control in the sheet, and every control
+         on the page against every other control on the page. */
+      if (a.floating !== b.floating) continue
       expect(apart(a.box, b.box), `${where}: ${a.where} -> ${b.where}`).toBeGreaterThanOrEqual(
         GAP_FLOOR,
       )
@@ -893,6 +1091,138 @@ async function openList(page: Page, wire: Wire[] = [], mood: Mood = {}): Promise
   return states
 }
 
+/* THE LAYOUT HAS TO HAVE STOPPED MOVING BEFORE A RULER TOUCHES IT.
+ *
+ * `fontsReady.ts` says why the faces matter and closes the case where every face is already
+ * loading when the promise is made. It does not close this one: the card panel draws the
+ * display family at a WEIGHT NO OTHER SCREEN USES, so the load starts when the panel opens —
+ * after `document.fonts.ready` has already been asked and answered. Measured on the case the
+ * overshoot rule turns on: the place label wrapped to three lines in the fallback and to one in
+ * Manrope, moving the control under it by 86px between two reads of one screen.
+ *
+ * So this waits for the faces AND then for the view's own height to stop changing — the same
+ * "wait for a true statement to become true" the config's timeout note describes. It weakens
+ * nothing: no assertion or allowance moves, and a layout that is genuinely wrong is still
+ * wrong when it settles. The frame cap keeps a page that never settles from hanging the run;
+ * a measurement taken after it is no worse than one taken without any of this. */
+async function settleLayout(page: Page): Promise<void> {
+  /* EVERY DECLARED FACE, FETCHED, and not merely the ones already in flight.
+     `document.fonts.ready` answers about the load cycle that is RUNNING; a weight this screen
+     is the first to use has not started loading when the promise is asked for, so the swap
+     lands after the wait is over. Asking each declared face to load leaves nothing that can
+     arrive later. Failures are swallowed: a face that cannot be fetched is a page drawn in the
+     fallback, which is a layout this file is entitled to measure — it just has to be the SAME
+     layout at both reads. */
+  // The faces are declared by a stylesheet fetched over the network, so there is a window in
+  // which NOTHING is declared and the loop below has nothing to force. Bounded: a run with no
+  // network draws in the fallback throughout, which is a layout this file may measure — it
+  // just has to be the same one at both reads.
+  await page
+    .waitForFunction(() => document.fonts.size > 0, undefined, { timeout: 5_000 })
+    .catch(() => undefined)
+  await page.evaluate(async () => {
+    const faces = [...(document.fonts as unknown as Iterable<FontFace>)]
+    await Promise.all(faces.map((face) => face.load().catch(() => undefined)))
+    await document.fonts.ready
+  })
+  /* AND THE FACES THIS SCREEN'S OWN TEXT IS SET IN, asked for by the elements themselves.
+     `document.fonts.check` answers false while a face is still arriving and true when it has —
+     or when nothing declares it, which is the no-network case going straight through. Reading
+     the family off the rendered element keeps the wait honest if the tokens change their
+     minds about which family that is. */
+  await page
+    .waitForFunction(
+      () => {
+        for (const element of document.querySelectorAll('main.fulfillment *')) {
+          if ((element.textContent ?? '').trim() === '') continue
+          const style = window.getComputedStyle(element)
+          const face = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+          if (!document.fonts.check(face)) return false
+        }
+        return true
+      },
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => undefined)
+  /* TWICE, WITH THE FACES RE-ASKED IN BETWEEN. A face can land AFTER a run of three quiet frames
+     — the check above is about the faces the screen declares it needs, and the browser decides
+     when it has them — so one settling pass can end just before the reflow it exists to wait
+     for. The second pass costs three frames on a page that is already still. */
+  for (let pass = 0; pass < 2; pass += 1) {
+    await settleFonts(page)
+    await page.evaluate(
+      () =>
+        new Promise<void>((done) => {
+          const read = () => document.querySelector('main.fulfillment')?.scrollHeight ?? 0
+          let last = read()
+          let same = 0
+          let frames = 0
+          const tick = () => {
+            const now = read()
+            same = now === last ? same + 1 : 0
+            last = now
+            frames += 1
+            if (same >= 3 || frames > 180) done()
+            else requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        }),
+    )
+  }
+}
+
+/* THE BOXES ARE SHUT WHEN HE ARRIVES, and that is the screen's own answer to a store of 229
+ * cards: the browse list is folded one box per row and opens on a tap. So a case that wants to
+ * SEE the walk has to do what he does and open them. Every box, in the order they are drawn,
+ * which is what leaves the rows in box-walk order for the assertion that reads them.
+ *
+ * It is deliberately not a `data-testid` and not a click on the first box: `aria-expanded` is
+ * the state a screen reader announces, so opening by it asserts in passing that the disclosure
+ * says what it is doing. */
+async function openEveryBox(page: Page): Promise<void> {
+  /* WAITED FOR FIRST. The cards can still be on their way — a re-read after "Try again" is the
+     ordinary case — and a loop that ran then would find nothing to open, break, and leave the
+     caller looking for a row on a screen that has not drawn one yet. */
+  /* SHORT WAITS, because this runs INSIDE a retried block (`expectWalk`): a re-read landing
+     mid-loop puts a shut box back, and a fifteen-second wait on that would spend the whole
+     retry budget of the case above rather than letting it start again. Long enough for a render,
+     short enough to be re-run. */
+  await expect(view(page).locator('.ff-box-head')).not.toHaveCount(0, { timeout: 5_000 })
+  const heads = view(page).locator('.ff-box-head[aria-expanded="false"]')
+  for (let guard = 0; guard < 40; guard += 1) {
+    const shut = await heads.count()
+    if (shut === 0) break
+    await heads.first().click()
+  }
+  await expect(view(page).locator('.ff-box-head[aria-expanded="false"]')).toHaveCount(0, {
+    timeout: 2_000,
+  })
+}
+
+/** His row for one card. The rows live inside the boxes, and the boxes arrive shut — so
+ *  finding one means opening them, which is what he does. */
+async function cardRow(page: Page, name: string): Promise<Locator> {
+  await openEveryBox(page)
+  return page.getByRole('button', { name })
+}
+
+/** The walk as HE can see it: every box opened, then every row's position label, in the order
+ *  the rows are drawn.
+ *
+ *  RETRIED AS ONE ACT, because the boxes arrive shut AND the list is re-read after every write:
+ *  a box that comes back with an undo comes back SHUT, after an opening pass that could not
+ *  have seen it, and its cards would then be missing from a walk that is in fact complete. So
+ *  the opening and the reading are one retried block rather than an opening followed by a
+ *  web-first assertion that can only wait for the second half. */
+async function expectWalk(page: Page, expected: readonly string[]): Promise<void> {
+  await expect(async () => {
+    await openEveryBox(page)
+    const drawn = await view(page).locator('.fulfillment-row .fulfillment-place').allTextContents()
+    expect(drawn.map((one) => one.replace(/\s+/g, ' ').trim())).toEqual([...expected])
+  }).toPass({ timeout: 20_000 })
+}
+
 /** The card panel for one card, photo loaded.
  *
  *  VISIBLE IS NOT DECODED, and the difference showed up as a real flake: `naturalWidth` was 0
@@ -901,7 +1231,12 @@ async function openList(page: Page, wire: Wire[] = [], mood: Mood = {}): Promise
  *  It deliberately does NOT wait for success: a broken image is `complete` with a natural size
  *  of zero, which is exactly the state the photo assertion has to be able to fail on. */
 async function openCard(page: Page, name: string): Promise<void> {
+  // His row is inside a box, and the boxes arrive shut. Opening them is how he reaches it.
+  await openEveryBox(page)
   await page.getByRole('button', { name }).click()
+  // The panel opens a face no other screen uses; see `settleLayout` for what that does to a
+  // ruler that reads before it lands.
+  await settleLayout(page)
   const photo = view(page).locator('.fulfillment-photo')
   await expect(photo).toBeVisible()
   await photo.evaluate(
@@ -949,8 +1284,30 @@ async function openSearch(
 ): Promise<Store> {
   const states = await openList(page, wire, mood)
   await searchBox(page).fill(text)
+  /* THE FIRST COPY IN WALK ORDER IS DRAWN IN FULL AND THE REST FOLD UNDER ONE CONTROL — the
+     store's common cards carry a dozen, and a search that drew nineteen photographs down the
+     page is the screen this fold exists to prevent. The owner's ruling is that a copy he can
+     reach is still every copy he can reach, so this opens the fold the way he does and the
+     cases below go on asserting that all of them are there, each whole. */
+  await showEveryCopy(page)
+  // The copies draw the heavy display face too — see `settleLayout`.
+  await settleLayout(page)
   await expect(view(page).locator('.card-locations-copy')).toHaveCount(copies)
   return states
+}
+
+/** Every copy of every card the search found, on screen. See `openSearch` for why they are
+ *  not all drawn at once, and why opening the fold is what HE does rather than a workaround. */
+async function showEveryCopy(page: Page): Promise<void> {
+  // The field is debounced, so the first copy has to be on screen before the fold under it
+  // can be opened — a loop that ran while the search was still looking would find nothing to
+  // open and leave the rest of the copies folded.
+  await expect(view(page).locator('.card-locations-copy')).not.toHaveCount(0)
+  for (let guard = 0; guard < 20; guard += 1) {
+    const shut = view(page).locator('.ff-more-head[aria-expanded="false"]')
+    if ((await shut.count()) === 0) break
+    await shut.first().click()
+  }
 }
 
 /** One copy's card in a search result, found by the position it names — the same scoping the
@@ -966,14 +1323,14 @@ async function sellCopy(page: Page, place: string): Promise<void> {
   const card = copyCard(page, place)
   await card.getByRole('button', { name: 'Pull' }).click()
   await expect(card).toContainText('Pulled.')
-  await card.getByRole('button', { name: 'Mark sold' }).click()
+  await card.getByRole('button', { name: 'Mark it sold' }).click()
 }
 
 /** Pull, then mark sold, on the card already open. */
 async function sellOpenCard(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Pull' }).click()
   await expect(view(page)).toContainText('Pulled.')
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
 }
 
 /** The receipt panel for one card, found by the position it names. Scoped, because two sales
@@ -1037,12 +1394,43 @@ test('the cards for sale are listed in box-walk order, and nothing else is liste
 }) => {
   await openList(page)
   // Box then index: 1/3, 2/9, 3/7, 3/26, 4/2. The fixture is written in another order, so this
-  // measures the sort rather than the object it came from.
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  // measures the sort rather than the object it came from — and the boxes are drawn in box
+  // order too, so opening all of them leaves the rows in exactly the order he walks them.
+  await expectWalk(page, WALK)
   // Captured, not for sale, and therefore not his to sell.
   await expect(page.getByText('Box 2 · Section 1 · Card 4')).toHaveCount(0)
   // For sale but unplaced: counted on screen, never dropped in silence.
   await expect(view(page)).toContainText('1 card for sale is not shown here')
+})
+
+/* THE ORDERS, WHICH ARE THE SCREEN'S FIRST ANSWER NOW. `GET /orders` resolves every open order
+ * to the copies that fill it, and those copies are drawn above the boxes with the order number
+ * on them — so the walk starts from what a buyer is waiting for rather than from the store.
+ *
+ * The rest of this file runs against a ledger with nothing open, which is the same screen with
+ * that section absent; this case is the one that renders it, and it holds the whole table to it
+ * for the reason the file's header gives: the copy on a screen nobody renders is the copy
+ * nobody proofreads.
+ */
+test('a card an order is waiting for is drawn under that order, and the floors hold there', async ({
+  page,
+}) => {
+  await openList(page, [], { orders: ONE_OPEN_ORDER })
+
+  // The figure he reads first, and it counts cards rather than orders.
+  await expect(view(page)).toContainText('1 card to pull')
+
+  /* The copy is on screen WITHOUT opening a box: an order's cards are the list, and the boxes
+     below it are the other way in. */
+  const order = view(page).locator('.ff-order', { hasText: ORDER_NUMBER })
+  await expect(order.locator('.fulfillment-place')).toHaveText(['Box 3 · Section 1 · Card 7'])
+  await battery(page, 'orders to fill')
+
+  // And the card he opens from it says which order is waiting, so he can match the slip.
+  await order.getByRole('button', { name: 'Charizard ex' }).click()
+  await expect(view(page)).toContainText(`For order ${ORDER_NUMBER}`)
+  await expect(view(page).locator('.fulfillment-photo')).toBeVisible()
+  await battery(page, 'card for an order')
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -1086,10 +1474,17 @@ async function bigTabularPlaces(
 
     for (let index = 0; index < count; index += 1) {
       const place = places.nth(index)
-      const size = await place.evaluate(
-        (node) => Number.parseFloat(window.getComputedStyle(node).fontSize),
-      )
-      expect(size, `${where}: position label ${index}`).toBeGreaterThanOrEqual(PLACE_FLOOR)
+      /* EVERY PART OF THE LABEL, not just its container: the words and the figure are separate
+         elements now, and a figure shrunk inside a 32px block is the regression the row of the
+         table is about. The container's own size is measured first, then every span in it. */
+      const sizes = await place.evaluate((node) => {
+        const read = (element: Element) =>
+          Number.parseFloat(window.getComputedStyle(element).fontSize)
+        return [read(node), ...[...node.querySelectorAll('*')].map(read)]
+      })
+      for (const size of sizes) {
+        expect(size, `${where}: position label ${index}`).toBeGreaterThanOrEqual(PLACE_FLOOR)
+      }
 
       /* Tabular figures, measured rather than asserted from the font name.
        *
@@ -1101,11 +1496,26 @@ async function bigTabularPlaces(
        * because the fallback in the token is `monospace` and a proportional fallback is
        * exactly the regression worth catching. */
       const widths = await place.evaluate((node) => {
-        const style = window.getComputedStyle(node)
+        /* MEASURED ON THE ELEMENT THAT CARRIES THE DIGITS. The label is drawn in parts now —
+           the words in one span and the figure in another — so the font that renders `17` is
+           the figure's, not the container's. A probe wearing the container's style would be
+           measuring a string this screen never draws.
+
+           AND `font-variant-numeric` IS COPIED, which the shorthand does not carry. The label
+           is set in the display face with `tabular-nums` rather than in a mono, so a probe
+           that dropped the property would report a proportional face and fail a screen that
+           is fine. What is asserted is unchanged and is still the thing the table asks for:
+           two digit strings of equal length measure the same width. */
+        const digits = node.querySelector('.ff-place-num') ?? node
+        const style = window.getComputedStyle(digits)
         const probe = document.createElement('span')
         probe.style.font = style.font
         probe.style.fontFamily = style.fontFamily
         probe.style.fontSize = style.fontSize
+        probe.style.fontWeight = style.fontWeight
+        probe.style.fontVariantNumeric = style.fontVariantNumeric
+        probe.style.fontFeatureSettings = style.fontFeatureSettings
+        probe.style.letterSpacing = style.letterSpacing
         probe.style.position = 'absolute'
         probe.style.whiteSpace = 'pre'
         document.body.appendChild(probe)
@@ -1129,6 +1539,7 @@ test(`every position label is at least ${PLACE_FLOOR}px and set in tabular figur
   page,
 }) => {
   await openList(page)
+  await openEveryBox(page)
   await bigTabularPlaces(page, 'list')
   await openCard(page, 'Charizard ex')
   await bigTabularPlaces(page, 'card')
@@ -1204,7 +1615,7 @@ test('no destructive action and no route out is reachable from any screen of thi
   // And the view itself writes nothing until he presses the one thing it offers.
   expect(wire, 'the view wrote to the server without being asked').toEqual([])
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
   await expect(view(page)).toContainText('Marked sold.')
   await noWayOut(page, 'sold')
 })
@@ -1222,7 +1633,7 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   // confirmation that says Pulled.
   await expect(view(page)).toContainText('Pulled.')
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
   await expect(view(page)).toContainText('Marked sold.')
   expect(wire.map((call) => call.undo), 'the sale reached the server as a sale').toEqual([false])
   expect(wire[0]!.url, 'the sale named the card').toContain('/inventory/3/7/sold')
@@ -1247,7 +1658,7 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
   // A sale then a reversal, in that order, on the one route that takes both.
   expect(wire.map((call) => call.undo), 'the withdrawal reached the server').toEqual([false, true])
   // Back in box-walk order rather than appended: he walks the boxes in this order.
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expectWalk(page, WALK)
 })
 
 /* "Undo present on EVERY mark-sold" — the word that was not honoured, and the two ways it
@@ -1430,7 +1841,7 @@ test('the cards are read again when he comes back to them, and after a sale', as
   const wire: Wire[] = []
   const mood: Mood = {}
   await openList(page, wire, mood)
-  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  await expect(await cardRow(page, 'Charizard ex')).toBeVisible()
 
   const beforeWalk = mood.reads ?? 0
   await openCard(page, 'Charizard ex')
@@ -1460,7 +1871,7 @@ test('the sale is not one tap of overshoot from the pull', async ({ page }) => {
 
   const pull = await boxOf(page.getByRole('button', { name: 'Pull' }))
   await page.getByRole('button', { name: 'Pull' }).click()
-  const sell = await boxOf(page.getByRole('button', { name: 'Mark sold' }))
+  const sell = await boxOf(page.getByRole('button', { name: 'Mark it sold' }))
 
   /* Pull and Mark sold were one control in one place, one state apart. A finger that lands
    * twice — the ordinary way a person presses a button that did not seem to respond — pulled
@@ -1468,7 +1879,7 @@ test('the sale is not one tap of overshoot from the pull', async ({ page }) => {
    * second control may not occupy any part of the first one's footprint. */
   expect(
     overlaps(pull, sell),
-    'Mark sold overlaps where Pull was, so a double-tap on Pull sells the card',
+    `Mark sold overlaps where Pull was, so a double-tap on Pull sells the card — pull ${JSON.stringify(pull)}, sale ${JSON.stringify(sell)}`,
   ).toBe(false)
   expect(sell.y, 'Mark sold begins above where Pull ended').toBeGreaterThanOrEqual(
     pull.y + pull.height,
@@ -1485,7 +1896,7 @@ test('the copy carries no word from the system this is built out of', async ({ p
   await noJargon(page, 'card')
   await page.getByRole('button', { name: 'Pull' }).click()
   await noJargon(page, 'pulled')
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
   await expect(view(page)).toContainText('Marked sold.')
   await noJargon(page, 'sold')
 })
@@ -1497,7 +1908,7 @@ test('the ordinary flow passes the whole table at every step', async ({ page }) 
   await battery(page, 'card')
   await page.getByRole('button', { name: 'Pull' }).click()
   await battery(page, 'pulled')
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.getByRole('button', { name: 'Mark it sold' }).click()
   await expect(view(page)).toContainText('Marked sold.')
   await battery(page, 'sold')
 })
@@ -1510,7 +1921,7 @@ test('the screen while the cards load is his too', async ({ page }) => {
   // The one screen that offers nothing to press, and the only call site that says so.
   await battery(page, 'loading', false)
   // And it does end. A loading state nothing clears is a broken screen that measures clean.
-  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  await expect(await cardRow(page, 'Charizard ex')).toBeVisible()
 })
 
 test('the screen when the cards do not load is his too, and trying again works', async ({
@@ -1532,7 +1943,7 @@ test('the screen when the cards do not load is his too, and trying again works',
   // the one he will press repeatedly before asking anyone.
   mood.fail = false
   await page.getByRole('button', { name: 'Try again' }).click()
-  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  await expect(await cardRow(page, 'Charizard ex')).toBeVisible()
 })
 
 test('a body this screen cannot read fails the same way a dead server does', async ({ page }) => {
@@ -1566,10 +1977,10 @@ test('the screen with nothing to pull is his too', async ({ page }) => {
 
 test('the screen when the photo is missing is his too', async ({ page }) => {
   await openList(page, [], { noPhoto: true })
-  await page.getByRole('button', { name: 'Charizard ex' }).click()
+  await (await cardRow(page, 'Charizard ex')).click()
 
   // The photo is gone and the card is not, so the screen says where it still is.
-  await expect(view(page)).toContainText('The photo is missing. The card is still in the place above.')
+  await expect(view(page)).toContainText('The photo is missing. The card is still in the place shown here.')
   await expect(view(page).locator('.fulfillment-photo')).toHaveCount(0)
   await expect(view(page)).toContainText('Box 3 · Section 1 · Card 7')
   await battery(page, 'photo missing')
@@ -1586,9 +1997,9 @@ test('a refusal says what happened and what to do, in his words', async ({ page 
   await sellOpenCard(page)
 
   // What happened, and what to do next.
-  await expect(view(page)).toContainText('Nothing was saved. Press Mark sold again.')
+  await expect(view(page)).toContainText('Nothing was saved. Press Mark it sold again.')
   // The card is still his to sell, because nothing was recorded.
-  await expect(page.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mark it sold' })).toBeVisible()
   // And none of the server's words are on screen — neither the code nor the sentence.
   await expect(view(page)).not.toContainText('store_busy')
   await expect(view(page)).not.toContainText('locked')
@@ -1600,7 +2011,7 @@ test('a failed re-read keeps the cards he has and says the list may have moved',
 }) => {
   const mood: Mood = {}
   await openList(page, [], mood)
-  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  await expect(await cardRow(page, 'Charizard ex')).toBeVisible()
 
   // The Mac goes to sleep between the first read and the walk back to the list.
   mood.fail = true
@@ -1610,7 +2021,7 @@ test('a failed re-read keeps the cards he has and says the list may have moved',
   await expect(view(page)).toContainText('These cards may have changed since they were last checked.')
   // The list he was using is still there. Taking it away because a re-read did not answer
   // leaves him with less than he had.
-  await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
+  await expect(await cardRow(page, 'Charizard ex')).toBeVisible()
   await battery(page, 'stale list')
 
   mood.fail = false
@@ -1706,14 +2117,15 @@ test('the search narrows to the copies of one card, and clearing it gives the wh
    * watched him use. */
   await page.getByRole('button', { name: 'Show every card' }).click()
   await expect(searchBox(page), 'the field kept the name after showing every card').toHaveValue('')
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expectWalk(page, WALK)
   await expect(view(page).locator('.card-locations-copy')).toHaveCount(0)
 
   // And emptying the field by hand is the same door. Two ways out, one destination.
   await searchBox(page).fill('Eiscue')
+  await showEveryCopy(page)
   await expect(view(page).locator('.card-locations-copy')).toHaveCount(2)
   await searchBox(page).fill('')
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expectWalk(page, WALK)
 })
 
 test('every copy the search finds is its own card, with its own photo, place, bar and action', async ({
@@ -1747,7 +2159,7 @@ test('the sale is not one tap of overshoot from the pull, on a search result too
 
   const pull = await boxOf(card.getByRole('button', { name: 'Pull' }))
   await card.getByRole('button', { name: 'Pull' }).click()
-  const sell = await boxOf(card.getByRole('button', { name: 'Mark sold' }))
+  const sell = await boxOf(card.getByRole('button', { name: 'Mark it sold' }))
 
   /* `CardLocations` gives every copy a single one-press "Mark sold" and says in its own header
    * that the overshoot is the thing it does not cover. This is the cover: the same two steps in
@@ -1757,7 +2169,7 @@ test('the sale is not one tap of overshoot from the pull, on a search result too
    * footprint. Measured, not argued. */
   expect(
     overlaps(pull, sell),
-    'Mark sold overlaps where Pull was, so a double-tap on Pull sells the card',
+    `Mark sold overlaps where Pull was, so a double-tap on Pull sells the card — pull ${JSON.stringify(pull)}, sale ${JSON.stringify(sell)}`,
   ).toBe(false)
   expect(sell.y, 'Mark sold begins above where Pull ended').toBeGreaterThanOrEqual(
     pull.y + pull.height,
@@ -1811,9 +2223,7 @@ test(`a copy sold from a search result leaves both lists, and keeps its undo for
 
   // And it leaves the walk underneath, which is the same physical card seen the other way in.
   await page.getByRole('button', { name: 'Show every card' }).click()
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(
-    WALK.filter((place) => place !== EISCUE_FIRST),
-  )
+  await expectWalk(page, WALK.filter((place) => place !== EISCUE_FIRST))
 
   /* Real time, not a fake clock, and the receipt has survived clearing the search since it is
    * rendered above every screen this view has. The window is a promise to a person who has
@@ -1823,10 +2233,11 @@ test(`a copy sold from a search result leaves both lists, and keeps its undo for
 
   await undo.click()
   expect(wire.map((call) => call.undo), 'the withdrawal reached the server').toEqual([false, true])
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expectWalk(page, WALK)
 
   // And back into the search results too, because it is back in the boxes.
   await searchBox(page).fill('Eiscue')
+  await showEveryCopy(page)
   await expect(view(page).locator('.card-locations-place-large')).toHaveText(EISCUE)
 })
 
@@ -1838,7 +2249,7 @@ test('the ordinary search passes the whole table at every step', async ({ page }
   await expect(copyCard(page, EISCUE_FIRST)).toContainText('Pulled.')
   await battery(page, 'search pulled')
 
-  await copyCard(page, EISCUE_FIRST).getByRole('button', { name: 'Mark sold' }).click()
+  await copyCard(page, EISCUE_FIRST).getByRole('button', { name: 'Mark it sold' }).click()
   await expect(view(page)).toContainText('Marked sold.')
   await battery(page, 'search sold')
 })
@@ -1888,7 +2299,7 @@ test('the screen with no card of that name is his too', async ({ page }) => {
 
   // And the way out is still there, which is the whole reason it sits above the results.
   await page.getByRole('button', { name: 'Show every card' }).click()
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expectWalk(page, WALK)
 })
 
 test('a search that does not answer says what happened and what to do, in his words', async ({
@@ -1912,6 +2323,7 @@ test('a search that does not answer says what happened and what to do, in his wo
    * follow repeatedly before asking anyone. */
   mood.searchFail = false
   await searchBox(page).fill('Eiscu')
+  await showEveryCopy(page)
   await expect(view(page).locator('.card-locations-place-large')).toHaveText(EISCUE)
 })
 
@@ -1929,8 +2341,8 @@ test('a refused sale from a search result says so beside the control it names', 
    * right there and wrong here — a search can be four copies long, and an instruction to press
    * a button he cannot see is an instruction to press nothing. */
   const card = copyCard(page, EISCUE_FIRST)
-  await expect(card).toContainText('Nothing was saved. Press Mark sold again.')
-  await expect(card.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(card).toContainText('Nothing was saved. Press Mark it sold again.')
+  await expect(card.getByRole('button', { name: 'Mark it sold' })).toBeVisible()
 
   // Nothing was recorded, so the copy did not leave either list.
   await expect(view(page).locator('.card-locations-copy')).toHaveCount(2)
@@ -1962,7 +2374,7 @@ test('a pooled card is never on his screen — not on the walk, not in a search,
    * pooled fact's words — and NOT in the unplaced count, which stays at the one
    * coerce-failure row. That count's sentence ends "Ask for help", and a pooled card is
    * working as designed: counting it there sends someone to fix nothing. */
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expectWalk(page, WALK)
   await expect(view(page)).not.toContainText('Trade Token')
   await expect(view(page)).not.toContainText('pooled')
   await expect(view(page)).toContainText('1 card for sale is not shown here')
@@ -1988,5 +2400,5 @@ test('a pooled card is never on his screen — not on the walk, not in a search,
 
   // The way back is intact, and the walk comes back without the pooled card, as always.
   await page.getByRole('button', { name: 'Show every card' }).click()
-  await expect(view(page).locator('.fulfillment-row .fulfillment-place')).toHaveText(WALK)
+  await expectWalk(page, WALK)
 })

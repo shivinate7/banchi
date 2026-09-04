@@ -1,1154 +1,1321 @@
-/* #/pricing — the hand-pricing worklist (D49).
- *
- * PAGE CHROME TO docs/DESIGN.md's NUMBERS, LITERALLY, and copied from `Runs.css` rather than
- * re-derived: that file is the second owner route to solve this header and it copied
- * `ReviewQueue.css`'s rather than inventing a third. 16px on all four sides, a 20px display
- * title sharing its line with the screen's controls and counts, a one-line lede, and the
- * first row of real content inside 150px of the top.
- *
- * NO SOLID ACCENT FILL ANYWHERE ON THIS SCREEN, and that is a positive finding rather than an
- * omission. docs/DESIGN.md reserves the fill for "exactly one thing to do" and reasons about
- * the harm on the review queue: filling the pricier candidate teaches the queue to drift
- * toward over-listing. Every state of this screen is a choice among prices, so the same harm
- * is available at run scale — a fill on any preset teaches the run to drift toward it. A
- * hundred-row worklist is the definition of more than one answer.
- */
+/* ============================================================================
+   #/pricing — the hand-pricing worklist (D49, D86).
+   The price field is the hero of every row. Three tiers, decided by the width of the list
+   itself (a container query, so the sidebar and the rail are accounted for):
+     ≥ 940px   a table, the DIRECT column joining it from 1040px
+     600–939   a compact two-line row
+     < 600     a card
+   ========================================================================== */
 
 .pricing {
-  padding: var(--s4);
-
-  /* ---- THE CORNER IS OWNED BY GEOMETRY, NEVER BY `z-index` (D85) -----------------------
-   *
-   * Four things want the bottom-left corner of this screen: every row's T and H, the reading
-   * panel, the photograph, and the ship bar. Three of them are `position: fixed` or `sticky`
-   * and one is a hundred rows deep, so whichever wins a stacking contest, something a hand
-   * is aiming at stops answering. The contest was actually run — T and H were raised to
-   * `z-index: 21` to escape the panels — and it inverted the defect rather than removing it:
-   * the buttons then drew over the panel they were escaping AND over the ship bar, so a row
-   * scrolled behind the bar punched its two letters through it and took the clicks landing
-   * there. A press at the bar's left edge opened a hold on a card nobody could see, and a
-   * hold writes `decisions.json`.
-   *
-   * These two properties are the settlement. The row keeps its gutter and the panels start
-   * after it, so no panel is ever over a T or an H and no `z-index` has to say who wins.
-   *
-   * `--pricing-gutter` IS DERIVED AND NEVER TYPED. It is the page's own padding plus the two
-   * button columns and the gaps after them, composed from the same `--pricing-btn` the grid
-   * template below uses — so widening a button moves the panels with it. A hand-typed 104px
-   * is exactly the two-declarations-that-must-agree drift this stylesheet refuses for its
-   * grid template, arrived at from the other end. */
-  --pricing-btn: 32px;
-  --pricing-gutter: calc(var(--s4) + 2 * (var(--pricing-btn) + var(--s3)));
-}
-
-.pricing-head {
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-/* `display: contents` on the controls, which is `Runs.css`'s trick and its reason: the row
-   wraps BETWEEN controls and never inside one, so a long run name pushes the Reload button to
-   a second line rather than breaking its own label in half. */
-.pricing-head-top {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-}
-
-.pricing-controls {
-  display: contents;
-}
-
-.pricing-controls > :first-child {
-  margin-left: auto;
-}
-
-.pricing-title {
-  margin: 0;
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-.pricing-scope,
-.pricing-save {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.pricing-lede {
-  margin: var(--s2) 0 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.pricing-lede code {
-  font-family: var(--util);
-  font-size: 12px;
-}
-
-/* 32px, which is `.runs-plain`'s height and `.run-button`'s — the settled control height in
-   this product. A third answer to how tall a button is would be visible the moment two of
-   these screens are open in sequence. */
-.pricing-plain {
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
-}
-
-.pricing-plain:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.pricing-plain:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-/* OUTLINE AND NEVER A FILL for a pressed state, which is the register docs/DESIGN.md assigns
-   to a system that is unsure — and a chosen filter is exactly that until it is cleared. */
-.pricing-plain[aria-pressed='true'] {
-  color: var(--accent);
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-/* ------------------------------------------------------------------- the run picker */
-
-.pricing-runs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin-top: var(--s4);
-}
-
-.pricing-run {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: var(--s2) var(--s3);
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
+  gap: var(--bn-5);
 }
 
-.pricing-run:hover {
-  background: var(--hover);
+/* ---- header ---------------------------------------------------------------- */
+.pricing-head { margin-bottom: 0; }
+/* the lede in the lede's own weight — the scope, the figure and the rule count are one sentence.
+   Wider than the kit's 72ch so the whole sentence sits on one line at desktop; the separator is a
+   TRAILING dot, so a line the phone wraps never opens with one. */
+.pricing-scope { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; max-width: none; }
+.pricing-scope > span:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
+.pricing-scope-run { font-size: var(--bn-fs-sm); }
+.pricing-scope-progress { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.pricing-head-progress { height: 4px; width: min(100%, 420px); margin-top: var(--bn-2); }
+.pricing-save { transition: background-color var(--bn-t) var(--bn-ease), color var(--bn-t) var(--bn-ease); }
+/* an icon-only button carrying a keycap is wider than the kit's square — a kit gap. The kit's own
+   8px gap plus the cap's 4px margin left 12px between the glyph and the cap against 4px of padding
+   after it, so on a ghost button (no container) the cap read as a second, floating control: the
+   internal gap is tightened under the padding on either side, and the two marks read as one press. */
+.pricing-reload.bn-btn-icon:has(.bn-kbd) { width: auto; gap: 2px; padding: 0 var(--bn-3) 0 var(--bn-2); }
+.pricing-runs-anchor { position: relative; }
+.pricing-runs-badge { height: 18px; padding: 0 6px; margin-left: 2px; }
+.pricing-runs-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 45;
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding: 0;
 }
-
-.pricing-run[aria-pressed='true'] {
-  background: var(--hover);
-  border-color: var(--ink);
-}
-
-.pricing-run-name {
-  font-family: var(--util);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/* THE SECOND LINE HOLDS TWO FACTS AT TWO WEIGHTS (D56): the run directory, which is what
-   tells two runs over one box apart, and the SKU count, which is the size of the job. A row
-   rather than one string so the directory keeps the metadata size while the count sits at the
-   caption size beside it — `2026-08-29-box1-01` at 10px is a date somebody has to squint at,
-   and it is the only thing distinguishing two chips whose headline is identical.
-
-   `flex-wrap` because a long run name plus a count is wider than a short chip, and a chip that
-   grew to fit would break the picker's row rhythm; wrapping inside the chip costs 13px and
-   keeps the strip even. */
-.pricing-run-meta {
+.pricing-runs-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  /* `--s3` and not `--s2` on the row axis. Both facts are mono and the worst adjacency is two
-     runs of digits — `2026-08-30-box3-01` ends in `01` and `15 SKUs` opens on `15` — so 8px
-     lets them read as one string. The separator is the gap rather than an interpunct because
-     D41 answered this exact question for `.boxops-meta` by giving the facts structure instead
-     of dots, and line one above already spends the one dot this chip can afford. */
-  gap: 2px var(--s3);
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-.pricing-run-id {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-}
-
-/* WHAT IS LEFT, ON THE CHIP (D86). The picker drew `counts.skus` and nothing else — the SIZE
-   of a job, never the job. Box 2's 109 SKUs are one `floor` press and box 3's 199 are 117 real
-   decisions, so the one number on the chip could not answer the only question being asked of
-   it: which of these is worth opening. `owes` is `Decisions.blocking`'s own words.
-
-   THE ANSWERED STATE IS DRAWN RATHER THAN LEFT BLANK. A chip saying nothing would be
-   indistinguishable from a chip whose figure had not loaded, and "answered" is the sentence
-   that saves the press. */
-.pricing-run-owes {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--ink);
-}
-
-.pricing-run-done {
-  color: var(--muted);
-}
-
-/* A RUN WITH WORK IN IT, MARKED ON ITS EDGE. Not a colour: `docs/DESIGN.md` spends hue on two
-   states already, and this is a third fact rather than a third alarm. The left border is the
-   cheapest mark that survives both themes and does not move the chip by a pixel — a border
-   WIDTH change would reflow the strip every time a run was answered. */
-.pricing-run-open {
-  border-left-width: 3px;
-  border-left-color: var(--ink);
-}
-
-.pricing-empty,
-.pricing-note-text,
-.pricing-refusal {
-  margin: var(--s3) 0 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.pricing-refusal {
-  color: var(--ink);
-}
-
-.pricing-note-block {
-  margin-top: var(--s3);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* The greppable token beneath the sentence — docs/DESIGN.md's human-label-large,
-   machine-string-small rule. It is the string as it sits in decisions.json, so grepping
-   `withheld` finds the screen, the file and the run report at once. */
-.pricing-machine {
-  margin: var(--s1) 0 0;
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-/* ---------------------------------------------------------------------- the presets */
-
-.pricing-presets {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s4);
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  position: sticky;
+  top: 0;
+  background: var(--bn-surface);
+  z-index: 1;
+}
+.pricing-runs-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricing-runs-list { display: flex; flex-direction: column; gap: 2px; padding: var(--bn-2); }
+.pricing-runs-foot { padding: var(--bn-2) var(--bn-3) var(--bn-3); border-top: 1px solid var(--bn-line); }
+.pricing-run {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  text-align: left;
+  color: var(--bn-ink);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.pricing-run:hover { background: var(--bn-surface-3); }
+.pricing-run-on { background: var(--bn-accent-tint); }
+.pricing-run-on:hover { background: var(--bn-accent-tint-2); }
+.pricing-run-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--bn-line-strong);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  transition: background-color var(--bn-t-fast), border-color var(--bn-t-fast), color var(--bn-t-fast);
+}
+.pricing-run-on .pricing-run-check { background: var(--bn-accent); border-color: var(--bn-accent); color: var(--bn-on-accent); }
+.pricing-run-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pricing-run-name { font-size: var(--bn-fs-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pricing-run-meta { display: flex; gap: var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); min-width: 0; }
+.pricing-run-id { font-family: var(--bn-font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pricing-run-owes { max-width: 200px; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 22px; }
+
+.pricing-notice { max-width: 72ch; }
+.pricing-machine { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.pricing-empty-code { display: block; margin-top: var(--bn-2); }
+
+/* THE KIT HIDES A BUSY BUTTON'S LABEL UNDER ITS RING. Here the label IS the progress — "Reading 3 of
+   11…", "Writing…" — so the ring moves in front of the words and the words stay. A kit gap. */
+.pricing .bn-btn[data-busy='true'] { color: var(--bn-ink); }
+.pricing .bn-btn-ghost[data-busy='true'] { color: var(--bn-ink-2); }
+.pricing .bn-btn-primary[data-busy='true'] { color: var(--bn-on-accent); }
+.pricing .bn-btn[data-busy='true'] > .bn-icon:first-child { display: none; }
+.pricing .bn-btn[data-busy='true']::after { position: static; order: -1; color: inherit; }
+
+/* ---- the body is the container ----------------------------------------------- */
+.pricing-body {
+  container-type: inline-size;
+  container-name: pricing;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  min-width: 0;
 }
 
-.pricing-preset {
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
+/* ---- toolbar ------------------------------------------------------------------------- */
+/* THE TOOLBAR ALIGNS ON ITS FIRST LINE, not on its midline: the rule block is two lines tall
+   and the buttons on the right belong beside the SEGMENTS, not beside the sentence under them. */
+.pricing-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bn-3) var(--bn-4);
+  flex-wrap: wrap;
 }
-
-.pricing-preset:hover {
-  background: var(--hover);
+.pricing-toolbar-right { padding-top: 3px; }
+/* THE RULE STRIP IS TWO LINES AND THE SECOND ONE IS RESERVED. The segments sit on the first;
+   the second holds either the rule's sentence or, under Custom, the three fields that state
+   one. `min-height` is the height of a `.bn-seg` (3px padding + a 28px item), so the line is
+   the same height whichever it is drawing and picking Custom moves nothing above it. */
+.pricing-rule { display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-2); min-width: 0; }
+.pricing-rule-line {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+  min-height: 34px;
+  min-width: 0;
 }
+.pricing-rule-says { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); max-width: 46ch; }
+.pricing-rule-says .bn-icon { flex: none; color: var(--bn-ink-4); }
+.pricing-rule-bad { color: var(--bn-warn); }
+.pricing-rule-bad .bn-icon { color: var(--bn-warn); }
 
-/* THE PRESET THE DOCUMENT IS CURRENTLY SET TO (D54). Derived from `rule`/`basis` rather than
-   from a stored key, so it cannot disagree with what `emit` will actually price at — see
-   `Pricing.tsx`'s `aria-pressed`.
-
-   AN OUTLINE, NOT A FILL. `docs/DESIGN.md` reserves the solid accent for a screen with
-   exactly one thing to do, and a hundred-row worklist is the definition of more than one;
-   `app/tests/pricing.spec.ts` asserts zero accent-filled grounds anywhere under
-   `main.pricing` and this must not be what breaks it. The weight comes from the border and
-   the ink, which is the same register `.boxops-op-on` uses one screen over. */
-.pricing-preset[aria-pressed='true'] {
-  border-color: var(--accent);
-  color: var(--accent);
+/* ---- the custom rule ----------------------------------------------------------------------
+   A fourth answer, not an escape hatch: the same segments the presets are drawn with, a price
+   field in the shape of the cheap-card one, and the word that joins them. */
+.pricing-custom {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex-wrap: wrap;
+  min-width: 0;
+  animation: bn-page-in var(--bn-t-fast) var(--bn-ease-out) both;
 }
-
-/* Absent-shaped rather than merely dim: a run joined before presets carried their rule
-   genuinely cannot be priced from one, and the sentence beside these says so. */
-.pricing-preset:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
+.pricing-custom-of { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricing-pct { height: 34px; padding-left: 0; }
+.pricing-pct-input { width: 58px; padding: 0 4px 0 var(--bn-2); font-size: var(--bn-fs-md); }
+.pricing-pct-sign { padding-right: var(--bn-2); font-size: var(--bn-fs-sm); }
+.pricing-custom[data-bad='true'] .pricing-pct { box-shadow: inset 0 0 0 1.5px var(--bn-warn); }
+.pricing-custom[data-bad='true'] .pricing-pct:focus-within {
+  box-shadow: inset 0 0 0 1.5px var(--bn-warn), 0 0 0 3px var(--bn-warn-tint);
 }
+.pricing-toolbar-right { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; margin-left: auto; }
+.pricing-trend-btn { min-width: 118px; }
 
-.pricing-preset:disabled:hover {
-  background: var(--surface);
+.pricing-trendbar {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) both;
 }
+.pricing-trend-progress { flex: 1 1 160px; height: 4px; }
+.pricing-trendbar-says { display: inline-flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; }
+.pricing-trendbar-span { height: 20px; background: var(--bn-surface); }
+.pricing-trendbar-why { display: inline-flex; align-items: center; gap: 4px; color: var(--bn-ink-3); cursor: help; }
+.pricing-trendbar-tally { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 
-.pricing-preset-says {
-  flex: 1 1 20rem;
-  font-family: var(--body);
-  font-size: 12px;
-  color: var(--muted);
+/* ---- a section ---------------------------------------------------------------------------- */
+.pricing-section {
+  background: var(--bn-surface);
+  border-radius: var(--bn-r-lg);
+  box-shadow: var(--bn-shadow-1);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
-
-/* ---------------------------------------------------------------------- the sections
-
-   THREE, AND THEY ARE THE THREE FILES emit WRITES rather than three states an operator can
-   move a row between. Every one is decided by the Market cell alone, so nothing typed here
-   can move a row from one to another — which is what makes the list stop reflowing under a
-   commit (D28's other half). */
-
 .pricing-section-head {
   display: flex;
-  align-items: baseline;
-  gap: var(--s3);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3) var(--bn-5);
+  flex-wrap: wrap;
+  padding: var(--bn-4) var(--bn-4) var(--bn-3);
+  border-bottom: 1px solid var(--bn-line);
 }
-
+.pricing-section-lead { display: flex; align-items: flex-start; gap: var(--bn-3); min-width: 0; }
+.pricing-section-icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+}
+.pricing-section-icon-sub_threshold { background: var(--bn-surface-2); color: var(--bn-ink-2); }
+.pricing-section-icon-no_market_data { background: var(--bn-warn-tint); color: var(--bn-warn); }
+.pricing-section-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pricing-section-title {
-  margin: 0;
-  font-family: var(--util);
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-tight);
+}
+.pricing-section-count { font-family: var(--bn-font-ui); letter-spacing: 0; }
+.pricing-section-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); max-width: 64ch; }
+
+/* what the cheap rows are carrying, in the section that holds them — the answer itself is on
+   the deck, and this is one press back to it */
+.pricing-section-answer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
+  height: 34px;
+  padding: 0 var(--bn-2) 0 var(--bn-3);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.pricing-section-answer:hover { color: var(--bn-ink); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+.pricing-section-answer:active { transform: translateY(1px); }
+.pricing-section-answer-figure {
+  font-size: var(--bn-fs-lg);
+  font-weight: 700;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--bn-tracking-tight);
+}
+.pricing-section-answer-says { font-size: var(--bn-fs-sm); font-weight: 500; }
+.pricing-section-answer[data-state='unset'] { background: var(--bn-warn-tint); color: var(--bn-warn); }
+.pricing-section-answer[data-state='unset'] .pricing-section-answer-figure { color: var(--bn-warn); }
+.pricing-section-answer[data-state='run'] { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.pricing-section-answer[data-state='run'] .pricing-section-answer-figure { color: var(--bn-accent); }
+
+/* ---- the landing deck ------------------------------------------------------------------
+   The two answers a person arrives wanting: what the cheap cards list at, and whether this can
+   be written. Neither was on the landing — one sat inside a section header and only once a
+   single run was picked, the other under a sticky bar at the bottom of a hundred rows.
+   ---------------------------------------------------------------------------------------- */
+.pricing-deck {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--bn-4);
+  /* THE SHORTER PANEL IS SIMPLY SHORTER. Stretching them to a common height, with the facts
+     strip bottom-anchored to fill the difference, opened a 136px hollow band in the middle of
+     the readiness panel in exactly the states the deck exists for — which reads as content
+     that failed to load rather than as alignment. */
+  align-items: start;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  animation-delay: 40ms;
+}
+@container pricing (min-width: 880px) {
+  .pricing-deck[data-cards='two'] { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+}
+/* pressed from the ship bar at the foot of the list: the deck says which one answered */
+.pricing-deck.is-flash > .bn-panel { animation: pricing-deck-flash 1200ms var(--bn-ease-out) both; }
+@keyframes pricing-deck-flash {
+  0%, 100% { box-shadow: var(--bn-shadow-1); }
+  12%, 55% { box-shadow: var(--bn-shadow-1), 0 0 0 3px var(--bn-accent-tint-2); }
+}
+
+.pricing-cheap,
+.pricing-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-4) var(--bn-5) var(--bn-5);
+  min-width: 0;
+}
+.pricing-deck-head { display: flex; align-items: center; gap: var(--bn-3); }
+.pricing-deck-mark {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  transition: background-color var(--bn-t) var(--bn-ease), color var(--bn-t) var(--bn-ease);
+}
+.pricing-cheap[data-written='no'] .pricing-deck-mark,
+.pricing-verdict[data-ready='false'] .pricing-deck-mark { background: var(--bn-warn-tint); color: var(--bn-warn); }
+.pricing-verdict[data-ready='true'] .pricing-deck-mark { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.pricing-deck-heading { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.pricing-deck-title {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-tight);
+  color: var(--bn-ink);
+}
+
+/* the figure IS the answer: one number, at size, with the statement it stands for beside it */
+.pricing-cheap-figure { display: flex; align-items: center; gap: var(--bn-4); flex-wrap: wrap; }
+.pricing-cheap-amount {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-4xl);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--bn-money);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--bn-t) var(--bn-ease);
+  animation: bn-pop var(--bn-t-slow) var(--bn-ease-spring) both;
+}
+.pricing-cheap[data-written='no'] .pricing-cheap-amount { color: var(--bn-ink-3); }
+.pricing-cheap[data-override='true'] .pricing-cheap-amount { color: var(--bn-accent); }
+.pricing-cheap-caption { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pricing-cheap-says { font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink-2); }
+.pricing-cheap[data-override='true'] .pricing-cheap-says { color: var(--bn-accent); }
+.pricing-cheap-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+.pricing-cheap-set { display: flex; flex-direction: column; gap: var(--bn-2); }
+.pricing-cheap-key { color: var(--bn-ink-3); }
+.pricing-cheap-controls { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+/* the offer: a default is not an answer, and the press that makes it one carries the figure */
+.pricing-cheap-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  margin-top: var(--bn-1);
+  padding: var(--bn-3) var(--bn-4);
+  border-left: 3px solid var(--bn-warn);
+  border-radius: 0 var(--bn-r) var(--bn-r) 0;
+  background: var(--bn-surface-2);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) both;
+}
+.pricing-cheap-offer-says { font-size: var(--bn-fs-md); line-height: 1.45; color: var(--bn-ink-2); }
+
+/* THIS RUN ONLY — inset, ruled and named, so it can never be read as the store's answer */
+.pricing-cheap-run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  margin-top: auto;
+  padding: var(--bn-3) var(--bn-4);
+  border: 1px dashed var(--bn-line-strong);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  transition: background-color var(--bn-t) var(--bn-ease), border-color var(--bn-t) var(--bn-ease),
+    box-shadow var(--bn-t) var(--bn-ease);
+}
+.pricing-cheap-run[data-on='true'] {
+  border-style: solid;
+  border-color: transparent;
+  background: var(--bn-accent-tint);
+  box-shadow: inset 3px 0 0 var(--bn-accent);
+}
+.pricing-cheap-run .bn-seg {
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.pricing-cheap-run-head { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; min-width: 0; }
+.pricing-cheap-run-key { color: var(--bn-ink-3); }
+.pricing-cheap-run[data-on='true'] .pricing-cheap-run-key { color: var(--bn-accent); }
+.pricing-cheap-run-name {
+  font-size: var(--bn-fs-sm);
   font-weight: 600;
+  color: var(--bn-ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.pricing-cheap-run-says { font-size: var(--bn-fs-sm); line-height: 1.45; color: var(--bn-ink-3); }
+.pricing-cheap-run-says strong { color: var(--bn-ink); font-weight: 700; }
+.pricing-cheap-run-off {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex-wrap: wrap;
+  font-size: var(--bn-fs-sm);
+  line-height: 1.45;
+  color: var(--bn-ink-3);
+}
+
+/* ---- the verdict panel ----------------------------------------------------------------- */
+.pricing-verdict-says { font-size: var(--bn-fs-base); line-height: 1.5; color: var(--bn-ink-2); }
+.pricing-verdict-says strong { color: var(--bn-ink); font-weight: 700; }
+.pricing-owes { display: flex; flex-direction: column; gap: var(--bn-2); list-style: none; }
+.pricing-owes-row {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-warn-tint);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+.pricing-owes-mark { flex: none; display: inline-grid; place-items: center; color: var(--bn-warn); }
+.pricing-owes-text { display: flex; flex-direction: column; gap: 0; min-width: 0; flex: 1 1 auto; }
+.pricing-owes-what { font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); }
+.pricing-owes-count {
+  flex: none;
+  font-size: var(--bn-fs-sm);
+  font-weight: 700;
+  color: var(--bn-warn);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pricing-verdict-warn { display: flex; align-items: flex-start; gap: 6px; font-size: var(--bn-fs-sm); line-height: 1.45; color: var(--bn-warn); }
+.pricing-verdict-warn .bn-icon { flex: none; margin-top: 1px; }
+.pricing-verdict-warn a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+/* where the answers stand — one bar, three parts, and a held row is its own colour because it
+   writes nothing rather than being a shade of done */
+.pricing-meter { display: flex; flex-direction: column; gap: var(--bn-2); }
+.pricing-meter-bar {
+  display: flex;
+  height: 8px;
+  border-radius: var(--bn-r-full);
+  overflow: hidden;
+  background: var(--bn-surface-2);
+}
+.pricing-meter-bar > span {
+  flex-basis: 0;
+  min-width: 0;
+  transition: flex-grow var(--bn-t-slow) var(--bn-ease);
+  animation: pricing-meter-in var(--bn-t-draw) var(--bn-ease-out) both;
+}
+@keyframes pricing-meter-in { from { transform: scaleX(0); transform-origin: left; } to { transform: none; } }
+.pricing-meter-bar > [data-part='typed'] { background: var(--bn-ok); }
+.pricing-meter-bar > [data-part='held'] { background: var(--bn-warn); }
+/* "on the rule" is not a decision, so it is not a solid: it is hatched, the way an estimate is.
+   The cheap rows are hatched too — nobody typed them either — but they go out at the store's
+   own figure rather than the rule's, so they are their own segment in the accent, and the
+   legend names the money. Two hatches rather than one lie. */
+.pricing-meter-bar > [data-part='rule'] {
+  background-color: color-mix(in srgb, var(--bn-ink-4) 20%, transparent);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bn-ink-4) 55%, transparent) 0 3px,
+    transparent 3px 7px
+  );
+}
+.pricing-meter-bar > [data-part='cheap'] {
+  background-color: color-mix(in srgb, var(--bn-accent) 16%, transparent);
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bn-accent) 62%, transparent) 0 3px,
+    transparent 3px 7px
+  );
+}
+.pricing-meter-keys { display: flex; gap: var(--bn-3); flex-wrap: wrap; list-style: none; }
+.pricing-meter-keys li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.pricing-meter-keys li[data-zero='true'] { color: var(--bn-ink-4); }
+.pricing-meter-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: color-mix(in srgb, var(--bn-ink-4) 35%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--bn-ink-4);
+}
+.pricing-meter-keys [data-part='typed'] .pricing-meter-dot { background: var(--bn-ok); }
+.pricing-meter-keys [data-part='held'] .pricing-meter-dot { background: var(--bn-warn); }
+.pricing-meter-keys [data-part='cheap'] .pricing-meter-dot {
+  background: color-mix(in srgb, var(--bn-accent) 30%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--bn-accent);
+}
+.pricing-meter-keys li[data-zero='true'] .pricing-meter-dot {
+  background: color-mix(in srgb, var(--bn-ink-4) 20%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--bn-ink-4) 60%, transparent);
+}
+
+.pricing-verdict-out {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--bn-fs-md);
+  line-height: 1.45;
+  color: var(--bn-ink-2);
+}
+.pricing-verdict-out .bn-icon { flex: none; margin-top: 2px; color: var(--bn-ink-4); }
+.pricing-verdict-out strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.pricing-verdict-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: var(--bn-2) var(--bn-4);
+  padding-top: var(--bn-3);
+  border-top: 1px solid var(--bn-line);
+}
+.pricing-verdict-facts dt {
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink);
+  color: var(--bn-ink-3);
 }
-
-.pricing-section-count,
-.pricing-section-note {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+.pricing-verdict-facts dd {
+  margin-top: 2px;
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
 }
+.pricing-verdict-fine { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
-.pricing-section-note {
-  margin: var(--s1) 0 var(--s2);
-  font-family: var(--body);
-  font-size: 12px;
-  letter-spacing: 0;
+/* the price field the two policy controls share */
+.pricing-flat {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--bn-control-h);
+  padding-left: var(--bn-2);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  color: var(--bn-ink-3);
+  font-weight: 700;
+  transition: box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-
-/* ------------------------------------------------------------------------- the grid
-
-   ONE TEMPLATE, DEFINED ONCE, READ BY THE CAPTION AND BY EVERY ROW. Two declarations that
-   have to agree is two declarations that will eventually not; a custom property makes the
-   drift structurally impossible rather than carefully avoided.
-
-   THE GAP IS UNIFORM AND THAT IS DELIBERATE. Tighter inside the reference block and wider
-   between zones cannot be expressed — `column-gap` is one value on a grid container, and a
-   wrapper around the four figures would stop them being items of the row's own grid, which
-   is what keeps the decimal column aligned down the list. */
-/* THE TREND STRIP IS A REAL COLUMN AND NOT THE CARD'S SLACK, which is the one thing the
-   request for it got wrong and the thing this comment exists to record. The card is
-   `minmax(0, 1fr)`: it is not a wide column with space in it, it is whatever is LEFT after
-   the fixed ones, so the gap the graphs were asked to fill is a function of the window and
-   is zero at about 1150px — where the names are already ellipsizing. Drawn into that slack
-   the strip would be wide on a big monitor, absent on a laptop, and would have taken the
-   name's last readable characters on the way. 168px is 80 + 80 with `--s2` between, the two
-   sparks the cells draw, and it comes off the name deliberately and at every width.
-
-   THE TEMPLATE HANGS ON THE SECTION AND NOT ON THE LIST, because the caption is the list's
-   SIBLING rather than its child — declared on `.pricing-list` it reached every row and no
-   caption at all, which is precisely the drift the shared property exists to prevent, arrived
-   at by the mechanism meant to stop it. `app/tests/pricing.spec.ts` compares the two computed
-   templates and caught it. */
-.pricing-section {
-  --pricing-cols:
-    var(--pricing-btn) /* history (D62)                  */
-    var(--pricing-btn) /* hold                           */
-    76px /* quantity                       */
-    minmax(0, 1fr) /* the card                       */
-    168px /* the trend strip (D79)          */
-    120px /* the price being set            */
-    76px /* MARKET   max $4400.00          */
-    84px /* LOW      max $49000.00         */
-    84px /* +SHIP    max $49000.00         */
-    76px; /* DIRECT   max $1974.74          */
-  margin-top: var(--s5);
+.pricing-flat:focus-within { box-shadow: inset 0 0 0 1.5px var(--bn-accent), 0 0 0 3px var(--bn-accent-tint-2); }
+.pricing-flat-sign { font-size: var(--bn-fs-md); }
+.pricing-flat-input {
+  width: 76px;
+  min-height: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0 var(--bn-2) 0 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink);
 }
+.pricing-flat-input:focus { box-shadow: none; outline: none; }
 
+/* ---- a live count never appears without the age of the reading -------------------------- */
+.pricing-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-live);
+  white-space: nowrap;
+  cursor: help;
+}
+.pricing-live[data-none='true'] { color: var(--bn-ink-3); font-weight: 500; }
+.pricing-live[data-none='true'] .bn-dot { background: var(--bn-ink-4); box-shadow: none; animation: none; }
+.pricing-live-age { font-weight: 500; color: var(--bn-ink-3); }
+
+/* ---- the caption and the grid --------------------------------------------------------------- */
 .pricing-caption,
 .pricing-row {
   display: grid;
   grid-template-columns: var(--pricing-cols);
-  column-gap: var(--s3);
+  column-gap: var(--bn-3);
   align-items: center;
 }
-
+.pricing-section {
+  --pricing-cols: 36px minmax(0, 1fr) 56px 128px 68px 68px 68px 132px 68px;
+}
+/* the kit table's `th`, so a column head reads the same here as on the codes ledger */
 .pricing-caption {
-  padding: 0 0 var(--s1);
-  font-family: var(--util);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  border-bottom: 1px solid var(--line);
-}
-
-.pricing-caption > span:not(:first-child) {
-  text-align: right;
-}
-
-/* THE ONE HEADER THAT IS NOT A NUMBER. Every other caption right-aligns to match the
-   right-aligned, decimal-aligned data beneath it (D41) — Qty, the price field and the four
-   export references all read that way. The card's NAME is the one column whose data is set
-   flush LEFT (`.pricing-name`), and it used to be column 1, which `:not(:first-child)` above
-   exempted for free. Moving the T, H and Qty controls ahead of it in the reorder cost it that
-   exemption — the header still right-aligned, floating at the FAR edge of a 500px column
-   while every card name it labels sits flush against the left edge of the same column, which
-   is the mismatch the owner reported as "alignment is off". Named rather than positional, so
-   a future column move cannot silently reopen it the same way. */
-.pricing-caption > span.pricing-caption-card {
-  text-align: left;
-}
-
-/* THE SNAP KEYS LIVE HERE, ONCE PER COLUMN, AND NOT ONCE PER ROW. docs/DESIGN.md's
-   every-choice-shows-its-key rule was written for a list whose choices differ per card; here
-   the same four choices are on every row, so the chip belongs where the eye already is when
-   choosing that column. A hundred rows would otherwise draw four hundred chips. */
-.pricing-caption kbd {
-  font-family: var(--util);
-  font-size: 9px;
+  padding: 6px var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  font-size: var(--bn-fs-xs);
   font-weight: 600;
-  color: var(--ink);
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
 }
+.pricing-caption > span { min-width: 0; white-space: nowrap; }
+.pricing-caption-qty,
+.pricing-caption-price,
+.pricing-caption-ref { text-align: right; }
+.pricing-caption .bn-kbd { height: 16px; min-width: 16px; font-size: var(--bn-fs-2xs); margin-left: 2px; }
+.pricing-caption .pricetrend-keys { display: flex; justify-content: flex-end; gap: var(--bn-2); }
+.pricing-caption .pricetrend-keys span { width: 56px; text-align: right; }
 
-/* -------------------------------------------------------------- the sunk groups' headings
+.pricing-list { display: flex; flex-direction: column; }
 
-   THE ROWS THAT WANT NOTHING FROM THE OPERATOR SINK, AND ONE HEADING SAYS WHY FOR EACH SET.
-   The sentence was drawn in the right margin of every row it applied to — twenty copies of
-   "every copy in this run is already listed or has left the box" running down a 51-row
-   section, in the same 10px muted register as the row notes it was sitting among, on rows that
-   want nothing from the operator at all. Once it is a heading it is stated once, and the rows
-   under it need not restate it.
-
-   THREE TIERS DOWN A SECTION, in the order the owner asked for: the rows still wanting a
-   price, then the ones they have already held, then the ones this run can add nothing for.
-   Every heading is this one class — what differs is where the sentence comes from, and
-   `Pricing.tsx` carries that.
-
-   IT IS SUBORDINATE TO THE SECTION HEAD AND IT LOOKS IT. Same `--util` face and same muted
-   ink, but sentence case rather than uppercase: the section titles are three fixed labels and
-   read as labels, while this is a sentence `pipeline/join.py` composed and reads as one. The
-   rule above it is the sink made visible — everything below this line in the section is
-   answered, and the operator's eye can stop there.
-
-   NOT `sticky`. D28 forbids the list moving under a finger already travelling to the next
-   field, and a heading that detaches and rides the scroll is that motion arriving from the
-   other direction. */
 .pricing-group-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--s3);
-  margin: 0;
-  padding: var(--s3) 0 var(--s1);
-  font-family: var(--util);
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 0.06em;
-  line-height: 1.3;
-  color: var(--muted);
-}
-
-/* THE FIRST GROUP CARRIES THE SINK LINE AND THE REST DO NOT. It is the line under the last row
-   this run is still waiting on an answer for, which is the one boundary in the section worth
-   drawing; between two sunk groups the rows above are already answered or unanswerable, so a
-   second rule would divide two halves of one silence and the row's own bottom border is
-   separation enough. `~` and not `+` because the heading is a sibling of every row in the list
-   rather than the parent of its own. */
-.pricing-row ~ .pricing-group-head {
-  margin-top: var(--s3);
-  border-top: 1px solid var(--line);
-}
-
-.pricing-group-head ~ .pricing-group-head {
-  border-top: 0;
-}
-
-/* THE SENTENCE YIELDS AND THE COUNT NEVER DOES, for the reason `.pricing-row-why` yields to
-   the machine token below: the sentence is prose and an ellipsis costs it nothing an operator
-   cannot read from the rows themselves, and "4 SKUs" truncated is a wrong number rather than a
-   shortened one. */
-.pricing-group-why {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pricing-group-count {
-  flex: none;
-  white-space: nowrap;
-}
-
-/* ROW HEIGHT IS INVARIANT ACROSS EVERY STATE, and the note is what makes it so: a second
-   grid row that every zone but the card leaves empty by construction, so a row that acquires
-   a sentence costs nothing and a list of a hundred cannot reflow when one does. */
-/* THE SECOND ROW IS RESERVED, NOT `auto`, AND THAT IS THE WHOLE OF THE NO-REFLOW GUARANTEE.
-   With `auto` it collapses to zero on a row carrying no note, so a row that acquires one grows
-   by 13px and everything below it moves — D28's finding, on the screen where the finger is
-   already travelling to the next field. 13px is the note's own line box: 10px x 1.3. */
-.pricing-row {
-  grid-template-rows: 32px 13px;
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.pricing-row[data-dim='true'] {
-  opacity: 0.4;
-}
-
-/* EXPLICIT COLUMN, NOT JUST AN EXPLICIT ROW, AND GETTING THAT WRONG IS INVISIBLE UNTIL YOU
-   MEASURE IT. Grid auto-placement runs in PASSES: an item pinned to a row but auto on its
-   column is placed in an earlier pass than an item auto on BOTH axes, so `.pricing-id` and
-   `.pricetrend` — the only two rows-spanning cells (D79 gave the trend strip the same
-   `grid-row: 1 / 3` for the same reason) — always claimed columns 1 and 2 first, regardless
-   of where they sat in the markup relative to T, H and Qty. Moving those three ahead of the
-   card in the DOM (this reorder) changed nothing about that: the card and the trend strip
-   kept jumping the queue back to the front, and every fully-auto cell — including the
-   buttons that were supposed to be leftmost — landed wherever was left over. Pinning the
-   column here is what makes source order and drawn order agree again. */
-.pricing-id {
-  grid-row: 1 / 3;
-  grid-column: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.pricing-name {
-  overflow: hidden;
-  font-family: var(--body);
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pricing-meta {
-  overflow: hidden;
-  font-family: var(--util);
-  font-size: 10px;
-  line-height: 1.3;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Condition at ink, because it is the field that tells one row of a SKU pair from the other
-   — the same argument ReviewQueue.css makes for the candidate rows, and the only place in
-   the repo that makes it. It is also FIRST, so the ellipsis can never reach it. */
-.pricing-cond {
-  color: var(--ink);
-}
-
-/* The four references and the quantity: one size, one weight, tabular, right-aligned. RIGHT
-   ALIGNMENT IS DECIMAL ALIGNMENT here, which is what carries the magnitude — a $1452.35 row
-   and a $0.45 row differ by four cells of ink per figure with every element drawn identically,
-   and no guessed breakpoint anywhere. `letter-spacing: 0` because Martian Mono is
-   fixed-advance and tracking a figure destroys the property it was chosen for (D41). */
-.pricing-ref,
-.pricing-qty {
-  font-family: var(--util);
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-4);
+  background: var(--bn-surface-2);
+  border-bottom: 1px solid var(--bn-line);
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
   letter-spacing: 0;
-  color: var(--muted);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  color: var(--bn-ink-3);
 }
+.pricing-group-why::first-letter { text-transform: uppercase; }
+.pricing-group-count { font-weight: 500; color: var(--bn-ink-3); white-space: nowrap; }
 
-.pricing-qty {
-  font-size: 11px;
+/* ---- a row --------------------------------------------------------------------------------------- */
+.pricing-row {
+  position: relative;
+  min-height: 64px;
+  padding: var(--bn-2) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t) var(--bn-ease);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 18ms);
 }
+.pricing-row:last-child { border-bottom: 0; }
+.pricing-row:hover { background: var(--bn-surface-3); }
+.pricing-row[data-drawn='true'] { box-shadow: inset 3px 0 0 var(--bn-accent); background: var(--bn-accent-tint); }
+.pricing-row[data-cap='full'] { opacity: 0.72; }
+.pricing-row[data-dim='true'] { opacity: 0.32; }
+.pricing-row[data-hold='open'] { z-index: 31; background: var(--bn-surface-3); } /* 31 > the ship bar's 30 */
 
-/* MARKET is senior because D9 makes it so: it is what the threshold always reads, whatever
-   the basis, and it is a statement about the card's value rather than about this run. */
-.pricing-ref-market {
+/* THE WINDOW ONTO THE PHOTOGRAPH. `position: relative` and `overflow: hidden` are what the crop
+   needs from it; the size is this screen's. The ground stays the pale surface rather than the
+   stage: these load lazily down a long list, and a dark field turns every row not yet reached
+   into a black block. */
+.pricing-thumb {
+  position: relative;
+  width: 36px;
+  height: 48px;
+  border-radius: var(--bn-r-sm);
+  overflow: hidden;
+  background: var(--bn-surface-2);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  display: grid;
+  place-items: center;
+  color: var(--bn-ink-4);
+  flex: none;
+  transition: transform var(--bn-t) var(--bn-ease-spring), box-shadow var(--bn-t) var(--bn-ease);
+}
+/* Uncropped — a refusal, or the beat before the reading lands — keeps the old framing, which
+   favours the upper half where the art and the name are. `.bn-crop` does the rest. */
+.pricing-thumb img { object-position: 50% 40%; }
+.pricing-thumb:hover { transform: scale(1.06); box-shadow: var(--bn-shadow-2); }
+
+.pricing-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pricing-name {
+  font-size: var(--bn-fs-base);
   font-weight: 600;
-  color: var(--ink);
-}
-
-.pricing-input {
-  min-height: 32px;
-  padding: var(--s1) var(--s2);
-  font-family: var(--util);
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  background: var(--bg);
-  /* --field: the boundary of something you TYPE INTO, and nowhere else. An empty input IS
-     its rectangle, so the hairline that separates every other thing on this screen leaves it
-     findable only by its placeholder. */
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-}
-
-/* The edge darkens under the pointer (D50). `border-color` only — never width, which
-   would reflow the box and move a target under a finger already travelling toward it.
-   Focus is an outline drawn
-   outside this border, so the two compose rather than compete. */
-.pricing-input:hover:not(:disabled) {
-  border-color: var(--field-hover);
-}
-
-/* A SUGGESTION READS AS ONE. It is a real value rather than a placeholder — the owner asked
-   for a preset that "prefills a box as suggested" — so the only thing that can say it has not
-   been chosen is its weight and its colour. */
-.pricing-row[data-answer='suggested'] .pricing-input {
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.pricing-input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
-
-/* ONE LINE, AND IT IS ARITHMETIC RATHER THAN TASTE. This column is 120px; `withheld:
-   next_batch` measures 152px, because Martian Mono's advance is 7px at 10px and the 0.06em
-   adds 0.6px of it per character — so the machine token has NEVER fitted here and no size
-   this screen is willing to draw makes it. Stacked in this cell it wrapped to three lines,
-   stood 54px tall in the row's 32px track, and printed over the note in the line below:
-   `withheld: bullish` and `every copy in this run is already listed or has left the box` were
-   drawn on top of each other, which is what the owner reported.
-
-   THE HUMAN LABEL IS WHAT STAYS, and the token moves to the row's reserved second line —
-   still small, still beneath the label, still right-aligned to the same edge, so
-   docs/DESIGN.md's human-label-large, machine-string-small rule reads the same down the
-   column. `line-height: 1` and `nowrap` are the height guarantee: one 15px line box inside a
-   32px track, whatever the reason string says. */
-.pricing-held {
-  font-family: var(--body);
-  font-size: 15px;
-  line-height: 1;
-  color: var(--ink);
-  text-align: right;
-  white-space: nowrap;
-}
-
-/* THE HOLD AND THE HISTORY ARE ONE CONTROL SHAPE UNDER TWO NAMES (D62). They sit side by
-   side in the row and must be the same object to the eye — but they are NOT one class,
-   because a shared name is a selector that cannot tell them apart, and
-   `app/tests/pricing.spec.ts` reaches for `.pricing-hold` expecting one element. Named
-   together here so the shape cannot drift; named apart in the markup so a test, a style
-   or a later state can reach exactly one of them. */
-.pricing-hold,
-.pricing-history {
-  min-height: 32px;
-  font-family: var(--util);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
-  /* NO `z-index` AND NO `position`, AND THE ABSENCE IS THE FIX (D85). These two buttons were
-     raised to 21 to stop `.pricehistory`/`.pricing-photo` — fixed to the corner the buttons
-     had just been moved into — swallowing their clicks. It worked, and the buttons then
-     swallowed the panel, and the ship bar with it: 28 sampled points inside an open reading
-     hit a hidden row's T or H, and every row scrolled behind the bar drew its two letters on
-     top of it. The panels start after `--pricing-gutter` now, so they are never over a T or
-     an H and there is nothing for a stacking order to arbitrate. A row's controls stack like
-     every other thing in the document, which is what a row's controls should do. */
-}
-
-/* The only control on this screen that did not answer the pointer. `.pricing-plain`,
-   `.pricing-preset` and `.pricing-run` all lift to `--hover` and this one — sitting in the same
-   row as the first of them — did not, which is one screen contradicting itself rather than two
-   screens disagreeing.
-
-   `--muted` on `--hover` is 7.30:1, the tightest pair in the palette and the one docs/DESIGN.md
-   publishes as the reason `--muted` was redrawn. Held, so this introduces no new pairing. The
-   pressed state below keeps its own colour and is `--accent` on `--hover` at 8.00:1.
-
-   Background only: the `aria-pressed` rule beneath draws an inset ring, and a hover that also
-   moved a border would make the two states argue about the same pixel. */
-.pricing-hold:hover:not(:disabled),
-.pricing-history:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.pricing-hold[aria-pressed='true'] {
-  color: var(--accent);
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-/* The free row. Spans everything but the card, which is space that already exists.
-
-   IT CARRIES TWO THINGS NOW AND THEY ARE LAID OUT RATHER THAN STACKED. The sentence and a
-   held row's `withheld: …` token are the same register and belong to the same row, and this
-   line is the only one the row reserves for that register — so they share it, right-aligned,
-   sentence first. Flex and not two grid cells: the token is one of nine columns wide and the
-   sentence is however long the join made it, so the split has to be content-shaped.
-
-   THE 13px RESERVATION IS THE THING BEING PROTECTED. `nowrap` on both halves is what keeps
-   this one line box tall in every state — with either half free to wrap, a row that acquired
-   a long note would grow and the list would move under a finger already travelling to the
-   next field, which is the reflow D28 forbids.
-
-   THE COLUMN NUMBER IS COUNTED OFF `--pricing-cols` AND IS THE ONE THING HERE THAT BREAKS
-   WHEN A COLUMN IS ADDED OR REORDERED. The note excludes the history and hold buttons, the
-   quantity, the card and the trend strip — none of them carry a note or a held token — and
-   spans everything after: the price field and the four export references. The symptom is
-   worth writing down because it does not look like this line: get the start column wrong and
-   `.pricetrend`, which spans BOTH rows, can no longer fit where it is placed and is pushed
-   into an IMPLICIT column off the right edge — and every figure on the row slides one column
-   left, on the rows carrying a note and not on the rows without. The caption stays put, so it
-   reads as the reference block having come unaligned from its own headings. A future column
-   moves this number again. */
-.pricing-row-note {
-  grid-column: 6 / -1;
-  grid-row: 2;
-  display: flex;
-  justify-content: flex-end;
-  align-items: baseline;
-  gap: var(--s2);
-  margin: 0;
-  font-family: var(--util);
-  font-size: 10px;
-  line-height: 1.3;
-  color: var(--muted);
-  text-align: right;
-}
-
-/* THE SENTENCE YIELDS. It is prose and it has a `title` carrying every word of it, so an
-   ellipsis costs a hover; the token beside it is a string somebody greps for, and
-   `withheld: nex…` matches nothing in `decisions.json`. Which half gives way under a narrow
-   window is a decision rather than an accident of source order, and this is it. */
-.pricing-row-why {
-  min-width: 0;
+  color: var(--bn-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.pricing-row-note .pricing-machine {
-  flex: none;
-  margin: 0;
-  white-space: nowrap;
-}
-
-/* ---------------------------------------------------- the card across runs (D86)
- *
- * THE LEFT HALF OF THE LINE THE NOTE ALREADY OWNS, AND THAT IS WHY THE ROW DOES NOT GROW.
- * `.pricing-row` is `grid-template-rows: 32px 13px` and `.pricing-row-note` sits at
- * `6 / -1` on the second of them, flush right. This takes `1 / 6` on the SAME row, flush
- * left, so a card in three drawers and a card in one are the same height — which is what
- * `app/tests/pricing.spec.ts` pins twice, once for a note and once for a hold, and what
- * D38's own rule about the row asks for. A third line would have broken both.
- *
- * MUTED BY DEFAULT AND LOUD ONLY WHERE SOMETHING IS WRONG. Where a card simply sits in two
- * boxes there is nothing to answer and the line is metadata; where the runs answered it two
- * ways, or claim more copies than may go, it is the one thing on the row worth the eye. */
-.pricing-row-span {
-  grid-column: 1 / 6;
-  grid-row: 2;
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  min-width: 0;
-  margin: 0;
-  font-family: var(--util);
-  font-size: 10px;
-  line-height: 1.3;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-/* THE ADDRESS YIELDS AND THE WARNINGS NEVER DO, which is `.pricing-row-why`'s ruling on the
-   other half of this same line. "Boxes 3, 4 · 2 runs" is restatable from the row above it;
-   "held in 1, priced in 1" is not restatable from anywhere on this screen. */
-.pricing-span-where {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pricing-span-clash,
-.pricing-span-cap {
-  flex: none;
-  white-space: nowrap;
-  color: var(--ink);
-}
-
-/* A HOLD ANSWERED WITH A PRICE IS THE ONE STATE HERE THAT HAS ALREADY COST MONEY, so it is
-   the one that gets weight. Measured on 2026-09-01: three of eleven holds were overridden in
-   a later run, including a card held above $5 and listed at $3.45.
-
-   WEIGHT AND NOT COLOUR. `docs/DESIGN.md` keeps hue for the two states the product already
-   spends it on, and a fourth accent here would be a fourth vocabulary an operator has to
-   learn. The underline is the same device `.pricing-run-open` uses one screen up. */
-.pricing-span-clash[data-kind='hold_overridden'] {
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-/* THE MERGED SEND'S OWN CONTROLS (D86). The bar itself is `.pricing-ship`, unchanged and
-   reused: one run or several, the operator is looking at the same place for the same act.
-
-   THE CHECKBOX IS THE ONE NEW AFFORDANCE and it is drawn as a label rather than a chip
-   because it is a modifier on the press beside it, not a choice between presses — the owner
-   asked for *"a checkmark to export just the valuable cards ... otherwise it defaults to
-   all"*, and a chip pair would make the default look like a decision they had to take. */
-.pricing-ship-only {
+.pricing-meta {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  cursor: pointer;
+  /* IT WRAPS, AND THE ROW RESERVES THE LINE IT WRAPS ONTO. A hold's note is free text and
+     belongs under the state it explains, so the second line is the design — what was wrong is
+     that the row GREW when it appeared (+7px at 1440, +20px at 1280), moving every row beneath
+     it under an operator answering top to bottom by keyboard. `.pricing-meta` now reserves two
+     lines on every row, so a note costs no height and its absence costs no alignment. */
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  min-height: 2.4em;
+  align-content: center;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+  min-width: 0;
 }
+.pricing-meta > span { flex: none; }
+.pricing-meta .bn-mono { font-size: var(--bn-fs-xs); }
+.pricing-meta-sep { color: var(--bn-ink-4); }
+/* a condition and a set every row of the section shares: kept for the reader, dimmed for the eye */
+.pricing-meta-same { color: var(--bn-ink-4); }
+.pricing-row-span,
+.pricing-row-note { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.pricing-row-note { flex: 0 1 auto !important; overflow: hidden; max-width: 100%; }
+.pricing-row-why { font-style: italic; color: var(--bn-ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto !important; }
+.pricing-span-cap { height: 18px; padding: 0 6px; }
 
-.pricing-ship-says {
+.pricing-qty {
+  text-align: right;
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pricing-qty-of { font-weight: 400; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+
+/* THE HERO: the price. */
+.pricing-price { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; margin-left: var(--bn-2); }
+.pricing-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 var(--bn-2) 0 var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  border: 1.5px solid var(--bn-line-strong);
+  background: var(--bn-surface);
+  cursor: text;
+  transition: border-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.pricing-currency { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-3); }
+.pricing-input {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  width: 100%;
+  border: 0;
+  background: transparent;
+  outline: none;
+  text-align: right;
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-lg);
+  font-weight: 700;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+  padding: 0;
+}
+.pricing-input::placeholder { color: var(--bn-ink-4); font-weight: 500; }
+/* a field brought into view by focus (Enter walks the list) lands above the sticky ship bar, not under it */
+.pricing-row input,
+.pricing-row button { scroll-margin-block: 72px calc(var(--pricing-ship-h, 0px) + var(--bn-4) + var(--bn-5)); }
+.pricing-price-check {
+  flex: none;
+  color: var(--bn-ok);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity var(--bn-t) var(--bn-ease), transform var(--bn-t) var(--bn-ease-spring);
+}
+/* suggested: ghost digits on a dashed edge */
+.pricing-price[data-answer='suggested'] .pricing-field { border-style: dashed; background: var(--bn-surface-2); }
+.pricing-price[data-answer='suggested'] .pricing-input { color: var(--bn-ink-2); font-weight: 500; }
+/* typed: solid, ink, a check */
+.pricing-price[data-answer='typed'] .pricing-field { border-color: var(--bn-ink-4); }
+.pricing-price[data-answer='typed'] .pricing-price-check { opacity: 1; transform: none; }
+.pricing-field:hover { border-color: var(--bn-ink-4); }
+.pricing-field:focus-within,
+.pricing-price[data-answer='suggested'] .pricing-field:focus-within {
+  border-style: solid;
+  border-color: var(--bn-accent);
+  background: var(--bn-surface);
+  box-shadow: 0 0 0 3px var(--bn-accent-tint-2);
+}
+.pricing-field:focus-within .pricing-input { color: var(--bn-ink); }
+.pricing-price.is-flash .pricing-field { animation: pricing-flash 700ms var(--bn-ease-out) both; }
+@keyframes pricing-flash {
+  0% { background-color: var(--bn-accent-tint-2); border-color: var(--bn-accent); }
+  100% { background-color: var(--bn-surface-2); }
 }
 
-/* ------------------------------------------------------------------- the hold panel */
+.pricing-held {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-warn-tint);
+  color: var(--bn-warn);
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  animation: bn-pop var(--bn-t) var(--bn-ease-spring) both;
+}
 
+/* the one line that says which answer a row is carrying — data, so ink-3 and not the faint step */
+.pricing-state {
+  font-size: var(--bn-fs-xs);
+  line-height: 1.2;
+  text-align: right;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pricing-state-ok { color: var(--bn-ok); font-weight: 600; }
+.pricing-state-warn { color: var(--bn-warn); font-weight: 600; }
+
+.pricing-ref {
+  text-align: right;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: help;
+}
+.pricing-ref-market { color: var(--bn-ink); font-weight: 600; }
+/* the column name travels in every cell: read by a screen reader here, drawn in the narrower tiers */
+.pricing-ref-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.pricing-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.pricing-actions .bn-btn { color: var(--bn-ink-3); }
+.pricing-actions .bn-btn:hover { color: var(--bn-ink); }
+.pricing-actions .bn-btn[aria-pressed='true'] { color: var(--bn-accent); background: var(--bn-accent-tint); }
+.pricing-hold[aria-pressed='true'] { color: var(--bn-warn) !important; background: var(--bn-warn-tint) !important; }
+
+/* the facts (qty, trend, refs) are one wrapper so the narrower tiers can lay them out as a line */
+.pricing-facts { display: contents; }
+
+/* skeleton rows */
+.pricing-row-skel { display: flex; align-items: center; gap: var(--bn-4); }
+.pricing-row-skel > :nth-child(2) { flex: 1 1 auto; }
+.pricing-row-skel .bn-skeleton { display: block; }
+
+/* ---- the hold popover ---------------------------------------------------------------------------- */
 .pricing-holdpanel {
-  grid-column: 1 / -1;
+  position: absolute;
+  z-index: 12;
+  right: var(--bn-3);
+  top: calc(100% - 4px);
+  width: min(460px, calc(100% - 24px));
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  margin-top: var(--s2);
-  padding: var(--s3);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+  transform-origin: top right;
 }
-
-.pricing-holdpanel-lede,
-.pricing-holdpanel-fine {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 12px;
-  color: var(--muted);
+.pricing-holdpanel[data-flip='up'] {
+  top: auto;
+  bottom: calc(100% - 4px);
+  transform-origin: bottom right;
+  animation-name: pricing-pop-up;
 }
-
-.pricing-holdpanel-reasons,
-.pricing-holdpanel-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
+@keyframes pricing-pop-up {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
 }
-
-.pricing-holdpanel kbd {
-  font-family: var(--util);
-  font-size: 10px;
+.pricing-holdpanel-sheet {
+  position: fixed;
+  z-index: 62;
+  top: auto;
+  left: var(--bn-2);
+  right: var(--bn-2);
+  bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-2));
+  width: auto;
+  border-radius: var(--bn-r-xl);
+  transform-origin: bottom center;
+  animation: bn-sheet-up var(--bn-t-slow) var(--bn-ease) both;
+}
+.pricing-holdpanel-sheet .pricing-holdpanel-fields { grid-template-columns: 1fr; }
+/* a thumb presses these: 40px is the floor, and a 16px input keeps iOS from zooming the sheet */
+.pricing-holdpanel-sheet .pricing-hold-reason { height: 40px; padding: 0 var(--bn-4); }
+.pricing-holdpanel-sheet .bn-input { min-height: 40px; font-size: var(--bn-fs-lg); }
+.pricing-holdpanel-sheet .pricing-holdpanel-actions { flex-wrap: wrap; }
+.pricing-holdpanel-sheet .pricing-holdpanel-fine { flex-basis: 100%; }
+.pricing-holdpanel-sheet .pricing-holdpanel-actions .bn-btn { flex: 1 1 auto; }
+.pricing-holdpanel-head { display: flex; align-items: baseline; gap: var(--bn-2); min-width: 0; }
+.pricing-holdpanel-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: var(--bn-fs-base); color: var(--bn-ink); white-space: nowrap; }
+.pricing-holdpanel-name { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pricing-holdpanel-reasons { display: flex; gap: 6px; flex-wrap: wrap; }
+.pricing-hold-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-full);
+  border: 1px solid var(--bn-line-strong);
+  font-size: var(--bn-fs-sm);
   font-weight: 600;
-  color: var(--muted);
+  color: var(--bn-ink-2);
+  background: var(--bn-surface);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
 }
+.pricing-hold-reason:hover { border-color: var(--bn-ink-4); color: var(--bn-ink); }
+.pricing-hold-reason[aria-pressed='true'] { background: var(--bn-accent); border-color: var(--bn-accent); color: var(--bn-on-accent); }
+.pricing-hold-reason[aria-pressed='true'] .bn-kbd { background: color-mix(in srgb, var(--bn-on-accent) 18%, transparent); border-color: transparent; color: inherit; }
+.pricing-holdpanel-says { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricing-holdpanel-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--bn-3); }
+.pricing-holdpanel-actions { display: flex; align-items: center; gap: var(--bn-2); }
+.pricing-holdpanel-fine { flex: 1 1 auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 
-.pricing-field {
+/* ---- the drawer: the reading, or the photograph --------------------------------------------------- */
+.pricing-drawer {
+  top: var(--bn-4);
+  bottom: calc(var(--pricing-ship-h, 0px) + var(--bn-5) + var(--bn-3));
+  left: calc(var(--pricing-drawer-left, 0px) + var(--bn-4));
+  width: min(380px, calc(100vw - 32px));
+  border-radius: var(--bn-r-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pricing-drawer[data-peek='true'] { box-shadow: var(--bn-shadow-3), 0 0 0 2px var(--bn-accent-tint-2); }
+.pricing-drawer-head {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
+  justify-content: space-between;
+  gap: var(--bn-2);
+  padding: 0 var(--bn-2) 0 var(--bn-3);
+  border-bottom: 1px solid var(--bn-line);
+  flex: none;
 }
+.pricing-drawer-tabs { border-bottom: 0; }
+.pricing-drawer > .pricehistory,
+.pricing-drawer > .pricing-photo { flex: 1 1 auto; overflow: auto; min-height: 0; }
 
-.pricing-field input {
-  padding: var(--s1) var(--s2);
-  font-family: var(--util);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-}
+.pricing-photo { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4) var(--bn-5) var(--bn-5); }
+.pricing-photo-head { display: flex; flex-direction: column; gap: 2px; }
+.pricing-photo-head h3 { font-size: var(--bn-fs-xl); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pricing-photo-frame { aspect-ratio: 5 / 7; max-height: 56vh; }
+.pricing-photo-caption { display: flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricing-photo-controls { display: flex; gap: var(--bn-2); }
 
-/* The edge darkens under the pointer (D50). `border-color` only — never width, which
-   would reflow the box and move a target under a finger already travelling toward it.
-   Focus is an outline drawn
-   outside this border, so the two compose rather than compete. */
-.pricing-field input:hover:not(:disabled) {
-  border-color: var(--field-hover);
-}
-
-.pricing-field-wide input {
-  flex: 1 1 20rem;
-}
-
-/* ----------------------------------------------------------------- the photo panel
-
-   ON DEMAND AND TOGGLED BY THE SAME KEY, so `Escape` keeps its two existing jobs in the
-   price field and this panel never takes a binding away from price entry. Fixed rather than
-   inline: it must not add height to a row, because an invariant row height is what stops the
-   list moving under a finger. */
-.pricing-photo {
-  position: fixed;
-  /* BOTTOM LEFT, AND THE CORNER WAS CHOSEN BY LOOKING AT IT. Bottom-right put the panel over
-     the four reference columns, the quantity and the price field — every number the operator
-     is pricing FROM and the one they are typing INTO. The left edge holds the card name,
-     which is already ellipsised and is the least precise thing on the row, so covering part
-     of it costs the least; and the panel is a picture of that card, so it sits beside what it
-     is about. */
-  /* AFTER THE ROW'S GUTTER, NOT AT THE PAGE EDGE (D85). The corner argument above is
-     untouched — this panel still sits beside the name it is about, at the left. What moved is
-     the start: `left: var(--s4)` put it directly over every row's T and H, which is the
-     overlap that was being settled with a stacking order and is settled by this offset
-     instead. `.pricing` composes the value from the same button width the grid uses. */
-  left: var(--pricing-gutter);
-  /* ABOVE THE SHIP BAR, NOT UNDER IT (D54, corrected by D85). `--pricing-ship-h` is now the
-     bar's MEASURED height, published by `Pricing.tsx` on every resize, rather than a closed
-     height nothing ever defined — the fallback below was the only value this ever had, and it
-     was wrong by 61px with the bar closed and by 369px with an emit receipt up. Wrong in the
-     direction that buried the bar's own sub-threshold controls under this panel, which are
-     the answer emit refuses without. The fallback stays for the frame before the observer
-     first reports. */
-  bottom: calc(var(--pricing-ship-h, 64px) + var(--s4));
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  box-shadow: 0 2px 16px rgb(8 9 10 / 12%);
-}
-
-.pricing-photo img {
-  display: block;
-  width: 260px;
-  aspect-ratio: 63 / 88;
-  object-fit: cover;
-  border-radius: var(--r);
-}
-
-/* WHICH COPY THIS IS, NAMED. There is no quality signal worth trusting — confidence is the
-   tempting one and exactly wrong, since T1's recorded misses are confident answers with the
-   digits wrong — so the pick is the first in box-walk order, said out loud, and steppable.
-   Five photographs also answer "are these actually the same card?", and if they are not, the
-   identification was wrong. */
-.pricing-photo-caption {
-  margin: 0;
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.pricing-photo-controls {
-  display: flex;
-  gap: var(--s2);
-}
-
-/* ---- the ship bar (D54) ---------------------------------------------------------------
- *
- * STICKY AND IN FLOW, NOT `fixed`. A sticky last child reserves its own height in the
- * document, so the space under a ~6,500px list is exactly this bar's height BY CONSTRUCTION
- * — including when the receipt appears and it grows. A `fixed` bar needs a hand-maintained
- * `padding-bottom` on `.pricing` equal to a height that changes, which is the
- * two-declarations-that-must-agree drift this file already refuses for its grid template.
- *
- * The negative margins bleed it to the page edges so nothing shows in the 16px gutter; the
- * negative bottom margin cancels the page's own bottom padding, so at full scroll it rests
- * flush rather than floating above a strip of ground.
- *
- * IT SPENDS NONE OF docs/DESIGN.md's 150px TOP BUDGET, which is the other half of why it is
- * at the bottom: the answer to "what do I still owe" has to be reachable from anywhere in a
- * hundred rows, and the top of the page is already spent on the title, the scope and the
- * lede.
- */
+/* ---- the ship bar -------------------------------------------------------------------------------- */
 .pricing-ship {
   position: sticky;
-  bottom: 0;
-  z-index: 10;
+  bottom: var(--bn-4);
+  z-index: 30;
   display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  margin: var(--s5) calc(-1 * var(--s4)) calc(-1 * var(--s4));
-  padding: var(--s3) var(--s4);
-  background: var(--surface);
-  border-top: 1px solid var(--line);
-}
-
-.pricing-ship-row {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s2);
-}
-
-.pricing-ship-act {
-  justify-content: flex-end;
-}
-
-.pricing-ship-key {
-  font-family: var(--util);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.pricing-ready {
-  flex: 1 1 24rem;
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.pricing-ready-warn {
-  color: var(--muted);
-}
-
-/* A control you TYPE INTO gets `field` rather than `line` — docs/DESIGN.md's second line
-   colour, for the one case where the low contrast genuinely bites: an empty input is a
-   rectangle and nothing else. */
-.pricing-ship-flat {
-  width: 7rem;
-  min-height: 32px;
-  padding: var(--s1) var(--s2);
-  font-family: var(--util);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-}
-
-/* THE PRESS, AND IT IS AN OUTLINE. docs/DESIGN.md reserves the solid accent fill for a screen
-   with exactly one thing to do; a hundred-row worklist is the definition of more than one,
-   and `app/tests/pricing.spec.ts` asserts zero accent-filled grounds anywhere under
-   `main.pricing`. The weight comes from the border and from where it sits — the right end of
-   a bar that is always on screen. */
-.pricing-emit {
-  min-height: 32px;
-  padding: var(--s1) var(--s4);
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--surface);
-  border: 1px solid var(--accent);
-  border-radius: var(--r);
-  cursor: pointer;
-}
-
-.pricing-emit:hover {
-  background: var(--hover);
-}
-
-.pricing-emit:disabled {
-  color: var(--muted);
-  border-color: var(--line);
-  cursor: not-allowed;
-}
-
-.pricing-ship-receipt {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  max-height: 30vh;
-  overflow-y: auto;
-}
-
-/* Tighter than `.run-console`'s 260px: this one shares a bar with the control that produced
-   it, and the readiness row and the button must never be pushed out of their own bar. */
-.pricing-ship-console {
-  max-height: 120px;
-  overflow: auto;
-  margin: 0;
-  padding: var(--s2);
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  white-space: pre-wrap;
-}
-
-/* ------------------------------------------------------------------- the trend strip's press
-
-   D79, and D62's condition discharged. It sits under the presets and above the list because it
-   is the same KIND of control — one press that changes every row at once — and because the
-   sentence beside it is what the strip's caveats hang on: the two spans, and the fact that the
-   ranges overlap and can point opposite ways.
-
-   IT IS `pricing-plain` AND NOT `pricing-preset`, which is the distinction worth keeping. A
-   preset WRITES — it fills unset rows and sets the run's rule, and `aria-pressed` says which
-   one is live. This reads. Drawing them alike would put a request to a public mirror in the
-   same register as an answer that ends up in `decisions.json`. */
-.pricing-trendbar {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s3);
-  margin-top: var(--s3);
-}
-
-.pricing-trendbar-says {
-  display: flex;
+  gap: var(--bn-3) var(--bn-5);
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s1) var(--s3);
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r-xl);
+  background: var(--bn-surface-glass);
+  backdrop-filter: saturate(1.4) blur(14px);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  box-shadow: var(--bn-shadow-3);
+  animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both;
+}
+.pricing-ship-status { display: flex; align-items: center; gap: var(--bn-3); flex: 1 1 260px; min-width: 0; flex-wrap: wrap; }
+/* the bar carries the verdict and the press; the account of the verdict is on the deck, and
+   this walks back to it rather than restating it under the operator's hands */
+.pricing-ship-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
   min-width: 0;
-  font-family: var(--util);
-  font-size: 10px;
-  line-height: 1.3;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+  padding: 4px var(--bn-2) 4px 4px;
+  border-radius: var(--bn-r-full);
+  color: var(--bn-ink-2);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.pricing-ship-verdict:hover { background: var(--bn-surface-2); }
+.pricing-ship-verdict:active { transform: translateY(1px); }
+.pricing-ship-verdict > .bn-icon:last-child { flex: none; color: var(--bn-ink-4); }
+.pricing-ready { display: inline; font-size: var(--bn-fs-md); line-height: 1.4; color: var(--bn-ink-2); min-width: 0; }
+.pricing-ready .bn-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.pricing-ready strong { color: var(--bn-ink); font-weight: 600; }
+.pricing-ready-fine { color: var(--bn-ink-3); }
+@media (max-width: 1599px) { .pricing-ready-fine { display: none; } }
+.pricing-ready-warn { color: var(--bn-warn); font-weight: 500; }
+.pricing-ship-says { color: var(--bn-ink-3); }
+.pricing-keys { display: flex; align-items: center; gap: var(--bn-3); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; flex: none; }
+.pricing-keys > span { display: inline-flex; align-items: center; gap: 4px; }
+.pricing-keys .bn-kbd { height: 16px; min-width: 16px; font-size: var(--bn-fs-2xs); }
+.pricing-ship-act { display: flex; align-items: center; gap: var(--bn-3); margin-left: auto; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.pricing-ship-key { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.pricing-ship-key .bn-icon { color: var(--bn-ok); }
+.pricing-ship-only { white-space: nowrap; }
+/* A SPLIT THAT CANNOT APPLY IS DIMMED, NEVER REMOVED — a control that vanishes reads as one
+   you imagined, and this one is off only while "just the cards above the cut-off" has already
+   left the lower half out. */
+.pricing-ship-only[data-off='true'] { opacity: 0.42; cursor: not-allowed; }
+.pricing-ship-trouble { flex: 1 1 100%; order: 11; }
+/* under 1400 the legend takes a line of its own beneath the status and the press — the keys are
+   still how the rows that make the run ready get answered; under 1024 there is rarely a keyboard */
+@media (max-width: 1399px) { .pricing-keys { flex-basis: 100%; order: 10; padding-top: 2px; } }
+@media (max-width: 1023px) { .pricing-keys { display: none; } }
+/* the kit's toast stack sits above the ship bar rather than on its primary — a kit gap (`--bn-toast-bottom`) */
+body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + var(--bn-4) + var(--bn-3)); }
+
+/* ---- the receipt dialog --------------------------------------------------------------------------- */
+.pricing-receipt-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-4) var(--bn-3) var(--bn-3) var(--bn-5);
+  border-bottom: 1px solid var(--bn-line);
+}
+.pricing-receipt-mark { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.pricing-receipt-mark.is-ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.pricing-receipt-mark.is-bad { background: var(--bn-danger-tint); color: var(--bn-danger); }
+.pricing-receipt-title { flex: 1 1 auto; min-width: 0; }
+.pricing-receipt-title h2 { font-size: var(--bn-fs-xl); }
+.pricing-receipt-sub { margin: 2px 0 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.pricing-receipt-sub.pricing-ready-warn { color: var(--bn-warn); }
+.pricing-receipt-body { display: flex; flex-direction: column; gap: var(--bn-4); padding: var(--bn-5); }
+.pricing-errand { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
+.pricing-errand li { display: flex; align-items: flex-start; gap: var(--bn-3); font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.pricing-errand strong { color: var(--bn-ink); }
+.pricing-errand-n {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  color: var(--bn-ink-2);
+}
+.pricing-console-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); align-self: flex-start; }
+.pricing-console-toggle:hover { color: var(--bn-ink); }
+.pricing-ship-console {
+  margin: 0;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-xs);
+  line-height: 1.5;
+  color: var(--bn-ink-2);
+  white-space: pre;
+  overflow: auto;
+  max-height: 260px;
+}
+.pricing-ship-receipt .run-file-name { font-family: var(--bn-font-mono); font-weight: 500; }
+.pricing-ship-receipt .run-file-import { border-color: var(--bn-accent); background: var(--bn-accent-tint); color: var(--bn-accent); }
+.pricing-ship-receipt .run-file-size { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+
+/* ============================================================================
+   TIERS — decided by the width of the list.
+   ========================================================================== */
+
+/* the trend column exists only once something has been asked for (D79) */
+.pricing-body[data-trends='off'] .pricing-section { --pricing-cols: 36px minmax(0, 1fr) 56px 68px 68px 68px 132px 68px; }
+.pricing-body[data-trends='off'] .pricetrend,
+.pricing-body[data-trends='off'] .pricetrend-keys { display: none; }
+
+/* the DIRECT column is blank on most rows; it joins the table only when there is room, and only in a
+   section where at least one row carries a figure for it (`data-direct`) — a column of dashes is not
+   worth 68px */
+.pricing-ref-direct_low,
+.pricing-caption-direct_low { display: none; }
+@container pricing (min-width: 1040px) {
+  .pricing-section[data-direct='some'] { --pricing-cols: 36px minmax(0, 1fr) 56px 128px 68px 68px 68px 68px 132px 68px; }
+  .pricing-body[data-trends='off'] .pricing-section[data-direct='some'] { --pricing-cols: 36px minmax(0, 1fr) 56px 68px 68px 68px 68px 132px 68px; }
+  .pricing-section[data-direct='some'] .pricing-ref-direct_low,
+  .pricing-section[data-direct='some'] .pricing-caption-direct_low { display: block; }
 }
 
-/* THE SPANS AT THE MACHINE REGISTER, because they are dates off the payload rather than
-   prose — the same treatment `.pricing-machine` gives a reason code, and the same
-   human-label-large rule docs/DESIGN.md states for an owner screen. */
-.pricing-trendbar-span {
+/* ---- compact rows (600–939) -------------------------------------------------------------------- */
+@container pricing (max-width: 939px) {
+  .pricing-caption { display: none; }
+  /* The preset sentence is density that a narrow screen can spend; the CUSTOM one is not —
+     it is the refusal, or the invitation to type, and there is no other copy of either. */
+  .pricing-rule-says { display: none; }
+  .pricing-rule-says[data-keep='true'] { display: inline-flex; }
+  .pricing-rule:not(:has(.pricing-custom)) .pricing-rule-line { min-height: 0; }
+  .pricing-body[data-trends='off'] .pricetrend { display: none; }
+  .pricing-row {
+    grid-template-columns: 36px minmax(0, 1fr) 124px auto;
+    grid-template-rows: auto auto;
+    row-gap: 3px;
+    column-gap: var(--bn-3);
+    min-height: 60px;
+  }
+  .pricing-thumb { grid-column: 1; grid-row: 1 / 3; }
+  .pricing-id { grid-column: 2; grid-row: 1; }
+  .pricing-facts {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px var(--bn-3);
+    min-width: 0;
+  }
+  .pricing-qty { text-align: left; font-size: var(--bn-fs-xs); }
+  .pricing-qty-of { font-size: var(--bn-fs-xs); }
+  .pricetrend { justify-content: flex-start; min-height: 0; gap: 6px; }
+  .pricetrend-empty { display: none; }
+  .pricetrend-mini { width: 44px; }
+  .pricetrend-spark, .pricetrend-blank { height: 12px; }
+  .pricetrend-figure { font-size: var(--bn-fs-2xs); }
+  .pricetrend-skel { width: 44px; height: 20px; }
+  .pricing-ref-direct_low { display: block; }
+  /* DIRECT is blank on most rows; a dash is not worth a line of the facts strip */
+  .pricing-ref-direct_low[data-empty='true'] { display: none; }
+  .pricing-ref {
+    font-size: var(--bn-fs-xs);
+    text-align: left;
+    color: var(--bn-ink-2);
+  }
+  .pricing-ref-market { font-weight: 600; color: var(--bn-ink); }
+  .pricing-ref-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    margin-right: 2px;
+    font-size: var(--bn-fs-2xs);
+    font-weight: 600;
+    letter-spacing: var(--bn-tracking-caps);
+    text-transform: uppercase;
+    color: var(--bn-ink-3);
+  }
+  .pricing-price { grid-column: 3; grid-row: 1 / 3; }
+  .pricing-actions { grid-column: 4; grid-row: 1 / 3; }
+  .pricing-meta .pricing-row-note { display: none; }
+}
+
+/* ---- cards (< 600) ------------------------------------------------------------------------------- */
+@container pricing (max-width: 599px) {
+  .pricing-section-head { padding: var(--bn-3) var(--bn-3); }
+  .pricing-list { gap: var(--bn-2); padding: var(--bn-2); }
+  .pricing-group-head { border-radius: var(--bn-r); border-bottom: 0; }
+  .pricing-row {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      'thumb id id'
+      'facts facts facts'
+      'price price act';
+    gap: var(--bn-2) var(--bn-3);
+    padding: var(--bn-3);
+    min-height: 0;
+    border: 1px solid var(--bn-line);
+    border-radius: var(--bn-r-lg);
+    background: var(--bn-surface);
+  }
+  .pricing-row:last-child { border-bottom: 1px solid var(--bn-line); }
+  .pricing-row[data-drawn='true'] { box-shadow: inset 0 0 0 2px var(--bn-accent); }
+  .pricing-thumb { grid-area: thumb; width: 44px; height: 60px; }
+  .pricing-id { grid-area: id; align-self: start; }
+  .pricing-name { white-space: normal; overflow: visible; line-height: 1.25; }
+  .pricing-meta { white-space: normal; flex-wrap: wrap; row-gap: 1px; }
+  /* as many tiles as carry a figure fill the row; an empty DIRECT stays hidden (the compact tier's
+     rule) rather than being drawn blank to square a grid */
+  .pricing-facts {
+    grid-area: facts;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: var(--bn-2);
+    align-items: center;
+  }
+  .pricing-qty { grid-column: 1 / -1; text-align: left; font-size: var(--bn-fs-sm); }
+  .pricing-ref {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 6px 8px;
+    border-radius: var(--bn-r-sm);
+    background: var(--bn-surface-2);
+    text-align: left;
+    font-size: var(--bn-fs-md);
+  }
+  .pricing-ref-label { margin-right: 0; }
+  .pricetrend { grid-column: 1 / -1; justify-content: flex-start; min-height: 0; }
+  .pricetrend-empty { display: none; }
+  .pricing-price { grid-area: price; }
+  .pricing-field { height: 44px; }
+  .pricing-input { font-size: var(--bn-fs-xl); }
+  .pricing-held { height: 44px; }
+  .pricing-actions { grid-area: act; align-self: start; }
+  .pricing-actions .bn-btn { --btn-h: 44px; width: 44px; }
+  .pricing-holdpanel { left: var(--bn-2); right: var(--bn-2); width: auto; top: calc(100% - 8px); }
+  .pricing-holdpanel[data-flip='up'] { top: auto; bottom: calc(100% - 8px); }
+  .pricing-holdpanel-fields { grid-template-columns: 1fr; }
+  .pricing-section-head { flex-direction: column; align-items: stretch; }
+  .pricing-section-answer { align-self: flex-start; }
+}
+/* a thumb has no keys: the keycaps beside the column heads, the hold reasons and the legend go */
+@media (hover: none) and (pointer: coarse) {
+  .pricing .bn-kbd,
+  .pricing-holdpanel .bn-kbd,
+  .pricing-drawer .bn-kbd { display: none; }
+}
+
+/* ---- phones: the shell's top bar and tab bar --------------------------------------------------- */
+@media (max-width: 767px) {
+  .pricing { gap: var(--bn-4); }
+  .pricing-head .bn-head-actions { width: 100%; }
+  .pricing-head .bn-head-actions .pricing-runs-anchor { margin-left: auto; }
+  .pricing-drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 72vh;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0;
+    animation-name: bn-sheet-up;
+  }
+  .pricing-ship {
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-2));
+    padding: var(--bn-3);
+    gap: var(--bn-2) var(--bn-3);
+  }
+  .pricing-ship-status { flex-basis: 100%; }
+  .pricing-ship-act { width: 100%; margin-left: 0; }
+  .pricing-ship-act .pricing-emit { flex: 1 1 auto; }
+  .pricing-ready-fine { display: none; }
+  .pricing-head .bn-head-actions { position: relative; }
+  .pricing-runs-anchor { position: static; }
+  /* the picker is a bottom sheet over the tab bar, the way the hold panel is — anchored under the
+     header it ran into the sticky ship bar, and its last row sat on the primary */
+  .pricing-runs-pop {
+    position: fixed;
+    top: auto;
+    left: var(--bn-2);
+    right: var(--bn-2);
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-2));
+    width: auto;
+    max-height: min(60vh, calc(100vh - 64px - env(safe-area-inset-bottom) - 120px));
+    z-index: 62;
+    border-radius: var(--bn-r-xl);
+    transform-origin: bottom center;
+    animation: bn-sheet-up var(--bn-t-slow) var(--bn-ease) both;
+  }
+  .pricing-run { min-height: 44px; }
+  .pricing-toolbar-right { margin-left: 0; width: 100%; }
+  body:has(.pricing-ship) .bn-toasts { bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-2) + var(--pricing-ship-h, 0px) + var(--bn-3)); }
+
+  /* a thumb presses these: 40px is the floor (28 is a mouse size). The kit's buttons already read the
+     phone control heights from tokens.css; the segments and tabs carry a fixed 28px there, so they are
+     raised here. The segments share the row rather than grow into it, and the sub-threshold key takes a
+     line of its own above its pair. */
+  .pricing-rule-seg,
+  .pricing-cheap .bn-seg { display: flex; width: 100%; }
+  .pricing-rule .bn-seg-item,
+  .pricing-cheap .bn-seg-item { flex: 1 1 0; min-height: 40px; padding: 0 var(--bn-2); }
+  /* the custom rule reads as one sentence across two lines: the direction, then the figure
+     and what it is a figure OF. Both segments share their line rather than stacking four
+     controls down the screen. */
+  .pricing-rule-line { width: 100%; }
+  .pricing-custom { width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: var(--bn-2); }
+  .pricing-custom-kind { grid-column: 1 / -1; }
+  .pricing-pct { height: var(--bn-control-h); grid-column: 1; }
+  .pricing-pct-input { width: 64px; font-size: var(--bn-fs-lg); }
+  .pricing-custom-of { grid-column: 2; justify-self: center; align-self: center; }
+  .pricing-custom-basis { grid-column: 3; }
+  .pricing-rule-says[data-keep='true'] { max-width: none; }
+  .pricing-drawer-tabs .bn-tab { min-height: 40px; }
+  /* the run's three-way reads as "off, or one of two answers": the off state takes the top
+     line and the two answers share the one below it, rather than one orphan wrapping */
+  .pricing-cheap-run .bn-seg { display: grid; grid-template-columns: 1fr 1fr; }
+  .pricing-cheap-run .bn-seg-item:first-child { grid-column: 1 / -1; }
+  /* the pair and its field each take a line rather than sharing one at 390 */
+  .pricing-cheap-controls { flex-direction: column; align-items: stretch; }
+  .pricing-cheap-controls .pricing-flat { align-self: flex-start; }
+  .pricing-cheap-offer .bn-btn { width: 100%; }
+  .pricing-cheap { padding: var(--bn-4); }
+  .pricing-verdict { padding: var(--bn-4); }
+  .pricing-cheap-amount { font-size: var(--bn-fs-3xl); }
+  /* 16px keeps iOS from zooming the field */
+  .pricing-flat { height: var(--bn-control-h); }
+  .pricing-flat-input { font-size: var(--bn-fs-lg); width: 92px; }
+
+  /* THE TWO WALK-BACKS TO THE DECK ARE THUMB TARGETS. Both were mouse-sized here — the
+     section chip a hard-coded 34px, the ship bar's verdict 30px off its padding — and both
+     are the only way back to the answer from where a person is standing. tokens.css raises
+     --bn-control-h-sm to 40px under this width; these read it rather than restating a number. */
+  .pricing-section-answer {
+    height: auto;
+    min-height: var(--bn-control-h-sm);
+    padding: var(--bn-2) var(--bn-3);
+  }
+  .pricing-ship-verdict {
+    min-height: var(--bn-control-h-sm);
+    padding: var(--bn-2) var(--bn-3) var(--bn-2) var(--bn-2);
+  }
+}
+
+/* THE CHEAP-CARD FIGURE IS A FIELD. It keeps the display weight it had as a read-out — this is
+   still the biggest thing on the panel — and gains the affordances of something you type into:
+   a resting underline, a hover ground, an accent ring on focus. The `$` is drawn beside the
+   input rather than typed into it, so the alphabet stays closed to money. */
+.pricing-cheap-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.pricing-cheap-currency {
+  font-family: var(--bn-font-display);
+  font-weight: 800;
+  font-size: 26px;
+  color: var(--bn-ink-3);
+}
+.pricing-cheap-input {
+  width: auto;
+  min-width: 2ch;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 2px dashed var(--bn-line-strong);
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  font-family: var(--bn-font-display);
+  font-weight: 800;
+  font-size: 34px;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--bn-ink);
   font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
 }
-
-.pricing-trendbar-says kbd {
-  font-family: var(--util);
-  font-size: 9px;
-  font-weight: 600;
-  color: var(--ink);
+.pricing-cheap-input:hover { background: var(--bn-surface-3); border-bottom-color: var(--bn-ink-4); }
+.pricing-cheap-input:focus-visible {
+  outline: none;
+  background: var(--bn-surface-3);
+  border-bottom: 2px solid var(--bn-accent);
+  box-shadow: 0 2px 0 0 var(--bn-accent-tint-2);
 }

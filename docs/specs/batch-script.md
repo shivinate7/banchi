@@ -94,8 +94,11 @@ runs/<YYYY-MM-DD>-<label>-<nn>/
   decisions.json        The pricing decision. Written by join, edited by you (or the
                         app at step 7), read by emit.
   report.txt            The join report, both directions, verbatim.
-  import-listed.csv      Above-threshold import file.
-  import-subthreshold.csv Sub-threshold import file.
+  import.csv            THE import file — one press, one spreadsheet (D99). Across
+                        games and across the listed/sub-threshold split.
+  import-listed.csv      Above-threshold import file. `--split-threshold` only.
+  import-subthreshold.csv Sub-threshold import file. `--split-threshold` only.
+  import-<game>.csv     `--split-games` only.
   reconcile.txt         Written by reconcile.
 ```
 
@@ -420,8 +423,10 @@ price = clamp_floor( round_2dp_half_up( rule(basis_price) ) )
 ```
 
 Round to two decimals, half up. Then clamp to the floor — in that order, so rounding can
-never sneak a price under it. Floor and threshold are both `$0.40`, both configurable, both
-already in `pipeline/pricing.py`.
+never sneak a price under it. Floor and threshold are both `$0.40` by default. The
+**threshold** is set by the operator and stored in `inventory/prices.json` as
+`policy.threshold` (D99) — `pipeline/pricing.py:THRESHOLD` is what a store that has never
+set one reads. The **floor** is still the constant; nobody has asked for that one.
 
 ### 6.3 Sub-threshold disposition — `decisions.json`
 
@@ -452,14 +457,30 @@ if the run-wide choice is still unset.
 
 ## 7. `emit`
 
-Writes **two** import files:
+Writes **one** import file, `import.csv`, carrying every row it has — above the D9
+cut-off and below it, and across every game in the send. The owner's instruction, 2026-09-03:
+*"emit by default only should now emit only one spreadsheet by default (with the ability to
+split if needed)"*. See D99.
 
-- `import-listed.csv` — above-threshold cards
-- `import-subthreshold.csv` — cards priced by the run's disposition
+Two flags split it, on two different axes, and neither is the default:
 
-Two files so the valuable cards can be staged and moved live immediately while the bulk
-file waits, and so a pricing mistake on the cheap file cannot touch the valuable one. Each
-file independently obeys the no-duplicate-SKU rule.
+- `--split-threshold` — the old pair back: `import-listed.csv` above the cut-off,
+  `import-subthreshold.csv` below it, one pair per game. It exists because the split was
+  never cosmetic: the valuable cards can be staged and moved live while the bulk file
+  waits, and a pricing mistake on the cheap file cannot touch the valuable one.
+- `--split-games` — one file per game, if Import to Staged refuses a file spanning two
+  `Product Line`s. Still unestablished; `fixtures/staged-import-accepted.csv` proves the
+  format for one line only, and a merged file whose games carry different export headers is
+  refused rather than written.
+
+`--listed-only` is a third thing and is not a split: it drops the sub-threshold rows rather
+than filing them elsewhere, and says how many it left for a later press.
+
+Every file independently obeys the no-duplicate-SKU rule, and merging cannot break it: the
+two buckets are disjoint SKU sets of one report, so one `import_rows` call over their union
+prices and writes each SKU once. The live cap is spent ONCE across everything one press
+writes — `add_to_quantity` is per SKU inside a run, and `pipeline/merge.py` re-derives it
+over the union of positions across runs.
 
 Byte format is `pipeline.tcgcsv` unchanged: unquoted header, fully quoted data fields, CRLF,
 only `Add to Quantity` and `TCG Marketplace Price` ever written, `TCGplayer Id` never
@@ -594,7 +615,7 @@ report — catching an import that was staged and never moved live.
 | `--dry-run` (join) | off | preview both queues, write nothing |
 | `--basis` | `market` | `market` \| `low` |
 | `--rule` | `match` | `decisions.json`, seeded by the flag |
-| threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py` |
+| threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py`. The threshold is the default for a store that has never set `policy.threshold` (D99) |
 | live cap | 4 | D7, `join.LIVE_QUANTITY_CAP` |
 | cards per section | *no default* | D10 — dividers are declared, never assumed |
 | staged-stale warning | 14 days | run report only |

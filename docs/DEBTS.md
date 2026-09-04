@@ -576,6 +576,27 @@ restatement may be the right answer, and that argument belongs in `docs/DESIGN.m
 in `docs/design-refs/` stay unchecked for a settled reason — they are drawings of the spec and
 are allowed to lose to it.
 
+### `design tokens` locks names for every token and values for only the hexes
+
+Named 2026-09-03, when the row was rewritten for the `--bn-` system. It compares a VALUE only
+where `docs/DESIGN.md`'s block states a hex literal — 31 of 100 declared tokens. The other 69 are
+checked for existence in both directions and their values are locked nowhere: an alpha of another
+token (`ink 8%`), an alias (`--bn-money` = ink in both themes), a duration, an easing curve, a
+shadow, a control height.
+
+**That is a real gap and not a shrug, and the shape of it matters.** The dangerous drift this row
+exists to catch is a value nobody chose rendering perfectly, and a wrong `cubic-bezier` or a
+wrong shadow is exactly that. What stops it being closed by writing more hexes into the document
+is that most of these are not hexes: `--bn-line` is *ink at 8%* by design, and spelling its two
+rendered values out would create the second source of truth the tint was invented to avoid — the
+light and dark values would then have to be kept in step by hand, which is the defect, not the
+fix.
+
+**What would close it**: a reader that resolves `color-mix()` and `rgba()` against the token they
+reference and compares the resolved value, which is a small CSS color engine and was judged not
+worth building for 69 tokens. Until then the row's summary line says how many hexes it compared,
+so a green row cannot be read as full coverage.
+
 ### Every decision-id check goes vacuous at three digits
 
 Found 2026-08-30 while building D72's renumber check, by reading the regex it reuses rather

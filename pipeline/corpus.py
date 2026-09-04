@@ -106,6 +106,16 @@ class Corpus:
     rule: str = "match"
     basis: str = "market"
     sub_threshold: object = None
+    #: The D9 cut-off, as the string it was typed as. `pipeline/pricing.py:THRESHOLD` is the
+    #: default, so a store that has never set one partitions exactly as it did yesterday.
+    #:
+    #: IT IS POLICY AND NOT AN ANSWER, which is why it sits here beside `rule` and `basis`
+    #: rather than in `skus`. D9 calls the threshold *"configurable"* and derives $0.40 from a
+    #: labor bar; a labor bar is a fact about the operator's hour, not about any one card, and
+    #: a per-SKU cut-off is just a per-SKU price with extra steps. Stored as a STRING for the
+    #: reason every price in this file is: `Decimal` is not JSON, and the figure the operator
+    #: typed is the figure that comes back.
+    threshold: object = str(pricing.THRESHOLD)
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the
     #: standing policy, which is expected to be almost all of them.
@@ -152,10 +162,19 @@ class Corpus:
         # raising matters.
         pricing.Rule.parse(policy.get("rule", "match"))
         pricing.check_basis(policy.get("basis", "market"))
+        # VALIDATED HERE FOR THE SAME REASON AND WITH ONE DIFFERENCE: the parsed value is
+        # discarded like the two above, but a MISSING key is the store that has never set one
+        # and reads `pricing.THRESHOLD`, where a present-and-unusable one is refused by name.
+        pricing.check_threshold(policy.get("threshold"))
         return cls(
             rule=str(policy.get("rule", "match")),
             basis=str(policy.get("basis", "market")),
             sub_threshold=policy.get("sub_threshold"),
+            threshold=(
+                str(pricing.THRESHOLD)
+                if policy.get("threshold") is None
+                else str(policy["threshold"]).strip()
+            ),
             answers=answers,
             overrides={
                 str(name): dict(over)
@@ -191,6 +210,10 @@ class Corpus:
             "rule": self.rule,
             "basis": self.basis,
             "sub_threshold": self.sub_threshold,
+            # WRITTEN EVEN WHEN IT IS THE DEFAULT, unlike `per_run` below. `#/pricing` reads
+            # `policy.threshold` to draw the control, and a key that appears only once
+            # somebody has changed it is a control that cannot draw its own current value.
+            "threshold": self.threshold,
         }
         if self.overrides:
             policy["per_run"] = self.overrides
@@ -285,6 +308,10 @@ class Corpus:
             "rule": over.get("rule", self.rule),
             "basis": over.get("basis", self.basis),
             "sub_threshold": over.get("sub_threshold", self.sub_threshold),
+            # NOT PARSED HERE. `check_basis` is called by the caller on `basis` for the same
+            # reason: this method answers what the policy SAYS, and the two commands that
+            # price from it already catch the refusal a bad value raises.
+            "threshold": over.get("threshold", self.threshold),
         }
 
     def scoped_to(

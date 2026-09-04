@@ -1,0 +1,159 @@
+/* Overlays on the inventory screen: the right sheet, the phone's bottom sheet, the dialog and
+   the lightbox. The panels themselves are the kit's; this adds their inner rhythm. */
+
+.inv-sheet,
+.inv-sheet-bottom,
+.inv-dialog {
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.inv-sheet { width: min(460px, 100vw); }
+
+.inv-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-5) var(--bn-5) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  position: sticky;
+  top: 0;
+  background: var(--bn-surface);
+  z-index: 1;
+}
+.inv-sheet-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inv-sheet-title {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+.inv-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-5);
+  padding: var(--bn-5);
+  padding-bottom: calc(var(--bn-7) + env(safe-area-inset-bottom));
+}
+.inv-sheet-body-tight { gap: var(--bn-4); }
+
+.inv-sheet-bottom {
+  border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0;
+}
+.inv-sheet-bottom::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: var(--bn-2) auto 0;
+  border-radius: 2px;
+  background: var(--bn-line-strong);
+}
+
+@media (max-width: 767px) {
+  .inv-sheet {
+    top: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-height: 88vh;
+    max-height: 88dvh;
+    border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0;
+    animation-name: bn-sheet-up;
+  }
+}
+
+/* dialog */
+.inv-dialog { padding: 0; }
+.inv-dialog-head { padding: var(--bn-5) var(--bn-5) 0; display: flex; flex-direction: column; gap: 4px; }
+.inv-dialog-title {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--bn-ink);
+}
+.inv-dialog-body { padding: var(--bn-4) var(--bn-5); display: flex; flex-direction: column; gap: var(--bn-3); }
+.inv-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--bn-2);
+  padding: var(--bn-3) var(--bn-5) var(--bn-5);
+  flex-wrap: wrap;
+}
+.inv-dialog-foot .bn-btn { min-width: 0; }
+@media (max-width: 480px) {
+  .inv-dialog-foot { flex-direction: column-reverse; }
+  .inv-dialog-foot .bn-btn { width: 100%; }
+}
+
+/* lightbox. The whole card, always: the image is sized against the VIEWPORT, not the grid
+   track — `max-height: 100%` against an auto track is ignored, and a 2160×3840 photograph
+   then ran 1,600px below the fold with body scroll locked behind it. */
+.inv-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 61;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
+  padding: var(--bn-6);
+  overflow: hidden;
+  cursor: zoom-out;
+  animation: bn-fade var(--bn-t) var(--bn-ease-out) both;
+  outline: none;
+}
+.inv-lightbox-close {
+  position: absolute;
+  top: max(var(--bn-4), env(safe-area-inset-top));
+  right: var(--bn-4);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--bn-r-full);
+  border: 0;
+  color: var(--bn-stage-ink);
+  /* The lightbox ground is the photograph, which is dark in both themes — so this paints from
+     the stage palette rather than from the page's, and holds in light mode too. */
+  background: color-mix(in srgb, var(--bn-stage-bg) 62%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bn-stage-ink) 18%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
+}
+.inv-lightbox-close:hover { background: color-mix(in srgb, var(--bn-stage-bg) 85%, transparent); }
+.inv-lightbox-close:active { transform: scale(0.94); }
+
+.inv-lightbox img {
+  display: block;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  max-width: calc(100vw - 2 * var(--bn-6));
+  max-height: calc(100vh - 2 * var(--bn-6));
+  max-height: calc(100dvh - 2 * var(--bn-6));
+  object-fit: contain;
+  border-radius: var(--bn-r-lg);
+  box-shadow: var(--bn-shadow-3);
+  animation: inv-lightbox-in var(--bn-t-slow) var(--bn-ease-spring) backwards;
+}
+@media (max-width: 767px) {
+  .inv-lightbox { padding: var(--bn-4); }
+  .inv-lightbox img {
+    max-width: calc(100vw - 2 * var(--bn-4));
+    max-height: calc(100vh - 2 * var(--bn-4));
+    max-height: calc(100dvh - 2 * var(--bn-4));
+  }
+}
+@keyframes inv-lightbox-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}

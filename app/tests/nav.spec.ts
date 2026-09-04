@@ -1,18 +1,24 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 
-/* THE SHELL'S KEYBOARD, AND THE FIRST TEST THIS APP HAS HAD OF THE STRIP AT THE TOP OF EVERY
- * SCREEN.
+/* THE SHELL'S KEYBOARD, AND THE FIRST TEST THIS APP HAS HAD OF THE CHROME EVERY SCREEN SITS IN.
  *
  * `app/src/App.tsx` carries two keyboards — the `,` chord that JUMPS to a route by name, and
- * (D51, 2026-08-30) Cmd-arrow, which STEPS along the strip in the order it is drawn. Neither
+ * (D51, 2026-08-30) Cmd-arrow, which STEPS along the sidebar in the order it is drawn. Neither
  * had an assertion of any kind: `make design-check` covered the Fulfilment view, the review
  * queue, the run panel, the capture claims, the inventory walk and the pricing screen, and
  * nothing at all covered the chrome all of them sit under.
  *
- * THE STRONGEST CASES HERE ARE THE TWO ENDS AND THE THREE REFUSALS, because each is a rule
- * that would otherwise live only in a comment: the step never wraps, a bare arrow is not the
- * shell's, a held Cmd inside a text field belongs to the caret, and a screen with no chrome
- * has no keys at all. A step that quietly gained a wrap, or quietly started eating the caret
+ * RE-POINTED AT THE BANCHI SHELL, 2026-09-03. The strip along the top became a collapsible
+ * sidebar with a phone tab bar and drawer, `#/` became Home and capture moved to `#/capture`,
+ * the leader letters gained `H`, and the inline ⌘←/⌘→ keycaps were deliberately NOT restored —
+ * the owner chose one keyboard reference sheet over chips on the chrome. So the case that used
+ * to measure where the chips sat now asserts the two things that ruling leaves owing: the
+ * binding is announced to a screen reader, and the sheet a person is sent to documents it.
+ *
+ * THE STRONGEST CASES HERE ARE STILL THE TWO ENDS AND THE THREE REFUSALS, because each is a
+ * rule that would otherwise live only in a comment: the step never wraps, a bare arrow is not
+ * the shell's, a held Cmd inside a text field belongs to the caret, and a screen outside the
+ * ring is left alone. A step that quietly gained a wrap, or quietly started eating the caret
  * keys, would pass every other file in this directory.
  *
  * WHAT THIS CANNOT SEE, said plainly rather than left to be assumed. Playwright presses keys
@@ -21,22 +27,30 @@ import { test, expect, type Page, type Route } from '@playwright/test'
  * Chrome or Safari then declines to go Back. That half is one press at the rig, and D51 names
  * it as the thing to check first if the step ever appears to fire twice.
  *
- * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is seven Python tests
+ * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is nine Python tests
  * at the Stop hook; this starts a browser.
  */
 
-/** The ring, in the order `app/src/App.tsx` draws it: the run group, then the look group. The
- *  hash form verbatim, for the reason every other spec here records — a path-style
- *  '/inventory' is served index.html by Vite, mounts with an empty hash and renders the
- *  capture screen, which is a passing navigation to the wrong view.
+/** The sidebar, and the links inside it. Scoped to `.bn-side` on purpose: the phone drawer
+ *  renders a SECOND `nav.bn-nav` off the same table when it is open, and the sidebar's own
+ *  foot carries a `.bn-nav-link` to the Fulfiller that is not a route in the ring. `nav` is
+ *  what separates them, and it is the element the shell hangs `aria-keyshortcuts` and
+ *  `data-armed` off. */
+const NAV = '.bn-side nav.bn-nav'
+const NAV_LINK = `${NAV} a.bn-nav-link`
+
+/** The ring, in the order `app/src/App.tsx` draws it: Home, then the workflow group, then the
+ *  sell group, then the library. The hash form verbatim, for the reason every other spec here
+ *  records — a path-style '/inventory' is served index.html by Vite, mounts with an empty hash
+ *  and renders HOME, which is a passing navigation to the wrong view.
  *
  *  PINNED ON PURPOSE, AND RECONCILED AT THE COMMIT SINCE 2026-08-31. `App.tsx` derives its own
- *  ring — `hotkey !== undefined` over GROUP_ORDER then the table — and this list is a hand
- *  typed copy of that, which is the shape that goes stale. It did: D70 added `#/codes` with a
- *  key and this array was not touched, so the ring under test was seven routes long while the
- *  product's was eight, and the "never a wrap" case below stepped off the end of THIS list
- *  onto a real screen. That failure was luck — a roster missing a route normally just walks
- *  the routes it has and stays green, which is what happened to `cursor.spec.ts` for two days.
+ *  ring — `hotkey !== undefined` over the ROUTES table — and this list is a hand typed copy of
+ *  that, which is the shape that goes stale. It did: D70 added `#/codes` with a key and this
+ *  array was not touched, so the ring under test was seven routes long while the product's was
+ *  eight, and the "never a wrap" case below stepped off the end of THIS list onto a real
+ *  screen. That failure was luck — a roster missing a route normally just walks the routes it
+ *  has and stays green, which is what happened to `cursor.spec.ts` for two days.
  *
  *  So the copy stays (a derived ring could not assert the ORDER against anything independent —
  *  it would be `App.tsx`'s answer marked by `App.tsx`) and `scripts/docs-audit.py`'s
@@ -45,6 +59,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 /* ROUTE-ROSTER hotkey */
 const RING = [
   '#/',
+  '#/capture',
   '#/runs',
   '#/review',
   '#/pricing',
@@ -56,15 +71,20 @@ const RING = [
 
 /** What each of those routes renders, so a step is asserted to have ARRIVED rather than
  *  merely to have changed a string. A hash the shell does not recognise still changes
- *  `location.hash`; only the view proves the route resolved. */
+ *  `location.hash`; only the view proves the route resolved.
+ *
+ *  `#/orders` and `#/shipping` are one component in two stages (`OrdersHub`), and the class
+ *  that separates them is the stage — which is exactly the fact worth asserting, since the
+ *  two routes differ by nothing else. */
 /* ROUTE-ROSTER hotkey */
 const VIEW: Record<(typeof RING)[number], string> = {
-  '#/': 'main.capture',
+  '#/': 'main.home',
+  '#/capture': 'main.capture',
   '#/runs': 'main.runs',
   '#/review': 'main.review',
   '#/pricing': 'main.pricing',
-  '#/orders': 'main.orders',
-  '#/shipping': 'main.shipping',
+  '#/orders': 'main.orders-hub.orders',
+  '#/shipping': 'main.orders-hub.shipping',
   '#/inventory': 'main.inventory',
   '#/codes': 'main.codes',
 }
@@ -92,8 +112,43 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/queues$/, (route) => json(route, { review: [], parked: [] }))
   await page.route(/\/search\?/, (route) => json(route, { query: '', groups: [] }))
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
-  await page.route(/\/status$/, (route) => json(route, { boxes: [], next: null }))
+  /* `GET /status` IN THE SHAPE `ServerStatus` ACTUALLY HAS, which it was not: this stub
+     answered `{boxes, next}` — a shape no version of that route has sent — and the shell reads
+     `status.cards` off it into the sidebar's card count. `undefined.toLocaleString()` throws
+     inside `Sidebar`, which sits outside every route boundary, so the whole shell would go
+     down a beat after each `goto`. It did not show up as a failure only because every case
+     here had already made its first assertion by then. */
+  await page.route(/\/status$/, (route) =>
+    json(route, {
+      captures_root: 'captures',
+      store: 'inventory/store.sqlite',
+      store_exists: true,
+      cards: cards.length,
+      states: {},
+      queues: { review: 0, parked: 0 },
+      next_index: {},
+    }),
+  )
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
+  /* Home and `#/pricing` both open on the pricing worklist (D86 made it one file for the
+     store), so it is read on the way in to the ring rather than only on one screen. Every key
+     present and empty, for the reason the two stubs below give at length. */
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [],
+      skus: [],
+      decisions: {},
+      written_at: {},
+      skipped: [],
+      asked: [],
+      remembered_sub_threshold: null,
+      live_cap: 4,
+      defaults: {},
+      threshold: null,
+      floor: null,
+    }),
+  )
   /* The code-card screen reads its ledger on mount (D70), and an EMPTY one is the honest
      answer here: this checkout has its own store (D43) and no code has ever been scanned into
      it. Every field the screen indexes is present rather than short, for the reason the order
@@ -110,11 +165,12 @@ async function stub(page: Page, cards: unknown[] = []) {
       products: [],
     }),
   )
-  /* The order screen reads on mount and the shipping screen does not — it holds nothing until
-     an export is uploaded — which is why only one of D69's two routes appears here. The
-     `counts` map carries all six reasons including the zeros, exactly as `GET /orders` does:
-     a payload that filtered them would make "nothing was short" and "nothing was checked" the
-     same answer, and a screen drawn from a short map is a screen this stub could break. */
+  /* The order screen reads on mount and the shipping stage does not — it holds nothing until
+     an export is uploaded — but both routes are the same component now, so one stub answers
+     for the pair. The `counts` map carries all six reasons including the zeros, exactly as
+     `GET /orders` does: a payload that filtered them would make "nothing was short" and
+     "nothing was checked" the same answer, and a screen drawn from a short map is a screen
+     this stub could break. */
   await page.route(/\/orders$/, (route) =>
     json(route, {
       summary: '0 orders',
@@ -142,11 +198,11 @@ async function stub(page: Page, cards: unknown[] = []) {
 }
 
 /** One card, in the shape `GET /inventory` answers with — enough for `BoxBrowse` to draw its
- *  walk, which is what puts a text field on screen. The screen renders "No cards captured
- *  yet." and NO search field for an empty store, so the one case that needs a caret needs a
- *  card. Every decoration `server/capture_server.py:do_inventory` adds is here: the screen
- *  renders them and computes none of them, so a row missing one takes the panel down and the
- *  case fails as "element not found", which reads exactly like an unregistered route. */
+ *  walk, which is what puts a text field on screen. The screen renders an empty state and NO
+ *  search field for an empty store, so the one case that needs a caret needs a card. Every
+ *  decoration `server/capture_server.py:do_inventory` adds is here: the screen renders them and
+ *  computes none of them, so a row missing one takes the panel down and the case fails as
+ *  "element not found", which reads exactly like an unregistered route. */
 const CARD = {
   box: 2,
   index: 1,
@@ -196,7 +252,7 @@ async function open(page: Page, hash: (typeof RING)[number], cards: unknown[] = 
   await expect(page.locator(VIEW[hash])).toBeVisible()
 }
 
-test('the step walks the strip in the order it is drawn, and the last screen is the last', async ({
+test('the step walks the sidebar in the order it is drawn, and the last screen is the last', async ({
   page,
 }) => {
   await open(page, RING[0])
@@ -216,7 +272,7 @@ test('the step walks the strip in the order it is drawn, and the last screen is 
      own for his view. The ring is every route with a `hotkey`, so the mistake that would put
      him in it is a hotkey added to his row in ROUTES — and this assertion goes red the moment
      that happens, because the step from the last owner screen would land on #/fulfillment.
-     A case pressing the step ON his view could not: `enabled` refuses there AND the ring does,
+     A case pressing the step ON his view could not: `chrome` refuses there AND the ring does,
      so no single mutation makes it fail, and docs/GATES.md's rule is that a case which cannot
      fail is not coverage. `app/tests/fulfillment.spec.ts` asserts the nav is not drawn. */
   await page.keyboard.press('Meta+ArrowRight')
@@ -270,7 +326,7 @@ test('a held Cmd inside a field belongs to the caret', async ({ page }) => {
 test('a screen outside the ring keeps the browser’s key', async ({ page }) => {
   await stub(page)
   await page.goto('/#/gallery')
-  await expect(page.locator('.app-nav')).toBeVisible()
+  await expect(page.locator(NAV)).toBeVisible()
 
   /* The gallery has chrome, so the listener is mounted — and it is deliberately not a step in
      any loop, so there is no next one along from it and the press is left alone rather than
@@ -282,35 +338,116 @@ test('a screen outside the ring keeps the browser’s key', async ({ page }) => 
   expect(page.url()).toContain('#/gallery')
 })
 
-test('the strip advertises the step once, at the end of the ring', async ({ page }) => {
+/** Every letter the sidebar advertises, read off the sidebar. `NavLink` draws `,H` beside
+ *  Home, `,C` beside Capture and so on, out of the same `hotkey` field the leader dispatches
+ *  on — so a route added with a key arrives here with no edit to this file, and a link drawn
+ *  without one fails the shape assertion below rather than being quietly skipped. */
+async function lettersFromNav(page: Page): Promise<{ href: string; cap: string }[]> {
+  const links = await page.evaluate((selector) => {
+    return Array.from(document.querySelectorAll<HTMLAnchorElement>(selector)).map((a) => ({
+      href: a.getAttribute('href') ?? '',
+      cap: (a.querySelector('kbd')?.textContent ?? '').trim(),
+    }))
+  }, NAV_LINK)
+
+  /* A FLOOR, because a selector that matched nothing would turn the two cases below into
+     loops over an empty list — green, instantly, forever. */
+  expect(links.length, `the sidebar drew no links — is \`${NAV_LINK}\` still it?`).toBe(RING.length)
+  return links
+}
+
+test('the comma leader jumps to every screen the sidebar offers a letter for', async ({ page }) => {
+  await open(page, RING[0])
+  const links = await lettersFromNav(page)
+
+  for (const link of links) {
+    expect(link.cap, `${link.href} advertises no leader letter`).toMatch(/^,[A-Z0-9]$/)
+    const letter = link.cap.slice(1).toLowerCase()
+
+    /* Arrive from somewhere that is NOT the destination, or a chord that dispatched nowhere
+       would be indistinguishable from one that worked. Home is the way in and is itself in the
+       ring, so the letter that leads to it is pressed from the screen after it. */
+    const from = link.href === '#/' ? '#/capture' : '#/'
+    await page.goto(`/${from}`)
+    await expect(page.locator(VIEW[from as (typeof RING)[number]])).toBeVisible()
+
+    await page.keyboard.press(',')
+    await page.keyboard.press(letter)
+    await expect(
+      page.locator(VIEW[link.href as (typeof RING)[number]]),
+      `,${letter.toUpperCase()} did not arrive at ${link.href}`,
+    ).toBeVisible()
+    expect(page.url()).toContain(link.href)
+  }
+})
+
+/* THE STEP IS ADVERTISED, AND WHERE IT IS ADVERTISED MOVED. Until the Banchi rebuild the nav
+ * carried a pair of ⌘←/⌘→ keycaps at the end of the strip, and the case that stood here
+ * measured their bounding box against the last link's. The owner ruled the chips out and chose
+ * a single keyboard reference instead, so the layout fact is gone and the REQUIREMENT is not:
+ * docs/DESIGN.md's "every choice shows its key" is still owed, and it is owed in the two
+ * places a person can actually collect it — the accessibility tree, and the sheet.
+ *
+ * Nothing here asserts that the chips are absent. An absence is a layout choice too, and
+ * pinning it would make this file an obstacle to the owner changing their mind. */
+test('the step is announced on the sidebar and documented in the shortcuts sheet', async ({
+  page,
+}) => {
   await open(page, RING[0])
 
-  /* docs/DESIGN.md: "Every choice shows its key". One hint because there is one binding —
-     `,C` is per route because the destination is what changes, and this reaches whichever
-     screen is next. */
-  const hint = page.locator('.app-nav-step')
-  await expect(hint).toHaveCount(1)
-  await expect(hint.locator('kbd')).toHaveText(['⌘←', '⌘→'])
-
-  /* Trailing the ring rather than the bar: the last link before it is the last route the step
-     can reach, and the two routes after it are the two it cannot. */
-  const links = page.locator('.app-nav-link')
-  const lastRing = links.nth(RING.length - 1)
-  await expect(lastRing).toHaveAttribute('href', LAST)
-  const ring = await lastRing.boundingBox()
-  const chips = await hint.boundingBox()
-  const aside = await links.last().boundingBox()
-  expect(ring && chips && aside).toBeTruthy()
-  expect(chips!.x).toBeGreaterThan(ring!.x)
-  expect(chips!.x).toBeLessThan(aside!.x)
-
-  /* The chips are aria-hidden — two arrow glyphs announce as nothing anyone could act on — so
-     the nav carries the same fact in the form a screen reader can use. */
-  await expect(hint).toHaveAttribute('aria-hidden', 'true')
-  await expect(page.locator('nav.app-nav')).toHaveAttribute(
+  /* The caps were aria-hidden even when they existed — two arrow glyphs announce as nothing
+     anyone could act on — so this is the form the fact has always had to take, and it is now
+     the only one on the chrome itself. */
+  await expect(page.locator(NAV)).toHaveAttribute(
     'aria-keyshortcuts',
     'Meta+ArrowLeft Meta+ArrowRight',
   )
+
+  await page.keyboard.press('?')
+  const sheet = page.locator('.app-keys[role="dialog"]')
+  await expect(sheet).toBeVisible()
+
+  /* Both caps, in one row, described by a sentence rather than left as two glyphs. Read as
+     text off the sheet's own rows: the keycaps there are bare `<kbd>` and NOT aria-hidden,
+     which is the difference between a reference and a decoration. */
+  const stepRow = sheet.locator('.app-keys-row', { has: page.locator('kbd', { hasText: '⌘←' }) })
+  await expect(stepRow).toHaveCount(1)
+  await expect(stepRow.locator('kbd')).toHaveText(['⌘←', '⌘→'])
+  await expect(stepRow.locator('.app-keys-does')).not.toBeEmpty()
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+})
+
+test('the sheet is reachable from the palette, and lists every letter the sidebar draws', async ({
+  page,
+}) => {
+  await open(page, RING[0])
+  const links = await lettersFromNav(page)
+
+  /* ⌘K, then the word a person would type for it. The owner's ruling is that the sheet is
+     reachable from the palette AND from `?`; the other case presses `?`, so this one goes the
+     long way deliberately. */
+  await page.keyboard.press('Meta+k')
+  const palette = page.locator('.bn-cmdk[role="dialog"]')
+  await expect(palette).toBeVisible()
+  await palette.locator('input').fill('keyboard shortcuts')
+  await page.keyboard.press('Enter')
+
+  const sheet = page.locator('.app-keys[role="dialog"]')
+  await expect(sheet).toBeVisible()
+  await expect(palette).toHaveCount(0)
+
+  /* THE SHEET IS THE ONLY DOCUMENTATION OF THE LEADER NOW, so it has to hold every letter the
+     sidebar hands out — including `H`, which arrived with Home and is the letter a stale sheet
+     would be missing. Derived from the nav rather than typed out here, so a tenth screen with
+     a key fails this case instead of quietly not being in it. */
+  const caps = await sheet.evaluate((el) =>
+    Array.from(el.querySelectorAll('kbd')).map((k) => (k.textContent ?? '').trim()),
+  )
+  for (const link of links) {
+    expect(caps, `the sheet documents no ${link.cap} for ${link.href}`).toContain(link.cap)
+  }
 })
 
 test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
@@ -318,7 +455,7 @@ test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
 
   /* A chord is spent on arriving, so an arm that survives an arrival is an arm nobody is
      holding — and the next key is then eaten on a screen the operator did not press it from.
-     Arm the leader, step away with the other keyboard, and the strip must not still be
+     Arm the leader, step away with the other keyboard, and the sidebar must not still be
      claiming the next press.
 
      READ AT THE MOMENT OF ARRIVAL, AND THAT IS THE WHOLE OF WHY THIS CASE IS WRITTEN THIS WAY.
@@ -326,7 +463,7 @@ test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
      passes as soon as that timer fires whatever the code does — observed: with the disarm
      deleted, the plain assertion went green. Two frames after the hash changes is long after
      React has committed the arrival and its effects, and ~30ms into a 1000ms window. */
-  await page.evaluate(() => {
+  await page.evaluate((selector) => {
     ;(window as unknown as { __armed?: string | null }).__armed = 'not read'
     window.addEventListener(
       'hashchange',
@@ -334,19 +471,19 @@ test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             ;(window as unknown as { __armed?: string | null }).__armed =
-              document.querySelector('nav.app-nav')?.getAttribute('data-armed') ?? null
+              document.querySelector(selector)?.getAttribute('data-armed') ?? null
           }),
         )
       },
       { once: true },
     )
-  })
+  }, NAV)
 
   await page.keyboard.press(',')
-  await expect(page.locator('nav.app-nav')).toHaveAttribute('data-armed', 'true')
+  await expect(page.locator(NAV)).toHaveAttribute('data-armed', 'true')
 
   await page.keyboard.press('Meta+ArrowRight')
-  await expect(page.locator(VIEW['#/runs'])).toBeVisible()
+  await expect(page.locator(VIEW['#/capture'])).toBeVisible()
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __armed?: string | null }).__armed))
     .toBeNull()

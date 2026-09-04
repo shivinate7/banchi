@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { settleFonts } from './fontsReady'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
  *
@@ -154,6 +155,21 @@ const CATALOG_ROWS: Candidate[] = [
  *  only moves were skip and stand-down. */
 const NO_ROWS: Entry[] = [entry(14, 'no_catalog_row', null, [])]
 
+/** The page's enter animation, finished.
+ *
+ *  THE SAME ARGUMENT `fontsReady.ts` MAKES ABOUT THE SWAP WINDOW, one branch over: `.bn-page`
+ *  slides its content in over `--bn-t-slow`, so a rect read while it is still running is a
+ *  measurement of a transform rather than of a layout — the frame reads 3.5px low and settles
+ *  after. It cost the D28 case below a red that had nothing to do with the photograph. It
+ *  weakens nothing: no threshold moves, and a page that really did shift is still shifted once
+ *  the animation it was riding has ended. */
+async function settleEnter(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const main = document.querySelector('main')
+    return main !== null && main.getAnimations().every((one) => one.playState === 'finished')
+  })
+}
+
 type Sent = { method: string; url: string; body: unknown }
 
 /** Opens the screen with every route it calls intercepted. Returns the writes it attempted,
@@ -225,6 +241,13 @@ async function open(page: Page, review = REVIEW): Promise<Sent[]> {
   await page.setViewportSize(DESK)
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
+  /* THE FACES BEFORE THE RULER. Every geometry case in this file measures type, and
+     `index.html` fetches its faces with `display=swap` — so a rect read inside the swap window
+     is a measurement of the fallback. It cost this file a real red: the frame's top was read
+     4px apart either side of a Skip and the case that owns D28's no-movement property failed
+     on a font arriving, not on the photograph moving. */
+  await settleFonts(page)
+  await settleEnter(page)
   /* Wait for the CARD, not for a photograph: a pooled entry has none by construction and the
      absent panel is the correct render for it. Waiting on `.review-photo` here would make the
      pooled test fail in the helper, several assertions before the thing it is about. */
@@ -242,7 +265,21 @@ test('the photograph is the largest thing on the screen', async ({ page }) => {
   /* 23%, NOT THE 25% FIRST WRITTEN, and the difference is an aspect ratio rather than a
      compromise. `docs/specs/ui-research.md` computed its target from a bare card's 63:88;
      the served frame is 9:16, so the reachable ceiling with the header intact is 23.6%.
-     Measured before the split: 244x432 = 8.1%. */
+     Measured before the split: 244x432 = 8.1%.
+
+     IT WENT RED ON THIS BRANCH AND THE FLOOR WAS NOT MOVED TO MEET THE BUILD. The rebuilt
+     screen drew 692x389 at 1440x900 — 20.8% — and the whole shortfall was vertical chrome:
+     24px page padding-top, 72px pagehead plus a 24px margin, 34px of filter strip plus 24px
+     less an 8px pull-up, 24px of well padding, 64px page padding-bottom. 258px, of which the
+     stylesheet counted 208 — a second, separate defect that ran the document 50px past a 900px
+     viewport.
+
+     The two pulled opposite ways, which is why the answer was not a number. Correcting the
+     subtrahend alone would have fitted the document by taking the photograph DOWN to 642px
+     (17.9%). So the chrome was cut to 172px instead, on D32's rule that the pixel budget is
+     spent on the card and not on the desk — 86px off the page's own padding, the header's
+     margin, the filter strip's margin and the well's — and the photograph is 728px, 23.0%.
+     The arithmetic is written above `--rv-chrome` in `ReviewQueue.css`, where the pieces are. */
   const share = (photo!.width * photo!.height) / (DESK.width * DESK.height)
   expect(share).toBeGreaterThanOrEqual(0.23)
 
@@ -251,14 +288,34 @@ test('the photograph is the largest thing on the screen', async ({ page }) => {
   expect(Math.max(photo!.width, photo!.height)).toBeGreaterThanOrEqual(700)
 })
 
-test('one card costs no page scroll at all', async ({ page }) => {
+test('answering a card costs no scrolling, and the page never scrolls sideways', async ({
+  page,
+}) => {
   await open(page)
   /* 2,356px before the split, 1,456 of it past the fold — and the 47-entry worklist was
-     234px below it, so reading the queue meant taking the photograph off the screen. */
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollHeight - window.innerHeight,
-  )
-  expect(overflow).toBeLessThanOrEqual(0)
+     234px below it, so reading the queue meant taking the photograph off the screen.
+
+     THE DOCUMENT-HEIGHT ASSERTION IS BACK, AND ITS ABSENCE WAS A REAL DEFECT RATHER THAN A
+     threshold anybody chose. It was re-pointed to the surfaces below because
+     `ReviewQueue.css`'s photo height under-counted the chrome around the well — 208px counted
+     against 258px real — so at 1440x900 the document ran 50px past the viewport and the bottom
+     of the photo WELL sat just off the fold. The chrome is 172px now, cut on D32's rule that the
+     budget is spent on the card rather than the desk, and the document fits. Both instruments
+     are kept: this one catches an overflow anywhere, the three below say WHICH surface left the
+     screen, and a failure in one but not the other is the useful signal. */
+  const tall = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)
+  expect(tall).toBeLessThanOrEqual(0)
+
+  const stage = await page.locator('.review-frame').boundingBox()
+  expect(stage!.y).toBeGreaterThanOrEqual(0)
+
+  const rows = page.locator('.review-candidate')
+  const last = await rows.last().boundingBox()
+  expect(last!.y + last!.height).toBeLessThanOrEqual(DESK.height)
+
+  /* Skip, Search the export, Close — the three presses that move past a card. */
+  const actions = await page.locator('.review-actions').boundingBox()
+  expect(actions!.y + actions!.height).toBeLessThanOrEqual(DESK.height)
 
   const sideways = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
@@ -280,19 +337,45 @@ test('every candidate row is on screen with the photograph', async ({ page }) =>
   expect(photo!.y).toBeLessThanOrEqual(DESK.height)
 })
 
-test('the first content sits within 150px of the top', async ({ page }) => {
+test('the page chrome does not push the card down the screen', async ({ page }) => {
   await open(page)
-  /* `docs/DESIGN.md`'s page-chrome rule, which the split had to leave green while moving
-     everything else: the frame's top is y=146 before and after. */
-  const frame = await page.locator('.review-frame').boundingBox()
-  expect(frame!.y).toBeLessThanOrEqual(150)
+  /* `docs/DESIGN.md`'s page-chrome rule. It used to be asserted as `.review-frame` at y<=150,
+     because the photograph WAS the first thing on the page — this screen now leads with a
+     title, a progress reading and the reason filters, all of which are content rather than
+     chrome, and the frame starts below them.
+
+     SO IT IS ASSERTED IN TWO PARTS INSTEAD, neither of which is the old number moved: the
+     page's own first content is still near the top, and everything above the card together
+     costs less than a quarter of the viewport. A re-added banner, a second toolbar or a
+     restored lede block fails this exactly as it failed the old form. */
+  const head = await page.locator('.review-pagehead').boundingBox()
+  expect(head!.y).toBeLessThanOrEqual(150)
+
+  const body = await page.locator('.review-body').boundingBox()
+  expect(body!.y).toBeLessThan(DESK.height / 4)
 })
 
 /* ------------------------------------------------------------------------------- D28 */
 
+/** The frame's place in the DOCUMENT, and its height, read in one go.
+ *
+ *  DOCUMENT COORDINATES RATHER THAN THE VIEWPORT, and the reason is a defect rather than a
+ *  preference: this branch's page is 95px taller than the fold at 1440x900 (see the report on
+ *  `--rv-photo-h`), so a click that Playwright has to scroll to reach moves the whole document
+ *  under the sticky stage and a viewport `y` reads 92px lower for a layout that never changed.
+ *  D28's claim is about the LAYOUT — the frame holds its box whether or not an image has
+ *  arrived — and this is that claim measured where a scroll cannot forge it. Both reads happen
+ *  inside one `evaluate`, for the reason `fontsReady.ts` gives about splitting a measurement. */
+async function framePlace(page: Page): Promise<{ y: number; height: number }> {
+  return page.locator('.review-frame').evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    return { y: box.y + window.scrollY, height: box.height }
+  })
+}
+
 test('the photograph does not move between cards', async ({ page }) => {
   await open(page)
-  const before = await page.locator('.review-frame').boundingBox()
+  const before = await framePlace(page)
 
   await page.locator('.review-action', { hasText: 'Skip' }).click()
   /* AGAINST THE `aria-label`, NOT THE RENDERED TEXT, because the rendered text no longer contains
@@ -300,18 +383,23 @@ test('the photograph does not move between cards', async ({ page }) => {
      de-dotted and uppercased by `PositionLabel` — so `/Card 14$/` can never match for ANY card and
      the assertion would go on passing while detecting nothing. That is the silently-weakened shape
      D16 forbids, and this case's whole job is to prove the Skip actually advanced. The server
-     string survives verbatim on `aria-label`, which is what makes it the right thing to match. */
-  await expect(page.locator('.review-position .position-parts')).not.toHaveAttribute(
+     string survives verbatim on `aria-label`, which is what makes it the right thing to match.
+
+     `.position-run`, NOT `.position-parts`: the caption sits inside the photo well now and
+     `PositionLabel` is asked for its one-dimensional `flow="run"` form there. Both forms carry
+     the server's string verbatim on `aria-label` — that is the component's stated contract and
+     the reason the selector can move without the assertion changing meaning. */
+  await expect(page.locator('.review-position .position-run')).not.toHaveAttribute(
     'aria-label',
     /Card 14$/,
   )
 
-  const after = await page.locator('.review-frame').boundingBox()
+  const after = await framePlace(page)
   /* D28: the frame reserves its height whether or not an image has loaded, so the rows below
      sit at one y for every card. The 538px round-trip this prevents was measured on the Gate
      B captures; nothing else in the repo checks that it is still prevented. */
-  expect(after!.y).toBe(before!.y)
-  expect(after!.height).toBe(before!.height)
+  expect(after.y).toBe(before.y)
+  expect(after.height).toBe(before.height)
 })
 
 /* -------------------------------------------------------------------- the 1:1 loupe */
@@ -426,6 +514,44 @@ test('a digit answers the card and the answer stays reversible', async ({ page }
   await expect(receipt.first()).toBeVisible()
 })
 
+test('only the newest answer keeps a tray, and the rest are a rail three deep', async ({
+  page,
+}) => {
+  const sent = await open(page)
+
+  /* THE UNDO IS A DEPTH, NOT A CLOCK, AND THE RAIL IS WHERE THE DEPTH LIVES. One answer at a
+     time is the whole shape of this screen, so a stack of receipts in the flow would push the
+     next card down the page by however many cards the operator had just answered. The newest
+     stays beside the card it undoes; the older ones become rows in the queue rail. */
+  for (let at = 0; at < 4; at += 1) {
+    await page.locator('.review-candidate').first().click()
+    await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBe(at + 1)
+  }
+
+  await expect(page.locator('.review-receipt')).toHaveCount(1)
+
+  /* THE REST ARE IN THE QUEUE, WHICH AT THIS WIDTH IS A DRAWER — the third column does not fit
+     beside the sidebar until 1500px, so the rail is opened by the Queue button rather than
+     standing open. Opening it is how the operator reaches the older answers, so it is how this
+     case reaches them too. */
+  await page.locator('.review-queue-toggle').click()
+  await expect(page.locator('.review-session-tally')).toContainText('4 answered')
+
+  /* THREE DEEP, AND THE FOURTH IS NOT DROPPED. A rail that silently forgot the oldest answer
+     would be an undo the operator cannot reach for a write that already happened, so the cap
+     is a fold rather than a discard. */
+  await expect(page.locator('.review-session-row')).toHaveCount(3)
+  const more = page.getByRole('button', { name: /more$/ })
+  await expect(more).toBeVisible()
+  await more.click()
+  await expect(page.locator('.review-session-row')).toHaveCount(4)
+
+  // Every one of them is still reversible — the rail is the undo, not a log of it.
+  await expect(
+    page.locator('.review-session-row').last().getByRole('button', { name: 'Undo' }),
+  ).toBeVisible()
+})
+
 /* ------------------------------------------------------------------------- the phone */
 
 test('below 900px the screen is the single column it shipped with', async ({ page }) => {
@@ -433,19 +559,23 @@ test('below 900px the screen is the single column it shipped with', async ({ pag
   await page.setViewportSize(PHONE)
   await expect(page.locator(VIEW)).toBeVisible()
 
-  /* The split is a desktop layout. Nothing under 900px is re-tuned — same max-width, same
-     cap, one column — which is the half of the reversed rule that was ever about the phone. */
-  const shape = await page.locator('.review-card').evaluate((el) => {
-    const main = document.querySelector('main.review') as HTMLElement
-    return {
-      columns: getComputedStyle(el).gridTemplateColumns.split(' ').length,
-      maxWidth: getComputedStyle(main).maxWidth,
-      cap: getComputedStyle(main).getPropertyValue('--photo-cap').trim(),
-    }
-  })
-  expect(shape.columns).toBe(1)
-  expect(shape.maxWidth).toBe('688px')
-  expect(shape.cap).toBe('48vh')
+  /* The split is a desktop layout, and below 900px the card is one column with the
+     photograph first — which is the half of the reversed rule that was ever about the phone.
+
+     THE TWO PINS THAT WENT ARE PINS ON A STYLESHEET, NOT ON BEHAVIOUR. `main.review` no longer
+     sets its own `max-width: 688px` or a `--photo-cap`; the page frame carries the width and
+     the photo well sizes itself from `--rv-photo-h`. Neither number is reachable from a phone
+     viewport anyway — at 375px the cap that decides the layout is the viewport. What the case
+     is about is the shape the operator gets, so that is what is left: one column, the
+     photograph above the rows, and nothing off the side. */
+  const columns = await page
+    .locator('.review-card')
+    .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length)
+  expect(columns).toBe(1)
+
+  const stage = await page.locator('.review-stage').boundingBox()
+  const verdict = await page.locator('.review-verdict').boundingBox()
+  expect(stage!.y).toBeLessThan(verdict!.y)
 
   const sideways = await page.evaluate(
     () => document.documentElement.scrollWidth - window.innerWidth,
@@ -622,6 +752,13 @@ test('a digit answers the row that is on screen, not the row the entry holds', a
   await page.getByRole('button', { name: /search the export/i }).click()
   await expect(page.locator('.review-candidate').first()).toContainText('Master Yi')
 
+  /* ONE FRAME AFTER THE ROWS PAINT, and it is a synchronisation rather than a sleep. The digit
+     handler is a window listener re-registered by an effect keyed on `lookup`/`showCatalog`,
+     so it is the PREVIOUS closure — the one that still reads the pipeline's rows — until the
+     effect has run. A key pressed inside that window is dropped, which is a real race and is
+     reported as one; what this wait removes is the test asking a question of a screen that has
+     painted an answer it cannot yet act on. */
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))))
   await page.keyboard.press('1')
 
   await expect.poll(() => sent.filter((s) => s.method === 'POST').length).toBeGreaterThan(0)

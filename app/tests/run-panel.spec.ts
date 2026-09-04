@@ -480,42 +480,77 @@ async function open(
 
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
-  await expect(page.locator('.run-panel')).toBeVisible()
-
-  /* SCOPED BEFORE ANYTHING ELSE, because on this route nothing is scoped on arrival and the
-     spend gate reads `scope.box !== null`. On `#/inventory` the walk picked a shelf by itself
-     and every test in this file inherited a box without asking for one; here the box is a
-     deliberate press, which is what `Runs.tsx` chose — "a box chosen for the operator is a box
-     they did not read, and the next press after it spends money". The unscoped state is worth
-     a test of its own rather than a state every other test tiptoes around: see below. */
-  await pickBox(page)
+  await expect(page.locator('.runs-master')).toBeVisible()
   return wire
 }
 
-/** Picks box 9 out of the strip.
+/* WHERE THE MONEY GATE LIVES NOW. The screen is master-detail — every run on the left, the
+ * picked run's four steps on the right — and the paid press moved into a staged dialog off
+ * the header: which boxes, how each is read, what it costs, a receipt. Every step of that is
+ * still one press with no typing, which is what D33 asked for; what changed is that the
+ * stages are a sequence rather than a column, so the helpers below name the stage they leave
+ * the screen on and each case says which one it needs. */
+
+/** The header's primary, which opens the identify dialog.
+ *
+ *  SCOPED TO THE PAGE HEADER, because the empty run list draws an `Identify a box` button of
+ *  its own — two controls doing the same job is not an ambiguity to route around with a
+ *  looser locator, it is two call sites this helper must not confuse. */
+async function openComposer(page: Page) {
+  await page.locator('.bn-head-actions').getByRole('button', { name: /^Identify/ }).click()
+  await expect(page.locator('.runs-composer')).toBeVisible()
+}
+
+/** Ticks a box on the dialog's first stage.
  *
  *  SCOPED TO `.runs-boxes`, AND THE FIRST DRAFT WAS NOT — `getByRole('button', {name: 'Box 9'})`
  *  matched the chip AND a run row whose accessible name ends `box 9`, and Playwright's strict
- *  mode caught it as an ambiguity rather than clicking the wrong one. Worth a helper rather than
- *  a longer locator repeated twice: this is the one press that turns an unscoped screen into a
- *  scoped one, and every test in this file depends on it having happened. */
+ *  mode caught it as an ambiguity rather than clicking the wrong one. */
 async function pickBox(page: Page, box = 9) {
-  await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^Box ${box}`) }).click()
+  await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^Box ${box}\\b`) }).click()
 }
 
-/** Open the fold, where every pipeline control lives.
+/** Forward from the boxes stage to the reading stage. */
+async function toReading(page: Page) {
+  await page.getByRole('button', { name: /^Next · how they are read$/ }).click()
+  await expect(page.locator('.run-readings').first()).toBeVisible()
+}
+
+/** Back to the reading stage from the cost stage, by the footer's own way back. */
+async function backToReading(page: Page) {
+  await page.locator('.runs-composer-foot').getByRole('button', { name: 'Reading' }).click()
+  await expect(page.locator('.run-readings').first()).toBeVisible()
+}
+
+/** The state most of this file's cases start from: the dialog open on box 9's reading, one
+ *  press from the free preflight. This is what `openPanel` used to mean before the panel
+ *  became a dialog — a scoped screen with `Check cost` on it. */
+async function atReading(page: Page, box = 9) {
+  await openComposer(page)
+  await pickBox(page, box)
+  await toReading(page)
+}
+
+/** The free preflight — step one of the two-press money gate. */
+async function checkCost(page: Page) {
+  await page.getByRole('button', { name: /^Check cost/ }).click()
+  await expect(page.locator('.run-quote')).toBeVisible()
+}
+
+/** Opens the first run in the list and waits for its detail panel. */
+async function openRun(page: Page) {
+  await page.locator('.run-row').first().click()
+  await expect(page.locator('.runs-detail-panel')).toBeVisible()
+}
+
+/** Opens the Join step's options well, where the routing lever and the export scope live.
  *
- *  THE FOLD'S COST, STATED IN A HELPER rather than smuggled into `open` — exactly the shape
- *  `app/tests/inventory.spec.ts:openBoxOps` takes, and for the same reason: a test that wants
- *  a control says so, and the fold test below can still assert the state every other test
- *  starts from. */
-/* THERE IS NOTHING TO OPEN ANY MORE. This helper clicked `.run-head` to unfold the panel;
- *  the fold was removed on 2026-08-24 at the owner's instruction — "both box and run, i don't
- *  want click in functionality, i want their buttons just there" — so it now only waits for
- *  the control every caller was really waiting for. Kept as a function rather than inlined so
- *  the call sites still read as "get to the point where the pipeline is usable". */
-async function openPanel(page: Page) {
-  await expect(page.getByRole('button', { name: 'Check cost' })).toBeVisible()
+ *  BEHIND A PRESS BY THE OWNER'S RULING for this rebuild — "disclosures stay collapsed,
+ *  including the Runs scope options that hold a refusal". So the cases below press it rather
+ *  than asserting it should not be there. */
+async function openJoinOptions(page: Page) {
+  await page.getByRole('button', { name: 'Options' }).click()
+  await expect(page.locator('.runs-options')).toBeVisible()
 }
 
 // -------------------------------------------------------------- present, not disclosed
@@ -544,16 +579,22 @@ test('the panel is open on arrival, with all four commands named and reachable',
      ASSERTED AS AN ABSENCE, WHICH IS THE ONE FORM NO RELOCATION CAN FALSIFY. `toBeVisible` on a
      control is a claim about this arrangement; `<details>`/`<summary>` at zero is D33's actual
      ruling — nothing is behind a press — and it stays true wherever the panel is put next. */
-  await expect(page.getByRole('button', { name: 'Check cost' })).toBeVisible()
-  await expect(page.locator('.run-panel details, .run-panel summary')).toHaveCount(0)
+  /* THE FOLD ARGUMENT IS SETTLED THE OTHER WAY NOW, BY THE OWNER, AND THIS CASE STOPS MAKING
+     IT. It used to assert `details, summary` at zero across the panel — "nothing is behind a
+     press". The owner's ruling on this rebuild is that the disclosures stay collapsed, the
+     Runs scope options included, and they will say so if it proves subpar in use. Asserting
+     the absence of a disclosure would be this file overruling that.
 
-  /* AND IT STILL SAYS WHAT IT HOLDS. `BoxOps` states the rule and it survives the fold:
-     "a disclosure that under-sold its contents is exactly how three routes came to have no
-     reachable control" — the pipeline being the largest instance this repo has had. It was
-     `.run-hint` inside the panel until 2026-08-29 and is the page's lede now: on a route of its
-     own the four command names are what the screen IS, not a caption on a panel inside it. The
-     assertion follows the string rather than the element, which is the half that matters. */
-  await expect(page.locator('.runs-lede')).toContainText('identify · join · emit · reconcile')
+     WHAT SURVIVES IS THE HALF THE RULE ACTUALLY PROTECTS: the four commands are named where a
+     person arrives, and the press that reaches them is on the screen rather than behind
+     anything. That is `CLAUDE.md`'s route-is-not-a-feature test, and it is what the fold
+     assertion was ever standing in for. */
+  await expect(page.locator('.bn-lede')).toContainText('Identify, join, emit and reconcile')
+
+  const identify = page.locator('.bn-head-actions').getByRole('button', { name: /^Identify/ })
+  await expect(identify).toBeVisible()
+  await identify.click()
+  await expect(page.getByRole('dialog', { name: /Which boxes/ })).toBeVisible()
 })
 
 test('a live run is announced where the panel already is', async ({ page }) => {
@@ -565,68 +606,77 @@ test('a live run is announced where the panel already is', async ({ page }) => {
      (D13 puts one truth on one Mac, so a run started from a terminal is this screen's
      business too), and the screen has to say so on arrival. */
   await expect(page.locator('.run-list-head')).toContainText('1 running')
-  await expect(page.locator('.run-phase-identifying').first()).toContainText('running')
+  /* AND ON THE RUN ITSELF, not only in the list's tally: `RunsStage.stageOf` gives a live run
+     a pill of its own that says how long it has been going. The class it used to be found by
+     was named after the phase; the pill is found by what it says, which is the thing an
+     operator reads. */
+  await expect(page.locator('.run-row .runs-pill-live').first()).toContainText('Running')
 })
 
 // ------------------------------------------------------------------- reachable at all
 
 test('the pipeline is on its own screen, with all four steps named', async ({ page }) => {
   await open(page)
-  await openPanel(page)
 
   /* THE ASSERTION THE HARD RULE ASKS FOR. Four commands have existed since step 4; this is the
      first thing in the repo that says a person can reach them. */
-  await expect(page.getByRole('button', { name: 'Check cost' })).toBeVisible()
+  await expect(page.locator('.bn-head-actions').getByRole('button', { name: /^Identify/ })).toBeVisible()
 
-  /* ALL FOUR STEPS ON ARRIVAL, WITH NOTHING CLICKED — and the click this used to need was the
-     bug. `STEPS` is authored rather than derived from `phase` because "a screen that only drew
-     the current step would leave the operator unable to see that emit exists until join had
-     finished", and that promise was kept against `phase` and broken against `detail`: three of
-     the four rendered only inside the open-run guard, so this test had to open a run before it
-     could assert them, and with no runs at all they existed nowhere. */
+  /* THE FOUR STEPS BELONG TO A RUN NOW, AND THE SCREEN IS MASTER-DETAIL, so they are drawn
+     against the run they would act on rather than standing empty beside a list. The old form
+     of this case asserted the four titles on ARRIVAL; the property under it — that an operator
+     can see the pipeline has four parts, and that a step's controls do not exist until there
+     is something for them to act on — is asserted in both states instead, here and in the case
+     below for a store with no runs at all. */
+  await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0)
+  await expect(page.locator('.runs-detail-empty')).toContainText('Pick a run')
+
+  await openRun(page)
+  /* COUNTED BEFORE IT IS READ. `allInnerTexts` auto-waits for nothing, so read against a panel
+     that has only just mounted it answers `[]` and the failure reads as four missing steps. */
+  await expect(page.locator('.run-step-title')).toHaveCount(4)
   const titles = await page.locator('.run-step-title').allInnerTexts()
   expect(titles).toEqual(['Identify', 'Join', 'Emit', 'Reconcile'])
-
-  /* THE NEGATIVE HALF, which is what stops a later refactor drawing dead controls to fill the
-     column. A step's HEAD says what it is; its CONTROLS need a run to act on, and absent beats
-     disabled for the reason `.run-button`'s own comment gives — a disabled button is one
-     attribute away from being pressable. */
-  await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
-  await expect(page.locator('.run-needs')).toContainText('Pick a run above')
-
-  // And they arrive the moment a run is picked.
-  await page.locator('.run-row').first().click()
-  await expect(page.locator('.run-open')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(1)
 })
 
-test('the four steps exist before any run does', async ({ page }) => {
+test('the four steps are named before any run exists', async ({ page }) => {
   /* THE STATE THE OLD ARRANGEMENT COULD NOT DRAW AT ALL. With no runs on disk, join, emit and
      reconcile were not merely un-pressable — they were absent from the document, so a first-time
-     operator could not learn the pipeline had four parts until after they had paid for one. */
-  await open(page, { runs: [] })
-  await openPanel(page)
+     operator could not learn the pipeline had four parts until after they had paid for one.
 
-  await expect(page.locator('.run-empty')).toHaveText('No runs yet.')
-  const titles = await page.locator('.run-step-title').allInnerTexts()
-  expect(titles).toEqual(['Identify', 'Join', 'Emit', 'Reconcile'])
-  await expect(page.locator('.run-needs')).toContainText('Identify a box first')
+     RE-POINTED AT THE WORDS RATHER THAN AT FOUR STEP CARDS, because that is where the four
+     names live in this arrangement: the page's lede and the empty detail both name them, and
+     the empty detail also says which of them has to happen first. A screen that stopped naming
+     them fails this exactly as it failed the old form. */
+  await open(page, { runs: [] })
+
+  await expect(page.locator('.run-empty')).toContainText('No runs yet')
+  await expect(page.locator('.bn-lede')).toContainText('Identify, join, emit and reconcile')
+  const empty = page.locator('.runs-detail-empty')
+  await expect(empty).toContainText('Identify a box first')
+  await expect(empty).toContainText('Join, emit and reconcile')
 })
 
 test('which steps cost money is on the heading line, not buried in the prose', async ({
   page,
 }) => {
   await open(page)
-  await openPanel(page)
+  await openRun(page)
   await expect(page.locator('.run-step-money')).toHaveText('Costs money')
 
   /* `allTextContents` and not `allInnerTexts`: the stylesheet uppercases these labels, and
      `innerText` returns what is PAINTED while `textContent` returns what is written. The
      authored string is the claim worth asserting — a casing rule is a design choice this file
      has no business freezing, and `toHaveText` above reads textContent for the same reason. */
-  const free = await page.locator('.run-step-free .run-step-cost').allTextContents()
-  expect(free).toEqual(['Free · re-runnable', 'Free · re-runnable', 'Free · re-runnable'])
+  await expect(page.locator('.runs-step .runs-step-cost')).toHaveCount(4)
+  const costs = await page.locator('.runs-step .runs-step-cost').allTextContents()
+  expect(costs).toEqual([
+    'Costs money',
+    'Free · re-runnable',
+    'Free · re-runnable',
+    'Free · re-runnable',
+  ])
 })
 
 // --------------------------------------------------------------------------- the reading
@@ -645,38 +695,39 @@ test('which steps cost money is on the heading line, not buried in the prose', a
 
 test('the reading is explained before Check cost is pressed, not after', async ({ page }) => {
   await open(page)
-  await openPanel(page)
+  await atReading(page)
 
   /* Nothing has been pressed, so there is no preflight and no console — and the explanation is
      already there. That ordering is the point: the console's own crop line is a receipt, and a
      receipt arrives after the decision. */
   await expect(page.locator('.run-quote')).toHaveCount(0)
 
-  const says = page.locator('.run-step .run-step-fine').first()
-  await expect(says).toContainText('Finds the card in each photograph')
+  /* One box, so the three legs share a reading and the sentence is said once for the cart
+     rather than once per row — the sentence is the same either way, and it is the sentence
+     that is under test. */
+  const says = page.locator('.runs-reading-says')
+  await expect(says).toContainText('Crops to the card')
   await expect(says).toContainText('never touched')
-  /* The measurement, in the house voice this class already uses one step down — the bypass
-     switch's sentence cites box 2's 230 of 544 rather than asserting a rule. */
+  /* The measurement, in the house voice: box 2's own figure rather than an asserted rule. */
   await expect(says).toContainText('$0.62')
 })
 
 test('each reading sends the pair it names, never half of one', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
+  await atReading(page)
 
   /* THE FAILURE THIS FORBIDS is the one D32 says it got wrong in public first: a crop at an
      unchanged 1568, which costs 26% MORE for asking for less. A preset sets both values or it
      is not a preset, so the assertion reads both out of one body. */
-  await page.getByRole('button', { name: 'Cheapest' }).click()
-  await page.getByRole('button', { name: 'Check cost' }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await page.getByRole('button', { name: /^Cheapest/ }).click()
+  await checkCost(page)
 
   const cheap = wire.filter((row) => row.path === '/pipeline/preflight').pop()
   expect(cheap?.body).toMatchObject({ scopes: [{ crop: true, max_edge: 900 }] })
 
-  await page.getByRole('button', { name: 'Whole frame' }).click()
-  await page.getByRole('button', { name: 'Check cost' }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await backToReading(page)
+  await page.getByRole('button', { name: /^Whole frame/ }).click()
+  await checkCost(page)
 
   const whole = wire.filter((row) => row.path === '/pipeline/preflight').pop()
   expect(whole?.body).toMatchObject({ scopes: [{ crop: false, max_edge: 1568 }] })
@@ -686,7 +737,7 @@ test('the crop is drawn before it is paid for, and the cut is where the route pu
   page,
 }) => {
   await open(page)
-  await openPanel(page)
+  await atReading(page)
 
   /* D32's amendment answered "walk me through how im supposed to understand crop with just
      this dialog box" with three named pairs and a sentence each. The sentences are prose about
@@ -719,21 +770,21 @@ test('the picture follows the reading, and a whole-frame run draws no cut at all
   page,
 }) => {
   const wire = await open(page)
-  await openPanel(page)
+  await atReading(page)
   await expect(page.locator('.run-preview-cut')).toHaveCount(1)
 
   /* ASSERTED AS AN ABSENCE, the same shape as the spend button's own case. A picture that kept
      drawing a rectangle after `Whole frame` was chosen would be a picture of a send that is
      not the one about to happen — D32's stale-estimate defect, in the medium the operator
      actually believes. */
-  await page.getByRole('button', { name: 'Whole frame' }).click()
+  await page.getByRole('button', { name: /^Whole frame/ }).click()
   await expect(page.locator('.run-preview-cut')).toHaveCount(0)
   await expect(page.locator('.run-preview-card')).toHaveCount(1)
 
   const whole = wire.filter((row) => row.path === '/pipeline/crop-preview').pop()
   expect(whole?.body).toMatchObject({ crop: false, max_edge: 1568 })
 
-  await page.getByRole('button', { name: 'Cheapest' }).click()
+  await page.getByRole('button', { name: /^Cheapest/ }).click()
   await expect(page.locator('.run-preview-cut')).toHaveCount(1)
   const cheap = wire.filter((row) => row.path === '/pipeline/crop-preview').pop()
   expect(cheap?.body).toMatchObject({ crop: true, max_edge: 900 })
@@ -746,7 +797,7 @@ test('the picture follows the reading, and a whole-frame run draws no cut at all
 
 test('arrow keys walk the box, and a text field keeps its own caret keys', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
+  await atReading(page)
   await expect(page.locator('.run-preview-count')).toContainText('card 1 of 543')
 
   await page.keyboard.press('ArrowRight')
@@ -784,9 +835,14 @@ test('a game that claims no number band gets the cut and a reason, never a wrong
      fractions measured on a Pokemon card. The strip drew a Riftbound card's RULES TEXT as though
      it were a collector number. */
   await open(page, { previewGame: 'riftbound' })
-  await openPanel(page)
+  await atReading(page)
 
-  await expect(page.locator('.run-preview')).toContainText('claims no number band')
+  /* THE FACT, NOT THE SERVER'S SENTENCE. The route answers with a paragraph naming
+     `pipeline/games.py` and `geometry/crop.py`; the screen says the thing that is true about
+     the card in front of the operator and what to do about it, which is this rebuild's rule
+     for a raw string with a person on the other end. The refusal is still stated. */
+  await expect(page.locator('.run-preview')).toContainText('No number band on this game')
+  await expect(page.locator('.run-preview')).toContainText('point at the card')
 
   /* AND THE 1:1 VIEW STILL WORKS. The registry cannot say where a Riftbound card prints its
      identifier and it does not have to — the operator points at it. A refusal that took the
@@ -802,7 +858,7 @@ test('the raw controls are behind Custom, and that is where the mistake is named
   page,
 }) => {
   await open(page)
-  await openPanel(page)
+  await atReading(page)
 
   const box = page.getByRole('checkbox', { name: 'Crop to the card' })
   await expect(box).toHaveCount(0)
@@ -812,33 +868,50 @@ test('the raw controls are behind Custom, and that is where the mistake is named
   await expect(page.getByRole('spinbutton', { name: 'Max edge' })).toBeVisible()
 
   /* DEMOTED, NOT DELETED — every pairing the three chips refuse to offer is reachable here,
-     including the wrong one, so the sentence that replaces them has to name it. */
-  const says = page.locator('.run-step .run-step-fine').first()
+     including the wrong one, so the sentence that replaces them has to name it. The wrong
+     pairing is named by its measurement rather than by a shouted word now, which is the same
+     claim: a crop at an unchanged 1568 cost 26% MORE. */
+  const says = page.locator('.runs-reading-says')
   await expect(says).toContainText('one decision')
-  await expect(says).toContainText('BIGGER')
+  await expect(says).toContainText('26% more')
 })
 
 test('changing the reading voids the estimate, because it changes what would be sent', async ({
   page,
 }) => {
-  await open(page)
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
+  const wire = await open(page)
+  await atReading(page)
+  await checkCost(page)
   await expect(page.locator('.run-button-money')).toHaveCount(1)
 
   /* THE MONEY GATE'S OWN RULE, APPLIED TO THE BYTES RATHER THAN TO THE CARDS. `scopeKey` was
      `box:indices` alone, so unticking the crop after Check cost left a stale figure standing
      above a live confirm — an estimate for a send that was no longer the one about to happen.
-     Asserted as an ABSENCE for the same reason the case below it is. */
-  await page.getByRole('button', { name: 'Cheapest' }).click()
+
+     RE-POINTED FROM "THE BUTTON GOES" TO "THE COST STAGE CANNOT BE GOT BACK TO", because the
+     dialog reaches the confirm through a sequence: the reading is changed on the stage before
+     the cost, so the confirm is already off screen while it is being changed and its absence
+     there would prove nothing. What has to hold is that the walk back does not carry the old
+     figure with it — the Cost stage is not a place the operator can return to, and the confirm
+     they eventually press was quoted for the reading now chosen. A dialog that let the stages
+     be walked freely over a stale quote fails this. */
+  await backToReading(page)
+  await page.getByRole('button', { name: /^Cheapest/ }).click()
+
+  await expect(page.locator('.runs-stages').getByRole('button', { name: 'Cost' })).toHaveCount(0)
   await expect(page.locator('.run-button-money')).toHaveCount(0)
-  await expect(page.locator('.run-quote')).toHaveCount(0)
+
+  await checkCost(page)
+  expect(wire.filter((row) => row.path === '/pipeline/preflight')).toHaveLength(2)
+  expect(wire.filter((row) => row.path === '/pipeline/preflight').pop()?.body).toMatchObject({
+    scopes: [{ crop: true, max_edge: 900 }],
+  })
 })
 
 test('the cache line is drawn only where cards are already answered', async ({ page }) => {
   await open(page)
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
+  await atReading(page)
+  await checkCost(page)
 
   /* D32's known cache gap, said as what it means rather than as a fact about a hash: the crop
      and the max edge are not part of the cache identity, so a box re-read at a different
@@ -850,9 +923,8 @@ test('the cache line is drawn only where cards are already answered', async ({ p
 
 test('nothing was cached, so the cache line says nothing', async ({ page }) => {
   await open(page, { cacheHits: 0 })
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await atReading(page)
+  await checkCost(page)
 
   /* THE NEGATIVE HALF, and it is the half worth having. A sentence about answers that already
      exist, drawn over a box where none do, is a warning that trains the operator to skip it. */
@@ -865,31 +937,37 @@ test('the control that spends does not exist until the free preflight has answer
   page,
 }) => {
   await open(page)
-  await openPanel(page)
+  await atReading(page)
 
   /* ABSENT, NOT DISABLED. A disabled button is one attribute away from being pressable, and
      that attribute is exactly what a later refactor drops without noticing. */
   await expect(page.locator('.run-button-money')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Check cost' }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await checkCost(page)
   await expect(page.locator('.run-button-money')).toHaveCount(1)
 })
 
 test('the estimate and the card count are on screen before the confirm is', async ({ page }) => {
   await open(page)
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await atReading(page)
+  await checkCost(page)
 
   /* The numbers are the COMMAND'S, lifted out of its own preflight stdout — so this asserts
      the parse as well as the render. A panel that recomputed them could show a figure the log
-     disagrees with, and the operator would have no way to tell which had drifted. */
-  const figures = await page.locator('.run-figures dd').allInnerTexts()
-  expect(figures).toEqual(['40', '4', '36', '$0.42'])
+     disagrees with, and the operator would have no way to tell which had drifted. The four
+     used to be a definition list; they are the money figure and the line under it now, and
+     every one of them is still on screen before the confirm is. */
+  await expect(page.locator('.runs-quote-money')).toHaveText('$0.42')
+  const line = page.locator('.runs-quote-line')
+  await expect(line).toContainText('36 cards')
+  await expect(line).toContainText('4 already answered')
+  await expect(line).toContainText('40 photographs')
 
-  /* And the command's own words beneath them, verbatim — docs/DESIGN.md's copy rule for the
-     owner's screens. */
+  /* And the command's own words, verbatim — docs/DESIGN.md's copy rule for the owner's
+     screens. Behind a press since the rebuild, which the owner ruled on: the disclosures stay
+     collapsed. What this asserts is that it is REACHABLE and unedited, which is the half D33
+     was ever about. */
+  await page.getByRole('button', { name: 'What the preflight printed' }).click()
   await expect(page.locator('.run-console').first()).toContainText('estimated cost  $0.42')
 
   const confirm = page.locator('.run-button-money')
@@ -899,10 +977,12 @@ test('the estimate and the card count are on screen before the confirm is', asyn
 
 test('the confirm sends confirm:true and the cart the picker is showing', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
+  await atReading(page)
+  await checkCost(page)
   await page.locator('.run-button-money').click()
+  /* The cost stage is left behind by the press, and what replaces it is the receipt. */
   await expect(page.locator('.run-quote')).toHaveCount(0)
+  await expect(page.locator('.runs-receipt')).toBeVisible()
 
   const spend = wire.find((row) => row.path === '/pipeline/identify')
   expect(spend).toBeTruthy()
@@ -923,70 +1003,67 @@ test('the estimate is spent by the confirm, so a second run needs a second prefl
   page,
 }) => {
   await open(page)
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
+  await atReading(page)
+  await checkCost(page)
   await page.locator('.run-button-money').click()
 
   /* The quote is cleared on success rather than left standing. Without this, pressing the
      confirm twice would start two runs on one estimate — and the second would be a second
      invoice for a number the operator only agreed to once. */
   await expect(page.locator('.run-button-money')).toHaveCount(0)
+  await expect(page.locator('.runs-composer-foot')).toContainText('The quote is spent')
 })
 
 test('nothing to send draws no confirm at all, and says why', async ({ page }) => {
   await open(page, { toSend: 0, estimate: 0 })
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await atReading(page)
+  await checkCost(page)
 
   await expect(page.locator('.run-button-money')).toHaveCount(0)
-  await expect(page.locator('.run-blocked')).toContainText('nothing to send and nothing to spend')
+  const quote = page.locator('.run-quote')
+  await expect(quote).toContainText('Nothing to send')
+  await expect(quote).toContainText('nothing to spend')
 })
 
 test('a live run over the same cards blocks the confirm rather than racing it', async ({
   page,
 }) => {
   await open(page, { busyRun: '2026-08-24-box9-01' })
-  await openPanel(page)
-  await page.getByRole('button', { name: 'Check cost' }).click()
+  await atReading(page)
+  await checkCost(page)
 
   /* Two live batches over one box is two invoices for one answer. The route refuses it as
      `run_already_live`; the screen refuses to draw the button, so the operator never presses
      something that is going to fail. */
   await expect(page.locator('.run-button-money')).toHaveCount(0)
-  /* IT NAMES THE BOX NOW, because a cart can carry several and "these cards" would not say
-     which of them is blocked. The run name is on the line for the same reason it always was:
-     the answer is to open that run, and a refusal that does not name it is a dead end. */
-  await expect(page.locator('.run-blocked')).toContainText('already identifying box 9')
-  await expect(page.locator('.run-blocked')).toContainText('2026-08-24-box9-01')
+  /* IT NAMES THE BOX, because a cart can carry several and "these cards" would not say which
+     of them is blocked. The run name is on the line for the same reason it always was: the
+     answer is to open that run, and a refusal that does not name it is a dead end. */
+  const quote = page.locator('.run-quote')
+  await expect(quote).toContainText('Box 9 is already being identified')
+  await expect(quote).toContainText('2026-08-24-box9-01')
 })
 
 // ------------------------------------------------------------------------- the free steps
 
-test('join offers a preview that writes nothing, and the trust switch in plain English', async ({
-  page,
-}) => {
+test('join offers a preview that writes nothing', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
-  await page.locator('.run-row').first().click()
+  await openRun(page)
 
-  /* D3's amendment, stated the way the owner asked for it — they said the question had not
-     been put in plain English, and this is the sentence that answers it. */
-  const trust = page.getByRole('checkbox', { name: 'Trust my finish claim over the photo' })
-  await expect(trust).toBeVisible()
-  await trust.check()
-
+  /* THE TRUST SWITCH IS GONE AND SO IS THE HALF OF THIS CASE THAT PRESSED IT. The finish-claim
+     bypass was deleted from the screen on the owner's ruling for this rebuild, and `bypass` is
+     no longer sent from anywhere in `app/src`. Asserting it here would be asserting a control
+     the owner removed; asserting its absence would be a claim about a control rather than
+     about behaviour. What is left is the property the case was named for. */
   await page.getByRole('button', { name: 'Preview' }).click()
   const join = wire.find((row) => row.path.endsWith('/join'))
   const body = join?.body as Record<string, unknown>
   expect(body.dry_run).toBe(true)
-  expect(body.bypass).toBe(true)
 })
 
 test('this run\'s own receipts download here; the import CSVs do not', async ({ page }) => {
   await open(page)
-  await openPanel(page)
-  await page.locator('.run-row').first().click()
+  await openRun(page)
 
   /* THE FILES WRITTEN BY THE COMMANDS PRESSED ON THIS SCREEN. `report.txt` and
      `pricing.json` come from join, `reconcile.txt` from reconcile — each one screen-inch
@@ -1005,16 +1082,11 @@ test('this run\'s own receipts download here; the import CSVs do not', async ({ 
   await expect(page.locator('.run-file-import')).toHaveCount(0)
 })
 
-test('a bypassed run says so on the run itself, not only in its log', async ({ page }) => {
-  await open(page, { detail: { bypass_detection: true, bypassed: 209 } })
-  await openPanel(page)
-  await page.locator('.run-row').first().click()
-  await expect(page.locator('.run-open')).toBeVisible()
-
-  /* The owner's choice, in their words: "resolved by the claim, and the run report says so."
-     A count that appeared only in a file nobody opened would not be that. */
-  await expect(page.locator('.run-flagged')).toContainText('209 cards resolved by your finish claim')
-})
+/* THE BYPASSED-RUN CASE IS DELETED WITH THE FEATURE IT COVERED. It asserted `.run-flagged`
+   reading "209 cards resolved by your finish claim" on a run started with the finish-claim
+   bypass; the owner deleted the bypass control from this rebuild, nothing in `app/src` sends
+   `bypass` any more, and no screen draws the count. Rewriting it to assert something else
+   would have been a case about a feature this branch does not have. */
 
 // ------------------------------------------------------------- which drawer a run was over
 
@@ -1025,7 +1097,6 @@ test('a run row names the drawer, and takes the name from the server', async ({ 
       runRow(),
     ],
   })
-  await openPanel(page)
 
   /* D56. The list drew `box 9` — a digit, on a screen whose whole question is which box you
      are about to spend money on. The name comes off `GET /pipeline/runs`, joined against the
@@ -1058,15 +1129,22 @@ test('a run predating the box field still finds its box, and is grouped by it', 
 
      GROUPING IS WHAT THIS ACTUALLY GUARDS. `boxOf` decides which runs are filed under the box
      in the cart, and a null there would push a run about the box you are standing in down into
-     `other boxes`. That is why the assertion is on the ABSENCE of the caption: with box 9
-     picked and box 9 the only run, there is nothing to be other than. */
+     `Other boxes`. The old form asserted the ABSENCE of a caption, which said what it meant
+     while an unscoped list drew no groups at all; it does not any more — the list is ungrouped
+     until there IS a cart, so an absence there would now pass whatever `boxOf` returned. So
+     the box is put in the cart and the caption is read: this run belongs to the picked box. */
   await open(page, {
     runs: [runRow({ box: undefined, box_name: undefined, scope: null })],
   })
-  await openPanel(page)
 
   await expect(page.locator('.run-row-scope').first()).toHaveText('Box 9')
-  await expect(page.locator('.run-group')).toHaveCount(0)
+
+  await openComposer(page)
+  await pickBox(page, 9)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.runs-composer')).toHaveCount(0)
+
+  await expect(page.locator('.run-group')).toHaveText(/Picked boxes/)
 })
 
 // -------------------------------------------------------------------------- the cart
@@ -1079,7 +1157,10 @@ test('a run predating the box field still finds its box, and is grouped by it', 
 
 test('several boxes are one cart, one estimate and one confirm', async ({ page }) => {
   const wire = await open(page)
+  await openComposer(page)
+  await pickBox(page, 9)
   await pickBox(page, 12)
+  await toReading(page)
 
   /* TWO ROWS, ONE PER BOX, EACH WITH ITS OWN READING PICKER. The strip decides WHICH boxes and
      the cart decides how each is read — the reading is part of what the confirm is agreeing to
@@ -1092,10 +1173,11 @@ test('several boxes are one cart, one estimate and one confirm', async ({ page }
      separator and no placeholder, since D20 makes a name optional rather than expected. */
   await expect(page.locator('.run-leg-box').first()).toHaveText('Box 9')
   await expect(page.locator('.run-leg-box').nth(1)).toHaveText('Box 12 · codes')
+  /* The header behind the dialog carries the same scope, which is what the operator is left
+     looking at when the dialog closes. */
   await expect(page.locator('.runs-scope')).toContainText('2 boxes')
 
-  await page.getByRole('button', { name: /^Check cost/ }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await checkCost(page)
 
   const asked = wire.filter((row) => row.path === '/pipeline/preflight').pop()
   const body = asked?.body as { scopes?: { box: number }[] }
@@ -1124,16 +1206,18 @@ test('several boxes are one cart, one estimate and one confirm', async ({ page }
 
 test('each box carries its own reading, and one press sends both', async ({ page }) => {
   const wire = await open(page)
+  await openComposer(page)
+  await pickBox(page, 9)
   await pickBox(page, 12)
+  await toReading(page)
 
   /* THE WHOLE REASON THIS IS A CART RATHER THAN ONE RUN ACROSS SEVERAL BOXES (D48). Which end
      of D32's measured frontier is right depends on what is IN the drawer, so a box of bulk
      commons and a box worth reading a collector number off must be able to disagree. Scoped
      per row, because `Cheapest` appears once per box and an unscoped locator would be
      ambiguous — which is the ambiguity that proves the control is per box. */
-  await page.locator('.run-leg').nth(1).getByRole('button', { name: 'Cheapest' }).click()
-  await page.getByRole('button', { name: /^Check cost/ }).click()
-  await expect(page.locator('.run-quote')).toBeVisible()
+  await page.locator('.run-leg').nth(1).getByRole('button', { name: /^Cheapest/ }).click()
+  await checkCost(page)
 
   const asked = wire.filter((row) => row.path === '/pipeline/preflight').pop()
   const body = asked?.body as { scopes?: { box: number; crop: boolean; max_edge: number }[] }
@@ -1144,49 +1228,71 @@ test('each box carries its own reading, and one press sends both', async ({ page
 test('adding a box to the cart voids the estimate, exactly as changing a reading does', async ({
   page,
 }) => {
-  await open(page)
-  await page.getByRole('button', { name: /^Check cost/ }).click()
+  const wire = await open(page)
+  await atReading(page)
+  await checkCost(page)
   await expect(page.locator('.run-button-money')).toHaveCount(1)
 
   /* THE MONEY GATE'S RULE, APPLIED TO THE CART. "A confirm whose first step described a
      different set of cards is not a confirm at all" — and a second box is a different set of
-     cards by the widest possible margin. Asserted as an ABSENCE, the same shape as the
-     reading case above it, because that is the form no refactor can quietly satisfy. */
+     cards by the widest possible margin.
+
+     ASSERTED AS THE CART CASE'S OWN SHAPE: the boxes stage is walked back to, a second box is
+     ticked, and the cost stage cannot be returned to — the operator has to buy a new estimate
+     for the cards they have now got in the cart, and it is quoted for both boxes. */
+  await page.locator('.runs-stages').getByRole('button', { name: 'Boxes' }).click()
   await pickBox(page, 12)
+  await expect(page.locator('.runs-stages').getByRole('button', { name: 'Cost' })).toHaveCount(0)
   await expect(page.locator('.run-button-money')).toHaveCount(0)
-  await expect(page.locator('.run-quote')).toHaveCount(0)
+
+  await toReading(page)
+  await checkCost(page)
+  const asked = wire.filter((row) => row.path === '/pipeline/preflight').pop()
+  expect((asked?.body as { scopes?: { box: number }[] }).scopes?.map((leg) => leg.box)).toEqual([
+    9, 12,
+  ])
 })
 
 test('a box is untickable, and the last one out leaves nothing to price', async ({ page }) => {
   await open(page)
+  await openComposer(page)
+  await pickBox(page, 9)
   await pickBox(page, 12)
+  await toReading(page)
   await expect(page.locator('.run-leg')).toHaveCount(2)
 
+  await page.locator('.runs-stages').getByRole('button', { name: 'Boxes' }).click()
   await pickBox(page, 12)
+  await toReading(page)
   await expect(page.locator('.run-leg')).toHaveCount(1)
   await expect(page.locator('.run-leg-box')).toHaveText('Box 9')
 
-  /* Back to the state the screen opens in, and the free preflight is disabled again rather
-     than absent — the one control on this screen that gets to be disabled, because it is free
-     and it is the next thing to press. */
+  /* Back to the state the dialog opens in, and the way forward is disabled again rather than
+     absent — the one control here that gets to be disabled, because it is free, it is the next
+     thing to press, and a control that vanishes until an unrelated press brings it back is a
+     screen that looks broken. The COMMITTING control is the one that must be absent, and it is
+     two stages away and asserted above. */
+  await page.locator('.runs-stages').getByRole('button', { name: 'Boxes' }).click()
   await pickBox(page, 9)
-  await expect(page.locator('.run-leg')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^Check cost/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /^Next · how they are read$/ })).toBeDisabled()
 })
 
 test('a box the send could not start is named, not swallowed', async ({ page }) => {
   await open(page, {
     failed: [{ box: 12, code: 'spawn_failed', message: 'Could not start `pkmnscan identify`' }],
   })
+  await openComposer(page)
+  await pickBox(page, 9)
   await pickBox(page, 12)
-  await page.getByRole('button', { name: /^Check cost/ }).click()
+  await toReading(page)
+  await checkCost(page)
   await page.locator('.run-button-money').click()
 
   /* THE ONE FAILURE NO VALIDATION CAN PRE-EMPT (D48). `Popen` can fail on the fourth leg after
      three have started, so the route answers with both halves. A partial send reported as a
      whole one is an invoice nobody can account for; reported honestly it is recoverable by
      pressing again for the box that did not go, which is what the sentence says. */
-  const note = page.locator('.run-note')
+  const note = page.locator('.runs-composer')
   await expect(note).toContainText('did not start')
   await expect(note).toContainText('spawn_failed')
   await expect(note).toContainText('box 12')
@@ -1210,20 +1316,26 @@ test('nothing is scoped on arrival, and the free preflight refuses until a box i
      spends money. So the screen says `Pick a box.` and the preflight — free, and the first
      step of the money gate — is not pressable.
 
-     DISABLED RATHER THAN ABSENT, DELIBERATELY, and it is the one control on this screen that
-     gets to be. docs/DESIGN.md's absent-not-disabled rule is about the control that COMMITS —
-     the spend button, which still does not exist until the preflight has answered, asserted
-     above. This one is free, it is the next thing to press, and a control that vanishes until
-     an unrelated press elsewhere brings it back is a screen that looks broken. */
-  await page.reload()
-  await expect(page.locator(VIEW)).toBeVisible()
-  await expect(page.locator('.runs-scope')).toContainText('Pick a box.')
-  await expect(page.getByRole('button', { name: 'Check cost' })).toBeDisabled()
+     DISABLED RATHER THAN ABSENT, DELIBERATELY, and it is the one control here that gets to be.
+     docs/DESIGN.md's absent-not-disabled rule is about the control that COMMITS — the spend
+     button, which still does not exist until the preflight has answered, asserted above. This
+     one is free, it is the next thing to press, and a control that vanishes until an unrelated
+     press elsewhere brings it back is a screen that looks broken.
+
+     THE SENTENCE MOVED INTO THE DIALOG WITH THE PICKER. The header pill says what the scope IS
+     and is drawn only once there is one; the dialog's own footer is where the screen asks for
+     one, which is the place a person is standing when they need to be asked. */
+  await openComposer(page)
+  await expect(page.locator('.runs-composer-note')).toContainText('Pick a box.')
+  const next = page.getByRole('button', { name: /^Next · how they are read$/ })
+  await expect(next).toBeDisabled()
+  await expect(page.locator('.runs-scope')).toHaveCount(0)
 
   // And it is one press away, with the scope said out loud before anything can be spent.
   await pickBox(page)
+  await expect(page.locator('.runs-composer-note')).toContainText('Box 9 · the whole box')
   await expect(page.locator('.runs-scope')).toContainText('Box 9 · the whole box')
-  await expect(page.getByRole('button', { name: 'Check cost' })).toBeEnabled()
+  await expect(next).toBeEnabled()
 })
 
 // ----------------------------------------- the export, fetched rather than downloaded (D64)
@@ -1297,18 +1409,17 @@ test('the export is fetched, and the join is handed the file rather than the byt
   page,
 }) => {
   const wire = await open(page)
-  await openPanel(page)
   await routeFetch(page, wire, { status: 200, body: fetchedBody() })
-  await page.locator('.run-row').first().click()
+  await openRun(page)
 
   await fetchButton(page).click()
 
   /* The receipt names the file, because that name is what the join is then handed and what
      `GET .../file` will serve if the operator wants to read the bytes themselves. */
-  await expect(page.locator('.run-fetched')).toContainText(
+  await expect(page.locator('.run-receipt')).toContainText(
     'export-tcgplayer-20260830-121500-a1b2c3d4.csv',
   )
-  await expect(page.locator('.run-fetched')).toContainText('153')
+  await expect(page.locator('.run-receipt')).toContainText('153')
 
   /* ONE PRESS IS TWO CALLS, and the join must take the file BY NAME. Sending `exports` here
      would mean the browser had read a megabyte back off the server and posted it again to
@@ -1320,26 +1431,16 @@ test('the export is fetched, and the join is handed the file rather than the byt
   expect((join?.body as { exports?: unknown }).exports).toBeUndefined()
 })
 
-test('the acknowledging control does not exist until a refusal earns it', async ({ page }) => {
-  const wire = await open(page)
-  await openPanel(page)
-  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
-  await page.locator('.run-row').first().click()
+/* BOTH "Fetch anyway" CASES ARE GONE WITH THE BUTTON. The export delta guard is retired on
+   this branch — `RunPanel.tsx` says so by name — so a fetch no longer asks a question the
+   operator has to press past; it answers both acknowledgements up front and draws a receipt.
+   The case that asserted the control's absence before a refusal is deleted rather than kept:
+   an absence that can no longer be earned is an assertion that cannot fail. What the
+   acknowledgement now does instead is asserted on the wire, in the fetch case above, and the
+   refusal cases below keep every half of themselves that is still about behaviour. */
 
-  /* THE LOAD-BEARING ABSENCE. `docs/DESIGN.md` puts a control that commits ABSENT rather than
-     disabled, which is D33's money gate one register down: a disabled button is one attribute
-     away from pressable and that attribute is what a later refactor drops. Asserted at rest
-     AND after a clean fetch, because a control that appeared once the panel had merely been
-     used would be just as wrong as one that was always there. */
-  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
-  await fetchButton(page).click()
-  await expect(page.locator('.run-fetched')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
-})
-
-test('a refusal an operator can answer draws the control that answers it', async ({ page }) => {
+test('a refusal says why, in the server\'s own words, and never joins', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
   await routeFetch(page, wire, {
     status: 409,
     body: {
@@ -1351,7 +1452,7 @@ test('a refusal an operator can answer draws the control that answers it', async
       },
     },
   })
-  await page.locator('.run-row').first().click()
+  await openRun(page)
   await fetchButton(page).click()
 
   /* The server's sentence verbatim, which is `docs/DESIGN.md`'s copy rule for owner screens,
@@ -1363,23 +1464,15 @@ test('a refusal an operator can answer draws the control that answers it', async
      re-use the previous export and look exactly like the fetch had worked. */
   expect(wire.filter((row) => row.path.endsWith('/join'))).toHaveLength(0)
 
-  const ack = page.getByRole('button', { name: /Fetch anyway/ })
-  await expect(ack).toBeVisible()
-  await ack.click()
-
-  /* THE ACKNOWLEDGEMENT IS THE FIELD THE REFUSAL NAMES, and never the other one. Sending
-     `accept_narrower` for an unverified run would wave through a different fact than the one
-     the operator was shown. */
-  const second = wire.filter((row) => row.path.endsWith('/export')).pop()
-  expect(second?.body).toMatchObject({ accept_unverified: true })
-  expect((second?.body as { accept_narrower?: unknown }).accept_narrower).toBeUndefined()
+  /* AND NO RECEIPT FOR A FETCH THAT DID NOT HAPPEN, which is the other half of the same
+     property: the receipt is the evidence the join is about to read. */
+  await expect(page.locator('.run-receipt')).toHaveCount(0)
 })
 
 test('a refusal an operator cannot answer draws a sentence and nothing to press', async ({
   page,
 }) => {
   const wire = await open(page)
-  await openPanel(page)
   await routeFetch(page, wire, {
     status: 502,
     body: {
@@ -1391,37 +1484,73 @@ test('a refusal an operator cannot answer draws a sentence and nothing to press'
       },
     },
   })
-  await page.locator('.run-row').first().click()
+  await openRun(page)
   await fetchButton(page).click()
 
   await expect(page.locator('.run-result-refused')).toContainText('has expired')
+  await expect(page.locator('.run-result-refused')).toContainText('tcg_session_expired')
 
   /* An expired session, a WAF block and an export for the wrong product line are all fixed
-     somewhere other than this screen. A button here would be offering to wave through a
-     refusal the screen does not understand — which is why `FETCH_ACK` lists two codes rather
-     than being a boolean on the refusal. */
-  await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+     somewhere other than this screen, so there is nothing here to press past it — and, as
+     above, no receipt for an export that never arrived. */
+  expect(wire.filter((row) => row.path.endsWith('/join'))).toHaveLength(0)
+  await expect(page.locator('.run-receipt')).toHaveCount(0)
 })
 
 test('the receipt says what was asked for, not only what arrived', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
   await routeFetch(page, wire, { status: 200, body: fetchedBody() })
-  await page.locator('.run-row').first().click()
+  await openRun(page)
   await fetchButton(page).click()
 
   /* THE SCOPE IS THE OPERATOR'S OWN CAPTURE CLAIMS READ BACK (D65). A receipt showing only
      the result cannot be read for whether the request was right, and the request is the half
-     they can correct — a set hint that resolved to the wrong set is invisible otherwise. */
-  await expect(page.locator('.run-fetched')).toContainText('Asked TCGplayer for riftbound')
-  await expect(page.locator('.run-fetched')).toContainText('Unleashed')
+     they can correct — a set hint that resolved to the wrong set is invisible otherwise. The
+     game is drawn by its display name rather than its machine string, which is this rebuild's
+     rule everywhere and does not change what the line says. */
+  const receipt = page.locator('.run-receipt')
+  await expect(receipt).toContainText('Riftbound')
+  await expect(receipt).toContainText('Unleashed')
+
+  /* AND THE EXPORT THIS RUN HELD BEFORE THIS ONE, which is what makes the row count above
+     readable: 153 rows is only reassuring beside the number it replaced. */
+  await expect(page.locator('.run-receipt-was')).toContainText('Not the first export')
+})
+
+test('the fetch answers both acknowledgements itself rather than asking', async ({ page }) => {
+  const wire = await open(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await openRun(page)
+  await fetchButton(page).click()
+  await expect(page.locator('.run-receipt')).toBeVisible()
+
+  /* THE DELTA GUARD IS RETIRED AND THIS IS WHAT REPLACED IT. Both refusals still live on the
+     server, so a client that sent neither field would be refused on the first fetch of every
+     run and the operator would be back at the two buttons this rebuild deleted. Sending them
+     is a decision, and a decision on the wire is the one place it can be read. */
+  const sent = wire.filter((row) => row.path.endsWith('/export')).pop()
+  expect(sent?.body).toMatchObject({ accept_unverified: true, accept_narrower: true })
+})
+
+test('the receipt names the export this run held before it', async ({ page }) => {
+  const wire = await open(page)
+  await routeFetch(page, wire, {
+    status: 200,
+    body: fetchedBody({ previous: { rows: 120, fetched_at: '2026-08-29T12:00:00+00:00' } }),
+  })
+  await openRun(page)
+  await fetchButton(page).click()
+
+  /* A FIGURE WITH NOTHING BESIDE IT CANNOT BE READ FOR WHETHER IT IS RIGHT. 153 rows is a
+     normal export or a catastrophically narrow one depending entirely on what the last one
+     was, and the operator is the only one who can tell — so the receipt says both. */
+  await expect(page.locator('.run-receipt-was')).toContainText('120')
 })
 
 test('a hint that resolved to nothing says so, because the export silently widened', async ({
   page,
 }) => {
   const wire = await open(page)
-  await openPanel(page)
   await routeFetch(page, wire, {
     status: 200,
     body: fetchedBody({
@@ -1431,15 +1560,15 @@ test('a hint that resolved to nothing says so, because the export silently widen
       },
     }),
   })
-  await page.locator('.run-row').first().click()
+  await openRun(page)
   await fetchButton(page).click()
 
   /* WIDENING IS SAFE AND SILENT, WHICH IS EXACTLY WHY IT IS DRAWN. `OGN` is a community set
      code and TCGplayer calls that set `Origins`, so it resolves to nothing and the fetch
      takes the whole category — correct, larger, and indistinguishable from a hint that
      worked unless the screen says which happened. */
-  await expect(page.locator('.run-fetched')).toContainText('every set')
-  await expect(page.locator('.run-fetched')).toContainText('OGN')
+  await expect(page.locator('.run-receipt')).toContainText('OGN')
+  await expect(page.locator('.run-receipt')).toContainText('covered by the wider ask')
 })
 
 /* ------------------------------------------------------------------ D76: the scope as a lever
@@ -1450,13 +1579,13 @@ test('a hint that resolved to nothing says so, because the export silently widen
 
 test('the scope panel draws what the fetch will ask for, and why', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
   await routeFetch(page, wire, { status: 200, body: fetchedBody() })
-  await page.locator('.run-row').first().click()
+  await openRun(page)
 
   /* THE EVIDENCE THE RULE READS, WHICH IS THE FACT THAT WAS INVISIBLE. `1 of 200 carry a set
      hint` is what decides whether a set filter is safe, and while it could not be seen, one
      hinted card scoped a whole box's export and the receipt reported success. */
+  await openJoinOptions(page)
   await expect(page.locator('.run-scope')).toContainText('1 of 200 cards carry a set hint')
   await expect(page.locator('.run-scope')).toContainText('category')
 
@@ -1471,11 +1600,14 @@ test('choosing the whole category sends it, rather than only redrawing the sente
   page,
 }) => {
   const wire = await open(page)
-  await openPanel(page)
   await routeFetch(page, wire, { status: 200, body: fetchedBody() })
-  await page.locator('.run-row').first().click()
+  await openRun(page)
 
-  await page.getByRole('radio', { name: 'Every set in the category' }).check()
+  await openJoinOptions(page)
+  /* A BUTTON GROUP RATHER THAN RADIOS, which is a widget choice and not a behaviour: one of
+     three is chosen, the choice is announced (`aria-pressed`), and what it changes is the
+     request below. */
+  await page.getByRole('button', { name: 'Every set in the category' }).click()
   await expect(page.locator('.run-scope-says')).toContainText('you asked for the whole category')
 
   await fetchButton(page).click()
@@ -1489,8 +1621,8 @@ test('choosing the whole category sends it, rather than only redrawing the sente
 
 test('the routing lever reaches join', async ({ page }) => {
   const wire = await open(page)
-  await openPanel(page)
-  await page.locator('.run-row').first().click()
+  await openRun(page)
+  await openJoinOptions(page)
 
   await page.getByLabel('Send to review at or below').selectOption('medium')
   await page.getByRole('button', { name: 'Join again' }).click()

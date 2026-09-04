@@ -157,6 +157,10 @@ class Resolved:
     failures: List[PreJoinFailure]
     rule: pricing.Rule
     basis: str
+    # The D9 cut-off this resolution was partitioned against (`pipeline/corpus.py`'s
+    # `policy.threshold`). Carried beside `rule` and `basis` for their reason: `join` prints
+    # what it ran with, and a figure a report cannot name is a figure nobody can check.
+    threshold: Decimal = pricing.THRESHOLD
     # Cards held out of the join because their game has no catalog. See `NotJoined`: these
     # are correct outcomes, not failures, and they are a separate list from `failures` so
     # that no reader can print them under one heading.
@@ -1109,6 +1113,7 @@ def load(
     review_below: str = routing.CONFIDENCE_LOW,
     live_cap: int = join.LIVE_QUANTITY_CAP,
     trust_claim: bool = False,
+    threshold: Decimal = pricing.THRESHOLD,
 ) -> Resolved:
     """Read the run, build one catalog per game, walk the ladder, route every card.
 
@@ -1336,11 +1341,19 @@ def load(
             game_cards,
             catalog,
             live_cap=live_cap,
-            router=join.default_router(review_below=review_below),
+            # BOTH HALVES OF THE THRESHOLD, AND THEY ARE NOT THE SAME DECISION. The router
+            # reads it to decide whether a low-confidence card is worth a human's attention
+            # (D9 through `pipeline/routing.py`); the batch reads it to partition the matches
+            # it keeps. One figure, two consumers, and a run priced against a threshold the
+            # router did not see would queue by one cut-off and list by another.
+            router=join.default_router(
+                threshold=threshold, review_below=review_below
+            ),
             rule=rule,
             basis=basis,
             trust_claim=trust_claim,
             copies_out=copies_out,
+            threshold=threshold,
         )
         joins_out[game] = GameJoin(
             game=game,
@@ -1356,6 +1369,7 @@ def load(
         failures=failures,
         rule=pricing.Rule.parse(rule),
         basis=basis,
+        threshold=pricing.check_threshold(threshold),
         not_joined=not_joined,
         photos=photos,
         realigned=realigned,

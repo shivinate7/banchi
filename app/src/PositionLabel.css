@@ -1,277 +1,127 @@
 /* app/src/PositionLabel.css — imported once, by PositionLabel.tsx.
- *
- * THE SCALE IS ONE DECLARATION PER SITE, AND EVERY OTHER NUMBER IS DERIVED FROM IT.
- * `--pos-slot` is the slot figure's size, which is the only number a site actually chooses.
- * `.position-num` is `1em`, so the base IS the figure; the path and the key derive from it.
- *
- * PROPORTIONAL SCALING WAS TRIED FIRST AND IS REFUSED, with the arithmetic. Take D41's shipped
- * ratios as canonical — path 11px against a 44px figure is 0.25em. At the review head's 32px
- * figure that is 8px and at the copies row's 28px it is 7px, both below anything this product
- * draws. The four sites were probed independently and all four landed on the SAME path size,
- * 11px, against four different figures — because the path tracks each screen's own metadata
- * register (`.review-machine` is 11px, `.card-locations-boxname` is 10px, `.browse-position-path`
- * is 11px) and the figure tracks its payload register. Two scales, not one. So `--pos-path`
- * defaults to 11px and is a knob a site may move, rather than a multiple of a figure it has
- * nothing to do with.
- *
- * THE KEY IS ONE EXPRESSION AND NO SITE DECLARES IT. `clamp(var(--pos-path), 0.295em, 13px)`
- * measures 12.98px at a 44px figure and 11px at 32, 28 and 20 — verified in the browser at all
- * five settings. That reproduces `#/inventory`'s shipped 13px to within 0.02px and gives every
- * other site the path's own register, which is right: the key is a muted uppercase word naming a
- * number, exactly what the path is. It is promoted only where the figure is large enough that an
- * 11px word beside it detaches, and 0.295em is where that happens on its own.
- *
- * THE GAP IS A TOKEN, NEVER A COMPUTATION, because docs/DESIGN.md's spacing scale is 4 8 12 16 24
- * 32 48 64 and a computed gap lands off it. The rule: `--s5` where the figure is >= 40px, `--s3`
- * below. Exactly one site is above the line today.
- *
- * ── THE FULFILLER FIREWALL ───────────────────────────────────────────────────────────────────
- * Every selector here is `.position-*`, and those classes exist in the DOM ONLY where
- * `PositionLabel` rendered them. `Fulfillment.tsx` and `CardLocations.tsx:FulfillerCard` do not
- * import the component, so no rule in this file can reach a node in `#/fulfillment` — the guard
- * is the component graph, not a selector prefix, which is why stripping a prefix cannot breach it.
- *
- * WHAT HAPPENS IF SOMEBODY LIFTS THE CALL INTO A SHARED RENDER PATH — the breach that would
- * actually happen — MEASURED rather than reasoned: `.position-path` sets its own 11px, which wins
- * over `.card-locations-place-large`'s 32px, and `#/fulfillment`'s minimum text size goes 20px ->
- * 11px with 16 nodes under the floor. `app/tests/fulfillment.spec.ts` fails three ways at once:
- * BODY_FLOOR (>=20px on every text node), `toHaveText(EISCUE)` (the DOM text becomes
- * `BOX 2SECTION 19`, uppercased and de-dotted), and the added `.position-parts` count-zero case
- * below. It cannot fail silently in any direction.
- * ─────────────────────────────────────────────────────────────────────────────────────────────
- */
+   `--pos-slot` is the slot figure's size, the one number a site chooses; the path and the key
+   derive from it. `--pos-path` is the path's own register (default 11px) and a site may move it.
+   Every selector here is `.position-*`, which exists in the DOM only where `PositionLabel`
+   rendered it — the Fulfiller's screens never import the component. */
 
-/* ---- the stacked block ---- */
-
+/* ---- the stacked block: a muted path column beside the slot figure ---- */
 .position-parts {
   display: flex;
   align-items: baseline;
-  gap: var(--pos-gap, var(--s3));
+  gap: var(--pos-gap, var(--bn-3));
+  min-width: 0;
 }
 
-/* THE PATH: coarse-to-fine, stacked, muted, demoted. `align-self: flex-end` sits it on the
-   figure's baseline rather than its cap, which is what makes the two read as one object instead
-   of two panels. The VALUES stay `--ink` while their keys stay `--muted`, so the numbers are
-   still findable at a glance even demoted — a rank change, not a hiding. */
 .position-path {
   display: flex;
   flex-direction: column;
   align-self: flex-end;
   padding-bottom: 2px;
   min-width: 0;
+  font-family: var(--bn-font-ui);
   font-size: var(--pos-path, 11px);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-/* TRACKING LANDS ON THE WORDS AND NEVER ON THE FIGURES, and `letter-spacing: 0` here is a FIX,
-   not tidying. The shipped `.browse-position-path b` sets weight and colour and never resets the
-   inherited 0.08em, so every digit in the path carries 0.88px of drift — 1.76px on a two-digit
-   section — through a face docs/DESIGN.md chose precisely "so the width cannot shift between
-   cards by someone forgetting to set it". Measured: a one-digit value renders 8.586px against
-   7.703px reset. That rule's own comment two lines below claims the tracking is "only ever on an
-   uppercase key"; it was not. */
-.position-path b {
   font-weight: 600;
-  color: var(--ink);
-  letter-spacing: 0;
+  letter-spacing: var(--bn-tracking-caps);
+  color: var(--bn-ink-3);
+  line-height: 1.45;
+  white-space: nowrap;
 }
-
-/* What the owner calls the box, riding the BOX line rather than taking one of its own. Only the
-   copies list passes it. Muted: a label for humans, never an identifier. */
+/* The box's note wraps under `BOX 1` where the column is tight, rather than clipping. */
+.position-path > span { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; min-width: 0; }
+.position-path b {
+  font-weight: 700;
+  color: var(--bn-ink);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
 .position-path-note {
-  margin-left: var(--s1);
+  margin-left: 2px;
   font-weight: 500;
-  color: var(--muted);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--bn-ink-3);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .position-slot {
   display: flex;
   align-items: baseline;
-  gap: var(--s1);
+  gap: var(--bn-1);
   flex: 0 0 auto;
 }
-
 .position-key {
+  font-family: var(--bn-font-ui);
   font-size: clamp(var(--pos-path, 11px), 0.295em, 13px);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  color: var(--bn-ink-3);
 }
-
 .position-num {
+  font-family: var(--bn-font-display);
   font-size: 1em;
-  font-weight: 700;
-  color: var(--ink);
-  line-height: 1.05;
-  letter-spacing: 0;
+  font-weight: 800;
+  color: var(--bn-ink);
+  line-height: 1;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
-/* SLOT-FIRST, AND THE DIGIT RESERVATION COMES WITH IT RATHER THAN AS A KNOB, because both exist
-   for the same reason: this block is in a COLUMN. `3ch` is relative to this element's own size
-   and Martian Mono is fixed-advance (measured 0.70em), so it reserves exactly three digits and
-   every row's path starts at one x. Without it the copies list puts the path at 905.7 / 928.1 /
-   950.5 for Card 7 / 59 / 107 — measured — because mono advance scales the figure box with the
-   digit count. Box 2 tops out at 543; a fourth digit widens its own row only. */
+/* Slot-first: the figures in a hard column at the cell's left edge, the path after. */
 .position-parts[data-lead='slot'] .position-path { order: 2; }
 .position-parts[data-lead='slot'] .position-slot { order: 1; }
 .position-parts[data-lead='slot'] .position-num,
 .position-parts[data-lead='slot'] .position-void { min-width: 3ch; }
-
-/* AND THE RESERVE IS THE WHOLE COLUMN, NOT THE FIGURE, once a row in it can have no figure.
-   `3ch` above holds the digits; it does not hold the KEY beside them, which every live row has
-   and a departed row does not — so the same list drew its live paths at x=866.2 and its two
-   departed paths at x=827.9, a 38.3px hang, which is the ragged column this whole `lead` exists
-   to prevent, reintroduced by the row that has least to say.
-
-   THE 38.3px IS THE KEY EXACTLY, and this expression is that measurement rather than a padding
-   that looked right. `CARD` is four cells of Martian Mono at `.position-key`'s size — the same
-   `clamp` two rules up, 11px in this list — and mono advance is 0.70em with 0.08em of tracking,
-   so 4 x 0.78 x 11 = 34.32px, plus `.position-slot`'s own `--s1` gap = 38.32px. Measured
-   difference: 38.328px.
-
-   `CARD` IS THE ONLY KEY THIS EVER HOLDS, because `pipeline/join.py:Position.label` is the one
-   composer of the string and it ends every located label on `Card N`. That is an assumption and
-   it is asserted rather than trusted: `app/tests/inventory.spec.ts` reads the x of a live path
-   and a departed one and requires the same number, so a label that ends on a longer word fails
-   there instead of hanging by the difference. */
+/* The reserve is the real word, drawn and hidden by `PositionLabel` in the void case — see the
+   comment there. No advance-width factor to keep in step with the typeface. */
+/* The reserve is an approximation of the key's advance width, and it is 2.1px short under the
+   current typeface: a departed copy's path hangs that much left of a live row's. Known and
+   left alone deliberately — three attempts to measure it exactly all regressed, because a live
+   row may or may not draw a key (`slot.key === ''` renders the number alone) and this
+   component cannot see what its siblings drew. Fixing it properly means giving the LIST a
+   shared column rather than each row a guess, which is a change to `CardLocations`, not here.
+   The owner has deferred the card-number work; this belongs with it. */
 .position-parts[data-lead='slot'] .position-slot {
-  min-width: calc(3ch + var(--s1) + 4 * 0.78 * clamp(var(--pos-path, 11px), 0.295em, 13px));
+  min-width: calc(3ch + var(--bn-1) + 4 * 0.78 * clamp(var(--pos-path, 11px), 0.295em, 13px));
 }
 
 /* ---- the number column of a card that is in no slot ---- */
-
-/* `Box 3 · departed · B3 #36` IS RANKED LIKE EVERY OTHER LABEL, AND THIS IS THE COLUMN IT LEAVES
-   EMPTY. D58 refuses a slot number for a card that has left and D68 refuses the store key in that
-   number's place; what neither asks for is the pre-D41 plain string, which is what the component
-   drew instead until this existed — 44px and wrapped in the walk panel, the loudest row in the
-   copies list. The state and the store key ride the path now (`DEPARTED B3 #36`, one key/value pair
-   in the same register as `SECTION 1`), and the figure is a dash.
-
-   1em AND MUTED, WHICH IS THE WHOLE ARGUMENT IN TWO DECLARATIONS. The size holds the column open
-   at whatever `--pos-slot` the site chose, so a departed row is the same height as a live one and
-   its path starts at the same x; the colour keeps it in the register of an absence rather than an
-   answer. A dash at `--ink` would be a figure, and a dash below 1em would let the row shrink and
-   the column ripple.
-
-   `text-align: center` IS FOR THE RESERVE, NOT FOR THE DASH. `lead='slot'` reserves three digits
-   so every path in a column starts at one x; a single glyph left-aligned in that box sits under
-   the hundreds digit of the row above, which reads as a number that lost its other two. */
 .position-void {
   font-size: 1em;
   font-weight: 400;
-  color: var(--muted);
-  line-height: 1.05;
+  color: var(--bn-ink-4);
+  line-height: 1;
   letter-spacing: 0;
   text-align: center;
 }
-
-/* WHEN THERE IS NO FIGURE, THE PATH IS THE PAYLOAD — and this is a DERIVATION, which is why it
-   is here rather than in five stylesheets. `--pos-slot` is the number a site chooses because the
-   slot figure is that screen's answer; a departed card has no figure, so at the shipped 11px the
-   whole answer collapses into the metadata register and a singleton reads as a block that failed
-   to load. Measured on the walk panel: `BOX 2 / DEPARTED B2 #4` at 11px under a 44px heading, in
-   the panel whose payload it is.
-
-   `clamp(11px, 0.45em, 20px)` IS `.position-key`'S ARGUMENT AT A DIFFERENT RANK, and the same
-   `em` resolution: this sets `font-size`, so the unit is against `.position-parts` — the site's
-   own `--pos-slot`. 19.8px at 44, 14.4px at 32, and the 11px floor at 20, so a site never draws
-   its path below the register it draws its metadata in. 20px is the ceiling because past it the
-   path stops being a path and becomes a second heading.
-
-   SINGLETONS ONLY, AND `lead` IS ALREADY THAT DISTINCTION. In a LIST the row with no figure is
-   the one with least to say and promoting it would make a sold copy the loudest line in the
-   copies list — which is the fault this whole change removes. A site that disagrees still sets
-   `--pos-path` itself; this is a default, not a lock. */
-.position-parts[data-lead='path']:has(.position-void) {
-  --pos-path: clamp(11px, 0.45em, 20px);
-}
-
-/* THE MARK ITSELF IS DRAWN ONLY WHERE THERE IS A COLUMN TO MARK, which is what `lead` already
-   means: `slot` is "this block is one row of many and its figures are in a hard column", `path`
-   is a singleton. A held place is legible against the rows above it; the same dash beside a lone
-   label has nothing to hold and reads as a stray mark. The ELEMENT is rendered either way — it is
-   what a site asks about with `:has(.position-void)` when it wants to re-rank a block that has no
-   figure, and keeping the slot column present in both forms is what makes that one question
-   rather than two.
-
-   IN `content` AND NOT IN THE COMPONENT, because a dash in the DOM joins `textContent` and the
-   label stops reading as the label: `.browse-position` greps as `BOX 2DEPARTED B2 #4—`. It is
-   typography, it is `aria-hidden`, and this is where typography lives. */
-.position-parts[data-lead='slot'] .position-void::before {
-  content: '\2014';
-}
-
-/* AND IT SITS UNDER THE DIGITS, NOT UNDER THE KEY. The reserve two rules up holds the whole
-   column — key, gap and figure — and the void is its only child, so it starts at the column's
-   left edge and the dash lands under `CARD` while the numbers it stands in for are 38px to the
-   right. `margin-left: auto` pushes its 3ch box to the column's far edge, which is the figure's
-   own box, and `text-align: center` then centres the glyph in it. The mark means "no number
-   here", so it belongs where the numbers are. */
-.position-parts[data-lead='slot'] .position-void {
-  margin-left: auto;
-}
+.position-parts[data-lead='path']:has(.position-void) { --pos-path: clamp(11px, 0.45em, 20px); }
+.position-parts[data-lead='slot'] .position-void::before { content: '\2014'; }
+.position-parts[data-lead='slot'] .position-void { margin-left: auto; }
 
 /* ---- the store key a label may end on (D68) ---- */
-
-/* A LABEL THAT NAMES NO POSITION RENDERS AS A LABEL WITH A NOTE UNDER IT, never as a figure. The
-   body keeps the site's own size — it is a sentence and it is drawn as one — and the key drops to
-   the muted register on its own line, so the row grows by one small line rather than by a second
-   line of the site's payload face.
-
-   ITS ONE CALLER IS THE POOLED ROW (D24, D71). `Pokémon code cards · pooled · 5/12` has no
-   coordinate to rank: `pooled` is a state like `departed`, but the part in front of it is a game's
-   display name rather than a `<word> <number>` pair, so there is no path to hang it on and no
-   figure to leave empty. A pooled card is nowhere; a departed card is in a box. That is the line
-   this rule sits on, and it is why the departed label crossed it in D71 and this one did not.
-
-   `.position-key`'S OWN EXPRESSION, NOT A SECOND ONE. The key beside a slot figure and the key
-   under a plain label are the same fact drawn in the same register, and this file's whole argument
-   is that one expression serves every site's scale: 11px at 28 and 12.98px at 44. */
-.position-plain {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
+.position-plain { display: flex; flex-direction: column; min-width: 0; }
 .position-storekey {
+  font-family: var(--bn-font-mono);
   font-size: clamp(var(--pos-path, 11px), 0.295em, 13px);
   font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.02em;
+  color: var(--bn-ink-3);
   line-height: 1.45;
   font-variant-numeric: tabular-nums;
 }
 
 /* ---- the run form: the same ranking, laid out in one dimension ---- */
-
+.position-run { white-space: nowrap; }
 .position-run-path,
 .position-run-key {
+  font-family: var(--bn-font-ui);
   font-size: 0.8em;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  color: var(--bn-ink-3);
 }
-
-.position-run-path { margin-right: var(--s2); }
-.position-run-path b { font-weight: 600; color: var(--ink); letter-spacing: 0; }
-.position-run-key { margin-right: var(--s1); }
-.position-run-num { font-weight: 700; color: var(--ink); letter-spacing: 0; }
-
-/* THE SEVEN SITE RULES LIVE IN THEIR OWN STYLESHEETS, not here — `.browse-position` in
-   BoxBrowse.css, `.review-position` in ReviewQueue.css, `.card-locations-label` in
-   CardLocations.css, `.capture-label` and `.capture-inline-label` in CaptureScreen.css, and
-   `.inventory-lone-place` and `.inventory-confirm-place` in Inventory.css. Each one sets
-   `--pos-slot` and almost nothing else. Kept apart deliberately: a site's register belongs beside
-   that site's other type, and gathering all seven here would make this file the place a screen's
-   size is changed, which is how a shared component becomes a bottleneck.
-
-   IT WAS FIVE UNTIL D71 AND THE PROSE SAID IT REACHED EVERY OWNER SITE, WHICH WAS FALSE. The two
-   added are both in `Inventory.tsx` and both drew `Position.label` raw: the lone-copy panel, which
-   is what a card with no name and no SKU renders through and therefore what 629 of 682 records on
-   the owner's Mac render through, and the retire dialog. Neither was found by a check — the lone
-   panel HAS a spec, and that spec asserted its two bars and never looked at the label beside them.
-   Both were found by marking a card sold in a browser. */
+.position-run-path { margin-right: var(--bn-2); }
+.position-run-path b { font-weight: 700; color: var(--bn-ink); letter-spacing: 0; }
+.position-run-key { margin-right: var(--bn-1); }
+.position-run-num { font-weight: 800; color: var(--bn-ink); letter-spacing: 0; font-variant-numeric: tabular-nums; }

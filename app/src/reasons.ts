@@ -13,7 +13,10 @@
  * up as a machine string on screen rather than as a blank line.
  */
 
-/* The FOURTEEN, transcribed from the two modules that emit them: seven from
+/* The FOURTEEN the pipeline emits — THIRTEEN of them live in the map below, and one,
+ * `metadata_detection_disagreement`, retired to `RETIRED_REASON_LABELS` on 2026-09-03 when
+ * the owner dropped the question the review screen asked of it. Transcribed from the two
+ * modules that emit them: seven from
  * `pipeline/variant.py` (the D3 ladder's review reasons, including D23's
  * `rarity_claim_mismatch`) and seven from `pipeline/routing.py` (v2 §5.4's routing reasons,
  * including D35's `number_unread_name_matched`). It read "twelve, six and six" until
@@ -43,7 +46,6 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   // pipeline/variant.py — the ladder could not settle the finish.
   no_catalog_row: 'Not in the export',
   metadata_not_stocked: 'Toggle names a finish that is not stocked',
-  metadata_detection_disagreement: 'Toggle and photo disagree',
   /* D23's stack claim contradicted the catalog: every candidate row's Rarity sits outside
    * what the operator claimed the stack holds. Deliberately NOT `metadata_*` — those three
    * are about the finish toggle, and a fourth reading as one at a glance is why the name
@@ -73,6 +75,26 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   no_market_data: 'No market price',
 }
 
+/* RETIRED — a code the product no longer asks a question about. Nothing on any screen
+ * generates one; the labels are kept because a QUEUE ENTRY WRITTEN BEFORE THE RETIREMENT is
+ * still a file this app opens, and it should render a name rather than its machine string.
+ * Read after the live map and never before it, so a code that ever comes back is live again
+ * by being put back above rather than by anybody remembering this list exists.
+ *
+ * `metadata_detection_disagreement` — the finish toggle and the photograph reading each
+ * other's opposite — was retired by the owner on 2026-09-03. It is the most-fired label in
+ * this file (16 of 53 at Gate B) and the answer was the same row either way, which is what
+ * made it a question not worth a person's attention rather than a question with no data.
+ */
+export const RETIRED_REASON_LABELS: Readonly<Record<string, string>> = {
+  metadata_detection_disagreement: 'Toggle and photo disagree',
+}
+
+/** Whether a reason is one the product has stopped asking about. */
+export function isRetiredReason(reason: string): boolean {
+  return RETIRED_REASON_LABELS[reason] !== undefined
+}
+
 export function reasonLabel(reason: string): string {
-  return REASON_LABELS[reason] ?? reason
+  return REASON_LABELS[reason] ?? RETIRED_REASON_LABELS[reason] ?? reason
 }

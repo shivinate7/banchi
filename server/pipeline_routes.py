@@ -112,6 +112,10 @@ sys.path.insert(0, str(REPO_ROOT))
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
 from pipeline import corpus, decisions, games as game_registry, join, tcgcsv  # noqa: E402
+# ALIASED, BECAUSE `pricing` IS A LOCAL IN THIS MODULE. Two handlers bind the name to a
+# run's parsed `pricing.json`; importing the module under it would make which one you
+# got a matter of where in the function you were standing.
+from pipeline import pricing as pricing_mod  # noqa: E402
 from server import tcg_export  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
 # reaches `json`, `time`, `urllib`, `dataclasses`, `datetime`, `decimal` and `pathlib`
@@ -1204,7 +1208,11 @@ def _artefacts(directory: Path) -> List[dict]:
                 "name": entry.name,
                 "bytes": stat.st_size,
                 "modified": int(stat.st_mtime),
-                "is_import": entry.name.startswith("import-") and entry.suffix == ".csv",
+                # `import` AND NOT `import-`, WHICH WAS WRONG FROM THE DAY THE MERGED FILE
+                # WAS ADDED. `cli/runs.py:IMPORT_MERGED` is `import.csv` with no hyphen, so
+                # the one file `emit` now writes by default was listed as an ordinary
+                # artefact and the run panel's import affordance never appeared over it.
+                "is_import": entry.name.startswith("import") and entry.suffix == ".csv",
             }
         )
     return out
@@ -1710,6 +1718,21 @@ def _pricing_constant(chosen: Sequence[str], field: str) -> Optional[str]:
     return None
 
 
+def _policy_threshold(book) -> str:
+    """The store's stored D9 cut-off, as a string, for a screen to draw and compare against.
+
+    NEVER `None` AND NEVER A REFUSAL. The empty-store branch of `do_pipeline_worklist`
+    answers `None` for both figures because there is nothing on screen to draw them over;
+    here there is, and a threshold is a property of the STORE rather than of the runs in the
+    worklist — so an unusable one falls back to the constant the partition would have used
+    anyway rather than blanking a heading the rows are already sorted under.
+    """
+    try:
+        return str(pricing_mod.check_threshold(book.policy_for()["threshold"]))
+    except (ValueError, AttributeError, KeyError, TypeError):
+        return str(pricing_mod.THRESHOLD)
+
+
 def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     """`GET /pipeline/pricing` — one pricing worklist over several runs (D86).
 
@@ -1765,7 +1788,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     # the chooser below needs anyway.
     try:
         book = corpus.Corpus.read()
-    except decisions.MalformedDecisions:
+    except (decisions.MalformedDecisions, ValueError):
         # A CORPUS THAT CANNOT BE PARSED MUST NOT BLANK THE SCREEN — the operator has to be
         # able to SEE the file that is wrong. Every run then reads as owing an answer, which
         # is the honest reading of "nobody can tell what has been answered".
@@ -1932,9 +1955,15 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # button; both are `pipeline/pricing.py` constants that every run on this machine
         # agrees about, and taking them off the newest table rather than restating them here
         # keeps the one place they are decided the one place they are read.
-        "threshold": (
-            summaries and _pricing_constant(chosen, "threshold")
-        ) or None,
+        # THE THRESHOLD IS THE STORE'S STORED POLICY, AND THE FLOOR IS STILL THE NEWEST
+        # TABLE'S. They stopped being the same kind of fact the moment the cut-off became
+        # something the operator sets: `policy.threshold` is one figure for the whole store
+        # and is the figure `emit` will partition by NEXT, where a run's `pricing.json` says
+        # what the join that wrote it partitioned by — a record rather than an answer, and a
+        # stale one the hour after the threshold is changed. The floor is unchanged and is
+        # still `pipeline/pricing.py`'s constant, read off the newest table for
+        # `_pricing_constant`'s reason.
+        "threshold": _policy_threshold(book),
         "floor": (summaries and _pricing_constant(chosen, "floor")) or None,
         # `remembered_sub_threshold` IS GONE FROM THIS PAYLOAD, AND ITS ABSENCE IS THE POINT
         # (D86, amended). It walked up to five sibling run directories for the newest answer
@@ -2016,8 +2045,10 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     person writes by hand — survives a client that has never heard of it.
 
     IT VALIDATES THE POLICY AND NOT THE ANSWERS, which is the same line D49 drew. `Corpus.parse`
-    raises on a rule or basis outside the enum, because a screen could otherwise write a
-    document that makes `emit` answer with a traceback an hour later. A per-SKU answer is left
+    raises on a rule or basis outside the enum, and on a `threshold` that is not a positive
+    price, because a screen could otherwise write a document that makes `emit` answer with a
+    traceback an hour later. All three are `ValueError`s and the `except` below is what turns
+    them into a 400 naming the value rather than a 500 naming a line number. A per-SKU answer is left
     alone: `Decisions.parse` is the one parser for what an answer means and it runs at the
     moment one is used, where its refusal names the SKU.
     """
@@ -2077,6 +2108,8 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
         argv.append("--listed-only")
     if payload.get("split_games"):
         argv.append("--split-games")
+    if payload.get("split_threshold"):
+        argv.append("--split-threshold")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
     return {
         "ok": code == 0,
@@ -3405,6 +3438,15 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
     elif step == "emit":
         argv += _exports_for_join(directory, payload)
         argv += _pricing_flags(payload)
+        # THE SAME THREE SHAPE FLAGS `POST /pipeline/emit` TAKES. One run and several are the
+        # same command, and a screen that could ask for a split on a send of three and not on
+        # a send of one would be answering a question about how many runs are open.
+        if payload.get("listed_only"):
+            argv.append("--listed-only")
+        if payload.get("split_games"):
+            argv.append("--split-games")
+        if payload.get("split_threshold"):
+            argv.append("--split-threshold")
     else:  # reconcile
         staged = payload.get("staged_export")
         if not isinstance(staged, dict):

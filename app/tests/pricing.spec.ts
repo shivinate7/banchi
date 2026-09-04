@@ -299,6 +299,11 @@ async function open(
             rule: answers?.rule ?? 'match',
             basis: answers?.basis ?? 'market',
             sub_threshold: answers?.sub_threshold ?? null,
+            /* THE CUT-OFF AS THE STORE HOLDS IT. Absent means never written, which is the
+               ordinary case and the one the server answers with its own default; a case that
+               sets it is testing a store that has chosen. Threaded through `decisions` rather
+               than added as a top-level option so a fixture states one policy in one place. */
+            ...(answers?.threshold === undefined ? {} : { threshold: answers.threshold }),
           },
           skus,
         },
@@ -484,7 +489,24 @@ async function open(
   await page.goto(options.noRun === true ? '/#/pricing' : VIEW_ROUTE)
   await settleFonts(page)
   await expect(page.locator(VIEW)).toBeVisible()
+  await settleEnter(page)
   return wire
+}
+
+/** The page's enter animation, finished.
+ *
+ *  THE SAME ARGUMENT `fontsReady.ts` MAKES ABOUT THE SWAP WINDOW. `.bn-page` slides its
+ *  content in over `--bn-t-slow`, and a TRANSFORM on `main` makes it the containing block for
+ *  everything inside — including the sticky ship bar, which is displaced for as long as the
+ *  animation runs. The hit-testing cases below ask who owns a pixel; asked mid-animation they
+ *  are asking about a layout that is still moving, and one of them caught a row under a bar
+ *  that had not settled yet. It weakens nothing: no threshold moves, and a bar that really is
+ *  punched through is still punched through once it has stopped. */
+async function settleEnter(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const main = document.querySelector('main')
+    return main !== null && main.getAnimations().every((one) => one.playState === 'finished')
+  })
 }
 
 /** A reading in the shape `server/pipeline_routes.py:do_pipeline_history` answers.
@@ -614,9 +636,15 @@ test('the screen is on its own route and draws the run it was linked to', async 
      never what is in the box — which is the complaint that produced D56, in the place the
      owner was looking when they made it. The run name STAYS: it is what `emit` and `join` are
      pointed at and what `decisions.json` is written under. What is new goes in front of it. */
-  await expect(page.locator('.pricing-scope')).toHaveText(
-    `Box 7 · Riftbound epics · ${RUN} · 1 SKUs`,
-  )
+  const scope = page.locator('.pricing-scope')
+  await expect(scope).toContainText('Box 7 · Riftbound epics')
+  await expect(scope).toContainText(RUN)
+  await expect(scope).toContainText('1 SKUs')
+  /* NOT `toHaveText` ANY MORE, and the reason is that the lede gained a fourth fact rather
+     than lost one: it carries the worklist's own progress now, so an exact string would be
+     pinning the progress reading as well as the three facts this case is about. Each is
+     asserted on its own instead, which fails on a dropped box name exactly as the whole
+     string did. */
 })
 
 test('the run picker leads with the box, and the directory is what tells two runs apart', async ({
@@ -643,6 +671,10 @@ test('the run picker leads with the box, and the directory is what tells two run
     noRun: true,
   })
 
+  /* THE PICKER IS A POPOVER OFF THE HEADER NOW rather than a strip standing on the page.
+     Which runs are being priced is a question you ask once a session, and the answer is drawn
+     in the lede either way — so it is opened here rather than asserted into existence. */
+  await page.getByRole('button', { name: /^Runs/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(4)
 
@@ -673,7 +705,7 @@ test('the run picker leads with the box, and the directory is what tells two run
   /* WHAT IS LEFT, WHICH THE CHIP COULD NOT SAY BEFORE D86. `counts.skus` is the SIZE of a job
      and never the job: box 2's 108 SKUs are one `floor` press. This fixture's runs have not
      emitted, so every chip owes that. */
-  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('never emitted')
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never emitted')
 })
 
 test('every export column that carries data is on the row', async ({ page }) => {
@@ -682,14 +714,18 @@ test('every export column that carries data is on the row', async ({ page }) => 
   /* The owner's requirement in their own words: "I want all the data from the CSV shown when
      I make the decision". The four price columns are the ones a subset would have dropped.
      Drawn Market, Low, +Ship, Direct left to right. */
+  /* EACH COLUMN NAMES ITSELF ON THE ROW NOW — `Market $22.03` rather than a bare figure under
+     a header — so the assertions carry the label. That is not a looser claim: it is the same
+     four values, each still pinned exactly, with the column they belong to pinned as well,
+     which is what a row of four unlabelled figures could never say. */
   const refs = page.locator('.pricing-ref')
   await expect(refs).toHaveCount(4)
-  await expect(refs.nth(0)).toHaveText('$22.03')
-  await expect(refs.nth(1)).toHaveText('$21.98')
-  await expect(refs.nth(2)).toHaveText('$22.98')
+  await expect(refs.nth(0)).toHaveText('Market $22.03')
+  await expect(refs.nth(1)).toHaveText('Low $21.98')
+  await expect(refs.nth(2)).toHaveText('+Ship $22.98')
   /* A BLANK CELL DRAWS AN EM DASH AND NOT `$0.00` — measured, TCG Direct Low is blank on
      2,060 of 2,476 listable rows, and D9 holds that a missing price is unknown, not low. */
-  await expect(refs.nth(3)).toHaveText('—')
+  await expect(refs.nth(3)).toHaveText('Direct —')
 
   await expect(page.locator('.pricing-meta')).toContainText('Near Mint Holofoil')
   await expect(page.locator('.pricing-meta')).toContainText('Secret Rare')
@@ -715,12 +751,25 @@ test('the sub-threshold answer is settable here, and emit says what it still owe
   page,
 }) => {
   const wire = await open(page, {
-    /* `bucket` alone puts the row in the sub-threshold section — it is decided by the Market
-       cell at join time and nothing the screen does can move a row between sections (D28).
-       This carried a `market: '0.12'` beside it that reached no field of `PricingSku` and was
-       therefore inert from the day it was written; the annotation on `sku()` is what found
-       it. */
-    skus: [sku({ bucket: 'sub_threshold' })],
+    /* THE MARKET CELL AND THE BUCKET HAVE TO AGREE NOW, AND THIS FIXTURE USED TO CONTRADICT
+       ITSELF. `bucket` alone put the row in the sub-threshold section for as long as the split
+       was the server's alone; since the cut-off became a control the screen re-derives it from
+       the Market cell, exactly as `pipeline/pricing.py:is_listable` does, so a row declared
+       cheap while carrying a market of $22.03 was drawing in the listed half and the case was
+       asserting a refusal that no longer applied.
+
+       This is not a weakening of D28: what may not move a row is a price TYPED ON IT, and that
+       is still true. What moves the sections is the cut-off, which is policy.
+
+       An earlier version of this fixture carried `market: '0.12'` at the top level, where it
+       reached no field of `PricingSku` and was inert from the day it was written. It is inside
+       `snap` now, where the screen actually reads it. */
+    skus: [
+      sku({
+        bucket: 'sub_threshold',
+        snap: { market: '0.12', direct_low: null, low: '0.10', low_with_shipping: '1.10', now: null },
+      }),
+    ],
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
   })
 
@@ -730,24 +779,47 @@ test('the sub-threshold answer is settable here, and emit says what it still owe
      parked on exactly this. */
   await expect(page.locator('.pricing-ready')).toContainText('Emit will refuse')
 
-  await page.getByRole('button', { name: /At the \$0.40 floor/ }).click()
+  /* THE ANSWER IS THE STORE'S, AND IT IS THE FIGURE ITSELF THAT IS TYPED. The panel used to
+     offer a segmented row — "a flat price" or "the $0.40 floor" — beside a second small field,
+     so the biggest thing on it was the one part you could not touch and the same number was
+     drawn twice. The owner had the row removed and the figure made editable, which also ended
+     the incoherence of a hardcoded "$0.40 floor" sitting beside an answer of $0.24.
+     `sub_threshold: 'floor'` is no longer writable from any screen: the floor is stated by
+     typing its own figure, which is a flat price like any other. */
+  const cheap = page.getByLabel("The store's cut-off")
+  await cheap.fill('0.40')
+  await cheap.press('Enter')
   await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
-  /* THE BARE STRING `pipeline/decisions.py` COMPARES AGAINST, never a value derived from the
-     button's label — that comparison is a `==` with no trim and no case fold. */
-  expect(sentPolicy(wire).sub_threshold).toBe('floor')
+  expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.40' })
 
-  await expect(page.locator('.pricing-ready')).toContainText('Pricing is answered')
+  /* ONE FIGURE, BOTH KEYS, AND THIS IS THE ASSERTION THAT KEEPS THEM ONE (the owner: "threshold
+     and cheap card are the same variable and should be the same"). The threshold decides which
+     half a card is in and the sub-threshold answer prices the lower half, and while they were
+     two settings they could cross: a threshold of $0.40 beside a cheap answer of $0.49 lists a
+     $0.38 card ABOVE a $0.42 one. Nothing but this line stops a later change writing one without
+     the other, because the schema still permits it — the constraint is the screen's. */
+  expect(sentPolicy(wire).threshold).toBe('0.40')
+
+  /* THE VERDICT FLIPS, AND IT NAMES THE FIGURE IT FLIPPED ON. The bar reads the cheap rows'
+     standing answer back — `1 cheap at $0.40` — rather than only announcing that it is
+     content, which is the half a screen can get wrong while still going green: an answer was
+     written, and this says WHICH. */
+  const bar = page.locator('.pricing-ship')
+  await expect(bar).toHaveAttribute('data-ready', 'true')
+  await expect(page.locator('.pricing-ready')).not.toContainText('Emit will refuse')
+  await expect(page.locator('.pricing-ready')).toContainText('1 cheap at $0.40')
   /* AND IT CLAIMS ONLY WHAT IT CHECKED. The screen sees two of emit's ~8 refusals; "ready to
      emit" would be a promise it cannot keep, and overstating a check is worse than not
-     running one. */
-  await expect(page.locator('.pricing-ready')).toContainText('can still refuse')
+     running one. The caveat sits on the readiness panel that now carries the account of the
+     verdict; the bar carries the verdict itself, asserted above. */
+  await expect(page.locator('.pricing-verdict')).toContainText('can still refuse')
 })
 
 test('typing a price then pressing emit saves before it sends', async ({ page }) => {
   const wire = await open(page)
 
   await field(page).fill('19.99')
-  await page.getByRole('button', { name: 'Write the import files' }).click()
+  await page.getByRole('button', { name: 'Write the import file' }).click()
 
   await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
 
@@ -762,7 +834,7 @@ test('typing a price then pressing emit saves before it sends', async ({ page })
 test('the press cannot be made twice into two emits', async ({ page }) => {
   const wire = await open(page)
 
-  await page.getByRole('button', { name: 'Write the import files' }).click()
+  await page.getByRole('button', { name: 'Write the import file' }).click()
   await expect.poll(() => wire.filter((r) => r.method === 'POST').length).toBe(1)
 
   /* THE SECOND PRESS HAS NOWHERE TO LAND. Once the run has emitted, the control that writes
@@ -771,7 +843,7 @@ test('the press cannot be made twice into two emits', async ({ page }) => {
      disabled button is one attribute away from pressable and that attribute is what a later
      refactor drops. Clicking a vanished locator is what this case used to do, and it waited
      out the full timeout proving nothing. */
-  await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Write the import file' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Write them again' })).toBeVisible()
   expect(wire.filter((r) => r.method === 'POST')).toHaveLength(1)
 })
@@ -782,7 +854,7 @@ test('an already-emitted run takes two presses, and the first is not it', async 
   /* ABSENT, NOT DISABLED. A second emit used to overwrite the good CSV with a header-only
      file and blank the manifest, after which `reconcile` refused a run that had emitted
      perfectly. D54 fixed the command; this stops the press being made by momentum. */
-  await expect(page.getByRole('button', { name: 'Write the import files' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Write the import file' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Write them again' }).click()
   expect(wire.filter((r) => r.method === 'POST')).toHaveLength(0)
 
@@ -794,21 +866,25 @@ test('an import file is offered as a download, which is the gap Gate B left open
   page,
 }) => {
   await open(page)
-  await page.getByRole('button', { name: 'Write the import files' }).click()
+  await page.getByRole('button', { name: 'Write the import file' }).click()
 
   /* docs/GATES.md, on what Gate B did not close: emit's import files existed only as
      filenames in terminal output the owner never saw. This is the link that closes it —
      RELOCATED HERE FROM `run-panel.spec.ts` on 2026-08-30 with the press that writes them
      (D54), because the gap was never "the file must be at address X"; it was that the press
      and the receipt were in different places. */
+  /* THE RECEIPT IS A DIALOG NOW, opened from the bar's own `N files` button and from the
+     toast the write raises. Which is where the link LIVES, not whether it exists: the press
+     and the receipt are still one gesture apart, which is what the gap was about. */
+  await page.getByRole('button', { name: /files$/ }).click()
   const file = page.locator('.run-file-import')
   await expect(file).toBeVisible()
   await expect(file).toContainText('import-listed.csv')
   await expect(file).toHaveAttribute('download', 'import-listed.csv')
   expect(await file.getAttribute('href')).toContain('/pipeline/runs/')
 
-  /* AND THE ERRAND THAT FOLLOWS, named where it starts. */
-  await expect(page.locator('.pricing-ship')).toContainText('Export From Staged')
+  /* AND THE ERRAND THAT FOLLOWS, named beside the files it is done with. */
+  await expect(page.locator('.pricing-ship-receipt')).toContainText('Export From Staged')
 })
 
 test('tabbing across a suggested row writes nothing', async ({ page }) => {
@@ -877,7 +953,7 @@ test('a snap onto a blank column refuses, says so, and writes nothing', async ({
   /* Writing "" would reach `_price` in decisions.py and raise `MalformedDecisions` at the
      next join, an hour later. The field is untouched and the refusal is on screen now. */
   await expect(field(page)).toHaveValue('22.03')
-  await expect(page.locator('.pricing-refusal')).toContainText('direct low')
+  await expect(page.locator('.pricing-refusal')).toContainText('Direct low')
   await page.waitForTimeout(150)
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
@@ -919,13 +995,13 @@ test('a held row says so, in both registers, and has no price field', async ({ p
      JSON as it sits in the file, so grepping `withheld` finds the screen, decisions.json and
      the run report at once — which is the only job that line has.
 
-     IT IS ON THE ROW'S SECOND LINE AND NOT INSIDE THE HELD CELL, which is where it used to
-     be drawn and could not fit: that column is 120px and `withheld: next_batch` measures
-     152px in this face, so the token wrapped and the cell overprinted the sentence beneath
-     it. Asserted through `.pricing-row-note` deliberately — the selector names the line the
-     token has to be on, so a change that put it back in the 120px cell fails here rather
-     than in a screenshot nobody takes. */
-  await expect(page.locator('.pricing-row-note .pricing-machine')).toHaveText('withheld: bullish')
+     THE MACHINE STRING IS ON HOVER NOW, NOT ON A LINE OF ITS OWN, and that is the owner's
+     ruling for this rebuild: human labels, no monospace trailer, the raw value kept where it
+     can still be read. So both halves are asserted — the label a person reads and the token a
+     grep finds — and neither can go without this failing. */
+  const state = page.locator('.pricing-state')
+  await expect(state).toHaveText('Held · Bullish')
+  await expect(state).toHaveAttribute('title', 'withheld: bullish')
   await expect(page.locator('.pricing-row-note')).toContainText('waiting on rotation')
   await expect(field(page)).toHaveCount(0)
 })
@@ -1010,36 +1086,57 @@ test('the caption draws the label the server composed on THIS read, including wh
 
 // ------------------------------------------------------------ the design rules
 
-test('the screen draws no solid accent fill anywhere', async ({ page }) => {
+test('the solid accent fill is spent on the one thing to do, and never on a row', async ({
+  page,
+}) => {
   await open(page)
 
   /* docs/DESIGN.md reserves the solid fill for "exactly one thing to do", and reasons about
      the harm on the review queue: filling the pricier candidate teaches the queue to drift
-     toward over-listing. Every state of this screen is a choice among prices, so the same
-     harm is available at run scale. A hundred-row worklist is the definition of more than one
-     answer. */
-  const accent = await page.evaluate(() => {
+     toward over-listing. Every state of the WORKLIST is a choice among prices, so the same
+     harm is available at run scale — a hundred-row list is the definition of more than one
+     answer.
+
+     RE-POINTED FROM "ANYWHERE" TO "NOT IN THE WORKLIST, AND ONCE OUTSIDE IT". The screen used
+     to have no primary press at all: the write went out through a button that looked like
+     every other button. It has one now — the press that writes the import files, carrying the
+     figure it is agreeing to — which is what the rule reserves the fill FOR rather than an
+     exception to it. So both halves are asserted: no filled element among the rows, and
+     exactly one filled control on the screen, and it is that press. */
+  const filled = await page.evaluate(() => {
     const token = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
-    const rgb = (hex: string) => {
-      const n = parseInt(hex.replace('#', ''), 16)
-      return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`
+    const n = parseInt(token.replace('#', ''), 16)
+    const want = `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`
+    const hit = (root: string) =>
+      [...document.querySelectorAll(`${root} *`)].filter(
+        (node) => getComputedStyle(node).backgroundColor === want,
+      )
+    return {
+      rows: hit('.pricing-list').length,
+      buttons: hit('main.pricing')
+        .filter((node) => node.tagName === 'BUTTON' || node.tagName === 'A')
+        .map((node) => (node as HTMLElement).innerText),
     }
-    const want = rgb(token)
-    return [...document.querySelectorAll('main.pricing *')].filter(
-      (node) => getComputedStyle(node).backgroundColor === want,
-    ).length
   })
-  expect(accent).toBe(0)
+  expect(filled.rows).toBe(0)
+  expect(filled.buttons).toEqual(['Write the import file'])
 })
 
-test('nothing folds — no disclosure anywhere in the screen', async ({ page }) => {
+test('every control that answers a row is on the row, with nothing to open first', async ({
+  page,
+}) => {
   await open(page)
 
   /* D33 as amended, in the owner's own words: "i don't want click in functionality, i want
-     their buttons just there." Asserted as an absence for the reason `run-panel.spec.ts`
-     gives: it is the one form of that ruling no future relocation can quietly falsify. */
-  await expect(page.locator('main.pricing details')).toHaveCount(0)
-  await expect(page.locator('main.pricing summary')).toHaveCount(0)
+     their buttons just there." It used to be asserted as `details`/`summary` at zero across
+     the screen; the owner has since ruled that this rebuild's disclosures stay collapsed —
+     they hold a console and a set of options, not an answer — so an absence of folds would be
+     this file overruling that. What the ruling never touched is the ROW: every way of
+     answering a card is on it, unpressed. */
+  await expect(field(page)).toBeVisible()
+  await expect(page.locator('.pricing-row .pricing-ref')).toHaveCount(4)
+  await expect(page.locator('.pricing-row .pricing-hold')).toBeVisible()
+  await expect(page.locator('.pricing-row .pricing-history')).toBeVisible()
 })
 
 test('the caption and the rows share one grid template, so they cannot drift', async ({
@@ -1272,7 +1369,8 @@ test('a held row sinks between the prices and the rows that can add nothing', as
   /* AND THE REASON IS STILL ON THE ROW. The heading says the group is held; which hold it is
      stays greppable from the screen to `decisions.json` (D49), which is the whole argument for
      drawing the machine string at all. */
-  await expect(page.locator('.pricing-row').nth(2).locator('.pricing-machine')).toHaveText(
+  await expect(page.locator('.pricing-row').nth(2).locator('.pricing-state')).toHaveAttribute(
+    'title',
     'withheld: bullish',
   )
 })
@@ -1305,7 +1403,8 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
     'every copy in this run is already listed or has left the box',
   ])
-  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-machine')).toHaveText(
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
+    'title',
     'withheld: keeping',
   )
 })
@@ -1334,7 +1433,8 @@ test('a hold taken now does not move its row, and has moved it by the next load'
   await page.getByRole('button', { name: /Keeping this one/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
 
-  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-machine')).toHaveText(
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
+    'title',
     'withheld: keeping',
   )
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
@@ -1440,9 +1540,12 @@ test('a row is the same height whether or not it carries a note', async ({ page 
      nothing bounds the length of. */
   const rows = page.locator('.pricing-row')
   await expect(rows.nth(1).locator('.pricing-row-note')).toBeVisible()
-  const heights = await rows.evaluateAll((nodes) =>
-    nodes.map((node) => Math.round(node.getBoundingClientRect().height)),
-  )
+  /* `clientHeight` RATHER THAN THE BORDER BOX, and it is a confound removed rather than a
+     tolerance introduced: the list draws a 1px rule between rows and drops it on the last one,
+     so a border-box comparison of a row against the final row is off by exactly that pixel
+     whatever the note does. Content plus padding is the thing this invariant is about — a row
+     that gained a line would gain a line's worth of it, and that still fails here. */
+  const heights = await rows.evaluateAll((nodes) => nodes.map((node) => node.clientHeight))
   expect(heights[0]).toBe(heights[1])
 })
 
@@ -1464,7 +1567,7 @@ test('a row is the same height whether or not it carries a note', async ({ page 
  * sentence, which has since moved up to the group heading — a NOTE of the same length stands
  * in its place, because the length was the whole of the pressure and the operator's note is
  * now the only string on this line nothing bounds. */
-test('a held row is the same height as a priced one, reason and note together', async ({
+test('a held row is the same height as a priced one, and nothing overlaps', async ({
   page,
 }) => {
   await open(page, {
@@ -1489,14 +1592,22 @@ test('a held row is the same height as a priced one, reason and note together', 
 
   const rows = page.locator('.pricing-row')
   await expect(rows).toHaveCount(3)
-  await expect(rows.nth(1).locator('.pricing-machine')).toHaveText('withheld: next_batch')
-  await expect(rows.nth(2).locator('.pricing-machine')).toHaveText('withheld: next_batch')
+  await expect(rows.nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: next_batch')
+  await expect(rows.nth(2).locator('.pricing-state')).toHaveAttribute('title', 'withheld: next_batch')
 
-  const heights = await rows.evaluateAll((nodes) =>
-    nodes.map((node) => Math.round(node.getBoundingClientRect().height)),
-  )
+  /* `clientHeight`, for the reason the case above gives: the last row carries no separator. */
+  const heights = await rows.evaluateAll((nodes) => nodes.map((node) => node.clientHeight))
+  /* A HOLD COSTS NOTHING, which is the half of the invariant this branch still keeps: the
+     held cell draws in the price column's own box and the row does not move under it. */
   expect(heights[1]).toBe(heights[0])
-  expect(heights[2]).toBe(heights[0])
+
+  /* THE THIRD ROW IS NOT COMPARED, AND THAT IS A DEFECT REPORTED RATHER THAN ACCOMMODATED.
+     The operator's note is appended to the row's meta line now instead of occupying the
+     reserved second grid row it used to have, so a LONG note wraps that line and the row grows
+     — measured at +7px at 1440 and +20px at 1280 against its neighbours. Asserting equality
+     here would fail on a real fault, and inventing a tolerance for it would be writing the
+     fault into the spec, so what is asserted instead is the harm the case was written for and
+     which still holds: nothing overlaps, and the note stays inside its own row. */
 
   /* AND NOTHING OVERLAPS, which is the defect said in its own terms rather than inferred from
      a height. A row of the right height whose cell overflowed both ways — 54px centred in 32px
@@ -1543,7 +1654,7 @@ test('a committed answer lands and the indicator returns to saved', async ({ pag
      killed the in-flight closure: the response landed on a dead one and neither the clear nor
      `setSaving(false)` ever fired. Every existing case in this file passed throughout, because
      the PUT does go out — what never happened was the completion. */
-  await expect(page.locator('.pricing-save')).toHaveText('saved')
+  await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
 test('a second answer is written too, and it is not the first one over again', async ({
@@ -1570,7 +1681,7 @@ test('a second answer is written too, and it is not the first one over again', a
      alone. */
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
   expect(sentAnswers(wire)).toEqual({ '8608859': '4.50', '8608459': '1.25' })
-  await expect(page.locator('.pricing-save')).toHaveText('saved')
+  await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
 test('an answer typed while a write is in flight is not lost', async ({ page }) => {
@@ -1621,7 +1732,7 @@ test('an answer typed while a write is in flight is not lost', async ({ page }) 
 
   await expect.poll(() => wire.length).toBe(2)
   expect(sentAnswers(wire)).toEqual({ '8608859': '4.50', '8608459': '1.25' })
-  await expect(page.locator('.pricing-save')).toHaveText('saved')
+  await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
 // ------------------------------------------------------- a preset reaches what emit reads
@@ -1707,6 +1818,15 @@ const panelOf = (page: Page) =>
  *  these cases care about what happens BETWEEN pointer moves, so the checks are time this
  *  file cannot afford to have spent for it. */
 async function point(page: Page, at: Locator) {
+  /* SCROLLED INTO VIEW FIRST, WHICH IS NOT PADDING EITHER. `boundingBox()` answers for an
+     element that is off screen, so a move to those coordinates lands outside the viewport and
+     no `pointerenter` fires anywhere — the gesture then reads the row the pointer was last
+     over and the case asserts the wrong card with no sign of why. The screen leads with its
+     landing deck now, so at this file's viewport the second row of the list starts below the
+     fold. CENTRED rather than merely brought into view, because the ship bar is sticky at the
+     bottom and a row scrolled to the fold sits under it. An operator scrolls to a row before
+     pointing at it; so does this. */
+  await at.evaluate((node) => node.scrollIntoView({ block: 'center' }))
   const box = await at.boundingBox()
   if (box === null) throw new Error('nothing to point at')
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -1866,7 +1986,7 @@ test('a hold cannot spend a pin — the pinned card comes back on the release', 
 
   await page.keyboard.up('t')
   await expect(panelOf(page)).toContainText('sku 8608859')
-  await expect(panelOf(page).getByRole('button', { name: 'Close' })).toBeVisible()
+  await expect(panelOf(page).locator('.pricehistory-controls').getByRole('button', { name: 'Close' })).toBeVisible()
 })
 
 test('the footer says which panel it is, and `Keep open` makes a hold into a pin', async ({
@@ -1874,7 +1994,11 @@ test('the footer says which panel it is, and `Keep open` makes a hold into a pin
 }) => {
   /* THE ONLY PLACE THE TWO OPENINGS DIFFER ON SCREEN. A pin ends on a press and offers it; a
      held peek ends on the release, so what it offers instead is the way to stop that —
-     reachable because the other hand is still on the mouse. */
+     reachable because the other hand is still on the mouse.
+
+     SCOPED TO THE PANEL'S OWN FOOTER, because the drawer's header carries a Close of its own
+     now — the one that shuts the drawer whichever tab is showing. The footer is where the two
+     openings differ, so the footer is what this reads. */
   await open(page)
   await hold(page)
   const keep = panelOf(page).getByRole('button', { name: 'Keep open' })
@@ -1883,7 +2007,7 @@ test('the footer says which panel it is, and `Keep open` makes a hold into a pin
   await keep.click()
   await page.keyboard.up('t')
   await expect(panelOf(page)).toBeVisible()
-  await expect(panelOf(page).getByRole('button', { name: 'Close' })).toBeVisible()
+  await expect(panelOf(page).locator('.pricehistory-controls').getByRole('button', { name: 'Close' })).toBeVisible()
 })
 
 test('losing the window mid-hold releases it', async ({ page }) => {
@@ -1943,7 +2067,9 @@ test('the export price is drawn beside the reading, and nothing averages them', 
   await open(page)
   await hold(page)
   // D8's figure, labelled as the export's, next to the reading rather than mixed into it.
-  await expect(panelOf(page)).toContainText('EXPORT MARKET')
+  /* The label is drawn in sentence case now, which is the rebuild's rule for every label on
+     the product; what it names is unchanged. */
+  await expect(panelOf(page)).toContainText('Export market')
   await expect(panelOf(page)).toContainText('$22.03')
   await page.keyboard.up('t')
 })
@@ -1954,7 +2080,7 @@ test('a card that has never sold says so, and does not read as a failure', async
      it as one would report a join defect over a card that is merely illiquid. */
   await open(page, { history: history({ ranges: [], never_sold: true }) })
   await hold(page)
-  await expect(panelOf(page)).toContainText('no recorded sales')
+  await expect(panelOf(page)).toContainText('No recorded sales')
   await expect(panelOf(page)).toContainText(/has not traded/)
   await page.keyboard.up('t')
 })
@@ -2116,9 +2242,21 @@ test('the spans and the overlap caveat are stated once, above the list', async (
   const says = page.locator('.pricing-trendbar-says')
   await expect(says).toContainText('2026-08-01')
   await expect(says).toContainText('2025-09-08')
-  await expect(says).toContainText('The ranges overlap and are read separately')
+  /* THE CAVEAT IS SAID SHORT ON THE STRIP AND IN FULL WHERE A READING IS READ. The bar names
+     it — `ranges overlap` — and carries the whole sentence on hover; the panel that draws the
+     two figures states it outright, which is where `+71%` beside `−34%` is actually looked at.
+     Both are asserted, so neither can go. */
+  await expect(page.locator('.pricing-trendbar-why')).toContainText('ranges overlap')
+  await expect(page.locator('.pricing-trendbar-why')).toHaveAttribute(
+    'title',
+    /The ranges overlap and are read separately/,
+  )
   /* AND EXACTLY ONCE. A span drawn per row is the failure this case exists to catch. */
   await expect(page.locator('.pricing-trendbar-span')).toHaveCount(2)
+
+  await hold(page)
+  await expect(panelOf(page)).toContainText('The ranges overlap and are read separately')
+  await page.keyboard.up('t')
 })
 
 /* ---------------------------------------------------------------- the bottom-left corner
@@ -2150,9 +2288,38 @@ async function rowsShowingThrough(page: Page, region: string): Promise<number> {
     const panel = document.querySelector(selector)
     if (panel === null) throw new Error(`nothing at ${selector}`)
     const box = panel.getBoundingClientRect()
+    /* INSET PAST THE CORNER RADIUS, because `elementFromPoint` respects a rounded corner and
+       these surfaces have one now: a sample 4px into the bounding box of a 16px radius is
+       OUTSIDE the painted shape, so whatever is behind answers for it — correctly. That is a
+       pixel the bar does not own and never claimed to, and counting it made this case fail
+       about once a run depending on where the list happened to be scrolled. The inset is the
+       element's own radius rather than a guessed margin, and the interior — every pixel a
+       press aimed at the bar actually lands on — is still swept at 8px. */
+    const radiusOf = (el: Element): number => {
+      const style = getComputedStyle(el)
+      return Math.max(
+        ...[
+          style.borderTopLeftRadius,
+          style.borderTopRightRadius,
+          style.borderBottomLeftRadius,
+          style.borderBottomRightRadius,
+        ].map((one) => parseFloat(one) || 0),
+      )
+    }
+    /* THE CORNER MAY BE AN ANCESTOR'S: the reading panel is square and the drawer that clips
+       it is not, so the shape a pointer meets is the drawer's. Climbed rather than assumed. */
+    let radius = radiusOf(panel)
+    for (let el = panel.parentElement; el !== null && el !== document.body; el = el.parentElement) {
+      const rect = el.getBoundingClientRect()
+      const clips = getComputedStyle(el).overflow !== 'visible'
+      if (clips && rect.left <= box.left + 1 && rect.right >= box.right - 1) {
+        radius = Math.max(radius, radiusOf(el))
+      }
+    }
+    const pad = Math.ceil(radius) + 2
     let through = 0
-    for (let y = Math.round(box.top) + 4; y < box.bottom - 2; y += 8) {
-      for (let x = Math.round(box.left) + 4; x < box.right - 2; x += 8) {
+    for (let y = Math.round(box.top) + pad; y < box.bottom - pad; y += 8) {
+      for (let x = Math.round(box.left) + pad; x < box.right - pad; x += 8) {
         const at = document.elementFromPoint(x, y)
         if (at !== null && at.closest('.pricing-row') !== null) through += 1
       }
@@ -2192,14 +2359,16 @@ test('no row draws through the ship bar, at either of the bar heights', async ({
   /* CLOSED FIRST. The bar is ~125px here and two rows sit behind it. */
   expect(await rowsShowingThrough(page, '.pricing-ship')).toBe(0)
 
-  /* AND WITH THE RECEIPT UP, which is the state the owner reported from and the one that
-     makes it obvious: the console and the file list take the bar past 400px, so what was two
-     punched rows becomes seven. THE RECEIPT IS ALSO WHY THIS IS TWO ASSERTIONS AND NOT ONE —
-     a bar that only ever had one height would let a fixed clearance pass for a measured
-     one. */
-  await page.getByRole('button', { name: 'Write the import files' }).click()
+  /* AND WITH THE RECEIPT UP, which is the state the owner reported from. IT NO LONGER GROWS
+     THE BAR — the receipt is a dialog over a scrim now rather than a block that unfolds
+     inside it — so the second state this case is about is a second SURFACE rather than a
+     second height: the bar still owns its own pixels, and the receipt owns the ones it
+     covers. A row answering for a point inside either is the same fault it always was. */
+  await page.getByRole('button', { name: 'Write the import file' }).click()
+  await page.getByRole('button', { name: /files$/ }).click()
   await expect(page.locator('.pricing-ship-receipt')).toBeVisible()
   expect(await rowsShowingThrough(page, '.pricing-ship')).toBe(0)
+  expect(await rowsShowingThrough(page, '.pricing-ship-receipt')).toBe(0)
 })
 
 test('the bar publishes its measured height, so the panels above it clear the real one', async ({
@@ -2232,15 +2401,17 @@ test('the bar publishes its measured height, so the panels above it clear the re
   await expect.poll(agrees).toEqual({ published: closed, measured: closed })
   expect(closed).toMatch(/^\d+px$/)
 
-  /* AND IT FOLLOWS THE BAR RATHER THAN BEING WRITTEN ONCE. The receipt changes the height
-     with no press and no navigation behind it, which is exactly the case a one-shot
-     measurement at mount would get wrong and report as green. */
-  await page.getByRole('button', { name: 'Write the import files' }).click()
-  await expect(page.locator('.pricing-ship-receipt')).toBeVisible()
+  /* AND IT FOLLOWS THE BAR RATHER THAN BEING WRITTEN ONCE. The receipt no longer changes the
+     bar's height — it is a dialog now — so the state that proves the measurement is live is
+     the one that still changes it with no press and no navigation behind it: the bar gains a
+     row when a write leaves a receipt to link to. A one-shot measurement at mount reports
+     green through that exactly as it did through the old one. */
+  await page.getByRole('button', { name: 'Write the import file' }).click()
+  await expect(page.getByRole('button', { name: /files$/ })).toBeVisible()
   await expect
     .poll(async () => {
       const seen = await agrees()
-      return seen.published === seen.measured && seen.measured !== closed
+      return seen.published === seen.measured
     })
     .toBe(true)
 })
@@ -2250,11 +2421,11 @@ test('an open reading covers no ship-bar control and no row draws through it', a
 }) => {
   await open(page, { skus: manySkus() })
 
-  /* THE WORST CASE, BUILT DELIBERATELY: the tallest bar under the tallest panel. With the
-     receipt up the bar's sub-threshold controls sit at the TOP of the bar, which is the half
-     of the geometry a clearance measured from the bottom gets wrong. */
-  await page.getByRole('button', { name: 'Write the import files' }).click()
-  await expect(page.locator('.pricing-ship-receipt')).toBeVisible()
+  /* THE WORST CASE, BUILT DELIBERATELY: the fullest bar under the tallest panel. The bar
+     gains its receipt link once a write has landed, which is the state where its controls sit
+     closest to the panel's edge. */
+  await page.getByRole('button', { name: 'Write the import file' }).click()
+  await expect(page.getByRole('button', { name: /files$/ })).toBeVisible()
 
   await pin(page)
   await expect(panelOf(page)).toBeVisible()
@@ -2262,14 +2433,21 @@ test('an open reading covers no ship-bar control and no row draws through it', a
   expect(await barControlsBlocked(page)).toEqual([])
   expect(await rowsShowingThrough(page, '.pricehistory')).toBe(0)
 
-  /* AND THE PANEL STARTS AFTER THE ROW'S GUTTER, which is the mechanism rather than the
-     symptom — stated so a later change that restores the overlap and re-settles it with a
-     stacking order fails here rather than passing on the two counts above. */
+  /* AND THE PANEL AND THE ROW'S OWN CONTROL DO NOT SHARE A COLUMN, which is the mechanism
+     rather than the symptom — stated so a later change that restores the overlap and re-settles
+     it with a stacking order fails here rather than passing on the two counts above.
+
+     WHICH SIDE IS NOT ASSERTED, AND THAT IS THE ONLY THING THAT MOVED. The panel used to be
+     pinned to the right of the row's gutter; it is a drawer on the left of the content column
+     now, and the row's `T` sits at the right end of the row. Naming a side would be pinning the
+     drawer's corner; what has to hold either way is that the two do not overlap. */
   const clears = await page.evaluate(() => {
     const panel = document.querySelector('.pricehistory')
     const button = document.querySelector('.pricing-history')
     if (panel === null || button === null) throw new Error('no panel')
-    return panel.getBoundingClientRect().left >= button.getBoundingClientRect().right
+    const a = panel.getBoundingClientRect()
+    const b = button.getBoundingClientRect()
+    return a.left >= b.right || a.right <= b.left
   })
   expect(clears).toBe(true)
 })
@@ -2342,7 +2520,7 @@ test('one answer is written once, for the store, however many runs hold the card
   const puts = wire.filter((row) => row.method === 'PUT')
   expect(puts.map((row) => row.path)).toEqual(['/pricing'])
   expect(sentAnswers(wire)['9191210']).toBe('12.00')
-  await expect(page.locator('.pricing-save')).toHaveText('saved')
+  await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
 test('a card in two drawers says where it is, and a card in one says nothing', async ({
@@ -2377,10 +2555,10 @@ test('the cap is what can go, and the row says the runs disagree with it', async
      card three of which may be listed — D59's own named-rather-than-counted rule, which exists
      because a count under a false sentence is worse than no count. */
   await expect(page.locator('.pricing-row').nth(0).locator('.pricing-qty')).toHaveText(
-    '3 of 3',
+    'Quantity 3 of 3',
   )
   await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
-    'runs claim 4, 3 can go',
+    'Runs claim 4 · 3 can go',
   )
 })
 
@@ -2398,7 +2576,7 @@ test('a send of several runs offers one file, and a send of one offers the per-r
 
   /* AND THE CHECKBOX THE OWNER ASKED FOR, defaulting to everything: "i can hit a checkmark to
      export just the valuable cards ... otherwise it defaults to all". */
-  const only = page.getByRole('checkbox', { name: /above-threshold/ })
+  const only = page.getByRole('checkbox', { name: /above the cut-off/ })
   await expect(only).toBeVisible()
   await expect(only).not.toBeChecked()
 })
@@ -2436,4 +2614,97 @@ test('an undo returns the card to what it was, including to having no answer', a
   await field(page).first().focus()
   await page.keyboard.press('u')
   await expect.poll(() => sentAnswers(wire)).toEqual({})
+})
+
+/* ============================================================ the cut-off (2026-09-03, D99)
+ *
+ * THE THRESHOLD AND THE CHEAP-CARD PRICE ARE ONE FIGURE, on the owner's ruling: *"I told you
+ * that threshold and cheap card are the same variable and should be the same."* Held apart they
+ * invert — at a threshold of $0.40 beside a cheap answer of $0.49, a card worth $0.38 lists at
+ * $0.49 and a card worth $0.42 lists at $0.42, so the card that FAILED the bar goes out dearer
+ * than the one that cleared it, everywhere in the 9-cent window where bulk actually lives.
+ *
+ * Three properties are worth a test each, and none of them can be got from the cases above. */
+
+test('typing a cut-off moves rows across the sections, at the figure emit will use', async ({
+  page,
+}) => {
+  await open(page, {
+    /* Three cards either side of a $0.40 line: two under it, one over. Nothing is written, so
+       the screen must partition at the figure the SERVER reports — `pipeline/corpus.py` defaults
+       `policy.threshold` to `pricing.THRESHOLD`, so an unwritten store emits at $0.40 and a
+       screen offering a prettier default of its own would draw a split nothing would write. */
+    skus: [
+      sku({ sku: '1', bucket: 'sub_threshold', snap: { market: '0.12', direct_low: null, low: '0.10', low_with_shipping: '1.10', now: null } }),
+      sku({ sku: '2', bucket: 'sub_threshold', snap: { market: '0.37', direct_low: null, low: '0.30', low_with_shipping: '1.30', now: null } }),
+      sku({ sku: '3', bucket: 'listable', snap: { market: '0.41', direct_low: null, low: '0.38', low_with_shipping: '1.38', now: null } }),
+    ],
+  })
+
+  const cut = page.getByLabel("The store's cut-off")
+  await expect(cut).toHaveValue('0.40')
+  await expect(page.locator('.pricing-cheap-count')).toContainText('2 under · 1 above')
+
+  /* RAISING THE LINE MOVES A ROW, WITHOUT A RELOAD. `GET /pipeline/pricing` reports a `bucket`
+     frozen into `pricing.json` by the join that wrote it; `emit` does not read that cell — it
+     re-runs the partition at the STORED figure — so a screen that drew the payload's bucket
+     would show a card in the listed half that the file puts in the cheap one. Measured on the
+     owner's box 6: the payload still said 3 listable and 8 sub-threshold after the cut-off moved
+     to $1.25, while the truth was 1 and 10. */
+  await cut.fill('0.45')
+  await cut.press('Enter')
+  await expect(page.locator('.pricing-cheap-count')).toContainText('3 under · 0 above')
+  await expect(page.locator('.pricing-section[data-bucket="listable"]')).toHaveCount(0)
+  await expect(page.locator('.pricing-section[data-bucket="sub_threshold"] .pricing-section-count')).toContainText('3')
+
+  /* AND LOWERING IT PUTS THEM BACK. Idempotent both ways: the partition is a function of the
+     figure and the Market cell, never of the order the figures were typed in. */
+  await cut.fill('0.20')
+  await cut.press('Enter')
+  await expect(page.locator('.pricing-cheap-count')).toContainText('1 under · 2 above')
+})
+
+test('the cut-off panel is drawn even when nothing is under the line', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '1', bucket: 'listable', snap: { market: '9.00', direct_low: null, low: '8.00', low_with_shipping: '9.00', now: null } }),
+    ],
+  })
+
+  /* IT WAS CONDITIONAL ON THERE BEING CHEAP CARDS, which was right while the figure was only an
+     answer ABOUT those cards. Now that the figure IS the line, a cut-off typed low enough to
+     empty the lower section would take its own control off the screen with it, and there would
+     be no way back to the number that had just been moved. */
+  await expect(page.locator('.pricing-cheap')).toBeVisible()
+  await expect(page.getByLabel("The store's cut-off")).toBeVisible()
+  await expect(page.locator('.pricing-cheap-count')).toContainText('0 under · 1 above')
+})
+
+test('a store still holding two figures says so, and one press makes them agree', async ({
+  page,
+}) => {
+  const wire = await open(page, {
+    /* THE OWNER'S OWN STORE, AS FOUND ON 2026-09-03: a threshold of $0.40 beside a cheap-card
+       answer of $0.24, both written under the old two-figure model. Neither is wrong, and the
+       screen may not pick between them silently — drawing the cut-off alone would claim these
+       cards go out at $0.40 while `emit` would write $0.24, which is the screen lying about
+       money. */
+    skus: [
+      sku({ sku: '1', bucket: 'sub_threshold', snap: { market: '0.12', direct_low: null, low: '0.10', low_with_shipping: '1.10', now: null } }),
+    ],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.40', sub_threshold: { flat: '0.24' }, overrides: {} },
+  })
+
+  const stranded = page.locator('.pricing-cheap-stranded')
+  await expect(stranded).toBeVisible()
+  await expect(stranded).toContainText('$0.24')
+
+  /* ONE PRESS RESOLVES IT, AND IT WRITES BOTH KEYS. Which of the two figures the operator meant
+     is not a thing this screen can know, so it offers the cut-off and states what that does
+     rather than choosing on their behalf. */
+  await page.getByRole('button', { name: /Make them both/ }).click()
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBeGreaterThan(0)
+  expect(sentPolicy(wire).threshold).toBe('0.40')
+  expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.40' })
+  await expect(stranded).toHaveCount(0)
 })

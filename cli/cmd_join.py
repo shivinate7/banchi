@@ -229,7 +229,10 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
 
     return {
         "run": run_dir.name,
-        "threshold": str(pricing.THRESHOLD),
+        # THE FIGURE THIS JOIN PARTITIONED BY, WHICH IS THE OPERATOR'S AND NOT THE MODULE'S.
+        # `#/pricing` prints "Below $X" over the sub-threshold section off this cell, and a
+        # constant here would have drawn a heading over rows it did not sort.
+        "threshold": str(resolved.threshold),
         "floor": str(pricing.FLOOR),
         "rule": str(choice.rule),
         "basis": choice.basis,
@@ -237,6 +240,11 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
         "games": [
             {
                 "game": g.game,
+                # THREE NAMES BECAUSE THERE ARE THREE SHAPES (D99), and the first is what
+                # a press writes unless a flag says otherwise. The two beside it are what
+                # `--split-threshold` writes and are kept rather than replaced: a screen
+                # offering a download has to be able to name a file an earlier emit left.
+                "import_merged": runs.import_merged_name(),
                 "import_listed": runs.import_listed_name(g.game),
                 "import_subthreshold": runs.import_subthreshold_name(g.game),
             }
@@ -247,7 +255,7 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
     }
 
 
-def _preview(args, run_dir, plan, resolved, say) -> int:
+def _preview(args, run_dir, plan, resolved, threshold, say) -> int:
     """`--dry-run`: everything the join would compute, and nothing it would write.
 
     The comparison is the point. It walks the ladder a SECOND time with the bypass flipped
@@ -271,6 +279,9 @@ def _preview(args, run_dir, plan, resolved, say) -> int:
             basis=args.basis,
             review_below=args.review_below_confidence,
             trust_claim=not args.bypass,
+            # THE SAME CUT-OFF AS THE FIRST WALK. This walk exists to diff two queues, and a
+            # diff between two partitions taken at two thresholds measures the threshold.
+            threshold=threshold,
         )
     except join.EmptyCatalog:  # pragma: no cover — the first load would have refused first
         return 0
@@ -309,6 +320,39 @@ def run(args, say) -> int:
         say(str(refusal))
         return 1
 
+    # ------------------------------------------------- the corpus, BEFORE the ladder walks
+    #
+    # READ HERE AND NOT AT THE TAIL, BECAUSE THE THRESHOLD DECIDES A PARTITION AND NOT A
+    # PRINT. `policy.threshold` is what `SkuMatch.listable` compares Market against, so it
+    # has to be in hand before `resolve.load` builds a single match — the same ordering
+    # `cli/cmd_emit.py` already gives its own read, and for the same reason it gives: a value
+    # read after the thing it governs is a value that governs nothing.
+    #
+    # ONE READ FOR THE WHOLE COMMAND. The seeding block at the tail uses this same `book`,
+    # so a join still writes exactly one document; nothing between here and there touches it.
+    #
+    # `rule` AND `basis` ARE DELIBERATELY NOT TAKEN FROM IT HERE. They are `--rule`/`--basis`
+    # at join time and the corpus's at emit time, which is the seam D49 Part One draws — the
+    # manifest RECORDS what a join ran with — and moving them is a separate argument nobody
+    # has made. The threshold is not a seed: there is no `--threshold`, and the stored figure
+    # is the only one there is.
+    try:
+        book = corpus.Corpus.read()
+    except (
+        decisions.MalformedDecisions,
+        pricing.UnknownRule,
+        pricing.UnknownBasis,
+        pricing.InvalidThreshold,
+    ) as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
+        say("Fix it, or delete it and let this join write a fresh one.")
+        return 1
+    try:
+        threshold = pricing.check_threshold(book.policy_for(run_dir.name)["threshold"])
+    except pricing.InvalidThreshold as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
+        return 1
+
     store = Store()
     snapshot = store.read()
 
@@ -336,6 +380,7 @@ def run(args, say) -> int:
             basis=args.basis,
             review_below=args.review_below_confidence,
             trust_claim=args.bypass,
+            threshold=threshold,
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
@@ -449,7 +494,7 @@ def run(args, say) -> int:
     # makes this useful: a preview that skipped the report would preview nothing, and one
     # that ran after the queues were written would not be a preview.
     if args.dry_run:
-        return _preview(args, run_dir, plan, resolved, say)
+        return _preview(args, run_dir, plan, resolved, threshold, say)
 
     # --------------------------------------------------------------- write the queues
     main, parked = resolve.entries_for(resolved)
@@ -549,13 +594,9 @@ def run(args, say) -> int:
     # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ. `pkmnscan prices adopt` folds it
     # in, once, with a report of every answer it had to choose between. Reading it here as a
     # fallback would put the duplication back the moment somebody re-joined an old run.
-    try:
-        book = corpus.Corpus.read()
-    except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
-        say(f"{corpus.FILENAME} is unusable: {exc}")
-        say("Fix it, or delete it and let this join write a fresh one.")
-        return 1
-
+    # `book` WAS READ AT THE TOP OF THIS COMMAND, because the threshold it carries had to be
+    # in hand before the ladder walked. Re-reading it here would be a second document,
+    # readable a second way, for a file this command is about to write.
     legacy = run_dir.path(runs.DECISIONS)
     if legacy.is_file() and not book.answers:
         say(f"this run has a legacy {runs.DECISIONS} and the corpus is empty")

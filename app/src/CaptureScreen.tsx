@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PositionLabel } from './PositionLabel'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
+import { PositionLabel } from './PositionLabel'
 import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry } from './types'
 import {
   getTcgSets,
@@ -21,24 +21,13 @@ import { resolveSetHint } from './setHint'
 import type { HintVerdict, SetOption } from './setHint'
 import { manualTrigger } from './trigger'
 import { motionTrigger } from './motion'
-import type { MotionControls, MotionDiagnostics } from './motion'
+import type { MotionControls, MotionDiagnostics, MotionPhase } from './motion'
 import { MotionTrace } from './trace'
 import { DEFAULT_PARAMS } from './motion'
 import { useCamera, PIPELINE_LONG_EDGE, ROTATIONS } from './useCamera'
-import { PullConfirm } from './PullConfirm'
+import { Button, Icon, Kbd, Notice, Pill, Stat } from './kit'
+import type { IconName, PillTone } from './kit'
 import './CaptureScreen.css'
-
-/* The capture screen — docs/specs/capture-app.md section 5.
- *
- * The screen the owner spends hours in, and the only one Gate B exercises end to end. Every
- * shape below is settled in that spec against a named alternative; where this file makes a
- * call the spec left open, the comment says so and names what it beat.
- *
- * The one thing to hold on to while reading: a card that passes the lens with no record and
- * no photo is unrecoverable — nothing afterwards can say which card it was. Section 5.5 is
- * the whole reason a failed capture stops the run instead of retrying quietly, and the
- * in-flight guard, the halt state and the disabled control below all serve that one rule.
- */
 
 // The trigger seam (spec section 6). Gate B fired on this key and button; the motion
 // machine (Gate C, src/motion.ts) sits in the same slot behind the mode toggle below.
@@ -50,39 +39,14 @@ import './CaptureScreen.css'
 const CAPTURE_KEY = 'c'
 const UNDO_KEY = 'u'
 
-/* THE THIRD ACT ON THIS SCREEN, and the owner asked for it in exactly those terms on
- * 2026-08-29: "just like C is capture, I want S for Sectioning". It puts a divider in front
- * of the next card, at the moment the real one goes into the box.
- *
- * AN ACT, NOT A FIELD, WHICH IS WHY IT IS HERE AND NOT IN `FIELD_KEYS`. Every letter in that
- * table opens something to choose from and changes what the NEXT photograph will claim. This
- * one writes to the store on the press, like the shutter and the undo, and it is on the same
- * `manualTrigger` primitive they are — so auto-repeat, held modifiers and keys typed into an
- * input are decided once, in one module, rather than in a second listener here that would
- * have to be kept in step with it. A divider is a physical act; a held `s` is not eleven of
- * them.
- *
- * IT COST THE SET HINT ITS LETTER, and the swap is the owner's: the set hint is `h` now. The
- * screen had `s` on the field an operator opens a few times a run and needed it for the act
- * they perform at the box. `h` is not a worse mnemonic for a hint, and nothing else on this
- * screen had claimed it. */
 const SECTION_KEY = 's'
 
-/* HOW FAR BACK THE UNDO STACK GOES. The owner's number, 2026-08-29: "let's say the 10 most
- * recent captures that I can just click undo capture on from the sidebar".
- *
- * IT IS A DEPTH, NOT A HISTORY. Every row is a card this SESSION captured, newest first, and
- * pressing one walks the undo back through every card above it — because D10 allows undo to
- * reach the newest capture in a box and nothing else, and repeated undo is how it reaches
- * further. A row is therefore "undo this and everything after it", which is what an undo
- * stack means everywhere else, rather than "delete this one" — that operation exists
- * (D10 ruling 1's mid-box remove) and deliberately lives on `#/inventory`, because it slides
- * every higher card down one index and would renumber the very list it was pressed from.
- *
- * TEN IS A HEIGHT AS WELL AS A NUMBER. The list is capped and scrolls, and the heading says
- * how many it holds, so a capped list cannot read as a short one — `BoxOps`' section list,
- * same problem, same answer. */
 const UNDO_DEPTH = 10
+
+/** How long the settle ring takes to fill: the machine's own still window, in frames, at
+ *  the 30 fps `motion.ts` derives its frame counts against. Written inline on the ring so
+ *  it depicts the wait it stands for rather than a constant that finishes early or late. */
+const SETTLE_MS = Math.round((DEFAULT_PARAMS.stillWindow * 1000) / 30)
 
 // What the chips say. The key compared against `event.key` is lower case; the chip is not.
 const CAPTURE_KEY_LABEL = 'C'
@@ -97,55 +61,24 @@ const SECTION_KEY_LABEL = 'S'
 // The list itself used to live here as `FINISHES`, Pokemon's three. It is per-game data now
 // and comes from `GET /games`; see `finishChips` below.
 
-/* THE DEFAULT STATE OF THE FINISH CONTROL — no claim at all — and, since 2026-08-23, a
- * LABEL RATHER THAN A CELL.
- *
- * It used to be drawn as the track's first cell, which made "claim nothing" a thing to pick
- * beside the things there are to claim. The owner's ruling: nothing selected already IS no
- * claim, so the cell only restated the absence of the others. It went; this label stayed,
- * because the state still has to be NAMED wherever it is read — the collapsed Row and the
- * last-capture panel both still say it at full contrast. Clearing a claim is re-tapping the
- * cell that is on, which is what the rarity claim beside it already did and what `Track`'s
- * `aria-pressed` markup always described.
- *
- * It is not a member of any game's enum — the server answers anything outside THE CHOSEN
- * GAME's finishes with `variant_invalid` (`_check_variant_members`; it was Pokemon's three
- * under every game until the day this comment was rewritten, which is the bug that cost a
- * Riftbound `foil` its capture) — it is `null`, and it sends no `variant` key at all,
- * exactly as a blank set hint sends no `set_hint`. Both rules come from the same sentence
- * in `sidecar_payload`: the file stays a record of claims the operator actually made
- * (D3 rung 1).
- *
- * THE NEXT PERSON TO TIDY THIS WILL WANT TO DEFAULT IT TO 'normal'. What that costs is
- * structural rather than cosmetic. `pipeline/variant.py:resolve` reaches rung 2
- * (CATALOG_FORCED, "one condition row for that number, so the row decides") and rung 3
- * (detection as a cross-check) only where the sidecar recorded no variant. A default claim
- * on every capture makes both rungs unreachable for every card this product will ever
- * photograph — and D3's own example, the holofoil-only SV-era rare, then returns
- * METADATA_NOT_STOCKED and costs a review-queue tap in place of resolving untouched. That
- * is the zero-attention-per-card property in CLAUDE.md's first line, spent on a claim
- * nobody made.
- *
- * Lower case with a space, which no member of the enum can be. Same trick as the undo
- * fallback further down: a state label must never be readable as a machine string.
- */
-const NO_CLAIM_LABEL = 'no claim'
+const NO_CLAIM_LABEL = 'No claim'
 
-/* `identify/prompt.py:UNWRITTEN` — the one registry strategy name this screen compares
- * against, and the only string here that duplicates a Python literal.
- *
- * It is not a mirror of the vocabulary and must not grow into one: `PROMPT_STRATEGIES` has
- * three members and the app cares about exactly one of them, because "this game has no
- * prompt YET" is a fact the operator can act on — it means a card captured now will need
- * re-identifying later. The other two are the app's business only through fields it already
- * gets: `catalogued` says a game is never identified at all, and `unverified` says it cannot
- * be captured. A `games.ts` holding all three would be the second copy `types.ts` argues
- * against, for one comparison.
- *
- * If the registry ever renames it, this comparison quietly stops matching and the chip loses
- * its second line — a missing hint, never a wrong capture. That is the failure this is worth
- * accepting; anything that decided a CLAIM off a duplicated literal would not be.
- */
+/** A finish member drawn as a word. The KEY — `reverse_holo` — is what the claim stores,
+ *  sends and compares (D3); only the eye gets the label. An unknown member falls back to
+ *  the key with its underscores opened, so no game's vocabulary ever prints as a raw enum. */
+const FINISH_LABEL: Record<string, string> = {
+  normal: 'Normal',
+  holo: 'Holo',
+  reverse_holo: 'Reverse holo',
+  foil: 'Foil',
+}
+function finishLabel(member: string): string {
+  const known = FINISH_LABEL[member]
+  if (known !== undefined) return known
+  const opened = member.replace(/_/g, ' ')
+  return opened.charAt(0).toUpperCase() + opened.slice(1)
+}
+
 const PROMPT_UNWRITTEN = 'unwritten'
 
 /** One capture made in this session: what the server recorded, and what we sent with it. */
@@ -194,19 +127,6 @@ function positionText(target: UndoTarget): string {
   return target.label ?? `box ${target.box}, index ${target.index}`
 }
 
-/* What counts as a box on the way in: digits, and nothing else.
- *
- * Deliberately not `Number.parseInt`, which was here and reads '1e3' as 1 and '3.7' as 3 —
- * handing back a DIFFERENT box that is entirely valid and that the operator never typed.
- * Neither is hypothetical: `<input type="number">` accepts both as values, so both arrive
- * here as strings, and the box decides which physical box a photo is filed into. A wrong
- * one is a real photo at a real position in a box that was never opened, which is the same
- * class of damage as the 33-for-3 typo spec 5.2 accepted knowingly — accepted there because
- * the operator typed it, and not acceptable here because nobody did.
- *
- * Leading zeros are allowed through ('003' is 3): they are unambiguous and a rig operator
- * typing one meant the box they got.
- */
 const BOX_DIGITS = /^[0-9]+$/
 
 /** One row of the Box field: what the registry calls it, how full it is, whether it is shut.
@@ -223,79 +143,20 @@ type BoxOption = {
   sealed: boolean
 }
 
-/* ---- what survives a reload, and nothing else does (D27) ----
- *
- * CLAUDE.md bans browser storage and that ban is about INVENTORY. D13 puts one truth on the
- * Mac so the owner's device and the Fulfiller's cannot disagree about where a card is, and
- * `docs/specs/capture-app.md` section 9's "no second store in the browser" is about captures,
- * which still go straight to the server. None of that was ever about the capture screen's own
- * scratch state, and reading it that way cost a real thing: everything below was `useState`,
- * so a reload in the middle of a run threw away the box, the set hint, the finish claim, the
- * game — and the in-flight capture id, which is the one that matters.
- *
- * THE CAPTURE ID IS WHY THIS EXISTS. It is the replay guard: when a capture's response is
- * lost, resending the same id lets the server answer with the position it already committed
- * instead of burning a second one. Held in a ref it did not survive a reload, and a reload
- * during a halt therefore made that ambiguity PERMANENTLY unresolvable — one physical card
- * with two positions or none, and D10's high-water mark handing the burned index to the next
- * card off the feeder. Nothing else on this screen has a failure of that shape.
- *
- * `sessionStorage`, NEVER `localStorage`, and the difference is the point. A shift ends when
- * the tab closes; a new tab is a new shift. That is exactly right for a claim about the stack
- * currently in front of the lens, and it is what makes the held capture id safe to keep:
- * closing the browser is what clears an id nobody is coming back to resolve. `useCamera.ts`
- * uses `localStorage` for the device id and the rotation, and those are the precedent rather
- * than the subject — they are facts about THIS MACHINE, wrong on any other, and a remembered
- * camera cannot take a photograph on its own. `app/eslint.config.js` holds the boundary open
- * in exactly one file for exactly that reason.
- *
- * THE KEYS ARE NAMED HERE AND NOWHERE ELSE, so the boundary is checkable rather than
- * remembered. Nothing about a card, a position or the inventory is in this list and nothing
- * about one may be added to it: what is stored is the claims the operator has set and the id
- * of the photograph in flight.
- *
- * TRIGGER MODE IS DELIBERATELY ABSENT. D19 keeps arming an act rather than a setting, and a
- * motion machine that came back armed after a reload is an automatic shutter pointed at
- * whatever is in front of the lens, with nobody having asked for it this session. Every
- * session starts manual. The same goes for the halt: it is the screen's reaction to one
- * request failing, not a claim, and the server's own message — which section 4 forbids
- * paraphrasing — is not ours to reconstruct from a store an hour later.
- *
- * The `pkmnscan.session.` prefix rather than `useCamera`'s `pkmnscan.capture.` is so that a
- * key read out of devtools says which store it belongs to. Two stores with one prefix is a
- * boundary you have to remember, which is the thing this block exists to stop.
- */
 /* Why the set suggestions are missing, in the operator's terms (D65).
  *
- * THE SESSION ONE IS THE ONLY ACTIONABLE CASE AND IT NAMES THE FILE. The others are stated
- * plainly and no more: this is the rig's screen, the field still works, and a paragraph about
- * a cookie would be louder than the thing it describes. The raw code is kept on the end
- * because `docs/DESIGN.md` shows reason codes beside names — what you saw stays greppable. */
+ * Sentences, not file paths: the session lives in `.env`, and that is a fact for the person
+ * setting the rig up rather than the one at the lens. Each case is stated plainly and no
+ * more — the field still works — and an unknown code is kept on the end because
+ * `docs/DESIGN.md` shows reason codes beside names, so what you saw stays greppable. */
 function hintReason(code: string | null): string {
   if (!code) return ''
-  if (code === 'tcg_session_expired') return 'TCGplayer session expired — replace it in .env'
-  if (code === 'tcg_cookie_missing') return 'no TCGplayer session — set one in .env'
-  if (code === 'no_category') return 'no TCGplayer category for this game'
-  return `set list unavailable (${code})`
+  if (code === 'tcg_session_expired') return 'The TCGplayer session has expired — sign in again'
+  if (code === 'tcg_cookie_missing') return 'No TCGplayer session'
+  if (code === 'no_category') return 'No TCGplayer category for this game'
+  return `Set list unavailable (${code})`
 }
 
-/* WHAT THE HINT FIELD SAYS ABOUT WHAT IS IN IT (D65, amended 2026-08-31).
- *
- * THE FIELD ALWAYS HAD RULES AND NEVER DREW THEM. D65 gave the hint a vocabulary and a
- * `datalist`, and a `datalist` is a suggestion box: it offers the real set names and says
- * nothing at all about the string actually typed. So `Spiritforge` and `Spiritforged` look
- * identical at the rig, and they part company an hour of captures later at the fetch — one
- * scopes the export to that set, the other resolves to nothing and widens to the whole
- * category. The operator learns which they typed from a row count on a different screen.
- *
- * TWO REGISTERS, BECAUSE THE BOX FIELD BESIDE IT ALREADY HAS TWO. A terse meta pinned to
- * the right of the entry — `next 60`, `new box` — for the state, and a sentence under the
- * field for what that state means. This is that grammar applied to the one other free-text
- * field on the screen; nothing here is a new shape.
- *
- * NOTHING IN EITHER OF THEM REFUSES. Every string is still storable, `unmatched` included,
- * and the sentence says what happens to it rather than asking for a different one. D65's
- * reason stands: the rig does not stop for an autocomplete. */
 function hintMetaText(verdict: HintVerdict): string {
   // Short enough not to squeeze the entry — `.capture-entrymeta` never wraps, and the box
   // beside it is where the operator is typing.
@@ -413,24 +274,6 @@ function readSessionSetHint(): string {
   return readSession(SESSION_KEYS.setHint) ?? ''
 }
 
-/** The claim as stored: a JSON list of finish strings, or `[]` for anything else.
- *
- *  NOT VALIDATED HERE, because the vocabulary this must be checked against is per-game and
- *  arrives from `GET /games` after the first render — see the effect that drops a claim the
- *  chosen game does not stock. A remembered `reverse_holo` means nothing under Riftbound,
- *  and sending it would earn a `variant_invalid` refusal mid-run with a card at the lens.
- *
- *  A BARE STRING READS AS ONE MEMBER, which `readSessionRarityClaim` below needs no clause
- *  for and this one does. The key held a bare string until D3's amendment of 2026-08-23, so
- *  every capture tab open at that moment has one under it right now; without this line the
- *  first reload after the change starts a run with the claim silently gone — which is the
- *  failure D27 exists to prevent, on the screen where a lost claim costs a review tap per
- *  card for the rest of the stack. It is the same read-side backfill the sidecar, the
- *  record and the wire all do, applied to the one store nothing else can reach.
- *
- *  Junk collapses to the empty claim rather than to a partial one, and non-string members
- *  are dropped rather than failing the whole list — `readSessionRarityClaim`'s rules, for
- *  its reasons, because the two claims are one shape now (D3). */
 function readSessionFinish(): FinishClaim {
   const stored = readSession(SESSION_KEYS.finish)
   if (stored === null) return []
@@ -452,17 +295,6 @@ function readSessionGame(): string | null {
   return readSession(SESSION_KEYS.game)
 }
 
-/** The stack claim as stored: a JSON list of rarity strings, or `[]` for anything else.
- *
- *  JUNK COLLAPSES TO THE EMPTY CLAIM, never to a partial one. A hand-edited value, a bare
- *  string, a list with a number in it — each of those is a store this session cannot trust,
- *  and "the operator claimed nothing" is the state the run starts in and the only safe
- *  reading (D3's no-claim instinct applied to D23's claim). Non-string members are dropped
- *  rather than failing the whole list because a mixed list has string members the operator
- *  really did claim; membership in the CHOSEN GAME's vocabulary is not checked here, for
- *  the same reason `readSessionFinish` does not — the vocabulary arrives from `GET /games`
- *  after the first render, and the effect beside the finish one drops what the registry
- *  disowns. */
 /** The product claim as stored. A plain string, unlike the two set-valued claims above it:
  *  a stack came out of exactly one sealed product, so "two products at once" is not a state
  *  the operator can be in. Unvalidated here and checked against the registry when it lands,
@@ -484,15 +316,6 @@ function readSessionRarityClaim(): string[] {
   }
 }
 
-/* A SHAPE FLOOR, NOT A MIRROR of what `newCaptureId` mints. It produces a UUID by both of its
- * paths, and an exact UUID test here would silently start discarding held ids the day that
- * function's format changed — discarding a held id being the exact failure this whole block
- * exists to prevent. So: id-shaped characters, a plausible length, nothing else.
- *
- * It is worth refusing anything at all because the server accepts any non-empty string as a
- * `capture_id` and writes it onto the record. A hand-edited value cannot be an id the server
- * ever committed under — this app is the only thing that mints them — so dropping it loses no
- * ambiguity that was ever resolvable, and keeping it would put junk in `inventory.json`. */
 const CAPTURE_ID_SHAPE = /^[A-Za-z0-9-]{8,64}$/
 
 function readSessionCaptureId(): string | null {
@@ -510,21 +333,7 @@ function describe(err: unknown): Note {
 }
 
 function photoSrc(box: number, index: number, revision: number): string {
-  /* A position can hold different bytes than it did five seconds ago: undo hard-deletes the
-   * photo and releases the index, and the next capture into that box takes it back. The URL
-   * is identical either way, so a cached image shows the card that was just deleted.
-   *
-   * On this screen that is not a cosmetic bug. The reason you undo is that the photo was
-   * bad; you re-shoot, and the panel shows you the bad photo again, at the one moment the
-   * whole layout exists to let you judge it.
-   *
-   * `server.ts` argues against a cache-busting parameter and it is right about the two
-   * things it names: minting one inside `photoUrl` would thread it through every caller and
-   * would defeat caching for the pull preview, which wants neither. Neither applies to one
-   * caller doing it locally, and the fix that module recommends — a cache header from the
-   * server — is a change to a file this session does not own. If that header lands, this
-   * function is what should be deleted.
-   */
+  
   const url = photoUrl(box, index)
   return `${url}${url.includes('?') ? '&' : '?'}v=${revision}`
 }
@@ -536,28 +345,6 @@ function blurActive(): void {
   // focus back rather than leaving the operator pressing a key nothing is listening for.
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
 }
-
-/* ---- the sidebar's whole grammar: the hairline row, and what an open one holds ----
- *
- * Pass D, approved by the owner 2026-08-23 ("D is approved — proceed") after four rendered
- * alternatives and a critique. Every field is ONE line at rest — key chip, label, current
- * value right-aligned in the utility face — and opening one expands it in place, closing
- * whatever else was open. The chip rows this replaces drew every choice all the time, which
- * is exactly what the owner's "oversized boxes" complaint was about: five games, four
- * finishes and a box list were on permanent display for claims that are set once per stack.
- * A closed row spends 32px saying what IS chosen; the choosing costs one keypress.
- *
- * WHAT THE HYBRID TRADES AWAY, carried over from the mockup because the honesty is the
- * point: selection is drawn two ways now — the ink-filled square in option lists and the
- * rarity bitfield, weight-plus-rail inside a segmented track — and that second language is
- * the direct price of putting a track inside a disclosure. Writing costs two keys where a
- * wall of chips cost one, and comparing two fields costs two openings. Both were argued to
- * the owner on the mockup itself and accepted with it.
- *
- * `aria-expanded` on every row and `aria-pressed` on every option are facts about the
- * document, and the stylesheet selects on them rather than on state classes — the same
- * cannot-drift argument App.tsx makes for `aria-current`.
- */
 
 /** Which field is open. One at a time, by construction: the state is a single id, so a
  *  second field cannot be open without closing the first — the mockup's rule enforced by
@@ -595,49 +382,12 @@ const FIELD_KEYS: Readonly<Record<string, FieldId>> = {
   t: 'trigger',
 }
 
-/* THE OPTION ALPHABET — the keys an open field's rows ride, in order.
- *
- * It was `1`-`9` and nothing else, and Pokemon's thirteen rarities are what convicted that:
- * four rows drew no chip at all, so `Special Illustration Rare` through `Rainbow Rare` were
- * mouse-only on the screen whose whole keyboard argument is that a claim costs one press.
- * The owner's ruling, 2026-08-24: past nine, carry on with `0` and then the letters.
- *
- * IT IS NOT `a`-`z`, AND THE SKIPS ARE THE POINT. This screen has spent eleven letters:
- * `b h r f g v o t` are the fields, and `c u s` are the three acts — the shutter, the undo,
- * and the divider. A literal alphabet hands position 13 the key `c`, on the screen
- * that runs at a 623 ms feeder cadence, where `c` means take the photograph. That is not a
- * collision to settle by precedence: whichever way it settled, one of the two acts would
- * fire while the operator believed the other had, silently, one card at a time. So the
- * alphabet is every key this screen has NOT already spent, in order, and every existing key
- * keeps exactly the meaning it had — no shadowing, no mode, nothing reassigned.
- *
- * NOBODY COMPUTES IT. Every row draws its own key in its chip (`Opt`), so a gap at `b` and
- * `c` costs one glance to read, the same way the rotation value is printed in the sidebar
- * rather than remembered. That is what makes skipping cheaper than shadowing: the skip is
- * visible on screen and the shadow would not have been.
- *
- * Twenty-five keys (thirty-six less the eleven above), against a longest authored
- * vocabulary of thirteen (`pipeline/games.py`).
- * A field that ever out-grows this draws no chip past the end rather than a chip that does
- * nothing — `Opt`'s rule, kept, now at a bound no real vocabulary reaches. */
 const RESERVED_KEYS: ReadonlySet<string> = new Set([
   ...Object.keys(FIELD_KEYS),
   CAPTURE_KEY,
   UNDO_KEY,
   SECTION_KEY,
 ])
-
-/* `n` USED TO BE RESERVED HERE AND IS NOT ANY MORE, which widens this alphabet by one and
- * is the intended consequence rather than a side effect. It was `NEW_BOX_KEY`, the jump to
- * the Box field's second input — and that input no longer exists: the filter and the new-box
- * entry are one control now, so there is nothing to jump to. A key held back for a control
- * that was deleted is a key no row can ride for no reason anybody could still state.
- *
- * `s` THEN TOOK THE WIDTH BACK, 2026-08-29 — the divider act. The two cancel, so the option
- * rows are drawn on the same letters they were before either change: `0 a d e i…`. Worth
- * knowing when reading `app/tests/capture-claims.spec.ts`, which pins the tenth through
- * thirteenth rarities to `0 a d e` and stayed green through both. `h` is a field letter now
- * and sits after `e`, so it could only ever have moved a row past the thirteenth. */
 
 const OPTION_KEYS: readonly string[] = [...'1234567890abcdefghijklmnopqrstuvwxyz'].filter(
   (key) => !RESERVED_KEYS.has(key),
@@ -662,117 +412,130 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
-/** A field at rest: key chip · label · whatever the field puts on the right. A button,
- *  because the whole line is the control that opens it — a 32px-tall target rather than a
- *  chevron to hunt for. */
+/* ---- the rail's grammar: a row at rest, an open field, an option, a track ----
+ *
+ * `aria-expanded` on every row and `aria-pressed` on every option are facts about the
+ * document, and the stylesheet selects on them rather than on state classes. */
+
+/** A field at rest: keycap · label · current value · chevron. A button, because the whole
+ *  line is the control that opens it. */
 function Row({
   k,
   label,
+  icon,
   right,
   onToggle,
+  size,
 }: {
   k: string
   label: string
+  icon?: IconName
   right: ReactNode
   onToggle: () => void
+  size?: 'lg'
 }) {
   return (
-    <button type="button" className="capture-row" aria-expanded={false} onClick={onToggle}>
-      <span className="capture-k">{k}</span>
+    <button
+      type="button"
+      className={size === 'lg' ? 'capture-row capture-row-lg' : 'capture-row'}
+      aria-expanded={false}
+      aria-keyshortcuts={k}
+      onClick={onToggle}
+    >
+      <Kbd className="capture-k">{k}</Kbd>
+      {icon === undefined ? null : <Icon name={icon} size={15} className="capture-row-icon" />}
       <span className="capture-lab">{label}</span>
-      {right}
+      <span className="capture-right">{right}</span>
+      <Icon name="chevronDown" size={14} className="capture-chev" />
     </button>
   )
 }
 
-/** The one open field: the same row as its head (now closing, `aria-expanded` true, meta on
- *  the right instead of the value), a 2px ink rail down the left edge, and the field's own
- *  body under it. The rail is flush to the panel edge — the stylesheet's negative margin —
- *  so an open field reads as a state of the column, not a nested card. */
+/** The one open field: the same row as its head (now closing), and the field's own body
+ *  under it. */
 function OpenField({
   k,
   label,
+  icon,
   meta,
   onClose,
   children,
+  size,
 }: {
   k: string
   label: string
+  icon?: IconName
   meta: ReactNode
   onClose: () => void
   children: ReactNode
+  size?: 'lg'
 }) {
   return (
-    <div className="capture-open">
-      <button type="button" className="capture-row" aria-expanded={true} onClick={onClose}>
-        <span className="capture-k">{k}</span>
+    <div className={size === 'lg' ? 'capture-open capture-open-lg' : 'capture-open'}>
+      <button
+        type="button"
+        className="capture-row"
+        aria-expanded={true}
+        aria-keyshortcuts={k}
+        onClick={onClose}
+      >
+        <Kbd className="capture-k">{k}</Kbd>
+        {icon === undefined ? null : <Icon name={icon} size={15} className="capture-row-icon" />}
         <span className="capture-lab">{label}</span>
         <span className="capture-meta">{meta}</span>
+        <Icon name="chevronUp" size={14} className="capture-chev" />
       </button>
-      {children}
+      <div className="capture-open-body">{children}</div>
     </div>
   )
 }
 
-/** One option row inside an open field: digit chip (or none), the 12px selection mark,
- *  the name, an optional machine trail on the right.
- *
- *  THE CHIP IS WHATEVER `OPTION_KEYS` PUTS AT THIS POSITION, and past the end of that
- *  alphabet there is no chip at all — drawn keyless rather than drawn with a key that does
- *  nothing, which is the one half of the old rule that survives.
- *
- *  The other half does not. This read "keyless past nine is deliberate, not a truncation",
- *  on the argument that digits are the only single keystrokes there are and one filter
- *  keystroke re-indexes the survivors into reach. Both premises had gone: the rarity field
- *  has no filter (owner, 2026-08-23) and letters are single keystrokes too, so what the
- *  paragraph actually defended was Pokemon's last four rarities being mouse-only. The owner
- *  ruled it out on 2026-08-24 and `OPTION_KEYS` carries the replacement. */
+/** One option row inside an open field: keycap (or none), the selection mark, the name, an
+ *  optional machine trail on the right. Past the end of `OPTION_KEYS` there is no keycap
+ *  at all — drawn keyless rather than with a key that does nothing. */
 function Opt({
   k,
   on,
   name,
   sfx,
   trail,
+  trailWord = false,
   onPick,
 }: {
   k?: string
   on: boolean
   name: string
-  /** The de-emphasised shared suffix — ` Rare` on eleven of Pokemon's thirteen. Even on a
-   *  selected row the suffix never takes the weight, so the eye lands on Radiant /
-   *  Illustration / Hyper: the word that distinguishes, not the word they share. */
+  /** The de-emphasised shared suffix — ` Rare` on eleven of Pokemon's thirteen. */
   sfx?: string | null
   trail?: string
+  /** The trail is a word (`Premium`) rather than a key (`pokemon`, `next 12`). */
+  trailWord?: boolean
   onPick: () => void
 }) {
   return (
     <button type="button" className="capture-opt" aria-pressed={on} onClick={onPick}>
-      <span className="capture-k">{k ?? ''}</span>
-      <span className="capture-mark" />
+      {k === undefined ? (
+        <span className="capture-k capture-k-blank" aria-hidden="true" />
+      ) : (
+        <Kbd className="capture-k">{k}</Kbd>
+      )}
+      <span className="capture-mark" aria-hidden="true">
+        <Icon name="check" size={11} strokeWidth={3} />
+      </span>
       <span className="capture-opt-name">
         {name}
         {sfx == null ? null : <span className="capture-sfx">{sfx}</span>}
       </span>
-      {trail === undefined ? null : <span className="capture-opt-trail">{trail}</span>}
+      {trail === undefined ? null : (
+        <span className={trailWord ? 'capture-opt-trail is-word' : 'capture-opt-trail'}>{trail}</span>
+      )}
     </button>
   )
 }
 
-/** A's segmented track, alive only inside a disclosure — the mockup's rule, kept: one
- *  bordered box subdivided by hairlines, for single-selects whose whole vocabulary fits one
- *  line (finish ≤4, rotation 4, trigger 2). Cells are content-sized with no flex-grow, so a
- *  vocabulary swapping four members for three shortens the track without moving a surviving
- *  cell — the reflow that killed the all-chips pass in review.
- *
- *  `aria-pressed` buttons in a named group rather than a radiogroup of radios: the rest of
- *  this screen's options are pressed-state buttons, and one selection semantics is worth
- *  more than the purer ARIA pattern — a radio that cannot arrow-navigate is a worse lie
- *  than a button that says pressed.
- *
- *  A disabled cell stays rendered — `aria-disabled`, dimmed, refusing the click — never
- *  hidden: the operator must be able to see what a rarity claim cost, or the claim reads as
- *  the screen losing a finish. WCAG exempts disabled controls from the contrast floor, and
- *  the cell's own `not stocked` sentence is drawn at full contrast under the track. */
+/** A segmented track for single-selects whose whole vocabulary fits one line (finish,
+ *  rotation, trigger). `aria-pressed` buttons in a named group; a disabled cell stays
+ *  rendered, dimmed, refusing — never hidden. */
 function Track({
   label,
   cells,
@@ -787,13 +550,12 @@ function Track({
 }) {
   return (
     <div className="capture-trackline">
-      <span />
-      <div className="capture-track" role="group" aria-label={label}>
+      <div className="capture-track bn-seg" role="group" aria-label={label}>
         {cells.map((cell) => (
           <button
             key={cell.text}
             type="button"
-            className="capture-cell"
+            className="capture-cell bn-seg-item"
             aria-pressed={cell.on}
             aria-disabled={cell.disabled === true ? true : undefined}
             onClick={() => {
@@ -806,6 +568,18 @@ function Track({
       </div>
     </div>
   )
+}
+
+/** The slot number out of a rendered label — `Box 3 · Section 1 · Card 40` → `40` — for a
+ *  thumbnail too narrow to carry the whole address. The raw index is the fallback, which is
+ *  also what the label would say for an undeclared box. */
+function slotNumber(target: UndoTarget): string {
+  if (target.label !== null) {
+    const tail = target.label.split(' · ').pop() ?? ''
+    const match = /(\d+)$/.exec(tail)
+    if (match !== null && match[1] !== undefined) return match[1]
+  }
+  return String(target.index)
 }
 
 /** `Radiant Rare` → `Radiant` + a de-emphasised ` Rare`. The bare `Rare` keeps its whole
@@ -841,17 +615,7 @@ export function CaptureScreen() {
   const [boxBusy, setBoxBusy] = useState(false)
   const [setHint, setSetHint] = useState(readSessionSetHint)
 
-  /* D65's whitelist: the real set names for the claimed game, offered in the hint field.
-   *
-   * WHY THE HINT NEEDED A VOCABULARY AT ALL. A hint typed free-hand is matched against
-   * TCGplayer's set names later, and the two disagree — `OGN` is the community code for the
-   * set TCGplayer calls `Origins`, and a hint that resolves to nothing widens the export to
-   * every set in the category. Offering the real names makes the stored hint exact.
-   *
-   * LAZY, CACHED AND UNABLE TO FAIL LOUDLY. Loaded when the field is first opened rather than
-   * at mount, because most sessions never touch it; kept per game; and a failure leaves the
-   * list empty so the control is the plain text input it has always been. The rig does not
-   * stop for an autocomplete. */
+  
   const [tcgSets, setTcgSets] = useState<
     Record<
       string,
@@ -906,56 +670,13 @@ export function CaptureScreen() {
    * deliberately not persisted: an open picker is a moment, not a claim. */
   const [openField, setOpenField] = useState<FieldId | null>(null)
 
-  /* THE BOX ENTRY. One control where there were two — the filter and the `N` new-box field
-   * — because they were one act wearing two shapes: both took digits, both ended with "this
-   * is now the current box", and nothing separated them except which one held focus.
-   *
-   * It is FREE TEXT rather than digits, which is the half that makes a box findable by what
-   * it is called. Digits search the number, letters search the name, and neither is a mode:
-   * they are just what was typed.
-   *
-   * NOT RESTORED FROM `sessionStorage`, and that is the distinction D27's carve-out rests
-   * on: a half-typed box entry is not a claim the operator has made. Restoring one would put
-   * a value in the field that has never been submitted and does not agree with `box`. What
-   * IS restored is the resolved box number, which is a claim.
-   *
-   * Cleared whenever the open field changes — an entry is an aid to one opening, and a
-   * remembered one would re-narrow a list the operator cannot see the reason for. */
+  
   const [boxEntry, setBoxEntry] = useState('')
 
-  /* THE BOXES, AS THE REGISTRY KNOWS THEM — `GET /boxes`, not `/status`.
-   *
-   * `/status` carries `next_index` and nothing else, so this screen has never had a name to
-   * draw and could not tell a sealed box from an open one. Both cost something real. The
-   * name is the whole of what the owner asked for. The lid is a defect: D20 has
-   * `allocate_capture` raise `BoxClosed` BEFORE it computes an index, so a sealed box could
-   * be offered here and refuse at the shutter — a refusal mid-feed, which is the
-   * rhythm-breaker this screen is built to avoid.
-   *
-   * `_box_row` already returns `box`, `name`, `state`, `next_index` and `fill`, so one route
-   * serves the whole field and `/status` keeps every other job it has. Read on mount and
-   * again whenever the field opens, which is rare — names change about as often as boxes do,
-   * and this is O(cards) per box on the server. */
+  
   const [boxRecords, setBoxRecords] = useState<BoxRecord[]>([])
 
-  /* WHICH GAME THE NEXT CARD IS. Null only until the registry arrives — it is then set to
-   * the registry's own `default`, and nothing on this screen can put it back to null.
-   *
-   * NULL IS NOT A NO-CLAIM HERE, and the difference from `finish` two lines up is D21's,
-   * spelled out because the two controls sit next to each other and look alike. A null
-   * finish is a real state with a ladder underneath it that infers one. There is no ladder
-   * that infers a game, so a null game is not "no claim" — it is "the app has not been told
-   * what the games are yet", and the only honest thing to do in that state is not capture.
-   *
-   * THE DEFAULT COMES FROM THE SERVER, not from a `'pokemon'` written here. Hardcoding it
-   * would be a second decision that has to agree with `games.DEFAULT_GAME` for ever.
-   *
-   * A RESTORED KEY IS A CLAIM ABOUT A REGISTRY THIS RENDER HAS NOT SEEN (D27), so it is held
-   * exactly as long as the registry agrees with it — `loadGames` drops it otherwise. Without
-   * that check the paragraph above stops being true: `gameEntry` could be null after a
-   * successful load, which every guard on this screen reads as "the list has not arrived
-   * yet" and which would leave capture blocked behind a sentence about waiting for a server
-   * that had already answered. */
+  
   const [game, setGame] = useState<string | null>(readSessionGame)
   /* C10's product claim, and it behaves exactly like `game` above: session state, resent
    * with every capture, written to the record and the sidecar, correctable afterwards on the
@@ -982,6 +703,33 @@ export function CaptureScreen() {
 
   const [shots, setShots] = useState<Shot[]>([])
   const [halt, setHalt] = useState<Halt | null>(null)
+  const haltRef = useRef<HTMLElement>(null)
+  /* Display only. When a halt lands the keyboard goes to Resume — `role="alert"` already
+   * speaks it; this is for the hands — and the halt's height is handed to the page as
+   * `--cap-halt-h`, so the viewfinder and the last capture shrink to stay whole above the
+   * fold instead of being pushed under it. Observed rather than measured once: opening
+   * "What the server said" grows the block. */
+  useEffect(() => {
+    if (halt === null) return
+    const node = haltRef.current
+    const page = node?.closest<HTMLElement>('.capture') ?? null
+    if (node === null || page === null) return
+    node.querySelector<HTMLButtonElement>('.capture-resume')?.focus({ preventScroll: true })
+    /* On a phone the halt lands at the top of a page that is usually scrolled down to the
+     * shutter, so it is brought into view — `.capture-halt`'s scroll-margin keeps it clear of
+     * the top bar. On wider screens the two frames shrink instead (see --cap-halt-h). */
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      node.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
+    const write = () => page.style.setProperty('--cap-halt-h', `${node.offsetHeight}px`)
+    write()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(write)
+    observer?.observe(node)
+    return () => {
+      observer?.disconnect()
+      page.style.removeProperty('--cap-halt-h')
+    }
+  }, [halt])
   const [busy, setBusy] = useState(false)
   // `position` is the rendered label of what was deleted, shown separately from `text` so it
   // can carry the utility face inside a body sentence. Null on a refusal, where the whole
@@ -993,20 +741,11 @@ export function CaptureScreen() {
     (Note & { done: boolean; position: string | null; did: number; want: number }) | null
   >(null)
   const [revision, setRevision] = useState(0)
+  /* Bumped on every capture the server answered, and only then: the viewfinder flashes
+   * on it. Undo bumps `revision` (the photo URL must change) and never this. */
+  const [flash, setFlash] = useState(0)
 
-  /* THE LAST `S`, AS A RECEIPT — `undoNote`'s shape, for the same reason: a sentence beside
-   * the control that produced it, which docs/DESIGN.md permits and a dialog is not. `place`
-   * carries the section and its first card in the utility face, the way `position` does for
-   * the undo, and is null on a refusal because the server's own sentence names the divider
-   * that is in the way.
-   *
-   * ITS BUSY FLAG IS NOT `busy`, AND THAT IS DELIBERATE. `busy` gates the shutter; the note
-   * editor above already keeps its own for the reason that applies here word for word — a
-   * write that blocked the trigger would drop feeder cards while the operator was doing
-   * something else. The cost is that a divider pressed in the same instant as a capture may
-   * land on either side of that one card, which is a corner the operator is not in (a
-   * divider goes in during a gap in feeding) and is one edit in the dividers editor if they
-   * ever are. A dropped card is not recoverable at all. */
+  
   const [sectionNote, setSectionNote] = useState<
     (Note & { done: boolean; place: string | null }) | null
   >(null)
@@ -1049,20 +788,7 @@ export function CaptureScreen() {
    * session. Both zero together or the two halves of the readout desynchronise. */
   const switchTrigger = useCallback(
     (mode: 'manual' | 'motion') => {
-      /* SETTING THE MODE IT IS ALREADY IN IS NOT A MODE CHANGE, and the chip row sends one
-       * every time the pressed chip is pressed — which is an ordinary thing to do at a rig
-       * while checking that motion really is armed.
-       *
-       * Unguarded, that press was destructive in two ways at once, and neither said so. The
-       * seam holds the same trigger, so `captureTrigger`'s identity does not change and the
-       * effect below does not re-arm: the MACHINE keeps its cumulative fires, same, empty
-       * and stall. Everything else in this function ran anyway — the swallowed counts were
-       * zeroed under a machine that had not restarted, which is exactly the desync the
-       * paragraph below forbids, and `traceRef` was replaced with an empty recording, taking
-       * a feeder pass's worth of tuning data with it and leaving a HUD still reporting the
-       * fires that produced it.
-       *
-       * So the guard is first, before anything is reset. */
+      
       if (mode === triggerMode) return
 
       setTriggerMode(mode)
@@ -1090,41 +816,10 @@ export function CaptureScreen() {
   // read the stale `false` and send two photos of one card.
   const busyRef = useRef(false)
 
-  /* The id of the photograph in flight, held across a halt and cleared only when the server
-   * has answered. THIS REF IS THE RETRY GUARD (spec 5.5); without it there is none.
-   *
-   * The id used to be minted inline in the call argument, which meant no code path could
-   * ever resend one — so the server's replay branch and every reader of `created` were dead
-   * code, and the guard looked covered while guarding nothing. What that costs is the worst
-   * failure this screen has: the server commits and the response is lost, leaving a record
-   * and a photo at index N for a card that is not in the box. Re-shoot and the card is
-   * recorded twice; skip it and every card after it sits one physical slot from its recorded
-   * position for the rest of the box, which is the one thing D10's positions cannot survive.
-   *
-   * A ref rather than state, for the same reason `busyRef` is one: it is read and written
-   * inside the capture path, where a value that only updates on the next render is a value
-   * that is wrong exactly when it matters.
-   *
-   * AND IT IS MIRRORED INTO `sessionStorage` (D27), which is the reason that decision exists.
-   * A ref does not survive a reload, and a reload during a halt is not an exotic event: it is
-   * what an operator does to a screen that looks stuck. Losing the id there does not lose a
-   * setting, it makes the ambiguity permanently unresolvable — the server may hold a record
-   * and a photograph at index N for a card that never went in the box, and nothing afterwards
-   * can tell. `rememberCaptureId` below is the only writer, so the ref and the store cannot
-   * come apart.
-   */
+  
   const captureIdRef = useRef<string | null>(readSessionCaptureId())
 
-  /* Whether the id in that ref came back from a reload rather than being minted this session.
-   * State, because it is rendered; set once and only ever cleared.
-   *
-   * IT IS NOT A CURIOSITY, IT IS THE OTHER HALF OF PERSISTING THE ID. A held id changes what
-   * the next press of the shutter means — the server ignores the image on a replay and
-   * answers with the card it already committed — so a fire with the WRONG card at the lens
-   * answers for the held card and lets the new one past unrecorded. The halt banner is what
-   * normally says so, and the halt is deliberately not persisted, so after a reload nothing
-   * on this screen would say it. Restoring the id silently would trade one unresolvable
-   * ambiguity for a quieter one. */
+  
   const [heldAcrossReload, setHeldAcrossReload] = useState(() => captureIdRef.current !== null)
 
   /** The one writer of the in-flight capture id: ref first, store second, never one without
@@ -1138,16 +833,7 @@ export function CaptureScreen() {
     if (id === null) setHeldAcrossReload(false)
   }, [])
 
-  /* THE FOUR CLAIMS, MIRRORED. One effect rather than four, because they are one decision —
-   * D27's list — and a per-field writer would be four places for a fifth field to be
-   * forgotten in. Cheap enough to run on a keystroke in the set hint field: five string
-   * writes into a synchronous store, against a JPEG encode on the same screen.
-   *
-   * Effects rather than writes at each call site, and that is the part worth defending: `box`
-   * is set from the chip row and from the box form, `finish` from the chip row, from
-   * `pickGame` and from the vocabulary check below. A writer at each of those is a writer
-   * somebody forgets at the next one, and a claim that is on screen but not in the store is
-   * exactly the silent disagreement this whole block is trying to end. */
+  
   useEffect(() => {
     writeSession(SESSION_KEYS.box, box === null ? null : String(box))
     writeSession(SESSION_KEYS.setHint, setHint.trim() === '' ? null : setHint)
@@ -1200,18 +886,7 @@ export function CaptureScreen() {
       const answer = await getGames()
       setRegistry(answer)
       setRegistryNote(null)
-      /* THE SERVER'S DEFAULT, and only while nothing the registry still carries has been
-       * chosen. `setGame(prev => ...)` rather than a bare set so that a refetch — the
-       * operator pressing "Ask again" after a restart — cannot silently move a running
-       * session back to Pokemon.
-       *
-       * THE MEMBERSHIP TEST IS D27's, and it is what keeps `gameEntry === null` meaning "the
-       * registry has not arrived". `game` used to be settable only from `answer.default` or
-       * from a chip built out of `answer.games`, so a key the server does not serve was
-       * unreachable; a key restored from `sessionStorage` is not, and neither is one that was
-       * valid until somebody edited `pipeline/games.py` and restarted between two captures.
-       * Falling back to the default rather than to null, because null blocks capture behind a
-       * sentence about waiting for a server that has already answered. */
+      
       setGame((prev) =>
         prev !== null && answer.games.some((entry) => entry.key === prev) ? prev : answer.default,
       )
@@ -1234,45 +909,14 @@ export function CaptureScreen() {
     [registry, game],
   )
 
-  /* Changing the game CLEARS THE FINISH CLAIM AND THE RARITY CLAIM, and leaves the box and
-   * the set hint alone.
-   *
-   * The finish, because `finishes` is per-game: `holo` is a Pokemon string, and a claim of
-   * `reverse_holo` carried into a game whose enum has no such member would be sent to the
-   * server and refused as `variant_invalid` at the worst possible moment — mid-run, with a
-   * card at the lens. Clearing it is also right on its own terms: a finish claimed about a
-   * Pokemon stack says nothing about the Yu-Gi-Oh card that follows it.
-   *
-   * The rarity claim for both of the same reasons, one wire code over: the members are the
-   * game's own Rarity cells (D22, verbatim), so under any other game they would be refused
-   * as `rarity_claim_invalid` — and a claim about a sorted Pokemon stack is not a claim
-   * about whatever game follows it.
-   *
-   * The box, because a box is a physical drawer and D21 makes MIXED BOXES LEGAL — that is
-   * the whole point of the game being a per-card claim rather than a session mode. Clearing
-   * it would make the operator re-pick a drawer they have not put down.
-   *
-   * The set hint, because it is free text the operator typed and this screen does not get
-   * to decide it has gone stale. A hint that no longer applies costs one review-queue tap;
-   * a hint silently erased between two cards of the same stack costs a whole stack of them.
-   */
+  
   const pickGame = useCallback((key: string) => {
     setGame(key)
     setFinish([])
     setRarityClaim([])
   }, [])
 
-  /* WHAT THE CLAIMED RARITIES LEAVE CLAIMABLE — D23's narrowing, job b. The offered finish
-   * set is the UNION of `finish_by_rarity[r]` over the claimed rarities: a stack claimed
-   * `Common + Double Rare` may still be claimed `holo`, because one of its members may be.
-   * An empty claim narrows nothing — null here means "no narrowing", which is not the same
-   * value as "narrowed to everything" and keeps the excluded-cell rendering honest.
-   *
-   * FAILS OPEN on a claimed rarity the matrix has no row for. The registry validates that
-   * every rarity has one, so the case is a registry bug or a mid-session restart — and the
-   * matrix's own rule (a superset, so a legitimate stack is never unclaimable) says the
-   * safe direction is to narrow less, never more. A missing row treated as "contributes
-   * nothing" would exclude every finish and render a track of dead cells. */
+  
   const offeredFinishes = useMemo<ReadonlySet<string> | null>(() => {
     if (gameEntry === null || rarityClaim.length === 0) return null
     const rows = rarityClaim.map((rarity) => gameEntry.finish_by_rarity[rarity])
@@ -1282,27 +926,7 @@ export function CaptureScreen() {
     return union
   }, [gameEntry, rarityClaim])
 
-  /* THE SAME RULE, ENFORCED AGAINST A CLAIM NOBODY PICKED. `pickGame` clears the finish when
-   * the operator changes game, which covers every path that existed before D27; a claim
-   * restored from `sessionStorage` arrives without anyone having touched the picker, and so
-   * does one left standing when a server restart changes what a game stocks. Both end the
-   * same way — a `reverse_holo` sent under a game whose enum has no such member is refused as
-   * `variant_invalid` at the worst possible moment, mid-run with a card at the lens.
-   *
-   * Falls back to no claim rather than to the nearest thing the game does stock, which would
-   * be inventing a claim: D3 rung 1 treats the toggle as a claim the operator made, and no
-   * claim is the state every run starts in. A game with an empty vocabulary — `misc` — draws
-   * no Finish field at all, and this is what makes sure nothing is being sent behind it.
-   *
-   * THE NARROWING CLAUSE IS THE SAME FALLBACK ONE CLAIM LATER (D23): a finish the rarity
-   * claim excludes falls back to no claim rather than surviving as a claim the track now
-   * draws unselectable — a selected cell the operator cannot re-select is a state the
-   * screen cannot explain. And it only ever CLEARS: when the narrowing leaves exactly one
-   * selectable finish it is not auto-claimed, because an inferred claim is precisely what
-   * D3 rung 1 says a claim is not.
-   *
-   * It cannot fight the operator: the only states it changes are ones the track cannot
-   * produce, since the track offers only `gameEntry.finishes` and refuses excluded cells. */
+  
   useEffect(() => {
     if (finish.length === 0 || gameEntry === null) return
     /* A GAME THAT DRAWS NO FINISH FIELD MAY NOT CARRY A FINISH CLAIM, and this is the case
@@ -1316,23 +940,7 @@ export function CaptureScreen() {
       setFinish([])
       return
     }
-    /* MEMBER-WISE SINCE D3's AMENDMENT (2026-08-23), and the rarity effect below is NOT a
-     * template that can be copied verbatim here — it has no analogue of the hazard in the
-     * next paragraph, because a one-member rarity claim still only filters.
-     *
-     * NARROWING A CLAIM OF TWO OR MORE DOWN TO ONE CLEARS IT INSTEAD. A one-member finish
-     * claim DETERMINES: it outranks the catalog at rung 2 and is what detection is
-     * cross-checked against at rung 3. So silently keeping the survivor of `{normal, holo}`
-     * would manufacture a determining claim the operator never made, out of a filtering one
-     * they did — auto-selection by the back door, and D23 refuses auto-selection in words
-     * ("it never auto-selects, not even when one finish is left") for exactly this reason.
-     * Two or more survivors are kept, because a narrower filter is still a filter and still
-     * something the operator said.
-     *
-     * Falling back to NO claim rather than to the nearest thing the game stocks is the same
-     * rule this effect always had: D3 rung 1 treats the control as a claim the operator
-     * made, and no claim is the state every run starts in. The whole row reads `no claim`
-     * when it happens, so the loss is on screen rather than silent. */
+    
     const kept = finish.filter(
       (member) =>
         gameEntry.finishes.includes(member) &&
@@ -1396,17 +1004,7 @@ export function CaptureScreen() {
     [gameEntry],
   )
 
-  /* ONE BOX, AS THIS FIELD NEEDS IT — the registry's name and lid, `/status`'s live index.
-   *
-   * Two sources rather than one, and each is authoritative over a different fact. The
-   * registry read (`GET /boxes`) is the only place a NAME or a LID exists. `/status`'s
-   * `next_index` is the fresher of the two after a capture, because `doCapture` advances it
-   * locally on every write — so it wins on `next`, and it also adds any box whose first card
-   * landed since the last registry read.
-   *
-   * Neither is dropped when the other is missing. A box the registry has never heard of but
-   * that cards already name is a real box (`_box_row` renders exactly that case), and a box
-   * created empty has no cards and so appears in the registry alone. */
+  
   const boxOptions = useMemo(() => {
     const byNumber = new Map<number, BoxOption>()
     for (const record of boxRecords) {
@@ -1457,15 +1055,7 @@ export function CaptureScreen() {
     setBoxNote(null)
   }, [openField])
 
-  /* The two text entries, focused when their field opens. On the Box field that is what
-   * makes "thirty boxes cost what three cost" true as typed: B, what you call it, Enter,
-   * with no click in between. The cost is that a focused input eats the field letters (they
-   * are typing) — Esc still closes from inside an input, deliberately, because it types
-   * nothing and a trap that needs a mouse to leave is worse than an inconsistent key.
-   *
-   * There used to be a third, and losing it is the point. The Box field held a filter AND a
-   * new-box entry, so the one thing that opened focused was never the one that created, and
-   * `n` existed to jump between them. */
+  
   const boxEntryRef = useRef<HTMLInputElement>(null)
   const hintRef = useRef<HTMLInputElement>(null)
 
@@ -1510,18 +1100,7 @@ export function CaptureScreen() {
    *  weight, never as a halt. `ambiguous` joins it: `match_sets` returns both as misses. */
   const hintAlert = hintVerdict.state === 'unmatched' || hintVerdict.state === 'ambiguous'
 
-  /* WHAT THE BOX FILTER SHOWS. Substring on the box number — `9` keeps 9, 19, 95 and 99,
-   * which is the mockup's own worked example — capped at nine rows, and the reason for the
-   * number changed on 2026-08-24 without the number moving. It used to be BY CONSTRUCTION:
-   * digits were the only keys there were. `OPTION_KEYS` now carries twenty-five, so the cap
-   * is a HEIGHT budget and a scanning one instead: the column's measured worst case is the
-   * rarity field's thirteen rows, and this is the one field whose vocabulary is unbounded
-   * (boxes already number in the nineties). Nine rows plus a filter that re-indexes on every
-   * keystroke is what that field has instead of a longer list. With no filter the
-   * highest-numbered nine stand in for "most recent": the store's boxes are allocated
-   * upward, recency is not a fact `/status` carries, and the top of the range is the end the
-   * operator is working. `boxMatchTotal` is the pre-cap count, so the meta can say
-   * `4 of 30 match` honestly while only nine draw. */
+  
   const boxQuery = boxEntry.trim()
 
   /* SUBSTRING OVER THE NUMBER AND THE NAME, and the two are not two modes. `9` keeps 9, 19,
@@ -1570,16 +1149,7 @@ export function CaptureScreen() {
   /** The row Enter takes, hoisted so the meta and the handler read the same one thing. */
   const boxTop = boxRows.length > 0 ? boxRows[0] : undefined
 
-  /* WHAT WOULD BE CREATED, or null when the entry names something that already exists.
-   *
-   * DIGITS MEAN A NUMBER AND LETTERS MEAN A NAME, which is the whole of the rule. An
-   * all-digit entry that matches no box exactly creates THAT NUMBER, unnamed — byte-for-byte
-   * what the old `N` field did, so the path every box in this store was made by still works.
-   * Anything else creates a box CALLED that, and the server takes the lowest free number
-   * (`next_box_number`), because the owner's ask was to stop caring which one it is.
-   *
-   * A number that is not a box refuses rather than being offered: `'0'`, and a string of
-   * twenty digits, are both things `Number` reads happily and neither is a drawer. */
+  
   const boxOffer = useMemo(() => {
     if (boxQuery === '' || boxExact !== undefined) return null
     if (BOX_DIGITS.test(boxQuery)) {
@@ -1602,17 +1172,7 @@ export function CaptureScreen() {
     [closeField],
   )
 
-  /* THE REGISTRY READ. On mount, and again whenever the Box field opens.
-   *
-   * Not on the `/status` poll: `_box_row` is O(cards) per box on the server, and a name and
-   * a lid change about as often as boxes are made. Re-read on open so a box named or sealed
-   * from `#/inventory` on the other device shows up here without a reload — D13 puts one
-   * truth on the Mac precisely so two screens cannot disagree about it.
-   *
-   * FAILS SILENTLY TO AN EMPTY LIST, deliberately. Every box that holds a card still comes
-   * through `/status`, so a registry read that does not answer costs this field its names
-   * and its lids and nothing else — the operator can still reach every box they could reach
-   * before this route was read at all. A halt banner for a decoration would be worse. */
+  
   useEffect(() => {
     if (openField !== null && openField !== 'box') return
     let live = true
@@ -1629,37 +1189,8 @@ export function CaptureScreen() {
     }
   }, [openField])
 
-  /* WHAT ENTER DOES, AND IT IS ONE SENTENCE: it takes the top row.
-   *
-   * The rule used to be that Enter took a LONE match and did nothing otherwise, which made
-   * it a dead key on the common case and meant the operator had to hold the store's contents
-   * in their head to know which. It was then going to be LITERAL — the digits you typed are
-   * the box — and that is right for digits and unstateable for names: `mega` denotes no box
-   * until one is called that.
-   *
-   * So the rule is stated over the SCREEN instead of over the draft. The top row is drawn
-   * before it is taken, which answers the objection that killed lone-match — it was never
-   * that partial matching is wrong, it was that you could not see what it would do.
-   *
-   * THE CREATION ROW IS LAST, so it is the top row only when nothing matched. Typing `com`
-   * against an existing "common box 3" selects that box; it does not make a junk one. The
-   * cost, named rather than designed away: creating "commons" while "commons A" exists needs
-   * the creation row clicked, because Enter will take the incumbent.
-   *
-   * A SEALED BOX REFUSES HERE rather than being skipped over. D20 shuts a box against more
-   * cards, and silently selecting a different one would be this screen answering a question
-   * the operator did not ask. */
-  /* MAKE THE BOX THE OFFER NAMES. Its own function, and separating it from `takeBoxEntry`
-     below is a fix rather than a tidy: the creation ROW used to call `takeBoxEntry`, which
-     takes the top match FIRST, so clicking a row that read `com · new` while `common box 3`
-     matched selected box 3 and created nothing. A control that says `new` and quietly
-     switches the capture target to an existing drawer is the worst version of this screen's
-     one dangerous mistake — every photograph after it lands in the wrong box, at 623 ms a
-     card, and nothing on screen contradicts it because the field has closed.
-
-     `boxOffer` is non-null whenever the entry is not an EXACT match, so the offer row and a
-     partial match are on screen together routinely; the two paths were never interchangeable
-     and only Enter's policy made them look it. */
+  
+  
   const createOfferedBox = useCallback(async () => {
     if (boxBusy) return
     if (boxOffer === null) {
@@ -1720,17 +1251,7 @@ export function CaptureScreen() {
    * were what it was quietly costing. */
   const visibleRarities = useMemo(() => gameEntry?.rarities ?? [], [gameEntry])
 
-  /* AN OPTION KEY ACTS ONLY INSIDE AN OPEN FIELD, and always on what is currently VISIBLE —
-   * the re-indexing rule. In the multi-select it toggles; in a single-select list or a track
-   * it picks and closes; on the box list it picks the indexed match. Track cells draw no key
-   * chips (the mockup's call — four cells in 306px have no room for chips that would mostly
-   * be blank) but the keys work there all the same, because "options ride the alphabet" is
-   * the design's one sentence about choosing and an exception per control shape is a rule
-   * nobody can hold. A key into a disabled cell does nothing, exactly like a click.
-   *
-   * `nth` IS A POSITION, NOT A KEY. The handler resolves the press through `OPTION_INDEX`
-   * and passes the index, so nothing below has to know that position 11 is `a` — which is
-   * what let the alphabet grow past the digits without touching one branch of this switch. */
+  
   const fieldPick = useCallback(
     (nth: number) => {
       if (nth < 0) return
@@ -1894,27 +1415,7 @@ export function CaptureScreen() {
 
   const last = shots.length === 0 ? undefined : shots[shots.length - 1]
 
-  /* THE RUN COUNTER, AND IT IS THE INSTRUMENT THAT ACTUALLY VERIFIES A CAPTURE.
-   *
-   * The Last capture panel's stated job is making a failed write visible, and at the feeder's
-   * ~623ms — 5,778 cards an hour — nobody verifies anything by looking at a photograph. No
-   * tethering product tries: Capture One owns a counter for exactly this, because the camera
-   * cannot be asked how many frames it sent.
-   *
-   * What this repo already treats as proof is arithmetic, not an image. docs/GATES.md's Gate C
-   * confirmation reads "85 records at indices 1..85, zero gaps, 85 distinct capture_ids" — and
-   * that check has only ever been run afterwards, by hand, over the store. It is computed here
-   * from `shots`, which is the same fact while the run is still going and while a gap can still
-   * be re-fed.
-   *
-   * GAPS ARE COUNTED OVER THE SPAN, NOT AGAINST THE COUNT. A box whose run starts at index 41
-   * has no gap; a run of 40 whose highest index is 45 has five. `next_index` is a high-water
-   * mark (D10) so the span is what the allocator actually handed out.
-   *
-   * A REPLAYED capture_id IS NOT A SECOND CARD, which is why the distinct count is drawn beside
-   * the total rather than instead of it: `created: false` means the server already had that id
-   * and the photograph did not take a new position. Two numbers that differ is the one thing
-   * on this screen that says a card may have passed the lens unrecorded. */
+  
   const runCount = useMemo(() => {
     const mine = box === null ? [] : shots.filter((shot) => shot.card.box === box)
     if (mine.length === 0) return null
@@ -1931,18 +1432,7 @@ export function CaptureScreen() {
     }
   }, [box, shots])
 
-  /* WHAT UNDO CAN REACH, NEWEST FIRST — up to `UNDO_DEPTH` of them. Row 0 is what `U` and
-   * every trigger fire aim at; row N is reached by undoing through rows 0..N.
-   *
-   * ONLY THIS BOX. The route deletes the newest card in the box it is given, and repeated
-   * undo walks backwards one card per call — which is the whole mechanism a deeper row uses.
-   *
-   * INDICES ARE NOT WALKED DOWNWARD, AND THAT IS THE TRAP THIS AVOIDS. `serverNewest - 1` is
-   * not the next undoable card: sold cards leave permanent gaps (D10) and a mid-box remove
-   * closes one, so the second-newest index in a box is whatever record actually sits there.
-   * The only thing that knows is the store — and, for this session, the shots themselves. So
-   * the stack is built from real records and never from arithmetic on a high-water mark.
-   */
+  
   const undoStack = useMemo<UndoTarget[]>(() => {
     if (box === null) return []
 
@@ -1953,27 +1443,7 @@ export function CaptureScreen() {
     const mine = shots.filter((shot) => shot.card.box === box)
     const newest = mine[mine.length - 1]
 
-    /* THE SERVER WINS WHERE IT IS AHEAD, AND WHERE IT IS AHEAD THE STACK COLLAPSES TO ONE.
-     * This session's shots carry a rendered label and a thumbnail and `/status` carries
-     * neither, so a shot is the better thing to show — but only while the two still agree
-     * about which card is newest.
-     *
-     * They stop agreeing in exactly two ways, and both are ordinary. A capture that
-     * committed and lost its response (spec 5.5) is a card the server has and this list does
-     * not; so is a capture the other device made into the same box, which D13 permits by
-     * design. In both cases the shot names a position that is no longer the newest, and the
-     * route refuses anything but the newest — so nothing is destroyed, but the control has
-     * shown the operator the wrong card and the press buys a refusal. Spec 5.4 wants an undo
-     * you can aim, and aiming at a stale local guess is the thing it is arguing against.
-     *
-     * ONE ROW RATHER THAN A DEEP STACK IS THE SAFE ANSWER HERE, and it is the reason this
-     * case is worth a paragraph rather than a line. The cards between the newest shot and
-     * the server's high-water mark are cards this session never took: it has no label, no
-     * photograph and no count for them. Offering to undo "back to" a shot underneath them
-     * would be offering to delete somebody else's captures, sight unseen, from a list that
-     * cannot draw them. So the depth is exactly one until the two agree again, which one
-     * ordinary undo restores.
-     */
+    
     if (newest === undefined || serverNewest > newest.card.index) {
       if (serverNewest < 1) return []
       return [{ box, index: serverNewest, label: null }]
@@ -2024,16 +1494,7 @@ export function CaptureScreen() {
       // Trimmed once, so what is shown under the photo is exactly what was sent.
       const hint = setHint.trim() === '' ? undefined : setHint.trim()
 
-      /* One id per PHOTOGRAPH, not one per request — that distinction is the whole guard.
-       * Minted here rather than at the top of this function so that a camera fault on a
-       * fresh card leaves no id lying in the ref; minted from the ref rather than fresh so
-       * that the fire after a resume carries the id of the photograph that halted.
-       *
-       * A newly grabbed frame with a held id is correct and not a compromise: on a replay
-       * the server ignores the image entirely and answers with the card it already
-       * committed. That is what lets the halt message ask for the same card back at the
-       * lens — whichever way the lost request went, one press resolves it.
-       */
+      
       const captureId = captureIdRef.current ?? newCaptureId()
       rememberCaptureId(captureId)
 
@@ -2083,6 +1544,7 @@ export function CaptureScreen() {
         )
         setNextIndex((prev) => ({ ...prev, [String(card.box)]: card.index + 1 }))
         setRevision((prev) => prev + 1)
+        setFlash((prev) => prev + 1)
         setUndoNote(null)
       } catch (err) {
         // The id stays in the ref. This is the case it exists for: the request may have
@@ -2114,25 +1576,7 @@ export function CaptureScreen() {
     // render. The seam re-arms on a keypress the operator made and not on a paint.
   }, [box, camera, finish, gameEntry, halt, product, rarityClaim, rememberCaptureId, setHint])
 
-  /* UNDO, `depth` CARDS OF IT, NEWEST FIRST. `depth` is 1 for `U` and for the button on the
-   * top row; it is N for the Nth row of the stack, which means "this card and everything
-   * captured after it".
-   *
-   * SEQUENTIAL, NEVER PARALLEL, and the store is what makes that non-negotiable: the route
-   * deletes the newest card in a box and refuses anything else, so card N-1 is not undoable
-   * until card N is gone. Firing them together would send N requests of which one could
-   * succeed.
-   *
-   * IT HOLDS `busy` FOR THE WHOLE WALK, which is the one place this differs from the note
-   * editor's rule about not blocking the shutter. A capture landing between two deletes
-   * would become the newest card in the box — so the next delete in the plan is no longer
-   * the newest, the server refuses it, and the walk stops halfway with a card the operator
-   * meant to keep already gone. The shutter is held for a few hundred milliseconds instead.
-   *
-   * THE PLAN IS READ ONCE, up front. `undoStack` is derived from state this function is
-   * about to change, so the value that named what would be deleted is the only value
-   * entitled to say what was.
-   */
+  
   const undoBack = useCallback(
     async (depth: number) => {
       if (busyRef.current) return
@@ -2219,22 +1663,7 @@ export function CaptureScreen() {
     await undoBack(1)
   }, [undoBack])
 
-  /* A DIVIDER, IN FRONT OF THE NEXT CARD. The owner's `S`, 2026-08-29.
-   *
-   * SENDS NO INDEX. `server.ts:openSection` has the argument at length: the store reads
-   * `next_index` inside its own lock, so the divider lands in front of the card the next
-   * capture will actually take, and there is no number here to be stale about. What this
-   * function does with the answer is read back the section the SERVER rendered —
-   * `sections_detail`'s last entry — rather than counting the layout array itself. Section
-   * arithmetic in TypeScript is the second renderer D10 and `BoxOps.tsx` both refuse.
-   *
-   * THE FRESH RECORD GOES BACK INTO `boxRecords`, which is not housekeeping: that list is
-   * read on mount and when the Box field opens, so without this the box the operator is
-   * shooting would carry the layout it had at the top of the run for the rest of it.
-   *
-   * A refusal is information beside the control and never a halt — `doUndo`'s rule, and the
-   * same reasoning: a refused divider changed nothing, and spec 5.5 stops the run for a card
-   * that may have gone past unrecorded. Nothing here can lose a card. */
+  
   const sectionBusyRef = useRef(false)
   const doSection = useCallback(async () => {
     if (box === null || sectionBusyRef.current) return
@@ -2321,15 +1750,7 @@ export function CaptureScreen() {
        * no record — spec 5.5's failure — and the halt banner below renders the `halted`
        * count as exactly that sentence. */
       if (triggerMode === 'motion') {
-        /* `held` is the replay guard meeting the machine, and it MUST come before the
-         * ordinary guards: while captureIdRef holds the id of a photograph the server may
-         * already have committed, the next capture will be sent under THAT id — and on a
-         * replay the server ignores the image entirely. A machine fire here would send
-         * the NEXT card's frame under the halted card's id: the server answers with card
-         * A's position, the screen says "already recorded", and card B passes the lens
-         * with no record while the UI reports it handled. So resolving a held id is
-         * human-only — the banner says to press the button — and the machine's fires are
-         * counted against `held` until it clears. */
+        
         const reason = busyRef.current
           ? ('busy' as const)
           : halt !== null
@@ -2360,22 +1781,7 @@ export function CaptureScreen() {
   useEffect(() => undoTrigger.start(() => fireUndoRef.current()), [undoTrigger])
   useEffect(() => sectionTrigger.start(() => fireSectionRef.current()), [sectionTrigger])
 
-  /* THE NOTE, SAVED AGAINST THE LAST CAPTURE — the one write on this screen aimed at a card
-   * other than the next one.
-   *
-   * WHY IT IS HERE AND NOT IN THE SIDEBAR WITH THE OTHER CLAIMS. Box, game, set hint and
-   * finish are all things you set once and leave alone for a stack; a note is per card, and
-   * a per-card text field placed BEFORE the shutter would put a keyboard on the critical
-   * path of a run whose feeder emits every ~623 ms. So it is a correction applied after the
-   * fact, through `PUT /inventory/<box>/<index>`, to a position that already exists — which
-   * is also why nothing about capture waits for it and why an empty note is not an error.
-   *
-   * IT DOES NOT TOUCH `busy`. That flag gates the shutter and counts swallowed trigger
-   * fires; blocking it while somebody types would drop feeder cards and report them as the
-   * screen refusing a fire, which is spec 5.5's loudest failure and would be a lie here.
-   *
-   * The trimmed empty string is sent as `null` and not as `''`: that is how a note is
-   * CLEARED, and `updateCard` keeps "absent" and "null" apart precisely so it can be. */
+  
   const saveNote = useCallback(
     async (target: Shot, text: string) => {
       if (noteBusy) return
@@ -2423,1573 +1829,1399 @@ export function CaptureScreen() {
     gameEntry !== null &&
     !gameEntry.unverified
 
-  /* HOW MANY FRAMES THERE ARE TO SAVE, from the recording itself.
-   *
-   * The Save control used to be rendered on `motionDiag !== null && motionDiag.frames > 0`,
-   * and that was wrong twice over.
-   *
-   * The one that loses data: `switchTrigger` clears `motionDiag` and deliberately KEEPS the
-   * trace — its comment says disarming leaves the old recording around "so it can still be
-   * saved after the run stops" — but the control keyed off the diagnostics, so pressing
-   * `key` made the button vanish and the next arm overwrote the recording. A feeder pass
-   * ended the natural way, by disarming, could not be saved at all. That file is D19's
-   * Tier-1 instrument and the whole reason the recording exists.
-   *
-   * The one that misreports: `motionDiag.frames` is the MACHINE's counter and it keeps
-   * climbing past `MAX_FRAMES`, where the trace has marked itself truncated and stopped
-   * growing. The label promised a file bigger than the file.
-   *
-   * Read off a ref during render, which is worth a sentence because it is normally a smell:
-   * `traceRef` is written by the sampler ~30 times a second and nothing re-renders on its
-   * account, so this is not a value React is tracking. It does not have to be. The only
-   * moments the answer can change from "hidden" to "shown" or back are a diagnostics tick
-   * and a mode change, and both are state updates that re-render on their own. */
+  
   const traceFrames = traceRef.current?.frameCount ?? 0
 
-  /* THE FRAMES ARE ALWAYS PORTRAIT NOW, because the rotation is always a quarter turn
-   * (`useCamera.ts:ROTATIONS`, narrowed to 90/270 by the owner on 2026-08-24). The camera is
-   * mounted on its side so a portrait card fills the portrait field, and the Cam Link hands
-   * the browser a landscape frame regardless — so the preview turns with the stored photo and
-   * the operator sees the card the way the pipeline will.
-   *
-   * Display only: the encode worker and the motion sampler both read the element's intrinsic
-   * frames, which a CSS transform never touches.
-   *
-   * THE `turned` TERNARIES ARE GONE RATHER THAN LEFT ALWAYS-TRUE. They chose between a
-   * portrait and a landscape stage, and the landscape half is now unreachable — TypeScript
-   * said so, which is what a narrowed union is for. A branch that cannot be taken is a branch
-   * a later reader has to prove cannot be taken. */
-  const frameClass = 'capture-frame capture-frame-portrait'
-  const stageClass = 'capture-stage capture-stage-portrait'
+  
   const liveMediaClass = `capture-media capture-media-turn${camera.rotation}`
 
-  /* Why the capture control is unavailable — first match wins, in the order the operator
-   * can act on them.
-   *
-   * The camera's own faults are deliberately not in this list. `useCamera` reports a missing
-   * remembered device and a stream error, the Camera field prints both verbatim — its rest
-   * row says `fault` and the sentence is one keypress behind V — and spec 6.1's requirement
-   * that the app say so and ask rather than fall back to another lens is met there.
-   * Repeating either sentence here would put the same words on screen twice and give a
-   * later edit two places to keep true. */
-  const blocked =
-    halt !== null
-      ? // Above, not below: the halt renders before the stage, so the resume control is up
-        // the page from this line in both the two-column and the stacked layout. Pointing
-        // the operator the wrong way costs the seconds a stopped run has least of, and
-        // docs/DESIGN.md's copy rules ask an error to say what to do next — which includes
-        // being right about where.
-        'Captures are paused. Resume them above.'
-      : gameEntry === null
-        ? // NOT "pick a game" — there is nothing to pick from yet, and telling the operator
-          // to do something the screen cannot offer is worse than saying nothing. Which of
-          // the two sentences depends on whether the fetch failed or is simply outstanding.
-          registryNote === null
-          ? 'Waiting for the game list from the server.'
-          : 'The game list did not load, so there is nothing to capture as. Ask again in the sidebar.'
-        : gameEntry.unverified
-          ? // D22's refusal, in the operator's terms rather than the server's. It names the
-            // game, says what is missing, and says what would fix it — docs/DESIGN.md's copy
-            // rule. Owner-side, so naming the file is allowed and is the useful part.
-            `${gameEntry.display} has no TCGplayer export yet, so a card captured as one could ` +
-            'never be identified, priced or listed. Pick another game, or add its export and ' +
-            'author its rarities in pipeline/games.py first.'
-          : box === null
-            ? 'Pick a box, or type a new one, before capturing.'
-            : !camera.started
-              ? // A FOURTH CASE, since 2026-08-23: the camera no longer opens on mount, so
-                // "no camera" is now three states and not one. `started` false is nobody has
-                // asked — an ordinary beginning to a session, not a fault — and it is the
-                // only one of the three that belongs here. `missing` and `error` stay out
-                // for the reason above: CameraPicker prints both, verbatim, a few pixels up.
-                'Open the camera in the sidebar before capturing.'
-              : null
+  
+  /* EVERY reason a capture is blocked, not just the first one that happens to have a button.
+   * A cause with a one-press way out carries it on its own row; a cause without one — the
+   * game list, or a game with no TCGplayer export — is written out in the same list rather
+   * than being replaced by the ones that can be pressed. Before this the shortcuts rendered
+   * INSTEAD of the sentence, so an unverified game behind a closed camera said only "Open
+   * the camera" and the operator never learned the cards could not join. */
+  type Blocker = {
+    key: string
+    icon: IconName
+    tone: 'plain' | 'warn'
+    text: string
+    fix: { label: string; icon: IconName; onPress: () => void } | null
+  }
+
+  const blockers: Blocker[] = []
+  if (halt !== null) {
+    /* Alone, and nothing else is worth pressing until the run is resumed. "Above" is right in
+     * both layouts: the halt renders before the stage, so the resume control is up the page
+     * from this line — pointing the operator the wrong way costs the seconds a stopped run
+     * has least of. */
+    blockers.push({
+      key: 'halt',
+      icon: 'alert',
+      tone: 'warn',
+      text: 'Captures are paused. Resume them above.',
+      fix: null,
+    })
+  } else {
+    if (!camera.started) {
+      /* `started` false is nobody has asked — an ordinary beginning to a session, not a
+       * fault, and the only one of the camera's three states that belongs here. `missing`
+       * and `error` stay out: CameraPicker prints both, verbatim, a few pixels up. */
+      blockers.push({
+        key: 'camera',
+        icon: 'camera',
+        tone: 'plain',
+        text: 'Open the camera before capturing.',
+        fix: { label: 'Open the camera', icon: 'camera', onPress: camera.retry },
+      })
+    } else if (!camera.ready) {
+      /* STARTED BUT NOT READY — asked for, and not delivering frames: a device that vanished,
+       * a permission withdrawn, a stream that failed to negotiate. `canCapture` requires
+       * `ready`, so the shutter is off in this state, and until now this list said NOTHING
+       * about it: a disabled shutter with no stated cause, which is the exact failure the
+       * "state every cause" ruling exists to end. The fault's own text is printed by the
+       * stage and the Camera row; what belongs here is why the shutter will not fire, and
+       * the same one press that reopens it. */
+      blockers.push({
+        key: 'camera-fault',
+        icon: 'alert',
+        tone: 'warn',
+        text: 'The camera is open but sending no frames. Reopen it before capturing.',
+        fix: { label: 'Reopen the camera', icon: 'refresh', onPress: camera.retry },
+      })
+    }
+    if (box === null) {
+      blockers.push({
+        key: 'box',
+        icon: 'box',
+        tone: 'plain',
+        text: 'Pick a box, or type a new one, before capturing.',
+        fix: { label: 'Pick a box', icon: 'box', onPress: () => toggleField('box') },
+      })
+    }
+    if (gameEntry === null) {
+      /* NOT "pick a game" — there is nothing to pick from yet, and telling the operator to do
+       * something the screen cannot offer is worse than saying nothing. Which of the two
+       * sentences depends on whether the fetch failed or is simply outstanding, and only the
+       * failure is a warning. */
+      blockers.push(
+        registryNote === null
+          ? {
+              key: 'game',
+              icon: 'layers',
+              tone: 'plain',
+              text: 'Waiting for the game list from the server.',
+              fix: null,
+            }
+          : {
+              key: 'game',
+              icon: 'layers',
+              tone: 'warn',
+              text:
+                'The game list did not load, so there is nothing to capture as. Ask again ' +
+                'under Rig.',
+              fix: null,
+            },
+      )
+    } else if (gameEntry.unverified) {
+      /* D22's refusal, in the operator's terms rather than the server's. It names the game,
+       * says what is missing, and says what would fix it. The file the rarities are authored
+       * in (`pipeline/games.py`) is a fact for the person at the repo, not the one at the
+       * lens, so it stays out of the sentence. */
+      blockers.push({
+        key: 'unverified',
+        icon: 'layers',
+        tone: 'warn',
+        text:
+          `${gameEntry.display} has no TCGplayer export yet, so a card captured as one could ` +
+          'never be identified, priced or listed. Pick another game, or add its export and ' +
+          'author its rarities first.',
+        fix: null,
+      })
+    }
+  }
+
+  /* ---- what the rebuilt screen derives for itself, from state the plumbing already owns ---- */
+
+  const boxName = box === null ? null : (boxRecords.find((record) => record.box === box)?.name ?? null)
+
+  const cameraLabel = (() => {
+    if (camera.deviceId === null) return null
+    const chosen = camera.devices.find((device) => device.deviceId === camera.deviceId)
+    return chosen === undefined || chosen.label === '' ? 'Camera' : chosen.label
+  })()
+
+  const cameraFault = camera.missing || camera.error !== null
+
+  const phase: MotionPhase | null =
+    triggerMode === 'motion' && motionDiag !== null ? motionDiag.phase : null
+
+  /* The stage lamp: what the feed is doing, in one pill. */
+  const lamp: { tone: PillTone; icon: IconName; text: string } = !camera.started
+    ? { tone: 'default', icon: 'camera', text: 'Camera off' }
+    : cameraFault
+      ? { tone: 'danger', icon: 'alert', text: 'Camera fault' }
+      : !camera.ready
+        ? camera.deviceId === null
+          ? { tone: 'warn', icon: 'camera', text: 'Pick a camera' }
+          : { tone: 'warn', icon: 'refresh', text: 'Connecting' }
+        : { tone: 'live', icon: 'dot', text: 'Live' }
+
+  /* The trigger's state, beside it. Manual mode is one word — its key rides on the shutter,
+   * the one keycap on this stage; motion mode is the machine's own phase, which is the most
+   * icon-shaped state in the product. */
+  const mode: { tone: PillTone; icon: IconName; text: string } =
+    triggerMode === 'manual'
+      ? { tone: 'accent', icon: 'keyboard', text: 'Manual' }
+      : motionDiag === null
+        ? { tone: 'warn', icon: 'eye', text: 'Armed · no signal' }
+        : !motionDiag.hasBaseline
+          ? { tone: 'warn', icon: 'eye', text: 'Baseline pending' }
+          : phase === 'moving'
+            ? { tone: 'live', icon: 'zap', text: 'Moving' }
+            : phase === 'settling'
+              ? { tone: 'accent', icon: 'clock', text: 'Settling' }
+              : { tone: 'ok', icon: 'eye', text: 'Watching' }
+
+  /* The presence meter: how far the scene is from the session's baseline against the floor
+   * it has to clear. Drawn as a bar with a tick at the floor, so "is there a card" is a
+   * glance rather than two decimals. */
+  const presence =
+    triggerMode === 'motion' && motionDiag !== null && motionDiag.hasBaseline
+      ? {
+          value: motionDiag.dBase,
+          floor: motionDiag.presenceFloor,
+          pct: Math.max(
+            0,
+            Math.min(100, (motionDiag.dBase / Math.max(motionDiag.presenceFloor * 2, 1)) * 100),
+          ),
+        }
+      : null
+
+  /* Busy is WORKING, not disabled: the shutter keeps its fill and shows a spinner for the
+   * encode and the POST, and `busyRef` inside `doCapture` is what refuses a second fire. */
+  const shutterDisabled = !canCapture && !busy
+
+  const swallowedTotal = swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held
+
+  const boxSentence =
+    box === null ? 'No box' : boxName === null ? `Box ${box}` : `Box ${box} · ${boxName}`
+
+  /* The store's next index for the box, named as the index it is. `#N` is reserved for the
+   * counted card number every other screen draws (D58); a high-water mark is not one, and a
+   * person moving between screens should never have to guess which `#` they are reading. */
+  const boxNextText = boxIsEmpty ? 'Empty' : `next index ${nextForBox ?? '?'}`
+
+  const gameSentence =
+    gameEntry === null ? (registryNote === null ? 'Loading…' : 'Unavailable') : gameEntry.display
+
+  const rarityText =
+    gameEntry === null || rarityClaim.length === 0
+      ? null
+      : rarityClaim.length <= 2
+        ? rarityClaim.join(' · ')
+        : `${rarityClaim.length} of ${gameEntry.rarities.length} claimed`
 
   return (
-    /* TWO COLUMNS: the controls beside the frames instead of above and below them.
-     *
-     * The owner asked for a screen where "everything shows at 100% on my browser tab, no
-     * scrolling", and said the undo "can clearly be on the side too". Stacked, this screen
-     * spent ~1150px of height inside a 900px window while leaving a third of the width
-     * empty — a bar of controls, two frames, and a full-width undo strip, in that order.
-     *
-     * So: every control in one sidebar column, the two frames in the other, and the frame
-     * height derived from the space actually left over rather than from a constant that was
-     * right on one window. The stylesheet does that arithmetic; see --portrait-h.
-     *
-     * Nothing here tells the stylesheet whether a halt is showing, and an earlier draft that
-     * did — a `capture-halted` class carrying a reserved height for the banner — is worth
-     * knowing about because it is the obvious thing to reach for. It reserved 390px; a halt
-     * in motion mode with a swallowed-fire count measures 433.5, and the difference was a
-     * scrolling page. The banner sizes itself and the frames take what is left.
-     */
-    <main className="capture">
-      {/* FULL WIDTH AND FIRST, above both columns. It was above the stage before and it is
-          above everything now, which is what keeps `blocked`'s "Resume them above" true
-          when read from the sidebar as well as from the stage. */}
-      {halt === null ? null : (
-        <section className="capture-halt" role="alert">
-          <h2 className="capture-halt-title">
-            {halt.where === 'camera'
-              ? 'Captures are paused. No frame came from the camera.'
-              : 'Captures are paused. The card was not recorded.'}
-          </h2>
-          {/* The server's own message, unchanged (spec section 4). */}
-          <p className="capture-halt-message">{halt.text}</p>
-          {/* What to do next, which docs/DESIGN.md's copy rules require of an error and which
-              the server cannot know. "May not have been recorded" rather than "was not":
-              a request can commit and lose its response, and claiming certainty either way
-              is how one physical card ends up with two positions or none.
+    <main className="capture bn-page" data-mode={triggerMode} data-live={camera.ready ? 'true' : 'false'}>
+      {/* Announces every record written, for anyone not looking at the screen. */}
+      <div className="bn-sr" aria-live="polite">
+        {last === undefined ? '' : `Recorded ${last.card.label}`}
+      </div>
 
-              The server line asks for the same card back rather than for it to be set aside,
-              and that instruction is only honest because the capture id is now held across
-              the halt. One press then settles it both ways: if the request never committed
-              the card is recorded normally, and if it did the server replays the original
-              position and burns no index. Set the card aside instead and the run continues
-              with the ambiguity unresolved, which is the state D10's positions cannot
-              survive. */}
-          <p className="capture-halt-message">
-            {halt.where === 'camera'
-              ? 'Set aside the card at the lens and check the camera feed before you resume.'
-              : 'Leave the card at the lens and capture it again after you resume. It may ' +
-                'already have been recorded, and the app will say so rather than give it a ' +
-                'second position.'}
-          </p>
-          <p className="capture-halt-message">
-            {last === undefined ? (
-              'Nothing has been recorded in this session.'
-            ) : (
-              <>
-                The last card recorded is{' '}
-                <span className="capture-inline-label">
-                  <PositionLabel label={last.card.label} flow="run" />
-                </span>.
-              </>
-            )}
-          </p>
-          {/* Human sentence large, machine string small — the reason-code pattern from
-              docs/DESIGN.md, owner-side, so what you saw on screen is greppable across the
-              app and the server log. */}
-          {halt.code === null ? null : <p className="capture-halt-code">{halt.code}</p>}
-          {/* Spec 5.5's sentence, for the one situation where a halt is not enough on its
-              own: a machine trigger with a feeder still delivering. Each of these fires is
-              a card the trigger saw and the screen refused, and physically it may be in
-              the box by now with no photo and no position. The count is what turns "the
-              run was paused for a bit" into "go check the last N cards", which is the
-              difference between a pause and a loss. */}
-          {triggerMode === 'motion' && swallowed.halted > 0 ? (
-            <p className="capture-halt-message">
-              The motion trigger fired{' '}
-              <span className="capture-inline-count">{swallowed.halted}</span>{' '}
-              {swallowed.halted === 1 ? 'time' : 'times'} while captures were paused. If the
-              feeder kept moving, that many cards may have passed the lens unrecorded — set
-              them aside and re-feed them after you resume.
+      {/* THE HALT (spec 5.5): full width and first. A stopped run, the one number that
+          matters, and the one thing to press. The server's own sentence and its code are
+          kept verbatim behind a disclosure. */}
+      {halt === null ? null : (
+        <section className="capture-halt" role="alert" ref={haltRef}>
+          <div className="capture-halt-main">
+            <span className="capture-halt-glyph" aria-hidden="true">
+              <Icon name="alert" size={18} />
+            </span>
+            <div className="capture-halt-text">
+              <h2 className="capture-halt-title">
+                {halt.where === 'camera'
+                  ? 'Captures are paused — no frame came from the camera.'
+                  : 'Captures are paused — the card was not recorded.'}
+              </h2>
+              <p className="capture-halt-message">
+                {halt.where === 'camera'
+                  ? 'Set aside the card at the lens and check the camera feed before you resume.'
+                  : 'Leave the card at the lens and capture it again after you resume — if it ' +
+                    'was already recorded, the app will say so and give it no second position.'}
+              </p>
+              {triggerMode === 'motion' && swallowed.halted > 0 ? (
+                <p className="capture-halt-message capture-halt-count">
+                  <span className="capture-inline-count">{swallowed.halted}</span>{' '}
+                  {swallowed.halted === 1 ? 'card' : 'cards'} may have passed the lens unrecorded
+                  while captures were paused. Set them aside and re-feed them after you resume.
+                </p>
+              ) : null}
+              {triggerMode === 'motion' && halt.where === 'server' ? (
+                <p className="capture-halt-message">
+                  After you resume, capture the held card with the button yourself — the
+                  machine will not re-present a card it has already fired on.
+                </p>
+              ) : null}
+            </div>
+            <Button
+              variant="primary"
+              size="lg"
+              icon="play"
+              className="capture-resume"
+              onClick={() => {
+                setHalt(null)
+                setSwallowed((prev) => ({ ...prev, halted: 0 }))
+                void loadStatus()
+              }}
+            >
+              Resume captures
+            </Button>
+          </div>
+          <details className="capture-halt-details">
+            <summary>
+              <Icon name="chevronRight" size={14} />
+              What the server said
+            </summary>
+            <p className="capture-halt-message capture-halt-server">{halt.text}</p>
+            {halt.code === null ? null : <p className="capture-halt-code">{halt.code}</p>}
+            <p className="capture-halt-message capture-halt-last">
+              {last === undefined ? (
+                'Nothing has been recorded in this session.'
+              ) : (
+                <>
+                  Last recorded:{' '}
+                  <span className="capture-inline-label">
+                    <PositionLabel label={last.card.label} flow="run" />
+                  </span>
+                </>
+              )}
             </p>
-          ) : null}
-          {triggerMode === 'motion' && halt.where === 'server' ? (
-            <p className="capture-halt-message">
-              After you resume, capture the held card with the button yourself. The machine
-              will not re-present a card it has already fired on, and the paused
-              photograph's id must go back with the same card — not with whatever the
-              feeder delivers next.
-            </p>
-          ) : null}
-          {/* The fill moves here while the run is stopped: the capture control renders
-              disabled, so there is again exactly one thing to do, which is what
-              docs/DESIGN.md reserves the solid accent for. No key hint — an explicit
-              acknowledgement is the point, and a key would let muscle memory resume a run
-              the operator has not read the message on. */}
-          <PullConfirm
-            label="Resume captures"
-            onConfirm={() => {
-              setHalt(null)
-              /* This pause's swallowed-fire count has been read and acted on — the banner
-               * told the operator how many cards to set aside. Carrying it into the next
-               * pause would tell them to re-feed cards they already re-fed. */
-              setSwallowed((prev) => ({ ...prev, halted: 0 }))
-              /* Ask the server where the box actually is. The local high-water mark is a
-               * guess from the moment a capture fails: the request may have committed and
-               * lost its response, in which case this box's next index moved and nothing on
-               * this side saw it — and undo would then aim one card too early. Nothing else
-               * in the screen refetches `/status`, by design (a round trip per card at a rig
-               * firing every few seconds buys nothing), so this resume is the one moment the
-               * stale number can be corrected without a reload.
-               *
-               * Run on both kinds of halt rather than only the server one. A camera fault
-               * sent no request, but a stopped run is also a window in which the other
-               * device (D13) can capture into the same box — and one path is easier to keep
-               * true than two conditioned on a distinction that does not change the answer.
-               */
-              void loadStatus()
-            }}
-          />
+          </details>
         </section>
       )}
 
-      {/* A CAPTURE THAT OUTLIVED THE PAGE (D27), and it is up here with the halt rather than
-          beside the shutter for two reasons that point the same way.
-
-          It changes what the next press MEANS, so it has to be read before the next press.
-          The id of a photograph the server never answered for came back from
-          `sessionStorage`; the halt that produced it did not, because a halt is this screen's
-          reaction to one failed request and its text is the server's own, which spec section
-          4 forbids paraphrasing and this could only have invented. So this says the one thing
-          that banner would have said: put the SAME card back. On a replay the server ignores
-          the image entirely and answers with the card it already committed — so a press with
-          the next card at the lens answers for the held one and lets the new one past with no
-          record at all. Restoring the id silently would trade an unresolvable ambiguity for a
-          quiet one.
-
-          And the height budget absorbs it here. Above the shell it takes its room from the
-          frames, exactly as the halt does; in the sidebar it would have pushed a column that
-          fits by ~15px into scrolling the page.
-
-          NOT RENDERED UNDER A HALT, because the halt already says it in the server's own
-          terms and says it louder. Two banners about one card is one banner too many.
-
-          No dismiss control, deliberately: dismissing it is precisely what a reload used to
-          do. One press with the right card settles it in both directions, and closing the tab
-          ends the session store with it. */}
+      {/* A capture that outlived the page (D27). Not rendered under a halt, which says it
+          louder. */}
       {halt !== null || !heldAcrossReload ? null : (
         <section className="capture-carried" role="status">
-          <p className="capture-halt-message">
-            A capture from before this page reloaded was never confirmed. Put that same card
-            back at the lens and capture it — if the server did record it, it will say so and
-            give it no second position. Do not feed the next card first.
-          </p>
+          <Notice tone="warn" title="A capture from before this page reloaded was never confirmed.">
+            Put that same card back at the lens and capture it — if the server did record it, it
+            will say so and give it no second position. Do not feed the next card first.
+          </Notice>
         </section>
       )}
 
+      {/* THE HEAD: the screen's name and the run's odometer, in the kit's register. The feed
+          lamp and the box sentence are the stage's, 60px lower, and are not drawn twice. */}
+      <header className="capture-head">
+        <div className="capture-head-text">
+          <span className="bn-eyebrow">Workflow</span>
+          <h1 className="capture-title">
+            <Icon name="camera" size={20} />
+            Capture
+          </h1>
+        </div>
+        <div className="capture-odo" aria-label="This run">
+          <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
+          <span className="capture-odo-rule" aria-hidden="true" />
+          <Stat value={box === null ? '—' : String(nextForBox ?? 1)} label="next index" />
+          <span className="capture-odo-rule" aria-hidden="true" />
+          <Stat
+            value={runCount === null ? '—' : `${runCount.low}–${runCount.high}`}
+            label="index span"
+          />
+          {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
+            <Pill tone="ok" icon="check" className="capture-odo-verdict">
+              no gaps
+            </Pill>
+          ) : (
+            <Pill tone="danger" icon="alert" className="capture-odo-verdict">
+              {runCount.gaps === 0 ? '' : `${runCount.gaps} missing`}
+              {runCount.gaps !== 0 && runCount.ids !== runCount.shots ? ' · ' : ''}
+              {runCount.ids === runCount.shots ? '' : `${runCount.ids} ids of ${runCount.shots}`}
+            </Pill>
+          )}
+        </div>
+      </header>
+
       <div className="capture-shell">
-        {/* THE CONTROL SIDEBAR — pass D's CADENCE SPLIT, re-ordered top to bottom by the
-            owner on 2026-08-24: SESSION, then the CLAIMS, then the shutter at the foot.
-            The split itself is untouched — Game, Camera, Rotation and Trigger are still
-            the quiet 24px group set once when the rig is set up, and Box, Set hint, Rarity
-            and Finish are still the per-stack claims at 32px — what moved is which end of
-            the column each one sits at.
-
-            What the old order bet, and what this one bets instead. Pass D put the claims at
-            the top and the session group under the shutter, on the reading that the rows an
-            operator's eyes cross per stack should all be claims. The owner's order reads the
-            column as a run instead: set the rig up at the top, claim the stack in the middle,
-            and press the shutter at the bottom — so the column is walked once downward at the
-            start of a run and then only its middle is touched. The shutter gains from the
-            move rather than losing: it is the last thing in the panel now, so nothing that is
-            added to the claims list above can ever push it further from the bottom edge.
-
-            The mockup's own `Capture` brand head is NOT reproduced — the app nav sits 46px
-            above this column already saying which screen this is, and a duplicate title is
-            36px of the exact "oversized boxes" complaint this pass exists to answer. */}
-        <aside className="capture-side">
-          {/* THE SESSION GROUP, at the top of the column and quieter — 24px rows to the
-              claims' 32, smaller type, one group caption. These four are set once when the
-              rig is set up and then read, not touched: which game the stacks are, which lens
-              the photos come through, which way the sensor is mounted, what fires the
-              shutter. It is FIRST rather than last as of 2026-08-24 (owner), which is the
-              order a run is actually set up in: rig, then stack, then shutter.
-
-              Quiet is doing the work the position used to do. The reason this group sat
-              under the shutter was to keep the rows beside a running feeder all claims, and
-              the group's whole visual grammar — one size down on every face, 24px rows, a
-              caption over the top — is what keeps it from competing with the claims now that
-              it is above them. It reads as the header of the column rather than as four more
-              things to set per stack. */}
-          <div className="capture-session">
-            <p className="capture-groupcap">Session</p>
-
-            {/* THE RUN COUNTER. Not a claim and not a control — the one row in this sidebar
-                that is evidence, which is why it sits at the top of Session rather than among
-                the claims above. It answers the question the Last capture panel is asked to
-                answer by eye and cannot at feeder pace: did every card that went past the lens
-                get a position of its own?
-
-                Drawn only once this box has a shot in this session, because before that there
-                is nothing to count and a row of zeroes reads as a fault. */}
-            {runCount === null ? null : (
-              <p className="capture-runcount">
-                <span className="capture-runcount-n">{runCount.shots}</span>
-                <span className="capture-runcount-word">
-                  captured &middot; #{runCount.low}&ndash;{runCount.high}
+        {/* ============ THE VIEWFINDER: the hero, on a dark stage in either theme ============ */}
+        <section className="capture-stage" aria-label="Viewfinder">
+          {/* The stage head: the feed and the trigger as lamps, and the presence meter while a
+              machine is judging. A real row rather than an overlay, so nothing sits on the
+              card. */}
+          <div className="capture-stage-head">
+            <div className="capture-lamps">
+              <Pill tone={lamp.tone} icon={lamp.icon} className={lamp.tone === 'live' ? 'capture-lamp is-live' : 'capture-lamp'}>
+                {lamp.text}
+              </Pill>
+              <Pill tone={mode.tone} icon={mode.icon} className="capture-lamp capture-lamp-mode">
+                {mode.text}
+              </Pill>
+            </div>
+            {presence === null ? null : (
+              <div
+                className={presence.value >= presence.floor ? 'capture-meter is-present' : 'capture-meter'}
+                role="img"
+                aria-label={`presence ${presence.value.toFixed(1)}, floor ${presence.floor.toFixed(1)}`}
+              >
+                <span className="capture-meter-label">presence</span>
+                <span className="capture-meter-bar">
+                  <span className="capture-meter-fill" style={{ width: `${presence.pct}%` }} />
+                  <span className="capture-meter-tick" />
                 </span>
-                <span
-                  className={
-                    runCount.gaps === 0 && runCount.ids === runCount.shots
-                      ? 'capture-runcount-ok'
-                      : 'capture-runcount-off'
-                  }
-                >
-                  {runCount.gaps === 0 ? 'no gaps' : `${runCount.gaps} missing`}
-                  {' · '}
-                  {runCount.ids === runCount.shots
-                    ? `${runCount.ids} ids`
-                    : `${runCount.ids} ids of ${runCount.shots}`}
-                </span>
-              </p>
-            )}
-
-            {/* The game decides what the claim fields above may offer — the finish enum
-                and the rarity vocabulary are both per-game — and it still does: picking
-                one here re-renders them and clears both claims (see pickGame). What moved
-                is only WHERE it is decided, because D21 makes it a per-card claim that in
-                practice changes once per session, not once per stack. */}
-            {openField === 'game' ? (
-              <OpenField k="G" label="Game" meta="Choose one" onClose={closeField}>
-                <div className="capture-opts">
-                  {(registry?.games ?? []).map((entry, position) => (
-                    <Opt
-                      key={entry.key}
-                      k={OPTION_KEYS[position]}
-                      on={entry.key === game}
-                      name={entry.display}
-                      /* The machine string, small, beside the human name — the reason-code
-                         pattern docs/DESIGN.md sets for owner-side screens, so what is on
-                         screen is greppable against `pipeline/games.py` and a run report. */
-                      trail={entry.key}
-                      onPick={() => {
-                        pickGame(entry.key)
-                        closeField()
-                      }}
-                    />
-                  ))}
-                  {registry === null ? (
-                    <p className="capture-quiet">The server has not sent the game list yet.</p>
-                  ) : null}
-                </div>
-                {registryNote === null ? null : (
-                  <>
-                    <p className="capture-quiet">{registryNote.text}</p>
-                    <button type="button" className="capture-go" onClick={() => void loadGames()}>
-                      Ask again
-                    </button>
-                  </>
-                )}
-                {/* THREE STATES, THREE DIFFERENT SENTENCES, AND NONE OF THEM IS THE OTHERS.
-                    Collapsing any two would be the mistake this block exists to avoid:
-                    `misc` is a settled, correct, permanent answer and must never render as
-                    a fault, while `unverified` is a fault with a fix and has to say so.
-                    Nothing renders for the ordinary case — a game that is catalogued,
-                    verified and has a prompt says nothing, because a line of reassurance
-                    on every capture is noise on the screen the owner spends hours in. The
-                    sentences live inside the disclosure now; the one that blocks capture
-                    (`unverified`) is also said at full length under the shutter, where
-                    `blocked` has always said it. */}
-                {gameEntry === null ? null : gameEntry.unverified ? (
-                  <p className="capture-quiet">
-                    No TCGplayer export has been seen for {gameEntry.display}, so it has no
-                    rarities and no price data and a card captured as one could never be
-                    identified, priced or listed. Captures are held until an export is in hand
-                    and its vocabulary is authored in <code>pipeline/games.py</code>.
-                  </p>
-                ) : !gameEntry.catalogued ? (
-                  <p className="capture-quiet">
-                    {gameEntry.display} is captured and located like any other card and then
-                    stops: no identification call, no join, no listing. Type a note under the
-                    last capture saying what the card is — that note is the only thing it can
-                    be found by later.
-                  </p>
-                ) : gameEntry.prompt === PROMPT_UNWRITTEN ? (
-                  <p className="capture-quiet">
-                    {gameEntry.display} has an export but no identification prompt yet, so
-                    these cards will be captured and positioned now and identified later.
-                  </p>
-                ) : null}
-              </OpenField>
-            ) : (
-              <Row
-                k="G"
-                label="Game"
-                right={
-                  gameEntry === null ? (
-                    <span className="capture-val is-default">
-                      {registryNote === null ? '…' : 'unavailable'}
-                    </span>
-                  ) : (
-                    <span className="capture-val">{gameEntry.display}</span>
-                  )
-                }
-                onToggle={() => toggleField('game')}
-              />
-            )}
-
-            {/* C10's PRODUCT CLAIM, and it is drawn ONLY for the game that claims one.
-                Which game that is comes from `registry.product_game` — the server's own
-                answer — rather than from a game key written on this side, which is the
-                registry mirror this file refuses everywhere else and is no more acceptable
-                for one string than for a whole vocabulary.
-
-                WHY THE CLAIM EXISTS AT ALL: code cards arrive in sealed-product batches, so
-                the operator can see the box the stack came out of while the camera cannot.
-                That is what retires C2's OCR half — a fiducial crop, an OCR engine, a
-                character whitelist and a hand-built SKU table replaced by one picker that is
-                right more often. `docs/specs/code-cards.md` §4 carries the argument.
-
-                THE PREMIUM MARK IS THE WHOLE POINT OF THE FIELD. A Pokemon Center ETB code
-                lists at roughly 46x a booster code, and the one mistake that costs real
-                money on this track is a premium code leaving in a bulk lot. */}
-            {registry !== null && game === registry.product_game ? (
-              openField === 'product' ? (
-                <OpenField
-                  k="P"
-                  label="Product"
-                  meta={
-                    product === null ? (
-                      <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
-                    ) : null
-                  }
-                  onClose={closeField}
-                >
-                  <div className="capture-opts">
-                    {registry.products.map((entry, nth) => (
-                      <Opt
-                        key={entry.key}
-                        k={OPTION_KEYS[nth]}
-                        on={product === entry.key}
-                        onPick={() =>
-                          setProduct((current) => (current === entry.key ? null : entry.key))
-                        }
-                        name={entry.display}
-                        trail={entry.premium ? 'premium' : undefined}
-                      />
-                    ))}
-                  </div>
-                  <p className="capture-quiet">
-                    Which sealed product this stack came out of. Leave it unclaimed if you do
-                    not know — an unclaimed code is counted on the Codes screen and refused by
-                    both channel lanes, which is louder than a wrong guess.
-                  </p>
-                </OpenField>
-              ) : (
-                <Row
-                  k="P"
-                  label="Product"
-                  right={
-                    product === null ? (
-                      <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
-                    ) : (
-                      <span className="capture-val">
-                        {registry.products.find((e) => e.key === product)?.display ?? product}
-                      </span>
-                    )
-                  }
-                  onToggle={() => toggleField('product')}
-                />
-              )
-            ) : null}
-
-            {/* The device picker's job, in the row grammar — the CameraPicker component's
-                whole surface folded into this field so the sidebar has one control
-                language. Everything it argued survives: the picker exists because the Cam
-                Link presents the rig camera as a plain UVC webcam distinguishable only by
-                label (D13, v1 bug 3 — no facingMode anywhere); nothing touches the camera
-                until the operator asks (`started`, the open-on-mount permission prompt);
-                a missing remembered device opens NOTHING rather than falling back to
-                another lens; and the negotiated resolution is shown because a constraint
-                is a request and a short stream should be caught before a box is shot
-                through it. */}
-            {openField === 'camera' ? (
-              <OpenField
-                k="V"
-                label="Camera"
-                meta={
-                  signal !== null ? (
-                    <span className={underTarget ? 'capture-meta-alert' : undefined}>
-                      {signal.width} × {signal.height}
-                    </span>
-                  ) : !camera.started ? (
-                    'not open'
-                  ) : (
-                    `${camera.devices.length} found`
-                  )
-                }
-                onClose={closeField}
-              >
-                {!camera.started ? (
-                  <>
-                    <p className="capture-quiet">
-                      The camera is not open yet. Nothing on this screen reaches for it until
-                      you ask, so opening the app raises no permission prompt.
-                    </p>
-                    <button type="button" className="capture-go" onClick={camera.retry}>
-                      Open the camera
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="capture-opts">
-                      {camera.devices.map((device, position) => (
-                        <Opt
-                          key={device.deviceId}
-                          k={OPTION_KEYS[position]}
-                          on={device.deviceId === camera.deviceId}
-                          /* Labels are blank until permission has been granted; useCamera
-                             asks before enumerating, so a blank here means it was refused
-                             — the numbered fallback keeps the list usable rather than
-                             drawing a row of 64-character deviceIds. */
-                          name={device.label === '' ? `Camera ${position + 1}` : device.label}
-                          onPick={() => camera.selectDevice(device.deviceId)}
-                        />
-                      ))}
-                      {camera.devices.length === 0 ? (
-                        <p className="capture-quiet">No cameras found.</p>
-                      ) : null}
-                    </div>
-                    {/* Selecting a device deliberately does NOT close this field: the
-                        acquisition's outcome — an error, a short stream, or the resolution
-                        in the meta — lands right here, and closing on the click would hide
-                        the answer to the question the click asked. */}
-                    {camera.missing ? (
-                      <p className="capture-quiet">
-                        The remembered camera is not connected. Check the Cam Link and that
-                        the camera is awake, or pick a camera above. Nothing is open until
-                        you do.
-                      </p>
-                    ) : null}
-                    {camera.error === null ? null : (
-                      <p className="capture-quiet">{camera.error}</p>
-                    )}
-                    {underTarget ? (
-                      <p className="capture-quiet">
-                        This stream is below the {PIPELINE_LONG_EDGE}px the pipeline works
-                        from, so every photo will be worse than the rig can produce. Check
-                        the camera is in its clean-HDMI output mode and that nothing else is
-                        holding the capture card.
-                      </p>
-                    ) : null}
-                    {/* Shown only when something is wrong — a permanently visible control
-                        to reopen a WORKING camera is an invitation to drop the stream
-                        mid-box. `retry` re-enumerates and re-opens, which is the only way
-                        back from a stream error: re-picking the same device fires no
-                        change event and re-runs nothing. */}
-                    {camera.missing || camera.error !== null || underTarget ? (
-                      <button type="button" className="capture-go" onClick={camera.retry}>
-                        Reopen the camera
-                      </button>
-                    ) : null}
-                  </>
-                )}
-              </OpenField>
-            ) : (
-              <Row
-                k="V"
-                label="Camera"
-                right={
-                  !camera.started ? (
-                    <span className="capture-val is-default">not open</span>
-                  ) : camera.missing || camera.error !== null ? (
-                    // A one-word state at rest; the sentence, verbatim, is one keypress
-                    // away inside the field. Accent because the system is unsure — its
-                    // outline-weight job, never the fill.
-                    <span className="capture-val capture-val-alert">fault</span>
-                  ) : (
-                    <span className="capture-val">
-                      {camera.deviceId === null
-                        ? 'none'
-                        : (() => {
-                            const chosen = camera.devices.find(
-                              (device) => device.deviceId === camera.deviceId,
-                            )
-                            return chosen === undefined || chosen.label === ''
-                              ? 'camera'
-                              : chosen.label
-                          })()}
-                    </span>
-                  )
-                }
-                onToggle={() => toggleField('camera')}
-              />
-            )}
-
-            {/* Which way the stored photo is turned, in degrees clockwise. The rig's
-                camera is side-mounted so a portrait card fills the field, the Cam Link
-                reports the sensor's landscape frame regardless, and Gate B misread 45 of
-                53 sideways cards — this setting is that lesson as a control. Display and
-                encode turn together; the element's intrinsic frames are never touched. */}
-            {openField === 'rotation' ? (
-              <OpenField k="O" label="Rotation" meta="Choose one" onClose={closeField}>
-                <Track
-                  label="Rotation"
-                  cells={ROTATIONS.map((value) => ({
-                    text: `${value}°`,
-                    on: camera.rotation === value,
-                    onPick: () => {
-                      camera.setRotation(value)
-                      closeField()
-                    },
-                  }))}
-                />
-              </OpenField>
-            ) : (
-              <Row
-                k="O"
-                label="Rotation"
-                right={<span className="capture-val">{camera.rotation}°</span>}
-                onToggle={() => toggleField('rotation')}
-              />
-            )}
-
-            {/* The trigger, last: the one session setting that is an ACT rather than a
-                fact about the rig. Toggling out of motion is the disarm — reversible in
-                one tap, so per docs/DESIGN.md it gets no confirmation — and toggling in
-                starts a run (D19), which is why the mode never survives a reload. The
-                answer to "how do I know it is on" is threefold: the pressed cell, the
-                machine string on this row, and a HUD that only exists while the machine
-                is watching. The row's value is `captureTrigger.name` verbatim — the
-                `capture-trigger` class is load-bearing, app/tests/motion-live.spec.ts
-                asserts the armed trigger through it. */}
-            {openField === 'trigger' ? (
-              <OpenField
-                k="T"
-                label="Trigger"
-                meta={<span className="capture-trigger">{captureTrigger.name}</span>}
-                onClose={closeField}
-              >
-                <Track
-                  label="Trigger"
-                  cells={[
-                    {
-                      text: 'key',
-                      on: triggerMode === 'manual',
-                      onPick: () => {
-                        switchTrigger('manual')
-                        closeField()
-                      },
-                    },
-                    {
-                      text: 'motion',
-                      on: triggerMode === 'motion',
-                      onPick: () => {
-                        switchTrigger('motion')
-                        closeField()
-                      },
-                    },
-                  ]}
-                />
-              </OpenField>
-            ) : (
-              <Row
-                k="T"
-                label="Trigger"
-                right={
-                  <span
-                    className={
-                      triggerMode === 'manual'
-                        ? 'capture-val is-default capture-trigger'
-                        : 'capture-val capture-trigger'
-                    }
-                  >
-                    {captureTrigger.name}
-                  </span>
-                }
-                onToggle={() => toggleField('trigger')}
-              />
-            )}
-          </div>
-
-          <div className="capture-side-fields">
-            {/* BOX FIRST among the claims — it is the one with a physical drawer under it.
-                The game is not here at all: it lives in the session group above, because it
-                decides what the other pickers may offer but is decided once per session, and
-                the fields it governs simply do not render until the registry lands. */}
-            {openField === 'box' ? (
-              <OpenField
-                k="B"
-                label="Box"
-                meta={
-                  box === null
-                    ? `no box · ${boxes.length} ${boxes.length === 1 ? 'box' : 'boxes'}`
-                    : `Box ${box} · ${boxes.length} ${boxes.length === 1 ? 'box' : 'boxes'}`
-                }
-                onClose={closeField}
-              >
-                {/* ONE ENTRY, NEVER A LIST: thirty boxes cost what three cost, because
-                    nothing ever draws more than nine rows and one keystroke re-narrows.
-                    Substring on the number AND the name, so `9` keeps 19 and 95 as well as
-                    9, and `com` keeps "common box 3" — a box is remembered by its digits or
-                    by what is written on it, not by either one's prefix.
-
-                    THIS WAS TWO CONTROLS AND IS ONE. A filter that could only select, and an
-                    `N` field that could only create, both taking digits, separated by nothing
-                    but which held focus. */}
-                <div className="capture-entry">
-                  <span />
-                  <div className="capture-entrybox">
-                    <input
-                      ref={boxEntryRef}
-                      className="capture-filter"
-                      type="text"
-                      aria-label="Find a box by number or name, or type a new one"
-                      placeholder="number or name, then Enter"
-                      value={boxEntry}
-                      disabled={boxBusy}
-                      onChange={(event) => {
-                        // NOT stripped to digits, which is the half that makes a box
-                        // findable by what it is called. The entry is free text; what
-                        // decides whether it is a number is `BOX_DIGITS`, at the one place
-                        // that has to decide — the creation offer.
-                        setBoxEntry(event.target.value)
-                        setBoxNote(null)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter') return
-                        event.preventDefault()
-                        void takeBoxEntry()
-                      }}
-                    />
-                    <span className="capture-entrymeta">
-                      {/* WHAT ENTER IS ABOUT TO DO, before it is pressed. Spec 5.2 asks for
-                          exactly this and calls it what it is: showing "this is a new box"
-                          as information is not a confirmation step and costs nothing. Until
-                          now the earliest that fact appeared was the `empty` sub AFTER the
-                          switch, and the `N` field said nothing at all. */}
-                      {boxBusy
-                        ? 'adding…'
-                        : boxTop !== undefined
-                          ? boxTop.sealed
-                            ? 'sealed'
-                            : `next ${boxTop.next ?? '?'}`
-                          : boxOffer !== null
-                            ? 'new box'
-                            : `${boxes.length} in use`}
-                    </span>
-                  </div>
-                </div>
-                <div className="capture-opts">
-                  {boxRows.map((option) => (
-                    <Opt
-                      key={option.box}
-                      /* NO KEY CHIP, and its absence is the merge's own consequence rather
-                         than a truncation. Every keystroke in this field is typing — box
-                         names are digits and letters both — so a chip here would advertise
-                         a key that does nothing. It always did: the entry holds focus from
-                         the moment the field opens, and the window handler bails on
-                         `isEditableTarget`, so the chips these rows used to draw were
-                         unreachable by keyboard for as long as they existed. */
-                      on={option.box === box}
-                      name={`Box ${option.box}`}
-                      sfx={option.name === null ? null : ` ${option.name}`}
-                      /* The store's own high-water mark, verbatim. NOT a card count — the
-                         two disagree the moment a record is removed. A shut box says so
-                         instead: D20 refuses a capture into one before it computes an
-                         index, so the lid is the only fact about it this screen needs. */
-                      trail={option.sealed ? 'sealed' : `next ${option.next ?? '?'}`}
-                      onPick={() => {
-                        if (option.sealed) {
-                          setBoxNote(
-                            `Box ${option.box} is sealed and takes no more cards. Open it ` +
-                              `on the Inventory screen, or pick another.`,
-                          )
-                          return
-                        }
-                        chooseBox(option.box)
-                      }}
-                    />
-                  ))}
-                  {/* THE CREATION ROW, AND IT IS LAST. Last is what keeps "Enter takes the
-                      top row" safe: it becomes the top row only when nothing matched, which
-                      is exactly when creating is what was meant. Typing `com` against an
-                      existing "common box 3" selects that box rather than making a junk one.
-
-                      Its name is what will exist. Digits create that NUMBER unnamed — the
-                      old `N` field's whole behaviour, kept — and anything else creates a box
-                      CALLED that, with the lowest free number attached by the server. */}
-                  {boxOffer === null ? null : (
-                    <Opt
-                      on={false}
-                      name={boxOffer.box === null ? boxOffer.name ?? '' : `Box ${boxOffer.box}`}
-                      trail="new"
-                      /* CREATES, and never takes the top match — see `createOfferedBox`. */
-                      onPick={() => void createOfferedBox()}
-                    />
-                  )}
-                </div>
-                <p className="capture-opennote">
-                  {boxMatchTotal > boxRows.length
-                    ? `${boxMatchTotal} boxes match; ${boxRows.length} shown. Narrow it, or press Enter to take the top row.`
-                    : 'Type a number or a name, then Enter. Enter takes the top row.'}
-                </p>
-                {boxNote === null ? null : <p className="capture-quiet">{boxNote}</p>}
-              </OpenField>
-            ) : (
-              <Row
-                k="B"
-                label="Box"
-                right={
-                  box === null ? (
-                    <span className="capture-val is-default">none</span>
-                  ) : (
-                    <span className="capture-val">
-                      {box}
-                      {/* `empty` earns the sub when the high-water mark says the drawer
-                          holds nothing yet — the earlier of the two chances to catch a
-                          typed 33 for 3, kept from the old flag. Otherwise the sub is the
-                          server's own next index, the same fact the option rows trail. */}
-                      <em className="capture-sub">
-                        {boxIsEmpty ? 'empty' : `next ${nextForBox ?? '?'}`}
-                      </em>
-                    </span>
-                  )
-                }
-                onToggle={() => toggleField('box')}
-              />
-            )}
-
-            {/* Free text over a real vocabulary (D65): TCGplayer publishes the set names
-                and the operator types shorthand, so the field suggests without constraining
-                and JUDGES WITHOUT REFUSING. Optional, and worth the field — without it a
-                collector number that matches rows in two sets reviews as `set_ambiguous`. */}
-            {openField === 'set' ? (
-              <OpenField
-                k="H"
-                label="Set hint"
-                /* THE RULE, WHERE THE WORD `optional` STOOD ALONE. Optional it remains; what
-                   the meta never said is that the field has a vocabulary at all, which is
-                   the fact an operator needs BEFORE they type rather than after. */
-                meta="optional · a real set name"
-                onClose={closeField}
-              >
-                <form
-                  className="capture-entry"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    /* ENTER COMPLETES BEFORE IT CLOSES. A hint that resolved through an
-                       alias, a prefix or a colon-code scopes the export correctly and is
-                       still not the set's NAME — which is the form `pipeline/join.py:
-                       set_matches` needs at join time, one fold and no shape rules. So the
-                       keystroke that leaves the field also makes the stored string exact.
-                       It never invents one: nothing resolved, nothing rewritten. */
-                    if (hintVerdict.state === 'matched' && !hintVerdict.exact) {
-                      setSetHint(hintVerdict.set)
-                    }
-                    closeField()
-                    blurActive()
-                  }}
-                >
-                  <span />
-                  {/* THE BOX FIELD'S OWN SHAPE, and deliberately the same one: an entry with
-                      its live state pinned to the right end, reading as one control. That
-                      field says `next 60` / `new box`; this one says whether what is typed
-                      names a set. Two free-text fields, one grammar. */}
-                  <div className="capture-entrybox">
-                    <input
-                      ref={hintRef}
-                      className="capture-filter"
-                      type="text"
-                      placeholder="sv09"
-                      aria-label="Set hint"
-                      list="capture-set-names"
-                      value={setHint}
-                      onChange={(event) => setSetHint(event.target.value)}
-                    />
-                    {/* A DATALIST AND NOT A SELECT, which is the whole reason this is safe to
-                        add to the rig's own screen. It suggests without constraining: free
-                        text still works, an empty list is indistinguishable from the control
-                        before D65, and nothing here can refuse a capture. */}
-                    <datalist id="capture-set-names">
-                      {hintSuggestions.map((name: string) => (
-                        <option key={name} value={name} />
-                      ))}
-                    </datalist>
-                    <span
-                      className={
-                        hintAlert ? 'capture-entrymeta capture-entrymeta-alert' : 'capture-entrymeta'
-                      }
-                    >
-                      {hintMetaText(hintVerdict)}
-                    </span>
-                  </div>
-                </form>
-                {/* WHY THERE ARE NO SUGGESTIONS, WHICH SILENCE DOES NOT SAY. The list
-                    degrading to empty is the correct behaviour — the rig never stops for an
-                    autocomplete — but degrading INVISIBLY is a different thing, and an
-                    expired session looks exactly like a game that has no sets. The reason
-                    already rides on the response and was being thrown away.
-
-                    IT TAKES PRECEDENCE OVER THE VERDICT, because there is no verdict: with
-                    no vocabulary every hint is `unchecked`, and a sentence about what the
-                    typing means would be a second sentence saying less than this one. */}
-                {hintVocabulary === undefined ? null : hintVocabulary.reason ? (
-                  <p className="capture-opennote">
-                    {hintReason(hintVocabulary.reason)}. The hint is stored exactly as typed.
-                  </p>
-                ) : (
-                  <p className={hintAlert ? 'capture-opennote capture-note-alert' : 'capture-opennote'}>
-                    {hintNoteText(hintVerdict, gameEntry?.display ?? 'this game')}
-                  </p>
-                )}
-              </OpenField>
-            ) : (
-              <Row
-                k="H"
-                label="Set hint"
-                right={
-                  setHint.trim() === '' ? (
-                    <span className="capture-val is-default">none</span>
-                  ) : (
-                    /* AT REST THE VERDICT IS ONE WORD OR NOTHING. A hint that names a set is
-                       the ordinary case and says nothing extra; one that names none carries
-                       the sub and the accent, so a stack captured against a typo is visible
-                       from the row rather than only from inside the field. Silent while the
-                       vocabulary has never been fetched — this screen does not accuse a
-                       string it has not checked. */
-                    <span className={hintAlert ? 'capture-val capture-val-alert' : 'capture-val'}>
-                      {setHint.trim()}
-                      {hintAlert ? <em className="capture-sub">names no set</em> : null}
-                    </span>
-                  )
-                }
-                onToggle={() => toggleField('set')}
-              />
-            )}
-
-            {/* RARITY AT REST IS THE BITFIELD: one 6px mark per rarity of the chosen game,
-                catalog stack order, filled where claimed — the same positions at the same
-                width every time you look, because width moves only when the game does and
-                the game is a session setting. It says HOW MANY and AT WHICH POSITIONS,
-                never WHICH NAMES: names live one keypress away behind R, and that trade is
-                the mockup's, accepted with it.
-
-                FEWER THAN TWO RARITIES DRAWS NO FIELD — the same threshold the finish row
-                takes, moved here on the owner's ruling of 2026-08-23 for the same reason
-                and in the same breath. `misc` authors none, and `pokemon_code` authors
-                exactly one (`Code Card`), which made a multi-select offering a single
-                option: a control whose only choice is whether to restate the one fact it
-                could possibly carry. Both of the claim's jobs (D23) are degenerate there —
-                a cross-check against one candidate rarity contradicts nothing, and
-                narrowing the finish chips is moot for a game with one finish that now
-                draws no chips either. Claiming nothing and letting the ladder read the
-                catalog is the same answer by the honest route. */}
-            {gameEntry !== null && gameEntry.rarities.length > 1 ? (
-              openField === 'rarity' ? (
-                <OpenField
-                  k="R"
-                  label="Rarity"
-                  meta={`Choose any · ${rarityClaim.length} of ${gameEntry.rarities.length}`}
-                  onClose={closeField}
-                >
-                  {/* NO FILTER BAR HERE, on the owner's ruling of 2026-08-23: "there's
-                      not that many that i have to search for them." The longest list any
-                      game authors is Pokemon's thirteen, and since 2026-08-24 ALL thirteen
-                      ride a key (`OPTION_KEYS`) rather than the first nine — so the box the
-                      filter saved was never more than a few taps, while it cost a focused
-                      input on every open of this field and a re-indexing rule the operator
-                      had to hold in their head to read the chips. The alphabet strengthens
-                      that ruling rather than reopening it: what a filter was for here was
-                      dragging row ten into keyboard reach, and row ten has its own key now.
-
-                      The box filter is NOT the mirror case and deliberately keeps its own:
-                      boxes are unbounded and already number in the nineties, which is the
-                      condition this list can never reach — `rarities` is authored per game
-                      in `pipeline/games.py` and grows only when a real catalog does. */}
-                  {/* ANY NUMBER of marks is a legal claim, including none: toggling the
-                      last one off IS the clear, the empty claim narrows nothing (D23), and
-                      no separate reset control exists to learn. */}
-                  <div className="capture-opts">
-                    {visibleRarities.map((name, position) => {
-                      const [stem, sfx] = rarityNameParts(name)
-                      return (
-                        <Opt
-                          key={name}
-                          k={OPTION_KEYS[position]}
-                          on={rarityClaim.includes(name)}
-                          name={stem}
-                          sfx={sfx}
-                          onPick={() => toggleRarity(name)}
-                        />
-                      )
-                    })}
-                  </div>
-                </OpenField>
-              ) : (
-                <Row
-                  k="R"
-                  label="Rarity"
-                  right={
-                    <span
-                      className="capture-bits"
-                      role="img"
-                      aria-label={`${rarityClaim.length} of ${gameEntry.rarities.length} claimed`}
-                    >
-                      {gameEntry.rarities.map((name) => (
-                        <span
-                          key={name}
-                          className={rarityClaim.includes(name) ? 'capture-bit on' : 'capture-bit'}
-                        />
-                      ))}
-                    </span>
-                  }
-                  onToggle={() => toggleField('rarity')}
-                />
-              )
-            ) : null}
-
-            {/* A GAME WITH FEWER THAN TWO FINISHES DRAWS NO FIELD, and the threshold moved
-                from zero to one on the owner's ruling of 2026-08-23. The zero case was
-                always here: `misc` declares an empty vocabulary — a Yu-Gi-Oh or Weiss card
-                has no finish this pipeline knows how to claim — and a Finish row offering
-                only "no claim" is a control with nothing to pick, which reads as something
-                failing to load rather than as nothing to say.
-
-                THE ONE-FINISH CASE IS THAT SAME SENTENCE ONE STEP ALONG. `pokemon_code`
-                stocks `normal` and nothing else, so its Finish row offered "no claim" beside
-                a single cell — two cells, one real choice, and the owner named it as making
-                no sense. It does not.
-
-                DRAWN AS ABSENT RATHER THAN AS AUTO-SELECTED, WHICH IS THE PART D23 DECIDES.
-                The owner's first instinct was that a lone finish "would always be selected",
-                and D23 refuses exactly that: an auto-selected claim is a MANUFACTURED one,
-                and D3 rung 1 outranks rung 2, so claiming `normal` on the operator's behalf
-                would make `CATALOG_FORCED` unreachable for every card of that game. Not
-                drawing the control claims nothing, leaves rung 2 to resolve the only finish
-                the catalog stocks, and reaches the same record by the honest route. Ruled
-                that way by the owner on 2026-08-23; D23 is not reopened.
-
-                A finish claimed under a game that DOES draw the field must not survive a
-                switch to one that does not — see the clearing effect above, which drops it
-                on this same threshold. Otherwise a claim would ride along on a control the
-                operator cannot see, let alone take back. */}
-            {gameEntry !== null && gameEntry.finishes.length > 1 ? (
-              openField === 'finish' ? (
-                <OpenField
-                  k="F"
-                  label="Finish"
-                  meta={`Choose any · ${finish.length} of ${gameEntry.finishes.length}`}
-                  onClose={closeField}
-                >
-                  {/* The pipeline's own strings, verbatim, cell for cell — the same
-                      no-second-vocabulary rule the chips followed (see NO_CLAIM_LABEL).
-                      An excluded cell stays drawn and refuses, so the operator can see
-                      what the rarity claim cost; the sentence below the track is where
-                      `not stocked` is said at full contrast.
-
-                      THERE IS NO "no claim" CELL, on the owner's ruling of the same day:
-                      nothing selected IS no claim, and a cell for it is a choice that only
-                      restates the absence of the others. Clearing is re-tapping the cell
-                      that is on — which is the idiom the rarity claim beside it already
-                      uses, and which `Track` was already marked up for: its cells carry
-                      `aria-pressed`, so they have always been toggles rather than radios.
-                      The collapsed Row below still SAYS `no claim` at full contrast, so the
-                      state stays named where it is read; what went is the cell that made
-                      naming it a thing to pick. */}
-                  <Track
-                    label="Finish"
-                    cells={gameEntry.finishes.map((member) => ({
-                      text: member,
-                      on: finish.includes(member),
-                      disabled: offeredFinishes !== null && !offeredFinishes.has(member),
-                      // MULTI-SELECT SINCE D3's AMENDMENT (2026-08-23), and `Track` needed
-                      // no change for it: its cells have always carried `aria-pressed` and
-                      // the stylesheet keys on `[aria-pressed='true']` per cell, so several
-                      // can read as on already. It stays shared with the rotation and
-                      // trigger tracks, which are still single-select — the component was
-                      // never the thing enforcing that.
-                      //
-                      // It does NOT close on pick: a set is built by more than one press.
-                      onPick: () => toggleFinish(member),
-                    }))}
-                  />
-                  {offeredFinishes === null ||
-                  gameEntry.finishes.every((member) => offeredFinishes.has(member)) ? null : (
-                    <p className="capture-opennote">
-                      {gameEntry.finishes
-                        .filter((member) => !offeredFinishes.has(member))
-                        .join(' · ')}{' '}
-                      — not stocked under the claimed rarities
-                    </p>
-                  )}
-                </OpenField>
-              ) : (
-                <Row
-                  k="F"
-                  label="Finish"
-                  /* THE PIPELINE'S OWN STRINGS, joined — not the rarity row's bitfield,
-                     and the difference is deliberate. That row draws a bitfield because
-                     Pokemon authors thirteen rarities and they cannot be spelled out; a
-                     game authors at most three finishes. Spelling them keeps NO_CLAIM_LABEL
-                     readable AT FULL CONTRAST in the same slot, which is the property the
-                     removed "no claim" cell handed to this row and which a bitfield says
-                     only in an aria-label.
-
-                     THE COST, recorded rather than designed around: `.capture-val` is
-                     nowrap + ellipsis at 12px, so all three of Pokemon's finishes claimed
-                     at once truncates. One and two members fit. The full claim is one
-                     keypress away in the open field and the last-capture panel shows what
-                     was actually sent, so the failure is a shortened label rather than a
-                     wrong one — but if a real session claims all three often, the bitfield
-                     is the fix to reach for. */
-                  right={
-                    finish.length === 0 ? (
-                      <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
-                    ) : (
-                      <span className="capture-val">{finish.join(' · ')}</span>
-                    )
-                  }
-                  onToggle={() => toggleField('finish')}
-                />
-              )
-            ) : null}
-
-            {statusNote === null ? null : (
-              <div className="capture-servernote">
-                <p className="capture-quiet">{statusNote.text}</p>
-                <button type="button" className="capture-go" onClick={() => void loadStatus()}>
-                  Ask again
-                </button>
+                <span className="capture-meter-val">{presence.value.toFixed(1)}</span>
               </div>
             )}
           </div>
 
-          {/* THE FOOT: the two controls that must never scroll out of reach, and as of
-              2026-08-24 they are literally the foot of the panel — the owner moved the
-              shutter to the bottom of the sidebar and the session group to the top.
-              Everything above is a setting, chosen at the top of a run and then left alone,
-              so it is what gives up room on a short window. These two are the run itself —
-              the shutter, and the one control in the app that hard-deletes. A capture button
-              you have to scroll a column to find is a card photographed late or not at all,
-              and an undo you have to go looking for is reached for after the next card has
-              already gone past.
+          <div className="capture-viewfinder">
+            <div className="capture-viewport">
+              <div className="capture-frame capture-frame-live" data-phase={phase ?? triggerMode}>
+                {/* muted and playsInline are required for autoplay to start at all. No
+                    facingMode anywhere — the Cam Link presents the rig camera as a plain UVC
+                    webcam. This is the first `.capture-media` in the DOM and must stay so. */}
+                <video className={liveMediaClass} ref={camera.videoRef} autoPlay playsInline muted />
+                <span className="capture-corner capture-corner-tl" aria-hidden="true" />
+                <span className="capture-corner capture-corner-tr" aria-hidden="true" />
+                <span className="capture-corner capture-corner-bl" aria-hidden="true" />
+                <span className="capture-corner capture-corner-br" aria-hidden="true" />
+                {flash > 0 ? <span key={flash} className="bn-flash" aria-hidden="true" /> : null}
+                {phase === 'settling' ? (
+                  <svg
+                    key={motionDiag?.fires ?? 0}
+                    className="capture-ring"
+                    viewBox="0 0 48 48"
+                    aria-hidden="true"
+                    style={{ '--cap-settle-ms': `${SETTLE_MS}ms` } as CSSProperties}
+                  >
+                    <circle className="capture-ring-track" cx="24" cy="24" r="20" />
+                    <circle className="capture-ring-fill" cx="24" cy="24" r="20" />
+                  </svg>
+                ) : null}
 
-              Being last is what makes that promise cheap to keep. Under the old order the
-              session group sat below these two, so every row added to it pushed the shutter
-              up away from the edge the eye returns to; nothing is below them now, and a new
-              field anywhere in the column leaves the shutter exactly where it was relative to
-              the bottom of the panel. */}
-          <div className="capture-side-foot">
-            <div className="capture-controls">
-              <PullConfirm
-                label="Capture card"
-                onConfirm={() => void doCapture()}
-                disabled={!canCapture}
-                // In motion mode the C key is genuinely disarmed — the seam holds one trigger
-                // at a time — so advertising it would be a chip for a key that does nothing.
-                // The button itself stays live in both modes: a manual fire past a hesitant
-                // machine is an override, not a mode.
-                keyHint={triggerMode === 'manual' ? CAPTURE_KEY_LABEL : undefined}
-              />
-              {/* Which trigger is armed — the line trigger.ts promised would answer this
-                  question — is no longer here. It read as debug output under the shutter;
-                  it is the Trigger field's own machine string now, beside the control it
-                  describes. Same class, same text, one field up the column. */}
+                {camera.ready ? null : (
+                  <div className="capture-frame-note">
+                    {!camera.started ? (
+                      <>
+                        <span className="capture-frame-glyph" aria-hidden="true">
+                          <Icon name="camera" size={26} />
+                        </span>
+                        <p className="capture-frame-title">The camera is not open</p>
+                        <p className="capture-frame-body">
+                          Nothing on this screen reaches for it until you ask.
+                        </p>
+                        <Button variant="primary" icon="camera" onClick={camera.retry}>
+                          Open the camera
+                        </Button>
+                      </>
+                    ) : cameraFault ? (
+                      <>
+                        <span className="capture-frame-glyph is-danger" aria-hidden="true">
+                          <Icon name="alert" size={26} />
+                        </span>
+                        <p className="capture-frame-title">Camera fault</p>
+                        <p className="capture-frame-body">
+                          {camera.error ??
+                            'The remembered camera is not connected. Check the Cam Link and that the camera is awake.'}
+                        </p>
+                        <Button icon="refresh" onClick={camera.retry}>
+                          Reopen the camera
+                        </Button>
+                      </>
+                    ) : camera.deviceId === null ? (
+                      <>
+                        <span className="capture-frame-glyph" aria-hidden="true">
+                          <Icon name="camera" size={26} />
+                        </span>
+                        <p className="capture-frame-title">Pick a camera</p>
+                        <p className="capture-frame-body">
+                          None is remembered for this rig. Choose one under Rig, or press V.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <span className="capture-frame-spinner" aria-hidden="true" />
+                        <p className="capture-frame-title">Waiting for frames.</p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
-              {/* The machine's own vitals, only while it is the armed trigger, and every
-                  number on this row is now one the machine actually decides on — D81's
-                  rule, learned the hard way: the row carried `luma` for two rig sessions
-                  while the gate read a different statistic, and a HUD showing a number
-                  nothing branches on is how a rig gets debugged against the wrong one.
-
-                  `d` is the live frame-difference and `t` is the pair of thresholds it is
-                  judged against, which MOVE now — they are multiples of `typ`, this
-                  session's own measured typical difference, so the operator can see the
-                  machine adapt instead of taking it on faith. `Δbase` is how far the scene
-                  is from the baseline and `≥` is what it must beat to count as a card.
-                  Mono, uppercase-free machine words — this is metadata, owner-side. */}
-              {triggerMode !== 'motion' ? null : motionDiag === null ? (
-                <p className="capture-quiet">
-                  Motion is armed but no frame has reached it yet. Open a camera and the
-                  readout appears here.
-                </p>
-              ) : (
-                <p className="capture-motion-hud">
-                  <span>{motionDiag.phase}</span>
-                  <span>d {motionDiag.d.toFixed(2)}</span>
-                  {/* The stillness band and the measurement it is a multiple of. Every one
-                      of these is `name value` with a single space, which is the shape
-                      motion-live.spec.ts parses the row by — a HUD that grows a slash or a
-                      unit stops being readable by the test that pins it. */}
-                  <span>tlo {motionDiag.tLo.toFixed(2)}</span>
-                  <span>thi {motionDiag.tHi.toFixed(2)}</span>
-                  <span>typ {motionDiag.dTypical.toFixed(2)}</span>
-                  {/* The presence decision, both halves: how far the scene is from the
-                      session's baseline, and what it has to beat to count as a card. */}
-                  <span>dbase {motionDiag.dBase.toFixed(2)}</span>
-                  <span>floor {motionDiag.presenceFloor.toFixed(2)}</span>
-                  {motionDiag.hasBaseline ? null : (
-                    <span className="capture-refused">baseline pending</span>
-                  )}
-                  <span>fires {motionDiag.fires}</span>
-                  <span>same {motionDiag.suppressedUnchanged}</span>
-                  <span>empty {motionDiag.suppressedNoCard}</span>
-                  <span>stall {motionDiag.stalled}</span>
-                  {swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held ===
-                  0 ? null : (
-                    <span className="capture-refused">
-                      dropped{' '}
-                      {swallowed.busy + swallowed.noBox + swallowed.notReady + swallowed.held}
-                    </span>
-                  )}
-                </p>
-              )}
-
-              {/* THE SENTENCE THE OLD MACHINE OWED AND NEVER SAID. On 2026-08-29 twenty
-                  settles in a row were refused as an empty stand while a box was fed
-                  through the lens, and the only trace of it on screen was a counter going
-                  up beside six other counters. A RUN of refusals has exactly one likely
-                  cause — the baseline was taken with something on the stand — and it has
-                  exactly one remedy, which is the button under it. Three in a row rather
-                  than one, because one refusal is the arm-time scene reporting itself and
-                  is correct. */}
-              {triggerMode === 'motion' && (motionDiag?.noCardRun ?? 0) >= 3 ? (
+            {/* A run of empty-stand verdicts has exactly one likely cause and one remedy. */}
+            {triggerMode === 'motion' && (motionDiag?.noCardRun ?? 0) >= 3 ? (
+              <div className="capture-stage-warn" role="alert">
+                <Icon name="alert" size={16} />
                 <p className="capture-refused">
                   {motionDiag?.noCardRun} settles in a row read as an empty stand. If cards are
-                  going past the lens, the baseline was taken with something on the stand —
-                  clear it and re-baseline. Those cards were not photographed.
+                  going past the lens, the baseline was taken with something on the stand — clear
+                  it and re-baseline. Those cards were not photographed.
                 </p>
-              ) : null}
+                <Button size="sm" icon="refresh" onClick={() => motionControls.current?.rebaseline()}>
+                  Re-baseline
+                </Button>
+              </div>
+            ) : null}
+          </div>
 
-              {/* A CONTROL, NOT A LETTER. Every act on this screen that costs a key press —
-                  the shutter, the undo, the divider — happens at feeder pace with both hands
-                  on cards. Re-baselining does not: it is performed after clearing the stand,
-                  with a hand already off the keyboard, and the letter it would want (`b`) is
-                  the box field's. Rendered only while a machine is armed to receive it. */}
-              {triggerMode === 'motion' && motionDiag !== null ? (
-                <button
-                  type="button"
-                  className="capture-go"
-                  onClick={() => motionControls.current?.rebaseline()}
-                >
-                  Re-baseline · stand must be empty
-                </button>
-              ) : null}
-              {/* D19's Tier-1 instrument, one press: the whole armed session's timing signal
-                  plus the exact watch-region pixels each gate decided on, as a JSON download.
-                  One feeder pass with this file is the tuning data — period, jitter, how
-                  long a card is moving versus still — measured instead of derived, and
-                  re-scorable offline against different thresholds without another rig trip.
-                  Rendered only when there is something to save; the recording itself costs
-                  nothing the HUD was not already paying. */}
-              {traceFrames > 0 ? (
-                <button
-                  type="button"
-                  className="capture-go"
-                  onClick={() => traceRef.current?.download()}
-                >
-                  Save trace · {traceFrames} frames
-                </button>
-              ) : null}
-              {blocked === null ? null : <p className="capture-quiet">{blocked}</p>}
-              {/* The one thing the retry guard is for, said out loud. It appears only after a
-                  resume, and it is the answer to the question the halt could not settle: the
-                  paused capture did reach the server, so this photograph took no new position.
-                  Beside the capture control rather than in the panel opposite, because that is
-                  where the operator is looking at the moment they press again. */}
-              {replayed === null ? null : (
-                <p className="capture-quiet">
-                  Already recorded at{' '}
-                  <span className="capture-inline-label">
-                  <PositionLabel label={replayed} flow="run" />
-                </span>. The paused capture
-                  did reach the server, so nothing new was recorded and no position was used.
-                  Move on to the next card.
-                </p>
+          {/* The stage foot: where the next photograph goes, and how the run is doing. */}
+          <div className="capture-stage-foot">
+            <span className="capture-foot-box">
+              <Icon name="box" size={14} />
+              <span className="capture-foot-box-name">{boxSentence}</span>
+              {box === null ? null : (
+                <span className="capture-foot-next">next index {nextForBox ?? 1}</span>
               )}
-            </div>
+            </span>
+            {/* ============ TUNING: the machine's readout and instruments, off the surface ============ */}
+            <details className="capture-tuning">
+              <summary>
+                <Icon name="settings" size={14} />
+                <span className="capture-tuning-word">Tuning</span>
+                <span className="capture-tuning-sum">
+                  {triggerMode !== 'motion'
+                    ? ''
+                    : motionDiag === null
+                      ? 'armed · no frames yet'
+                      : `${motionDiag.phase} · ${motionDiag.fires} fires`}
+                  {swallowedTotal > 0 ? ` · ${swallowedTotal} dropped` : ''}
+                </span>
+                <Icon name="chevronUp" size={13} className="capture-chev" />
+              </summary>
+              <div className="capture-tuning-body">
+                {triggerMode !== 'motion' ? (
+                  <p className="capture-quiet">
+                    Arm the motion trigger under Rig (T) and the machine's readout appears here.
+                  </p>
+                ) : motionDiag === null ? (
+                  <p className="capture-quiet">
+                    Motion is armed but no frame has reached it yet. Open a camera and the readout
+                    appears here.
+                  </p>
+                ) : (
+                  /* Every span is `name value` with one space — motion-live.spec.ts parses the row
+                     by that shape, and every number here is one the machine actually decides on. */
+                  <p className="capture-motion-hud">
+                    <span>{motionDiag.phase}</span>
+                    <span>d {motionDiag.d.toFixed(2)}</span>
+                    <span>tlo {motionDiag.tLo.toFixed(2)}</span>
+                    <span>thi {motionDiag.tHi.toFixed(2)}</span>
+                    <span>typ {motionDiag.dTypical.toFixed(2)}</span>
+                    <span>dbase {motionDiag.dBase.toFixed(2)}</span>
+                    <span>floor {motionDiag.presenceFloor.toFixed(2)}</span>
+                    {motionDiag.hasBaseline ? null : (
+                      <span className="capture-refused">baseline pending</span>
+                    )}
+                    <span>fires {motionDiag.fires}</span>
+                    <span>same {motionDiag.suppressedUnchanged}</span>
+                    <span>empty {motionDiag.suppressedNoCard}</span>
+                    <span>stall {motionDiag.stalled}</span>
+                    {swallowedTotal === 0 ? null : (
+                      <span className="capture-refused">dropped {swallowedTotal}</span>
+                    )}
+                  </p>
+                )}
+                <div className="capture-tuning-actions">
+                  {triggerMode === 'motion' && motionDiag !== null ? (
+                    <Button size="sm" icon="refresh" onClick={() => motionControls.current?.rebaseline()}>
+                      Re-baseline · stand must be empty
+                    </Button>
+                  ) : null}
+                  {traceFrames > 0 ? (
+                    <Button size="sm" icon="download" onClick={() => traceRef.current?.download()}>
+                      Save trace · {traceFrames} frames
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </details>
+          </div>
+        </section>
 
-            {/* THE THIRD ACT, BETWEEN THE TWO THAT WERE ALREADY HERE, and the order is the
-                order they are performed in: shoot the stack, drop a divider in when you
-                reach one, undo the card you just took. It is in the foot rather than up
-                among the fields because it is not a claim — nothing about it changes what
-                the next photograph will say about itself — and because it is pressed at the
-                box, which is the argument the foot's own comment makes for the other two.
-
-                DISABLED WITHOUT A BOX, WHICH IS THE ONE STATE IT HAS. docs/DESIGN.md's
-                absent-not-disabled rule is about the control that COMMITS to something
-                irreversible — the run panel's spend button, the listing release on the box
-                header — and this is neither: it is free, it is reversible in the dividers
-                editor, and it is the next thing to press. A control that vanished until a box was picked would
-                read as a screen with a missing feature on the one screen the owner cannot
-                afford to look for things on. */}
-            <div className="capture-section">
-              <button
-                type="button"
-                className="capture-go"
-                onClick={() => void doSection()}
-                disabled={box === null || sectionBusy}
-              >
-                New section <kbd className="capture-key">{SECTION_KEY_LABEL}</kbd>
-              </button>
-              {sectionNote === null ? null : (
-                <p className={sectionNote.done ? 'capture-quiet' : 'capture-refused'}>
-                  {sectionNote.text}
-                  {/* The section and its first card in the utility face, inline in a body
-                      sentence — the same treatment the undo receipt gives the position it
-                      deleted, and the same reason: this is metadata, and mixing it into the
-                      body face would make a number read as a word. */}
-                  {sectionNote.place === null ? null : (
-                    <>
-                      {' '}
-                      <span className="capture-inline-label">{sectionNote.place}</span>
-                    </>
-                  )}
-                  {sectionNote.code === null ? null : (
-                    <span className="capture-halt-code"> {sectionNote.code}</span>
-                  )}
+        {/* ============ THE LAST CAPTURE: the bytes the Mac stored, and its receipt ============ */}
+        <aside className="capture-last" aria-label="Last capture" data-has-last={last === undefined ? 'false' : 'true'}>
+          <div className="capture-panel-head">
+            <span className="bn-label">Last capture</span>
+            {last === undefined ? null : last.card.created ? (
+              <Pill key={last.card.key} tone="ok" icon="check" className="bn-anim-pop capture-written">
+                Written
+              </Pill>
+            ) : (
+              <Pill key={last.card.key} tone="warn" icon="history" className="bn-anim-pop capture-written">
+                Already recorded
+              </Pill>
+            )}
+          </div>
+          <div className="capture-last-viewport">
+          <div className="capture-frame capture-frame-last">
+            {last === undefined ? (
+              <div className="capture-frame-note capture-frame-note-last">
+                <span className="capture-frame-glyph" aria-hidden="true">
+                  <Icon name="image" size={24} />
+                </span>
+                <p className="capture-frame-title">Your first capture lands here</p>
+                <p className="capture-frame-body">
+                  Big enough to catch a blur or a finger before the card goes back in the box.
                 </p>
-              )}
-            </div>
-
-            {/* Always visible, never appearing after a capture: a control that appears and
-                disappears is one you have to look for at the moment you are least inclined
-                to. It was a full-width strip under the frames until the owner said it "can
-                clearly be on the side too", and that strip was ~90px of the height this
-                layout needed back. */}
-            {/* THE UNDO STACK — the owner's ask of 2026-08-29: "a list of 10 rather than the
-                one I can see right now". It was one card with one button; it is every
-                capture this session made into this box, newest first, each row its own
-                control.
-
-                EVERY ROW IS A BUTTON AND A ROW IS NOT A DELETE. Pressing row N undoes N
-                cards — that row and everything captured after it — because D10 lets undo
-                reach the newest capture in a box and nothing else, and walking is how it
-                reaches further. The count is drawn on the row so the press cannot be made
-                without seeing it: the number IS how many cards go, and it is the row's
-                ordinal, which are the same number by construction.
-
-                Still no dialog, still one tap (spec 5.4). The deleted photo is of a card
-                still within reach of the hand that fed it, so the remedy for a wrong undo is
-                to photograph it again — which is why this is the stated exception to the
-                no-confirm rule rather than a violation of it. Allowed while the run is
-                halted: the halt is about capturing, and correcting the last good card is
-                exactly what a stopped run is for. */}
-            <footer className="capture-undo">
-              <p className="capture-field-name">
-                Undo
-                {undoStack.length > 1 ? (
-                  /* WHAT THE LIST HOLDS, beside its name, because the list is capped and
-                     scrolls — a capped list that does not say so reads as a short one, which
-                     is `BoxOps`' section list making the same mistake one screen over. */
-                  <span className="capture-undo-depth">{undoStack.length} recent</span>
+              </div>
+            ) : (
+              <img
+                key={last.card.key}
+                className="capture-media"
+                src={photoSrc(last.card.box, last.card.index, revision)}
+                alt={`Capture at ${last.card.label}`}
+              />
+            )}
+          </div>
+          {last === undefined ? null : (
+            <div className="capture-said">
+              <p className="capture-label">
+                <PositionLabel label={last.card.label} />
+              </p>
+              <p className="capture-said-meta">
+                <Pill icon="layers">{last.game.display}</Pill>
+                {typeof last.setHint === 'string' && last.setHint !== '' ? (
+                  <Pill mono>{last.setHint}</Pill>
+                ) : (
+                  <Pill>No set hint</Pill>
+                )}
+                <Pill>{last.finish.length === 0 ? 'No claim' : last.finish.map(finishLabel).join(' · ')}</Pill>
+                {last.card.new_box ? (
+                  <Pill tone="accent" className="capture-flag">
+                    New box
+                  </Pill>
                 ) : null}
+                {last.card.created ? null : (
+                  <Pill tone="warn" className="capture-flag">
+                    Already recorded
+                  </Pill>
+                )}
               </p>
 
-              {undoStack.length === 0 ? (
-                <p className="capture-quiet">Nothing in this box to undo.</p>
-              ) : (
-                <>
-                  <ul className="capture-undo-list">
-                    {undoStack.map((target, at) => (
-                      <li key={`${target.box}/${target.index}`}>
-                        <button
-                          type="button"
-                          className="capture-undo-row"
-                          onClick={() => void undoBack(at + 1)}
-                          disabled={busy}
-                          /* The visible row is a thumbnail, a position and a number, and the
-                             number means something a screen reader cannot infer from it. So
-                             the accessible name says the act in full — and says it
-                             differently for the top row, which is the one `U` fires. */
-                          aria-label={
-                            at === 0
-                              ? `Undo the newest capture, ${positionText(target)}`
-                              : `Undo ${at + 1} captures, back to ${positionText(target)}`
-                          }
-                        >
-                          {/* Empty alt on purpose, not by omission: the position beside it is
-                              the same fact in words, and what the thumbnail adds — whether
-                              this is the card you meant — is not a thing alt text can
-                              carry. */}
-                          <img
-                            className="capture-undo-thumb capture-undo-thumb-portrait"
-                            src={photoSrc(target.box, target.index, revision)}
-                            alt=""
-                          />
-                          <span className="capture-undo-pos">
-                            {/* THROUGH THE SHARED COMPONENT, because D41 lists this
-                                sidebar as one of the six owner sites that draw an
-                                address as a rank rather than a dotted list. This branch
-                                predates that entry by 32 commits and drew a bare string;
-                                the stack is the feature and the treatment is a rule about
-                                how any address is drawn, so the row keeps one and gains
-                                the other. The 20px figure is set in the stylesheet, once,
-                                where the site's register belongs. */}
-                            <PositionLabel label={positionText(target)} />
-                          </span>
-                          {/* The top row carries its KEY and every other row carries its
-                              DEPTH. They are different kinds of fact in the same slot, which
-                              is legible only because the top row's is the one letter this
-                              screen has always drawn there and the rest are plain counts. */}
-                          <span className="capture-key">
-                            {at === 0 ? UNDO_KEY_LABEL : at + 1}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  {undoStack.length > 1 ? (
-                    <p className="capture-quiet">
-                      A row undoes that card and everything captured after it.
-                    </p>
-                  ) : null}
-                </>
-              )}
-
-              {undoNote === null ? null : (
-                <p className={undoNote.done ? 'capture-quiet' : 'capture-refused'}>
-                  {/* A WALK THAT STOPPED EARLY SAYS SO FIRST, before the server's own
-                      sentence, because it is the half the operator cannot see: the cards
-                      that went and the cards that did not have both left the list. Our
-                      sentence is added to the server's, never folded into it — the copy rule
-                      shows the server's message verbatim. */}
-                  {undoNote.did !== undoNote.want ? (
-                    <span className="capture-undo-partial">
-                      Undid {undoNote.did} of {undoNote.want}.{' '}
-                    </span>
-                  ) : null}
-                  {undoNote.text}
-                  {undoNote.done && undoNote.did > 1 ? ` ${undoNote.did} captures, back to` : null}
-                  {/* The position in the utility face, inline in a body sentence — the same
-                      string the server rendered when the card was captured. This used to say
-                      "Undone 3/7": the store's own key, in the body face, naming a thing the
-                      operator has never seen on any screen. */}
-                  {undoNote.position === null ? null : (
-                    <>
-                      {' '}
-                      <span className="capture-inline-label">
-                        <PositionLabel label={undoNote.position} flow="run" />
-                      </span>
-                    </>
-                  )}
-                  {undoNote.code === null ? null : (
-                    <span className="capture-halt-code"> {undoNote.code}</span>
-                  )}
+              {/* The note on the last capture, after the fact — never before the shutter. Its
+                  own form, so Enter saves and never reaches the shutter. */}
+              <form
+                className="capture-inline"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void saveNote(last, noteDraft)
+                  blurActive()
+                }}
+              >
+                <div className="bn-input-wrap capture-note-wrap">
+                  <Icon name="list" size={14} />
+                  <input
+                    className="bn-input capture-text capture-note"
+                    type="text"
+                    placeholder={last.game.catalogued ? 'Add a note to this card' : 'What is this card?'}
+                    aria-label={`Note on ${last.card.label}`}
+                    value={noteDraft}
+                    onChange={(event) => setNoteDraft(event.target.value)}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="ghost"
+                    icon="check"
+                    iconOnly
+                    className="capture-note-save"
+                    disabled={noteBusy}
+                  >
+                    Save note
+                  </Button>
+                </div>
+              </form>
+              {last.game.catalogued ? null : (
+                <p className="capture-quiet">
+                  This card gets no identification call, so this note is the only thing it can be
+                  found by later. A name and a game is enough.
                 </p>
               )}
-            </footer>
+              {noteSaved === null ? null : (
+                <p className={noteSaved.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
+                  {noteSaved.done ? <Icon name="check" size={13} /> : <Icon name="alert" size={13} />}
+                  {noteSaved.text}
+                  {noteSaved.code === null ? null : <span className="capture-halt-code"> {noteSaved.code}</span>}
+                </p>
+              )}
+            </div>
+          )}
           </div>
         </aside>
 
-        {/* THE STAGE: live left, last capture right (spec 5.1), and nothing else. Everything
-            that is not a photograph moved to the sidebar, so the frames get the whole of the
-            column's height — which is what the stylesheet sizes them from.
+        {/* ============ THE RUN: the box, the shutter, the divider ============ */}
+        <section className="capture-card capture-card-run" aria-label="Run">
+          <p className="bn-label capture-card-label">Run</p>
 
-            The wrapper is not decoration and is the one piece of markup here that exists for
-            the stylesheet's sake: it is the size container the frame height is measured
-            against. Without it there is no way to say "as tall as what is left" in CSS
-            without a constant, and a constant is what was wrong with the layout this
-            replaces. The stylesheet's `--portrait-h` block is the argument. */}
-        <div className="capture-main">
-          <div className={stageClass}>
-            <section className="capture-panel">
-              <p className="capture-panel-name">Live</p>
-              <div className={frameClass}>
-                {/* muted and playsInline are required for autoplay to start at all; neither is a
-                    preference. No facingMode anywhere — v1 bug 3, and D13 records why: the Cam
-                    Link presents the rig camera as a plain UVC webcam, indistinguishable by kind
-                    from the laptop's own. */}
-                <video className={liveMediaClass} ref={camera.videoRef} autoPlay playsInline muted />
-                {/* The state of the frame, not an explanation of it — the picker in the sidebar
-                    carries the explanation. `deviceId` is null when nothing is open at all, which
-                    `useCamera` guarantees is never a silent stand-in for another camera. */}
-                {camera.ready ? null : (
-                  <p className="capture-frame-note">
-                    {camera.deviceId === null ? 'No camera is open.' : 'Waiting for frames.'}
-                  </p>
-                )}
+          {openField === 'box' ? (
+            <OpenField
+              k="B"
+              label="Box"
+              icon="box"
+              size="lg"
+              meta={`${boxes.length} ${boxes.length === 1 ? 'box' : 'boxes'}`}
+              onClose={closeField}
+            >
+              <div className="capture-entry">
+                <div className="capture-entrybox bn-input-wrap">
+                  <Icon name="search" size={14} />
+                  <input
+                    ref={boxEntryRef}
+                    className="capture-filter bn-input"
+                    type="text"
+                    aria-label="Find a box by number or name, or type a new one"
+                    placeholder="Number or name"
+                    value={boxEntry}
+                    disabled={boxBusy}
+                    onChange={(event) => {
+                      setBoxEntry(event.target.value)
+                      setBoxNote(null)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return
+                      event.preventDefault()
+                      void takeBoxEntry()
+                    }}
+                  />
+                  <span className="capture-entrymeta">
+                    {boxBusy
+                      ? 'Adding…'
+                      : boxTop !== undefined
+                        ? boxTop.sealed
+                          ? 'Sealed'
+                          : `Next index ${boxTop.next ?? '?'}`
+                        : boxOffer !== null
+                          ? 'New box'
+                          : ''}
+                  </span>
+                </div>
               </div>
-            </section>
-
-            <section className="capture-panel">
-              <p className="capture-panel-name">Last capture</p>
-              <div className={frameClass}>
-                {last === undefined ? (
-                  <p className="capture-frame-note">
-                    Nothing captured in this session yet. The photo of each card lands here, big
-                    enough to catch a blur or a finger before the card goes back in the box.
-                  </p>
-                ) : (
-                  // The bytes the Mac stored, not the frame the browser holds. A local preview
-                  // would show a photo even when the server recorded nothing, which is the one
-                  // failure this screen exists to make loud.
-                  <img
-                    className="capture-media"
-                    src={photoSrc(last.card.box, last.card.index, revision)}
-                    alt={`Capture at ${last.card.label}`}
+              <div className="capture-opts">
+                {boxRows.map((option) => (
+                  <Opt
+                    key={option.box}
+                    on={option.box === box}
+                    name={`Box ${option.box}`}
+                    sfx={option.name === null ? null : ` ${option.name}`}
+                    trail={option.sealed ? 'Sealed' : `next index ${option.next ?? '?'}`}
+                    trailWord={option.sealed}
+                    onPick={() => {
+                      if (option.sealed) {
+                        setBoxNote(
+                          `Box ${option.box} is sealed and takes no more cards. Open it ` +
+                            `on the Inventory screen, or pick another.`,
+                        )
+                        return
+                      }
+                      chooseBox(option.box)
+                    }}
+                  />
+                ))}
+                {boxOffer === null ? null : (
+                  <Opt
+                    on={false}
+                    name={boxOffer.box === null ? boxOffer.name ?? '' : `Box ${boxOffer.box}`}
+                    trail="New"
+                    trailWord
+                    onPick={() => void createOfferedBox()}
                   />
                 )}
               </div>
-              {last === undefined ? null : (
-                <div className="capture-said">
-                  {/* Rendered by pipeline/join.py and returned by the server. The app never
-                      composes a second one. */}
-                  <p className="capture-label">
-                    <PositionLabel label={last.card.label} />
-                  </p>
-                  <p className="capture-said-meta">
-                    {/* The key rather than the display name, and first, because it is the
-                        claim that decides whether this card is ever identified — and because
-                        it is the string that lands in the sidecar and in `inventory.json`,
-                        which is what the operator would grep. */}
-                    <span>{last.game.key}</span>
-                    <span>{last.setHint ?? 'no set hint'}</span>
-                    {/* The same words the chip carries, so one state has one name. Read in the
-                        finish slot beside "no set hint", which is what supplies the noun. */}
+              <p className="capture-opennote">
+                {boxMatchTotal > boxRows.length
+                  ? `${boxMatchTotal} boxes match; ${boxRows.length} shown. Narrow it, or press Enter to take the top row.`
+                  : 'Enter takes the top row. Anything new is created by name.'}
+              </p>
+              {boxNote === null ? null : <p className="capture-refused">{boxNote}</p>}
+            </OpenField>
+          ) : (
+            <Row
+              k="B"
+              label="Box"
+              icon="box"
+              size="lg"
+              right={
+                box === null ? (
+                  <span className="capture-box-val is-empty">
+                    <strong>No box yet</strong>
+                    <span>Pick one, or type a new name</span>
+                  </span>
+                ) : (
+                  <span className="capture-box-val">
+                    <strong>Box {box}</strong>
                     <span>
-                      {last.finish.length === 0 ? NO_CLAIM_LABEL : last.finish.join(' · ')}
+                      {boxName === null ? boxNextText : `${boxName} · ${boxNextText}`}
                     </span>
-                    {last.card.new_box ? <span className="capture-flag">new box</span> : null}
-                    {/* Every other flag here describes the capture; this one describes what the
-                        server did with it. Kept beside them anyway, and per shot rather than as
-                        one banner, because the session list has to stay honest about which
-                        photograph took a position and which found one already taken. */}
-                    {last.card.created ? null : (
-                      <span className="capture-flag">already recorded</span>
-                    )}
-                  </p>
+                  </span>
+                )
+              }
+              onToggle={() => toggleField('box')}
+            />
+          )}
 
-                  {/* THE NOTE, AND IT IS DELIBERATELY DOWN HERE RATHER THAN IN THE SIDEBAR.
-                      Every control in that column is set once for a stack and then left
-                      alone; a note is per card and is typed with a keyboard, and the feeder
-                      emits every ~623 ms. Putting it before the shutter would make the run
-                      wait for prose. So it corrects a card that is ALREADY photographed,
-                      positioned and recorded — nothing about the next capture waits for it,
-                      and leaving it empty costs nothing.
+          <div className="capture-controls">
+            <Button
+              variant="primary"
+              size="xl"
+              block
+              icon="camera"
+              className="capture-shutter"
+              onClick={() => void doCapture()}
+              disabled={shutterDisabled}
+              busy={busy}
+              /* In motion mode the C key is genuinely disarmed, so the keycap goes; the
+                 button itself stays live in both modes as an override. */
+              kbd={triggerMode === 'manual' ? CAPTURE_KEY_LABEL : undefined}
+            >
+              Capture card
+            </Button>
 
-                      Its own `<form>`, so Enter saves and Enter cannot reach the shutter:
-                      `CAPTURE_KEY` is a letter for exactly this reason (see its comment),
-                      and typing a note is the one moment on this screen where a stray key
-                      would otherwise photograph whatever is at the lens. */}
-                  <form
-                    className="capture-inline"
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      void saveNote(last, noteDraft)
-                      blurActive()
-                    }}
-                  >
-                    <input
-                      className="capture-text capture-note"
-                      type="text"
-                      placeholder={last.game.catalogued ? 'note' : 'what is this card?'}
-                      aria-label={`Note on ${last.card.label}`}
-                      value={noteDraft}
-                      onChange={(event) => setNoteDraft(event.target.value)}
-                    />
-                    <button type="submit" className="capture-go" disabled={noteBusy}>
-                      Save note <kbd className="capture-key">↵</kbd>
-                    </button>
-                  </form>
-
-                  {/* Only for a game that is never identified. For everything else a note is
-                      an optional extra and needs no explaining; for `misc` it is the ONLY
-                      record of what the card is, and a silent text box would not say so. */}
-                  {last.game.catalogued ? null : (
-                    <p className="capture-quiet">
-                      This card gets no identification call, so this note is the only thing
-                      it can be found by later. A name and a game is enough.
-                    </p>
-                  )}
-
-                  {noteSaved === null ? null : (
-                    <p className="capture-quiet">
-                      {noteSaved.text}
-                      {noteSaved.code === null ? null : (
-                        <span className="capture-halt-code"> {noteSaved.code}</span>
+            {/* One block: the sentence is the whole truth and the shortcut rides on the
+                cause it fixes, so a cause with no button is read rather than replaced. */}
+            {blockers.length === 0 ? null : (
+              <div className="capture-block" role="group" aria-label="Before you can capture">
+                <span className="bn-label capture-block-word">Before you can capture</span>
+                <ul className="capture-block-list">
+                  {blockers.map((blocker) => (
+                    <li key={blocker.key} className="capture-block-row" data-tone={blocker.tone}>
+                      <Icon name={blocker.icon} size={14} />
+                      <span className="capture-block-say">{blocker.text}</span>
+                      {blocker.fix === null ? null : (
+                        <Button
+                          size="sm"
+                          icon={blocker.fix.icon}
+                          className="capture-block-fix"
+                          onClick={blocker.fix.onPress}
+                        >
+                          {blocker.fix.label}
+                        </Button>
                       )}
-                    </p>
-                  )}
-                </div>
-              )}
-            </section>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {replayed === null ? null : (
+              <Notice tone="warn" className="capture-replayed">
+                Already recorded at{' '}
+                <span className="capture-inline-label">
+                  <PositionLabel label={replayed} flow="run" />
+                </span>
+                . Move on.
+              </Notice>
+            )}
           </div>
-        </div>
+
+          <div className="capture-section">
+            <Button
+              icon="divider"
+              kbd={SECTION_KEY_LABEL}
+              block
+              onClick={() => void doSection()}
+              disabled={box === null || sectionBusy}
+              busy={sectionBusy}
+            >
+              New section
+            </Button>
+            {sectionNote === null ? null : (
+              <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
+                {sectionNote.done ? <Icon name="check" size={13} /> : <Icon name="alert" size={13} />}
+                {sectionNote.text}
+                {sectionNote.place === null ? null : (
+                  <>
+                    {' '}
+                    <span className="capture-inline-label">{sectionNote.place}</span>
+                  </>
+                )}
+                {sectionNote.code === null ? null : (
+                  <span className="capture-halt-code"> {sectionNote.code}</span>
+                )}
+              </p>
+            )}
+          </div>
+
+          {/* The way onward: once the box holds cards, the run hands it to the pipeline. Runs
+              reads only `?run=` today, so the box is picked there. */}
+          {box !== null && !boxIsEmpty ? (
+            <div className="capture-onward">
+              <Button
+                icon="zap"
+                iconRight="arrowRight"
+                block
+                onClick={() => (window.location.hash = '#/runs')}
+              >
+                Identify box {box} on Runs
+              </Button>
+            </div>
+          ) : null}
+        </section>
+
+        {/* ============ RECENT: what undo can reach, as a filmstrip ============ */}
+        <footer className="capture-undo capture-film" aria-label="Recent captures">
+          <div className="capture-film-head">
+            <p className="capture-field-name bn-label">
+              Recent
+              {undoStack.length > 1 ? (
+                <span className="capture-undo-depth">{undoStack.length} recent</span>
+              ) : null}
+            </p>
+            {undoStack.length === 0 ? null : (
+              <p className="capture-film-hint" title="A thumbnail undoes that card and everything captured after it">
+                <Kbd>{UNDO_KEY_LABEL}</Kbd> undoes the newest
+              </p>
+            )}
+          </div>
+
+          {undoStack.length === 0 ? (
+            <p className="capture-quiet capture-film-empty">
+              <Icon name="film" size={14} />
+              {box === null
+                ? 'Captures you can undo will appear here once a box is picked.'
+                : 'Nothing in this box to undo yet.'}
+            </p>
+          ) : (
+            <ul className="capture-undo-list">
+              {undoStack.map((target, at) => (
+                <li key={`${target.box}/${target.index}`} style={{ animationDelay: `${at * 30}ms` }}>
+                  <button
+                    type="button"
+                    className="capture-undo-row"
+                    onClick={() => void undoBack(at + 1)}
+                    disabled={busy}
+                    data-undo={at === 0 ? 'Undo' : `Undo ${at + 1}`}
+                    aria-label={
+                      at === 0
+                        ? `Undo the newest capture, ${positionText(target)}`
+                        : `Undo ${at + 1} captures, back to ${positionText(target)}`
+                    }
+                  >
+                    <img
+                      className="capture-undo-thumb capture-undo-thumb-portrait"
+                      src={photoSrc(target.box, target.index, revision)}
+                      alt=""
+                    />
+                    <span className="capture-undo-pos">#{slotNumber(target)}</span>
+                    <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
+                      {at === 0 ? UNDO_KEY_LABEL : at + 1}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {undoNote === null ? null : (
+            <p className={undoNote.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
+              {undoNote.done ? <Icon name="undo" size={13} /> : <Icon name="alert" size={13} />}
+              {undoNote.did !== undoNote.want ? (
+                <span className="capture-undo-partial">
+                  Undid {undoNote.did} of {undoNote.want}.{' '}
+                </span>
+              ) : null}
+              {undoNote.text}
+              {undoNote.done && undoNote.did > 1 ? ` ${undoNote.did} captures, back to` : null}
+              {undoNote.position === null ? null : (
+                <>
+                  {' '}
+                  <span className="capture-inline-label">
+                    <PositionLabel label={undoNote.position} flow="run" />
+                  </span>
+                </>
+              )}
+              {undoNote.code === null ? null : (
+                <span className="capture-halt-code"> {undoNote.code}</span>
+              )}
+            </p>
+          )}
+        </footer>
+
+        {/* ============ THE STACK: claims set once per stack ============ */}
+        <section className="capture-card capture-card-stack" aria-label="Stack claims">
+          <p className="bn-label capture-card-label">Stack</p>
+
+          {openField === 'set' ? (
+            <OpenField k="H" label="Set hint" icon="tag" meta="Optional" onClose={closeField}>
+              <form
+                className="capture-entry"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (hintVerdict.state === 'matched' && !hintVerdict.exact) {
+                    setSetHint(hintVerdict.set)
+                  }
+                  closeField()
+                  blurActive()
+                }}
+              >
+                <div className="capture-entrybox bn-input-wrap">
+                  <Icon name="tag" size={14} />
+                  <input
+                    ref={hintRef}
+                    className="capture-filter bn-input"
+                    type="text"
+                    placeholder="sv09"
+                    aria-label="Set hint"
+                    list="capture-set-names"
+                    value={setHint}
+                    onChange={(event) => setSetHint(event.target.value)}
+                  />
+                  <datalist id="capture-set-names">
+                    {hintSuggestions.map((name: string) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                  <span
+                    className={
+                      hintAlert ? 'capture-entrymeta capture-entrymeta-alert' : 'capture-entrymeta'
+                    }
+                  >
+                    {hintMetaText(hintVerdict)}
+                  </span>
+                </div>
+              </form>
+              {hintVocabulary === undefined ? null : hintVocabulary.reason ? (
+                <p className="capture-opennote">
+                  {hintReason(hintVocabulary.reason)}. The hint is stored exactly as typed.
+                </p>
+              ) : (
+                <p className={hintAlert ? 'capture-opennote capture-note-alert' : 'capture-opennote'}>
+                  {hintNoteText(hintVerdict, gameEntry?.display ?? 'this game')}
+                </p>
+              )}
+            </OpenField>
+          ) : (
+            <Row
+              k="H"
+              label="Set hint"
+              icon="tag"
+              right={
+                setHint.trim() === '' ? (
+                  <span className="capture-val is-default">None</span>
+                ) : (
+                  <span className={hintAlert ? 'capture-val capture-val-alert' : 'capture-val'}>
+                    <span className="bn-mono capture-val-name">{setHint.trim()}</span>
+                    {hintAlert ? <em className="capture-sub">names no set</em> : null}
+                  </span>
+                )
+              }
+              onToggle={() => toggleField('set')}
+            />
+          )}
+
+          {gameEntry !== null && gameEntry.rarities.length > 1 ? (
+            openField === 'rarity' ? (
+              <OpenField
+                k="R"
+                label="Rarity"
+                icon="sparkles"
+                meta={`${rarityClaim.length} of ${gameEntry.rarities.length} claimed`}
+                onClose={closeField}
+              >
+                <div className="capture-opts">
+                  {visibleRarities.map((name, position) => {
+                    const [stem, sfx] = rarityNameParts(name)
+                    return (
+                      <Opt
+                        key={name}
+                        k={OPTION_KEYS[position]}
+                        on={rarityClaim.includes(name)}
+                        name={stem}
+                        sfx={sfx}
+                        onPick={() => toggleRarity(name)}
+                      />
+                    )
+                  })}
+                </div>
+              </OpenField>
+            ) : (
+              <Row
+                k="R"
+                label="Rarity"
+                icon="sparkles"
+                right={
+                  rarityText === null ? (
+                    <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
+                  ) : (
+                    <span className="capture-val">
+                      {rarityText}
+                      <span
+                        className="capture-bits"
+                        role="img"
+                        aria-label={`${rarityClaim.length} of ${gameEntry.rarities.length} claimed`}
+                      >
+                        {gameEntry.rarities.map((name) => (
+                          <span
+                            key={name}
+                            className={rarityClaim.includes(name) ? 'capture-bit on' : 'capture-bit'}
+                          />
+                        ))}
+                      </span>
+                    </span>
+                  )
+                }
+                onToggle={() => toggleField('rarity')}
+              />
+            )
+          ) : null}
+
+          {gameEntry !== null && gameEntry.finishes.length > 1 ? (
+            openField === 'finish' ? (
+              <OpenField
+                k="F"
+                label="Finish"
+                icon="sun"
+                meta={`${finish.length} of ${gameEntry.finishes.length} claimed`}
+                onClose={closeField}
+              >
+                <Track
+                  label="Finish"
+                  cells={gameEntry.finishes.map((member) => ({
+                    text: finishLabel(member),
+                    on: finish.includes(member),
+                    disabled: offeredFinishes !== null && !offeredFinishes.has(member),
+                    onPick: () => toggleFinish(member),
+                  }))}
+                />
+                {offeredFinishes === null ||
+                gameEntry.finishes.every((member) => offeredFinishes.has(member)) ? null : (
+                  <p className="capture-opennote">
+                    {gameEntry.finishes
+                      .filter((member) => !offeredFinishes.has(member))
+                      .map(finishLabel)
+                      .join(' · ')}{' '}
+                    — not stocked under the claimed rarities
+                  </p>
+                )}
+              </OpenField>
+            ) : (
+              <Row
+                k="F"
+                label="Finish"
+                icon="sun"
+                right={
+                  finish.length === 0 ? (
+                    <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
+                  ) : (
+                    <span className="capture-val">{finish.map(finishLabel).join(' · ')}</span>
+                  )
+                }
+                onToggle={() => toggleField('finish')}
+              />
+            )
+          ) : null}
+
+          {registry !== null && game === registry.product_game ? (
+            openField === 'product' ? (
+              <OpenField
+                k="P"
+                label="Product"
+                icon="package"
+                meta="Pick one"
+                onClose={closeField}
+              >
+                <div className="capture-opts">
+                  {registry.products.map((entry, nth) => (
+                    <Opt
+                      key={entry.key}
+                      k={OPTION_KEYS[nth]}
+                      on={product === entry.key}
+                      onPick={() =>
+                        setProduct((current) => (current === entry.key ? null : entry.key))
+                      }
+                      name={entry.display}
+                      trail={entry.premium ? 'Premium' : undefined}
+                      trailWord
+                    />
+                  ))}
+                </div>
+                <p className="capture-opennote">
+                  Which sealed product this stack came out of. Leave it unclaimed if you do not
+                  know — an unclaimed code is counted on the Codes screen and refused by both
+                  channel lanes, which is louder than a wrong guess.
+                </p>
+              </OpenField>
+            ) : (
+              <Row
+                k="P"
+                label="Product"
+                icon="package"
+                right={
+                  product === null ? (
+                    <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
+                  ) : (
+                    <span className="capture-val">
+                      {registry.products.find((e) => e.key === product)?.display ?? product}
+                    </span>
+                  )
+                }
+                onToggle={() => toggleField('product')}
+              />
+            )
+          ) : null}
+
+          {statusNote === null ? null : (
+            <div className="capture-servernote">
+              <p className="capture-refused">{statusNote.text}</p>
+              <Button size="sm" icon="refresh" onClick={() => void loadStatus()}>
+                Ask again
+              </Button>
+            </div>
+          )}
+        </section>
+
+        {/* ============ THE RIG: set once when the rig is set up, then read ============ */}
+        <section className="capture-card capture-card-rig" aria-label="Rig">
+          <p className="bn-label capture-card-label">Rig</p>
+
+          {openField === 'game' ? (
+            <OpenField k="G" label="Game" icon="layers" meta="Pick one" onClose={closeField}>
+              <div className="capture-opts">
+                {(registry?.games ?? []).map((entry, position) => (
+                  <Opt
+                    key={entry.key}
+                    k={OPTION_KEYS[position]}
+                    on={entry.key === game}
+                    name={entry.display}
+                    onPick={() => {
+                      pickGame(entry.key)
+                      closeField()
+                    }}
+                  />
+                ))}
+                {registry === null ? (
+                  <p className="capture-quiet">The server has not sent the game list yet.</p>
+                ) : null}
+              </div>
+              {registryNote === null ? null : (
+                <>
+                  <p className="capture-refused">{registryNote.text}</p>
+                  <Button size="sm" icon="refresh" onClick={() => void loadGames()}>
+                    Ask again
+                  </Button>
+                </>
+              )}
+              {gameEntry === null ? null : gameEntry.unverified ? (
+                <p className="capture-opennote" title="Rarities are authored in pipeline/games.py">
+                  No TCGplayer export has been seen for {gameEntry.display}, so a card captured as
+                  one could never be identified, priced or listed. Captures are held until an
+                  export is in hand and its rarities are authored.
+                </p>
+              ) : !gameEntry.catalogued ? (
+                <p className="capture-opennote">
+                  {gameEntry.display} is captured and located like any other card and then stops:
+                  no identification call, no join, no listing. A note under the last capture is
+                  the only thing it can be found by later.
+                </p>
+              ) : gameEntry.prompt === PROMPT_UNWRITTEN ? (
+                <p className="capture-opennote">
+                  {gameEntry.display} has an export but no identification prompt yet, so these
+                  cards will be captured and positioned now and identified later.
+                </p>
+              ) : null}
+            </OpenField>
+          ) : (
+            <Row
+              k="G"
+              label="Game"
+              icon="layers"
+              right={
+                gameEntry === null ? (
+                  <span className="capture-val is-default">{gameSentence}</span>
+                ) : (
+                  <span className="capture-val">{gameEntry.display}</span>
+                )
+              }
+              onToggle={() => toggleField('game')}
+            />
+          )}
+
+          {openField === 'camera' ? (
+            <OpenField
+              k="V"
+              label="Camera"
+              icon="camera"
+              meta={
+                signal !== null ? (
+                  <span className={underTarget ? 'capture-meta-alert' : undefined}>
+                    {signal.width} × {signal.height}
+                  </span>
+                ) : !camera.started ? (
+                  'Not open'
+                ) : (
+                  `${camera.devices.length} found`
+                )
+              }
+              onClose={closeField}
+            >
+              {!camera.started ? (
+                <>
+                  <p className="capture-opennote">
+                    The camera is not open yet. Nothing on this screen reaches for it until you
+                    ask, so opening the app raises no permission prompt.
+                  </p>
+                  <Button variant="primary" size="sm" icon="camera" onClick={camera.retry}>
+                    Open the camera
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="capture-opts">
+                    {camera.devices.map((device, position) => (
+                      <Opt
+                        key={device.deviceId}
+                        k={OPTION_KEYS[position]}
+                        on={device.deviceId === camera.deviceId}
+                        name={device.label === '' ? `Camera ${position + 1}` : device.label}
+                        onPick={() => camera.selectDevice(device.deviceId)}
+                      />
+                    ))}
+                    {camera.devices.length === 0 ? (
+                      <p className="capture-quiet">No cameras found.</p>
+                    ) : null}
+                  </div>
+                  {camera.missing ? (
+                    <p className="capture-refused">
+                      The remembered camera is not connected. Check the Cam Link and that the
+                      camera is awake, or pick a camera above. Nothing is open until you do.
+                    </p>
+                  ) : null}
+                  {camera.error === null ? null : <p className="capture-refused">{camera.error}</p>}
+                  {underTarget ? (
+                    <p className="capture-refused">
+                      This stream is below the {PIPELINE_LONG_EDGE}px the pipeline works from, so
+                      every photo will be worse than the rig can produce. Check the camera is in
+                      its clean-HDMI output mode and that nothing else is holding the capture card.
+                    </p>
+                  ) : null}
+                  {camera.missing || camera.error !== null || underTarget ? (
+                    <Button size="sm" icon="refresh" onClick={camera.retry}>
+                      Reopen the camera
+                    </Button>
+                  ) : null}
+                </>
+              )}
+            </OpenField>
+          ) : (
+            <Row
+              k="V"
+              label="Camera"
+              icon="camera"
+              right={
+                !camera.started ? (
+                  <span className="capture-val is-default">Not open</span>
+                ) : cameraFault ? (
+                  <span className="capture-val capture-val-alert">
+                    <Icon name="alert" size={12} />
+                    Fault
+                  </span>
+                ) : camera.deviceId === null ? (
+                  <span className="capture-val capture-val-alert">
+                    <Icon name="camera" size={12} />
+                    Pick one
+                  </span>
+                ) : !camera.ready ? (
+                  <span className="capture-val is-default">Connecting…</span>
+                ) : (
+                  <span className="capture-val">
+                    <span className="capture-val-name">{cameraLabel ?? 'Camera'}</span>
+                    {signal === null ? null : (
+                      <em className={underTarget ? 'capture-sub capture-sub-alert' : 'capture-sub'}>
+                        {signal.width}×{signal.height}
+                      </em>
+                    )}
+                  </span>
+                )
+              }
+              onToggle={() => toggleField('camera')}
+            />
+          )}
+
+          {openField === 'rotation' ? (
+            <OpenField k="O" label="Rotation" icon="rotate" meta="Pick one" onClose={closeField}>
+              <Track
+                label="Rotation"
+                cells={ROTATIONS.map((value) => ({
+                  text: `${value}°`,
+                  on: camera.rotation === value,
+                  onPick: () => {
+                    camera.setRotation(value)
+                    closeField()
+                  },
+                }))}
+              />
+            </OpenField>
+          ) : (
+            <Row
+              k="O"
+              label="Rotation"
+              icon="rotate"
+              right={<span className="capture-val bn-tnum">{camera.rotation}°</span>}
+              onToggle={() => toggleField('rotation')}
+            />
+          )}
+
+          {openField === 'trigger' ? (
+            <OpenField
+              k="T"
+              label="Trigger"
+              icon={triggerMode === 'motion' ? 'eye' : 'keyboard'}
+              meta={
+                <>
+                  {triggerMode === 'motion' ? 'Motion · the machine fires it' : `Manual · ${CAPTURE_KEY_LABEL} fires it`}
+                  <span className="bn-sr capture-trigger">{captureTrigger.name}</span>
+                </>
+              }
+              onClose={closeField}
+            >
+              <Track
+                label="Trigger"
+                cells={[
+                  {
+                    text: 'key',
+                    on: triggerMode === 'manual',
+                    onPick: () => {
+                      switchTrigger('manual')
+                      closeField()
+                    },
+                  },
+                  {
+                    text: 'motion',
+                    on: triggerMode === 'motion',
+                    onPick: () => {
+                      switchTrigger('motion')
+                      closeField()
+                    },
+                  },
+                ]}
+              />
+              <p className="capture-opennote">
+                {triggerMode === 'motion'
+                  ? 'The machine fires the shutter when a card settles at the lens. Arming starts the run; it never survives a reload.'
+                  : 'The shutter fires on C. Motion arms a machine that fires it when a card settles.'}
+              </p>
+            </OpenField>
+          ) : (
+            <Row
+              k="T"
+              label="Trigger"
+              icon={triggerMode === 'motion' ? 'eye' : 'keyboard'}
+              right={
+                <span className={triggerMode === 'manual' ? 'capture-val' : 'capture-val is-armed'}>
+                  {triggerMode === 'manual' ? 'Key' : 'Motion'}
+                  <em className="bn-sr capture-trigger">
+                    {captureTrigger.name}
+                  </em>
+                </span>
+              }
+              onToggle={() => toggleField('trigger')}
+            />
+          )}
+        </section>
+
       </div>
     </main>
   )

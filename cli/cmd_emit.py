@@ -1,19 +1,45 @@
-"""`pkmnscan emit <run-dir>` — write the import CSVs. Free, re-runnable.
+"""`pkmnscan emit <run-dir>` — write the import CSV. Free, re-runnable.
 
-TWO FILES PER GAME, and neither split is cosmetic:
+ONE FILE, `import.csv`, AND THAT IS THE DEFAULT FOR EVERY SEND — one run or several. The
+owner's instruction, verbatim: *"emit by default only should now emit only one spreadsheet by
+default (with the ability to split if needed)"*. Two files per game per run was two uploads
+for one errand, and a send of three runs over two games was twelve.
 
-    import-listed.csv        above-threshold cards
-    import-subthreshold.csv  cards priced by this run's disposition
+TWO FLAGS SPLIT IT, ON TWO DIFFERENT AXES, AND NEITHER IS THE DEFAULT ANY MORE:
 
-The valuable cards can be staged and moved live immediately while the bulk file waits, and a
-pricing mistake on the cheap file cannot touch the valuable one. Each file independently
-obeys the no-duplicate-SKU rule, because two rows with one `TCGplayer Id` in one import file
-is undefined behaviour and the emitter must not be able to produce it.
+    --split-threshold   the old pair back — `import-listed.csv` above the D9 cut-off,
+                        `import-subthreshold.csv` below it, one pair per game
+    --split-games       one file per game — `import-pokemon.csv`, `import-riftbound.csv`
 
-PER GAME because nobody has established that Import to Staged accepts a file spanning two
-`Product Line`s — `fixtures/staged-import-accepted.csv` proves it for one line only, and
-per-game files are correct under either answer. The default game keeps the two names above;
-every other game suffixes its key (`import-listed-riftbound.csv`), see `cli/runs.py`.
+`--listed-only` is a THIRD thing and is deliberately not a split: it drops the sub-threshold
+rows rather than filing them elsewhere, so the valuable cards can be staged first and the
+bulk can wait for a later press.
+
+WHAT THE OLD SPLIT WAS FOR, BECAUSE IT WAS NOT COSMETIC AND `--split-threshold` IS WHY IT IS
+KEPT. The valuable cards could be staged and moved live while the bulk file waited, and a
+pricing mistake on the cheap file could not touch the valuable one. Both are still available
+one flag away; what changed is which is the default, and the default is now the errand the
+owner actually runs.
+
+THE GAME SPLIT IS AN OPEN QUESTION AND NOT A PREFERENCE. Nobody has established that
+TCGplayer's Import to Staged accepts a file spanning two `Product Line`s —
+`fixtures/staged-import-accepted.csv` proves it for one line only. The owner asked for one
+file and said they would test it; `--split-games` is the one-flag way back if the portal
+refuses. A merged file whose games carry different export HEADERS is refused rather than
+written, and the refusal names the flag.
+
+EVERY FILE OBEYS THE NO-DUPLICATE-SKU RULE, and merging is where that could have been lost.
+Two rows with one `TCGplayer Id` in one import file is undefined behaviour; the buckets are
+disjoint SKU sets of one report and a SKU belongs to one `Product Line`, so a merged file
+cannot contain one twice by construction — and `join.write_import` asserts it anyway,
+because a property nothing checks is a comment.
+
+THE LIVE CAP IS SPENT ONCE ACROSS EVERYTHING ONE PRESS WRITES. Inside a run that is
+`SkuMatch.add_to_quantity`, which is per SKU and therefore already once whichever file the
+row lands in. ACROSS runs it is `pipeline/merge.py`, which re-derives the figure over the
+union of positions deduped on `(box, index)` — see `run_merged`, and D86 for the two SKUs
+that reached `pushed: 6` against a cap of 4 before it existed. A merged file is never a
+concatenation of the per-run CSVs.
 
 IT REFUSES, LOUDLY, WRITING NOTHING, when:
 
@@ -59,11 +85,10 @@ def _warn_stale(run_dir, say) -> None:
     staged. So it is named, not removed. Globbed rather than listed, because the import
     files are per-game now and a stale one is stale whichever game wrote it.
     """
-    stale = [
-        path
-        for pattern in ("import-listed*.csv", "import-subthreshold*.csv")
-        for path in sorted(run_dir.directory.glob(pattern))
-    ]
+    # ONE GLOB OVER EVERY SHAPE THIS COMMAND CAN WRITE. It listed the two per-game bucket
+    # names and would have said nothing about `import.csv`, which is the file the default
+    # press now leaves behind — the exact stale file this function exists to name.
+    stale = sorted(run_dir.directory.glob("import*.csv"))
     if not stale:
         return
     say("")
@@ -157,6 +182,118 @@ def _write(game_join, path, only, choice, say, label):
     return skus
 
 
+class SplitRefused(Exception):
+    """One file was asked for over games whose exports carry different columns.
+
+    ITS OWN CLASS SO THE CALLER'S EXISTING REFUSAL BLOCK CATCHES IT. `run` already turns
+    `OutputSuppressed`, `Undecided` and `ReadOnlyColumn` into "REFUSING to write. Nothing was
+    written." with the stale-file warning under it, and this is the same kind of event: a
+    whole-send refusal raised before a single byte is written.
+    """
+
+
+def _merged_targets(rows_by_game, run_dir, split_games):
+    """(path, catalog, rows) for each file one press should write, refusing an impossible one.
+
+    `rows_by_game` is game -> the rows that game contributed, already priced and already
+    filtered. With `--split-games` each game gets its own file and no header question arises.
+    Without it there is ONE file, and a file whose rows came from two different export headers
+    is malformed in a way no reader here would notice — so the headers are compared rather
+    than assumed, and the refusal names the flag that fixes it.
+    """
+    if split_games:
+        return [
+            (
+                run_dir.path(runs.import_merged_name(game)),
+                game_join.catalog,
+                rows,
+            )
+            for game, (game_join, rows) in rows_by_game.items()
+            if rows
+        ]
+    carrying = [
+        (game, game_join, rows) for game, (game_join, rows) in rows_by_game.items() if rows
+    ]
+    if not carrying:
+        return []
+    headers = {tuple(game_join.catalog.header) for _, game_join, _ in carrying}
+    if len(headers) > 1:
+        raise SplitRefused(
+            "these games' exports carry different columns, and one file needs one header. "
+            "Re-run with --split-games. (" + ", ".join(g for g, _, _ in carrying) + ")"
+        )
+    merged = [row for _, _, rows in carrying for row in rows]
+    return [(run_dir.path(runs.import_merged_name()), carrying[0][1].catalog, merged)]
+
+
+def _write_merged(resolved, priced, choice, run_dir, args, say):
+    """The default: one import file, both buckets in it. Returns (listed SKUs, sub SKUs).
+
+    THE TWO BUCKETS ARE ONE `import_rows` CALL PER GAME, NOT TWO CONCATENATED. `only` is the
+    union of the two SKU sets, so each SKU is priced once and written once — which is what
+    makes the no-duplicate-SKU rule a property here rather than a thing to check. The buckets
+    are disjoint by construction (`_game_only` partitions one report on `listable`), so the
+    union cannot hold a SKU twice, and the cap is `SkuMatch.add_to_quantity` — per SKU, and
+    therefore spent once whichever file the row lands in.
+
+    THE SPLIT IS STILL COMPUTED, because the manifest keeps it. D54 makes `emitted` a union
+    that `reconcile` reads in both directions, and its `listed`/`sub_threshold` lists are what
+    a screen tells the two apart by. One file on disk does not mean one bucket in the record.
+
+    D54's EMPTY GUARD IS PER FILE AND IS NOT OPTIONAL. `tcgcsv.write_csv` emits the header
+    before it iterates rows, so a write with no rows replaces a good file with a valid CSV of
+    nothing — the exact destruction D54 was written about, and merging gives it one more way
+    to happen, because a file can now be empty for every game at once.
+    """
+    rows_by_game = OrderedDict()
+    listed_skus = []
+    sub_skus = []
+    for game_join in resolved.joins.values():
+        game = game_join.game
+        listed, sub = _game_only(game_join.report, priced[game])
+        only = listed if args.listed_only else (listed | sub)
+        rows = (
+            join.import_rows(
+                game_join.report,
+                sub_threshold=choice.sub_threshold,
+                sku_dispositions=_scoped(choice.dispositions(), game_join.report),
+                no_market_data=choice.no_market_data,
+                withheld=set(choice.withheld()),
+                only=only,
+            )
+            if only
+            else []
+        )
+        rows_by_game[game] = (game_join, rows)
+        if args.listed_only and sub:
+            say(f"{'sub-threshold':<16} {len(sub)} SKU(s) left for a later emit "
+                "— --listed-only")
+
+    targets = _merged_targets(rows_by_game, run_dir, args.split_games)
+    if not targets:
+        # THE SENTENCE `_write` GIVES, KEPT WORD FOR WORD. An operator pressing emit a second
+        # time reads the same thing whichever shape they asked for, and the caller's D54
+        # branch below turns it into the "nothing new to send" report.
+        say(f"{'import':<16} nothing new to write — every row is already sent")
+        return [], []
+
+    for path, catalog, rows in targets:
+        data = join.write_import(catalog, path, rows)
+        written = tcgcsv.parse(data)
+        quantity = sum(int(row[tcgcsv.QUANTITY_COLUMN] or 0) for row in written.rows)
+        say(f"{'import':<16} {len(written.rows)} row(s), {quantity} card(s) -> {path}")
+
+    # THE BUCKETS ARE READ BACK OFF WHAT REACHED A FILE, never off what was offered to one.
+    # `import_rows` drops a zero-quantity row after `_game_only` has already counted its SKU,
+    # and D54's whole finding is that the record must describe the FILE.
+    shipped = {row[tcgcsv.SKU_COLUMN] for _, _, rows in targets for row in rows}
+    for game_join in resolved.joins.values():
+        listed, sub = _game_only(game_join.report, priced[game_join.game])
+        listed_skus += sorted(listed & shipped)
+        sub_skus += sorted(sub & shipped)
+    return listed_skus, sub_skus
+
+
 def run(args, say) -> int:
     # ONE RUN OR SEVERAL, AND THE SINGLE-RUN PATH IS UNTOUCHED. A send of one still writes the
     # two per-game files it always did, so every run already on disk, every harness case and
@@ -201,7 +338,12 @@ def run(args, say) -> int:
     # on the next re-emit of an old run — it is folded in once by `pkmnscan prices adopt`.
     try:
         book = corpus.Corpus.read()
-    except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
+    except (
+        decisions.MalformedDecisions,
+        pricing.UnknownRule,
+        pricing.UnknownBasis,
+        pricing.InvalidThreshold,
+    ) as exc:
         say(f"{corpus.FILENAME} is unusable: {exc}")
         return 1
     if not book.answers and run_dir.path(runs.DECISIONS).is_file():
@@ -220,6 +362,13 @@ def run(args, say) -> int:
             plan.by_game,
             rule=pricing.Rule.parse(policy["rule"]),
             basis=pricing.check_basis(policy["basis"]),
+            # THE STORED CUT-OFF, WHICH IS WHAT DECIDES WHICH ROWS ARE SUB-THRESHOLD AND SO
+            # WHICH FILE THEY LAND IN UNDER `--split-threshold`. Same source as `rule` and
+            # `basis` one line up and for the identical reason: `emit` re-derives the join,
+            # and a derivation that read the module constant while the operator had set
+            # something else would partition this run differently from the `join` that
+            # produced the report they are looking at.
+            threshold=pricing.check_threshold(policy["threshold"]),
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
@@ -336,30 +485,53 @@ def run(args, say) -> int:
                 withheld=withheld,
             )
 
+        # TWO SHAPES, ONE SET OF ROWS. Whichever branch runs, the rows come out of the same
+        # `priced` mapping and the same `_game_only` partition, so the flag decides how many
+        # files the rows are spread over and never which rows exist. That is what keeps
+        # `--split-threshold` from being a second emitter that can drift from this one.
         listed_skus = []
         sub_skus = []
-        for game_join in resolved.joins.values():
-            game = game_join.game
-            if multi:
-                say(f"[{game}]")
-            listed, sub = _game_only(game_join.report, priced[game])
-            listed_skus += _write(
-                game_join,
-                run_dir.path(runs.import_listed_name(game)),
-                listed,
-                choice,
-                say,
-                "listed",
+        if args.split_threshold:
+            for game_join in resolved.joins.values():
+                game = game_join.game
+                if multi:
+                    say(f"[{game}]")
+                listed, sub = _game_only(game_join.report, priced[game])
+                listed_skus += _write(
+                    game_join,
+                    run_dir.path(runs.import_listed_name(game)),
+                    listed,
+                    choice,
+                    say,
+                    "listed",
+                )
+                if args.listed_only:
+                    # NAMED, NOT SILENTLY SKIPPED. `--listed-only` with `--split-threshold`
+                    # is a legitimate pair — file the valuable cards now, leave the bulk for
+                    # a later press — and a sub-threshold file that simply did not appear
+                    # would read as "there were none".
+                    if sub:
+                        say(f"{'sub-threshold':<16} {len(sub)} SKU(s) left for a later "
+                            "emit — --listed-only")
+                    continue
+                sub_skus += _write(
+                    game_join,
+                    run_dir.path(runs.import_subthreshold_name(game)),
+                    sub,
+                    choice,
+                    say,
+                    "sub-threshold",
+                )
+        else:
+            listed_skus, sub_skus = _write_merged(
+                resolved, priced, choice, run_dir, args, say
             )
-            sub_skus += _write(
-                game_join,
-                run_dir.path(runs.import_subthreshold_name(game)),
-                sub,
-                choice,
-                say,
-                "sub-threshold",
-            )
-    except (join.OutputSuppressed, join.Undecided, tcgcsv.ReadOnlyColumn) as exc:
+    except (
+        join.OutputSuppressed,
+        join.Undecided,
+        tcgcsv.ReadOnlyColumn,
+        SplitRefused,
+    ) as exc:
         say("REFUSING to write. Nothing was written.")
         for line in str(exc).splitlines():
             say(f"    {line}")
@@ -523,9 +695,19 @@ def run(args, say) -> int:
     # still sitting in a box unlisted.
     say(f"standing queues  {queue_line}")
     say("")
-    listed_names = ", ".join(
-        runs.import_listed_name(game) for game in resolved.joins
-    ) or runs.IMPORT_LISTED
+    # NAMED OFF THE SHAPE THAT WAS ASKED FOR, because this line is an instruction. It told
+    # the operator to import `import-listed.csv` whatever had been written, which is now
+    # usually a file that does not exist.
+    if args.split_threshold:
+        listed_names = ", ".join(
+            runs.import_listed_name(game) for game in resolved.joins
+        ) or runs.IMPORT_LISTED
+    elif args.split_games:
+        listed_names = ", ".join(
+            runs.import_merged_name(game) for game in resolved.joins
+        ) or runs.IMPORT_MERGED
+    else:
+        listed_names = runs.IMPORT_MERGED
     if not wrote_any:
         # NOTHING NEW WENT ANYWHERE, AND SAYING SO IS THE POINT OF THIS BRANCH. Every copy
         # this run holds is already at `pushed`, so there is no row left to send and the
@@ -565,6 +747,7 @@ def _resolve_one(run_dir, book, say):
             plan.by_game,
             rule=pricing.Rule.parse(policy["rule"]),
             basis=pricing.check_basis(policy["basis"]),
+            threshold=pricing.check_threshold(policy["threshold"]),
             review_below=run_dir.manifest.get("review_below_confidence", routing.CONFIDENCE_LOW),
             # THE RUN'S OWN BYPASS, for the reason the single-run path gives at length: `emit`
             # re-derives rather than reads, so every input to that derivation has to come from
@@ -574,6 +757,34 @@ def _resolve_one(run_dir, book, say):
     except join.EmptyCatalog as refusal:
         say(f"{run_dir.name}: {refusal}")
         return None
+
+
+def _bucket_files(game, group, split_threshold):
+    """[(filename, rows)] for one game's slice of a merged plan.
+
+    ONE FILE UNLESS `--split-threshold` IS ASKED FOR, which is the default this command
+    exists to have. The pair it splits into is the pair the single-run path writes under the
+    same flag, so an operator who wants the old shape gets the old NAMES too — a file called
+    something else would not be the thing they asked for.
+
+    `game` IS `None` WHEN THE GAMES ARE NOT BEING KEPT APART. The per-game name helpers take
+    a game and answer the un-suffixed name for the default one, which is the right answer
+    here as well: a file spanning every game in the send is the one `import-listed.csv`.
+    """
+    if not split_threshold:
+        return [(runs.import_merged_name(game), group)]
+    return [
+        (
+            runs.IMPORT_LISTED if game is None else runs.import_listed_name(game),
+            [row for row in group if not row.sub_threshold],
+        ),
+        (
+            runs.IMPORT_SUBTHRESHOLD
+            if game is None
+            else runs.import_subthreshold_name(game),
+            [row for row in group if row.sub_threshold],
+        ),
+    ]
 
 
 def run_merged(args, say) -> int:
@@ -678,20 +889,30 @@ def run_merged(args, say) -> int:
             say(f"one header. Re-run with --split-games. ({', '.join(games)})")
             return 1
         catalog = catalogs[games[0]]
-        target = dirs[-1].path(runs.import_merged_name(game))
-        csv_rows = merge.import_rows(group)
-        try:
-            # `write_import` OWNS THE DUPLICATE-SKU GATE, and it is reused rather than
-            # restated. `merge.plan` is keyed by SKU so two rows with one `TCGplayer Id`
-            # cannot be built here — and a property nothing checks is a comment, which is
-            # exactly what that function exists to stop this file from writing.
-            join.write_import(catalog, target, csv_rows)
-        except join.OutputSuppressed as refusal:
-            say(f"REFUSING: {refusal}. Nothing more was written.")
-            return 1
-        copies = sum(row.match.add_to_quantity for row in group)
-        say(f"import           {len(csv_rows)} row(s), {copies} card(s) -> {target}")
-        written.append((target, group))
+        # THE SPLIT IS OVER THE ONE PLAN AND NEVER A SECOND ONE. `merged_plan` spent the cap
+        # over the union of positions once; filing the rows into two files after the fact
+        # cannot change a quantity, which is exactly why the split is applied HERE and not by
+        # planning the two buckets separately.
+        for name, bucket in _bucket_files(game, group, args.split_threshold):
+            if not bucket:
+                # D54's EMPTY GUARD, WHICH THE MERGED PATH NEEDS THE MOMENT IT CAN SPLIT. A
+                # send whose every row is above the threshold would otherwise write a
+                # header-only `import-subthreshold.csv` over an earlier good one.
+                continue
+            target = dirs[-1].path(name)
+            csv_rows = merge.import_rows(bucket)
+            try:
+                # `write_import` OWNS THE DUPLICATE-SKU GATE, and it is reused rather than
+                # restated. `merge.plan` is keyed by SKU so two rows with one `TCGplayer Id`
+                # cannot be built here — and a property nothing checks is a comment, which is
+                # exactly what that function exists to stop this file from writing.
+                join.write_import(catalog, target, csv_rows)
+            except join.OutputSuppressed as refusal:
+                say(f"REFUSING: {refusal}. Nothing more was written.")
+                return 1
+            copies = sum(row.match.add_to_quantity for row in bucket)
+            say(f"import           {len(csv_rows)} row(s), {copies} card(s) -> {target}")
+            written.append((target, bucket))
 
     # --------------------------------------------------------------------- the store
     #

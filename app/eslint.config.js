@@ -146,15 +146,19 @@ const TWO_ARG_THEN_RULES = [
 ]
 
 const LOCAL_STORAGE =
-  '`localStorage` survives closing the browser, and D27 permits it for exactly two things: ' +
-  'the remembered camera and the photo rotation, both facts about THIS MACHINE, both in ' +
-  'app/src/useCamera.ts, neither of which can take a photograph on its own. Everything else ' +
-  'the capture screen remembers is a claim about the stack currently at the lens — the box, ' +
-  'the set hint, the finish, the game, the in-flight capture id — and those belong in ' +
-  '`sessionStorage`, where a new tab is a new shift and closing the browser ends one. ' +
-  'Nothing about a card, a position or the inventory goes in either: D13 puts that one ' +
-  'truth on the Mac so two devices cannot disagree about where a card is, which is what ' +
-  "CLAUDE.md's ban on browser storage has always been about. See D27 for the permitted keys."
+  '`localStorage` survives closing the browser, and D27 permits it only for facts about THIS ' +
+  'MACHINE. Two files hold such facts and this is neither: app/src/useCamera.ts (the ' +
+  'remembered camera and the photo rotation, neither of which can take a photograph on its ' +
+  'own) and app/src/deviceMemory.ts (the theme and the rail — shell preferences about the ' +
+  'screen the operator is sitting at). Put a new device-local key in deviceMemory.ts, where ' +
+  'the argument for it is, rather than at the call site: this rule matches the STORE and not ' +
+  'the key, so a named file is the only exception it can express, and that is what puts a new ' +
+  'key in front of a reviewer. Everything the capture screen remembers is a claim about the ' +
+  'stack currently at the lens — the box, the set hint, the finish, the game, the in-flight ' +
+  'capture id — and those belong in `sessionStorage`, where a new tab is a new shift and ' +
+  'closing the browser ends one. Nothing about a card, a position or the inventory goes in ' +
+  'either: D13 puts that one truth on the Mac so two devices cannot disagree about where a ' +
+  "card is, which is what CLAUDE.md's ban on browser storage has always been about."
 
 /* Two selectors, the same pair the facingMode guard needs and for the same reason:
  * `Identifier` covers `window.localStorage` and a bare `localStorage`, `Literal` covers
@@ -208,11 +212,19 @@ export default tseslint.config(
   },
   {
     /* The second exception, and the fourth rule's whole reason for having a shape rather
-     * than being a ban. `useCamera.ts` is where D27's carve-out was argued informally before
-     * it was a decision — the remembered deviceId and the photo rotation, both of which that
-     * file justifies at length beside the keys themselves. They are facts about the machine
-     * this browser is running on: meaningless on the Fulfiller's laptop, actively wrong if
-     * shared, and neither is about a card.
+     * than being a ban. TWO FILES, and between them they hold every `localStorage` call in the
+     * app. `useCamera.ts` is where D27's carve-out was argued informally before it was a
+     * decision — the remembered deviceId and the photo rotation, both of which that file
+     * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own
+     * two, the theme and the rail. All four are facts about the machine this browser is running
+     * on: meaningless on the Fulfiller's laptop, actively wrong if shared, and none about a
+     * card.
+     *
+     * THE SECOND FILE EXISTS BECAUSE OF THIS RULE, which is the rule working rather than being
+     * worked around. The theme and the rail were read and written at three call sites in
+     * `App.tsx` and two in `kit/index.tsx`; exempting either file would have waved through
+     * anything those files ever store, and `App.tsx` is the shell. Collecting the keys into one
+     * small module put the exception back where a reviewer can read it whole.
      *
      * SCOPED TO THE ONE FILE, and only the storage guard is dropped: `facingMode` in
      * particular still errors here, which matters more in this file than anywhere else in
@@ -224,7 +236,7 @@ export default tseslint.config(
      * would have to be switched off with an inline disable comment at four call sites, and a
      * guard that is routinely disabled inline is one the next person disables without
      * reading. Naming the file keeps the exception in one place a reviewer can see whole. */
-    files: ['src/useCamera.ts'],
+    files: ['src/useCamera.ts', 'src/deviceMemory.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

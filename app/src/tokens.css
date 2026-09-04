@@ -1,157 +1,190 @@
-/* The locked design tokens from docs/DESIGN.md, locked 2026-08-12 by interview.
- *
- * SOURCE OF TRUTH IS docs/DESIGN.md, NOT THIS FILE. Every value below was chosen by the
- * owner from rendered alternatives; changing one here without changing it there makes the
- * app disagree with the document that argues for it.
- *
- * THAT AGREEMENT IS AUDITED, as of 2026-08-13: the `design tokens` row of
- * scripts/docs-audit.py parses the fenced block under `## Tokens` in docs/DESIGN.md — every
- * colour by name, the three typefaces, every step of the spacing scale, the radius — and the
- * custom properties declared on `:root` below, and compares them BOTH WAYS. A value that
- * differs, a locked token this file never declares, and a token declared here that the block
- * never locked are each a blocking finding naming both files and both values. So a hex edited
- * here alone stops the commit rather than shipping a silent disagreement, which is what this
- * comment used to have to warn about.
- *
- * WHAT THAT ROW DOES NOT SEE, so a green audit is read for what it is:
- *
- *   whether the palette is good   It proves two files agree, never that a colour earns its
- *                                 place or clears 7:1. Contrast is asserted against RENDERED
- *                                 pixels in app/tests/fulfillment.spec.ts and
- *                                 app/tests/pull-confirm.spec.ts; the rest was the interview.
- *   the sheets in design-refs/    Deliberately unchecked. They are drawings of
- *                                 docs/DESIGN.md and are allowed to lose to it — that file
- *                                 records two places where the sheet did. Forcing agreement
- *                                 would mean re-drawing the reference before a token could
- *                                 move, which inverts which of the two is the source.
- *   the doc's second block        Step 6's three button states restate five of these values
- *                                 in prose that nothing parses.
- *   every hex outside this :root  The row reads one `:root` in one file, so a literal in any
- *                                 other stylesheet is invisible TO IT — but no longer to the
- *                                 audit, and this bullet said otherwise until 2026-08-30. The
- *                                 `raw colour` row is a BLOCKING check over every stylesheet
- *                                 that strips comments first, so prose about a colour is not
- *                                 mistaken for one, and it currently answers clean. This
- *                                 bullet also named PullConfirm.css as the one file painting
- *                                 raw hex: that file now has none, so both halves of the
- *                                 sentence had outlived the state they described. The rule is
- *                                 unchanged — paint from var(--token), never from a hex — and
- *                                 it is enforced now rather than asked for.
- *
- * Hand-written on purpose. Generating this file from the doc would put a writer on the
- * path that decides whether a commit proceeds, which D18 forbids by name — and would make
- * the two agree by construction, turning every wrong value into a confidently rendered one.
- * Checking lets them disagree in public.
- *
- * Custom-property names MOSTLY match docs/design-refs/locked.html, and three of them no longer
- * do: `--on-accent`, `--field` and `--field-hover` all postdate that sheet, which draws neither
- * boundary token nor the label token. The claim used to be unqualified and stopped being true
- * the day `--on-accent` was named.
- *
- * Left as it is rather than corrected, and that is the bullet above applied rather than an
- * exception to it: the sheets are DRAWINGS of docs/DESIGN.md and are allowed to lose to it, and
- * forcing agreement would mean re-drawing the reference before a token could move — which
- * inverts which of the two is the source. What is fixed here is the sentence claiming they
- * agree, not the disagreement.
- *
- * Deliberately nothing but tokens: no reset, no element rules. See base.css.
- */
+/* ============================================================================
+   BANCHI — design tokens
+   ----------------------------------------------------------------------------
+   番地 (banchi): a lot number — the address of a thing. Every card in the store has
+   one: box → section → card. The product is named after that idea, and the system
+   below is built around three registers that idea needs:
+
+     ink   — what you read
+     line  — what separates
+     brand — where to look (indigo for action, vermilion for what is live)
+
+   Two themes, one set of names. Light is the default; `[data-theme="dark"]` on <html>
+   switches every surface and ink together. Nothing in a component sheet may name a
+   colour — components paint from these tokens only.
+
+   LEGACY ALIASES are at the bottom. The old sheet exported --ink/--muted/--line/--s1…
+   and 40 stylesheets read them; keeping the names live means every screen re-skins the
+   moment this file lands, and screens are then refined one by one.
+   ========================================================================== */
 
 :root {
-  /* ---- colour. Every token that carries text clears 7:1 on every ground it sits on. ---- */
-  --bg: #fcfcfd; /* the page. Everything sits on this. */
-  --surface: #ffffff; /* raised: choice rows, queue rows, panels */
-  --ink: #08090a; /* all body text, all headings, all money      19.4:1 on bg */
-  --muted: #4e5157; /* metadata, secondary labels, disabled  7.76:1 on bg, 7.30:1 on hover */
-  --line: #e6e7ea; /* the 1px hairline. Every separation, no exceptions. */
-  --accent: #1e40af; /* unsure, and the only-action fill             8.5:1 on bg */
+  color-scheme: light;
 
-  /* Two interaction states derived from the above. */
-  --hover: #f4f5f7; /* ROW HOVER ONLY. bg and surface are 1.5% apart, so neither can
-                       serve as a hover state for the other. Not a button state — the
-                       pull-confirm goes straight from default to pressed.
+  /* ---- neutrals ---------------------------------------------------------- */
+  --bn-bg: #f4f5f8;              /* the page */
+  --bn-surface: #ffffff;         /* raised: panels, rows, cards */
+  --bn-surface-2: #eceef2;       /* sunken: wells, code, inactive tracks */
+  --bn-surface-3: #f7f8fa;       /* hover ground on a surface */
+  --bn-surface-glass: rgba(255, 255, 255, 0.72);
 
-                       IT IS A GROUND THAT CARRIES TEXT, which is the whole reason --muted
-                       moved. A hovered row does not empty itself: every word on it is
-                       still there, and it is the row somebody is reading. So the floor on
-                       the first line of this block applies here exactly as it does to bg
-                       and surface, and this is the darkest of the three. Check a text
-                       token against it. */
-  --pressed: #17348f; /* accent, pressed. White on it: 10.9:1. */
+  --bn-ink: #0f1217;             /* primary text, headings, money */
+  --bn-ink-2: #3b414b;           /* secondary text, values in a key/value row */
+  --bn-ink-3: #6b7280;           /* metadata, captions, placeholders */
+  --bn-ink-4: #7f8791;           /* faint: icons, separators, disabled — 3.6:1 on the page. Data-bearing
+                                    text reads ink-3; this is the floor a word may sit at, never a caption */
 
-  /* Label on an accent or pressed fill. NEVER a ground — that is --surface, and conflating
-     the two is why this token did not exist for a day: PullConfirm.css painted a raw
-     #ffffff twice rather than say "raised panel" where it meant "text on the loud button".
-     Not a new colour. docs/DESIGN.md's step 6 block already specified label #FFFFFF on both
-     fills, so the owner chose this value; it just had no name, and a value with no name is a
-     value the house rule against raw hex cannot be enforced against. */
-  --on-accent: #ffffff;
+  --bn-line: rgba(15, 18, 23, 0.08);
+  --bn-line-strong: rgba(15, 18, 23, 0.16);
+  --bn-line-focus: rgba(61, 90, 241, 0.55);
 
-  /* THE BOUNDARY OF SOMETHING YOU TYPE INTO, and the only token in this file that exists for a
-     contrast criterion rather than for the interview.
+  /* ---- brand ------------------------------------------------------------- */
+  --bn-accent: #3d5af1;          /* action. Buttons, links, selection, focus ring */
+  --bn-accent-hover: #2f4bd9;
+  --bn-accent-press: #2540c2;
+  --bn-accent-tint: rgba(61, 90, 241, 0.10);
+  --bn-accent-tint-2: rgba(61, 90, 241, 0.18);
+  --bn-on-accent: #ffffff;
 
-     `--line` is 1.24:1 on surface. That is deliberate for a separator — the walk draws a
-     hairline under all 543 of its rows and it is supposed to disappear behind the cards — and
-     it is wrong for the edge of a control, which WCAG 1.4.11 puts at 3:1 because the edge is
-     the only thing identifying it. An empty text input IS its rectangle: at 1.24:1 you find it
-     by its placeholder. A button at the same contrast is found by the ink label inside it at
-     19.9:1, which is why this is not a button token.
+  /* TWO COLOURS THAT ARE NOT PAINT, and they are tokens because the audit was right to ask.
+     `make docs-audit`'s `raw color` row says a hex literal in a stylesheet is a token nobody
+     wrote — and where the literal genuinely is not a colour the reader will see, the honest
+     answer is a named constant saying so rather than an exemption.
+       --bn-mask: the opaque end of a `mask-image` gradient. A mask carries ALPHA and no colour;
+         the paint underneath shows through unchanged, so this is black in both themes not by
+         choice but by definition, and theming it would be meaningless.
+       --bn-flash: the capture flash overlay, which stands in for a camera's own. It is white in
+         both themes for the same reason a shutter is: it reads as light rather than as a
+         surface, and a dark "flash" is not a flash. */
+  --bn-mask: #000000;
+  --bn-flash: #ffffff;
 
-     DARKENING `--line` ITSELF WAS BUILT AND RENDERED FIRST. At a true 3:1 (~#8c8c8c) the
-     section list reads as a spreadsheet grid — the one failure docs/DESIGN.md names by product
-     — and `BoxOps.css`'s box track, which PAINTS with `--line` rather than bordering with it,
-     goes from the quietest visible mark in the palette to something reading as ink.
+  --bn-live: #d63d2b;            /* vermilion. The logo dot, a live camera, a capture — 4.6:1 as text */
+  --bn-live-tint: rgba(239, 75, 58, 0.12);
 
-     NAMED FOR THE ONE JOB IT HAS, so it cannot grow one. `--edge` or `--control` would have
-     been taken by a button border within a session, and that is the weight this product just
-     spent a rebuild removing from the box operations. */
-  --field: #8c8c8c;
+  /* ---- semantic ---------------------------------------------------------- */
+  --bn-ok: #15803d;              /* 5.0:1 on white — the kit paints these as TEXT (pills, buttons) */
+  --bn-ok-tint: rgba(22, 163, 74, 0.12);
+  --bn-warn: #b45309;            /* 5.0:1 */
+  --bn-warn-tint: rgba(217, 119, 6, 0.13);
+  --bn-danger: #b91c1c;          /* 6.5:1 */
+  --bn-danger-tint: rgba(220, 38, 38, 0.10);
+  --bn-money: #0f1217;
 
-  /* THE SAME BOUNDARY, UNDER THE POINTER — and the ONE token in this file the owner granted
-     against a locked palette rather than chose at the 2026-08-12 interview. D50 carries the
-     argument; this comment carries the numbers, because the value was picked by measurement
-     and the measurement is what a later session needs to disagree with.
+  /* ---- elevation --------------------------------------------------------- */
+  --bn-shadow-1: 0 1px 2px rgba(15, 18, 23, 0.05), 0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-2: 0 1px 2px rgba(15, 18, 23, 0.06), 0 6px 20px -8px rgba(15, 18, 23, 0.18),
+    0 0 0 1px rgba(15, 18, 23, 0.05);
+  --bn-shadow-3: 0 2px 4px rgba(15, 18, 23, 0.06), 0 18px 48px -16px rgba(15, 18, 23, 0.32),
+    0 0 0 1px rgba(15, 18, 23, 0.06);
+  --bn-shadow-accent: 0 8px 24px -8px rgba(61, 90, 241, 0.55);
 
-     WHY IT COULD NOT BE A TOKEN THAT ALREADY EXISTS. `--field` at 3.36:1 on surface is the
-     quietest edge WCAG 1.4.11 permits, so a field has no hover response at all today: the
-     pointer crosses into the one control on the screen that takes typing and nothing moves.
-     The obvious reuse is `--muted`, which is already a value with two names' worth of jobs and
-     would have cost nothing — and it is REFUSED on a number nobody would think to compute.
+  /* the default button's ground. A token rather than a rule so the dark theme can lift a
+     button off a panel that is the same colour as it, without a specificity fight */
+  --bn-btn-bg: var(--bn-surface);
+  --bn-btn-bg-hover: var(--bn-surface-3);
+  --bn-btn-shadow: var(--bn-shadow-1);
 
-     THE NUMBER THAT DECIDED IT IS CONTRAST AGAINST `--ink`, NOT AGAINST THE GROUND. Focus on
-     these controls is `outline: 2-3px solid var(--ink)` (base.css, SearchField.css), so the
-     question a hover border has to answer is not "can it be seen" — every candidate clears
-     1.4.11 — it is "can it be told apart from focus". Measured against `--ink`:
+  /* ---- type -------------------------------------------------------------- */
+  --bn-font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+  --bn-font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bn-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-         --field   #8c8c8c   5.93:1 vs ink      rest, and no hover response
-         this      #6b6e73   3.89:1 vs ink      1.52x the rest edge, still clearly not focus
-         --muted   #4e5157   2.50:1 vs ink      2.37x the rest edge, and READS AS FOCUS
+  --bn-fs-2xs: 10px;
+  --bn-fs-xs: 11px;
+  --bn-fs-sm: 12px;
+  --bn-fs-md: 13px;
+  --bn-fs-base: 14px;
+  --bn-fs-lg: 16px;
+  --bn-fs-xl: 18px;
+  --bn-fs-2xl: 22px;
+  --bn-fs-3xl: 28px;
+  --bn-fs-4xl: 36px;
+  --bn-fs-5xl: 48px;
 
-     So `--muted` fails the one criterion that matters here while passing every criterion
-     anyone would have checked first. On surface / bg / hover this is 5.12 / 4.99 / 4.69:1,
-     all well over 1.4.11's 3:1, on all three grounds a field is ever drawn on.
+  --bn-tracking-caps: 0.06em;
+  --bn-tracking-tight: -0.015em;
 
-     IT COMPOSES WITH FOCUS RATHER THAN COMPETING, which is what makes a border-colour hover
-     safe at all: every focus treatment in this app is an OUTLINE, drawn outside the box at a
-     positive offset, so hover darkens the edge and focus draws a ring around it. Two
-     properties, two places, and a control that is both hovered and focused says both.
+  /* ---- spacing ----------------------------------------------------------- */
+  --bn-1: 4px;
+  --bn-2: 8px;
+  --bn-3: 12px;
+  --bn-4: 16px;
+  --bn-5: 20px;
+  --bn-6: 24px;
+  --bn-7: 32px;
+  --bn-8: 40px;
+  --bn-9: 48px;
+  --bn-10: 64px;
 
-     IT IS COOL-GREY, LIKE THE REST OF THE AXIS. `--ink` (8,9,10) and `--muted` (78,81,87) are
-     both cool and `--field` (140,140,140) is the pure-neutral exception; this sits on the
-     majority line, so a darkening field walks toward the palette rather than out of it.
+  /* ---- radius ------------------------------------------------------------ */
+  --bn-r-xs: 4px;
+  --bn-r-sm: 6px;
+  --bn-r: 8px;
+  --bn-r-lg: 12px;
+  --bn-r-xl: 16px;
+  --bn-r-2xl: 22px;
+  --bn-r-full: 999px;
 
-     NAMED FOR THE ONE STATE OF THE ONE JOB, per the rule the block above sets for `--field`
-     itself: `--field-hover` cannot grow into a button border the way `--edge` would have. */
-  --field-hover: #6b6e73;
+  /* ---- motion ------------------------------------------------------------ */
+  --bn-t-fast: 120ms;
+  --bn-t: 200ms;
+  --bn-t-slow: 320ms;
+  --bn-ease: cubic-bezier(0.2, 0, 0, 1);
+  --bn-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --bn-ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+  /* one cadence for every list: row i waits min(i, cap) * stagger. `.bn-stagger` in kit.css
+     reads `--i` off each child so the arithmetic leaves the JSX */
+  --bn-stagger: 30ms;
+  --bn-stagger-cap: 12;
+  --bn-t-draw: 480ms;        /* a bar or a line drawing in */
+  --bn-t-emphasis: 600ms;    /* a hero settling, a figure landing */
+  --bn-t-pulse: 1.8s;        /* a live dot */
+  --bn-t-spin: 0.7s;         /* a busy ring */
+  --bn-disabled: 0.45;       /* the one opacity a disabled pressable wears */
 
-  /* ---- type. Three faces, each with exactly one job. ---- */
-  --display: 'Cabinet Grotesk', sans-serif; /* 700/800 only, and only at >= 20px */
-  --body: 'Atkinson Hyperlegible', sans-serif; /* 400/700. Drawn for low vision — a
-                                                  Fulfillment decision wearing a typeface. */
-  --util: 'Martian Mono', monospace; /* 400/500/600, tabular by construction. Carries
-                                        every number in the product. */
 
-  /* ---- spacing. One scale, no other values. ---- */
+  /* ---- stage: a dark ground in BOTH themes (viewfinder, photo heroes) ---------- */
+  --bn-stage-bg: #0c0e12;
+  --bn-stage-bg-2: #171b25;
+  --bn-stage-surface: #1b2029;
+  --bn-stage-ink: #eef0f4;
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-accent-hover: #93a2ff;
+  --bn-stage-accent-press: #6b7dfa;
+  --bn-stage-on-accent: #0c0e12;
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+
+  /* ---- shell ------------------------------------------------------------- */
+  --bn-sidebar-w: 236px;
+  --bn-rail-w: 64px;
+  --bn-topbar-h: 52px;
+  --bn-control-h: 34px;
+  --bn-control-h-lg: 40px;
+  --bn-control-h-sm: 28px;
+
+  /* ======================================================================
+     LEGACY ALIASES — the names every existing stylesheet reads.
+     ====================================================================== */
+  --bg: var(--bn-bg);
+  --surface: var(--bn-surface);
+  --ink: var(--bn-ink);
+  --muted: var(--bn-ink-3);
+  --line: var(--bn-line);
+  --accent: var(--bn-accent);
+  --hover: var(--bn-surface-3);
+  --pressed: var(--bn-accent-press);
+  --on-accent: var(--bn-on-accent);
+  --field: var(--bn-line-strong);
+  --field-hover: var(--bn-ink-4);
+  --display: var(--bn-font-display);
+  --body: var(--bn-font-ui);
+  --util: var(--bn-font-mono);
+  --font-utility: var(--bn-font-mono);
+  --radius: var(--bn-r);
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -160,7 +193,63 @@
   --s6: 32px;
   --s7: 48px;
   --s8: 64px;
+  --r: var(--bn-r);
+}
 
-  /* ---- radius. One value, everywhere. ---- */
-  --r: 4px;
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+
+  --bn-ink: #eef0f4;
+  --bn-ink-2: #b9bfc9;
+  --bn-ink-3: #838b98;
+  --bn-ink-4: #707886;           /* 4.0:1 on the dark page */
+
+  --bn-line: rgba(255, 255, 255, 0.08);
+  --bn-line-strong: rgba(255, 255, 255, 0.16);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
+
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-on-accent: #0c0e12;
+
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
+
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-money: #eef0f4;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #262b34;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* A thumb needs 40px. Every kit control reads these, so the floor is raised once — and it
+   follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  :root {
+    --bn-control-h-sm: 40px;
+    --bn-control-h: 42px;
+    --bn-control-h-lg: 46px;
+  }
 }

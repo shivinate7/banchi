@@ -1,393 +1,570 @@
-/* The app shell's chrome. Owner-side only, and deliberately the quietest thing on screen.
- *
- * docs/DESIGN.md gives the owner's screens a different standard from the Fulfiller's —
- * "the owner's screens are a tool — dense is fine" — and the Fulfillment floors (20px body,
- * 32px position labels, 44px tap targets) govern that view rather than this one. None of
- * them is asserted on the nav because none of them applies to the nav.
- *
- * THE UNRESOLVED-HASH PANEL AT THE END OF THIS FILE IS THE EXCEPTION, and it is the only
- * place in the app where both standards meet. It is drawn to HIS floors, on the owner's
- * ground, because it is the one page the shell renders without knowing whose device is
- * showing it. The argument is at `hasChrome` in App.tsx; the numbers are down there.
- *
- * OWNER-SIDE ONLY IS ENFORCED AND NOT JUST DECLARED. This file said, before the Fulfillment
- * view existed, that the nav must never render on it — the constraints table requires zero
- * destructive actions reachable from that view, and a strip of links to the capture screen's
- * hard-delete undo (D10) is exactly the route it forbids. App.tsx stopped rendering it there
- * on 2026-08-13, and stopped rendering it over an unresolved hash on 2026-08-22; the
- * reasoning and the mechanism for both are at `CHROME_FREE` and `hasChrome` in that file,
- * because the shell is the only place that can decide either.
- *
- * So every rule in the nav section below is measured against nothing but the owner's screens.
- * Its 13px links and sub-44px targets would fail four rows of the constraints table if they
- * ever appeared on his device, which is the sharpest possible statement of why they may not.
- */
+/* ============================================================================
+   BANCHI SHELL — sidebar, rail, mobile top bar + sheet, command palette, toasts.
+   ========================================================================== */
 
-.app-nav {
-  display: flex;
-  align-items: stretch;
-
-  /* IT WRAPS, AS OF 2026-08-24, BECAUSE IT DID NOT AND THAT WAS A REAL DEFECT. Found by
-     app/tests/review.spec.ts asserting no sideways scroll at 375px: the page scrolled to
-     557px on a 375px viewport, and the culprit was not the screen under test — it was this
-     strip. Five route names in one non-wrapping row are wider than a phone, so every owner
-     screen inherited a horizontal scrollbar there and none of them could do anything about
-     it.
-
-     Nothing about the desktop changes: at any width that fits, a wrapping flex row lays out
-     identically to a non-wrapping one. What wrapping buys is that the strip gets taller on a
-     narrow screen instead of pushing the page sideways — and a sideways scroll is the one
-     kind that hides content with no affordance saying so. */
-  flex-wrap: wrap;
-
-  /* 16px, DOWN FROM 32, AND THE REASON IS ALIGNMENT RATHER THAN DENSITY. docs/DESIGN.md's
-     page-chrome rule puts an owner screen's outer padding at 16px, so a 32px nav left the
-     first route name one full step out of line with the heading directly beneath it — a
-     misalignment on the one element that appears on every screen, and therefore the only one
-     that can be out of line with all of them at once. The nav is not a page and does not get
-     its own margin; it is the strip above the page and shares its reading edge.
-
-     The vertical is untouched. `.app-nav-link`'s 12px padding was already at the owner end of
-     the scale and the bar is 46px tall, which is a strip rather than a header — nothing there
-     was ever the waste. */
-  padding: 0 var(--s4);
-
-  /* The 1px hairline and nothing else. docs/DESIGN.md: a tinted header strip carrying each
-     panel's name was built, looked at and rejected, so the chrome sits on the page ground
-     with a single --line rule under it. No shadow, no tint, no fill. The grouping below is
-     built out of the same hairline and the gap either side of it, for the same reason: this
-     file has exactly one separation mechanism and does not get a second one for a new job. */
-  background: var(--bg);
-  border-bottom: 1px solid var(--line);
+.bn-shell {
+  display: grid;
+  grid-template-columns: var(--bn-sidebar-w) minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+  transition: grid-template-columns var(--bn-t-slow) var(--bn-ease);
 }
+.bn-shell[data-rail='true'] { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+.bn-shell-main { min-width: 0; position: relative; }
+.bn-view { min-height: 100%; }
 
-/* ---- the groups ----
- *
- * SEVEN LINKS IN ONE UNDIFFERENTIATED ROW WAS THE DEFECT. The row was written for three
- * routes and grew to seven without anyone deciding it should, and at seven it drew the
- * component sheet — a gallery of one button, kept in the build so it cannot go stale — with
- * exactly the weight of the screen the owner spends an hour a day in.
- *
- * `Group` in App.tsx says which is which; this is where that costs pixels. Two mechanisms,
- * one per boundary, and each is chosen by how far apart the two sides of it are:
- *
- *   run | look    ADJACENT, so the boundary is the hairline. There is nowhere else for it to
- *                 go: 24px of gap already separates the links inside a group, and widening it
- *                 to say something different would be one gap meaning two things.
- *   look   aside  DISTANT, so the boundary is the space. The aside is pushed to the far end
- *                 of the bar, and a vertical rule with four hundred pixels of air on one side
- *                 of it is not separating anything — it reads as something left behind.
- *
- * A third group was considered and this is where it stopped being free: two hairlines in a
- * seven-link row is a row with a diagram in it. The right-hand push already says everything
- * the second rule would have.
- */
-
-.app-nav-group {
-  display: flex;
-  align-items: stretch;
-  gap: var(--s5);
-
-  /* THE GROUPS WRAP TOO, AND THE STRIP'S OWN WRAP WAS NEVER ENOUGH ON ITS OWN. `.app-nav`
-     has wrapped since 2026-08-24, which lets it break BETWEEN groups — and a group is itself
-     a non-wrapping flex row, so a group too wide for the viewport still pushed the page
-     sideways with nothing able to break it.
-
-     Latent until D49: the run group held three links and fitted. A fourth (`Pricing`) took
-     `app/tests/review.spec.ts`'s no-sideways-scroll case red at 375px by 45px — the same
-     assertion, on the same screen, that found the outer defect a fourth link earlier.
-     Nothing about the desktop changes: at any width that fits, a wrapping flex row lays out
-     identically to a non-wrapping one. */
-  flex-wrap: wrap;
-}
-
-/* `:not(.app-nav-group-aside)` rather than a rule below that undoes this one for the aside.
-   The undo was written first and it silently lost: an adjacent-sibling selector outranks a
-   single class, so the aside kept the hairline and the 24px gap it was supposed to trade for
-   the push, and the bar looked exactly as it had. Excluding it here means the two rules cannot
-   fight, which is worth more than the shorter selector. */
-.app-nav-group + .app-nav-group:not(.app-nav-group-aside) {
-  margin-left: var(--s5);
-  padding-left: var(--s5);
-  border-left: 1px solid var(--line);
-}
-
-/* Not the owner's work at all, and drawn where the eye goes last. `margin-left: auto` rather
-   than a fixed gap so the bar's slack collects here: everything the owner reaches on a rhythm
-   stays packed at the reading edge however wide the window is. */
-.app-nav-group-aside {
-  margin-left: auto;
-}
-
-/* ---- the links ----
- *
- * Metadata, not prose: a view's name is a label, so it takes the utility face uppercase and
- * tracked, the same treatment .specimen-caption gives a state name in the gallery.
- *
- * 13px, UP FROM 11px, and the change is worth its own paragraph because 11px was legal. The
- * Fulfillment floor is 20px and governs that view alone, so nothing was violated — but 11px
- * put the one element that appears on EVERY screen at the bottom of the app's whole type
- * scale, below every label it sits above. 13px is a size already in this file (the hash
- * literal on the panel below has always been drawn at it) and is still firmly owner density:
- * the padding stays on the 4–16 end of the spacing scale, the target stays under 44px, and
- * nothing here drifts toward the standards written for his device.
- */
-.app-nav-link {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: var(--s3) 0;
-
-  /* Pulls the link's own bottom rule down onto the nav's hairline instead of stacking a
-     second line above it. Without this the current-route marker reads as a double rule. */
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
-
-  font-family: var(--util);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-decoration: none;
-}
-
-/* Colour only. --hover is row hover ONLY (tokens.css says so in as many words), and these
-   are not rows — a background swatch behind a nav link would be the first use of that token
-   outside the case it was derived for. */
-.app-nav-link:hover {
-  color: var(--ink);
-}
-
-/* ---- the current route ----
- *
- * THREE CHANNELS, AND NOT ONE OF THEM IS COLOUR ALONE. It was ink against muted siblings plus
- * a 1px rule, which is a 4% difference in weight-per-pixel across a row of six at 11px: the
- * marker was there and you had to look for it, which is the same as not having one on a screen
- * you glance at to answer "where am I".
- *
- *   colour   --ink against --muted siblings, as before
- *   weight   600 against 500 — the utility face carries 400/500/600, so this is the top of
- *            what tokens.css locked rather than a value invented here
- *   rule     2px --ink under the label, doubled from 1px, sitting on the nav's own hairline
- *
- * Weight and rule are the two that survive a monochrome print or a colour-blind reader, which
- * is why the answer to "the marker is weak" was a second and third channel rather than a
- * louder colour.
- *
- * DELIBERATELY NOT --accent, and this is the constraint that shaped the whole rule.
- * docs/DESIGN.md gives accent exactly two jobs — outline and text weight for "the system is
- * unsure", solid fill for "there is one thing to do" — and "which screen am I on" is neither.
- * A third job is how a colour stops meaning anything.
- */
-.app-nav-link[aria-current='page'] {
-  color: var(--ink);
-  font-weight: 600;
-  border-bottom-color: var(--ink);
-}
-
-/* Focus ring in --ink for the same reason. The conventional choice is the accent colour,
-   but accent's outline weight already carries a meaning here, and a keyboard user tabbing
-   through the chrome is not being told the system is unsure about anything.
-
-   IT DREW AS A SQUARE BLACK BOX CLAMPED TO THE TEXT, and the owner named it on 2026-08-23.
-   Two things did that, both of them local overrides of a rule `base.css` already gets
-   right. The offset was NEGATIVE, so the ring was painted 2px INSIDE the link — and this
-   link is `display: flex` with `padding: 12px 0`, no horizontal padding at all, so inside
-   means straight through the ends of the word. And there was no radius, against a token
-   block that publishes exactly one (4px, everywhere), so it met the text in four sharp
-   corners.
-
-   `base.css` states the fix in its own comment — "`outline-offset` is positive so the ring
-   clears the 4px radius instead of clipping the corners of the control it is announcing" —
-   and that sentence was true of everything except the two rules that overrode it. This is
-   now that rule, with the horizontal breathing room the ring needs to stand off a word
-   rather than box it in. The colour is unchanged: it was argued, and it was not the
-   problem. */
-.app-nav-link:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-/* ---- the key chips ----
- *
- * `,C`, `,R` and so on: docs/DESIGN.md's "Every choice shows its key", applied to the one
- * owner-side control in the product that had no key at all. The chord and why it is a chord
- * are at `LEADER` in App.tsx.
- *
- * THE WHOLE SEQUENCE ON EVERY CHIP, not the letter with the leader named once somewhere else.
- * Two characters each is the cost, and what it buys is a nav that needs no legend: seven chips
- * sharing a first character teach the prefix by repetition, in the place you are already
- * looking. The alternatives were a lone `,` chip at the head of the bar, which is a punctuation
- * mark floating in chrome with nothing to attach it to, and revealing the chips only while the
- * leader is armed — which hides the keys from everyone who has not already found them, and a
- * key nobody can discover is a key nobody presses.
- *
- * The same 10px bordered chip .capture-key, .review-key and .pull-preview-key draw, because a
- * key off a keyboard should look the same everywhere in this app. Tracking is reset to zero
- * and the uppercasing is dropped: the label above is a name and takes the nav's tracking, and
- * this is two literal characters, where tracking is what makes `,C` read as two separate
- * things. `--muted` on `--bg` is 7.76:1, which is the pairing every label in this nav already
- * sits on — no new pairing is introduced by anything in this file.
- */
-/* ONE CHIP LOOK, TWO SELECTORS, AND THE SECOND ONE IS NOT `.app-nav-key` FOR A REASON. The
-   step's chips (App.tsx's `.app-nav-step`) are the same key off the same keyboard and take the
-   same 10px bordered chip — but the armed rule below selects `.app-nav-key`, and the step is
-   never armed. Wearing the class would make Cmd-arrow light up whenever a comma had just been
-   pressed, which is a chip claiming a state it does not have. */
-.app-nav-key,
-.app-nav-step kbd {
-  font-family: var(--util);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-
-  padding: 0 var(--s1);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  color: var(--muted);
-}
-
-/* ---- the step's chips (D51) ----
- *
- * `⌘←` `⌘→`, drawn once at the end of the ring they walk — App.tsx's `STEP_HINT_GROUP` puts
- * them there rather than at the end of the bar, where `.app-nav-group-aside`'s auto margin
- * would have stood them beside the two routes the step cannot reach.
- *
- * `⌘` AND NOT `Ctrl` OR BOTH. The handler takes either, because Ctrl is what a machine that
- * is not a Mac would press; this rig is a Mac (D13), and a chip naming two modifiers is a chip
- * that has to be read rather than recognised.
- *
- * `align-items: center` because `.app-nav-group` stretches its children and a chip stretched to
- * the full 46px of the bar is a box around nothing. The 4px gap is `--s1`, the same step that
- * sits between a route's name and its own chip. */
-.app-nav-step {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-}
-
-/* ARMED, AND THE CHROME SAYS SO. The leader eats exactly one following keystroke wherever it
-   lands, so the state has to be visible or it is a trap — this is the whole disclosure, and it
-   is why the rule at `useLeader` can be "the next press belongs to the nav and to nothing
-   else" with no exceptions to explain. The chips come up to --ink and the bar's own hairline
-   with them: peripheral, on an element already on every screen, and gone again on the next
-   press or after CHORD_MS. Nothing moves, so nothing reflows underneath the armed state. */
-.app-nav[data-armed] {
-  border-bottom-color: var(--ink);
-}
-
-.app-nav[data-armed] .app-nav-key {
-  color: var(--ink);
-  border-color: var(--ink);
-}
-
-/* ---- the unresolved-hash panel ----
- *
- * THE ONE PAGE IN THIS APP DRAWN TO THE FULFILLER'S FLOORS ON THE OWNER'S GROUND. Every other
- * screen knows whose it is; this one is whatever the browser was pointed at, on either device,
- * and App.tsx's `hasChrome` explains at length why the safe reading of that is his. This is
- * what the reading costs in CSS, and it is not much: one page, rendered rarely, drawn large.
- *
- *   body      >= 20px on every text node        the .no-such-view-say and .no-such-view-path rules
- *   targets   >= 44px, >= 12px apart            56px min-height, 24px flex gap
- *   contrast  >= 7:1                            --ink on --bg is 19.4:1, on --surface 19.9:1,
- *                                               on --hover 18.3:1
- *   jargon    no SKU, CSV, import, sync,        the copy carries none of them; "screen" and
- *             batch, queue, staged              "address" are the words a person uses
- *
- * Read as a floor and not as a second design language. Same palette, same three faces, same
- * 4px radius, same hairline — docs/DESIGN.md's "one system, two densities", with this page
- * sitting at the far end of the one scale rather than in a world of its own.
- */
-
-.no-such-view {
+/* ---- sidebar ------------------------------------------------------------- */
+.bn-side {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-
-  /* 24px between everything, which is both the gap that reads as separate paragraphs at this
-     size and — where it falls between the two doors — the tap-target spacing floor with
-     twice the room to spare. One value doing both jobs honestly; it is not a coincidence
-     worth engineering around, but it is worth not breaking. */
-  gap: var(--s5);
-
-  padding: var(--s7) var(--s6);
-
-  /* Narrower than the 60ch this panel used to be. 60ch is a reading measure for the owner's
-     16px body; at 20px it is most of a laptop and the doors below stretch with it into two
-     bars nobody would read as buttons. */
-  max-width: 44ch;
+  gap: var(--bn-2);
+  padding: var(--bn-3);
+  background: var(--bn-surface);
+  border-right: 1px solid var(--bn-line);
+  overflow: hidden;
+  z-index: 20;
 }
+:root[data-theme='dark'] .bn-side { background: var(--bn-surface-2); }
 
-/* Display face, which is otherwise unused on this side of the app — this is the one owner-side
-   page allowed to look like a page rather than a tool, because the person reading it may not
-   know what the tool is. 700 at 32px clears the face's own floor (700/800 only, >= 20px). */
-.no-such-view-title {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 32px;
-  line-height: 1.2;
-  color: var(--ink);
-}
-
-/* Body face at --ink rather than --muted, and the change from --muted is deliberate: muted is
-   for metadata beside something else, and there is nothing else on this page. These two
-   sentences are the whole message. 19.4:1 on --bg. */
-.no-such-view-say {
-  font-size: 20px;
-  color: var(--ink);
-}
-
-/* The hash itself is a literal string somebody typed or bookmarked, so it takes the utility
-   face: it is the one part of the message worth reading character by character, and the owner
-   is the one who will. Its own line rather than inline in the sentence, because a mono run
-   inside a 20px body line at this size fights the line it is in. */
-.no-such-view-path {
-  font-family: var(--util);
-  font-size: 20px;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-/* ---- the two doors ----
- *
- * A raised row with a hairline, which is what a choice looks like everywhere else in this app.
- * NOT AN ACCENT FILL: docs/DESIGN.md reserves the solid fill for "there is exactly one thing
- * to do", and this page has two answers because it genuinely does not know which of two people
- * is reading it. Filling one of them would be the shell asserting the very thing it just
- * admitted it cannot know.
- *
- * `stretch` rather than a content-width button, so both doors are the same width and neither
- * reads as the recommended one. At 44ch that is well under a thumb's reach on a phone and
- * still obviously a control on a laptop.
- */
-.no-such-view-door {
-  align-self: stretch;
+.bn-brand {
   display: flex;
   align-items: center;
-
-  min-height: 56px;
-  padding: var(--s3) var(--s5);
-
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-
-  font-size: 20px;
-  color: var(--ink);
+  gap: var(--bn-3);
+  padding: var(--bn-2);
+  border-radius: var(--bn-r-lg);
+  color: var(--bn-ink);
   text-decoration: none;
+  min-height: 48px;
+}
+.bn-brand:hover { text-decoration: none; background: var(--bn-surface-3); }
+.bn-brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
+.bn-brand-name {
+  font-family: var(--bn-font-display);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.bn-brand-tag { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-weight: 500; letter-spacing: 0.02em; white-space: nowrap; }
+
+.bn-side-collapse {
+  position: absolute;
+  top: 18px;
+  right: -1px;
+  transform: translateX(50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+  color: var(--bn-ink-3);
+  opacity: 0;
+  transition: opacity var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast);
+  z-index: 21;
+}
+.bn-side:hover .bn-side-collapse, .bn-side-collapse:focus-visible { opacity: 1; }
+.bn-side-collapse:hover { color: var(--bn-ink); }
+
+.bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
+.bn-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.bn-nav-group + .bn-nav-group { margin-top: var(--bn-3); }
+.bn-nav-group-label {
+  padding: var(--bn-1) var(--bn-3);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bn-ink-4);
+  white-space: nowrap;
+  transition: opacity var(--bn-t) var(--bn-ease);
 }
 
-/* --hover is row hover only, and a door IS a row: a full-width raised choice with one label,
-   which is the case that token was derived for. --ink on --hover is 18.3:1. */
-.no-such-view-door:hover {
-  background: var(--hover);
+.bn-nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  height: 36px;
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r);
+  color: var(--bn-ink-2);
+  font-size: var(--bn-fs-md);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-nav-link:hover { background: var(--bn-surface-3); color: var(--bn-ink); text-decoration: none; }
+:root[data-theme='dark'] .bn-nav-link:hover { background: var(--bn-surface); }
+.bn-nav-link .bn-icon { flex: none; color: var(--bn-ink-3); transition: color var(--bn-t-fast), transform var(--bn-t) var(--bn-ease-spring); }
+.bn-nav-link:hover .bn-icon { color: var(--bn-ink); }
+.bn-nav-link[aria-current='page'] { color: var(--bn-accent); background: var(--bn-accent-tint); font-weight: 600; }
+.bn-nav-link[aria-current='page'] .bn-icon { color: var(--bn-accent); }
+.bn-nav-link[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--bn-accent);
+}
+.bn-nav-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--bn-t) var(--bn-ease); }
+.bn-nav-link .bn-kbd { opacity: 0.55; transition: opacity var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease); }
+.bn-nav-link:hover .bn-kbd, .bn-nav[data-armed='true'] .bn-nav-link .bn-kbd { opacity: 1; }
+.bn-nav[data-armed='true'] .bn-nav-link .bn-kbd { color: var(--bn-accent); border-color: var(--bn-accent); }
+.bn-nav-badge { margin-left: auto; }
+
+/* Rail (collapsed) */
+.bn-shell[data-rail='true'] .bn-side { padding: var(--bn-3) var(--bn-2); }
+.bn-shell[data-rail='true'] .bn-side .bn-brand { justify-content: center; padding: var(--bn-2) 0; }
+.bn-shell[data-rail='true'] .bn-side .bn-brand-text,
+.bn-shell[data-rail='true'] .bn-side .bn-nav-text,
+.bn-shell[data-rail='true'] .bn-side .bn-nav-link .bn-kbd,
+.bn-shell[data-rail='true'] .bn-side .bn-nav-badge,
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot-text { display: none; }
+.bn-shell[data-rail='true'] .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
+.bn-shell[data-rail='true'] .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; margin: 0 auto; }
+.bn-shell[data-rail='true'] .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot { align-items: center; }
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn { width: 40px; padding: 0; }
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
+
+/* Tooltip for rail links */
+.bn-nav-link[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 4px 8px;
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-size: var(--bn-fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
+  z-index: 30;
+}
+:root[data-theme='dark'] .bn-nav-link[data-tip]::after { background: var(--bn-surface-3); color: var(--bn-ink); box-shadow: var(--bn-shadow-2); }
+.bn-shell[data-rail='true'] .bn-side .bn-nav-link[data-tip]:hover::after { opacity: 1; transform: translateY(-50%); }
+
+/* Sidebar footer */
+.bn-side-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding-top: var(--bn-2);
+  border-top: 1px solid var(--bn-line);
+}
+.bn-side-foot .bn-btn { justify-content: flex-start; box-shadow: none; background: transparent; color: var(--bn-ink-2); font-weight: 500; height: 34px; }
+.bn-side-foot .bn-btn:hover { background: var(--bn-surface-3); color: var(--bn-ink); }
+.bn-side-foot .bn-btn .bn-icon { color: var(--bn-ink-3); }
+.bn-server {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  height: 34px;
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
+.bn-server[data-state='offline'] { color: var(--bn-danger); background: var(--bn-danger-tint); }
+.bn-server-detail { font-family: var(--bn-font-mono); font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+
+/* ---- mobile top bar + sheet ------------------------------------------------ */
+.bn-topbar { display: none; }
+@media (min-width: 768px) and (max-width: 1023px) {
+  .bn-shell, .bn-shell[data-rail='true'] { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  .bn-side { padding: var(--bn-3) var(--bn-2); }
+  .bn-side-collapse { display: none; }
+  .bn-side .bn-brand { justify-content: center; padding: var(--bn-2) 0; }
+  .bn-side .bn-brand-text, .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge, .bn-side .bn-side-foot-text { display: none; }
+  .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
+  .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0 auto; }
+  .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
+  .bn-side .bn-side-foot { align-items: center; }
+  .bn-side .bn-side-foot .bn-btn { width: 44px; height: 44px; padding: 0; }
+  .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
+  .bn-side .bn-nav-link[data-tip]:hover::after { opacity: 1; transform: translateY(-50%); }
+}
+@media (max-width: 767px) {
+  .bn-shell, .bn-shell[data-rail='true'] { grid-template-columns: minmax(0, 1fr); }
+  .bn-side { display: none; }
+  .bn-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: var(--bn-3);
+    height: var(--bn-topbar-h);
+    padding: 0 var(--bn-3) 0 var(--bn-4);
+    background: var(--bn-surface-glass);
+    backdrop-filter: saturate(1.4) blur(14px);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    border-bottom: 1px solid var(--bn-line);
+    padding-top: env(safe-area-inset-top);
+  }
+  .bn-topbar-title { font-family: var(--bn-font-display); font-weight: 700; font-size: var(--bn-fs-lg); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bn-topbar-brand { display: flex; align-items: center; justify-content: center; gap: var(--bn-2); min-width: 40px; min-height: 40px; margin-left: -7px; color: var(--bn-ink); text-decoration: none; font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); letter-spacing: -0.02em; }
+}
+.bn-drawer {
+  width: min(300px, 86vw);
+  display: flex;
+  flex-direction: column;
+  padding: var(--bn-4) var(--bn-3);
+  padding-top: calc(var(--bn-4) + env(safe-area-inset-top));
+}
+.bn-drawer .bn-nav-link { height: 44px; font-size: var(--bn-fs-base); }
+.bn-drawer .bn-nav-link .bn-kbd { opacity: 1; }
+.bn-drawer .bn-side-foot .bn-btn, .bn-drawer .bn-server { height: 44px; }
+.bn-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--bn-2) var(--bn-3); }
+
+/* ---- command palette ---------------------------------------------------------- */
+.bn-cmdk {
+  position: fixed;
+  z-index: 70;
+  left: 50%;
+  top: 14vh;
+  transform: translateX(-50%);
+  width: min(600px, calc(100vw - 32px));
+  border-radius: var(--bn-r-xl);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-3);
+  overflow: hidden;
+  animation: bn-cmdk-in var(--bn-t) var(--bn-ease-spring) backwards;
+}
+@keyframes bn-cmdk-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: translateX(-50%); }
+}
+.bn-cmdk[data-leaving] { animation: bn-cmdk-out var(--bn-t-fast) var(--bn-ease) forwards; pointer-events: none; }
+@keyframes bn-cmdk-out {
+  from { opacity: 1; transform: translateX(-50%); }
+  to { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.98); }
+}
+.bn-cmdk-input {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+}
+.bn-cmdk-input input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: var(--bn-fs-lg);
+  color: var(--bn-ink);
+  outline: none;
+}
+.bn-cmdk-input input::placeholder { color: var(--bn-ink-4); }
+.bn-cmdk-list { max-height: 50vh; overflow: auto; padding: var(--bn-2); }
+.bn-cmdk-group { padding: var(--bn-2) var(--bn-3) var(--bn-1); font-size: var(--bn-fs-2xs); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bn-ink-4); }
+.bn-cmdk-item {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  font-size: var(--bn-fs-base);
+  color: var(--bn-ink);
+  text-align: left;
+}
+.bn-cmdk-item .bn-icon { color: var(--bn-ink-3); }
+.bn-cmdk-item[aria-selected='true'] { background: var(--bn-accent-tint); color: var(--bn-ink); }
+.bn-cmdk-item[aria-selected='true'] .bn-icon { color: var(--bn-accent); }
+.bn-cmdk-item-hint { margin-left: auto; color: var(--bn-ink-4); font-size: var(--bn-fs-sm); }
+.bn-cmdk-foot { display: flex; gap: var(--bn-4); padding: var(--bn-2) var(--bn-4); border-top: 1px solid var(--bn-line); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+.bn-cmdk-empty { padding: var(--bn-6); text-align: center; color: var(--bn-ink-3); }
+
+/* ---- unknown route ---------------------------------------------------------------- */
+.no-such-view { display: grid; place-items: center; min-height: 70vh; padding: var(--bn-6); }
+.no-such-view-card { max-width: 480px; width: 100%; }
+.no-such-view-path { font-family: var(--bn-font-mono); font-size: 20px; color: var(--bn-ink-2); overflow-wrap: anywhere; }
+
+/* THE FLOORS APPLY HERE, AND ONLY HERE, ON THE OWNER'S GROUND. This is the one page the
+   shell renders without knowing whose device is showing it — a mistyped hash on the
+   Fulfiller's tablet lands on exactly this markup — so docs/DESIGN.md's 20px body and 44px
+   targets govern it rather than the owner's dense scale. */
+.no-such-view .bn-lede { font-size: 20px; color: var(--bn-ink-2); }
+.no-such-view-doors .no-such-view-door { font-size: 20px; min-height: 56px; }
+.no-such-view-doors { display: grid; gap: var(--bn-2); margin-top: var(--bn-4); }
+.no-such-view-door {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  min-height: 52px;
+  padding: 0 var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  color: var(--bn-ink);
+  font-size: var(--bn-fs-base);
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.no-such-view-door:hover { text-decoration: none; transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+.no-such-view-door .bn-icon { color: var(--bn-accent); }
+.no-such-view-door .bn-icon:last-child { margin-left: auto; color: var(--bn-ink-4); }
+
+/* Legacy names some specs look for. */
+.app-nav { display: contents; }
+
+/* ---- server banner ------------------------------------------------------------------ */
+.bn-banner {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-4);
+  background: var(--bn-danger);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-md);
+  font-weight: 500;
+  animation: bn-fade var(--bn-t) var(--bn-ease-out) backwards;
+}
+.bn-banner .bn-btn { background: color-mix(in srgb, currentColor 16%, transparent); color: inherit; box-shadow: none; }
+.bn-banner .bn-btn:hover { background: color-mix(in srgb, currentColor 28%, transparent); }
+@media (max-width: 767px) { .bn-banner { top: var(--bn-topbar-h); } }
+
+/* ---- which-key overlay ------------------------------------------------------------- */
+.bn-whichkey {
+  position: fixed;
+  z-index: 65;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  padding: var(--bn-3) var(--bn-4) var(--bn-4);
+  border-radius: var(--bn-r-xl);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  box-shadow: var(--bn-shadow-3);
+  overflow: hidden;
+  max-width: calc(100vw - 32px);
+}
+:root[data-theme='dark'] .bn-whichkey { background: var(--bn-surface); color: var(--bn-ink); }
+.bn-whichkey-title { font-size: var(--bn-fs-sm); opacity: 0.7; margin-bottom: var(--bn-2); display: flex; align-items: center; gap: 6px; }
+.bn-whichkey-grid { display: grid; grid-template-columns: repeat(5, auto); gap: var(--bn-2) var(--bn-4); }
+.bn-whichkey-item { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-md); font-weight: 500; white-space: nowrap; }
+.bn-whichkey .bn-kbd { background: transparent; color: var(--bn-accent); border-color: currentColor; }
+.bn-whichkey-drain { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--bn-accent); transform-origin: left; animation: bn-drain linear forwards; }
+@media (max-width: 640px) { .bn-whichkey-grid { grid-template-columns: repeat(2, auto); } }
+
+/* ---- bottom tab bar (phones) --------------------------------------------------------- */
+.bn-tabbar { display: none; }
+@media (max-width: 767px) {
+  .bn-shell-main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .bn-tabbar {
+    position: fixed;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    height: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--bn-surface-glass);
+    backdrop-filter: saturate(1.4) blur(14px);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    border-top: 1px solid var(--bn-line);
+  }
+  .bn-tab-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--bn-ink-3);
+    font-size: var(--bn-fs-2xs);
+    font-weight: 600;
+    text-decoration: none;
+    transition: color var(--bn-t-fast) var(--bn-ease);
+  }
+  .bn-tab-link .bn-icon { transition: transform var(--bn-t) var(--bn-ease-spring); }
+  .bn-tab-link:active .bn-icon { transform: scale(0.9); }
+  .bn-tab-link[aria-current='page'] { color: var(--bn-accent); }
+  .bn-tab-link[aria-current='page'] .bn-icon { transform: translateY(-1px); }
 }
 
-.no-such-view-door:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
+/* A keycap is a promise about a keyboard; a phone has none. */
+@media (hover: none) and (pointer: coarse) {
+  .bn-drawer .bn-kbd, .bn-nav-link .bn-kbd { display: none; }
+}
+
+
+/* ---- the Fulfiller's crash page ------------------------------------------------------
+   No wordmark, no error text, no link out. docs/DESIGN.md forbids any route out of his
+   view, and a crash is the moment he is most likely to press whatever is offered — so the
+   only control here reopens the screen he is already on. Drawn to his floors. */
+.crash-plain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-5);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--bn-7) var(--bn-6);
+  text-align: center;
+  background: var(--bn-bg);
+}
+.crash-plain-title {
+  font-family: var(--bn-font-display);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--bn-ink);
+}
+.crash-plain-say { font-size: 22px; color: var(--bn-ink-2); max-width: 24ch; }
+.crash-plain-door {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 68px;
+  padding: 0 var(--bn-8);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-accent-press);
+  color: var(--bn-on-accent);
+  font-size: 22px;
+  font-weight: 700;
+}
+:root[data-theme='dark'] .crash-plain-door { background: var(--bn-accent-hover); color: var(--bn-bg); }
+
+/* ---- the shortcuts sheet ------------------------------------------------------------------
+   A reference, so it is read rather than scanned: caps in one aligned column, the sentence in
+   the other, and a line under every heading saying where those keys are alive. Two columns on
+   a wide window, one on a phone, and the body is the only thing that scrolls so the heading
+   and the way out never leave. */
+.app-keys {
+  display: flex;
+  flex-direction: column;
+  width: min(940px, calc(100vw - 32px));
+  max-height: min(840px, calc(100vh - 48px));
+  overflow: hidden;
+}
+.app-keys:focus-visible { outline: none; }
+
+.app-keys-head {
+  padding: var(--bn-5) var(--bn-6) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+}
+.app-keys-head-top { display: flex; align-items: center; gap: var(--bn-4); }
+.app-keys-title {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-tight);
+  color: var(--bn-ink);
+}
+.app-keys-title .bn-icon { color: var(--bn-accent); }
+.app-keys-lede { margin-top: var(--bn-2); max-width: 78ch; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.app-keys-close { margin-left: auto; flex: none; }
+
+.app-keys-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--bn-5) var(--bn-6) var(--bn-6);
+  columns: 2;
+  column-gap: var(--bn-8);
+}
+.app-keys-group {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  margin-bottom: var(--bn-6);
+}
+.app-keys-group-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--bn-fs-base);
+  font-weight: 700;
+  color: var(--bn-ink);
+}
+.app-keys-group-title .bn-icon { color: var(--bn-ink-3); }
+.app-keys-where {
+  margin: 4px 0 var(--bn-3);
+  font-size: var(--bn-fs-xs);
+  line-height: 1.5;
+  color: var(--bn-ink-4);
+}
+.app-keys-goto {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--bn-accent);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.app-keys-goto:hover { text-decoration: underline; }
+
+/* One grid for the whole group, so every cap in it lines up on the same edge. */
+.app-keys-rows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px var(--bn-4);
+  align-items: baseline;
+}
+.app-keys-row { display: contents; }
+.app-keys-caps { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.app-keys-cap { display: inline-flex; align-items: center; gap: 4px; }
+.app-keys-join { font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); }
+.app-keys-does { font-size: var(--bn-fs-md); line-height: 1.45; color: var(--bn-ink-2); }
+.app-keys-when { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+
+/* A run of caps long enough to be its own line takes the full width rather than stretching
+   the column every other row is measured against. */
+.app-keys-row-wide > dt, .app-keys-row-wide > dd { grid-column: 1 / -1; }
+.app-keys-row-wide > dd { margin-top: -3px; }
+
+.app-keys-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  padding: var(--bn-3) var(--bn-6);
+  border-top: 1px solid var(--bn-line);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-4);
+}
+.app-keys-foot .bn-kbd { margin-right: 3px; }
+.app-keys-foot-end { margin-left: auto; white-space: nowrap; }
+
+@media (max-width: 1023px) {
+  .app-keys-body { columns: 1; }
+}
+@media (max-width: 767px) {
+  .app-keys { width: auto; max-height: 92dvh; }
+  .app-keys-head { padding: var(--bn-4) var(--bn-4) var(--bn-3); }
+  .app-keys-body { padding: var(--bn-4); }
+  .app-keys-foot { padding: var(--bn-3) var(--bn-4); }
+}
+@media (max-width: 480px) {
+  /* The caps keep their own column even here — the widest run in any group is about 100px,
+     which still leaves a readable measure, and stacking every row made the nine jump keys
+     eighteen lines long. */
+  .app-keys-rows { gap: 9px var(--bn-3); }
+  .app-keys-foot-end { display: none; }
 }

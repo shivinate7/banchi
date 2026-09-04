@@ -1,105 +1,60 @@
-/* The search field, at both densities.
- *
- * One palette, three faces, one 4px radius — docs/DESIGN.md's "one system, two densities",
- * with `.search-field-owner` and `.search-field-fulfiller` changing scale and nothing else.
- * Every colour comes from a token; the `raw colour` row of scripts/docs-audit.py blocks the
- * alternative.
- *
- * NO SEARCH ICON, AND ITS ABSENCE IS NOT AN OVERSIGHT. There is no icon anywhere in this
- * product: the separation mechanism is a hairline, the metadata register is mono, and an icon
- * set would be a fourth visual vocabulary to keep in step for a control that already carries a
- * label saying what it is. Adding one is a change to docs/DESIGN.md, not a CSS decision.
- */
+/* The search field, at both densities. `.search-field-owner` is the dense one with a key to
+   get there; `.search-field-fulfiller` is 56px tall with a visible 20px label and no keys. */
 
 .search-field {
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-width: 0;
 }
 
-/* The box, not the input. The border lives out here so the key chip can sit inside it and the
-   whole thing reads as one control — an input with a chip floating beside it is two things.
-
-   --field, NOT --line, AND THIS IS THE STRONGEST CASE FOR THAT TOKEN. An empty search field is
-   a rectangle and nothing else; at the hairline's 1.24:1 the only thing locating it was the
-   placeholder inside it. It is also the one input in the product BOTH personas touch, and the
-   Fulfiller is the one who benefits most — his view's whole design is about being findable at
-   reading distance. Nothing in app/tests/fulfillment.spec.ts measures a border. */
+/* The box is the control: the border lives out here so the icon and the key chip sit inside
+   it and the whole thing reads as one field. */
 .search-field-box {
+  position: relative;
   display: flex;
   align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-
-  /* THE BOX IS THE CONTROL, SO THE BOX HAS TO READ AS ONE. The border lives out here (see
-     above), which means the padding either side of the input — 8px on the owner's, 16px on
-     his — is part of what LOOKS like a text field and was reading `default` while the
-     middle read `text`. One rectangle, two answers, and the seam was invisible until the
-     pointer crossed it.
-
-     `text` and not `pointer`, because what this is is a place to type. It is also the
-     honest half of a known limit: a click on the padding does not move the caret, since
-     nothing here focuses the input on the box's behalf. Saying `text` describes the region
-     correctly; saying `pointer` would promise a click target that is not there.
-
-     BOTH SKINS, DELIBERATELY. This is the one input in the product both personas touch, and
-     the Fulfiller's is the 56px one — the larger the box, the more of it is padding, so the
-     mismatch was worse on his screen than on the owner's. Nothing in
-     app/tests/fulfillment.spec.ts measures a cursor; his nine floors are text size, target
-     size, contrast, jargon and reachability, and none of them is touched. */
+  gap: var(--bn-2);
+  background: var(--bn-surface);
+  border: 1px solid var(--bn-line-strong);
+  border-radius: var(--bn-r);
   cursor: text;
+  transition: border-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
 }
-
-/* The edge darkens under the pointer (D50). `border-color` only — never width, which
-   would reflow the box and move a target under a finger already travelling toward it.
-   Focus is an outline drawn
-   outside this border, so the two compose rather than compete. */
-.search-field-box:hover {
-  border-color: var(--field-hover);
-}
-
-/* --ink and not --accent. Accent has exactly two jobs, "the system is unsure" and "there is
-   exactly one thing to do", and "your caret is here" is neither. The same argument
-   Fulfillment.css makes for its row focus, applied to the one control on the screen. */
+.search-field-box:hover { border-color: var(--bn-ink-4); }
 .search-field-box:focus-within {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
+  border-color: var(--bn-accent);
+  box-shadow: 0 0 0 3px var(--bn-accent-tint-2);
 }
+
+.search-field-icon { flex: none; color: var(--bn-ink-4); pointer-events: none; }
+.search-field-box:focus-within .search-field-icon { color: var(--bn-accent); }
 
 .search-field-input {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--body);
+  font-family: var(--bn-font-ui);
   background: transparent;
-  color: var(--ink);
+  color: var(--bn-ink);
   border: 0;
 }
+.search-field-input:focus { outline: none; }
+.search-field-input::placeholder { color: var(--bn-ink-4); }
+.search-field-input::-webkit-search-cancel-button { appearance: none; }
 
-/* The box already draws the focus ring for both of them; a second ring inside it would be two
-   rectangles a pixel apart. */
-.search-field-input:focus {
-  outline: none;
+.search-field-clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--bn-r-sm);
+  color: var(--bn-ink-3);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-
-.search-field-input::placeholder {
-  color: var(--muted);
-}
-
-/* type="search" draws a browser cancel widget in WebKit at a size and colour nothing here
-   chose, and `make screenshot` renders in Chromium while the owner works in another browser —
-   a control that differs between the render and the screen breaks the comparison loop
-   docs/DESIGN.md calls mandatory. Cleared by retyping, the way every other field in this app
-   is. */
-.search-field-input::-webkit-search-cancel-button {
-  appearance: none;
-}
+.search-field-clear:hover { background: var(--bn-surface-2); color: var(--bn-ink); }
 
 /* ---- the owner: dense, and a key to get here with ---- */
-
-/* Visually hidden, still read aloud, still associated. Not `display: none`, which removes it
-   from the accessibility tree — the whole point is that the label exists for the reader who
-   cannot see the placeholder. */
 .search-field-owner .search-field-label {
   position: absolute;
   width: 1px;
@@ -108,53 +63,49 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-
 .search-field-owner .search-field-box {
-  padding: 0 var(--s2);
-  min-height: 36px;
+  padding: 0 var(--bn-2) 0 var(--bn-3);
+  min-height: var(--bn-control-h-lg);
 }
-
 .search-field-owner .search-field-input {
-  font-size: 15px;
-  padding: var(--s2) var(--s1);
+  font-size: var(--bn-fs-base);
+  padding: var(--bn-2) 0;
 }
-
-/* The chip, in the utility face like every other key hint in this app. Owner-side only —
-   PullConfirm.css carries the same rule and the same reason. */
 .search-field-owner .search-field-key {
-  font-family: var(--util);
-  font-size: 10px;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 2px 5px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 20px;
-  text-align: center;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid var(--bn-line-strong);
+  border-bottom-width: 2px;
+  background: var(--bn-surface);
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--bn-ink-3);
 }
+.search-field-owner .search-field-box:focus-within .search-field-key { opacity: 0; }
 
 /* ---- the Fulfiller: 24-64, and every floor in the constraints table ---- */
-
-/* His label is visible. It is an instruction rather than a name, and a placeholder that
-   vanishes the moment he types is not an instruction — it is the one that disappears exactly
-   when somebody who is unsure would want to re-read it. */
 .search-field-fulfiller .search-field-label {
-  font-family: var(--body);
+  font-family: var(--bn-font-ui);
   font-size: 20px;
   font-weight: 700;
   line-height: 1.45;
-  color: var(--ink);
-  margin-bottom: var(--s3);
+  color: var(--bn-ink);
+  margin-bottom: var(--bn-3);
 }
-
-/* 56px, not the 44px floor. 44 is what a target may not go below, not what a target should be
-   for a reader with reading glasses under a desk lamp — Fulfillment.css sets its rows the same
-   way. */
 .search-field-fulfiller .search-field-box {
-  padding: 0 var(--s4);
+  padding: 0 var(--bn-4);
   min-height: 56px;
+  border-radius: var(--bn-r-lg);
 }
-
 .search-field-fulfiller .search-field-input {
   font-size: 24px;
-  padding: var(--s3) var(--s1);
+  padding: var(--bn-3) var(--bn-1);
 }

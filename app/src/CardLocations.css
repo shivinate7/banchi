@@ -1,552 +1,403 @@
 /* One card's copies and where they are, at both densities.
- *
- * ONE STYLESHEET FOR TWO SKINS, split by `.card-locations-owner` and
- * `.card-locations-fulfiller`. docs/DESIGN.md: one system, two densities — the owner's screens
- * use the 4-16 end of the spacing scale and his use 24-64, over one palette, three faces and a
- * single 4px radius. Two stylesheets would be two things to keep in step, and the day they
- * drift is the day one persona sees a colour the other does not.
- *
- * EVERY FLOOR IN THE FULFILLMENT CONSTRAINTS TABLE APPLIES TO THE `-fulfiller` HALF: 20px on
- * any text node, 32px on any position label, 44px tap targets 12px apart, 7:1 on any text
- * against any ground, a photo at least 320px on its short edge. NONE OF THOSE NUMBERS IS
- * RESTATED HERE AS THOUGH THIS FILE CHECKED THEM — docs/DESIGN.md asks for Playwright
- * assertions against the rendered page, not prose, and a comment claiming 44px is prose. What
- * is below is the rule that intends to satisfy them.
- *
- * The separation mechanism is the 1px --line hairline and nothing else, everywhere. No shadow,
- * no second border weight, no tinted header strip — docs/DESIGN.md built one of those, looked
- * at it, and rejected it by name.
- */
+   `.card-locations-owner` is the dense list; `.card-locations-fulfiller` carries every floor
+   in the Fulfillment constraints table (20px text, 32px position labels, 44px targets, a
+   photo at least 320px on its short edge). */
 
-.card-locations {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
+.card-locations { min-width: 0; }
 .card-locations-rows,
-.card-locations-copies {
-  list-style: none;
-}
+.card-locations-copies { list-style: none; }
 
-/* ---------------------------------------------------------------- the owner: dense, 4-16 ---- */
+/* ------------------------------------------- the reading age beside a live count ---- */
+
+/* Quieter than the figure it qualifies, always. It answers "how old is this number", so it
+   must never compete with the number. Used here, in the card facts and in the box sheet. */
+.inv-readage {
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.inv-readage.is-unread { color: var(--bn-ink-4); font-style: italic; }
+
+/* ---------------------------------------------------------------- the owner: dense ---- */
 
 .card-locations-owner {
-  padding: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
 }
 
-/* A ROW, NOT A COLUMN, since the card name left it (2026-08-26). What is left is two metadata
-   lines — `sku …` and the three counts — and stacking two 17px lines under a deleted heading
-   spent 84px to say what fits on one. Measured: 84px -> 30px, which is most of an 83px copy row.
-
-   `space-between` so the identity reads from the left and the counts from the right, which is
-   the same left-label / right-detail shape the box operations took the same day. It wraps rather
-   than shrinking either: at 864px they still share a line, and below that the counts drop under
-   the sku instead of the two colliding.
-
-   THE DISPLAY-FACE RULE THAT LIVED HERE IS GONE WITH THE ELEMENT. It argued that a card name is
-   the one thing on an owner-side row that is a name rather than a number — correct, and now
-   carried by `.browse-fact dd` in the band above, which is body face at 15px. The Fulfiller's
-   `.card-locations-name` at 32px display is a different rule further down this file and is
-   untouched. */
 .card-locations-owner .card-locations-head {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title title'
+    'stats stats'
+    'meta counts';
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2) var(--s5);
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
+  gap: var(--bn-3) var(--bn-4);
 }
+/* Says what the list beneath is, so the copy the walk is standing on appearing BOTH in the
+   card above and as a row here reads as hero-and-list rather than as an accident. */
+.card-locations-owner .card-locations-title { grid-area: title; margin-bottom: calc(-1 * var(--bn-1)); }
 
-/* Mono carries all metadata — reason codes, set and collector number, counts, positions. The
-   body face is reserved for sentences a human reads, and `sku 1234 · sv1 · 031/197` is not
-   one. */
-.card-locations-owner .card-locations-meta,
-.card-locations-owner .card-locations-counts {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.card-locations-owner .card-locations-counts {
+/* The three figures: how many copies exist, how many are still in the boxes, and how many
+   this store believes TCGplayer is holding. The third carries its reading age. */
+.card-locations-stats {
+  grid-area: stats;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s3);
+  align-items: flex-start;
+  gap: var(--bn-3) var(--bn-6);
 }
-
-/* The two numbers the owner opened the screen for sit at full ink; the three-way breakdown
-   beside them stays muted. Both are on screen at once on purpose — a single "listed" number
-   would hide an import that was staged and never moved live. */
-.card-locations-owner .card-locations-listed,
-.card-locations-owner .card-locations-onhand {
-  color: var(--ink);
-}
-
-/* THE ROW. Four columns: where it is, how far in, what state it is in, what can be done.
-   The bar's column is the flexible one because it is the only cell whose meaning comes from
-   its width — the others carry text that either fits or wraps.
-
-   `min-height` rather than `height`: the budget is about 56px, and a box with a name draws a
-   second line in the first cell. Growing is the right failure, because the alternatives are
-   truncating a position label or a box name, and both are things somebody carries to a shelf. */
-/* A WRAPPING FLEX ROW, NOT A FOUR-COLUMN GRID, and the change is measured rather than tidy.
-   The grid put the place cell in `minmax(0, 17rem)` and gave every spare pixel to the bar, so
-   in the ~460px column D31's merge drew this list in, the position label was squeezed to 72px
-   and wrapped onto three lines — a 117px row against a ~56px budget, with the one thing
-   somebody carries to a shelf as the part that got broken.
-
-   THAT 460px IS THE MEASUREMENT'S OWN WIDTH AND NOT A STANDING FACT ABOUT THIS COLUMN, which is
-   worth saying because the number has moved twice since without this rule needing to change. It
-   dates from the 1240px page cap that `Inventory.css` records deleting; the column has been
-   ~534px since, and ~574px since the three-column rebuild of 2026-08-25 widened the card's own
-   track. The design below is what makes those moves free — see the next paragraph.
-
-   Flex fixes the priority as well as the width. The label takes the growth and the bar is
-   capped, which is the right order: the label is the payload and the bar is a picture of it.
-   When the four parts no longer fit, the row wraps to two lines instead of shredding the label
-   — so the same component is honest in the owner's 500px detail column and in the full-width
-   panel it used to have, with no breakpoint to keep in step.
-
-   `state` takes a fixed basis rather than its content width so the words still line up as a
-   column across rows, which is most of what the grid was buying. */
-.card-locations-owner .card-locations-row {
-  display: flex;
-  flex-wrap: wrap;
+.card-locations-owner .card-locations-stat { gap: 1px; }
+.card-locations-owner .card-locations-stat .bn-stat-value {
+  display: inline-flex;
   align-items: center;
-  gap: var(--s3);
-  min-height: 56px;
-  padding: var(--s2) var(--s2);
-  border-bottom: 1px solid var(--line);
+  gap: 6px;
+  font-size: var(--bn-fs-2xl);
+  line-height: 1.05;
 }
-
-/* THE BAR TAKES ITS OWN LINE UNDER THE ROW, and this replaces a measured 6rem cap with a
-   measured full width. The cap was right while the bar carried one caption and it stopped being
-   right the day it carried two (PositionBar.tsx: the section scale).
-
-   THE MEASUREMENT, at 1440x900 in the detail column D31's merge draws this list in. The row is
-   474px and the bar's cell was 96px, so `#1 of 53 so far` already wrapped onto two lines — 29px
-   for one line of text — and `Section 1 · card 1 of 25 slots` wrapped onto FOUR, taking the row
-   to 183px against its ~56px budget. Two honest scales illegibly stacked is worse than one, so
-   the choice was to widen the cell or drop a scale, and the owner's ruling was "yes, while
-   retaining box depth too".
-
-   `order` RATHER THAN A DIFFERENT DOM ORDER. The row already wraps, and a 100% basis on the
-   second of four children would have pushed the state and the action onto a THIRD line. Ordered
-   last it wraps to exactly two: where it is, what state, what can be done — then the picture of
-   it, full width, both captions on one line each. Nothing moves for a screen reader, which
-   reads the DOM and gets the bar where it always was.
-
-   The reason the old cap gave for keeping the bar small still holds and is now satisfied by
-   geometry rather than by a cap: the position label is the string somebody carries to a shelf
-   and it must not break, and on its own line the bar cannot take a pixel from it. */
-.card-locations-owner .card-locations-row > .position-bar {
-  flex: 1 1 100%;
-  order: 1;
+.card-locations-owner .card-locations-stat .bn-stat-label {
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
 }
+/* Live is vermilion — the one register in the product that means "out there right now". The
+   FIGURE carries it; the label stays in the ordinary voice so the strip is not two-thirds red. */
+.card-locations-owner .card-locations-live .bn-stat-value { color: var(--bn-live); }
+.card-locations-owner .card-locations-live .bn-dot { flex: none; }
 
-/* THE BAR JOINS THE ROW INSTEAD OF TAKING A LINE OF ITS OWN, once the row is wide enough to hold
-   all four parts. Measured: the row goes 144px to 82px and eleven copies go 1598px to 902px — a
-   43% cut with nothing removed, every bar still drawn, both captions still one line.
-
-   A CONTAINER QUERY AND NOT A MEDIA QUERY, which is this file's own standing ask: the rule above
-   is a wrapping flex precisely so the component is "honest in the owner's detail column and in
-   the full-width panel it used to have, WITH NO BREAKPOINT TO KEEP IN STEP". Asking the copies
-   node how wide it actually is keeps that promise; asking the viewport would break it the first
-   time the column moved, which it has now done three times in two days.
-
-   880px SINCE 2026-08-29, AND 860 HAD BECOME A CLIFF POINTING THE WRONG WAY. The paragraph below
-   is the reasoning as it stood when the bar took four stacked full-width lines; the rule beneath
-   this one now folds each caption beside its track, so the NARROW branch is 114px and the
-   crossing has to beat that rather than the 144px it was written against. Measured across the
-   container sweep after that change: 820 -> 114px, **860 -> 126px**, 880 -> 85px, 900+ -> 82px.
-   At 860 the wide branch was making the row TWELVE PIXELS TALLER at the exact width it engaged.
-
-   BE HONEST THAT THIS IS UNREACHABLE TODAY. The copies container is 612px at 1440 and 528px at
-   1280, so `min-width` needs roughly a 1980px viewport to fire at all. 860 was chosen because
-   "columns 2+3 measure 862px at Playwright's 1280" — a layout D40 deleted — so the number was
-   inherited from a dead premise, which is the same defect the position label's own comment was
-   found to have. Fixed rather than left, because a threshold that is wrong and dormant is worse
-   than one that is wrong and visible: nothing will fail while it waits.
-
-   The original argument, kept because its SHAPE is still right — pick the width where the branch
-   starts being better, not the width where it becomes ideal:
-
-   860px, NOT the ~940 where all four parts fit on one line. 940 is where the row becomes ideal;
-   860 is where it stops being what it is today and starts being better — and columns 2+3 measure
-   862px at Playwright's 1280, so the branch the owner sees at 1440 is at least rendered by the
-   test viewport. That is the same argument this repo makes for putting the page breakpoint at
-   1240 rather than at the owner's 1440. Between 860 and 940 the row is place+bar, then
-   state+action: two lines, still better than three. */
-@container copies (min-width: 880px) {
-  .card-locations-owner .card-locations-row > .position-bar {
-    flex: 1 1 20rem;
-    order: 0;
+.card-locations-owner .card-locations-meta {
+  grid-area: meta;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* SKU, set code and number are machine strings; the condition is a phrase. */
+.card-locations-owner .card-locations-meta-mono { font-family: var(--bn-font-mono); }
+.card-locations-owner .card-locations-cond { font-family: var(--bn-font-ui); }
+.card-locations-owner .card-locations-cond::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+/* The stages: figures in Inter, tabular. Only the SKU line above is a machine string.
+   INK-3, NOT INK-4: it is a sentence a person reads, and at 11px ink-4 measures 3.64:1 in the
+   light theme — under AA for body text. ink-4 is for a mark, not for a line of prose. */
+.card-locations-owner .card-locations-counts {
+  grid-area: counts;
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
+/* Narrow: the identity keeps every character and the stage triple drops under it, rather than
+   the SKU line being cut to fit the least useful three numbers on the row. */
+@container copies (max-width: 479px) {
+  .card-locations-owner .card-locations-head {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'title'
+      'stats'
+      'meta'
+      'counts';
+    gap: var(--bn-2);
   }
+  .card-locations-owner .card-locations-meta { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .card-locations-owner .card-locations-counts { white-space: normal; }
+  .card-locations-stats { gap: var(--bn-3) var(--bn-5); }
 }
 
-/* BELOW 860 THE CAPTIONS SIT BESIDE THEIR TRACKS INSTEAD OF UNDER THEM (2026-08-29, D40 amended).
-   The rule above is about whether the bar joins the row. This one is about the bar's own shape
-   once it has taken a line of its own, and it is what makes the narrow column affordable.
+/* ---- the rows ---- */
+/* EVERY copy, drawn the same way. Nothing here folds a row away, reorders one, or dresses one
+   up as the recommended stop: the owner picks the copy he reaches for. */
+.card-locations-owner .card-locations-rows {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  overflow: hidden;
+}
 
-   THE MEASUREMENT. In the three-column layout the copies column gives this list 586px, and the
-   row came to exactly `8 + place 51 + gap 12 + bar 65 + 8 = 144px`. The bar is four stacked
-   full-width children — box track 16, its caption 14, then the section block's 8px track and its
-   own 14px caption — on lines 570px wide carrying captions that measure ~120px and ~200px. Two
-   thirds of that block was empty. Beside their tracks the same four parts are two rows instead of
-   four: bar 65 -> 34px, row 144 -> 114px, copies visible on landing 3.61 -> 4.56, page 1274 ->
-   1092, and the landing void 26.30% -> 22.32%.
-
-   WHY NOT THE OBVIOUS FIX, AND THIS IS THE HALF WORTH KEEPING. Lowering the 860 threshold so the
-   bar rejoins the row was tried first and REFUSED: it does shorten the row to 129px, and it gets
-   there by squeezing `.card-locations-place` to 231px, which WRAPS THE POSITION LABEL. This file
-   says a few rules up that the label "is the string somebody carries to a shelf and it must not
-   break". A row 15px shorter that lies about where a card is, is not the trade. So the height
-   comes out of the bar's own dead space instead, and the label's line is untouched at 586px.
-
-   BOTH SCALES SURVIVE INTACT, which is the constraint `docs/DESIGN.md` puts on this component:
-   the box track stays 16px and the section track 8px, the section block keeps its indent, and the
-   captions keep their `#` and `Section` prefixes. All three cues that tell the two scales apart
-   are still drawn — what changed is where the words sit, not what they say.
-
-   `white-space: nowrap` ON THE CAPTIONS because they are now in an `auto` track beside a
-   flexible one: without it the grid would shrink the caption to its longest word rather than
-   shrinking the track, and the two-line caption is the thing this rule exists to delete. */
-@container copies (max-width: 879px) {
-  .card-locations-owner .card-locations-row > .position-bar-owner {
-    display: grid;
+/* One copy: where it is (label + neighbours), the lens, the state, the action. The lens takes
+   a line of its own by default — it is the one cell whose meaning comes from its width — and
+   joins the row only where the container is wide enough to hold all four parts. */
+.card-locations-owner .card-locations-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'place state action'
+    'bar bar bar';
+  align-items: center;
+  gap: var(--bn-3) var(--bn-4);
+  padding: var(--bn-3) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+.card-locations-owner .card-locations-row.is-nobar {
+  grid-template-areas: 'place state action';
+}
+/* Narrow — and this is most of the time, because the pane is one column of a three-column
+   screen. The address takes the whole line, the state and the action drop beneath it, and the
+   lens takes the last. Anything tighter and the box's own name is clipped to `UNL R…`, which
+   is the one part of the address a hand actually navigates by. */
+@container copies (max-width: 619px) {
+  .card-locations-owner .card-locations-row {
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: var(--s2);
-    row-gap: var(--s1);
+    grid-template-areas:
+      'place place'
+      'state action'
+      'bar bar';
+    row-gap: var(--bn-2);
   }
-
-  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-track {
-    grid-column: 1;
+  .card-locations-owner .card-locations-row.is-nobar {
+    grid-template-areas:
+      'place place'
+      'state action';
   }
-
-  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-text {
-    grid-column: 2;
-    white-space: nowrap;
-  }
-
-  /* The section scale keeps its own row and repeats the pattern one level in, so the indent that
-     distinguishes it from the box scale is preserved rather than flattened into the same line. */
-  .card-locations-owner .card-locations-row > .position-bar-owner > .position-bar-zoom {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    column-gap: var(--s2);
-  }
-
-  .card-locations-owner
-    .card-locations-row
-    > .position-bar-owner
-    > .position-bar-zoom
-    > .position-bar-text {
-    white-space: nowrap;
-  }
+  /* NOT `justify-self: start`: that sizes the cell to its content and lets a long marker run
+     out under the sale control beside it (measured: a 211px state cell in a 110px track). */
+  .card-locations-owner .card-locations-state { justify-self: stretch; justify-content: flex-start; }
 }
+.card-locations-owner .card-locations-row:last-child { border-bottom: 0; }
+.card-locations-owner .card-locations-row:hover { background: var(--bn-surface-3); }
 
-.card-locations-owner .card-locations-row > .card-locations-state,
-.card-locations-owner .card-locations-row > .card-locations-gone {
-  flex: 0 0 4.5rem;
+/* The copy the walk is standing on. A NEUTRAL rail and a neutral ground: this says "you are
+   looking at this one", and deliberately not "take this one" — the accent tint it used to
+   wear read as a recommendation the owner ruled against. */
+.card-locations-owner .card-locations-row.is-current {
+  background: var(--bn-surface-2);
+  box-shadow: inset 3px 0 0 0 var(--bn-ink-4);
 }
+.card-locations-owner .card-locations-row.is-current:hover { background: var(--bn-surface-2); }
+.card-locations-owner .card-locations-viewing { color: var(--bn-ink-2); }
+.card-locations-owner .card-locations-row.is-gone .card-locations-place { opacity: 0.7; }
 
-.card-locations-owner .card-locations-row > .card-locations-action {
-  flex: 0 0 auto;
-  margin-left: auto;
+/* An open order has already named this copy. Marked, and still pressable: a walk-in sale is
+   recorded here, and `Mark sold` never disappears. */
+.card-locations-owner .card-locations-claim {
+  max-width: 100%;
+  min-width: 0;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  transition: transform var(--bn-t-fast) var(--bn-ease), filter var(--bn-t-fast) var(--bn-ease);
 }
-
-.card-locations-owner .card-locations-row:last-child {
-  border-bottom: 0;
+/* The order number is 21 characters and a phone row is 110px. Below the width that can hold
+   it the pill is the mark alone — `Wanted` — and the number is in the title, on the location
+   card above, and one press away on the order screen. */
+.card-locations-owner .card-locations-claim-id {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--bn-font-mono);
+  font-weight: 500;
+  opacity: 0.85;
 }
+/* 470px is where the marker's track stops being 110px and starts being ~285: measured, not
+   guessed. Below it the pill is the mark alone. */
+@container copies (min-width: 470px) {
+  .card-locations-owner .card-locations-claim-id { display: inline; }
+}
+.card-locations-owner .card-locations-claim:hover { text-decoration: none; transform: translateY(-1px); }
 
-/* Row hover, which is the only thing --hover exists for. bg and surface are 1.5% apart, so
-   neither can serve as a hover state for the other — which is why this token was locked. */
-.card-locations-owner .card-locations-row:hover {
-  background: var(--hover);
+@container copies (min-width: 760px) {
+  .card-locations-owner .card-locations-row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(160px, 1fr) auto auto;
+    grid-template-areas: 'place bar state action';
+    column-gap: var(--bn-5);
+  }
+  .card-locations-owner .card-locations-row.is-nobar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: 'place state action';
+  }
 }
 
 .card-locations-owner .card-locations-place {
+  grid-area: place;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  /* Takes the growth: see the row above. 12rem is the basis at which a full position label
-     ("Box 1 · Section 1 · Card 1") sits on one line in the utility face. */
-  flex: 1 1 14rem;
+  gap: 4px;
   min-width: 0;
 }
-
-/* The position label. Mono because docs/DESIGN.md gives every number in the product to Martian
-   Mono, and because it must not shift width between rows — which is the whole reason a list of
-   positions is readable as a column at all. Allowed to wrap at the separators rather than
-   truncate: a hidden digit is the digit that decides which slot gets opened. */
-/* THE SITE RULE ONLY, SINCE 2026-08-29 (D41, amended). The shape is `PositionLabel`'s; what this
-   file chooses is `--pos-slot`, and 28px is derived twice over. It is under the free ceiling —
-   the two-line path is 33.9px, so any figure up to 33.9/1.05 = 32.3px costs the row nothing, and
-   the sweep confirms it: 16/20/24/28/32 all measure 114.17px against a 114.19px baseline, 36
-   costs +3.9/row and 44 costs +12.3/row and drops a copy off the fold. And it is subordinate to
-   the card band 500px to the left, which draws the SAME fact at 44px — 44:28 is 1.57 and keeps
-   the band the dominant instance of this idiom, where 44:32 at 1.375 does not.
-
-   OWNER SKIN ONLY. The prefix is this file's existing two-skin guard and it is the SECOND line of
-   defence; the first is that `FulfillerCard` never calls the component. */
-.card-locations-owner .card-locations-label {
-  font-family: var(--util);
-  color: var(--ink);
-  letter-spacing: 0;
-  --pos-slot: 28px;
-  font-size: var(--pos-slot);
-  line-height: 1.3;
-  overflow-wrap: break-word;
-}
-
-/* What the owner calls the box. A label for humans, never an identifier — quieter than the
-   position it sits under, because the position is the thing you walk with. */
-/* D30's neighbours on a copy row. One step below the band's register, for the reason
-   `--pos-slot` is 28px here and 44px there: this is a LIST, and a treatment that is right
-   once is not automatically right seven times down a column. 10px is the key register this
-   row already uses for `.card-locations-state`, and 12px keeps the name a step under the
-   band's 13px without dropping below what the row's other body text draws.
-
-   NO MARGIN AND NO MEASURE. The place cell is a flex column with its own 2px gap, and the
-   cell's width IS the measure — a `max-width` here would be a second opinion about a track
-   the container query already decides. */
-.card-locations-owner .nb {
-  --nb-key: 10px;
-  --nb-name: 12px;
-}
-
-.card-locations-owner .card-locations-boxname {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  overflow-wrap: break-word;
-}
-
-/* The pipeline's own state word, shown verbatim so that what is on screen greps to what the
-   run said. Muted, because it is the least surprising thing in the row: nearly every copy is
-   in the same state as the one above it, and a column of identical words at full ink is the
-   dense-grey-table failure docs/DESIGN.md names by the front door. */
-.card-locations-owner .card-locations-state,
-.card-locations-owner .card-locations-gone {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.card-locations-owner .card-locations-action {
-  justify-self: end;
-}
-
-/* No accent fill: a list of copies is a screen with several things to do, and docs/DESIGN.md
-   reserves the solid fill for a screen with exactly one. A hairline border and ink text is the
-   quiet form every other owner-side control in this app uses. */
-.card-locations-owner .card-locations-sell {
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
+.card-locations-owner .card-locations-row > .position-bar { grid-area: bar; }
+.card-locations-owner .card-locations-state {
+  grid-area: state;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
   white-space: nowrap;
 }
-
-.card-locations-owner .card-locations-sell:hover:not(:disabled) {
-  background: var(--hover);
+.card-locations-owner .card-locations-action {
+  grid-area: action;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
 }
 
-/* Disabled exists on this side and only on this side — PullConfirm's own prop is documented
-   owner-side only, and the Fulfiller's skin below guards instead. --muted on --surface. */
-.card-locations-owner .card-locations-sell:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-/* ----------------------------------------------------- the Fulfiller: generous, 24-64 ---- */
-
-.card-locations-fulfiller {
-  padding: var(--s5);
-  display: flex;
-  flex-direction: column;
-  /* 24px, which is both the bottom of this view's spacing range and twice the 12px the
-     constraints table requires between tap targets. One value doing two jobs, larger wins. */
-  gap: var(--s5);
-}
-
-.card-locations-fulfiller .card-locations-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-.card-locations-fulfiller .card-locations-name {
-  font-family: var(--display);
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-/* Every sentence on his side, at one size. There is deliberately no second body size and no
-   muted variant of it: a "secondary" sentence on a screen with one user is a sentence somebody
-   decided he did not need to read, and the way to have that opinion is to delete the sentence.
-   --ink on --surface, 19.4:1. */
-.card-locations-fulfiller .card-locations-say {
-  font-family: var(--body);
-  font-size: 20px;
-  font-weight: 400;
-  line-height: 1.45;
-  color: var(--ink);
-}
-
-.card-locations-fulfiller .card-locations-copies {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s5);
-}
-
-/* One copy, one card, one control. Padded at the 24px end rather than at the 44px tap floor:
-   44px is what a target may not go below, not what a target should be for a reader with
-   reading glasses under a desk lamp. */
-.card-locations-fulfiller .card-locations-copy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s5);
-  padding: var(--s5);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* Short edge >= 320px, which the aspect ratio makes the width. Sized from the card rather than
-   from the viewport: 63x88mm is the shape of every card this product will ever hold, so the
-   box is the right shape before the photo loads and the layout does not jump when it does.
-
-   `min-width: min(320px, 100%)` is the floor and the honest limit in one line. The photo holds
-   320px wherever the column allows it and shrinks rather than overflowing where it does not —
-   which means the containing screen owns the padding budget, exactly as Fulfillment.css does
-   with the one breakpoint it measured a phone against. */
-.card-locations-fulfiller .card-locations-photo {
+/* The position label. `--pos-slot` is the one number this site chooses. */
+.card-locations-owner .card-locations-label {
   display: block;
-  width: min(360px, 100%);
-  min-width: min(320px, 100%);
-  aspect-ratio: 63 / 88;
-  object-fit: cover;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  color: var(--bn-ink);
+  --pos-slot: 22px;
+  --pos-gap: var(--bn-3);
+  font-size: var(--pos-slot);
+  line-height: 1.2;
+  min-width: 0;
+}
+.card-locations-owner .card-locations-label .position-parts { flex: 1 1 auto; min-width: 0; }
+/* Inside the walk-to the label does NOT grow: the arrow belongs beside the address it opens,
+   not stranded at the far edge of a full-width row. */
+.card-locations-owner .card-locations-goto .position-parts { flex: 0 1 auto; }
+.card-locations-owner .nb {
+  --nb-key: 11px;
+  --nb-name: 12px;
+}
+.card-locations-owner .card-locations-boxname {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  letter-spacing: 0.02em;
+  color: var(--bn-ink-3);
+  overflow-wrap: anywhere;
 }
 
-/* The position label, and the payload of his whole screen. Mono for tabular figures that do
-   not shift width between copies, at the size the constraints table puts on a position label
-   rather than at the size body text sits at. Wrapping allowed at the separators — shrinking it
-   below the floor is forbidden and truncating hides the digit that decides which slot. */
-.card-locations-fulfiller .card-locations-place-large {
-  font-family: var(--util);
-  font-variant-numeric: tabular-nums;
-  font-size: 32px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--ink);
-  overflow-wrap: break-word;
-}
-
-.card-locations-fulfiller .card-locations-action {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-}
-
-/* The solid fill is the loudest thing he ever sees and it belongs to PullConfirm, which brings
-   its own rules. All this does is let it fill the card it sits in, the way the Fulfillment
-   view's does. */
-.card-locations-fulfiller .pull-confirm {
-  width: 100%;
-}
-
-/* THE COPY THE WALK IS POINTING AT (D31's merge). One row of this list is the card whose
-   photograph is on screen beside it, and a group of four identical copies is unreadable without
-   that mark: "which of these am I looking at" decides which slot a hand goes to.
-
-   Ink against muted plus weight, never a ground — tokens.css says why in one line: --bg and
-   --surface are 1.5% apart, so neither can mark anything against the other, and a selected row
-   that is only a shade lighter is a selected row nobody can find. The left rail is the same
-   2px ink rail the box strip and the capture track already draw, so this is one idiom.
-
-   Owner skin only: the Fulfiller's view has no walk and no cursor, and `currentKey` never
-   reaches it. */
-.card-locations-owner .card-locations-row[aria-current='true'] {
-  box-shadow: inset 2px 0 0 0 var(--ink);
-}
-
-/* The walk's cursor recoloured the label; the label is a container now, so it aims at the ink. */
-.card-locations-owner .card-locations-row[aria-current='true'] .position-num {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* THE WALK-TO, WHERE THE CALLER OFFERS ONE (`onGoTo`, D45). A TRANSPARENT WRAPPER AROUND
-   `PositionLabel` AND NOT A SECOND TREATMENT OF THE ADDRESS — that component owns every pixel of
-   the string at all six owner sites, and a rule here that touched its size, its colour or its
-   two ranks would make the copies list a seventh. So this takes the button chrome back off and
-   states nothing about the label: `font: inherit` because a button does not inherit one, and
-   `--pos-slot` and the site rule on `.card-locations-label` above reach the component through
-   it unchanged.
-
-   `display: block` and a full width because `.position-parts` is a flex box and the cell it
-   lays out in is `.card-locations-place`'s column. An inline-block would shrink-wrap the row
-   and put the slot figure and the path on a measure neither was tuned at.
-
-   THE AFFORDANCE IS HOVER AND FOCUS, WHICH IS THE ONE THING DEFENSIBLE HERE. A persistent
-   underline down a column of positions would be the newspaper-link register docs/DESIGN.md
-   rejects, and an accent fill is reserved for a screen with exactly one thing to do. The row
-   already lights on hover — this adds the underline that says the address itself is the target,
-   and `:focus-visible` gives the keyboard the same fact rather than leaving it to the ring
-   alone.
-
-   ON THE SLOT AND NOT ON THE WHOLE BLOCK, which was looked at and is the louder of the two. The
-   stacked address is three lines — the figure, and the two muted path lines under `slot` lead —
-   so underlining the parts drew three rules through a block whose own design demotes two of
-   them. `PositionLabel` already says which part is the anchor; the affordance follows it.
-   Under `.card-locations-goto` so it cannot reach the same component at the five sites that
-   offer no walk-to, and on the parts' own child so it tracks the text rather than the
-   full-width box — an underline running the width of the cell reads as a rule, not a link. */
-
-/* `text-align: left` because a button centres its text and every other line in this cell is
-   ragged-right against the same edge. */
+/* The walk-to: a transparent wrapper around the label, with an arrow that says the address is
+   the target. */
 .card-locations-owner .card-locations-goto {
   appearance: none;
-  display: block;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--bn-2);
   width: 100%;
   margin: 0;
-  padding: 0;
+  padding: 2px 4px;
+  margin-left: -4px;
   border: 0;
+  border-radius: var(--bn-r-sm);
   background: none;
   font: inherit;
   color: inherit;
   text-align: left;
   min-width: 0;
   cursor: pointer;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.card-locations-owner .card-locations-goto:hover { background: var(--bn-accent-tint); }
+.card-locations-owner .card-locations-goto-icon {
+  color: var(--bn-ink-4);
+  align-self: center;
+  transition: color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t) var(--bn-ease-spring);
+}
+.card-locations-owner .card-locations-goto:hover .card-locations-goto-icon,
+.card-locations-owner .card-locations-goto:focus-visible .card-locations-goto-icon {
+  color: var(--bn-accent);
+  transform: translate(1px, -1px);
+}
+.card-locations-owner .card-locations-goto:hover .position-num,
+.card-locations-owner .card-locations-goto:focus-visible .position-num { color: var(--bn-accent); }
+
+/* A thumb presses the walk-to, AND the claim pill — it is a link to the order screen, not a
+   badge, so it takes the same floor as the `Mark sold` button beside it (`Button size="sm"`
+   is `--bn-control-h-sm`, which the phone tokens raise to 40px). 28px is a mouse size. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .card-locations-owner .card-locations-goto { min-height: var(--bn-control-h-lg); padding-top: 4px; padding-bottom: 4px; }
+  .card-locations-owner .card-locations-claim {
+    height: var(--bn-control-h-sm);
+    min-height: var(--bn-control-h-sm);
+    padding: 0 var(--bn-3);
+  }
+  .card-locations-owner .card-locations-claim .bn-icon { width: 14px; height: 14px; }
 }
 
-.card-locations-owner .card-locations-goto:hover .position-slot,
-.card-locations-owner .card-locations-goto:focus-visible .position-slot {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+
+/* ----------------------------------------------------- the Fulfiller: generous, 24-64 ---- */
+
+.card-locations-fulfiller {
+  padding: var(--bn-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-6);
+  background: var(--bn-surface);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
 }
+
+.card-locations-fulfiller .card-locations-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+}
+
+.card-locations-fulfiller .card-locations-name {
+  font-family: var(--bn-font-display);
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--bn-ink);
+}
+
+/* Every sentence on his side, at one size, at full ink. */
+.card-locations-fulfiller .card-locations-say {
+  font-family: var(--bn-font-ui);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--bn-ink);
+}
+
+.card-locations-fulfiller .card-locations-copies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-6);
+}
+
+.card-locations-fulfiller .card-locations-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-6);
+  padding: var(--bn-6);
+  background: var(--bn-surface);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+}
+
+/* Short edge >= 320px, which the aspect ratio makes the width. */
+.card-locations-fulfiller .card-locations-photo {
+  display: block;
+  width: min(360px, 100%);
+  min-width: min(320px, 100%);
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  background: var(--bn-surface-2);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+}
+
+.card-locations-fulfiller .card-locations-place-large {
+  font-family: var(--bn-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--bn-ink);
+  overflow-wrap: break-word;
+}
+
+.card-locations-fulfiller .card-locations-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+}
+
+.card-locations-fulfiller .pull-confirm { width: 100%; }

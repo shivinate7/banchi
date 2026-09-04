@@ -444,3 +444,6 @@ Paldean
 unphotographed
 [Dd]ownsampl\w*
 dBase
+Banchi
+unrepresentable
+boolean

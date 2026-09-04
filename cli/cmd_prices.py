@@ -99,11 +99,18 @@ def _adopt(args, say) -> int:
 def _show(args, say) -> int:
     try:
         book = corpus.Corpus.read()
-    except decisions.MalformedDecisions as exc:
+    except (decisions.MalformedDecisions, ValueError) as exc:
+        # `ValueError` COVERS THE POLICY REFUSALS — `UnknownRule`, `UnknownBasis` and
+        # `InvalidThreshold` are all `ValueError`s and none is a `MalformedDecisions`, so this
+        # command answered a bad threshold with a traceback where `join` and `emit` answer it
+        # with a sentence. It is the one command whose whole job is showing you this file.
         say(f"{corpus.FILENAME} is unusable: {exc}")
         return 1
     say(f"{files.prices_path()}")
-    say(f"policy           rule={book.rule} basis={book.basis} sub_threshold={book.sub_threshold}")
+    say(
+        f"policy           rule={book.rule} basis={book.basis} "
+        f"threshold=${book.threshold} sub_threshold={book.sub_threshold}"
+    )
     for name, over in sorted(book.overrides.items()):
         say(f"  override       {name}: {over}")
     held = {sku: answer for sku, answer in book.answers.items() if answer.is_hold}

@@ -1,95 +1,49 @@
-/* The run status line on `#/inventory`, in the slot the run panel occupied until 2026-08-29.
- *
- * ONE ROW, AND IT MUST STAY ONE. The whole argument for the panel leaving this screen was that
- * it was 625px closed and 1143px with a run picked, in a column whose question is "where is this
- * card". Anything that grows here re-creates that. There is no state in this component that can
- * add a line: the sentence is one sentence and the link is one link. */
+/* The run status line under the box header on `#/inventory`. The status keeps its line; the
+   link drops to a second one, right-aligned, rather than eating the status it sits beside. */
 .boxruns {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-  margin-top: var(--s3);
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  align-items: center;
+  gap: var(--bn-1) var(--bn-2);
+  min-width: 0;
+  min-height: 28px;
 }
 
-/* A box number and a duration, so the utility face — docs/DESIGN.md gives every count and
-   position in the product to Martian Mono, and this line is both. */
 .boxruns-said {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.boxruns[data-live='true'] .boxruns-said { color: var(--bn-live); font-weight: 600; }
 
-/* NO FILL. docs/DESIGN.md reserves the solid accent for a screen with exactly one thing to do,
-   and this screen has a walk, a card, its copies and the box's own operations. It is drawn as
-   `.boxops-plain` is drawn one column over — same face, same size, same 32px — because the two
-   panels on this screen agreeing about how tall a control is was a finding worth keeping. */
+/* The link over to the pipeline, drawn as a small ghost button. */
 .boxruns-go {
+  flex: none;
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  gap: 5px;
+  height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2) 0 var(--bn-3);
+  border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-accent);
   text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
+.boxruns-go:hover { background: var(--bn-accent-tint); text-decoration: none; }
+.boxruns-go .bn-icon:first-child { color: var(--bn-accent); }
+.boxruns-go .bn-icon:last-child { color: var(--bn-ink-4); }
+.boxruns-go[aria-disabled='true'] { color: var(--bn-ink-4); pointer-events: none; }
 
-.boxruns-go:hover {
-  background: var(--hover);
-}
-
-/* `aria-disabled` RATHER THAN A MISSING href, and it is drawn as what it is. There is no box to
-   run before a shelf is picked, and this state lasts exactly as long as the first read of the
-   walk — absent-rather-than-disabled is the rule for a control that COMMITS something (the
-   spend button, the release), and this one navigates to a screen that is perfectly reachable
-   from the nav two lines up. */
-.boxruns-go[aria-disabled='true'] {
-  color: var(--muted);
-  pointer-events: none;
-}
-
-
-/* ============================================================================
-   IN THE HEADER ROW (2026-08-29)
-
-   `BoxBrowse` draws this component as a header item between the store count and the key hint.
-   There it is a run of text and a link on a line that already has three of those, so its own
-   panel chrome — surface, border, radius, padding, leading — would draw a box around one item
-   in an unboxed row and make the header two ranks deep.
-
-   `flex-wrap: nowrap` IS THE HALF THAT MATTERS, and it is D39's "it must never become two rows"
-   made structural rather than promised. In the old full-width slot wrapping was harmless; on a
-   shared line a wrap pushes the whole header to two rows and moves every other screen element
-   down. Measured, the widest realistic content is 487px into 905px of free header, so nowrap
-   never truncates at either 1440 or 1280 — but if a future string does overrun, a clipped
-   duration is the correct failure and a silently two-row header is not.
-
-   `margin-left: auto` COMES OFF `.boxruns-go`. In the panel it pushed the link to the far edge
-   of a full-width row; in the header that same declaration would shove the key hint off the
-   end, because the hint uses the identical trick to reach the right edge. Two `auto` margins on
-   one line is one too many.
-   ========================================================================== */
-.browse-controls > .boxruns {
-  flex-wrap: nowrap;
-  gap: var(--s3);
-  margin-top: 0;
-  padding: 0;
-  background: none;
-  border: 0;
-  border-radius: 0;
-}
-
-.browse-controls > .boxruns > .boxruns-go {
-  margin-left: 0;
+/* a thumb presses this one */
+@media (max-width: 767px) {
+  .boxruns { min-height: var(--bn-control-h-lg); }
+  .boxruns-go { height: var(--bn-control-h-lg); padding: 0 var(--bn-3) 0 var(--bn-4); font-size: var(--bn-fs-md); border-radius: var(--bn-r); }
 }

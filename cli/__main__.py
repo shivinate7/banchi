@@ -174,6 +174,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="one file per game, if Import to Staged refuses a multi-Product-Line file",
     )
+    # THE SECOND AXIS, AND IT IS A SPLIT RATHER THAN A FILTER. `--listed-only` above drops
+    # the sub-threshold rows; this one files them separately, which is what `emit` did by
+    # default until the owner asked for one spreadsheet. The two compose: both flags together
+    # write the listed file and say how many rows are waiting for a later press.
+    emit.add_argument(
+        "--split-threshold",
+        action="store_true",
+        help="the old pair back: import-listed.csv above the D9 threshold and "
+        "import-subthreshold.csv below it, instead of one import.csv",
+    )
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile
