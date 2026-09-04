@@ -249,7 +249,12 @@ link would have had to be 68px and `Runs` was 72.6.
 
 **That strip no longer exists.** D95's shell is a sidebar collapsing to a rail with a command
 palette beside it, where a nav item costs a row of vertical space rather than a share of one
-horizontal line, so the arithmetic above constrains nothing here any more. The placement did not
+horizontal line, so the arithmetic above constrains nothing here any more. Re-measured in a
+browser on 2026-09-04, at the owner's 1440x900: nine links, each 36px tall and 211px wide, in
+four groups on a 2px gap, running y=68 to y=537 with the sidebar foot ending at y=704 — **196px
+of slack, against the 38px a tenth link would cost**, and on a phone a nav route that is not one
+of the four tabs goes in the More drawer at no width cost at all. **A row would fit.** The
+placement did not
 change with it: this opens as a modal on `#/runs` from a header button beside the store-wide
 reconcile, a structural sibling of `app/src/LiveReconcile.tsx`, because both read the same live
 export and the order is the order of the work. What was a forced choice is a deliberate one.
@@ -354,11 +359,11 @@ one thing that *cannot* go wrong this way is the quantity: no file on this path 
 | decision | `pipeline/reprice.py` — pure, no I/O, no `store` import, no network |
 | command | `cli/cmd_reprice.py`, wired in `cli/__main__.py` |
 | routes | `GET/POST /pipeline/markdowns`, `POST /pipeline/markdowns/<stamp>/apply`, `GET /pipeline/markdowns/<stamp>/file` |
-| screen | a modal on `#/runs`, opened from `app/src/Runs.tsx`'s header beside the store-wide reconcile |
+| screen | `app/src/Markdown.tsx` — a sheet on `#/runs`, opened from `app/src/Runs.tsx`'s header beside the store-wide reconcile. No stylesheet of its own: the chrome is in `app/src/Runs.css` beside the composer's, and the primitives are the kit's |
 | output | `inventory/markdowns/<stamp>/` — `worklist.csv`, `report.txt`, `manifest.json`, then `import.csv`, `receipt.txt` |
 | answers | `inventory/prices.json`, via `pipeline/corpus.py` |
 | harness | `check_markdown` in `harness/tests/t7_store_and_seams.py` |
-| screen tests | a Playwright spec beside the other `#/runs` specs, run by `make design-check` and never at turn end |
+| screen tests | `app/tests/markdown.spec.ts`, run by `make design-check` and never at turn end |
 
 ## 9. What would reopen this
 

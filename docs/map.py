@@ -2222,7 +2222,7 @@ COMPONENTS = [
                                     "the order routes were ADDED and not their place in the "
                                     "table, which is why `route census` checks the counts and "
                                     "deliberately not these.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28", "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61", "D63", "D66", "D69", "D70", "D94", "D95"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28", "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61", "D63", "D66", "D69", "D70", "D94", "D95", "D100"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -2308,11 +2308,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D100"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D91", "D92", "D93"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D91", "D92", "D93", "D100"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme and the rail — and nothing else",
                                     "governed_by": ["D13", "D27", "D94", "D95"],
@@ -2883,9 +2883,9 @@ COMPONENTS = [
                                              "its own overflow because the report draws "
                                              "fixed-width columns a wrap would break.",
                                      "governed_by": ["D50", "D87"]},
-            "src/Runs.tsx": {"does": "#/runs: the page chrome, the box picker, the composer "
-                                     "and the store-wide reconcile, with RunPanel "
-                                     "beneath them. Owns the SCOPE and nothing else — a strip of "
+            "src/Runs.tsx": {"does": "#/runs: the page chrome, the box picker, the composer, the "
+                                     "store-wide reconcile and the stale-listing markdown, with "
+                                     "RunPanel beneath them. Owns the SCOPE and nothing else — a strip of "
                                      "boxes from GET /boxes, and the ticked selection handed over "
                                      "from #/inventory through runHandoff.ts, validated against "
                                      "the registry on arrival so a deleted box falls through to "
@@ -2897,7 +2897,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D100"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -2905,7 +2905,7 @@ COMPONENTS = [
                                      "No fill on the selected chip — the solid accent is reserved "
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
-                             "governed_by": ["D5", "D33", "D38", "D39"]},
+                             "governed_by": ["D5", "D33", "D38", "D39", "D100"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -2955,15 +2955,47 @@ COMPONENTS = [
                                          "nothing in reachability. Both forms take a drop as well "
                                          "as a click.",
                                  "governed_by": ["D5", "D33", "D94"]},
-            "src/runsOverlay.ts": {"does": "dialog focus for the two runs overlays — the composer "
-                                           "and the store-wide reconcile sheet: focus lands "
+            "src/Markdown.tsx": {"does": "THE STALE-LISTING MARKDOWN (D100), the second sheet off "
+                                         "the Runs header and a structural clone of "
+                                         "LiveReconcile.tsx — same bn-sheet/bn-scrim shell, same "
+                                         "runsOverlay focus trap, same open/onClose contract. "
+                                         "Three steps and each press is ABSENT until the read "
+                                         "before it has answered, which is D33's gate applied "
+                                         "twice: to the press that writes a worklist and to the "
+                                         "one that writes the file the operator uploads. The "
+                                         "footer carries whichever of the three is next. The "
+                                         "export is HELD so the write sends the same bytes the "
+                                         "preview described, LiveReconcile's rule and it matters "
+                                         "more here — a survey about one file and a worklist "
+                                         "written from another would make the numbers on screen "
+                                         "about something else. Both consoles are RunsLog wells "
+                                         "and neither is summarised (D33). BESIDE THE RECONCILE "
+                                         "AND NOT ON A ROUTE, which App.tsx's ROUTES table "
+                                         "records as a judgement rather than the nav measurement "
+                                         "D100 argued from: that measurement was over the "
+                                         "horizontal strip D95 deleted, and a tenth sidebar link "
+                                         "would now fit. Says two things in its own words that no "
+                                         "spec can say for it — that nothing is deleted at "
+                                         "TCGplayer to lower a price, and that the age it ranks "
+                                         "on is OWNERSHIP age.",
+                                 "governed_by": ["D7", "D9", "D13", "D33", "D49", "D86", "D87", "D94", "D95", "D100"],
+                                 # `app/tests/markdown.spec.ts` is the check the hard rule says
+                                 # does not otherwise exist — it runs under `make design-check`,
+                                 # not at turn end, so it is named here in prose rather than in
+                                 # `tested_by`. It has NO stylesheet of its own on purpose: the
+                                 # PR this came from carried a 253-line one written against the
+                                 # legacy alias variables, and the chrome lives in Runs.css with
+                                 # the composer's, in `--bn-*` only.
+                                 },
+            "src/runsOverlay.ts": {"does": "dialog focus for the three runs overlays — the composer, "
+                                           "the store-wide reconcile and the markdown sheet: focus lands "
                                            "inside on open, Tab and Shift-Tab stay inside, focus "
                                            "goes back to the opener on close, Escape closes. Its "
                                            "own comment says what it is: the behaviour "
                                            "`InventoryOverlay` has, waiting to be promoted to a "
                                            "kit Dialog so the product has one of these rather "
                                            "than two.",
-                                   "governed_by": ["D5", "D33", "D87", "D94"]},
+                                   "governed_by": ["D5", "D33", "D87", "D94", "D100"]},
             # ---- the pricing screen (D49, 2026-08-30) ----
             #
             # The owner hand-prices and had never been asked what they wanted a listing price
@@ -3582,7 +3614,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -3652,6 +3684,24 @@ COMPONENTS = [
                         "ledger. The route is intercepted and its body read; no real request is "
                         "made and no store is touched.",
                 "governed_by": ["D7", "D33", "D87"]},
+            "tests/markdown.spec.ts": {
+                "does": "the stale-listing markdown in a browser (D100): that a person can open "
+                        "it from the Runs header at all, that it traps focus and Escape hands it "
+                        "back, that BOTH previews ask for no write, and that none of the three "
+                        "presses EXISTS before the read before it has answered — absent rather "
+                        "than disabled, D33's shape applied twice on one screen. Two routes are "
+                        "intercepted and their bodies read; no real request is made and no store "
+                        "is touched.",
+                "governed_by": ["D7", "D9", "D33", "D86", "D100"],
+                "note": "ONE OF ITS CASES IS A GEOMETRY ASSERTION AND IT WAS WRITTEN FROM A "
+                        "DEFECT. The survey console rendered 512px wide and 0px TALL — "
+                        "`.runslog` sets `overflow: hidden`, which makes a flex item's automatic "
+                        "minimum size zero, so the sheet's scrolling column squeezed it flat "
+                        "with every line of stdout still in the DOM. Content, class and "
+                        "`white-space: pre` all asserted true against it. Nothing that reads "
+                        "text could have caught it, which is the whole argument for measuring a "
+                        "box here rather than trusting one.",
+            },
             "tests/run-panel.spec.ts": {
                 "does": "the pipeline panel in a browser: that all four commands are reachable "
                         "from #/inventory at all, and that the money gate holds. The strongest "

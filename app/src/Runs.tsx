@@ -5,6 +5,7 @@ import { boxLabel } from './runScope'
 import type { BoxRecord } from './types'
 import { Button, PageHeader, Pill } from './kit'
 import { LiveReconcile } from './LiveReconcile'
+import { Markdown } from './Markdown'
 import { RunPanel } from './RunPanel'
 import { RunsComposer, type CartBox } from './RunsComposer'
 import { carriedScope, clearCarriedScope } from './runHandoff'
@@ -45,6 +46,7 @@ export function Runs() {
 
   const [composerOpen, setComposerOpen] = useState(false)
   const [syncOpen, setSyncOpen] = useState(false)
+  const [markdownOpen, setMarkdownOpen] = useState(false)
   const [openRun, setOpenRun] = useState<string | null>(() => runInHash())
 
   useEffect(() => {
@@ -150,6 +152,7 @@ export function Runs() {
 
   const closeComposer = useCallback(() => setComposerOpen(false), [])
   const closeSync = useCallback(() => setSyncOpen(false), [])
+  const closeMarkdown = useCallback(() => setMarkdownOpen(false), [])
 
   return (
     <main className="runs bn-page">
@@ -178,6 +181,14 @@ export function Runs() {
             <Button icon="upload" onClick={() => setSyncOpen(true)} aria-label="Reconcile the whole store">
               <span className="runs-hide-sm">Reconcile the store</span>
               <span className="runs-only-sm">Reconcile</span>
+            </Button>
+            {/* BESIDE THE RECONCILE AND AFTER IT (D100), because they read the SAME FILE —
+                TCGplayer's My Pricing export — and the order of the two buttons is the order
+                of the work: settle what TCGplayer holds, then decide about the part of it
+                that is not moving. */}
+            <Button icon="trendDown" onClick={() => setMarkdownOpen(true)} aria-label="Mark down stale listings">
+              <span className="runs-hide-sm">Mark down stale</span>
+              <span className="runs-only-sm">Mark down</span>
             </Button>
             <Button variant="primary" icon="zap" onClick={() => setComposerOpen(true)}>
               {cart.length > 1 ? `Identify ${cart.length} boxes` : 'Identify a box'}
@@ -211,6 +222,7 @@ export function Runs() {
       />
 
       <LiveReconcile open={syncOpen} onClose={closeSync} />
+      <Markdown open={markdownOpen} onClose={closeMarkdown} />
     </main>
   )
 }

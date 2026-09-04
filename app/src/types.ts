@@ -2553,3 +2553,51 @@ export type ShippingBatch = {
 }
 
 export type ShippingForgotten = { batch: string; forgotten: boolean }
+
+/* ------------------------------------------------- the stale-listing markdown (D100) */
+
+/** What `POST /pipeline/markdowns` is asked. Every field optional: the defaults live in
+ *  `cli/__main__.py` and are the same whichever door the command is reached through.
+ *
+ *  `percent` and `rule` are the same knob at two altitudes — `percent: 10` is
+ *  `rule: 'undercut:10'` spelled the way the screen spells it — and the server takes `rule`
+ *  where both arrive. `basis` is `asking | market | low`; `asking` is the operator's own live
+ *  price and is deliberately NOT one of `pricing.BASES`, because it is blank on almost every
+ *  row of an ordinary Filtered Export and a listing run reading it would silently write no
+ *  price at all. */
+export type MarkdownAsk = {
+  days?: number
+  percent?: number | string
+  rule?: string
+  basis?: 'asking' | 'market' | 'low'
+  above_market?: number | string
+  limit?: number
+  again?: boolean
+  write?: boolean
+}
+
+/** One press of either half. `console` is the command's own stdout, verbatim (D33).
+ *
+ *  `ok: false` IS AN ANSWER AND NOT AN ERROR, which is this seam's standing contract: a
+ *  worklist the command refuses — a raised price, a duplicated SKU — comes back 200 with the
+ *  reason in `console`. `stamp` names the markdown directory; null on a preview that made
+ *  none. */
+export type MarkdownAnswer = {
+  ok: boolean
+  exit_code: number
+  wrote: boolean
+  console: string
+  stamp: string | null
+}
+
+/** One markdown as the screen lists it. `files` is what the directory actually holds, so
+ *  whether the upload has been written is answered by `import.csv` being in it rather than by
+ *  a flag that could be true of a file somebody deleted. */
+export type MarkdownSummary = {
+  stamp: string
+  at: string | null
+  asked: Record<string, unknown>
+  source: string | null
+  skus: number
+  files: string[]
+}

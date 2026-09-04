@@ -112,6 +112,11 @@ async function stub(page: Page, cards: unknown[] = []) {
   await page.route(/\/queues$/, (route) => json(route, { review: [], parked: [] }))
   await page.route(/\/search\?/, (route) => json(route, { query: '', groups: [] }))
   await page.route(/\/games$/, (route) => json(route, { games: [] }))
+  /* The markdown sheet on #/runs reads its own history when the screen mounts (D100), closed
+     or not, and holds nothing else until an export is uploaded. Empty is the honest answer
+     here: this checkout has its own store (D43) and no markdown has ever been written into
+     it. */
+  await page.route(/\/pipeline\/markdowns$/, (route) => json(route, { markdowns: [] }))
   /* `GET /status` IN THE SHAPE `ServerStatus` ACTUALLY HAS, which it was not: this stub
      answered `{boxes, next}` — a shape no version of that route has sent — and the shell reads
      `status.cards` off it into the sidebar's card count. `undefined.toLocaleString()` throws

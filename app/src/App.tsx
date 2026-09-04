@@ -52,6 +52,28 @@ export const ROUTES: readonly Route[] = [
   { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist' },
   { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger' },
   { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
+  /* THE STALE-LISTING MARKDOWN (D100) IS NOT A ROW HERE, AND THE MEASUREMENT THAT USED TO SAY
+   * SO IS DEAD. D100 wanted `#/markdown` on D49's precedent — a worklist the operator sits in
+   * is what earned `#/pricing` a route — and was refused by arithmetic over a horizontal nav:
+   * 1,484.9px to draw eleven links on one row against the owner's 1,440px desk, with the wrap
+   * taking `review.spec.ts`'s between-cards floor red. D95 deleted that strip. This shell draws
+   * the nav as a SIDEBAR, and it was re-measured here on 2026-09-04 rather than carried
+   * forward: nine links, 36px tall and 211px wide each, in four groups on a 2px gap, running
+   * from y=68 to y=537 with the foot ending at y=704 in a 900px column. A tenth link costs
+   * 38px inside an existing group against 196px of slack, and on a phone a `nav: true,
+   * tab: false` route goes in the More drawer at no width cost at all.
+   *
+   * SO IT WOULD FIT, AND IT IS STILL NOT A ROW — the choice is a judgement now rather than a
+   * capacity refusal, and it is the owner's to reverse. The markdown and the store-wide
+   * reconcile read the SAME FILE, TCGplayer's My Pricing export, and the order is the order of
+   * the work; both are sheets off the `#/runs` header for that reason. Adding a row here also
+   * moves a count three mechanical checks reconcile (`route census`, `route rosters`, and
+   * every spec's pinned roster), so it is a deliberate edit and never a side effect.
+   *
+   * WHAT WOULD REOPEN IT: the operator finding they sit in the worklist long enough to want a
+   * back button and a bookmark. That is the same test D49 passed, and nothing about the nav
+   * refuses it any more. The one real cost is vertical: the sidebar already clips its own foot
+   * below a 704px viewport and a tenth link moves that floor to about 742px. */
   { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move' },
   { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box' },
   { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside' },
