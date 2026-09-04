@@ -119,6 +119,30 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
+./pkmnscan markdown <my-pricing.csv> --days N --percent P
+                                   # THE ONE COMMAND THAT MOVES A PRICE ALREADY LIVE (D94).
+                                   #   Previews by default; --write produces the import CSV.
+                                   #   Stale = live now AND no copy sold in N days AND the
+                                   #   oldest card carrying the SKU photographed here more
+                                   #   than N days ago. THE THIRD TERM IS WHAT MAKES THE
+                                   #   OTHERS MEAN ANYTHING: 352 of 378 live SKUs have never
+                                   #   sold, and half were captured two days ago.
+                                   #   `Add to Quantity` IS 0 ON EVERY ROW, which is
+                                   #   TCGplayer's own byte on all 21,502 fixture rows — so it
+                                   #   re-prices in place, adds no copies, CANNOT breach the
+                                   #   live cap and CANNOT delist. Nothing needs deleting at
+                                   #   TCGplayer; that was asked and the answer is no.
+                                   #   NEVER RAISES A PRICE (`not_a_markdown`), and refuses a
+                                   #   SKU marked down inside the window unless --again —
+                                   #   without which a daily sweep compounds to -52% a week.
+                                   #   Writes the new price into inventory/prices.json, so the
+                                   #   card is HAND-PRICED from then on; `was` holds what it
+                                   #   was asking and #/pricing draws it. Reachable on #/runs.
+                                   #   --rule/--basis  the power forms of --percent (CLI only,
+                                   #     D49 keeps that press on #/pricing)
+                                   #   --above-market P  only listings P% over market
+                                   #   --limit N  the N worth most. USE IT FOR THE FIRST PUSH:
+                                   #     no real listing has been through this path.
 ./pkmnscan reconcile <run-dir> <staged-export.csv>   # one import, one Export From Staged
 ./pkmnscan reconcile --live <my-pricing.csv> [--write]
                                    # THE WHOLE STORE against one live export (D87). Previews
@@ -136,7 +160,8 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   A reading OLDER than the store's own `live_as_of` is
                                    #   kept, not written, and named in the report — the
                                    #   same rule `join` applies (D87 amended 2026-09-02).
-                                   #   Reachable on `#/runs`, under the run panel.
+                                   #   Reachable on `#/runs`, under the run panel — beside the markdown, which reads the
+                                   #   same file.
 ```
 
 ## Things you will get wrong without being told
@@ -693,6 +718,7 @@ D90  The envelope is the unit of the write, and an order drives the walk as a mo
 D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
 D92  A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
 D93  The copies panel is the picker, and a full line refuses the take
+D94  The markdown is a price-only import, and staleness is measured from the store rather than claimed
 ```
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).

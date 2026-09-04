@@ -122,6 +122,9 @@ async function open(
   options: {
     skus?: unknown[]
     decisions?: Record<string, unknown> | null
+    /** SKU -> what it was asking before a markdown moved it (D94). Sets `was` on that SKU's
+     *  corpus answer, which is what `#/pricing` draws the provenance line from. */
+    markedDown?: Record<string, string>
     /** Whether the run already carries an emit record — the double-press guard's input. */
     emitted?: boolean
     /** The run LIST, for cases about the picker rather than about a table. Each entry is the
@@ -257,7 +260,12 @@ async function open(
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1 }),
+        body: JSON.stringify({
+          ok: true,
+          written: '/tmp/prices.json',
+          answers: 1,
+          revision: 'fixture-revision-2',
+        }),
       })
     }
     const answers =
@@ -268,7 +276,14 @@ async function open(
     for (const [sku, value] of Object.entries(
       (answers?.overrides ?? {}) as Record<string, unknown>,
     )) {
-      skus[sku] = { value }
+      /* `markedDown` PROJECTS A MARKDOWN'S PROVENANCE (D94) — what the card was asking before
+         `pkmnscan markdown` moved it. The fixture writes SKU -> previous price and this puts
+         it on the answer, so a case asserts the annotation without knowing the corpus shape. */
+      const was = (options.markedDown ?? {})[sku]
+      skus[sku] =
+        was === undefined
+          ? { value }
+          : { value, was, marked_down: '2026-09-03T14:12:07.000+00:00' }
     }
     for (const [sku, value] of Object.entries(
       (answers?.no_market_data ?? {}) as Record<string, unknown>,
@@ -279,6 +294,10 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
+        /* THE REVISION TRAVELS IN THE ENVELOPE, NEVER IN THE DOCUMENT (D94) — see
+           `server.ts:putPricingCorpus`. The screen keeps it in a ref, so it can never reach
+           the identity comparison `dirty` is. */
+        revision: 'fixture-revision',
         corpus: {
           version: 1,
           policy: {
@@ -2456,4 +2475,41 @@ test('an undo returns the card to what it was, including to having no answer', a
   await field(page).first().focus()
   await page.keyboard.press('u')
   await expect.poll(() => sentAnswers(wire)).toEqual({})
+})
+
+test('a card a markdown moved says what it was asking, and only that card does', async ({
+  page,
+}) => {
+  /* D94's HALF THAT LIVES ON THIS SCREEN. `pkmnscan markdown` writes its new price here as an
+     ordinary answer, which is layer 1 of the price ladder and above the rule — so the card is
+     hand-priced from then on. This line is what makes that visible where the decision is made
+     rather than only in a receipt file the operator would have to go and find, and clearing
+     the answer is what gives the card its rule price back.
+
+     IT IS DRAWN, NEVER COMPUTED. `was` is a string Python formatted; this screen performs no
+     arithmetic on money, and a delta rendered here would be exactly that. */
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', overrides: { '8608859': '9.00' } },
+    markedDown: { '8608859': '10.00' },
+  })
+
+  await expect(page.locator('.pricing-wasmark')).toHaveCount(1)
+  await expect(page.locator('.pricing-wasmark')).toHaveText('marked down from $10.00')
+
+  /* AND IT IS ON THE CARD THAT WAS MARKED DOWN, not on the screen. */
+  await expect(page.locator('.pricing-row', { has: page.locator('.pricing-wasmark') })).toContainText(
+    'Articuno',
+  )
+})
+
+test('a hand-priced card that no markdown touched draws no provenance line', async ({ page }) => {
+  /* THE OTHER HALF, AND THE ONE A BLANKET RENDER WOULD FAIL. The annotation is a claim about
+     HOW a price got there — an answer typed on this screen carries no `was`, and drawing the
+     line anyway would say something untrue about every hand-priced card in the store. */
+  await open(page, {
+    decisions: { rule: 'match', basis: 'market', overrides: { '8608859': '9.00' } },
+  })
+
+  await expect(page.locator('.pricing-input').first()).toHaveValue('9.00')
+  await expect(page.locator('.pricing-wasmark')).toHaveCount(0)
 })

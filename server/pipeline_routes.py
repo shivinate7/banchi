@@ -110,7 +110,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
-from pipeline import corpus, decisions, games as game_registry, join, tcgcsv  # noqa: E402
+from pipeline import corpus, decisions, games as game_registry, join, pricing, tcgcsv  # noqa: E402
 from server import tcg_export  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
 # reaches `json`, `time`, `urllib`, `dataclasses`, `datetime`, `decimal` and `pathlib`
@@ -1925,6 +1925,137 @@ def do_reconcile_live(payload: dict) -> dict:
     }
 
 
+def do_markdown(payload: dict) -> dict:
+    """`POST /pipeline/markdown` — mark down the listings that are not selling (D94).
+
+    FREE, AND IT WRITES ONLY WITH `write`, which is `do_reconcile_live`'s contract aimed at
+    money instead of at quantities. `docs/DECISIONS.md`'s Someday entry deferred this feature
+    with the shape it would have to take — *"a free preflight showing exactly which prices
+    would change and by how much, and a confirm that is not a default"* — and that is this
+    route's default and this route's `write`.
+
+    IT IS NOT THE MONEY GATE, AND THE DIFFERENCE IS DELIBERATE. `POST /pipeline/identify`
+    takes `confirm: true` because it spends API credit the instant it is pressed. This spends
+    nothing and reaches nobody: it writes a CSV the operator then uploads by hand. So it wears
+    the `write` flag every other free-but-writing route wears, and the irreversible step stays
+    outside this product entirely.
+
+    IT CARRIES NO `rule` AND NO `basis`, BY OMISSION FROM THE WIRE RATHER THAN BY DEFAULT.
+    `CLAUDE.md` records that `--rule` and `--basis` are deliberately not on `#/runs`: D49
+    makes `#/pricing` the one press that sets a standing pricing policy. `percent` and `days`
+    are this operation's own parameters and not that policy, so they are here and the other
+    two are only ever typed at the CLI.
+    """
+    upload = payload.get("export")
+    if not isinstance(upload, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "export_required",
+            "Send `export` as {name, content} — TCGplayer's My Pricing export, all printings.",
+        )
+    days = _positive_int(payload.get("days"), "days")
+    percent = payload.get("percent")
+    try:
+        # VALIDATED HERE AND AGAIN IN THE COMMAND. The command is the authority — it is what
+        # a terminal user reaches — but a bad number arriving from the screen should be a
+        # named refusal rather than a subprocess exit code the panel renders as console noise.
+        pricing.Rule.parse("{0}:{1}".format(pricing.RULE_UNDERCUT, percent))
+    except (pricing.UnknownRule, TypeError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "percent_invalid",
+            "`percent` is how far down, 0 to 99: {0}".format(exc),
+        ) from None
+
+    target = files.inventory_dir() / ".markdown"
+    target.mkdir(parents=True, exist_ok=True)
+    path = _store_upload(target, upload, "live-")
+    argv = [
+        str(PKMNSCAN), "markdown", str(path),
+        "--days", str(days),
+        "--percent", str(percent),
+    ]
+    if payload.get("write"):
+        argv.append("--write")
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+    wrote = bool(payload.get("write")) and code == 0
+    return {
+        "ok": code == 0,
+        "exit_code": code,
+        "wrote": wrote,
+        # THE DIRECTORY, AS A FIELD, AND NEVER REGEXED OUT OF `console`. The written CSV needs
+        # a URL and the URL needs this name; deriving it from the report would make a reworded
+        # sentence break a download. `None` on every preview and on a write that refused, so a
+        # non-null stamp is the same fact as "a file exists", said once.
+        "stamp": _newest_markdown() if wrote else None,
+        "console": console,
+    }
+
+
+def _positive_int(value, name: str) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "{0}_invalid".format(name),
+            "`{0}` must be a whole number of days.".format(name),
+        ) from None
+    if number <= 0:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "{0}_invalid".format(name),
+            "`{0}` must be greater than zero.".format(name),
+        )
+    return number
+
+
+def _newest_markdown() -> Optional[str]:
+    """The stamp of the directory the command just wrote.
+
+    READ BACK OFF THE DISK RATHER THAN COMPOSED HERE. The command owns the stamp format, and
+    a second composition of it in this module would be a name drawn twice that nothing
+    reconciles — the class of defect D67 exists about. Newest by name, which sorts
+    chronologically because the stamp is `<date>-<time>`.
+    """
+    root = files.markdowns_dir()
+    if not root.is_dir():
+        return None
+    stamps = sorted(
+        entry.name for entry in root.iterdir()
+        if entry.is_dir() and (entry / MARKDOWN_IMPORT).is_file()
+    )
+    return stamps[-1] if stamps else None
+
+
+#: The one file this route will serve. Named rather than pattern-matched: a markdown
+#: directory holds a receipt and a manifest too, and neither is a download.
+MARKDOWN_IMPORT = "markdown.csv"
+
+
+def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
+    """`GET /pipeline/markdowns/<stamp>/file?name=markdown.csv` — the import CSV, to download.
+
+    `do_pipeline_file`'s shape for a directory that is not a run, and it keeps that route's
+    belt and braces: the name is checked against the one file this serves, and the resolved
+    path is checked to be inside the markdowns directory rather than trusted to the regex
+    that matched the stamp.
+    """
+    if filename != MARKDOWN_IMPORT:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "file_name_invalid",
+            "{0!r} is not a downloadable markdown artefact.".format(filename),
+        )
+    root = files.markdowns_dir().resolve()
+    target = (root / stamp / MARKDOWN_IMPORT).resolve()
+    if root not in target.parents or not target.is_file():
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "no_such_markdown",
+            "No markdown was written under {0!r}.".format(stamp),
+        )
+    return target.read_bytes(), "text/csv"
+
+
 # ------------------------------------------------------------------ the pricing corpus
 
 
@@ -1940,7 +2071,35 @@ def do_pricing_corpus() -> dict:
     one answers what has been decided, and it is the same document whatever is on screen. Two
     facts, two routes, and the screen holds them apart the same way.
     """
-    return {"corpus": corpus.Corpus.read().to_payload(), "path": str(files.prices_path())}
+    return {
+        "corpus": corpus.Corpus.read().to_payload(),
+        "path": str(files.prices_path()),
+        "revision": _corpus_revision(),
+    }
+
+
+def _corpus_revision() -> str:
+    """A short digest of `inventory/prices.json` as it stands on disk, or `""` if absent.
+
+    OUT OF BAND, IN THE ENVELOPE, AND NEVER INSIDE THE DOCUMENT — which is the whole design
+    of this guard. `#/pricing` decides "unsaved" by comparing the corpus object it holds
+    against the one it last sent, BY IDENTITY (`Pricing.tsx`: *"a plain boolean recomputed
+    every render reads the ref fresh and is stable by VALUE"*). Putting a revision inside the
+    document would mean the screen has to rebuild that object every time a write lands, which
+    is exactly the endless unsaved -> saving -> unsaved oscillation that file records
+    measuring. A sibling field is compared by the route and never touched by the screen's
+    dirty check.
+
+    WHY IT EXISTS AT ALL: `PUT /pricing` replaces the document wholesale, so a screen holding
+    a snapshot from mount silently reverts anything written underneath it on the next
+    keystroke. That was harmless while the operator was the only writer. D94 adds a second
+    one — a markdown re-prices every stale SKU at once — so a stale PUT would undo the whole
+    sweep with no error anywhere.
+    """
+    path = files.prices_path()
+    if not path.is_file():
+        return ""
+    return run_files.sha256_of(path)[:16]
 
 
 def do_pricing_corpus_write(payload: dict) -> dict:
@@ -1956,6 +2115,22 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     alone: `Decisions.parse` is the one parser for what an answer means and it runs at the
     moment one is used, where its refusal names the SKU.
     """
+    # THE STALE-WRITE REFUSAL (D94). Absent means "did not read one", which is the terminal
+    # user editing the file and `PUT`ing it back, and it is allowed — the guard is for a
+    # client that DID read a revision and is now behind, which is the only case that can
+    # silently destroy somebody else's write.
+    offered = payload.get("revision")
+    if isinstance(offered, str) and offered:
+        current = _corpus_revision()
+        if current and offered != current:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "corpus_moved",
+                "The pricing file changed since this screen read it — a markdown, another "
+                "tab, or an edit on disk. Reload before saving, or this write would revert "
+                "it.",
+            )
+
     document = payload.get("corpus")
     if not isinstance(document, dict):
         raise PipelineRefusal(
@@ -1970,7 +2145,14 @@ def do_pricing_corpus_write(payload: dict) -> dict:
             HTTPStatus.BAD_REQUEST, "corpus_invalid", str(exc)
         ) from None
     written = book.write()
-    return {"ok": True, "written": str(written), "answers": len(book.answers)}
+    return {
+        "ok": True,
+        "written": str(written),
+        "answers": len(book.answers),
+        # THE NEW REVISION, SO THE NEXT WRITE IS NOT REFUSED FOR BEING THE ONE THAT LANDED.
+        # The screen keeps this in a ref beside `savedBook`, never in the document.
+        "revision": _corpus_revision(),
+    }
 
 
 def do_pipeline_merged_emit(payload: dict) -> dict:

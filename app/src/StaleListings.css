@@ -1,0 +1,163 @@
+/* THE STALE-LISTING MARKDOWN (D94). The second tenant on the unscoped shelf under the run
+   panel, drawn to match the reconcile beside it rather than to outrank it: everything above
+   them is about a run, and neither of these is. Same quiet section rule as `.livecheck`. */
+.stale {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.stale-head {
+  margin: 0;
+  font-family: var(--util);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.stale-says {
+  max-width: 62ch;
+  margin: var(--s2) 0 0;
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.stale-link {
+  color: var(--ink);
+}
+
+.stale-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.stale-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.stale-label {
+  font-family: var(--util);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.stale-select {
+  padding: var(--s1) var(--s2);
+  font-family: var(--util);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.stale-pick input {
+  font-family: var(--util);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* NO SOLID ACCENT FILL, the rule `app/tests/pricing.spec.ts` floors for the screen next door
+   and `docs/DESIGN.md` states once for all of them. A border and the ink weight carry it.
+
+   AND NO `cursor` OVERRIDE ON `:disabled`. `.livecheck-settle:disabled` sets `cursor: default`
+   and beats `base.css`'s `button:disabled { cursor: not-allowed }` on specificity; it stays
+   green only because that button is disabled solely mid-request, where `cursor.spec.ts`'s
+   sweep never catches it. This one is disabled while a preview runs, which is long enough to
+   catch, so it inherits the base rule instead. */
+.stale-write {
+  padding: var(--s2) var(--s3);
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+
+.stale-write:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.stale-write:disabled {
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.stale-done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s3);
+  margin: var(--s3) 0 0;
+}
+
+.stale-file {
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.stale-where {
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.stale-next {
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* THE COMMAND'S STDOUT, MONOSPACED AND SCROLLED RATHER THAN WRAPPED — `.livecheck-console`'s
+   argument, and it binds harder here: this draws asking, new, market, drift and age as
+   fixed-width columns, and a wrap would break the alignment that lets the operator read a
+   markdown down the page. `overflow` on the block keeps the page from scrolling sideways. */
+.stale-console {
+  max-height: 60vh;
+  margin: var(--s3) 0 0;
+  padding: var(--s3);
+  overflow: auto;
+  font-family: var(--util);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  white-space: pre;
+}
+
+.stale-note {
+  margin-top: var(--s3);
+}
+
+.stale-note-text {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.stale-machine {
+  margin: var(--s1) 0 0;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}

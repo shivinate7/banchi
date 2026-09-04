@@ -96,6 +96,17 @@ class Answer:
     #: — layer 1 beats layer 2 — while `blocking` stops being able to see the channel at all.
     #: The screen would then report nothing owed for a run `emit` refuses.
     channel: str = "price"
+    #: What this SKU was asking before a markdown moved it, and when (D94). PROVENANCE, like
+    #: `at` and `from_run`, and never input — nothing prices from either.
+    #:
+    #: THEY EXIST BECAUSE THE MARKDOWN WRITES HERE AND THAT COSTS SOMETHING. An answer in this
+    #: table is layer 1 of `join.prices_for`, above the rule, so a card marked down is
+    #: hand-priced from then on. `was` is what makes that reversible by inspection rather than
+    #: by memory — the operator can see on `#/pricing` what the card was asking — and
+    #: `marked_down` is the ratchet guard's source of truth, which a deleted receipt directory
+    #: cannot defeat because clearing it means giving the card its rule price back.
+    was: Optional[str] = None
+    marked_down: Optional[str] = None
 
     @property
     def is_hold(self) -> bool:
@@ -146,6 +157,8 @@ class Corpus:
                     at=row.get("at"),
                     from_run=row.get("from_run"),
                     channel=str(row.get("channel") or "price"),
+                    was=row.get("was"),
+                    marked_down=row.get("marked_down"),
                 )
             else:
                 # A BARE VALUE IS AN ANSWER WITH NO PROVENANCE, which is what a person editing
@@ -222,6 +235,8 @@ class Corpus:
                 **({"at": answer.at} if answer.at else {}),
                 **({"from_run": answer.from_run} if answer.from_run else {}),
                 **({"channel": answer.channel} if answer.channel != "price" else {}),
+                **({"was": answer.was} if answer.was else {}),
+                **({"marked_down": answer.marked_down} if answer.marked_down else {}),
             }
             for sku, answer in sorted(self.answers.items())
         }

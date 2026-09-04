@@ -319,7 +319,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87", "D94"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -399,6 +399,19 @@ COMPONENTS = [
                                    "`_box_name_for` withholds a name by (D56) — `realign` reads "
                                    "photographs and not the store, and cannot see that case.",
                            "governed_by": ["D4", "D8", "D10", "D11", "D20", "D21", "D22", "D23", "D24", "D25", "D26", "D33", "D34", "D36", "D49", "D56", "D58", "D59", "D64", "D87"], "tested_by": ["T7"]},
+            "cmd_markdown.py": {"does": "mark down the listings that are live, old and not "
+                                        "selling (D94) — the one command that moves a price "
+                                        "that is ALREADY LIVE, which `docs/DECISIONS.md` "
+                                        "called a concept this product did not have. Previews "
+                                        "by default; `--write` produces an import CSV whose "
+                                        "every row carries `Add to Quantity` 0, so it changes "
+                                        "prices and adds no copies and cannot breach the live "
+                                        "cap. Reads staleness off the cards in one indexed "
+                                        "pass and the ratchet stamp off the corpus. Writes the "
+                                        "CSV first and the corpus second, so a failed write "
+                                        "never leaves the store claiming a markdown no file "
+                                        "carried.",
+                                "governed_by": ["D7", "D8", "D9", "D33", "D49", "D54", "D86", "D94", "D67", "D88"], "tested_by": ["T7"]},
             "runs.py": {"does": "run directories and manifest.json", "governed_by": ["D1", "D25", "D49", "D54", "D86"], "tested_by": ["T7"]},
         },
     },
@@ -600,8 +613,23 @@ COMPONENTS = [
                                   "DEFAULTS TO FLAT $0.49 when the policy is silent — absent or "
                                   "null — applied on read and written on the next save (D9 "
                                   "amended 2026-09-02).",
-                          "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86"],
+                          "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86", "D94"],
                           "tested_by": ["T7"]},
+            "reprice.py": {"does": "which live listings are stale and what each would be "
+                                   "re-priced to (D94). Pure — plain mappings in, "
+                                   "`livecheck.compare`'s shape, so it never learns the card "
+                                   "schema. Three terms: live now, no sale inside the window, "
+                                   "and the oldest card ever to carry the SKU older than the "
+                                   "window — the third is what gives the other two power, "
+                                   "since 93% of the owner's live SKUs have never sold. "
+                                   "`BASES` carries `listed` and is DELIBERATELY LOCAL: "
+                                   "widening `pricing.BASES` would offer it to `join` and "
+                                   "`emit`, where a blank basis cell leaves the price column "
+                                   "untouched on 7,787 of 7,802 rows with nothing raising. "
+                                   "`not_a_markdown` is what stops it ever raising a live "
+                                   "price, and prices are compared as `Decimal` because an "
+                                   "export writes four decimals and this writes two.",
+                           "governed_by": ["D7", "D8", "D9", "D49", "D54", "D86", "D94", "D87"], "tested_by": ["T7"]},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
                                      "scopes its diff to one run's emitted_skus while "
@@ -855,7 +883,7 @@ COMPONENTS = [
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
-                         "governed_by": ["D13", "D15", "D43", "D86"], "tested_by": ["T7"]},
+                         "governed_by": ["D13", "D15", "D43", "D86", "D94"], "tested_by": ["T7"]},
             # D53 still, and D63, because the header now says what the transaction DOES
             # promise where it used to say what five files did not: one commit over every
             # table, history rows included. D53's drain is still a prerequisite for the
@@ -1696,7 +1724,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D94"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1784,7 +1812,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88", "D67", "D94"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -2095,11 +2123,11 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D94"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D93"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D93", "D94"]},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2703,6 +2731,25 @@ COMPONENTS = [
             # The pipeline moved off #/inventory onto a route of its own at the owner's
             # instruction. RunPanel.tsx did not change shape for it: these three files are the
             # scope it used to get from the walk, answered where there is no walk.
+            "src/StaleListings.tsx": {"does": "the stale-listing markdown panel on #/runs "
+                                              "(D94), the second tenant on the shelf beside "
+                                              "the reconcile and driven by the same document. "
+                                              "LiveReconcile's four invariants plus a fifth "
+                                              "the controls force: changing the window or the "
+                                              "percentage re-previews and takes the write "
+                                              "control away, so a write is never aimed at a "
+                                              "report the operator replaced. Carries NO rule "
+                                              "or basis control — D49 keeps that press on "
+                                              "#/pricing — and the report names the rule it "
+                                              "applied instead.",
+                                      "governed_by": ["D33", "D49", "D86", "D94"]},
+            "src/StaleListings.css": {"does": "the markdown panel's quiet section, matching "
+                                              "the reconcile beside it. No `cursor` override "
+                                              "on `:disabled`: `.livecheck-settle`'s beats "
+                                              "base.css on specificity and stays green only "
+                                              "because that button is never disabled long "
+                                              "enough for `cursor.spec.ts` to catch it.",
+                                      "governed_by": ["D94"]},
             "src/LiveReconcile.tsx": {"does": "the store-wide reconcile panel on #/runs (D87) — "
                                               "upload one live export, preview, settle. On this "
                                               "screen because its own lede names the four "
@@ -2738,7 +2785,7 @@ COMPONENTS = [
                              # sessionStorage carve-out the handoff rides. D10 is cards-not-
                              # high-water on the chip, D32 the crop pair whose estimate the
                              # scope key voids, D38 the layout this left behind.
-                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87"]},
+                             "governed_by": ["D5", "D10", "D13", "D20", "D27", "D32", "D33", "D38", "D39", "D56", "D87", "D49", "D94"]},
             "src/Runs.css": {"does": "its page chrome, to docs/DESIGN.md's numbers literally: 16px "
                                      "on all four sides, a 20px display title sharing its line "
                                      "with the scope and the controls, a one-line lede, and the "
@@ -2776,7 +2823,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85", "D86"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85", "D86", "D94"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -2793,7 +2840,7 @@ COMPONENTS = [
                                         "the same button width the grid reads, and both fixed "
                                         "panels start after it, so no panel is ever over a row "
                                         "control and nothing has to win a stacking order.",
-                                "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79", "D85", "D86"]},
+                                "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79", "D85", "D86", "D94"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -3405,7 +3452,15 @@ COMPONENTS = [
                                               "ask while the screen was a pile. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D94"]},
+            "tests/stale-listings.spec.ts": {"does": "the markdown panel is reachable, "
+                                                     "previews before it writes, offers no "
+                                                     "rule or basis control (D49's seam, "
+                                                     "otherwise only prose), re-previews when "
+                                                     "either setting moves, and hands the CSV "
+                                                     "over as a download rather than as bytes "
+                                                     "in the page. NOT A HARNESS TEST.",
+                                             "governed_by": ["D33", "D49", "D94"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "

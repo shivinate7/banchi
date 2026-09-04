@@ -601,6 +601,17 @@ export function Pricing() {
   /** WHAT THE SERVER LAST CONFIRMED. `dirty` is a comparison against this rather than a flag,
    *  so it cannot be cleared for a write that did not carry the answer. */
   const savedBook = useRef<PricingCorpus | null>(null)
+  /** THE REVISION THE SERVER LAST CONFIRMED (D94), beside the document and never inside it.
+   *
+   *  `PUT /pricing` replaces the corpus wholesale, so a screen holding a mount-time snapshot
+   *  silently reverts anything written underneath it on the next keystroke. That was harmless
+   *  while the operator was the only writer; a markdown re-prices every stale SKU at once, so
+   *  it is not now. Sending the revision inside `book` would put it in the object `dirty`
+   *  compares BY IDENTITY, which is the oscillation the comment above `dirty` records
+   *  measuring — hence a second ref, updated by exactly the two places that update
+   *  `savedBook`. A stale one is refused as `corpus_moved`, which lands in the existing
+   *  failure path and stops the loop until the operator reloads. */
+  const savedRevision = useRef<string | undefined>(undefined)
   /* ONE PUT IN FLIGHT. A boolean again: there is one document, so there is one write, and the
    * per-run `Set` this briefly was existed only because there were eight files.
    *
@@ -706,6 +717,7 @@ export function Pricing() {
       setBook(held.corpus)
       setSunkHolds(heldOnArrival(answer.skus, corpusAsDoc(held.corpus)))
       savedBook.current = held.corpus
+      savedRevision.current = held.revision
       failedBook.current = null
       setFailure(null)
       setUndo([])
@@ -792,8 +804,11 @@ export function Pricing() {
     setSaving(true)
     void (async () => {
       try {
-        await putPricingCorpus(sent)
+        const landed = await putPricingCorpus(sent, savedRevision.current)
         savedBook.current = sent
+        // THE REVISION THE WRITE PRODUCED, so the next save is not refused for being the one
+        // that landed. A ref, so this assignment renders nothing and `dirty` cannot see it.
+        savedRevision.current = landed.revision
         failedBook.current = null
         setFailure(null)
       } catch (err) {
@@ -2181,6 +2196,19 @@ export function Pricing() {
                         <span className="pricing-cond">{sku.condition}</span>
                         {` · ${sku.set_name} · ${sku.row['Number'] ?? ''} · ${sku.row['Rarity'] ?? ''}`}
                       </span>
+                      {/* WHAT A MARKDOWN MOVED THIS CARD FROM (D94). An answer written by
+                          `pkmnscan markdown` is layer 1 of the price ladder, above the rule,
+                          so the card is hand-priced from here on — and this line is what
+                          makes that visible where the decision is made rather than only in a
+                          receipt file the operator would have to go and find. Read off the
+                          corpus and never composed: `was` is a string Python formatted, which
+                          is this screen's own no-arithmetic-on-money rule. Clear the answer
+                          and the card takes its rule price back. */}
+                      {book?.skus?.[sku.sku]?.was === undefined ? null : (
+                        <span className="pricing-wasmark">
+                          marked down from ${book.skus[sku.sku]?.was}
+                        </span>
+                      )}
                     </div>
 
                     {/* WHICH OF THESE IS MOVING — the question a list answers and a panel

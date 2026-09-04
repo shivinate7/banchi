@@ -531,6 +531,12 @@ _RUN_EXPORT_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/export$")
 # GET step, the specific path is already above it.
 _RUN_HISTORY_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/history$")
 
+# The markdown's written import CSV, for download (D94). NOT under `/pipeline/runs/`, because a
+# markdown is store-wide and belongs to no run — it is scoped by a window and a live export —
+# so it lands in `inventory/markdowns/<stamp>/` and gets a path that says so. No ordering
+# hazard against the `_RUN_*` family: those are all anchored on `/pipeline/runs/`.
+_MARKDOWN_FILE_RE = re.compile(r"^/pipeline/markdowns/([A-Za-z0-9._-]+)/file$")
+
 # D79's batched read, beside D62's single one. `/history` answers one SKU for the panel and
 # `/trends` answers many for the row strip — two routes because they carry two different
 # payloads for two different drawings, not one route with a mode: the panel needs every figure
@@ -9330,6 +9336,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
                 blob, kind = pipeline_routes.do_pipeline_file(match.group(1), wanted[0])
                 return self._send(HTTPStatus.OK, blob, kind)
+            match = _MARKDOWN_FILE_RE.match(path)
+            if match:
+                # The markdown's import CSV (D94). Same download shape as the run artefact
+                # above it — a URL the browser fetches, never bytes through a JSON body.
+                wanted = parse_qs(parsed.query, keep_blank_values=True).get("name") or [""]
+                blob, kind = pipeline_routes.do_markdown_file(match.group(1), wanted[0])
+                return self._send(HTTPStatus.OK, blob, kind)
             match = _RUN_PRICING_RE.match(path)
             if match:
                 return self._json(
@@ -9552,6 +9565,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # shape that can report what TCGplayer holds and this pipeline never sent.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_reconcile_live(self._body())
+                )
+            if path == "/pipeline/markdown":
+                # THE ONE COMMAND THAT MOVES A PRICE THAT IS ALREADY LIVE (D94). Free, and it
+                # writes only when asked. Driven by the SAME document as the reconcile above
+                # it — one live export answers both questions — which is why they sit together
+                # here and in one shelf on `#/runs`.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_markdown(self._body())
                 )
             if path == "/pipeline/emit":
                 # ONE IMPORT FILE OVER SEVERAL RUNS (D86). FREE — it reads runs, writes a CSV

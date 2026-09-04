@@ -4,6 +4,7 @@ import { describeFailure, getBoxes, type Failure } from './server'
 import { boxLabel } from './runScope'
 import type { BoxRecord } from './types'
 import { LiveReconcile } from './LiveReconcile'
+import { StaleListings } from './StaleListings'
 import { RunPanel, type CartBox } from './RunPanel'
 import { carriedScope, clearCarriedScope } from './runHandoff'
 import './Runs.css'
@@ -229,7 +230,8 @@ export function Runs() {
         </div>
         <p className="runs-lede">
           identify · join · emit · reconcile. One of the four spends money; the other three are
-          free and re-runnable.
+          free and re-runnable. Below them, two things to do with one live export: settle the
+          ledger against it, and mark down what it shows is not selling.
         </p>
       </header>
 
@@ -280,6 +282,13 @@ export function Runs() {
       {/* THE FOURTH COMMAND, UNSCOPED (D87). Below the run panel because everything
           above it is about a run and this deliberately is not. */}
       <LiveReconcile />
+
+      {/* THE SECOND TENANT ON THAT SHELF (D94), and it is here for the same reason and one
+          more. Unscoped, like the reconcile above it; and driven by the SAME document — one
+          My Pricing export answers both "what does TCGplayer hold" and "what has it held too
+          long", so one file in Downloads has two things done to it in one place. It carries
+          no rule or basis control: D49 keeps that press on #/pricing. */}
+      <StaleListings />
     </main>
   )
 }

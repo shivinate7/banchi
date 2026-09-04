@@ -36,6 +36,7 @@ import type {
   ListingReleaseResult,
   CropPreview,
   CsvUpload,
+  MarkdownResult,
   ExportFetched,
   ExportScope,
   RunDetail,
@@ -1777,6 +1778,54 @@ export async function reconcileLive(
 }
 
 /**
+ * STALE LISTINGS, MARKED DOWN — the whole store against one live export (D94).
+ *
+ * FREE, AND IT WRITES ONLY WHEN `write` IS TRUE. `reconcileLive`'s contract aimed at money
+ * instead of at quantities: it decides what every stale listing will be asking, and a
+ * re-price nobody read is how a wrong number becomes the new floor. `docs/DECISIONS.md`
+ * deferred this feature naming that exact shape — *"a free preflight showing exactly which
+ * prices would change and by how much, and a confirm that is not a default"*.
+ *
+ * IT SENDS NO `rule` AND NO `basis`, AND THAT IS D49's SEAM RATHER THAN AN OMISSION.
+ * `CLAUDE.md` records that those two are deliberately not on `#/runs`, because `#/pricing` is
+ * the one press that sets a standing pricing policy. `days` and `percent` are this
+ * operation's own parameters and not that policy. The report names the rule it applied, so
+ * the operator reads it before the control that applies it exists.
+ *
+ * BOTH NUMBERS ARE REQUIRED AND ALWAYS SENT. The command has no defaults for them on purpose
+ * — no number in this repo derives a staleness window — so the screen's controls are the one
+ * declaration of what they start at, and there is no second one to drift out of step.
+ */
+export async function runMarkdown(
+  file: CsvUpload,
+  options: { write?: boolean; days: number; percent: number },
+): Promise<MarkdownResult> {
+  return (await request('/pipeline/markdown', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      export: file,
+      write: Boolean(options.write),
+      days: options.days,
+      percent: options.percent,
+    }),
+  })) as MarkdownResult
+}
+
+/**
+ * Where a written markdown's import CSV can be downloaded.
+ *
+ * `runFileUrl`'s shape for a directory that is not a run: a markdown is scoped by a window
+ * and a live export rather than by a box, so it belongs to no run and lands under
+ * `inventory/markdowns/<stamp>/`. A URL rather than a fetch, for that function's own reason —
+ * the browser's own download is what the operator wants, because this is the file that goes
+ * into TCGplayer's importer and a string in a text area is not that.
+ */
+export function markdownFileUrl(stamp: string): string {
+  return `${base}/pipeline/markdowns/${encodeURIComponent(stamp)}/file?name=markdown.csv`
+}
+
+/**
  * The pricing corpus — every listing answer this operator has given, and the policy (D86).
  *
  * ONE READ AND ONE WRITE FOR THE WHOLE SCREEN, whatever is on it. `#/pricing` used to fetch a
@@ -1787,8 +1836,16 @@ export async function reconcileLive(
  * of the operator, out of which runs, with which export rows — it changes as the selection
  * does. This answers what has been decided, and it is the same document either way.
  */
-export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path: string }> {
-  return (await request('/pricing', NO_CACHE)) as { corpus: PricingCorpus; path: string }
+export async function getPricingCorpus(): Promise<{
+  corpus: PricingCorpus
+  path: string
+  revision: string
+}> {
+  return (await request('/pricing', NO_CACHE)) as {
+    corpus: PricingCorpus
+    path: string
+    revision: string
+  }
 }
 
 /**
@@ -1799,14 +1856,22 @@ export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path:
  */
 export async function putPricingCorpus(
   corpus: PricingCorpus,
-): Promise<{ ok: boolean; written: string; answers: number }> {
+  revision?: string,
+): Promise<{ ok: boolean; written: string; answers: number; revision: string }> {
+  /* `revision` IS THE STALE-WRITE GUARD AND IT TRAVELS BESIDE THE DOCUMENT, NEVER IN IT (D94).
+     This route replaces `inventory/prices.json` wholesale, so a screen holding a snapshot from
+     mount silently reverts anything written underneath it on the next keystroke — harmless
+     while the operator was the only writer, and not harmless now that a markdown re-prices
+     every stale SKU at once. Sending it inside the corpus would put it in the object
+     `Pricing.tsx` dirty-checks BY IDENTITY, which is the endless unsaved -> saving -> unsaved
+     oscillation that file records measuring. Omitted means "did not read one", which the
+     route allows for the terminal user editing the file by hand. */
   return (await request('/pricing', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ corpus }),
-  })) as { ok: boolean; written: string; answers: number }
+    body: JSON.stringify(revision === undefined ? { corpus } : { corpus, revision }),
+  })) as { ok: boolean; written: string; answers: number; revision: string }
 }
-
 /**
  * One import file over several runs — free, and it writes the CSV and raises `pushed` (D86).
  *

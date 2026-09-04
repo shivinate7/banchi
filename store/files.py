@@ -25,6 +25,7 @@ INVENTORY_DIRNAME = "inventory"
 # otherwise conflate, and one of them is authoritative.
 PRICES_NAME = "prices.json"
 RUNS_DIRNAME = "runs"
+MARKDOWNS_DIRNAME = "markdowns"
 LOCK_NAME = ".lock"
 
 # The code ledger (docs/CODES-DECISIONS.md C8): one line per code card, the transcribed
@@ -83,6 +84,20 @@ def prices_path() -> Path:
     own stock, which a worktree must not inherit and must not write into the main tree.
     """
     return inventory_dir() / PRICES_NAME
+
+
+def markdowns_dir() -> Path:
+    """Where a written markdown leaves its import CSV and its receipt (D94).
+
+    UNDER `inventory/` AND NOT `runs/`, and the two reasons are different. A markdown is
+    store-wide — it is scoped by a window and a live export, never by a box — so there is no
+    run for it to belong to. And `store/__init__.py` declares a run directory disposable:
+    *"Deleting a run directory must never cost money or state."* A markdown receipt IS state:
+    it is the record of what a listing was asking before the price moved, and the ratchet
+    guard reads the corpus stamps it wrote. Put it under `runs/` and a routine cleanup
+    silently re-arms a sweep that compounds.
+    """
+    return inventory_dir() / MARKDOWNS_DIRNAME
 
 
 @contextmanager

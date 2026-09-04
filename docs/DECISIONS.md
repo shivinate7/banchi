@@ -4002,7 +4002,9 @@ Distinct from Deferred above: those need an argument and a decision entry first.
 
   Honest limit, and why this is Someday rather than a plan: it might do nothing. The crop-retry path was built on the assumption that enlarging the number helps, and that assumption has never been measured on its own — which is exactly what makes it worth an experiment rather than an edit.
 
-- **Refresh prices against a scheduled pull, and keep the push out of it.** D65 made the export a scoped request, so fetching fresh prices on a schedule is now small — `fetch(Scope(...))` on a cron, storing a dated export, so a pricing decision is made against today's market rather than a file from three days ago.
+- ~~**Refresh prices against a scheduled pull, and keep the push out of it.**~~ **The PUSH half was built 2026-09-03 — D94**, in the shape this item specified: `pkmnscan markdown`, a free preflight naming every price that would change and by how much, and a write that is not a default. The SCHEDULED PULL half is untaken and stays open — nothing fetches an export on a cron, and D94's input is a file the operator downloads. Struck in place rather than deleted, this list's own convention, so a later session reading an older copy does not reinstate the built half.
+
+  The original argument, kept because D94 rests on it: D65 made the export a scoped request, so fetching fresh prices on a schedule is now small — `fetch(Scope(...))` on a cron, storing a dated export, so a pricing decision is made against today's market rather than a file from three days ago.
 
   **The useful, safe half stops there: surface which SKUs have moved.** *These 23 have moved more than 10% since you listed them*, on `#/pricing`. The staleness gets answered and the decision stays with a person.
 
@@ -5156,3 +5158,94 @@ All 104 of those sales went through `#/inventory`'s plain sale — the write thi
 **And it is still built over an ingest no real order has been through.** D90's table is unchanged: 0 orders in the ledger, 0 copies ever recorded as pulled for one. Every guarantee here is proven by `app/tests/order-walk.spec.ts` and by nothing that has held a buyer's money.
 
 **What would reopen this.** *A second pair of hands*, exactly as D90 has it — two people walking one wave each hold a `chosen` the other has already spent. *A line the resolver answered short while a copy sat takeable in the panel*, which would mean the queue's membership test and the picker disagree about what is fillable. *A tap that costs a card* — the refusal above is a bet that a change the finger did not make is worse than a second press, and the measurement that settles it is an operator swapping copies at a real drawer.
+
+## D94 — The markdown is a price-only import, and staleness is measured from the store rather than claimed
+
+**A listing that is live, old and not selling is re-priced down through an import CSV that adds no copies.** Built 2026-09-03 on the owner's ask: *"I then wanted to build some relationship where I can export my live inventory back out (for cards I have listed and aren't selling) and be able to mass re-edit the prices down (and then reupload it back) <maybe deleting inventory in between from tcgplayer?>"*
+
+**This discharges a recorded Someday item and takes the shape that item specified.** *"Refresh prices against a scheduled pull, and keep the push out of it"* argued the push half was a different thing needing its own entry, on three checked facts: nothing in the pipeline reprices anything, the import path is TCGplayer's own transactional `initializeexportcsv`/`uploadexportcsv`/`finalizeexportcsv`/`rollbackexportcsv`, and `pipeline/pricing.py` has the arithmetic but *"no opinion on when a live price should move, which is the part that decides whether a loop is useful or expensive."* It closed: *"If it is built, it takes D33's shape: a free preflight showing exactly which prices would change and by how much, and a confirm that is not a default. An unattended loop that moves live marketplace prices is the one thing in this product that could lose money while nobody is looking."* That is the whole design brief, and it is met rather than reinterpreted. The bullet is struck in place above.
+
+### Nothing is deleted from TCGplayer, and the answer is a measurement
+
+**The owner's parenthetical is answered no.** `Add to Quantity` is `"0"` on **every one of the 21,502 rows** across the four real exports in `fixtures/`. That is TCGplayer's own byte for *add nothing*, so a price-only row is the shape their own export already writes, and `TCG Marketplace Price` updates a listing in place against `TCGplayer Id` — which the `tcgplayer-csv` skill names as *"what the import matches on"*.
+
+**Deleting would be strictly worse, not merely unnecessary.** It discards a listing's age and standing at TCGplayer, and re-adding quantity puts the operation back inside the cap arithmetic D86 measured going wrong — three separate emits spending one global cap three times, two SKUs at `pushed: 6` against a cap of 4.
+
+**So the markdown adds nothing, and that is the safety argument rather than a detail.** It cannot breach the live cap because it has no quantity to spend, and it cannot delist because it writes no quantity at all. Asserted twice rather than trusted: an input row carrying a quantity refuses the whole file (`add_to_quantity_not_zero`), and each output row is re-checked against its export original the way `join.import_rows` re-checks its own.
+
+### Staleness is three terms, and the age one is what makes the other two mean anything
+
+**Live now, no copy sold inside the window, and the oldest card ever to carry the SKU photographed here longer ago than the window.** Measured on the owner's store: of 378 SKUs with `live > 0`, **352 have never sold a single copy** — 93%, 945 of 996 live copies. A one-term "has not sold" predicate therefore fires on essentially the whole store. Half of it was captured two days before this was built and has had no chance to sell.
+
+| oldest copy captured | never sold | sold at some point |
+|---|---|---|
+| 2026-08-23 | 108 SKUs / 390 copies | 1 |
+| 2026-08-29 | 45 / 108 | 4 |
+| 2026-08-31 | 22 / 73 | 12 |
+| 2026-09-01 | 177 / 374 | 9 |
+
+**The age is an age of OWNERSHIP, not of listing, and the report says so on its own face.** `Listing` has no `first_listed_at`, and `live_as_of` is absent from all 443 stored payloads — `Listing.from_record` backfills it from `at`, so every value it would report today is a legacy fallback rather than a reading. `Card.captured_at` has 100% coverage and is the only fully-populated age axis there is. The proxy is named in the report's header, where an operator reads it, rather than in a docstring where they do not.
+
+**The age must be computed over every card that ever carried the SKU, including departed ones.** A floor over on-hand copies moves FORWARD as the oldest copy sells, so a listing would get younger the longer it sat and fall out of the sweep at exactly the moment it most belongs in it.
+
+**Sales are read off the cards and not off the event log.** `state_at` on a sold card is one indexed column; the log costs a full scan plus a JSON extract, and **one of the 193 `sold` events carries no `sku` key at all**, which a naive `NOT IN (SELECT ...)` answers by returning nothing. The measured difference is one SKU out of 87, and it is accepted here rather than discovered later.
+
+**`--days` and the markdown size have no defaults and are required.** `cli/__main__.py`'s own header: *"Every default here is a number from the spec, not a taste."* Nothing in this repo derives a staleness window the way D9 derives the $0.40 floor, and both plausible tastes are wrong on this store today — 14 days fires on nothing, 7 quietly proposes 394 copies. **The screen carries the default instead**, as a control whose value it always sends, so there is exactly one declaration and no Python default for it to drift against.
+
+### `first_listed_at` was considered and refused
+
+**It would record the wrong fact under the right name.** `Listing.bump` is what an emit calls; a field set on the first push records *a CSV was written*, and the listing goes live when the operator imports that file hours or days later — a moment this pipeline never observes. Measured over the 45 SKUs carrying a push event, the capture floor sits ~20 hours **after** the first push, so the "exact" field would be wrong in the opposite direction to the proxy it replaced.
+
+**And it would reproduce the defect that made this necessary.** Null on all 443 existing rows, exactly `live_as_of`'s shape, leaving `captured_at` as the only exercised path for weeks while a second untrusted column accumulated.
+
+**What would actually fix it is elsewhere and pays for more.** `Listing.bump` writes **no history event at all**, so every emit's and every D87 settlement's ledger write is invisible to the history route. That is a real gap, it yields an exact first-push time forever after, and it needs its own entry rather than riding in on this one.
+
+### The markdown reuses `pricing.Rule` entirely, and the new basis stays local
+
+**`--percent 10` spells `undercut:10` against the operator's own asking price, and `list_price` does the rest** — `clamp_floor(round_money(rule(basis)))`, in that order, with the $0.40 floor. No new arithmetic exists.
+
+**`listed` is a basis in `pipeline/reprice.py` and must never be added to `pipeline/pricing.py:BASES`.** Traced, that would be a silent catastrophic listing bug rather than a tidiness question: `cli/__main__.py` binds `--basis choices=list(pricing.BASES)` for **`join` and `emit`**, so `listed` would immediately be offered on the new-listing path — where `SkuMatch.list_price` returns `None` for a blank cell, `import_rows` finds the SKU present in the price map, and `set_writable`'s `is not None` guard leaves `TCG Marketplace Price` **exactly as the export had it**. Blank on 7,787 of 7,802 rows in the wide Pokemon export, with nothing raising anywhere. `corpus.Corpus.parse` would accept it as a store-wide standing policy on top of that.
+
+**It never raises a price.** `not_a_markdown` refuses any row whose new price is at or above the old one — where a risen market under `--basis market`, a mistyped `markup:`, and a listing already on the floor all land. **Compared as `Decimal` and never as strings**: a live export writes four decimals (`"0.6600"`) and this writer emits two (`"0.66"`), which are equal as numbers and different as bytes, and only the first reading is right. A string comparison would mark down the entire store on a rounding artefact.
+
+**Sold-out listings are skipped and named.** A price with `Total Quantity` 0 — **96 of the 109 priced rows across the four fixtures**, the majority population. Marking one down changes nothing, and silence would read as a broken sweep to an operator who thinks of them as listed.
+
+### The answer is written to the corpus, on the owner's decision, and it carries what it replaced
+
+**Asked whether a markdown should become the store's standing answer, the owner chose that it always should**, so `inventory/prices.json` and the marketplace never disagree. What that costs is named rather than discovered: an answer there is layer 1 of `join.prices_for`, above the rule, so a marked-down card is **hand-priced from then on** for every future run.
+
+**So `Answer` gains `was` and `marked_down`, and they are the reversibility.** `was` is what the card was asking before this pipeline started moving it — kept across a second markdown rather than overwritten with the intermediate — and `#/pricing` draws *"marked down from $X"* beside the row, which is what makes a sweep legible where the decision is made instead of only in a receipt file. Clearing the answer gives the card its rule price back.
+
+**`marked_down` is the ratchet guard, and without one this feature loses money quietly.** Nothing else stops `undercut:10` compounding daily to −52% in a week, floored only at $0.40, with every individual run justified because the card still has not sold and is still old. A SKU marked down inside the window is refused; `--again` is the override and is deliberately not a default. **The stamp is read from the corpus rather than from the receipt directories** precisely because a directory can be deleted and an answer cannot be, without also giving the card its rule price back.
+
+**The write order is CSV first, corpus second.** If the file write fails the store still says the old price and the operator re-runs; the other order would leave the store claiming a markdown no file ever carried.
+
+### `PUT /pricing` gains a stale-write refusal, because the always-write choice made one necessary
+
+**That route replaces the corpus wholesale and had no concurrency guard.** `#/pricing` holds the document from mount and autosaves it whole, so a screen open in another tab would revert an entire sweep on the next keystroke — no error anywhere. Harmless while the operator was the only writer; not harmless with a second one.
+
+**The revision travels in the envelope and never inside the document.** `Pricing.tsx` computes "unsaved" by comparing the corpus object BY IDENTITY, and that file records measuring an endless `unsaved → saving… → unsaved` oscillation when that comparison was disturbed. A sibling field, kept in a ref beside `savedBook`, cannot be seen by the dirty check at all. A stale one is refused `corpus_moved` and lands in the failure path that already stops the loop.
+
+**Absent means "did not read one" and is allowed** — the terminal user editing the file and putting it back. The guard is for a client that read a revision and is now behind, which is the only case that can silently destroy somebody else's write.
+
+### It is on `#/runs`, and `#/pricing` was disqualified by a race rather than by taste
+
+**The panel sits beside `LiveReconcile` on the unscoped shelf**, because both are driven by the same document: one My Pricing export answers *what does TCGplayer hold* and *what has it held too long*. One file in Downloads, two things to do with it.
+
+**`#/pricing` is where a person would look, and it is the one screen this must not live on.** The autosave above is the reason: a markdown writing every stale SKU while that screen holds a mount-time snapshot is the revert case in its purest form. Placing it there would mean re-plumbing the most race-sensitive hundred lines of a 2,686-line file. One screen away, the guard is something the operator meets at a reload instead of mid-edit.
+
+**A new route was refused for its cost against its worth**: the `route census` recount in four files, both `ROUTE-ROSTER` literals in `app/tests/nav.spec.ts`, `scripts/views.txt`, a hotkey, and a conflict in `App.tsx`'s `ROUTES` — to house a panel consuming a file another panel already consumes.
+
+**The panel carries no `--rule` and no `--basis` control, which is D49's seam kept literally.** `CLAUDE.md` records those two as deliberately absent from this screen because `#/pricing` is the one press that sets a standing pricing policy. The window and the percentage are this operation's own parameters and not that policy. **The report names the rule and basis it applied**, so the policy is on screen before the control that applies it exists — and `app/tests/stale-listings.spec.ts` pins both halves.
+
+### The report is stdout, verbatim, and a table was refused
+
+**D33's rule, and it binds hardest here.** Summarising would be a second opinion about which rows mattered, taken at the one moment a price moves. And `Pricing.tsx`'s no-client-arithmetic-on-money rule closes it by reductio: every column a table would add — a delta, a percentage — is arithmetic, so shipping them pre-formatted from Python converges on the fixed-width columns the command already prints, having paid a route, a type and a component for it. What makes the `<pre>` sufficient is that the command sorts by what each markdown gives up, so the first screenful is the one that decides whether to press.
+
+### What is NOT validated, and it is the part that carries money
+
+**No real listing has been through this path.** The byte oracle `fixtures/staged-import-accepted.csv` is what **Import to Staged** accepted, carrying `Add to Quantity` = `"1"`; this file goes back through the **My Pricing** upload, whose four endpoints this repo has never called. **Whether that importer accepts a zero-quantity price-only row has never been measured** — only inferred, from TCGplayer's own export writing that byte on all 21,502 rows and from `Total Quantity` being a separate, unwritable column. The failure modes split cleanly: a no-op is silent and safe, and only a reading of `Add to Quantity` as *set the quantity to* would delist.
+
+**`--limit N` exists for that reason and not for convenience.** The first real press should be five cards, uploaded, then `reconcile --live` against a fresh download to read the prices back.
+
+**What would reopen this.** *The first real upload*, whichever way it answers, and the answer belongs in `docs/specs/stale-listings.md` in the session that gets it. *A ledger write that leaves a history event*, which would replace `captured_at` with a real first-push time and is worth its own entry. *An operator who wants a ladder* — different percentages by how long a card has sat — which today is two runs at two windows and is deliberately not a parameter. *A second writer of the corpus that is not a person*, which would make the revision guard's "absent means did not read one" too permissive.

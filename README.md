@@ -108,6 +108,13 @@ human. One blocking command would put a person in the middle of a poll loop.
 ./pkmnscan reconcile  <run-dir> <staged-export.csv>   confirm what TCGplayer staged.
 ./pkmnscan reconcile  --live <my-pricing.csv>         the WHOLE store against one live
                         export, both directions. Previews; --write settles `live`.
+./pkmnscan markdown   <my-pricing.csv> --days N --percent P
+                                                      mark down what is live, old and not
+                        selling. Previews; --write writes the import CSV. Every row carries
+                        `Add to Quantity` 0, so it re-prices in place and adds no copies —
+                        nothing has to be deleted at TCGplayer, and the live cap cannot be
+                        breached. It never raises a price.
+                        --limit N  the N worth most. Use it for the first real push.
 ```
 
 `identify --dry-run` does everything except the API call, so a mistyped directory, a
@@ -145,7 +152,9 @@ server and nothing else: no pipeline logic, no second store, no auth, no login.
 
 ```
 capture        live camera, box / game / set hint / finish / rarity, undo, motion trigger
-runs           the pipeline: preflight, the money gate, join / emit / reconcile, downloads
+runs           the pipeline: preflight, the money gate, join / emit / reconcile, downloads,
+               and — under the run panel, unscoped — the store-wide reconcile and the
+               stale-listing markdown, which read the same live export
 review queue   one card at a time, photo first — the answer writes and advances
 pricing        the hand-pricing worklist, one row per SKU, and D49's deliberate holds
 orders         which copies this buyer gets and where they are, out of the order ledger,

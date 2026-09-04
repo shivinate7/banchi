@@ -14,9 +14,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli import cmd_emit, cmd_prices, cmd_identify, cmd_join, cmd_reconcile, cmd_scan, runs  # noqa: E402
+from cli import (  # noqa: E402
+    cmd_emit,
+    cmd_identify,
+    cmd_join,
+    cmd_markdown,
+    cmd_prices,
+    cmd_reconcile,
+    cmd_scan,
+    runs,
+)
 from identify import images  # noqa: E402
-from pipeline import pricing, routing, variant  # noqa: E402
+from pipeline import pricing, reprice, routing, variant  # noqa: E402
 from store import files as store_files  # noqa: E402
 
 
@@ -190,6 +199,71 @@ def build_parser() -> argparse.ArgumentParser:
         help="with --live: settle the ledger. Previews without it.",
     )
 
+    # ------------------------------------------------------------------------- markdown
+    #
+    # THE ONE COMMAND THAT MOVES A PRICE THAT IS ALREADY LIVE (D94), and it previews by
+    # default for `prices adopt`'s reason with money at stake instead of quantities.
+    #
+    # `--days` AND THE MARKDOWN SIZE HAVE NO DEFAULTS, and that is this file's own header
+    # holding: "Every default here is a number from the spec, not a taste." No number in this
+    # repo derives a staleness window the way D9 derives the floor, and the two plausible
+    # tastes are both wrong on the owner's store today — 14 fires on nothing, 7 quietly
+    # proposes 394 copies. The screen carries its own default as a control whose value it
+    # always sends, so there is exactly one declaration of it and nothing to drift.
+    markdown = sub.add_parser(
+        "markdown",
+        help="mark down the listings that are live, old and not selling. Previews by default",
+    )
+    markdown.add_argument(
+        "live_export", help="TCGplayer's My Pricing export — the same file `reconcile --live` reads"
+    )
+    markdown.add_argument(
+        "--days",
+        type=int,
+        required=True,
+        help="the window. A listing is stale when no copy has sold in this many days AND the "
+        "oldest copy of it was photographed here more than this many days ago.",
+    )
+    markdown.add_argument(
+        "--percent",
+        help="how far down, as a percentage off what you are asking. 10 means 10%% off. "
+        "Spells --rule undercut:PCT, and is the whole vocabulary #/runs offers.",
+    )
+    markdown.add_argument(
+        "--rule",
+        help="the power form of --percent: match | undercut:PCT | markup:PCT. Give one or "
+        "the other, never both.",
+    )
+    markdown.add_argument(
+        "--basis",
+        default=reprice.BASIS_LISTED,
+        choices=list(reprice.BASES),
+        help="which column the rule is applied to (default: listed, your own asking price). "
+        "`market` re-prices against the market instead. The $0.40 floor applies either way.",
+    )
+    markdown.add_argument(
+        "--above-market",
+        help="only listings priced more than this percentage above TCG Market Price. The "
+        "drift is printed on every row whether or not this filters.",
+    )
+    markdown.add_argument(
+        "--limit",
+        type=int,
+        help="mark down only the N rows worth the most. Everything below the cut is named, "
+        "never silently dropped. Use it for the first real push.",
+    )
+    markdown.add_argument(
+        "--again",
+        action="store_true",
+        help="mark down a SKU the corpus says was already marked down inside the window. "
+        "Without it they are refused, which is what stops a daily sweep compounding.",
+    )
+    markdown.add_argument(
+        "--write",
+        action="store_true",
+        help="write the import CSV, the receipt and the corpus. Previews without it.",
+    )
+
     # -------------------------------------------------------------------------- prices
     #
     # THE CORPUS, AND THE ONE-TIME FOLD THAT FILLS IT (D86). `adopt` previews by default
@@ -222,6 +296,7 @@ COMMANDS = {
     "join": cmd_join.run,
     "emit": cmd_emit.run,
     "reconcile": cmd_reconcile.run,
+    "markdown": cmd_markdown.run,
     "prices": cmd_prices.run,
 }
 

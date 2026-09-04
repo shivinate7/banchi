@@ -206,6 +206,7 @@ from pipeline import (  # noqa: E402
     orders,
     pirateship,
     pricehistory,
+    pricing,
     shipping,
     tcgcsv,
     variant,
@@ -426,6 +427,12 @@ def capture_payload(box: int, **extra) -> dict:
 # two condition rows, which the capture toggle decides (D3 rung 1), and a holofoil-only
 # number, which the catalog decides on its own (rung 2).
 FIXTURE_EXPORT = Path(__file__).resolve().parents[2] / "fixtures" / "sv09_export_untouched.csv"
+# THE BYTE ORACLE — the two-row file TCGplayer's importer accepted verbatim. T2 owns the
+# round-trip; `check_markdown` reuses it to assert the FORMAT while writing the opposite
+# quantity, which is the one thing a markdown's file does differently from an emit's.
+ACCEPTED_IMPORT = (
+    Path(__file__).resolve().parents[2] / "fixtures" / "staged-import-accepted.csv"
+)
 
 DUNSPARCE_SKU = "8608459"  # 120/159 Near Mint, market 2.06
 DUNSPARCE_REVERSE_SKU = "8608464"  # 120/159 Near Mint Reverse Holofoil, market 2.60
@@ -9350,16 +9357,20 @@ def check_cli_refusals(checks: Checks) -> None:
 
     from cli import __main__ as entry
 
-    # SIX SINCE 2026-09-02, and `scan` is still the only one that is free AND writes to the
-    # store. `prices` writes the CORPUS — `prices adopt` previews unless given `--write`, and
-    # `prices show` reads. Still an exact match rather than a superset check: the point of this
-    # line is that a command cannot appear in the dispatch without somebody editing this list,
-    # and a membership test would let one arrive unnoticed — which matters most for a command
-    # that touches the store, as `scan` does.
+    # SEVEN SINCE 2026-09-03, and `scan` is still the only one that is free AND writes to the
+    # INVENTORY. `prices` and `markdown` write the CORPUS — `prices adopt` and `markdown`
+    # both preview unless given `--write`, and `prices show` reads. `markdown` is the first
+    # command that can change the price of something already live, and it reaches TCGplayer
+    # through a CSV a person uploads rather than through anything here.
+    #
+    # RECOUNTED FROM `entry.COMMANDS`, NEVER INCREMENTED — the rule `route census` enforces one
+    # register over, applied by hand here. Still an exact match rather than a superset check:
+    # the point of this line is that a command cannot appear in the dispatch without somebody
+    # editing this list, and a membership test would let one arrive unnoticed.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["emit", "identify", "join", "prices", "reconcile", "scan"],
-        "six commands are registered, and only six",
+        ["emit", "identify", "join", "markdown", "prices", "reconcile", "scan"],
+        "seven commands are registered, and only seven",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -10057,6 +10068,354 @@ def check_prices_adopt(checks: Checks) -> None:
             "and emit prices the sub-threshold card at the default without touching the "
             "corpus — the answer was already there; emit only reads it",
         )
+
+def check_corpus_revision(checks: Checks) -> None:
+    """`PUT /pricing` refuses a write that is behind the file on disk (D94).
+
+    WHY THIS BECAME NECESSARY. That route replaces `inventory/prices.json` WHOLESALE, which is
+    D86's design and is right: the screen round-trips every key it does not understand. It had
+    no concurrency guard because the operator was the only writer. `pkmnscan markdown` is a
+    second one, and it re-prices every stale SKU at once — so a `#/pricing` tab holding a
+    snapshot from mount would revert an entire sweep on the next keystroke, with no error
+    anywhere.
+
+    AN ABSENT REVISION IS ALLOWED, AND THAT IS NOT A HOLE. It means "did not read one", which
+    is the terminal user editing the file and putting it back. The guard is for a client that
+    DID read one and is now behind — the only case that can silently destroy another writer's
+    work.
+    """
+    checks.note("")
+    checks.note("CORPUS REVISION — the stale-write refusal on PUT /pricing")
+
+    with isolated_home():
+        corpus.Corpus().write()
+        first = pipeline_routes.do_pricing_corpus()
+        checks.ok(
+            bool(first.get("revision")),
+            "`GET /pricing` carries a revision BESIDE the document. Inside it, the screen's "
+            "identity-compared `dirty` would see it — the oscillation `Pricing.tsx` records "
+            "measuring",
+        )
+        checks.ok(
+            "revision" not in first["corpus"],
+            "and it is NOT a key of the corpus itself, so nothing round-trips it into the file",
+        )
+
+        # THE REVISION IS THE FILE'S OWN DIGEST, so an IDEMPOTENT write does not move it — and
+        # that is the better semantic than a counter: a client is stale only when the content
+        # it holds actually differs from what is on disk, not merely when somebody else wrote.
+        same = pipeline_routes.do_pricing_corpus_write(
+            {"corpus": first["corpus"], "revision": first["revision"]}
+        )
+        checks.equal(
+            same["revision"],
+            first["revision"],
+            "a write that changes nothing does not move the revision — it is a digest of the "
+            "file, not a counter, so re-saving an unchanged document is never a conflict",
+        )
+
+        # NOW A SECOND WRITER MOVES IT, which is what a markdown does to every stale SKU.
+        moved = dict(first["corpus"])
+        moved["skus"] = {DUNSPARCE_SKU: {"value": "4.50", "was": "5.00"}}
+        landed = pipeline_routes.do_pricing_corpus_write(
+            {"corpus": moved, "revision": first["revision"]}
+        )
+        checks.ok(
+            landed["revision"] != first["revision"],
+            "a write that CHANGES the document answers with the new revision, so the next "
+            "save is not refused for being the one that landed",
+        )
+
+        # THE INLINE FORM, because `refusal` catches `capture_server.BadRequest` and the
+        # pipeline routes raise their own class — the seam its own header argues for.
+        label = (
+            "and the write that would REVERT it is refused. This is the exact press a "
+            "`#/pricing` tab makes on its next keystroke after a markdown has run — wholesale, "
+            "from a mount-time snapshot, with no error anywhere before this guard"
+        )
+        try:
+            pipeline_routes.do_pricing_corpus_write(
+                {"corpus": first["corpus"], "revision": first["revision"]}
+            )
+            checks.ok(False, label, "it accepted the stale write")
+        except pipeline_routes.PipelineRefusal as refused:
+            checks.equal(refused.code, "corpus_moved", label)
+
+        after = pipeline_routes.do_pricing_corpus_write({"corpus": first["corpus"]})
+        checks.ok(
+            after["ok"],
+            "and a write carrying NO revision still lands: absent means 'did not read one', "
+            "which is a person editing the file by hand",
+        )
+
+
+def check_markdown(checks: Checks) -> None:
+    """Mark down the listings that are live, old and not selling (D94).
+
+    THE INVARIANT THIS EXISTS TO PIN IS `Add to Quantity` = 0. It is what makes the operation
+    incapable of breaching the live cap — D86's failure mode, where three separate emits spent
+    a global cap three times — because there is no quantity to spend. It is also the byte
+    TCGplayer's own export writes on all 21,502 rows across the four fixtures, which is the
+    only evidence there is that the importer takes a price-only row: no real listing has been
+    through this path, and `docs/specs/stale-listings.md` says so.
+
+    AND THAT IT NEVER RAISES A PRICE. `not_a_markdown` refuses a row whose new price is at or
+    above the old one, which is where a risen market under `--basis market`, a mistyped
+    `markup:`, and a listing already on the $0.40 floor all land.
+
+    THE AGE TERM IS THE ONE THAT MAKES THE OTHER TWO USEFUL. Measured on the owner's store,
+    93% of live SKUs have never sold a copy — but half of them were captured two days ago, so
+    "has not sold" alone fires on essentially everything. The case below sells nothing and
+    still expects a young card to be excluded.
+    """
+    checks.note("")
+    checks.note("MARKDOWN — the stale listings, re-priced down")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "normal"),
+        (3, 3, "Articuno", "161", None),
+    ]
+
+    def live_export(directory, name, *, asking, live=None, quantity_column=None):
+        """A My Pricing export: the seam rows, live, each carrying an ASKING price.
+
+        Built from the run's own export so every column is the real shape. `TCG Marketplace
+        Price` is what a live export carries and what a markdown is measured against, and
+        nothing else in this harness writes it.
+        """
+        source = tcgcsv.read_export(directory.path("export.csv"))
+        rows = []
+        for row in source.rows:
+            sku = row[tcgcsv.SKU_COLUMN]
+            out = dict(row)
+            out[tcgcsv.LIVE_QUANTITY_COLUMN] = str((live or {}).get(sku, 2))
+            out[tcgcsv.PRICE_COLUMN] = str(asking[sku])
+            if quantity_column is not None:
+                out[tcgcsv.QUANTITY_COLUMN] = quantity_column
+            rows.append(out)
+        # A DISTINCT FILE PER CASE. Writing them all to one name made the sold-out export
+        # clobber the one the hold case then read, and that case passed for the wrong
+        # reason — sold-out is judged before held, so nothing reached the hold at all.
+        path = directory.path(name)
+        tcgcsv.write_csv(path, source.header, rows)
+        return path
+
+    def backdate(days):
+        """Move every card's capture back, so the age term is satisfied. `captured_at` is the
+        only fully-populated age axis in the store and the one `select` reads."""
+        stamp = (
+            datetime.now(timezone.utc) - timedelta(days=days)
+        ).isoformat(timespec="milliseconds")
+        store = Store()
+        with store.write() as writable:
+            for card in writable.inventory.cards.values():
+                card.captured_at = stamp
+        return stamp
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+        backdate(40)
+
+        # EVERY ASKING PRICE IS FOUR DECIMALS, because a live export writes four and this
+        # writer emits two. ARTICUNO SITS ON THE $0.40 FLOOR: `undercut:10` takes it to $0.36,
+        # which clamps back to $0.40 — at or above what it is already asking, which is the case
+        # `not_a_markdown` exists for and the one a live marketplace would otherwise see as a
+        # rewrite to the price it already has.
+        asking = {DUNSPARCE_SKU: "5.0000", ARTICUNO_SKU: "0.4000"}
+        asking[SEAM_SKUS[1]] = "3.0000"
+        path = live_export(run_dir, "my-pricing.csv", asking=asking)
+
+        said = command(checks, "markdown", str(path), "--days", "7", "--percent", "10")
+        checks.ok(
+            "DRY RUN" in said,
+            "IT PREVIEWS BY DEFAULT — `docs/DECISIONS.md` deferred this feature naming that "
+            "exact shape, *'a free preflight showing exactly which prices would change and by "
+            "how much, and a confirm that is not a default'*",
+        )
+        checks.ok(
+            not list(files.markdowns_dir().glob("*/markdown.csv")),
+            "and the preview wrote NO FILE — not even an empty one (D54)",
+        )
+        checks.ok(
+            not corpus.Corpus.read().answers,
+            "and wrote NO ANSWER into the corpus",
+        )
+        checks.ok(
+            "rule=undercut:10" in said and "basis=listed" in said,
+            "the report NAMES THE RULE AND THE BASIS. `#/runs` carries no control for either "
+            "(D49), so this sentence is how the operator reads the policy being applied — and "
+            "it is on screen before the control that applies it exists",
+        )
+
+        before = store_tables()
+        said = command(
+            checks, "markdown", str(path), "--days", "7", "--percent", "10", "--write"
+        )
+        checks.equal(
+            store_tables(),
+            before,
+            "THE WRITE MOVES NOTHING IN THE STORE. No card is marked sold, no `live`, "
+            "`pushed` or `staged` count moves — it writes a CSV and an answer, and the "
+            "irreversible step stays outside this product entirely",
+        )
+
+        written = sorted(files.markdowns_dir().glob("*/markdown.csv"))
+        checks.equal(len(written), 1, "one import CSV was written")
+        out = tcgcsv.read_export(written[-1])
+        source = tcgcsv.read_export(path).by_sku()
+
+        checks.ok(
+            all(row[tcgcsv.QUANTITY_COLUMN] == "0" for row in out.rows),
+            "`Add to Quantity` IS 0 ON EVERY ROW. This is the whole safety argument: the "
+            "operation adds no copies, so it CANNOT breach the live cap, and it is the byte "
+            "TCGplayer's own export writes on all 21,502 fixture rows",
+        )
+        changed = {
+            column
+            for row in out.rows
+            for column in source[row[tcgcsv.SKU_COLUMN]]
+            if source[row[tcgcsv.SKU_COLUMN]][column] != row[column]
+        }
+        checks.equal(
+            sorted(changed),
+            [tcgcsv.PRICE_COLUMN],
+            "and EXACTLY ONE COLUMN differs from the export original, on every row. "
+            "`TCGplayer Id` above all is untouched — a modified SKU does not fail, it lists "
+            "the wrong card",
+        )
+        checks.equal(
+            out.header,
+            tcgcsv.read_export(path).header,
+            "the header round-trips identically",
+        )
+        checks.equal(
+            len({row[tcgcsv.SKU_COLUMN] for row in out.rows}),
+            len(out.rows),
+            "no SKU appears twice — two rows for one `TCGplayer Id` is undefined behaviour",
+        )
+        profile = tcgcsv.inspect(written[-1].read_bytes())
+        checks.equal(
+            profile.signature,
+            tcgcsv.inspect(ACCEPTED_IMPORT.read_bytes()).signature,
+            "and the BYTE FORMAT matches the file TCGplayer's importer accepted — header "
+            "unquoted, every data field quoted, CRLF, no BOM",
+        )
+
+        priced = {row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN] for row in out.rows}
+        checks.equal(
+            priced.get(DUNSPARCE_SKU), "4.50", "10% off $5.00, rounded then floored"
+        )
+        checks.ok(
+            ARTICUNO_SKU not in priced and "not a markdown" in said,
+            "A LISTING THE RULE CANNOT LOWER IS SKIPPED AND NAMED, NEVER RAISED. It is already "
+            "on the $0.40 floor, so `undercut:10` clamps back to what it is asking — and a row "
+            "written at the price it already has spends a row in the import file and moves a "
+            "live marketplace price nowhere",
+        )
+
+        # FOUR DECIMALS AGAINST TWO, ASSERTED ON ITS OWN. `match` on `"5.0000"` yields
+        # `Decimal("5.00")`, which is EQUAL — so nothing is a candidate. Compare the strings
+        # instead and every row in the store reads as changed, and the whole store is marked
+        # down by a rounding artefact.
+        said_match = command(
+            checks, "markdown", str(path), "--days", "7", "--rule", "match", "--again"
+        )
+        checks.ok(
+            "Nothing to mark down" in said_match,
+            "A PRICE THE RULE LEAVES ALONE IS NOT A MARKDOWN, THOUGH ITS BYTES DIFFER. The "
+            "export writes `\"5.0000\"` and this writer emits `\"5.00\"`; they are equal as "
+            "`Decimal` and different as strings, and only the first reading is right",
+        )
+
+        answers = corpus.Corpus.read().answers
+        checks.equal(
+            answers[DUNSPARCE_SKU].was,
+            "5.00",
+            "the corpus records WHAT IT WAS ASKING. An answer here is layer 1 of the price "
+            "ladder, above the rule, so the card is hand-priced from now on — `was` is what "
+            "makes that reversible by inspection rather than by memory",
+        )
+        checks.ok(
+            bool(answers[DUNSPARCE_SKU].marked_down),
+            "and stamps `marked_down`, which is the ratchet guard's source of truth — a "
+            "receipt directory can be deleted; an answer cannot be, without also giving the "
+            "card its rule price back",
+        )
+
+        # ------------------------------------------------------------------ the ratchet
+        again = live_export(run_dir, "again.csv", asking=asking)
+        said = command(checks, "markdown", str(again), "--days", "7", "--percent", "10")
+        checks.ok(
+            "marked down already" in said and DUNSPARCE_SKU in said,
+            "A SECOND SWEEP INSIDE THE WINDOW REFUSES, BY NAME. Nothing else stops "
+            "`undercut:10` compounding daily to -52% in a week, floored only at $0.40, with "
+            "every individual run justified because the card still has not sold",
+        )
+        checks.equal(
+            len(sorted(files.markdowns_dir().glob("*/markdown.csv"))),
+            1,
+            "and no second file was written",
+        )
+        said = command(
+            checks, "markdown", str(again), "--days", "7", "--percent", "10", "--again"
+        )
+        checks.ok(
+            "marked down already" not in said,
+            "`--again` is the deliberate override, and it is deliberately not a default",
+        )
+
+        # ------------------------------------------------- the age term, on its own
+        backdate(1)
+        said = command(checks, "markdown", str(again), "--days", "7", "--percent", "10",
+                       "--again")
+        checks.ok(
+            "too young" in said and "Nothing to mark down" in said,
+            "A CARD HELD LESS THAN THE WINDOW IS EXCLUDED THOUGH IT HAS SOLD NOTHING. This is "
+            "the term that gives the predicate its power: 93% of the owner's live SKUs have "
+            "never sold, and half were captured two days ago",
+        )
+        backdate(40)
+
+        # ------------------------------------------------- sold out, held, and additive
+        sold_out = live_export(
+            run_dir, "sold-out.csv", asking=asking, live={sku: 0 for sku in SEAM_SKUS}
+        )
+        said = command(checks, "markdown", str(sold_out), "--days", "7", "--percent", "10",
+                       "--again")
+        checks.ok(
+            "sold out" in said,
+            "A PRICE WITH NO COPIES FOR SALE IS SKIPPED AND NAMED — 96 of the 109 priced rows "
+            "across the four fixtures are this, and the operator thinks of them as listed, so "
+            "silence would read as a broken sweep",
+        )
+
+        book = corpus.Corpus.read()
+        book.answers[DUNSPARCE_SKU] = corpus.Answer(value=pricing.UNLISTED)
+        book.write()
+        said = command(checks, "markdown", str(again), "--days", "7", "--percent", "10",
+                       "--again")
+        checks.ok(
+            "held back" in said and DUNSPARCE_SKU in said,
+            "A HELD CARD IS EXCLUDED AND NAMED. A hold that is live at TCGplayer is a "
+            "contradiction worth the operator's eye — they said 'not this one' and it is "
+            "listed — so it is reported rather than silently passed over (D78's shape)",
+        )
+
+        additive = live_export(run_dir, "additive.csv", asking=asking, quantity_column="1")
+        said = command(checks, "markdown", str(additive), "--days", "7", "--percent", "10",
+                       "--again", "--write")
+        checks.ok(
+            "carries a quantity" in said,
+            "AN EXPORT ALREADY CARRYING A QUANTITY IS REFUSED. A file that would add copies as "
+            "well as reprice is not the document this command contracts to read, and one row "
+            "of it would make the whole import additive",
+        )
+
 
 def check_live_reconcile(checks: Checks) -> None:
     """The whole store against one live export, both directions (D87).
@@ -17869,6 +18228,8 @@ def run() -> Result:
     check_prices_adopt(checks)
     check_merged_emit_cap(checks)
     check_live_reconcile(checks)
+    check_markdown(checks)
+    check_corpus_revision(checks)
     check_withholding(checks)
     check_pricing_route(checks)
     check_pricing_labels(checks)

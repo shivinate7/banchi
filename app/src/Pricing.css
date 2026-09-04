@@ -1152,3 +1152,14 @@
   font-weight: 600;
   color: var(--ink);
 }
+
+/* WHAT A MARKDOWN MOVED A CARD FROM (D94). A third line under the name and the meta, at the
+   meta's weight and quieter than it: it is provenance, not a figure to act on — the figure to
+   act on is in the price field two columns over. */
+.pricing-wasmark {
+  display: block;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}

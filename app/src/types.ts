@@ -1726,6 +1726,16 @@ export type CorpusAnswer = {
   /** `"price"` for `overrides`, `"unknown"` for `no_market_data`. The channel decides which
    *  gate `emit` measures the answer against, so it is carried rather than inferred. */
   channel?: string
+  /** What this SKU was asking before a markdown moved it, and when (D94). PROVENANCE, like
+   *  `at` and `from_run` — nothing prices from either, and the screen only draws them.
+   *
+   *  THEY EXIST BECAUSE A MARKDOWN'S WRITE COSTS SOMETHING. An answer here is layer 1 of the
+   *  price ladder, above the rule, so a card marked down is hand-priced from then on. `was`
+   *  is what makes that legible at the point of decision instead of only in a receipt file,
+   *  and it holds the price before this pipeline started moving it rather than the last
+   *  intermediate one. */
+  was?: string
+  marked_down?: string
 }
 
 /** `GET /pricing` — every listing answer this operator has given, and the standing policy.
@@ -1975,6 +1985,25 @@ export type RunStarted = {
 /** A free step's result. A non-zero `exit_code` arrives as a 200 with `ok: false` — `emit`
  *  refusing while a price is unanswered is the most useful thing that command does, and an
  *  HTTP error would put a stack trace where the sentence naming the SKU belongs. */
+/**
+ * What `POST /pipeline/markdown` answers (D94) — `reconcileLive`'s shape plus a download.
+ *
+ * `stamp` IS THE DIRECTORY, AND IT IS WHY THIS IS A NAMED TYPE. `reconcileLive` returns an
+ * inline shape because nothing survives its call; this one does — the write's stamp becomes
+ * an href through `markdownFileUrl`. It is `null` on every preview and on a write that
+ * refused, so a non-null `stamp` is the same fact as "a file exists", said once.
+ *
+ * NEVER PARSED OUT OF `console`. That string is the command's stdout, verbatim and free to be
+ * reworded; a client regex over it would make a prose edit break a download.
+ */
+export type MarkdownResult = {
+  ok: boolean
+  exit_code: number
+  wrote: boolean
+  stamp: string | null
+  console: string
+}
+
 export type RunStepResult = {
   ok: boolean
   exit_code: number
