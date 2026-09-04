@@ -778,12 +778,6 @@ ORDER_PULL_FIELDS = ("source", "number", "sku", "targets", "undo")
 ORDER_PULL_UNDO_FIELDS = ("undo", "targets")
 ORDER_PULL_TARGET_FIELDS = ("box", "index", "capture_id")
 
-# What `POST /orders/fill` carries — the envelope, every line of one order in one write. ONE
-# TUPLE FOR BOTH DIRECTIONS, unlike the pull's: the undo names its lines too, because the
-# screen holds the receipt of what it sent and the ledger must agree with every line of it.
-ORDER_FILL_FIELDS = ("source", "number", "lines", "undo")
-ORDER_FILL_LINE_FIELDS = ("sku", "targets")
-
 # A paste ceiling, not a page size. Two hundred orders is far past any day's work and well
 # short of a whole exported history, which is the accident this guards: one paste of
 # everything the marketplace ever sold would take the store lock for the length of it.
@@ -792,10 +786,6 @@ ORDER_INGEST_LIMIT = 200
 # One press is one operator's armful of cards. Fifty is generous for that and refuses the
 # script that meant to send the whole box.
 ORDER_PULL_TARGET_LIMIT = 50
-
-# One envelope is one buyer's cards, across every line of the order. The same fifty, for the
-# same reason.
-ORDER_FILL_TARGET_LIMIT = 50
 
 # The feed a fetched order is recorded under. `store/orders.py:order_key` folds case to
 # compare and stores what it was given, so this is the spelling that reaches a screen.
@@ -8466,14 +8456,14 @@ def _prepare_targets(
     undo: bool,
     seen: Set[str],
 ) -> Tuple[List[dict], List[Tuple[str, BadRequest]]]:
-    """Phase one of a pull, shared by `/orders/pull` and `/orders/fill`: validate every
-    target and compute every PRE-WRITE place, writing nothing.
+    """Phase one of `POST /orders/pull`: validate every target and compute every PRE-WRITE
+    place, writing nothing.
 
-    Lifted out of `do_order_pull` when the envelope route arrived, so the aim check
-    (`capture_id_mismatch`), the SKU check and the duplicate guard are ONE implementation
-    behind both doors. Refusals are COLLECTED rather than raised, because the caller decides
-    the unit that is refused whole — one line's press, or one envelope's. `seen` is the
-    caller's, so an envelope can refuse one position sent under two lines.
+    A SEPARATE FUNCTION FOR A SECOND DOOR THAT NO LONGER EXISTS. It was lifted out of
+    `do_order_pull` for D90's `/orders/fill`, which D96 deleted rather than wired up; the
+    shape stays because it is the honest one either way. Refusals are COLLECTED rather than
+    raised, because the caller — not this function — decides the unit that is refused whole,
+    and `seen` is the caller's for the same reason.
     """
     prepared: List[dict] = []
     refused: List[Tuple[str, BadRequest]] = []
@@ -8544,10 +8534,10 @@ def _prepare_targets(
 def _ledger_pull(
     snapshot, key: str, sku: str, copies: List[str], undo: bool
 ) -> Tuple[str, str, int]:
-    """Phase two's ledger half, shared by both doors: record or forget, and map the store's
-    refusals to this server's codes. Answers `(key, sku, newly)` — for an undo the key and
-    SKU are DISCOVERED from whoever holds the copies, because `/orders/pull`'s undo names no
-    line and `/orders/fill`'s undo names one it must then agree with."""
+    """Phase two's ledger half: record or forget, and map the store's refusals to this
+    server's codes. Answers `(key, sku, newly)` — for an undo the key and SKU are DISCOVERED
+    from whoever holds the copies, because `/orders/pull`'s undo names no line at all, so a
+    screen holding a stale order key cannot reverse the wrong one."""
     if undo:
         holders = []
         for copy in copies:
@@ -8600,178 +8590,6 @@ def _ledger_pull(
         raise BadRequest(HTTPStatus.CONFLICT, "over_fulfilled", str(exc)) from None
     return key, sku, int(newly)
 
-
-def do_order_fill(payload: dict) -> dict:
-    """`POST /orders/fill` — the envelope: every line of one order in ONE transaction. D63.
-
-    THE UNIT OF THE WRITE IS THE ENVELOPE, AND THAT REOPENS D69 ON THE OWNER'S WORD. D69 ruled
-    "one card, one press, and there is no batch control", and `/orders/pull` still is that.
-    The owner then named the failure the per-card press produces at the drawer: moving on to
-    the next card and only afterwards wondering whether the last one was marked sold. So the
-    order walk on `#/inventory` writes NOTHING per card; this route records every copy of one
-    order — pulled and sold — on the one press that says the envelope is filled, and the walk
-    does not offer the next order until it has been pressed. The unit moved; what did not is
-    that every copy is still aimed by its own `capture_id`, still checked against the card at
-    the slot, and still undoable — the whole envelope, in one write, through this same route.
-
-    WHY NOT N CALLS TO `/orders/pull`. That route takes one SKU per call, so an envelope of
-    three lines would be three writes; a refusal on the second leaves a half-recorded envelope,
-    and the undo could not reverse it in one press because `/orders/pull`'s undo refuses
-    `pull_spans_lines`. One transaction, one refusal, one undo.
-
-    BODY-ADDRESSED, both directions, for `/orders/pull`'s reason: a number may carry a colon.
-
-        record: {source, number, lines: [{sku, targets: [{box, index, capture_id}]}]}
-        undo:   {undo: true, source, number, lines: [{sku, targets: [...]}]}
-
-    Unlike `/orders/pull`, the undo NAMES its lines — the screen holds the receipt of what it
-    sent — and the ledger's own answer (`holder_of`) must agree with every one of them, or the
-    whole undo refuses `fill_line_mismatch`.
-
-    ONE `Store.write()`, TWO PHASES, exactly `do_order_pull`'s and through the same two
-    helpers. Phase one validates every target of every line and computes every pre-write place;
-    a refusal anywhere aggregates to `fill_entry_refused` naming the line and the position, and
-    NOTHING is written. Phase two writes the ledger line by line, then sells every copy.
-    `Store.write()` commits only on a clean exit, so a raise anywhere discards all of it.
-    """
-    undo = _optional_flag(payload, "undo", "undo_invalid")
-    _reject_unknown(payload, ORDER_FILL_FIELDS)
-    source = _order_text(
-        payload,
-        "source",
-        "source_required",
-        "Send `source` — the marketplace this order came from. It is half of the key the "
-        "envelope is recorded under.",
-    )
-    number = _order_text(
-        payload,
-        "number",
-        "number_required",
-        "Send `number` — the order's own identifier at that marketplace.",
-    )
-    try:
-        key = order_store.order_key(source, number)
-    except order_store.BadOrderKey as exc:
-        raise BadRequest(HTTPStatus.BAD_REQUEST, "order_key_invalid", str(exc)) from None
-
-    raw_lines = payload.get("lines")
-    if not isinstance(raw_lines, list) or not raw_lines:
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST,
-            "lines_required",
-            "Send `lines` — one entry per order line, each {sku, targets: [...]}. An "
-            "envelope of nothing is refused rather than recorded as filled.",
-        )
-    parsed_lines: List[Tuple[str, List[dict]]] = []
-    total = 0
-    for line_at, raw in enumerate(raw_lines, start=1):
-        if not isinstance(raw, dict):
-            raise BadRequest(
-                HTTPStatus.BAD_REQUEST,
-                "line_invalid",
-                f"Line {line_at} is not an object. Send {{\"sku\": …, \"targets\": [...]}}.",
-            )
-        _reject_unknown(raw, ORDER_FILL_LINE_FIELDS)
-        sku = _order_text(
-            raw,
-            "sku",
-            "sku_required",
-            f"Line {line_at} names no `sku` — the TCGplayer Id of the line these copies "
-            f"fill. Fulfilment is keyed by SKU because that is the only line identity stable "
-            f"across two ingests.",
-        )
-        if any(sku == other for other, _ in parsed_lines):
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "duplicate_line",
-                f"SKU {sku} appears on two lines of this envelope. One order line is one "
-                f"SKU; send its targets together.",
-            )
-        targets = raw.get("targets")
-        if not isinstance(targets, list) or not targets:
-            raise BadRequest(
-                HTTPStatus.BAD_REQUEST,
-                "targets_required",
-                f"Line {line_at} ({sku}) names no `targets`. A line the envelope does not "
-                f"fill is left out of the body, not sent empty.",
-            )
-        total += len(targets)
-        if total > ORDER_FILL_TARGET_LIMIT:
-            raise BadRequest(
-                HTTPStatus.BAD_REQUEST,
-                "too_many_targets",
-                f"More than {ORDER_FILL_TARGET_LIMIT} positions in one envelope. One press is "
-                f"one envelope's cards; a longer list is a script that meant to send the box.",
-            )
-        parsed_lines.append(
-            (sku, [_pull_target(f"{line_at}.{at}", entry) for at, entry in enumerate(targets, 1)])
-        )
-
-    with Store().write() as snapshot:
-        places = _Places(snapshot.inventory)
-
-        # ---------------------------------------------------------------- phase one
-        seen: Set[str] = set()
-        prepared_lines: List[Tuple[str, List[dict]]] = []
-        refused: List[Tuple[str, BadRequest]] = []
-        for sku, parsed in parsed_lines:
-            prepared, bad = _prepare_targets(snapshot, places, parsed, sku, undo, seen)
-            refused.extend((f"line {sku} {position}", exc) for position, exc in bad)
-            prepared_lines.append((sku, prepared))
-        if refused:
-            named = "; ".join(f"{where}: {exc.code} — {exc}" for where, exc in refused)
-            raise BadRequest(
-                HTTPStatus.CONFLICT,
-                "fill_entry_refused",
-                f"{len(refused)} of {total} positions refused, so the whole envelope is "
-                f"refused and nothing was written — not one line of the ledger and not one "
-                f"card's state. Re-read the walk and aim again. {named}",
-            )
-
-        # ---------------------------------------------------------------- phase two
-        lines_out: List[dict] = []
-        all_prepared: List[dict] = []
-        for sku, prepared in prepared_lines:
-            copies = [entry["capture_id"] for entry in prepared]
-            found_key, found_sku, newly = _ledger_pull(snapshot, key, sku, copies, undo)
-            if (found_key, found_sku) != (key, sku):
-                raise BadRequest(
-                    HTTPStatus.CONFLICT,
-                    "fill_line_mismatch",
-                    f"The copies sent under {key} SKU {sku} are held by {found_key} SKU "
-                    f"{found_sku}. An undo reverses the line that holds the copies; send them "
-                    f"under it.",
-                )
-            lines_out.append(
-                {
-                    "sku": sku,
-                    "newly": newly,
-                    "recorded": snapshot.ledger.fulfilled(key, sku),
-                    "outstanding": snapshot.ledger.outstanding(key, sku),
-                }
-            )
-            all_prepared.extend(prepared)
-
-        # `_sell`'s refusals reach the dispatcher unchanged; a raise here discards every
-        # ledger write above with everything else — `Store.write()` commits only on a clean
-        # exit.
-        sales = [_sell(snapshot, entry["box"], entry["index"], undo) for entry in all_prepared]
-
-        record = snapshot.ledger.orders.get(key)
-        complete = record is not None and all(
-            snapshot.ledger.outstanding(key, line.sku) == 0 for line in record.lines
-        )
-        body = {
-            "undone": bool(undo),
-            "order_key": key,
-            "complete": complete,
-            "lines": lines_out,
-            # The PRE-WRITE places, one per target in request order across the lines.
-            "places": [entry["place"] for entry in all_prepared],
-            "sales": sales,
-        }
-
-    return body
 
 def do_order_pull(payload: dict) -> dict:
     """`POST /orders/pull` — record copies against an order line and mark them sold. D63.
@@ -9632,10 +9450,6 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
             if path == "/orders/pull":
                 return self._json(HTTPStatus.OK, do_order_pull(self._body()))
-            # THE ENVELOPE — every line of one order in one write, the order walk's one
-            # door. Exact string like its three neighbours; spends nothing.
-            if path == "/orders/fill":
-                return self._json(HTTPStatus.OK, do_order_fill(self._body()))
             # D61's Export Shipping read. Free, re-runnable, and it spends nothing — what
             # it costs is memory holding buyer addresses, which the DELETE below is the way
             # back from.

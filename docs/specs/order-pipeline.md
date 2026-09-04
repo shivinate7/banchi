@@ -33,7 +33,7 @@ here (T2b), and a `T6` that collided with the harness's own.
 | 8 order in | **built, two ways, reachable at `#/orders`.** Paste, projected client-side by `app/src/orderPaste.ts`, and a fetch behind the same control — `POST /orders/fetch`, `server/order_transport.py` (T3). **The fetch is two presses since D91**: the window counted by status string, then only the ticked statuses detailed — because the one-press fetch was refused `order_too_many` on every press against this account's 370-order window and had never returned an order. The transport's endpoints, auth kind, body shape and four refusal codes were measured; `search` has run authenticated and returned three real orders, and the summary walk is proven by that refusal. `detail` — the half that carries a buyer's name and address — has not run live. Section 6. |
 | 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
 | 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
-| 11 pull | **built and reachable, in BOTH its forms.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. Since 2026-09-02 the order also drives the inventory walk (T6, D90): `#/inventory?order=<key>` or `?orders=open`, and `POST /orders/fill` records the whole envelope on one press. |
+| 11 pull | **built and reachable, in ONE form — the per-copy press.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. It is pressed a card at a time, from an order's own panel or from the cross-order pass through the drawers (`#/orders`, "Walk the boxes"). **T6's envelope form is deleted, not built** (D96 amended 2026-09-04): main's `POST /orders/fill` and the `#/inventory?order=` walk were reachable from no screen here and are gone, the want they served answered by the walk mode above. |
 | 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship, and its three Rubber Stamp columns render empty — `POST /shipping/batches/<batch>/stamps` is specified and not built (T2b). |
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
@@ -359,6 +359,19 @@ govern the file, and the order id T2 carries into Pirate Ship is what makes the 
 authors on one shipment is D34's problem twice.
 
 ### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen
+
+> **SUPERSEDED 2026-09-04, and DELETED rather than left standing (D96, amended).** Everything
+> below records what main built and is kept as that record; none of it is in this product's tree.
+> The owner used both shapes and ruled for the per-copy walk — *"I don't want the walk picking for
+> me"* — so `POST /orders/fill`, `do_order_fill`, `app/src/orderWalk.ts`,
+> `app/src/OrderWalkBanner.tsx`/`.css` and harness T7's `check_order_fill` are gone, 1,484 lines,
+> reachable from no screen for the day and a half they sat here. **The want at the head of this
+> section is still met**, by `app/src/Orders.tsx`'s `buildWalk`/`WalkView` — the "Walk the boxes"
+> mode on `#/orders`, written here independently, which sorts the same cross-order pass by the same
+> `(box, index)` and leaves the choice of copy to the operator (D93, D97). What survives of the
+> envelope idea is one figure: the walk's head says how many open orders are whole beside how many
+> cards are left. `_prepare_targets` and `_ledger_pull` also survive — they are `POST /orders/pull`'s
+> own two phases and always were.
 
 **Built 2026-09-02, and D90 carries the ruling.** The want is the owner's own and it is unchanged:
 *"as orders arrive on TCGPlayer I want them to be matched against PKMNSCAN for SKUs they may hit,

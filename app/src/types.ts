@@ -2459,22 +2459,6 @@ export type PullTarget = { box: number; index: number; capture_id: string }
 /** One pulled copy's current position, composed per `GET /orders` answer. */
 export type OrderPulledCopy = { capture_id: string; box: number | null; index: number | null }
 
-/** One line of an envelope: the SKU and the copies taken for it, each aimed by capture id. */
-export type FillLine = { sku: string; targets: PullTarget[] }
-
-/** What `POST /orders/fill` answered — the whole envelope in one write, both directions.
- *  `places` are the PRE-write places, one per target across the lines in request order, for
- *  the receipt (D58: a post-write label reads departed). `complete` is the ledger's answer
- *  for the whole order after the write. */
-export type FillResult = {
-  undone: boolean
-  order_key: string
-  complete: boolean
-  lines: { sku: string; newly: number; recorded: number; outstanding: number }[]
-  places: Place[]
-  sales: SaleResult[]
-}
-
 /** What a pull or its undo did.
  *
  *  `places` ARE THE LABELS AS THEY WERE BEFORE THE WRITE, one per target in request order.

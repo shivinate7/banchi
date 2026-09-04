@@ -51,8 +51,6 @@ import type {
   RunSummary,
   IngestResult,
   OrderIngestOrder,
-  FillLine,
-  FillResult,
   OrdersFetched,
   OrdersPreview,
   OrdersPayload,
@@ -2314,49 +2312,6 @@ export async function previewOrders(range?: string): Promise<OrdersPreview> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(range === undefined ? { preview: true } : { preview: true, range }),
   })) as OrdersPreview
-}
-
-/**
- * Record a whole envelope — every line of one order — as pulled and sold, in ONE write.
- *
- * THE ORDER WALK'S ONE DOOR. `#/inventory`, driven by an order, writes nothing per card; the
- * press that says the envelope is filled sends every line's copies here, each aimed by its
- * own `capture_id`, and `POST /orders/fill` records all of them or none — one refusal names
- * the line and the position (`fill_entry_refused`), and nothing moves. Not N calls to
- * `pullCopy`: one SKU per call means a half-recorded envelope on the second refusal, and
- * `undoPull` refuses `pull_spans_lines`. The answer carries the PRE-write `places` for the
- * receipt (D58) and `complete`, the ledger's word on the whole order after the write.
- */
-export async function fillEnvelope(
-  order: { source: string; number: string },
-  lines: readonly FillLine[],
-): Promise<FillResult> {
-  return (await fill({ source: order.source, number: order.number, lines: [...lines] })) as FillResult
-}
-
-/**
- * Reverse a whole envelope in one write — the receipt's Undo. Unlike `undoPull`, this NAMES
- * its lines: the screen holds what it sent, and the server refuses `fill_line_mismatch` if
- * the ledger holds a copy under a different line than the one named.
- */
-export async function undoEnvelope(
-  order: { source: string; number: string },
-  lines: readonly FillLine[],
-): Promise<FillResult> {
-  return (await fill({
-    undo: true,
-    source: order.source,
-    number: order.number,
-    lines: [...lines],
-  })) as FillResult
-}
-
-async function fill(body: Record<string, unknown>): Promise<FillResult> {
-  return (await request('/orders/fill', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })) as FillResult
 }
 
 /* One route in both directions — `POST /orders/pull`, with `{"undo": true}` to reverse — and

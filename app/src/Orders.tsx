@@ -1718,7 +1718,7 @@ function PullStage({
 
       {mode === 'walk' ? (
         <>
-          <WalkView walk={walk} open={open} busy={busy} onPull={onPull} />
+          <WalkView walk={walk} open={open} done={done} busy={busy} onPull={onPull} />
           {why}
         </>
       ) : shown.length === 0 ? (
@@ -2540,17 +2540,34 @@ function PickLine({
 function WalkView({
   walk,
   open,
+  done,
   busy,
   onPull,
 }: {
   readonly walk: Walk
   readonly open: OrderRow[]
+  readonly done: OrderRow[]
   readonly busy: string | null
   readonly onPull: PullHandler
 }) {
   const wanted = open.reduce((sum, order) => sum + order.wanted, 0)
   const recorded = open.reduce((sum, order) => sum + order.recorded, 0)
   const pct = wanted > 0 ? Math.min(100, Math.round((recorded / wanted) * 100)) : 0
+  /* THE SECOND FIGURE IS IN THE OTHER UNIT, and that is the whole reason it is here. The
+     figure above counts CARDS and a card is what the walk hands you; what you pack is an
+     ENVELOPE, and an order two copies short is as unpackable as one nothing has been pulled
+     for. So the walk also says how many orders are whole.
+
+     IT IS COUNTED OVER `done` AND NOT OVER `open`, WHICH IS NOT A DETAIL. `open` is the
+     ledger's answer to "does this still owe copies" (`server/capture_server.py:_order_row`,
+     which refuses to read the feed's `status` string for it), so the moment an order's last
+     copy is pulled it LEAVES `open` — a count of finished orders taken over `open` is zero
+     by construction, always, and the walk is where that is least visible because the rows
+     vanish with it. Measured on this store: pulling the one copy of order A47CCC-13B33
+     moved the page header from `20 open orders` to `19 open orders and 1 done`. The
+     denominator is therefore both halves, which is the pair that header already prints from
+     the same two arrays — so the walk's figure and the page's headline cannot disagree. */
+  const total = open.length + done.length
   const next = walk.rows[0] ?? null
 
   if (walk.rows.length === 0) {
@@ -2577,6 +2594,15 @@ function WalkView({
               still to pull across {open.length} open order{open.length === 1 ? '' : 's'}
               {recorded === 0 ? '' : ` · ${recorded} already pulled`}
             </span>
+            {/* Drawn only once one is whole, by the bar's own rule beside it: none finished is
+                the state every walk starts in, and a figure that reads 0 on arrival is not one
+                anybody acts on. It says `orders` in the label because the figure it sits next
+                to counts cards. */}
+            {done.length === 0 ? null : (
+              <Pill size="sm" icon="check">
+                {done.length} of {total} orders fully pulled
+              </Pill>
+            )}
           </p>
           {/* The same rule as an order's own meter: nothing pulled yet is a figure, not a track. */}
           {recorded === 0 ? null : (
