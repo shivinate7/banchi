@@ -2644,28 +2644,22 @@ COMPONENTS = [
                         "it is not here. It also holds the one request that goes the OTHER way "
                         "(D45): a press on a copy's position asks the walk to go there, which is "
                         "the only thing this file tells BoxBrowse to do.\n\n"
-                        "THERE IS A THIRD MODE SINCE 2026-09-02, AND IT DOES NOT REOPEN THE "
-                        "SENTENCE ABOVE. D31 folded #/boxes and #/pull because they were three "
-                        "instances of one thing; an ORDER DRIVING THE WALK (D90) is the opposite "
-                        "case — the same one screen, the same spine, with a queue deciding which "
-                        "card it stands on next. It arrives as a URL parameter and not a route: "
-                        "`#/inventory?order=<key>` or `#/inventory?orders=open`, D49's argument "
-                        "for `#/pricing?run=` verbatim, so nothing in App.tsx's ROUTES table "
-                        "moves and no published count changes. What this file adds for it is the "
-                        "hash-driven ask, the queue and cursor memos over one GET /orders answer, "
-                        "the effect that lands the walk on each stop through the same `goTo`, the "
-                        "PICKER over the copies panel (D93: `Take` / `Don't take` on every unsold "
-                        "copy of the line's SKU, in ANY box on the owner's 2026-09-02 ruling that "
-                        "D7 already settles, with the resolver's picks as the default and a full "
-                        "line refusing the take rather than dropping one of its own), and the one "
-                        "write. "
-                        "THE WALK WRITES NOTHING PER CARD: `Mark sold` is drawn on NO row while "
-                        "an order drives, because the plain sale writes card state and not the "
-                        "ledger, so a card sold under a walk leaves its line owed forever. "
-                        "`Retire` stays, a damaged copy being damaged whoever it was promised to. "
-                        "The one press is the envelope — every line of one order in one "
-                        "POST /orders/fill — and in order mode the next order is not offered "
-                        "until it has been pressed.",
+                        "NO ORDER DRIVES THIS SCREEN, and the mode that let one is not here. "
+                        "Main's D90 came with the merge — the order arriving as a URL parameter "
+                        "(`#/inventory?order=<key>`, `#/inventory?orders=open`) rather than a "
+                        "route, a queue and a cursor landing the walk on each stop through "
+                        "`goTo`, a PICKER over the copies panel (D93), `Mark sold` withheld from "
+                        "every row while the queue ran, and one press writing every line of one "
+                        "order through `POST /orders/fill`. All of it went with D96's amendment "
+                        "on 2026-09-04, the route included, on the owner's ruling after using "
+                        "both: \"I don't want the walk picking for me\". The same want is "
+                        "answered on `src/Orders.tsx` — the per-copy walk, D97's copy map beside "
+                        "each line, and a per-copy undo — and what THIS file carries of an order "
+                        "is one READ. `wantedOf` folds `GET /orders`'s resolution into a map from "
+                        "copy key to order, re-read after every write and allowed to fail, so a "
+                        "copy an open order is waiting on says so on its own row and links to "
+                        "#/orders instead of offering a pull. `Mark sold` is drawn on every live "
+                        "row here, which is the state this screen has always been in.",
                 "note": "IT WRITES NOW, AND ITS HEADER OVERTURNS ITS OWN OBJECTION IN PLACE "
                         "rather than deleting it. The file argued at length that a sold button "
                         "here would be 'the same irreversible-looking write with neither guard, "
@@ -2688,20 +2682,12 @@ COMPONENTS = [
                         "re-read while the clock runs. The retirement is untouched — its four "
                         "reasons are the write's only input, not an acknowledgement — and "
                         "#/fulfillment is untouched, its two-step being a displacement guard a "
-                        "real double-tap sale earned.\n\n"
-                        "ONE MARK IS UNREACHABLE FOR THE STATE ITS OWN NAME DESCRIBES, and it is "
-                        "written here rather than discovered again. `Action` returns inside its "
-                        "sold branch before it reaches the walk branch, so a copy recorded "
-                        "against an order AND SOLD draws the plain word `sold` and never "
-                        "`pulled for order N`; the mark renders only for a recorded copy still on "
-                        "hand, which is a sale reversed by hand. The server half's stated purpose "
-                        "for `_order_progress.pulled` — the only way the copies panel can mark "
-                        "the slot a pulled card came out of — therefore does not hold for the "
-                        "ordinary pulled-and-sold copy. Nothing is wrong on screen; the branch is "
-                        "simply narrower than its comment claims.",
-                # D28 is the receipt's undo window and the row that must not move under a finger;
-                # D36 is why the queue is re-derived on every read rather than stored; D49 is the
-                # URL as the handoff; D90 is the order-driven mode and its envelope.
+                        "real double-tap sale earned.",
+                # D28 is the receipt's undo window and the row that must not move under a finger.
+                # D36, D49, D90 and D93 are cited for main's order-driven mode, which this file no
+                # longer has — the re-derived queue, the URL as the handoff, the envelope press and
+                # the picker. The citations stay so a session reading main's history knows the mode
+                # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D90", "D93"],
