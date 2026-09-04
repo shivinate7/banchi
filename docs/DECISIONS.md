@@ -5165,7 +5165,7 @@ The parenthetical is the question this entry exists to answer, and the answer is
 
 ### `Add to Quantity` is a delta, and TCGplayer's own export is the proof
 
-**72,701 real export rows carry `Add to Quantity` = `"0"`** — the four untouched fixtures (21,843 rows), twelve exports recorded into run directories (40,858 rows), and the owner's My Pricing download of 2026-09-01 (757 rows). Not one row anywhere carries anything else.
+**72,701 real export rows carry `Add to Quantity` = `"0"`** — the four untouched fixtures (21,843 rows) and the twelve TCGplayer exports recorded into run directories (50,858 rows), which is the whole of it: 21,843 + 50,858 = 72,701. Not one row anywhere carries anything else. The owner's My Pricing download of 2026-09-01 is one of those twelve and is not a third source; an earlier draft of this paragraph counted it twice and put 40,858 against the run directories, which made the total right and the breakdown unreconcilable. Recounted 2026-09-04.
 
 **649 of those are rows on which TCGplayer simultaneously reported live copies**, `Total Quantity` between 1 and 10, and every one still carries `Add to Quantity` = 0. That settles it on its own: if the column meant *set the quantity to*, re-uploading an untouched export would delist the entire account, and nobody ships an export that destroys the account it came from. `Total Quantity` is not a writable column at all, so **there is no CSV route to lowering or setting a quantity even for a caller that wanted one.**
 

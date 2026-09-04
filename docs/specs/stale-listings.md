@@ -42,9 +42,15 @@ already happened.
 ### `Add to Quantity` is a delta, and TCGplayer's own export says so
 
 **72,701 real export rows carry `Add to Quantity` = `"0"`.** That is the four untouched
-fixtures (21,843 rows), twelve exports recorded into run directories (40,858 rows), and the
-owner's My Pricing download of 2026-09-01 (757 rows). Not one row anywhere carries anything
-else.
+fixtures (21,843 rows) and the twelve TCGplayer exports recorded into run directories (50,858
+rows), which is the whole of it: 21,843 + 50,858 = 72,701. Not one row anywhere carries anything
+else. The My Pricing download of 2026-09-01 is one of those twelve, not a third source — an
+earlier draft counted it separately and put 40,858 against the run directories, leaving a total
+that was right and a breakdown that did not add up. Recounted 2026-09-04.
+
+The 510 rows on this machine that DO carry a non-zero `Add to Quantity` are all in files this
+pipeline wrote — `import*.csv` — which is the column doing its job. No file TCGplayer produced
+carries anything but `0`.
 
 **649 of those rows are ones on which TCGplayer simultaneously reported live copies** —
 `Total Quantity` between 1 and 10 — and every one of them still carries `Add to Quantity` = 0.
