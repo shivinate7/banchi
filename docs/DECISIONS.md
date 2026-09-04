@@ -5378,7 +5378,7 @@ Named because each is a place where main or an earlier rule says otherwise, and 
 
 **The two answers this entry left open were `deleted` and `they get the screen D90 built for them`, and the answer is deleted.** 1,484 lines: `app/src/orderWalk.ts`, `OrderWalkBanner.tsx` and `OrderWalkBanner.css` whole (1,000 of them), `fillEnvelope`/`undoEnvelope` and the `fill()` helper behind both in `server.ts`, `FillLine`/`FillResult` in `types.ts`, `do_order_fill` with its dispatcher line and its two constants in `server/capture_server.py`, and harness T7's `check_order_fill`. Nothing referenced any of it: the five greps came back with hits only inside the set being deleted, and `make harness` passes nine of nine without the check that covered the route.
 
-**Nothing was ported, because the one capability that sounded distinct had already been rebuilt here.** D90's wave mode — the cross-order pass that walks the drawers in box order rather than in the order the carts were composed — is `Orders.tsx`'s `buildWalk`/`WalkView`, the "Walk the boxes" mode, written independently on this branch before anyone compared the two. It does the same sort over the same landing, and it does it while keeping the copy the operator reaches for theirs to choose (D93, D97), which is the ruling above. The deletion cost this product no behaviour.
+**Nothing was ported, because the one capability that sounded distinct had already been rebuilt here.** D90's wave mode — the cross-order pass that walks the drawers in box order rather than in the order the carts were composed — is `Orders.tsx`'s `buildWalk`/`WalkView`, the "Walk the boxes" mode, written independently on this branch before anyone compared the two. It does the same sort over the same landing, and it does it while keeping the copy the operator reaches for theirs to choose (D93, D97), which is the ruling above. The deletion cost this product no behavior.
 
 **What was NOT deleted is the pair of helpers, and the reason is in the code.** `_prepare_targets` and `_ledger_pull` were lifted out of `do_order_pull` for the envelope's sake and are still `POST /orders/pull`'s own two phases; both docstrings now say the second door is gone rather than naming a route that answers 404. A refactor folding them back inline is a separate change with its own argument, and this was not it.
 
@@ -5520,7 +5520,7 @@ So the failure mode is not exotic and is not hypothetical — **it is one extra 
 
 **Because a spreadsheet is how a person does "mass re-edit", and a spreadsheet reformats.** It strips the leading zero from `Number` (`001/132` becomes `1/132`), strips a trailing zero from a price (`0.0100` becomes `0.01`), and writes `0` into an empty cell. Measured: a worklist mangled all three ways produces an `import.csv` byte-identical to the unmangled one. **The byte contract cannot be broken by the operator's editor, because the operator's editor is not where the bytes come from.**
 
-**And prices are compared as `Decimal`, never as text.** A live export writes four decimal places and this writer emits two; equal as money, different as bytes, and a string comparison would read every untouched row as an edit and mark down the whole store on a rounding artefact.
+**And prices are compared as `Decimal`, never as text.** A live export writes four decimal places and this writer emits two; equal as money, different as bytes, and a string comparison would read every untouched row as an edit and mark down the whole store on a rounding artifact.
 
 ### Two commands, because the operator's sentence has two halves
 

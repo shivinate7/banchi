@@ -267,7 +267,7 @@ argument where the row would have gone.
 
 A live export writes four decimal places (`"0.6600"`); this writer emits two (`"0.66"`). Equal
 as money, different as bytes. A string comparison would read every untouched row as an edit and
-mark down the entire store on a rounding artefact. Asserted in T7.
+mark down the entire store on a rounding artifact. Asserted in T7.
 
 ### Refusals
 
@@ -295,7 +295,7 @@ mark down the entire store on a rounding artefact. Asserted in T7.
 | `below_floor` | under `$0.40` |
 | `not_in_worklist` | a SKU this worklist was not written for, so there are no bytes to build a row from |
 | `raised` | **whole file.** Above the live price. This path only lowers. |
-| `duplicate` | **whole file.** Two rows, one SKU. Undefined behaviour in a TCGplayer import (D7). |
+| `duplicate` | **whole file.** Two rows, one SKU. Undefined behavior in a TCGplayer import (D7). |
 
 A deleted line is not a refusal: **deleting a row is how a person says "not this one"**, and the
 report names how many were dropped that way.
