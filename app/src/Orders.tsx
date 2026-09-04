@@ -6,7 +6,7 @@ import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
-import { describeFailure, fetchOrders, getInventory, getOrders, ingestOrders, pullCopy, undoPull } from './server'
+import { describeFailure, fetchOrders, getInventory, getOrders, ingestOrders, previewOrders, pullCopy, undoPull } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import type {
@@ -1134,7 +1134,31 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          is measured against. */
       const previous = readLastCheck()
       try {
-        const found = await fetchOrders()
+        /* ONE PRESS, TWO CALLS, AND THE SECOND ONE IS NOT A QUESTION. D91 made the wire refuse
+           a fetch that names no statuses — `statuses_required` — on the argument that this
+           account's window holds hundreds of orders and one press taking all of them is what
+           never worked. The owner ruled the two-press flow out: *"why would it ever say 1 of 3
+           found"*, and the press asks and takes in the same gesture.
+
+           BOTH SURVIVE, because the thing D91 actually needed was for somebody to NAME the
+           statuses rather than for a human to tick them. The vocabulary is not enumerable on
+           this side — `order_transport.py` says so at length: it was never published, and a
+           guess that drops an order is an envelope that never ships — so the press reads it off
+           the preview, which writes nothing, and sends back exactly what came out. Nothing is
+           guessed and nothing is asked.
+
+           The detail cap is unchanged and is not what this works around: a press still details
+           at most its limit and reports `remaining`, which the receipt below already draws with
+           the control to take the next batch. */
+        const seen = await previewOrders()
+        const statuses = seen.by_status.map((row) => row.status).slice(0, 50)
+        if (statuses.length === 0) {
+          if (!live.current) return
+          setPasteNote('TCGplayer returned no orders in this window.')
+          setBusy(null)
+          return
+        }
+        const found = await fetchOrders({ statuses })
         if (!live.current) return
         /* The four counts the merge brings on `OrdersFetched` — see `FetchCounts` above. Absent
            on this branch's wire, and each absence omits its clause rather than drawing a zero. */

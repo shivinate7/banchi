@@ -152,8 +152,14 @@ function rowSlot(row: Row): string {
   return isPooled(row.card) ? pooledText(row.card, row.key) : `no label · ${row.key}`
 }
 
-/** `join.departed_label`'s store key, in the server's spelling (`B3 #96`, D68). */
+/** `join.departed_label`'s store key, in the server's spelling (`B3 #96`, D68).
+ *
+ *  THE ONE PLACE A `#` IS A KEY AND NOT A COUNT, and it is deliberate. D92 gave the bare sigil
+ *  to D58's count, and every other `#` in this product obeys that. This function exists to
+ *  reproduce a string the SERVER composed — `join.departed_label`, for a card that has left its
+ *  box — and a departed record is in no slot at all, so there is no count to draw instead. */
 function departedKey(card: InventoryCard): string {
+  // sigil-ok: the server's own spelling of a departed record's key, and a departed card has no slot
   return `B${card.box} #${card.index}`
 }
 

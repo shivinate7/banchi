@@ -16,4 +16,4 @@
 # An ALL_CAPS entry is an identifier rather than a path — an env var, or a test id a doc
 # names in order to say it does not exist. It goes stale when the code starts referencing
 # it, which is the moment the thing became real.
-
+app/tests/order-walk.spec.ts  # Deleted with D90's envelope walk, which this product does not build (D96). Both references NAME the deletion — one records it, one is a spec paragraph correcting itself — so the path is meant to be unresolvable. Delete this line if the walk is ever built here; main's copy of the file is at 71c6dcb.

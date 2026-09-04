@@ -59,10 +59,15 @@ function seam(name: string): [string, string | null] {
 }
 
 function Name({ side }: { side: PlaceNeighbor }): ReactNode {
-  /* A neighbour nothing has identified degrades to its index, never to a blank. Kept at ink
-     because it is the whole payload of its row when it fires — see `placeParts` for the
-     recorded hazard that this index is the store key rather than the drawn count. */
-  if (side.name === null) return <b>#{side.index}</b>
+  /* A neighbour nothing has identified degrades to its SLOT, never to a blank. Kept at ink
+     because it is the whole payload of its row when it fires.
+
+     IT DEGRADED TO THE INDEX UNTIL D92, which `placeParts` had recorded as a known hazard and
+     left standing: `#41` composed from the store key names a card that is not the one a hand
+     counting to 41 arrives at, and the two diverge by every card that has left the box in
+     front of it — 76 in box 3. It sat one column from a sticky header spelling the same `#`
+     in count space. `side.index` is still on the wire and must not be drawn bare. */
+  if (side.name === null) return <b>#{side.slot}</b>
 
   const [champion, epithet] = seam(side.name)
   return (

@@ -39,10 +39,11 @@ const IDLE_POLL_MS = 20000
 /* THE EXPORT DELTA GUARD IS RETIRED, AND WITH IT BOTH "Fetch anyway" BUTTONS. It compared a
  * fetch against this run's last export and refused a file that was smaller or had nothing to
  * compare against — which refused the very improvement it existed to allow, and left the
- * operator pressing past it to get on with the work. The server still holds the two refusals,
- * so the client answers them once, up front, and never asks: a fetch produces a RECEIPT now,
- * not a question. */
-const ACCEPT_ALWAYS = { acceptUnverified: true, acceptNarrower: true } as const
+ * operator pressing past it to get on with the work. This branch answered the two refusals
+ * up front with an `ACCEPT_ALWAYS` pair; D64's own amendment then took the guard out of the
+ * SERVER, so the two acknowledgement fields are gone from the wire and there is nothing left
+ * to answer. A fetch produces a RECEIPT now, not a question — `previousLine` below is that
+ * receipt's second line, and every remaining refusal is a sentence with nothing to press. */
 
 /* Why the fetch is asking for what it is asking for (D76), in the operator's words. */
 const SCOPE_REASON: Record<string, string> = {
@@ -97,39 +98,34 @@ function scopeWords(asked: ExportAsked): string {
 /** THE EXPORT BEFORE THIS ONE — the receipt's second line, and the whole of its reassurance:
  *  it says the figure above is a normal size for this run.
  *
- *  NOT ON THE WIRE ON THIS BRANCH. The field this line reads once the server carries it is
- *  `ExportFetched.previous` — `{ rows: number; fetched_at: string }`, the export this run
- *  held before this fetch — and `whenLabel` already turns that timestamp into "two days ago".
- *  Until it lands, `verified` is the half that exists: it names the games this run DID have a
- *  previous export for, which is the same fact one figure short. */
-type PreviousExport = { rows: number; fetched_at: string }
-type PreviousPerGame = Record<string, { file?: string; rows: number; skus?: number }>
-
-/* TWO SHAPES, BECAUSE THE WIRE CARRIES A DIFFERENT ONE ON EITHER SIDE OF THE MERGE, and
-   reading the wrong one is not a wrong sentence, it is a crash that takes the Join step
-   down after a fetch that SUCCEEDED. This branch expects `{rows, fetched_at}`; main's
-   `ExportFetched.previous` is a per-game `Record<string, {file, rows, skus}>`. Both are
-   read, neither is assumed, and an unrecognised shape falls through to the sentence that
-   needs no figure at all. */
+ *  THE SHAPE IS `ExportFetched.previous` (D64, amended 2026-09-02): what the LAST JOIN used,
+ *  per game this file answers for, and `{}` on a run's first fetch. It is INFORMATION AND
+ *  NOTHING REFUSES ON IT — the delta guard that once turned this comparison into a refusal is
+ *  retired, D65's positive scope check is the whole guard now, and this line exists so a
+ *  narrower file is visible to the operator who asked for one.
+ *
+ *  BOTH COUNTS CARRY A SEPARATOR. Rows did and SKUs did not, which reads as a typo where the
+ *  two sit a slash apart — `2,008 rows / 1900 SKUs`. A figure is formatted for what it is and
+ *  not for how big it happened to be in the fixture.
+ *
+ *  AND IT NAMES THE FILE, which is the owner's own word for what this receipt is for: the guard
+ *  it replaced refused a narrower export, and what stands in for the refusal is being able to see
+ *  WHICH file the comparison is against. A figure with no file beside it says a number changed
+ *  and not which export to go and look at.
+ *
+ *  ROWS AND SKUS BOTH, because they fail differently: a variant-thinned export loses SKUs
+ *  while its row count barely moves, which is the case that mislists a reverse holo at the
+ *  normal row's price. One line per game, on the same principle as the trend strip's spans —
+ *  a shared figure over two games would be wrong for one of them. */
 function previousLine(fetched: ExportFetched, display: (game: string) => string): string {
-  const raw = (fetched as ExportFetched & { previous?: unknown }).previous
-  if (raw != null && typeof raw === 'object') {
-    const flat = raw as Partial<PreviousExport>
-    if (typeof flat.rows === 'number') {
-      const when = typeof flat.fetched_at === 'string' ? `, ${whenLabel(flat.fetched_at)}` : ''
-      return `Last time: ${flat.rows.toLocaleString()} rows${when}`
-    }
-    const perGame = Object.entries(raw as PreviousPerGame).filter(
-      ([, was]) => was != null && typeof was === 'object' && typeof was.rows === 'number',
+  const was = Object.entries(fetched.previous ?? {})
+  if (was.length === 0) return 'The first export this run has fetched — nothing earlier to set beside it.'
+  return `Last time: ${was
+    .map(
+      ([game, held]) =>
+        `${display(game)} ${held.rows.toLocaleString()} rows / ${held.skus.toLocaleString()} SKUs (${held.file})`,
     )
-    if (perGame.length > 0) {
-      return `Last time: ${perGame
-        .map(([game, was]) => `${display(game)} ${was.rows.toLocaleString()} rows`)
-        .join(' · ')}`
-    }
-  }
-  if (fetched.verified.length > 0) return `Not the first export for ${fetched.verified.map(display).join(', ')} in this run.`
-  return 'The first export this run has fetched.'
+    .join(' · ')} · this one: ${fetched.rows.toLocaleString()} / ${fetched.skus.toLocaleString()}`
 }
 
 /** What a run was over, in the fewest words that are true. */
@@ -432,8 +428,11 @@ export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pag
       setFetchRefusal(null)
       let answer: ExportFetched
       try {
-        answer = await fetchExport(openRun, { ...scopeOptions, ...ACCEPT_ALWAYS })
+        answer = await fetchExport(openRun, scopeOptions)
       } catch (err) {
+        /* Caught here rather than left to `guard`, because the refusal is drawn beside the
+           control that earned it. A panel-wide banner would put the sentence a long way from
+           the button — and every fetch refusal is a sentence with nothing to press. */
         setFetched(null)
         setFetchRefusal(describeFailure(err))
         return

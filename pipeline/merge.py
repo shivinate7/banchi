@@ -150,9 +150,16 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
 
     `held_out` IS THE LARGEST THE LEGS SAW, WHICH IS THE ONLY SAFE DIRECTION. It is
     `cli/resolve.py:_copies_out` — what TCGplayer holds, live and pending — and that docstring
-    makes the export a FLOOR that *"cannot be argued below"*. Two legs reading it at different
-    moments can differ; taking the smaller would re-open the cap on the strength of the staler
-    read, which is exactly the refill bug D59 closed.
+    makes the newest reading a FLOOR that *"cannot be argued below"*. Two legs reading it at
+    different moments can differ; taking the smaller would re-open the cap on the strength of
+    the staler read, which is exactly the refill bug D59 closed. `live_out` takes the same
+    `max`, for the same reason.
+
+    WHAT `max` STILL COSTS, now that each leg's figure is arbitrated by time against the store
+    (D87, amended): it never re-opens the cap, and it can UNDER-LIST by the gap between an
+    older leg's higher reading and a newer leg's lower one — two copies sold between the two
+    joins are room the merged file does not offer until the older run is re-joined. Legs do
+    not carry their file's time, so a stand-in is what this is, and the conservative one.
     """
     newest = legs[-1]
     return join.SkuMatch(
@@ -173,6 +180,11 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
             None
             if all(leg.match.held_out is None for leg in legs)
             else max(leg.match.held_out or 0 for leg in legs)
+        ),
+        live_out=(
+            None
+            if all(leg.match.live_out is None for leg in legs)
+            else max(leg.match.live_out or 0 for leg in legs)
         ),
     )
 

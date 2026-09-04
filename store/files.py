@@ -74,7 +74,8 @@ def prices_path() -> Path:
     THREE FILES IN THIS REPO ARE ABOUT PRICE AND THEY ARE NOT THE SAME FILE. `runs/<n>/
     pricing.json` is the TABLE a join wrote — what the export said about the cards in one run,
     and it is derived, rewritten on every join, and read-only to a person. `runs/<n>/
-    decisions.json` was the per-run ANSWER file and is now an optional per-lot override.
+    decisions.json` was the per-run ANSWER file and is legacy: `pkmnscan prices adopt` folds
+    it in and retires it, and the per-lot override is `policy.per_run` in THIS file.
     This is the ANSWER, once, for every card the operator has ever priced.
 
     UNDER `inventory/` AND THEREFORE PER CHECKOUT (D43), beside `inventory.json` and the codes

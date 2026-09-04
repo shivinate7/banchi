@@ -135,8 +135,6 @@ function runRow(overrides: Record<string, unknown> = {}) {
     collected: true,
     joined: false,
     counts: {},
-    bypass_detection: false,
-    bypassed: null,
     usage: {},
     ...overrides,
   }
@@ -806,10 +804,10 @@ test('arrow keys walk the box, and a text field keeps its own caret keys', async
     offset: 1,
   })
 
-  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input and a textarea, and
-     an unguarded window listener would steal the caret keys from both — the operator would be
-     unable to move through a value they were editing. Reveal `Custom`, put the caret in its
-     number field, and the walk must not move.
+  /* THE GUARD IS THE HALF WORTH ASSERTING. This panel holds a number input, and an unguarded
+     window listener would steal the caret keys from it — the operator would be unable to move
+     through a value they were editing. Reveal `Custom`, put the caret in its number field, and
+     the walk must not move.
 
      WAITED FOR RATHER THAN ASSERTED IMMEDIATELY, and the first draft of this case got that
      wrong in a way worth recording: `toContainText` passes the instant the text matches, so
@@ -1050,6 +1048,14 @@ test('join offers a preview that writes nothing', async ({ page }) => {
   const wire = await open(page)
   await openRun(page)
 
+
+  /* THE TRUST SWITCH IS GONE, ASSERTED AS AN ABSENCE. "Trust my finish claim over the photo"
+     was a checkbox here until D3's amendment of 2026-09-02 made its rule the ladder's own;
+     a body carrying `bypass` again would mean the choice had come back. */
+  await expect(
+    page.getByRole('checkbox', { name: 'Trust my finish claim over the photo' }),
+  ).toHaveCount(0)
+
   /* THE TRUST SWITCH IS GONE AND SO IS THE HALF OF THIS CASE THAT PRESSED IT. The finish-claim
      bypass was deleted from the screen on the owner's ruling for this rebuild, and `bypass` is
      no longer sent from anywhere in `app/src`. Asserting it here would be asserting a control
@@ -1059,6 +1065,7 @@ test('join offers a preview that writes nothing', async ({ page }) => {
   const join = wire.find((row) => row.path.endsWith('/join'))
   const body = join?.body as Record<string, unknown>
   expect(body.dry_run).toBe(true)
+  expect(body.bypass).toBeUndefined()
 })
 
 test('this run\'s own receipts download here; the import CSVs do not', async ({ page }) => {
@@ -1340,7 +1347,7 @@ test('nothing is scoped on arrival, and the free preflight refuses until a box i
 
 // ----------------------------------------- the export, fetched rather than downloaded (D64)
 
-/** The control that fetches. A helper because four cases press it or assert its absence. */
+/** The control that fetches. A helper because several cases press it. */
 function fetchButton(page: Page) {
   return page.getByRole('button', { name: 'Fetch from TCGplayer' })
 }
@@ -1358,9 +1365,9 @@ function fetchedBody(over: Record<string, unknown> = {}) {
     sets: ['Origins', 'Unleashed'],
     conditions: ['Near Mint', 'Near Mint Foil'],
     product_lines: ['Riftbound League of Legends Trading Card Game'],
-    verified: ['riftbound'],
-    unverified: [],
-    accepted_narrower: false,
+    previous: {
+      riftbound: { file: 'export-tcgplayer-20260829-100000-9f9f9f9f.csv', rows: 2008, skus: 1900 },
+    },
     source: 'https://store.tcgplayer.com/admin/pricing/downloadexportcsv',
     asked: {
       game: 'riftbound',
@@ -1385,7 +1392,7 @@ function fetchedBody(over: Record<string, unknown> = {}) {
 /** Register the fetch route for one case. Not in `open()`: every case here wants a different
  *  answer from it, and registering per case avoids depending on Playwright's precedence
  *  between two patterns that could both match. Pushes into `wire` so an assertion can read
- *  what the screen SENT, which is the whole point of the acknowledgement cases. */
+ *  what the screen SENT, which is what the join-by-name case reads. */
 async function routeFetch(
   page: Page,
   wire: { method: string; path: string; body: unknown }[],
@@ -1497,6 +1504,93 @@ test('a refusal an operator cannot answer draws a sentence and nothing to press'
   await expect(page.locator('.run-receipt')).toHaveCount(0)
 })
 
+
+/* PORTED FROM MAIN, AGAINST THIS BRANCH'S RECEIPT. D64's delta guard is retired on both
+   branches — a fetch no longer asks a question the operator has to press past — and what the
+   guard used to compare is drawn as a receipt instead. Main asserted it against `.run-fetched`
+   and raw digits; this branch draws it in `.run-receipt-was` and formats row counts with
+   `toLocaleString`, so the figures carry a separator. The FILE NAME is asserted because the
+   owner's ruling was that the receipt NAMES the previous export: a figure with no file beside
+   it says a number changed and not which export to go and look at. */
+test('the receipt says what the last export held beside what this one holds', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openRun(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
+  await fetchButton(page).click()
+
+  const was = page.locator('.run-receipt-was')
+  await expect(was).toContainText('2,008')
+  await expect(was).toContainText('1,900')
+  await expect(was).toContainText('153')
+  await expect(was).toContainText('export-tcgplayer-20260829-100000-9f9f9f9f.csv')
+  /* AND THERE IS NOTHING TO PRESS. Nothing refused, so the receipt carries no control — the
+     absence is the whole of what the retirement bought. */
+  await expect(page.locator('.run-receipt-said button')).toHaveCount(0)
+})
+
+test('a first fetch says there is nothing earlier to set beside it', async ({ page }) => {
+  const wire = await open(page)
+  await openRun(page)
+  await routeFetch(page, wire, { status: 200, body: fetchedBody({ previous: {} }) })
+  await fetchButton(page).click()
+
+  /* A run directory is new per run, so every run's first fetch has no previous export. That
+     used to be `export_unverified`, a refusal the operator answered with a press and a second
+     download of the same file; it is a sentence on the receipt now. */
+  await expect(page.locator('.run-receipt-was')).toContainText('The first export this run has fetched')
+  await expect(page.locator('.run-result-refused')).toHaveCount(0)
+})
+
+/* EVERY FETCH REFUSAL IS A SENTENCE WITH NOTHING TO PRESS. An expired session is fixed in
+ * `.env`; a set that was asked for and did not arrive is fixed in the capture claims or the
+ * registry. Neither is fixed on this screen, so a button here would be offering to wave
+ * through a refusal the screen does not understand. The two refusals that once drew one —
+ * `export_unverified` and `export_narrower` — are gone with the delta guard they answered
+ * (D64, amended 2026-09-02), so the absence is asserted over EVERY refusal rather than over
+ * the ones a list happened to omit. */
+for (const refusal of [
+  {
+    status: 502,
+    code: 'tcg_session_expired',
+    message:
+      'TCGplayer redirected the download to its login page, which means the session in '
+      + 'TCGPLAYER_STORE_COOKIE has expired.',
+    shown: 'has expired',
+  },
+  {
+    status: 409,
+    code: 'export_scope_incomplete',
+    message:
+      'This export was asked for Unleashed and came back without Unleashed. Every card of a '
+      + 'missing set would queue as no_catalog_row. Nothing was kept.',
+    shown: 'came back without',
+  },
+]) {
+  test(`a refusal draws a sentence and nothing to press: ${refusal.code}`, async ({ page }) => {
+    const wire = await open(page)
+    await openRun(page)
+    await routeFetch(page, wire, {
+      status: refusal.status,
+      body: { error: { code: refusal.code, message: refusal.message } },
+    })
+    await fetchButton(page).click()
+
+    /* The server's sentence verbatim, which is `docs/DESIGN.md`'s copy rule for owner
+       screens, with the machine string beneath it so what was seen can be grepped. */
+    await expect(page.locator('.run-result-refused')).toContainText(refusal.shown)
+    await expect(page.locator('.run-result-refused')).toContainText(refusal.code)
+
+    /* A REFUSED FETCH MUST NOT JOIN. It wrote nothing, so joining after one would silently
+       re-use the previous export and look exactly like the fetch had worked. */
+    expect(wire.filter((row) => row.path.endsWith('/join'))).toHaveLength(0)
+
+    await expect(page.locator('.run-result-refused button')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Fetch anyway/ })).toHaveCount(0)
+  })
+}
+
 test('the receipt says what was asked for, not only what arrived', async ({ page }) => {
   const wire = await open(page)
   await routeFetch(page, wire, { status: 200, body: fetchedBody() })
@@ -1514,38 +1608,21 @@ test('the receipt says what was asked for, not only what arrived', async ({ page
 
   /* AND THE EXPORT THIS RUN HELD BEFORE THIS ONE, which is what makes the row count above
      readable: 153 rows is only reassuring beside the number it replaced. */
-  await expect(page.locator('.run-receipt-was')).toContainText('Not the first export')
+  await expect(page.locator('.run-receipt-was')).toContainText('Last time:')
 })
 
-test('the fetch answers both acknowledgements itself rather than asking', async ({ page }) => {
-  const wire = await open(page)
-  await routeFetch(page, wire, { status: 200, body: fetchedBody() })
-  await openRun(page)
-  await fetchButton(page).click()
-  await expect(page.locator('.run-receipt')).toBeVisible()
+/* TWO CASES DELETED HERE, BOTH WITH THE THING THEY ASSERTED.
 
-  /* THE DELTA GUARD IS RETIRED AND THIS IS WHAT REPLACED IT. Both refusals still live on the
-     server, so a client that sent neither field would be refused on the first fetch of every
-     run and the operator would be back at the two buttons this rebuild deleted. Sending them
-     is a decision, and a decision on the wire is the one place it can be read. */
-  const sent = wire.filter((row) => row.path.endsWith('/export')).pop()
-  expect(sent?.body).toMatchObject({ accept_unverified: true, accept_narrower: true })
-})
+   `the fetch answers both acknowledgements itself rather than asking` sent `accept_unverified`
+   and `accept_narrower` on every fetch, because the server refused without them. D64's
+   amendment RETIRED the delta guard and deleted both fields from the wire, so the case now
+   asserts a request shape no route reads — and the workaround it was defending (answering the
+   two questions up front so the operator never sees them) has nothing left to answer.
 
-test('the receipt names the export this run held before it', async ({ page }) => {
-  const wire = await open(page)
-  await routeFetch(page, wire, {
-    status: 200,
-    body: fetchedBody({ previous: { rows: 120, fetched_at: '2026-08-29T12:00:00+00:00' } }),
-  })
-  await openRun(page)
-  await fetchButton(page).click()
-
-  /* A FIGURE WITH NOTHING BESIDE IT CANNOT BE READ FOR WHETHER IT IS RIGHT. 153 rows is a
-     normal export or a catastrophically narrow one depending entirely on what the last one
-     was, and the operator is the only one who can tell — so the receipt says both. */
-  await expect(page.locator('.run-receipt-was')).toContainText('120')
-})
+   `the receipt names the export this run held before it` is covered by the ported case above,
+   against the REAL payload. This one built `previous` as `{rows, fetched_at}`, a shape this
+   branch guessed before the merge brought main's `Record<game, {file, rows, skus}>`; asserting
+   a stub nothing sends proves the stub. */
 
 test('a hint that resolved to nothing says so, because the export silently widened', async ({
   page,
@@ -1628,7 +1705,7 @@ test('the routing lever reaches join', async ({ page }) => {
   await page.getByRole('button', { name: 'Join again' }).click()
 
   /* `--review-below-confidence` was reachable only from a terminal. `--rule` and `--basis`
-     are deliberately NOT here: D49 makes decisions.json the one place a pricing answer is
+     are deliberately NOT here: D49 makes `inventory/prices.json` the one place a pricing answer is
      written, and a second place to say `rule` already cost 48 cards a price nobody chose. */
   const join = wire.filter((row) => row.path.endsWith('/join')).pop()
   expect(join?.body).toMatchObject({ review_below_confidence: 'medium' })

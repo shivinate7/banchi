@@ -77,7 +77,7 @@ The owner's ruling, 2026-08-24; `pkmnscan join --bypass`. The paragraph above ke
 
 **The fix is one line and its shape is the rule: `emit` reads `bypass_detection` off the manifest exactly as it already reads `review_below_confidence`.** Both are per-run choices the run recorded, and a command that RE-DERIVES rather than reads must take every input to that derivation from the run. **There is deliberately no `--bypass` flag on `emit`**: this entry makes the bypass a join-time decision, and a second place to state it is a second thing that can disagree with the first. Covered by T7's `check_emit_bypass`, which asserts the card reaches the import file at the SKU its claim names — not merely that the command stopped refusing, because a fix that only silenced the refusal would have shipped the quieter failure.
 
-**What would reopen this: a rig that measures better.** The flag treats the detector as untrustworthy under this lamp, which is what two runs measured. It is not a finding about foil detection in general, and a re-measurement after the lighting changes is the evidence that would make rung 3 worth leaving on.
+**Amended 2026-09-02 on the owner's instruction: the cross-check is retired, and the flag's rule is the ladder's.** Every run since Gate B joined with `--bypass` (256 cards), 16 of 16 rulings went to the claim, box 2's 230 were all wrong: a switch every run flips is a default wearing a flag. Detection chooses inside a claim, never against it. `trust_claim`, `--bypass`, `Resolution.bypassed`, the manifest keys (kept, unread, on old runs) and the reason code are gone; the 16 events stay under a retired label; an entry the old rung queued is released on the next join, since the card resolves; `emit` re-derives the same answer, having no flag to forget (`check_emit_claim_decides`, reduced from `check_emit_bypass`).
 
 ## D4 — Review queue is digital-only
 
@@ -184,6 +184,8 @@ Pricing rules: match / undercut % / markup %.
 The join preserves the sub-threshold price distribution in bands rather than lumping it, because *everything under $0.40* hides the difference between a $0.38 rare and a $0.01 code card, and that difference decides later which of them are worth a bulk lot. Bands are cut as fractions of the threshold, so they follow it if it moves.
 
 TCGplayer's native Bulk Lots category (Level 4, Pricing tab) remains the exit for whatever is not listed — selected against that distribution, not sorted into blindly at emit time. No eBay needed.
+
+**Amended 2026-09-02, on the owner's decision: the sub-threshold disposition is a standing STORE policy with a default, and output is no longer suppressed for want of it.** The answer is `inventory/prices.json`'s `policy.sub_threshold` (D86) — one for the whole store, not one per run — and the default is **flat $0.49**: `pipeline/corpus.py:DEFAULT_SUB_THRESHOLD`, applied by `Corpus.parse` wherever the key is absent or null and written to the file on the next ordinary save, never on read. A file that says `"floor"` or a flat price says what it says; only silence takes the default. *"Per-run choice, never a constant in the code"* above is retired: the constant is the owner's own answer, given once, and the per-lot exception survives as `Corpus.overrides` for the run that genuinely wants its own. The `no_market_data` paragraph below is unchanged — a missing price is still an unknown price, still answered by hand, and `emit` still refuses while one is unanswered.
 
 ## D10 — Inventory model
 
@@ -1019,6 +1021,8 @@ Box 2: card `2/7` was deleted, 537 cards shifted down one, and the run directory
 - **ambiguous** — the digest is on two photographs. That is a question, not a slot, and guessing an identity is forbidden. Refuses the whole run.
 - **collided** — two RECORDS carry one digest, so they re-bind to one slot. **Added 2026-08-25, and it is `ambiguous`'s missing twin**: that outcome checks the DISK for a digest appearing twice, and nothing checked the PAYLOAD. Two records landing on one key overwrote each other in the rebuilt payload — measured at two cards in and one card out, with `departed` empty and nothing printed. A silent drop inside the function written to prevent one. Refuses the whole run and names the contested slot.
 - **unverified** — the box offers nothing to check against: no photographs on disk, no record carrying a digest, or no digest that matches any photograph there. Its records pass through exactly as the run recorded them, and the report says the slots were **not** checked, so an unchecked box cannot read as a verified one. The third case is why this is stated as "nothing to check against" rather than "no photographs": a box whose photographs have all been REPLACED (D26's re-shoot writes new bytes at the same slot) matches none of the run's digests, and calling its cards departed would be the same inversion the paragraph above refuses.
+
+**Amended 2026-09-02: a box whose number was deleted and reused after the run is refused outright, and `unverified` still means what it meant.** Box 1 was deleted 2026-08-25 with 53 Pokemon cards and its number reused 2026-08-29 for 133 Riftbound cards — `next_box_number` allocates the lowest free integer (D20 amended) — and `2026-08-22-box1-03` still describes the old drawer. `realign` never opens the store: none of the run's digests were among the new box's photographs, so it answered `unverified` and passed the keys through, and everything after it read the CURRENT box's records at those keys — the `held.game` fallback, `answered`, `committed`, `box_views` — until the refusal that fired said *"this run holds 53 riftbound card(s) and no export covers that game"* over a Pokemon run and sent the operator to edit live records that were never this run's. The rule is the one D56's `server/pipeline_routes.py:_box_name_for` has withheld a box's NAME on since it was built — the registry entry was made AFTER the run started AND the box's cards came from somewhere else — now shared from `store/master.py:box_disowns_run` rather than copied, read off the store by `Inventory.box_disowns_run`, and refused on by `cli/resolve.py:refuse_reallocated` before `_games_needed` or `load` reads a record. The photographs are deliberately not an input: `do_delete_box` deletes the cards with the entry, so a box `realign` can verify cannot satisfy the rule, and the honest `unverified` case — photographs missing, box unchanged — fails the time test or the membership test and passes through exactly as above.
 
 **A record with no digest is the fifth thing that can refuse, and it is not an outcome of a box.** `cli/cmd_identify.py` writes `photo_sha256` as `None` for any card whose photograph raised an `ImageError`, so a run written today can carry digest-less records — this is live, not merely a guard against payloads older than the field. Such a record is harmless while nothing in its box has moved and unplaceable once something has, so it refuses only in the second case.
 
@@ -2077,7 +2081,7 @@ Added 2026-08-30, from the owner asking how they would know whether a change tou
 
 **The join is handed the file by name, not the bytes.** The server already holds them.
 
-**The control that waves a refusal through is absent unless the refusal is one an operator can answer.** `FETCH_ACK` lists the two codes that have an answer, and every other refusal draws its sentence and nothing to press. An expired session, a WAF block and an export for the wrong product line are fixed somewhere other than this screen, so a button there would offer to wave through a refusal the screen does not understand. Absent rather than disabled is D33's rule, for its reason: a disabled button is one attribute away from pressable.
+**The control that waves a refusal through is absent unless the refusal is one an operator can answer.** `FETCH_ACK` lists the two codes that have an answer, and every other refusal draws its sentence and nothing to press. An expired session, a WAF block and an export for the wrong product line are fixed somewhere other than this screen, so a button there would offer to wave through a refusal the screen does not understand. Absent rather than disabled is D33's rule, for its reason: a disabled button is one attribute away from pressable. Retired 2026-09-02 with the two refusals it listed (D64, amended): every fetch refusal draws a sentence and nothing to press, and `FETCH_ACK` is gone.
 
 **`app/tests/run-panel.spec.ts` asserts that absence at rest and after a clean fetch.** A control appearing once the panel had merely been used would be as wrong as one always there. Two mutations were observed failing: drawing the acknowledgement for every refusal, and joining after a refused fetch.
 
@@ -2424,6 +2428,8 @@ Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declar
 **The floor is the export and cannot be argued below.** D8 and D11 put the authority in `Total Quantity`, so the answer is never less than it. **A stale or under-reporting export is therefore harmless WHILE THE PIPELINE'S OWN CLAIM IS STILL STANDING** — `live + pushed + staged` keeps the cap shut even when the export reads zero.
 
 **And after a `reconcile` nothing is standing, which is a hazard this entry does not close.** That corrects a sentence first published as an unqualified guarantee. Once `pushed` and `staged` are both zero, `Listing.live` is the only record left that TCGplayer holds anything, and `_copies_out` does not read it — so a later join whose export under-reports computes `room = cap - 0` and sends the SKU again. **Reading `Listing.live` as a second floor was built and reverted**: `cli/cmd_join.py` sets that field from whatever export it was last handed, so a stale-HIGH stored value would outrank a fresh-LOW export and the SKU would never refill after a sale — T7's own stale-export case went red on it. The two hazards are mirror images and nothing in the data says which reading is newer, so the tie goes to D8 and D11. Pre-existing, unreachable for an operator who never reconciles, and named here rather than claimed away.
+
+**Amended 2026-09-02: the hazard above is closed, by TIME rather than by trusting either side.** `Listing.live_as_of` records when the store's `live` was READ — the export file's mtime for `join` and `reconcile --live`, `now()` for a sale's ±1 and a D34 release — and `Listing.live_reading` is the one rule: the newer reading wins, an equal-second reading is the store's, and a record with no stamp on either side is the export's, as before. `cli/resolve.py:_copies_out` reads it, so the floor under the cap is the NEWEST reading and `SkuMatch.copies_out` no longer `max`es the row's own column back over it; `Listing.observe_live` writes it, so `cli/cmd_join.py` adopts an export's figure only where the file is newer, and the join report names each SKU it kept with both readings. The mirror this entry recorded — a stale-HIGH store outranking a fresh-LOW export — cannot return, because an older store reading loses. D87's amendment of the same day carries the measurement.
 
 **The ceiling was the shelf and is now the sales, because D7's amendment moved the stamp.** It was `max(live, copies not sold)` — we cannot have SENT more copies than we own and have not sold — which held only while `emit` stamped a SKU onto exactly the copies it wrote into a file. D7's 2026-08-30 amendment stamps `uncommitted_positions` instead, correctly, so a stamp means MATCHED rather than SENT and the shelf count silently stopped binding. Measured on the branch before it was fixed: seven copies with four pushed and one sold went from `room = 1` to `room = 0`, and the correction this entry exists for disappeared without a single test going red until the rebase. **The ceiling is `max(live, pushed + staged - sold)`**, aged by the one event that proves a sent copy has left TCGplayer — a copy cannot sell without having been listed — and the sale count survives the stamp move because an unsent backstock copy is on both sides of the subtraction and cancels.
 
@@ -2981,13 +2987,13 @@ This is cookie-session auth, not the order-management API, which is another host
 
 **The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
 
-**What was fetched is downloadable.** `_artifacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
+**What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
 
 **The WAF does not block an authenticated stdlib client, measured 2026-08-30.** The owner placed a session cookie and the fetch returned 68,363 bytes over 394 rows. This was the one thing the entry recorded as owed, and it is the reason `PKMNSCAN_TCG_USER_AGENT` exists: the earlier unauthenticated measurement said nothing about a request carrying a session, so a block was a plausible outcome the build had to survive. It did not occur. `tcg_blocked` stays, because one measurement on one day is not a guarantee about a rule somebody else maintains.
 
 **What that fetch also showed is that the portal's saved filter decides what arrives.** It returned the owner's current listings — eight conditions including `Unopened` and the Lightly Played family — rather than a catalog export. That is not a defect in the fetch, and the guard is what catches it: against box 3's baseline the same file carries 145 Riftbound rows to that run's 153, so it refuses `export_narrower` and names what went.
 
-**What would reopen this: an authenticated probe of `getjsonfilters` and `productsearch`.** If scope can be set by request, the scoped-export design replaces this guard with a positive one, and the one-fetch-one-game limit may soften with it.
+**Amended 2026-09-02: the delta guard is retired.** D65 met the condition above the same day and names the scope, so this guard's remedy asked about a Pricing-tab filter the request overrides. A run directory is new per run, so `previous is None` on every first fetch and `export_unverified` fired on every run — a 1.7 MB download unlinked and fetched again on a press; `export_narrower` fired on a legitimate set-scoped fetch after a category-wide one. Both codes, both fields, `_coverage`, `_printings` and `_finish_conditions` are gone; `export_scope_incomplete` is the whole guard; the receipt carries `previous`, the last joined export's file, rows and SKUs per game, and refuses nothing on it. The filename finds identical bytes by digest before it stamps — with the stamp first, every re-fetch added a copy, and `2026-08-31-box3-01` holds two byte-identical 366 KB exports 29 seconds apart.
 
 ---
 
@@ -3025,7 +3031,7 @@ D64 fetched whatever the portal's saved filter last produced and then tried to j
 
 **A scope this process named can be checked against what arrived.** The question becomes "did I get the sets I asked for", which the file answers. `export_scope_incomplete` refuses rather than warns: a set asked for and absent means every card in it queues as `no_catalog_row`, a whole box silently, from a fetch that reported success.
 
-**The delta guard stays for exports that arrive by upload**, where nobody named a scope.
+**There never was a delta guard on the upload path, and the fetch path's was retired 2026-09-02** (D64, amended): the positive check is the whole guard.
 
 ### The scope is the claims the operator already made
 
@@ -3516,7 +3522,7 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 
 ### What would reopen this
 
-**D100.** `_DECISION_RE` is `\bD([1-9][0-9]?)\b` and the heading pattern matches two digits, so at three digits every citation check in this file goes silently vacuous — it is recorded in `docs/DEBTS.md` rather than fixed here, because fixing it untested against a tree that has no such id is how a regex gets loosened for nothing. **Or a renumber done by rewriting history** rather than by a commit, which leaves no state pair to compare and is invisible to this.
+**The three-digit ceiling, which fired and was discharged 2026-09-02.** `_DECISION_RE` was `\bD([1-9][0-9]?)\b` and the heading pattern matched two digits, so at the hundredth entry every citation check here went silently vacuous — recorded in `docs/DEBTS.md` at the time rather than fixed, on the grounds that a regex loosened against a tree holding no such id is loosened for nothing. **What made it testable was writing the entry first**: a three-digit heading appended to this file left `decision ids` reporting 92 D headings over 93, `decision structure` 92 over the same 93, and `decision index` "92 indexed, matching 92 headings" while that entry sat outside the index — four rows green over a file none of them could read. The bound is `_ID_DIGITS` now, spelled once and shared by all seven patterns in `scripts/docs-audit.py`, with a `--self-test` case behind each. **`scripts/prose-guard.py` and `scripts/decision-context.py` were widened with it**, because `decision structure` IS the first of those and a widen stopping at the audit would have left that row reporting an entry count that is not this file's. **A ceiling is written here as a word and never as an id** — spelling it the other way makes the sentence a citation of an entry that does not exist, and `decision ids` blocks the commit for it, which is exactly what the id this paragraph used to open with did the moment the patterns could see it. **Or a renumber done by rewriting history** rather than by a commit, which leaves no state pair to compare and is invisible to this.
 
 ---
 
@@ -3762,7 +3768,7 @@ D65 scoped the export by the set hints the box's own cards carry. The reasoning 
 
 **So the three are hoisted into `STANDING_FILTERS` and spread last**, where a re-capture of the portal's body cannot silently paste over them, and `scripts/docs-audit.py`'s `export request` row blocks the commit on any value that has moved — naming the instruction rather than the literal, because somebody who has just changed a value already knows what the literal is. T7 asserts all three on the wire, which is the half a literal check cannot reach.
 
-**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job; `accept_narrower` is the honest answer once, and the baseline moves with it.
+**The first fetch after this lands will refuse `export_narrower`, correctly.** It removes rows a previous export carried, which is the guard doing its job; `accept_narrower` is the honest answer once, and the baseline moves with it (retired 2026-09-02).
 
 **The rarity and condition axes stay unspent.** `Scope` carries `rarity_ids` and `condition_ids` and both remain empty: D64 measured that a condition filter thins a number's rows and that D3 rung 2 then decides a card from whichever row survived, and a rarity claim is per-card and would inherit the exact partial-claim defect this entry fixes.
 
@@ -4669,6 +4675,8 @@ The second half is what a price *is*. TCGplayer prices per SKU globally, D7 stat
 
 **A legacy run file is never read as a fallback.** That would put the duplication back on the first re-join of an old run. `join` and `emit` refuse with a sentence naming the command instead.
 
+**Amended 2026-09-02: the refusal is unconditional, the migration retires what it folds, and the per-run editor is deleted.** The refusal above was gated on an EMPTY corpus — `join` and `emit` looked for a legacy file only while `inventory/prices.json` held no answers — so from the first adoption onward eight files on the owner's store were silently ignored while this entry and CLAUDE.md described a refusal. It is unconditional now and fires before anything is read or written, naming `pkmnscan prices adopt --write`. That command RETIRES each folded file to `decisions.json.adopted` (`cli/runs.py:retire_decisions`, never overwriting); a re-adopt over SKUs the corpus already answers keeps the corpus's answer, reports the file's under `kept`, and retires the file without `--force`; and `--force` folds the files OVER the corpus rather than into a fresh one — the old form dropped every answer written on `#/pricing` since adoption. `PUT /pipeline/runs/<name>/decisions`, the `#/runs` textarea and `remembered_sub_threshold` are deleted: they answered 409 for every run made after this entry, because `join` no longer wrote the file they edited. The policy's default is D9's amendment of the same day.
+
 ---
 
 **The original entry follows, with the parts the amendment retired marked where they stand.**
@@ -4779,6 +4787,34 @@ being cheap cards, which was right while the figure was only an answer ABOUT tho
 the figure IS the line, a cut-off typed low enough to empty the lower section would have taken its
 own control off the screen with it.
 
+### The default is one figure too, and that cost the invisibility promise
+
+**The merge with main took away this entry's own promise.** Its first build said a store which
+had never set a threshold would partition exactly as it did yesterday. D9's amendment of
+2026-09-02 gave `sub_threshold` a default of flat $0.49, so a fresh store's first `emit` is not
+refused for want of an answer the owner had already given once. That is right on its own. Beside a
+`threshold` still falling back to `pricing.THRESHOLD` at $0.40 it is the inversion this entry
+exists to end, arriving through the back door: a store that has chosen NEITHER figure partitions
+at $0.40 and prices the half below it at $0.49, so a card worth $0.38 lists above one worth $0.42.
+
+**So `pipeline/corpus.py` has ONE fallback and both keys read it — `DEFAULT_CUTOFF`, $0.49.** The
+figure is the owner's, stated twice: as the cheap-card default they asked to be inserted, and then
+as the ruling that the two settings are one variable. The pair cannot invert now unless somebody
+writes them apart on purpose, which the command line still permits and no screen does.
+
+**What it costs, said plainly.** An existing store that never set a threshold partitions at $0.49
+where it used to partition at $0.40, and every SKU whose market sits between the two moves from the
+listed half to the cheap half on its next join. **That moves cards and not money**: those SKUs go
+out at $0.49 either way, because $0.49 is what the cheap half has been priced at since the
+amendment. The owner's own store is unaffected — it has $0.40 written — and `harness/tests/
+t7_store_and_seams.py` asserts the shared fallback with the trade written beside it, where the
+assertion that used to promise the opposite stood.
+
+**What would reopen it**: an operator who wants the bar for LISTING to sit below the price cheap
+cards go out at, which is a coherent thing to want — list everything over $0.40, sell the bulk at
+$0.49 — and is the one case the one-variable rule refuses to express. Nobody has asked for it, and
+the screen would need a way to say it that could not be mistaken for the pair drifting apart.
+
 ### What is NOT built, named rather than left to be discovered
 
 **The merged emit is not built.** The owner asked for one CSV — across runs, across the listed/sub-threshold split, and across games, with a checkbox to peel off just the above-threshold rows. It is a real change to `pipeline/join.py`, `cli/resolve.py` and `cli/cmd_emit.py`, because **a merged file cannot be a concatenation of the CSVs already on disk**: the cap has to be recomputed across the union or it writes the over-push above into a file. Until it lands, `emit` stays per run and the press is **absent** on a worklist of more than one — absent rather than disabled, which is D33's rule for the control that spends applied to the one that writes files.
@@ -4827,6 +4863,8 @@ The first build settled `pushed` too, drawing it down by what the export account
 **And `cli/resolve.py:_copies_out` already corrects a stuck one**, in its own words: *"THE CEILING IS PHYSICAL, AND IT IS WHAT CORRECTS A STUCK `pushed` … it cannot be true that TCGplayer holds more copies than we sent and have not sold."* What that arithmetic was missing is a real `live` — **which nothing in this repo has ever written**. Populating it is the whole fix.
 
 **The ledger's own `live` is a stale observation, not a second belief.** Adding it to `pushed` looked principled — `LISTING_STAGES` partitions the sent copies — and is false of this data: **32 of the 38 SKUs carrying a legacy `live` would then claim more copies than were ever captured.** The two describe the same copies at different moments, so the export supersedes it.
+
+**Amended 2026-09-02: the settlement was not wired to the cap, and the next re-join overwrote it.** `_copies_out` read `live` from the export's `live_by_sku` alone and refused the store's — its comment cited D59's *"nothing here knows which of the two readings is the newer one"* — so `--live --write` moved 1,079 copies the cap arithmetic never saw, and "the whole fix" above was a claim about a field nothing downstream read. And `cli/cmd_join.py` set `live` from whatever export the join was handed: run `2026-09-01-box3-01`'s recorded export was fetched fifteen minutes BEFORE that run was emitted, `Total Quantity` blank for every SKU it had just listed and `parse_quantity('')` reading 0, and "Join again" on `#/runs` with the picker left alone — the ordinary path — took a copy of the store from 1,072 live copies over 406 SKUs to 700 over 266. Closed by D59's amendment of the same day: `Listing.live_as_of` dates every reading, `Listing.live_reading` arbitrates the cap and `Listing.observe_live` the write, the join and reconcile reports name what they kept, and an uploaded export carries `File.lastModified` so its stored copy is dated to the file rather than to the upload. A settlement row was written before the field existed, and `Listing.from_record` reads its `at` as the observation time at the parse — absent is legacy, null is a record nothing has read `live` for, and the two are told apart nowhere else.
 
 **Idempotence is the test that separates the two designs.** A settlement that rewrites `pushed` destroys the record it read, so its second pass answers a different question — measured, 126 unexplained on the first pass and 120 on the second over an unchanged store. Writing only `live` gives 55 both times, and 0 corrections on the second.
 
@@ -4954,6 +4992,261 @@ There is no undo — the bytes are gone and the card is not in your hand — so 
 **No store-wide reclaim.** The plan's own shape is per batch — reclaim as each 5,000-card lot sells through, so the peak stays near 9 GB rather than climbing to 176 — and a box is the batch this product has. A whole-store press is one loop over `GET /boxes` away if the per-box gesture turns out to be resented, and the history of the box delete says what a resented gate becomes.
 
 **No probe of the pile.** Neither this entry nor D88 measures whether the 100,000 cards are worth scanning; the 2,000-card probe that decides it is work at the rig, and it needs none of this — at 2,000 cards the JSON store was 25 ms. This is the second half of the plan built ahead of the first, on the owner's instruction to execute the plan end to end, and it is recorded that way rather than as the probe having been done.
+
+---
+
+## D90 — The envelope is the unit of the write, and an order drives the walk as a mode of the inventory screen
+
+**An order takes over `#/inventory`: the walk lands on the first copy that order needs, an arrow steps to the next, and the whole order is recorded on ONE press that says the envelope is filled.** Built 2026-09-02 on the owner's want: *"as orders arrive on TCGPlayer I want them to be matched against PKMNSCAN for SKUs they may hit, and then I literally want to be able to have all the cards pulled either in one go across all orders or work order by order with basically an order fulfillment screen showing me one after the other without me searching for each card"*. Both halves of that sentence are modes — `#/inventory?orders=open` is the one go across all orders, `#/inventory?order=<key>` is order by order.
+
+**The mechanic was asked for by name, and it is the mechanic that already exists.** *"you know how currently in inventory if you're on one card and left or right arrow you go to the cards next to you in the box, and when you move from card x to card y, you also went from seeing all the positions card x was in to now seeing all the positions card y is in, i want that same mechanic on the order walks too"*. The arrows step the queue instead of the box while a walk is on — consulted by `BoxBrowse`'s existing window `keydown` listener, after its existing guards, so there is one key table and one listener — and the copies panel follows the focus for free, because that is all it has ever done.
+
+### The unit of the write, and the failure it exists to end
+
+**The owner named their own error point and rejected the obvious remedy in the same breath.** *"does order driving the walk mean mark sold is auto applied / auto matched? i'd rather it be i can't move on from the envelope until I click a button saying the envelope is filled all items mark sold something like that, yanno? currently i think my biggest error point might be remembering only after i've already switched to pulling another card that oh did i even mark the previous card sold?"*
+
+**So the walk writes nothing per card.** No advance records anything, no arrow spends a copy, and `POST /orders/fill` records every copy of one order — pulled and sold — on the press that says the envelope is filled; in order mode the next order is not offered until that press lands. The state the owner described is unrepresentable rather than recoverable: there is no moment at which some cards of an envelope are recorded and others are not, so *"did I even mark the previous card sold"* has no true answer that is not the whole envelope.
+
+**Auto-applying the sale on the advance was the alternative and it reproduces the doubt one register down**: instead of wondering whether a card was recorded, the operator would wonder whether an arrow pressed twice recorded twice. An advance is a statement about where the eyes are; a press on the envelope is a statement about what is in it.
+
+### This reopens D69 on the owner's word, and what moved is the unit
+
+**D69 ruled `One card, one press, and there is no batch control.`** That sentence stands over `POST /orders/pull`, which is untouched: one SKU, its copies, its own undo, its receipt. What this entry moves is the unit of the write for the WALK, and it moves it on the owner's instruction rather than on an argument D69 got wrong.
+
+**D69's ruling was about a screen that lists picks, and a list is not a pass through drawers.** On `#/orders` the operator reads rows and presses the one they just fetched, and one card, one press is the honest gesture there. The walk is a different posture: minutes at a drawer, hands full, eyes on cardboard. The envelope is the unit the OPERATOR works in, and D69 had no walk to notice that from.
+
+**What did NOT move, and it is most of the machinery.** Every copy is still aimed by its own `capture_id`; the aim is still checked against the card actually at that slot (`capture_id_mismatch`, rather than selling whatever slid into the index after a mid-box delete — D10 ruling 1, D58); the SKU check and the duplicate guard are the same code, because `_prepare_targets` and `_ledger_pull` were lifted out of `do_order_pull` and both doors go through them. `ORDER_FILL_TARGET_LIMIT = 50` bounds one press.
+
+**N calls to `/orders/pull` were the cheap build and they were refused for a reason that is not taste.** That route takes one SKU per call, so a three-line envelope is three writes, and a refusal on the second leaves a half-recorded envelope the undo cannot reverse in one press: `/orders/pull`'s undo NAMES no line — it discovers the holder from the ledger — and refuses `pull_spans_lines` the moment the copies belong to two of them. The operator would be left pressing undo once per line, in the right order, after a failure. One transaction, one refusal (`fill_entry_refused`, naming the line and the position, with nothing written), one undo (which names its lines and refuses `fill_line_mismatch` if the ledger disagrees).
+
+**D39's one-mass-select rule is not reopened.** This is not a multi-select over cards; nothing on the screen is ticked to compose it. The envelope is the resolver's own answer for one order, and the press either records that answer or refuses it whole.
+
+### The queue is of lines, and wave mode sorts by position without drawing one
+
+**T6's first determination ruled `A queue of positions would stand a second pick list beside the panel already drawn`, and wave mode sorts stops by `(landing.box, landing.index)`.** That reads like the determination being ignored and is not: what the sentence protected is the second-RENDERER rule, and it is intact. Nothing new is drawn. A stop is expressed as the walk's own focus through `goTo` (D45), every label is `place.label` off the wire (`pipeline/join.py:Position`, still the one formula), and `app/src/CardLocations.tsx` still draws the copies of whatever the walk points at. The sort decides the ORDER of a queue whose members are still lines; it renders nothing.
+
+**The sort is the argument FOR ordering by position rather than against it.** Order mode walks the drawers in the order the buyer's cart happened to be composed in: all three copies of X, then both of Y. If X sits in boxes 2, 5 and 7 and Y in 2 and 5, that is five shelf changes where the interleaved pass is three — and the interleaved pass is the whole content of *"all the cards pulled either in one go across all orders"*.
+
+**A landing is re-derived on every read, so the pass is a property of the read and never a stored list.** A three-copy line whose first copy was just filled stands at its next unfilled copy the next time the queue is computed; a mid-box delete on another device moves an index and the landing moves with it. `app/src/orderWalk.ts` holds no state, calls no server and imports no React for this reason, and the only thing carried across reads is the cursor.
+
+**A line the walk cannot stand on is counted rather than walked to.** A line still owed copies with no pick the walk can aim at — `no_copies_on_hand`, a pooled copy (D24), a record with no capture id — is `unfillable`: the banner counts it and links to `#/orders`, and the queue never lands on a place that does not exist.
+
+### It is a mode, and D31's ruling against two modes is untouched
+
+**D31's correction was against two TABS over one set of records** — a segmented control asking which way to look at the same 767 cards when there was only ever one question: *"i imagined moreso in this merge that these wouldn't be two tabs, instead it's basically find a card in a box-based system if anything.."*
+
+**A driver is not a tab.** The spine is the same — box, section, card — the photograph is the same, the copies panel is the same, the writes are the same door. What the mode adds is a banner saying which order is driving, a queue the arrows step, and a way out. Nothing is offered twice and nothing has to be chosen between, which is the property D31 was defending.
+
+**It is not a chord either, and that ruling is not touched.** `app/src/App.tsx`'s chord table is a ROUTE table whose own comment rules out a second key space reaching a mode inside a route, and D51 settles Cmd-arrow as the one modifier the shell takes. Entry is a link on `#/orders` — `Walk this order` per open order, `Walk every open order` in its header — and exit is `Stop walking`, drawn ALWAYS LAST in the banner so the press that leaves is never where the press that fills has just been.
+
+### The URL is the handoff, because the order key has one source of truth
+
+**Entry is `#/inventory?order=<key>` or `#/inventory?orders=open`, and not `app/src/runHandoff.ts`.** That `sessionStorage` handoff exists, is D27's carve-out rather than a new one, and would have worked. D49's argument for `#/pricing?run=` is taken here verbatim: the key has one source of truth — the ledger — and a copy of it in a second store is a second thing with its own clearing rules, its own staleness and its own way of disagreeing with the address bar.
+
+**What that buys is T6's own open question answered.** That section closed with *"Whether the queue survives a reload"* and declined to settle it, noting the argument is stronger here than for a run handoff because a pull walk is minutes at a drawer rather than seconds between two screens. It survives: the ask is read out of the hash, the key is validated against the payload on every read, and a reload lands on the first REMAINING stop rather than on nothing or on one already filled. The colon in `source:number` is why the key is encoded.
+
+### The resolver is asked for what is owed, not for what the buyer bought
+
+**`_engine_order` passed `line.quantity` raw and the ledger's recorded pulls were subtracted nowhere, so a partly filled line resolved as if nothing had been pulled.** `Ledger.outstanding` is the quantity that reaches the engine now. The defect predates this work and was live on `#/orders`; it is one this entry found rather than one it pays for.
+
+| the case | before | after |
+|---|---|---|
+| a line of 3, one copy pulled, 3 copies in the store | wants 3, finds the 2 unsold, reports `short` | wants 2, reports `resolved` |
+| a line of 3, one copy pulled, 5 copies in the store | wants 3, allocates **3** picks against a line owed 2 | wants 2, allocates 2 |
+
+**The second row is not a local error, and that is why it is the one that bites.** `resolve_all` is a one-pass allocation over the WHOLE open set and its double-book guard is D69's single most important property. A third pick allocated to a line owed two is a copy taken out of the pool every other order for that SKU draws from, so the visible symptom is a SECOND buyer's line reading `short` over a copy the first buyer is not owed — a wrong answer on a row nobody touched.
+
+**`pipeline/orders.py:OrderLine` accepts quantity zero now and refuses only negatives.** A line owed nothing arrives wanting zero, the engine picks none, and it answers `resolved` with the breakdown still counted — which is how a filled line keeps drawing its figures without a second implementation of the row. On the wire a resolved line gained `owed`, the ledger's figure, beside `wanted`, the buyer's.
+
+### A pulled copy's slot is joined at read time, and storing it would break D36
+
+**`_order_progress` answers `pulled: [{capture_id, box, index}]`, composed per read from `card_by_capture_id`, and nothing writes it down.** The copies panel needs it and can get it no other way: a pulled copy is SOLD, so the resolver offers it in no pick, and nothing else says which slot it came out of. (`SearchCopy` carries a capture id since D93, so a client could now match the ledger's records itself — that would be a second implementation of a join the store is indexed for, and the browser's copy would be the one with no `card_by_capture_id` to be right about duplicates.) The ledger holds capture ids, the walk is keyed by position, and this is the join between them.
+
+**It may never be stored, and D36 is the reason in one sentence: a run directory's slot numbers are not the truth, the photograph is.** A `{box, index}` written into the ledger beside a capture id is a second address for a card, and it goes stale the first time a card in front of it leaves the box (D10 ruling 1, D58) — with none of the recovery D36 gives a run record, which at least carries a `photo_sha256` to re-bind by. Composed per answer it is simply true. `card_by_capture_id` is an indexed lookup under D88; a card that is gone, or a duplicate id the store refuses to guess between, answers nulls rather than taking `GET /orders` down, and `harness/tests/t7_store_and_seams.py` holds the renumber case that proves it.
+
+### Boxes get no say in which copy fills a line
+
+**Told that `Take this one instead` would be fenced to the copy under the photograph and never one in another box, the owner refused the fence: `You're giving boxes too much independence` (2026-09-02).**
+
+**They are right, and D7 had already ruled it: `Every unsold copy is sellable`, and price is per-SKU and shared across copies.** A box-scoped swap would be the one place in the product where a copy's drawer decided whether it could fill an order — while the copies panel draws those copies across boxes precisely because they are interchangeable, and D45 makes each one press away. Any unsold copy of the line's SKU, in any box, may be taken.
+
+**One copy is refused, and it is refused by the ALLOCATION rather than by the drawer.** A copy another stop in the queue already targets — another line of this envelope, or in wave mode another buyer's order — cannot be swapped in. `resolve_all` is a one-pass allocation over the whole open set precisely so two envelopes cannot name one card, and a hand-swap able to undo that would put D69's double-book defect back one register up: both envelopes would count the copy, the first press would take it, and the second would refuse at the server with the operator holding a card the screen had promised them. The row says `for order N` beside the missing button, which is the reason rather than a fence. The test that proves the box has no say and the test that proves the allocation does are deliberately the same case, over two copies in ONE drawer of which only one is offered.
+
+**And the stop FOLLOWS the copy taken.** The landing is the stop's first target rather than the server's first pick, so a swap into another box moves the walk to that box instead of snapping back to the drawer the resolver happened to choose. The two client maps behind it are `targetsOf`'s `retargets` and `excluded` — the copies re-aimed, and the capture ids the operator said were not there.
+
+**In this mode `Mark sold` is hidden on every row, and `Retire` is not.** T6's second determination is the reason and it is the seam the whole feature turns on: `POST /inventory/<box>/<index>/sold` writes card state and NOT the ledger, so a card sold that way while an order drives leaves its line owed forever and the operator ships a card the ledger still wants. Retiring is a different claim about a different card and belongs to nobody's order.
+
+### What it costs
+
+**The mass-select clears on an advance nobody pressed.** T6 named this and it is kept: a shelf change clears the ticks (D31, because the write the selection feeds is box-scoped) and D45 already pays it for a label press. What the walk adds is that the shelf now changes on an arrow, or on a fill that re-derives the queue, rather than on a gesture aimed at a box.
+
+**Re-aims and exclusions are this screen's and this session's.** `retargets` and `excluded` are React state; a reload drops them and the envelope falls back to the resolver's picks. That is deliberate over a store write per swap — a swap is a statement about the next press, not a fact about the store — but an operator who re-aimed three copies and then reloaded gets the resolver's answer back with nothing on screen saying it changed.
+
+**The banner costs about 62px above the walk at every stop.** It renders between `.browse-controls` and `.browse-body`, so the photograph's own floor and everything under it start about 62px lower for as long as the mode is on. It is one row, `nowrap`, and its height never changes — D28's rule that a list must not move under an undo, applied to the row that carries the undo.
+
+**A copy taken without pressing the swap records the slot the walk was standing on.** The envelope sends the targets the SCREEN holds, not the card in the hand. Take a different copy of the same SKU silently and the write is right about the SKU and wrong about the slot: the store says a card is gone that is still in the drawer, and the aim check cannot catch it because the card at the recorded slot really is that SKU. The discipline is the one the walk is built around — take the copy the walk is standing on, or press `Take this one instead` and let the stop follow you.
+
+**It is built over an ingest no real order has ever been through.** Measured against the owner's own store on 2026-09-02:
+
+| | |
+|---|---|
+| cards in the store | 1,625 |
+| cards sold | 104 |
+| orders in the ledger | **0** |
+| copies ever recorded as pulled for an order | **0** |
+
+All 104 of those sales went through `#/inventory`'s plain sale — the write this mode hides, for the reason those 104 demonstrate: it moves the card and leaves the ledger alone. D91 built the door an order arrives through on the same day, and its own table records the fetch having returned an order zero times before it. Every guarantee here is proven by `harness/tests/t7_store_and_seams.py` and by nothing that has held a buyer's money.
+
+**A row's correction and its reversal share a rectangle, so a double press takes one back.** `.card-locations-action` is right-anchored, `Take this one instead` is about 177px and `Not here` about 84px, and the shorter one lands inside the longer one's footprint. Neither press reaches the server, so there is no busy gate to cover an overshoot the way one covers the sale. This is the same overshoot `Inventory.css` already records for `Mark sold`, decided the same way and for the smaller stake: nothing is written, the row's mark changes word and register, and the banner's `take` figure moves — so the second press is visible rather than silent, and one more press undoes it. What was fixed instead is the part that was NOT visible: with every copy excluded the landing used to fall back to the resolver's first pick and walk the operator to a drawer they had just said the card was not in. It stays where it is now.
+
+**In wave mode the banner is not one height, and the envelopes list is why.** The ROW is constant — that is the measured invariant and the one the arrows are pressed against — but the list beneath it is one 40px row per open order, and a read that changes which orders are open changes it. An envelope filled here keeps its row, drawn `filled`; one another device fills, or one whose last copy leaves the store, simply goes, and the walk below moves up 48px. Order mode has no list and is the constant-height case the measurements were taken in. Fixing it properly means holding a row for an order this screen never filled, which is a claim about somebody else's work that this screen has no business making.
+
+**What would reopen this, and there are three.**
+
+*A second pair of hands.* Everything here assumes one operator at one screen: the cursor, the re-aims and the exclusions are this session's, and two people walking the same wave would each hold an allocation the other has already spent. The measurement is a second device on a walk at the same time.
+
+*A real envelope pressed and found wrong.* The first press against an order a buyer actually placed is the measurement this entry does not have. Watch for `fill_entry_refused` naming a position the operator was standing at: that would mean the aim check and the walk disagree about what is at a slot, which is a store bug wearing this feature's error message.
+
+*`SearchCopy` gaining a `capture_id`.* Today a copy is swapped in only by walking to it, because the aim needs an id the search rows do not carry. If they carried one, an unpicked copy could be taken straight off the panel without the walk moving — worth arguing rather than taking, because the walk-to IS the flow: you look at the card before you swap it in.
+
+## D91 — The window is the range, the status is the filter, and the operator picks it from what the wire returned
+
+**The order fetch is two presses: the search pages are walked whole and counted by the status string TCGplayer gave each order, and only the statuses the operator ticks are detailed.** Built 2026-09-02, after the owner reported that the fetch had never worked once on the account it exists for. The refusal, verbatim: *"The LastThreeMonths range holds 370 orders and this fetch is capped at 100. Nothing was read rather than the first 100 being read and the rest silently left behind. Ask for a narrower range."* Code `order_too_many`.
+
+**The cap was on the wrong quantity, and the remedy it printed could not be followed.** `server/order_transport.py` capped the ORDERS IN THE WINDOW at 100 to keep one press inside the only request budget anyone has a number for. A fetch is one search page per 25 orders plus one detail request per order, and `MAX_ORDERS` sized the whole of that against the 120 requests a minute the bridge extension holds itself to — a figure that is that client's own self-limit, read out of its source, and not a measurement of TCGplayer's server. The window's size is not what spends the budget: the pages are cheap and the details are the cost. And "ask for a narrower range" names a thing the transport cannot do — `Custom` needs a date pair whose query string was never captured, and the two ranges it knows are three months and two years.
+
+### What the press measured
+
+| | |
+|---|---|
+| orders in `LastThreeMonths`, this account, 2026-09-02 | **370** |
+| the cap the fetch refused at | 100 |
+| search pages to walk the whole window | 15 |
+| requests for a full detail of the window | 385 |
+| requests for the two orders awaiting shipment (D87's `Ready to Ship`) | 17 |
+| times the one-press fetch had returned an order | **0** |
+
+**The first row is the first real number this repo has about the order feed's size**, and it retires the "347 orders in 90 days" that `docs/specs/order-pipeline.md` §6 carried as an unverified external figure. The last row is the finding: a guard sized to protect the budget had made the route unusable on the one account it serves, and nothing in the tree could see that, because no test of `do_order_fetch` existed and no fixture holds 370 of anything.
+
+### The status is the operator's and never the code's
+
+**`fetch_open_orders`' own docstring ruled that "open" is the range and not a status filter, because the status vocabulary was never enumerated on the wire, and that ruling stands.** A string this module decided meant "still needs picking" would be a guess, and a guess that drops an order is an envelope that never ships. What changed is who chooses. `POST /orders/fetch {preview: true}` walks the summaries — `order_transport.summaries`, one request per 25 orders, no detail call — and answers the window counted by the status STRING each order carried, verbatim, with how many of each the ledger already holds at that status. The screen draws those strings as rows with tick boxes and nothing pre-ticked. `POST /orders/fetch {statuses: [...]}` details only the ticked ones, compared verbatim after a strip: never folded, never mapped, never a constant in code. The strings on the wire are the strings on the screen, and the operator ticks the two they are about to put in envelopes rather than the 280 that already shipped.
+
+**The cap moved to the detail calls and it stays.** Fifteen pages plus a hundred details is 115 requests, inside the budget; a two-year window would not be, and its page count is what would reopen this. Past the cap the rest is COUNTED and answered as `remaining`, never silently left behind — `CLAUDE.md`'s rule against a silent drop is kept by making the drop loud and finite — and the next press picks it up, because `skip_known` hands the transport `{number: status}` as the ledger holds them and an order already detailed at this status is not detailed twice. An order whose status moved IS detailed again, which is how a shipped order's new word reaches the ledger without a full re-fetch. That map is `_known_orders`, read out of a store snapshot; the route still writes nothing.
+
+**The transport does not sleep.** A route that paused its way through 370 details to stay under the budget would block one HTTP request for minutes, which is the wrong shape for a button and the shape D33 spawns a child for. Two presses inside one minute can pass the budget and nothing stops them; that is a cost named below rather than a cooldown, because the owner's ruling for this work was that the fetch stays a press and everything after it is what gets automated.
+
+### What it costs
+
+**Two presses where there was one, and a table to read between them.** The first press is the price of not guessing at the vocabulary. **The status strings are TCGplayer's, seen once.** The filter and the delta both compare the summary's `orderStatus` against the ledger's stored `status`, which came from the detail; if the two endpoints ever spell one state differently, `skip_known` re-details that order on every press. The preview would show the doubled string, so the operator would see it. **The `Custom` range is still not captured**, so the window is three months or two years and nothing between. **No cooldown**: the budget is the operator's to respect across presses. **And `detail` is still unexercised against the live host** — the summary walk is proven by the very refusal that opened this entry, and the projection of a buyer's name and address is proven against fixtures only. The first filtered fetch the owner presses is the measurement, and the transport's STATUS block says so.
+
+**What would reopen this: a status spelled two ways between the summary and the detail, `Custom` captured off the wire, or orders arriving faster than a person presses.** The first is the delta re-detailing an order every press; the second gives the window a date and makes the status table smaller; the third is an unattended fetch, which is its own entry with its own argument about a cookie that expires under D53's supervisor with nobody watching the refusal.
+
+## D92 — A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
+
+**A bare `#` on an owner-side screen draws D58's count of the cards in a box, never the store key; a key is drawn only with the `B<box>` sigil D68 gave it.** Recorded and built 2026-09-02, after the owner reported the index on box 3 card 27 as wrong. It was not wrong. Box 3 was carrying two numbering systems and one sigil, and `#27` named two different cards on one screen.
+
+**The two numbers are D58's and they are both correct.** `Place.index` is the store key — the `/inventory/<box>/<index>` path, the `<index>.jpg` the photograph is named after, what every write aims by. `Place.slot` is the number a person counts to, and it moves as cards leave the box in front of it. Both ride the wire because they answer different questions. What had never been decided is which one owns the `#`.
+
+### What box 3 measured
+
+| | |
+|---|---|
+| stored indices in box 3 (`RB Epics`) | 723 |
+| cards on hand | 647 |
+| departed — sold | **76** |
+| index 27 | a sold `Astral Heron` |
+| card 27 | index 63, `Master Yi, Unstoppable` |
+| the two spaces at the top of the box | **76 apart** |
+| on-hand cards in box 3 carrying no name, which is what made the row draw at all | 5 |
+
+**Three renderers spelled both spaces `#`, on one screen.** `BoxBrowse.tsx`'s sticky header drew `Section 1 · #1–#82` from `section_start`/`section_end`, which are counts. `PlaceNeighbors.tsx` drew `#41` from `PlaceNeighbor.index`, which is a key. `join.departed_label` drew `B3 #27`, which is a key and says so. Only the third had ever argued its spelling.
+
+### The sigil goes to the count, and D68 is not reopened
+
+**`slot` is what a renderer draws and `index` is what a caller addresses with.** `_company` sends both per neighbour — the slot is the record's ordinal in `occupants`, which is already every on-hand index ascending, so it is `Position.slot` by the same bisect rather than a second derivation. `index` stays on the wire unread, because D45 makes a copies list a way back into the walk and a click target needs the key.
+
+**D68's `B3 #27` is exempt BY NAME, and the exemption is the rule rather than a hole in it.** A departed card has no count — `Position.slot` answers null for one by design — so a key is the only number it has. The `B` is what marks it, which is D68's own argument, and it is why that form is not a bare `#`. The rule is therefore: **a bare `#` is a count; `B<box> #` is a key.**
+
+**A FROZEN COUNT WAS PROPOSED AND MEASURED AND REJECTED ON THE MEASUREMENT.** The owner's first instinct was to give a departed card the count it held when it left, accepting that a historical number could collide with a live one. It collides essentially always: of 105 departed records across the store, **104 carry a number a live card in the same box holds right now**, and box 3 has 26 records sharing 18 numbers with each other. That is structural — any frozen count is by construction below the box's live card total, so a live card always holds it — and it is D68's own complaint (*"I'm seeing two box 1's"*) reproduced against live cards, which is the more dangerous direction, because a live card is one somebody walks to. **The frozen count survives as a FACT and not as an identifier**: it is worth drawing in the card panel, where nothing can mistake it for somewhere to reach, and that half is NOT BUILT — see the cost below.
+
+### What is checked, and what the check cannot do
+
+**`scripts/sigil-check.py` refuses a `#` composed from an expression naming `index`, on the commit path.** Narrow on purpose: it cannot tell a count from a key in general, and a check claiming to would be worse than none. What it catches is the one repeated mistake — reaching for the field called `index` when drawing a figure a hand is meant to count to.
+
+**It found three sites nobody had looked at, on its first run.** `BoxOps.tsx`'s machine receipt naming skipped terminal rows, and `RunPanel.tsx` twice over a capture-directory preview. All three are legitimate — a departed record is in no slot, and `CropSample` carries no slot at all because nothing there has consulted the store — so each now carries a `sigil-ok:` marker with the reason. That is the check's real value: it did not find bugs in those three, it forced them to be *examined* rather than assumed. It also found a CSS class named `run-preview-slot` that had been drawing a key since it was written.
+
+**Two prose statements of these facts were the exact reverse of the truth.** `types.ts` told every reader that the neighbour index "is a slot a hand can count to, not a store key". `t7_store_and_seams.py` told every reader that `Card 17` "IS THE SEVENTEENTH SLOT, NOT THE SEVENTEENTH CARD YOU CAN COUNT" — true when D30 wrote it, made false by D58 on 2026-08-30. `server.ts` had it right, as a recorded hazard, one screen away from `types.ts` having it backwards, and neither reader checked the other. **That is why this is a check and not a paragraph.**
+
+### Two things this deleted, and one it fixed by accident
+
+**The two stored `entry.label` writes are gone** — the mid-box delete's re-key and D83's move. Both composed a label in INDEX space while every route serves one re-rendered in count space by `_queue_row`; nothing read them, so no wrong number ever reached a screen. What they left was a field holding a plausible wrong rendering, indistinguishable from the correct ones `cli/resolve.py` writes, one forgotten `places` argument from being served. D56's rule already covers it: a rendering nobody can correct is joined at read time and not stored. The move was the worse of the two — the entry crosses INTO ANOTHER BOX, so the stale string named a section and card number from a different box's layout.
+
+**`docs-audit.py`'s `commit path` row was matching flags across the whole hook file**, so adding a second self-testing check made `audit-self-test` — which D18 requires the hook not to run — report as being on the commit path. Its own comment already said what it meant (*"a check is on that path when the hook invokes its script IN ITS MODE"*); the match is per line now. A false positive there is worse than a loose one: it reports a check as gating commits when nothing runs it.
+
+### What it costs
+
+**The check is text, so a renamed local walks past it** — `const n = side.index` and then `#{n}` is invisible to it. A nominal type over the two numbers is the fix that could not be evaded, and it was rejected on blast radius: `slot` and `index` are plain numbers across the wire contract and forty call sites. The ceiling is in `docs/DEBTS.md` rather than left for someone to discover. **`PlaceNeighbor.index` is now sent and read by nothing**, which is a deliberate unread field and not an oversight. **And the departed card's frozen count is RECORDED AND NOT BUILT**: it needs the event log, because current state plus `state_at` does not reconstruct it — tested, and 31 of 105 records come out wrong that way, box 1 uniformly by one (a sale that was later undone) and box 3 indices 37–39 in both directions (a reindex). That makes it a route on `getPriceHistory`'s shape, and it carries a semantic question nobody has answered: what a re-sold card's frozen count means.
+
+**What would reopen this: a neighbour row that becomes a click target, a screen that needs to draw a key inside a count column, or the frozen-count panel.** The first is why `index` is still on the wire. The second is what `sigil-ok:` is for. The third is the one piece of this entry that is a want rather than a build.
+
+## D93 — The copies panel is the picker, and a full line refuses the take
+
+**Which copies of a line go in the envelope is CHOSEN off the copies panel, one press per copy, in any box.** Built 2026-09-02 on the owner's complaint: *"When I have an order of 2 cards and I have inventory for 3, I basically should be able to pick which two I sell, instead currently it's like predetermined, and using the 'take this one instead' system is not intuitive it should be done differently."*
+
+**This is D90's own third reopening condition, taken.** That entry closed with *"`SearchCopy` gaining a `capture_id`. Today a copy is swapped in only by walking to it, because the aim needs an id the search rows do not carry. If they carried one, an unpicked copy could be taken straight off the panel without the walk moving — worth arguing rather than taking, because the walk-to IS the flow: you look at the card before you swap it in."* The argument came back the other way from the person doing the walking, and the flow it defended is what they called unintuitive.
+
+### What was actually in the way, and it was one field
+
+**`resolve_all` decides which copies fill a line before anybody reaches a drawer, and that half is right and unchanged.** It allocates over the WHOLE open set in one pass so two envelopes cannot name one card, and the operator wanting a different copy of the same SKU is not a defect in that allocation — it is a fact about which cards are in their hand.
+
+**What made the correction awkward was that a copy could not be AIMED at.** Every write in the walk aims by `capture_id`, checked against the card actually at the slot (`capture_id_mismatch`, D90) — and `GET /search` did not send one, so the only aimable copies were the resolver's own picks and whichever card the walk was standing on. Hence the two-press errand the owner objected to: walk to the copy, then press `Take this one instead`, which replaced the stop's first target one copy at a time.
+
+**The carve-out this reopens is narrower than it read.** `app/src/types.ts:SearchCopy` refused `confidence` and `capture_id` together, to stop *"a second inventory view growing inside a search result"*. That rule stands for the metadata; it never had an argument about the identity. **An identity is not a view.** `_copy_row` sends `capture_id` now, null on a record written before ids were kept — and a copy carrying null says `no capture id` where its control would be, rather than offering a press the server would refuse.
+
+### A full line refuses the take, and the ring was the alternative
+
+**Told that the panel would be the picker, the owner was asked what a third tap should do when the line already has the two copies it is owed, and chose the refusal.** At `2 of 2` every other row draws the count where its control would be; dropping one is what makes room.
+
+**The alternative was a ring, and it is the one this build would have shipped unasked.** Tapping a third copy would drop the longest-standing take — one press per correction, and because the resolver's picks are always the oldest members, tapping exactly the copies in your hand converges on exactly those. It was declined on the property that makes it convenient: **nothing may leave the envelope on a press aimed at something else.** A row that un-takes itself because a different row was pressed is a change the finger did not make, to a list whose whole job is to say what is in the operator's hand.
+
+**What it costs is the second press, and it is named rather than hidden.** A swap is `Don't take` then `Take`, and the panel says so in one sentence.
+
+### One map, not two, and an empty list is an answer
+
+**`retargets` and `excluded` collapse into `chosen`.** They existed because the gesture was a CORRECTION: a replacement list for the copy swapped in, and a set of capture ids the operator had said were not in the drawer. A picker has one fact per stop — the copies taken — so there is one map, keyed by stop, and `targetsOf` reads it with `??` rather than `||`: a stop the operator has emptied stays empty instead of falling back to the picks it was seeded from. *"None of these"* is a thing that can now be said.
+
+**The vocabulary follows the gesture.** `taking` in ink and `not taking` in muted, `Take` and `Don't take` on the rows, `2 of 2 taken` where a full line refuses, and `take 2 of 2` on the banner — a bare numerator answered "is this line full" only for somebody who remembered what the buyer asked for. `Not here`, `Back in` and `taken instead` are gone.
+
+### The walk follows a drop and not a take
+
+**Taking a copy appends it, so the walk stands still.** The landing is the stop's first target; a copy pushed to the FRONT — which is what the swap did, deliberately, so the stop followed the operator to the drawer they had walked to — would now jump the screen to whatever row was just ticked, and under the refusal above a swap is two presses, so it would move the walk twice for one correction.
+
+**Dropping the copy the walk is standing on DOES move it**, to the next copy the envelope is taking, in another box if that is where it is. That is the errand D90 built the landing for, and it is the half worth keeping: the walk goes where the cards are, not where the taps are.
+
+### The two shortfalls survive, and the order of derivation is what keeps them honest
+
+**`short` is copies the resolver never found and `not taken` is copies it found that the operator has not put in the envelope** — the ledger's problem and the shelf's, and one number covering both sends a person to the wrong place. `Stop.available` is the count of aimable picks; what is missing is `owed - take`; as much of that as a pick could still answer for is `not taken`, and the rest is `short`.
+
+**Derived in that order rather than as two independent counts, which is what stops them double-counting.** A copy taken that the resolver never offered — a free copy in another drawer — closes the gap rather than being counted against it, and the old subtraction (`all picks` minus `kept picks`) could not express that at all, because a hand-taken copy was not in either list.
+
+### What did not move
+
+**The resolver's picks are still the default, and that is what keeps the common case free.** A line owed two with two copies on the shelf is zero presses; the picker costs a press only where the operator has an opinion about which copies. Nothing about the envelope moved either: one press per order, one transaction, `Mark sold` hidden on every row while an order drives (D90's seam), `Retire` still offered.
+
+**A copy another stop has been allocated is still refused, and still by the allocation rather than by the drawer** (D7, and the owner's *"You're giving boxes too much independence"*). The mark says `for order N` beside the missing control. A pooled copy (D24) is refused too: it is a count rather than a location, so there is no slot for the aim check to check against.
+
+### What it costs
+
+**The choice is still this screen's and this session's.** `chosen` is React state; a reload drops it and the envelope falls back to the resolver's picks with nothing on screen saying it changed. That is D90's cost unchanged, and the case for storing it is no stronger now — a take is a statement about the next press, not a fact about the store.
+
+**A line the resolver could not answer at all is still not walkable.** `stopsOf` keeps a line with no aimable pick out of the queue, so the picker cannot be used to fill one by hand. No reachable gap follows from it today — the copies that would fill such a line are pooled, id-less, or held by another order, and all three are refused on their own terms — but the queue's membership is now decided by a narrower question than the panel can answer.
+
+**The take is per stop, and the panel draws one SKU.** In wave mode each stop keeps its own list, which is right; what it means is that no screen shows the whole envelope's copies at once, and the banner's counts are what stands in.
+
+**And it is still built over an ingest no real order has been through.** D90's table is unchanged: 0 orders in the ledger, 0 copies ever recorded as pulled for one. Every guarantee here is proven by `app/tests/order-walk.spec.ts` and by nothing that has held a buyer's money.
+
+**What would reopen this.** *A second pair of hands*, exactly as D90 has it — two people walking one wave each hold a `chosen` the other has already spent. *A line the resolver answered short while a copy sat takeable in the panel*, which would mean the queue's membership test and the picker disagree about what is fillable. *A tap that costs a card* — the refusal above is a bet that a change the finger did not make is worse than a second press, and the measurement that settles it is an operator swapping copies at a real drawer.
 
 ---
 
@@ -5113,7 +5406,7 @@ screen.
 
 ### One: the threshold stops being a module constant
 
-**`pipeline/corpus.py`'s `policy.threshold` is the D9 cut-off, and `pipeline/pricing.py:THRESHOLD` is what a store that has never set one reads.** D9 has said *"both configurable"* since it was written and nothing could configure it: the figure was a module literal no flag, env var, document or route could reach. That is the shape D10's `CARDS_PER_SECTION` was deleted for — a number the product asserts about the operator's business with no way for the operator to disagree — and the argument transfers whole. D9's derivation is untouched: $0.40 is still $60/hr against a ~20s marginal pull, and it is still the default. What moved is who may say otherwise.
+**`pipeline/corpus.py`'s `policy.threshold` is the D9 cut-off, and `pipeline/pricing.py:THRESHOLD` is what a store that has never set one reads.** D9 has said *"both configurable"* since it was written and nothing could configure it: the figure was a module literal no flag, env var, document or route could reach. That is the shape D10's `CARDS_PER_SECTION` was deleted for — a number the product asserts about the operator's business with no way for the operator to disagree — and the argument transfers whole. D9's derivation is untouched: $0.40 is still $60/hr against a ~20s marginal pull. What moved is who may say otherwise — **and, on the merge with main, what a store that has chosen nothing reads.** See *The default is one figure too* below.
 
 **It goes in the corpus and not in the run, which is D86 applied rather than reopened.** A run's `decisions.json` held two kinds of fact and the per-SKU half was a property of the CARD; the threshold is neither. It is a property of the OPERATOR'S HOUR — a labor bar, which is what D9 derives it from — so it is standing policy for the store, beside `rule` and `basis`, with the same per-run override shape D48 keeps for the lot that genuinely differs.
 

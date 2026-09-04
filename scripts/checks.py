@@ -185,6 +185,23 @@ CHECKS = (
         "governed_by": ("D18",),
     },
     {
+        "target": "sigil-check",
+        "runs": "python3 scripts/sigil-check.py --self-test && python3 scripts/sigil-check.py",
+        "asserts": "A bare `#` on an owner-side screen draws D58's COUNT and never the store "
+                   "key. Three renderers spelled both with one sigil — the sticky section "
+                   "header in count space, the neighbour row and the departed key from the "
+                   "index — and on box 3 those spaces are 76 apart, so `#27` named two "
+                   "different cards on one screen. Text-matched and therefore narrow: it "
+                   "refuses a `#` composed from an expression naming `index`, and a renamed "
+                   "local walks past it (docs/DEBTS.md).",
+        "needs": ("python3",),
+        "writes": "",
+        "commit_path": True,
+        "why_off_commit_path": "",
+        "gates": True,
+        "governed_by": ("D58", "D68", "D92"),
+    },
+    {
         "target": "ignore-check",
         "runs": "sh scripts/ignore-check.sh",
         "asserts": "Every path a worktree provisions is gitignored — as a file, as a directory "

@@ -3,8 +3,8 @@
 For a card with normal, holo, and reverse rows in the fixture, assert each ladder stage
 resolves to the correct condition string and price.
 
-Pass: all four stages correct, review fires on metadata/detection disagreement, and every
-routing row sends the card to the queue named.
+Pass: all four stages correct, a finish claim is never contradicted by the photograph, and
+every routing row sends the card to the queue named.
 
 The ladder (D3 in docs/DECISIONS.md), in order:
   1. Capture-time metadata — variant toggle recorded in the card's JSON sidecar. Primary
@@ -14,14 +14,18 @@ The ladder (D3 in docs/DECISIONS.md), in order:
   2. Catalog-forced — one condition row for that number in the fixture (most SV-era rares
      are holofoil-only), so the row decides.
   3. Haiku `finish` field (normal | holo | reverse_holo), returned in every identification
-     call at no extra cost. Runs as a cross-check even when metadata exists: a normal card
-     mis-sorted into the reverse stack still matches a valid catalog row, so only
-     detection catches it.
-  4. Review queue — still ambiguous, detection disagrees with metadata, or no matching
-     catalog row.
+     call at no extra cost. Decides where NO claim exists, and chooses INSIDE a multi-member
+     claim. It never contradicts one (D3, amended 2026-09-02): it ran as a cross-check over
+     a one-member claim until then, and every disagreement a human ruled on went to the
+     claim — 16 of 16 at Gate B, box 2's 230 all wrong — so a read outside the claimed set
+     is dropped rather than argued with.
+  4. Review queue — still ambiguous, or no matching catalog row.
 
-Stage 4 is not an afterthought: the disagreement case is the one that catches a mis-sort,
-and it must be asserted to fire, not merely to be reachable.
+Stage 4 is not an afterthought: the no-signal case is the one that refuses to guess between
+two rows the operator did not name, and it must be asserted to fire, not merely to be
+reachable. The claim-decides path is asserted the same way, in BOTH directions, because a
+ladder that quietly let the photograph win one of them would be the retired cross-check back
+under another name.
 
 THE TOGGLE IS TRUSTED (owner's call, 2026-08-03), so rung 2 is narrower than it reads: it
 fires only when a card carries NO capture-time metadata. Metadata the catalog contradicts
@@ -72,7 +76,7 @@ from store import files
 NAME = "T4"
 DESCRIPTION = "Variant ladder resolves all four stages, and the routing table"
 PASS_CRITERIA = (
-    "all four stages correct, review fires on metadata/detection disagreement, and "
+    "all four stages correct, a finish claim is never contradicted by the photograph, and "
     "every routing row sends the card to the queue named"
 )
 
@@ -296,26 +300,32 @@ def run() -> Result:
         "metadata_not_stocked (owner's call 2026-08-03)"
     )
 
+    # --- the claim decides: a contradicting photograph is dropped (D3, amended 2026-09-02) --
+    # This was the METADATA_DETECTION_DISAGREEMENT review path, asserted here as the one
+    # that catches a mis-sort. It caught nothing: 16 of 16 rulings at Gate B went to the
+    # claim, box 2's 230 disagreements were all wrong, and every run since was joined with
+    # the cross-check switched off. Both directions, because a ladder that let the
+    # photograph win one of them would be the retired rung back under another name.
+    _check_stage(
+        c,
+        variant.resolve(both, metadata_finish="normal", detected_finish="reverse_holo"),
+        variant.METADATA,
+        BOTH_NORMAL_SKU,
+        "Near Mint",
+        BOTH_NORMAL_PRICE,
+        "metadata=normal vs detected=reverse_holo -> the claim's row at rung 1, not review",
+    )
+    _check_stage(
+        c,
+        variant.resolve(both, metadata_finish="reverse_holo", detected_finish="normal"),
+        variant.METADATA,
+        BOTH_REVERSE_SKU,
+        "Near Mint Reverse Holofoil",
+        BOTH_REVERSE_PRICE,
+        "and in the other direction — the claim decides whichever way the photo leans",
+    )
+
     # --- stage 4: review ---------------------------------------------------------------------
-    disagreement = variant.resolve(
-        both, metadata_finish="normal", detected_finish="reverse_holo"
-    )
-    c.equal(
-        (disagreement.stage, disagreement.reason, disagreement.row),
-        (variant.REVIEW, variant.METADATA_DETECTION_DISAGREEMENT, None),
-        "stage 4 metadata=normal vs detected=reverse_holo -> review, nothing resolved",
-    )
-    c.ok(disagreement.needs_review, "the disagreement path fires, it is not merely reachable")
-
-    mis_sort = variant.resolve(
-        both, metadata_finish="reverse_holo", detected_finish="normal"
-    )
-    c.equal(
-        (mis_sort.stage, mis_sort.reason),
-        (variant.REVIEW, variant.METADATA_DETECTION_DISAGREEMENT),
-        "the mis-sort catches in the other direction too",
-    )
-
     ambiguous = variant.resolve(both)
     c.equal(
         (ambiguous.stage, ambiguous.reason),
@@ -497,9 +507,10 @@ def run() -> Result:
     )
     c.equal(
         [outside.stage, outside.reason],
-        [variant.REVIEW, variant.METADATA_DETECTION_DISAGREEMENT],
-        "detection OUTSIDE the claimed set is the same disagreement it always was — with "
-        "one member this is the identity test, so the reason code needed no sibling",
+        [variant.REVIEW, variant.AMBIGUOUS_NO_SIGNAL],
+        "detection OUTSIDE a multi-member claim is DROPPED and the narrowed rows fall to "
+        "rung 4 — not to detected_finish_not_stocked, which would refuse the card by citing "
+        "the very signal the claim outranks and send the operator to look at the catalog",
     )
 
     forced = variant.resolve([_row(NM), _row(NMH)], metadata_finish=["normal", "reverse_holo"])
@@ -531,117 +542,91 @@ def run() -> Result:
         "silently shortened claim is a claim the operator did not make",
     )
 
-    # --- the pre-emptive bypass: `trust_claim` (2026-08-24) --------------------------------
+    # --- the claim decides, and there is no flag (D3, amended 2026-09-02) ------------------
     # ONE RULE — detection may not contradict a finish claim, but may still choose inside
-    # one. The evidence is in docs/GATES.md's box-2 section: 230 of 544 cards contradicted a
-    # claim the owner confirmed was right every time, and the SAME photograph read
-    # differently at two downscales. The cases below are written so that each can fail on
-    # its own: a flag that only ever turned reviews into resolutions would pass a single
-    # happy-path case while quietly overruling rungs it was never meant to reach.
-    bypassed = variant.resolve(
-        three, metadata_finish=["normal"], detected_finish="holo", trust_claim=True
-    )
+    # one. It was `trust_claim=True`, opt-in per run as `--bypass`, from 2026-08-24 until
+    # every run since Gate B had been joined with it on (256 cards) and the owner retired
+    # the switch. The cases below are the flag's own, re-asserted as the DEFAULT: each can
+    # fail on its own, so a change that only ever turned reviews into resolutions would pass
+    # a single happy-path case while quietly overruling rungs the rule was never meant to
+    # reach.
+    contradicted = variant.resolve(three, metadata_finish=["normal"], detected_finish="holo")
     _check_stage(
         c,
-        bypassed,
+        contradicted,
         variant.METADATA,
         _row(NM)[tcgcsv.SKU_COLUMN],
         NM,
         Decimal(_row(NM)[tcgcsv.MARKET_PRICE_COLUMN]),
-        "trust_claim resolves a contradicted one-member claim at RUNG 1 — the claim was "
-        "always what rung 1 trusts, so the bypass changes which signals are consulted and "
-        "never which rung answers",
-    )
-    c.equal(
-        bypassed.bypassed,
-        True,
-        "and the resolution SAYS it was bypassed, so the run report can count the cards the "
-        "operator is answering for rather than leaving it inferred from a smaller queue",
+        "a contradicted one-member claim resolves at RUNG 1 — the claim was always what "
+        "rung 1 trusts, so what changed is which signals are consulted and never which rung "
+        "answers",
     )
 
+    agreeing = variant.resolve(three, metadata_finish=["normal"], detected_finish="normal")
     c.equal(
-        variant.resolve(
-            three, metadata_finish=["normal"], detected_finish="holo"
-        ).reason,
-        variant.METADATA_DETECTION_DISAGREEMENT,
-        "the identical card WITHOUT the flag still reviews — the bypass is per-run and "
-        "opt-in, and a default that changed would have moved D3 rung 3 for everyone",
+        agreeing.stage,
+        variant.METADATA,
+        "a claim detection AGREES with resolves the same way, at the same rung — nothing "
+        "was overruled and nothing is different",
     )
 
-    agreeing = variant.resolve(
-        three, metadata_finish=["normal"], detected_finish="normal", trust_claim=True
-    )
+    unclaimed = variant.resolve(three, detected_finish="holo")
     c.equal(
-        [agreeing.stage, agreeing.bypassed],
-        [variant.METADATA, False],
-        "a claim detection AGREES with is not counted as bypassed — nothing was overruled, "
-        "and a count inflated by the cards the cross-check passed would misreport exactly "
-        "the number the operator turned the flag on to see",
-    )
-
-    unclaimed = variant.resolve(three, detected_finish="holo", trust_claim=True)
-    c.equal(
-        [unclaimed.stage, unclaimed.condition, unclaimed.bypassed],
-        [variant.DETECTION, NMH, False],
-        "a card with NO claim is untouched by the flag — rung 3 still decides it, because "
-        "there is no claim to resolve it by and suppressing detection here would review a "
-        "card the ladder could answer",
+        [unclaimed.stage, unclaimed.condition],
+        [variant.DETECTION, NMH],
+        "a card with NO claim is decided by rung 3 — there is no claim to resolve it by, "
+        "and dropping detection here would review a card the ladder can answer",
     )
 
     inside_still = variant.resolve(
-        three,
-        metadata_finish=["normal", "reverse_holo"],
-        detected_finish="reverse_holo",
-        trust_claim=True,
+        three, metadata_finish=["normal", "reverse_holo"], detected_finish="reverse_holo"
     )
     c.equal(
-        [inside_still.stage, inside_still.condition, inside_still.bypassed],
-        [variant.DETECTION, NMR, False],
-        "detection INSIDE a claimed set still decides under the flag — it is not "
-        "contradicting the claim, so half the rule would be lost by switching rung 3 off "
-        "wholesale instead of switching off its power to contradict",
+        [inside_still.stage, inside_still.condition],
+        [variant.DETECTION, NMR],
+        "detection INSIDE a claimed set still decides — it is not contradicting the claim, "
+        "so half the rule would be lost by switching rung 3 off wholesale instead of "
+        "switching off its power to contradict",
     )
 
     dropped = variant.resolve(
         [_row(NM), _row(NMR)],
         metadata_finish=["normal", "reverse_holo"],
         detected_finish="holo",
-        trust_claim=True,
     )
     c.equal(
         [dropped.stage, dropped.reason],
         [variant.REVIEW, variant.AMBIGUOUS_NO_SIGNAL],
-        "a contradicted MULTI-member claim drops detection entirely and falls to rung 4 — "
-        "not to detected_finish_not_stocked, which would refuse the card by citing the very "
-        "signal the flag just set aside and send the operator to look at the catalog",
+        "a contradicted MULTI-member claim over two rows drops detection entirely and falls "
+        "to rung 4 — not to detected_finish_not_stocked, which would refuse the card by "
+        "citing the very signal the claim outranks",
     )
 
     narrowed = variant.resolve(
         [_row(NM), _row(NMH)],
         metadata_finish=["normal", "reverse_holo"],
         detected_finish="holo",
-        trust_claim=True,
     )
     c.equal(
-        [narrowed.stage, narrowed.condition, narrowed.bypassed],
-        [variant.CATALOG_FORCED, NM, True],
-        "and when that narrowing leaves ONE row it resolves at rung 2 and is still counted "
-        "as bypassed — the card only got here because a contradiction was set aside",
+        [narrowed.stage, narrowed.condition],
+        [variant.CATALOG_FORCED, NM],
+        "and when that narrowing leaves ONE row it resolves at rung 2 — the fall-through, "
+        "with the contradiction set aside before it rather than carried down to rung 3",
     )
 
     c.equal(
-        variant.resolve([_row(NMH)], metadata_finish=["normal"], trust_claim=True).reason,
+        variant.resolve([_row(NMH)], metadata_finish=["normal"]).reason,
         variant.METADATA_NOT_STOCKED,
-        "the flag does NOT reach metadata_not_stocked — a claim the catalog contradicts is "
-        "not a claim detection contradicts, and bypassing it would list a card as a finish "
-        "the number is not stocked in",
+        "metadata_not_stocked is untouched — a claim the CATALOG contradicts is not a claim "
+        "detection contradicts, and listing through it would sell a finish the number is "
+        "not stocked in",
     )
     c.equal(
-        variant.resolve([], metadata_finish=["normal"], trust_claim=True).reason,
+        variant.resolve([], metadata_finish=["normal"]).reason,
         variant.NO_CATALOG_ROW,
-        "nor no_catalog_row — with no rows there is nothing for a claim to resolve TO, "
-        "which is the plain-English boundary the operator was given: the bypass trusts your "
-        "claim, it does not invent a row for it",
+        "and so is no_catalog_row — with no rows there is nothing for a claim to resolve "
+        "TO: the rule trusts the claim, it does not invent a row for it",
     )
 
     # --- three condition strings, one number: SYNTHETIC (see the fixture gap above) --------
@@ -686,12 +671,15 @@ def run() -> Result:
             price,
             f"synthetic 3-row catalog: detected={finish} -> {condition} @ {price}",
         )
-    c.equal(
-        variant.resolve(
-            synthetic, metadata_finish="holo", detected_finish="reverse_holo"
-        ).reason,
-        variant.METADATA_DETECTION_DISAGREEMENT,
-        "synthetic 3-row catalog: disagreement still reviews",
+    _check_stage(
+        c,
+        variant.resolve(synthetic, metadata_finish="holo", detected_finish="reverse_holo"),
+        variant.METADATA,
+        "9000001",
+        "Near Mint Holofoil",
+        Decimal("1.50"),
+        "synthetic 3-row catalog: the claim decides against a disagreeing photo, at the "
+        "holo row it named",
     )
 
     # --- the ladder as the join sees it ----------------------------------------------------
@@ -701,7 +689,10 @@ def run() -> Result:
             name="Billy & O'Nare",
             number="142",
             printed_total="159",
-            metadata_finish="normal",
+            # A claim the CATALOG contradicts — 142/159 stocks no holo row — because that is
+            # the one finish disagreement the ladder still reviews. The photograph disagreeing
+            # with the claim reviews nothing any more (D3, amended 2026-09-02).
+            metadata_finish="holo",
             detected_finish="reverse_holo",
             photo="captures/box1/0001.jpg",
         ),
@@ -717,8 +708,8 @@ def run() -> Result:
     c.note(report.report())
     c.equal(
         [u.reason for u in report.unmatched_cards],
-        [variant.METADATA_DETECTION_DISAGREEMENT],
-        "a mis-sorted card reaches the review queue through the join",
+        [variant.METADATA_NOT_STOCKED],
+        "a misfiled card reaches the review queue through the join",
     )
     c.ok(
         report.unmatched_cards[0].card.photo is not None,
@@ -778,12 +769,12 @@ def run() -> Result:
             "ladder -> review, cheapest candidate < $0.40",
             dict(
                 resolved=False,
-                reason=variant.METADATA_DETECTION_DISAGREEMENT,
+                reason=variant.METADATA_NOT_STOCKED,
                 confidence="high",
                 candidate_prices=[cheap, expensive],
             ),
             routing.PARKED,
-            variant.METADATA_DETECTION_DISAGREEMENT,
+            variant.METADATA_NOT_STOCKED,
         ),
         (
             "no catalog row at all",

@@ -147,7 +147,7 @@ has no entry.
 
 ## 3 — The claim chain
 
-**Two entries, overlapping files. Not parallel with each other.**
+**Three entries. The first two overlap in files; none is parallel with another.**
 
 ### A capture-time claim crosses ten hops and nothing binds them together
 
@@ -198,6 +198,27 @@ is a stack label. Doing it properly means `Profile` growing a note clause and `u
 parameter — a prompt-contract change with its own fingerprint questions, since
 `prompt_fingerprint` hashes both user turns and T1's recorded scores are evidence about the
 bytes that exist today.
+
+### `app/src/readiness.ts` is a second `blocking`, and nothing reconciles the two
+
+`app/src/readiness.ts:owed` is a second implementation of `pipeline/decisions.py:blocking` so
+`#/pricing`'s ready line settles on the keystroke that satisfies it, with no round trip — D54's
+choice, and the right one for a line whose whole value is that it is instant. **Its header
+claimed an `emit readiness` row in `scripts/docs-audit.py` and a Makefile target,
+`readiness-agreement`, until 2026-09-02, and neither has ever existed.** `OWED_REASONS` was shaped as a flat
+literal for a parser nobody wrote.
+
+**What it costs.** The two can disagree and nothing says so: when `blocking` gains a refusal,
+the line keeps saying *Pricing is answered* while `emit` refuses, and the operator learns it
+from the emit's stdout. The one live defense is the roster on `GET /pipeline/pricing`, which
+asks the Python that actually refuses — so a chip and the line can disagree, and the chip is
+the one that is right.
+
+**Why not fixed.** The honest check reconciles a vocabulary — `OWED_REASONS` against the
+reasons `blocking` can return — and `blocking` builds its reasons as sentences rather than off
+a tuple, so the row needs a roster the Python does not publish. That is cluster 1's decision
+again, asked of one more module. Until it is settled the header says nothing audits it, which
+is the claim this file exists to keep true.
 
 ---
 
@@ -597,31 +618,26 @@ reference and compares the resolved value, which is a small CSS color engine and
 worth building for 69 tokens. Until then the row's summary line says how many hexes it compared,
 so a green row cannot be read as full coverage.
 
-### Every decision-id check goes vacuous at three digits
+## 9 — The sigil check matches text, so a renamed local walks past it
 
-Found 2026-08-30 while building D72's renumber check, by reading the regex it reuses rather
-than by anything failing.
+`make sigil-check` (D92) refuses a bare `#` composed from an expression naming `index`, which is
+what keeps D58's count and the store key from being spelled the same way on one screen. It reads
+SOURCE TEXT. `const n = side.index` on one line and `#{n}` on the next is a violation it cannot
+see, and so is any indirection through a helper, a destructure or a prop rename.
 
-`scripts/docs-audit.py:_DECISION_RE` is `\bD([1-9][0-9]?)\b`, and `decision_heading_lines`
-matches `^##\s+(D[1-9][0-9]?)\b`. Both cap at two digits. One entry past that ceiling the
-heading is not a heading to this file and the citation is not a citation, so **four rows go quietly
-green over a file they can no longer see**: `decision ids`, `decision ids in code`,
-`decision index` and `renumbered ids`. `check_map`'s `governed_by` reader is not separately
-broken — it compares against `decision_headings`, so it simply never finds the entry either,
-which is the same silence one layer down.
+**The fix that could not be evaded was considered and rejected on blast radius.** A nominal type
+over the two numbers — branding `slot` and `index` so the compiler refuses the swap — is the real
+answer, and `slot` and `index` are plain numbers across the whole wire contract and forty call
+sites. That is a refactor much larger than the bug, and D92 took the cheap check that runs on
+every commit over the expensive one nobody would finish.
 
-**The cap is not an accident and is worth keeping until it costs something.** `# noqa: D102`
-appears in `server/tcg_export.py` and `server/order_transport.py`, and a three-digit rule
-reads both as citations of a decision that does not exist — a real false positive today
-against a real blind spot someday.
+**What makes the ceiling tolerable is where the mistake actually happens.** All four sites the
+check found on its first run compose the `#` and the field on ONE line, at the point of render,
+because that is what drawing a number looks like. The evasion is available and has never been
+taken; if it is, this is the entry that says the check went quiet rather than the tree going
+clean.
 
-**Unfixed because the fix cannot be tested against this tree.** The highest entry is D72.
-Widening now means loosening a pattern on a guess, with the `noqa` collision as the only
-observable effect. The discharge is triggered rather than open: **at the ninetieth entry** —
-the last point at which both patterns still agree — widen them to three digits, exclude a
-`noqa:` on the same line, and add a `--self-test` case for each.
-
-**The trigger is written as a word and not as an id on purpose.** Spelling it the other way
-makes this sentence a citation of an entry that does not exist, and `decision ids` blocks the
-commit for it — correctly, and it did while this entry was being written. A debt about four
-citation checks cannot be recorded in a form one of them has to refuse.
+**Not blocking, and not a discharge condition.** The check is worth what it is worth. It would
+become worth fixing properly if a violation ever ships THROUGH the gap — that is the trigger,
+and until then a green run means "no `#` is drawn over a field named index", which is exactly
+what it says and no more.

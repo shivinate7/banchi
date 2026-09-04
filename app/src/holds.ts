@@ -31,8 +31,8 @@ export type WithholdReason = (typeof WITHHOLD_REASONS)[number]
  *  BOTH ARE DRAWN, NEVER ONE. `docs/DESIGN.md`'s rule for the owner's screens is the human
  *  label large and the machine string small beneath it — showing only the friendly word
  *  creates a second vocabulary nothing audits, and showing only the raw string is honest and
- *  unreadable. One line of chrome buys a word you can grep from the screen to `decisions.json`
- *  to the run report. */
+ *  unreadable. One line of chrome buys a word you can grep from the screen to
+ *  `inventory/prices.json` to the run report. */
 export const WITHHOLD_LABELS: Record<WithholdReason, string> = {
   bullish: 'Bullish — waiting for the price to move',
   keeping: 'Keeping this one',

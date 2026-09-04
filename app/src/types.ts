@@ -429,10 +429,13 @@ export type InventoryCard = {
  * `store/master.py:check_state` now refuses them as card states — which is why a screen that
  * wants "how many of this are listed" reads it here and cannot count it off the copies.
  *
- * `live` IS AN ESTIMATE BETWEEN RUNS, deliberately. D8 and D11 put the authority in the
- * TCGplayer export's `Total Quantity`, which `./pkmnscan join` reads on every run; a sale
- * decrements this locally and the next join corrects it. Do not render it as a fact about
- * the marketplace — render it as what this store last believed. */
+ * `live` IS THE STORE'S LAST OBSERVATION, WITH ITS TIME. D8 and D11 put the authority in the
+ * TCGplayer export's `Total Quantity`, which `./pkmnscan join` and `reconcile --live` read; a
+ * sale decrements this locally and stamps it now, and an export corrects it only where the
+ * export was read LATER than `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
+ * Do not render it as a fact about the marketplace — render it as what this store last saw,
+ * and `live_as_of` is when. Null on a record nothing has read `live` for yet — an emit's
+ * record before any join or reconcile — and the export then answers whatever its age. */
 export type Listing = {
   sku: string
   condition: string | null
@@ -441,6 +444,7 @@ export type Listing = {
   live: number
   at: string | null
   staged_at: string | null
+  live_as_of: string | null
 }
 
 export type Inventory = {
@@ -1117,20 +1121,40 @@ export type Place = {
   section_gaps?: number | null
 }
 
-/** One side of `Place.neighbors`: the record's index in the box, and its identified name or
- *  null. The index is D10's allocator number — the same space as `Place.index` — so `#41`
- *  drawn from it is a slot a hand can count to, not a store key. */
+/** One side of `Place.neighbors`: where the neighbouring record is, in BOTH spaces, and its
+ *  identified name or null.
+ *
+ *  THIS COMMENT SAID THE OPPOSITE OF THE TRUTH UNTIL D92, and it is the third place the two
+ *  spaces were confused in writing. It read "the index is D10's allocator number — the same
+ *  space as `Place.index` — so `#41` drawn from it is a slot a hand can count to, not a store
+ *  key". Both halves of that are right and the conclusion inverts them: `Place.index` IS the
+ *  store key, D58 made the drawn number a COUNT, and a `#41` composed from the key is
+ *  therefore precisely NOT the slot a hand counts to. `server.ts:placeParts` had the same
+ *  fact recorded correctly as a known hazard on the very next screen, and neither reader
+ *  checked the other — which is what the `make check` row added with D92 now does.
+ *
+ *  `slot` is what a renderer draws; `index` is for a caller that needs to ADDRESS the card
+ *  (D45's way back into the walk) and no renderer may put a bare `#` in front of it. */
 export type PlaceNeighbor = {
+  /** D58's count — this card's number among the cards actually in the box. What gets drawn. */
+  slot: number
+  /** D10's allocator number: `/inventory/<box>/<index>`, the `<index>.jpg`. Never drawn bare. */
   index: number
   name: string | null
 }
 
 // ------------------------------------------------------------------------------- the search
 
-/** One physical copy in a search result: the store's own key, its pipeline state, and where
- *  it is. Deliberately NOT the whole `InventoryCard` — the search answers "where are my
- *  copies of this card", and a screen that also received `confidence` and `capture_id` would
- *  invite a second inventory view to grow inside a search result. */
+/** One physical copy in a search result: the store's own key, its pipeline state, where it is,
+ *  and the id a write aims by.
+ *
+ *  STILL NOT THE WHOLE `InventoryCard`, AND THAT RULE IS INTACT: the search answers "where are
+ *  my copies of this card", and a row carrying `confidence`, the run and the metadata would
+ *  invite a second inventory view to grow inside a search result. What this comment said until
+ *  D93 was that `capture_id` was one of the fields being kept out, and that cost the order walk
+ *  the ability to aim at any copy but the ones the resolver had already picked — so choosing a
+ *  different copy meant walking to it first, which is the flow the owner called unintuitive.
+ *  An identity is not a view. */
 export type SearchCopy = {
   /** `"<box>/<index>"`, `store.master.position_key`. Identity for React, and the string a
    *  `curl /inventory` is grepped with. Never parsed into a position — a store key and a
@@ -1161,6 +1185,16 @@ export type SearchCopy = {
    *  broken image, never a guarantee: undo deletes a photo, so a screen still has to handle
    *  the load failing. */
   has_photo: boolean
+
+  /** THE ID EVERY WRITE AIMS BY, and the reason a copy can be picked off this list at all (D93).
+   *
+   *  `POST /orders/fill` checks it against the card actually at the slot and refuses
+   *  `capture_id_mismatch` rather than selling whatever slid into the index after a mid-box
+   *  delete (D10 ruling 1, D58) — so an id, and not a `(box, index)`, is what a copy is chosen
+   *  BY. Null for a record written before ids were kept and for one `emit` created rather than
+   *  the camera; a copy carrying null cannot be taken, and the screen says so rather than
+   *  sending a target the server would refuse. */
+  capture_id: string | null
 
   place: Place
 }
@@ -1617,9 +1651,10 @@ export type WithheldRecord = {
   note?: string
 }
 
-/** `decisions.json` as it sits on disk. Deliberately loose: `PUT .../decisions` replaces the
- *  document wholesale, so the screen round-trips every key it does not understand rather
- *  than rebuilding the file from what it happens to know about. */
+/** One run's pricing decision, as `GET .../pricing` projects the corpus for one run (D86).
+ *  Deliberately loose, for the reason the corpus type below gives: every reader on `#/pricing`
+ *  takes this shape, and the corpus is projected into it rather than each reader learning a
+ *  new one. */
 export type DecisionsDocument = {
   rule?: string
   basis?: string
@@ -1633,10 +1668,6 @@ export type PricingPayload = {
   run: string
   pricing: PricingTable
   decisions: DecisionsDocument | null
-  /** The sub-threshold answer the newest OTHER run gave. A LABEL and never a default — D9
-   *  forbids defaulting this on the operator's behalf, so this removes the time spent
-   *  deciding and not the press. */
-  remembered_sub_threshold: { answer: string | { flat: string }; run: string } | null
   /** When `pricing.json` was last written, as a UNIX SECOND — `cli/cmd_join.py` rewrites it on
    *  every join, so this is the moment a join last read an export and therefore the age of
    *  every figure under `snap`.
@@ -1732,17 +1763,12 @@ export type PricingWorklist = {
    *  which are worth loading, so this is deliberately wider than `runs` above. */
   roster: RosterRun[]
   skus: MergedSku[]
-  decisions: Record<string, DecisionsDocument | null>
   written_at: Record<string, number>
   /** A run that could not be read, named rather than dropped — an eight-run worklist must not
    *  fail to draw because one directory predates `pricing.json`. */
   skipped: { run: string; code: string; message: string }[]
   asked: string[]
-  remembered_sub_threshold: PricingPayload['remembered_sub_threshold']
   live_cap: number
-  /** Each run's own `rule`/`basis`, for seeding a document that does not exist yet (D54).
-   *  Per run and never one seed for the worklist — D48 makes both a property of the lot. */
-  defaults: Record<string, { rule: string | null; basis: string | null }>
   /** The two run-wide figures a row is drawn against, off the newest run in the list. Null
    *  where no table could be read, which the screen falls back on rather than blanks. */
   threshold: string | null
@@ -1799,11 +1825,6 @@ export type RunSummary = {
   collected: boolean
   joined: boolean
   counts: Record<string, number>
-  /** The run was joined with D3 rung 3 switched off, and how many cards that resolved.
-   *  Reported rather than inferred from a smaller queue: these are the cards the operator
-   *  took responsibility for. */
-  bypass_detection: boolean
-  bypassed: number | null
   usage: { input_tokens?: number; output_tokens?: number }
 }
 
@@ -1974,16 +1995,14 @@ export type RunStepResult = {
 /** An uploaded CSV. Uploaded rather than named by path: a screen cannot know what is on
  *  the server's disk, and a route that opened any absolute path a request named would be a
  *  file-read primitive guarded by an origin header. */
-export type CsvUpload = { name: string; content: string }
+/** `modified` is `File.lastModified` — milliseconds since the epoch, the file's own time — and
+ *  the server sets the stored copy's mtime from it (`_store_upload`), because that mtime is
+ *  when the export's `Total Quantity` was read and the store arbitrates `live` by that time
+ *  (D87 amended). Optional: a caller without a `File` sends none and the write time stands. */
+export type CsvUpload = { name: string; content: string; modified?: number }
 
 /** What `POST /pipeline/runs/<name>/export` fetched, in the terms the operator filters the
  *  portal in (D64). Free: it downloads the owner's own Filtered Export and spends nothing.
- *
- *  `verified` and `unverified` are the halves of the guard's answer and both are lists, so a
- *  mixed-game run can report per game. A game in `unverified` was accepted on the operator's
- *  acknowledgement because this run had no previous export to compare against — an absence of
- *  evidence rather than evidence, which is why it is reported separately rather than folded
- *  into `verified`.
  *
  *  `file` is the name the join is then handed. It is a name and not the bytes: the server
  *  already holds them, and sending a megabyte back through the browser to arrive at them is
@@ -2009,9 +2028,9 @@ export type ExportFetched = {
   sets: string[]
   conditions: string[]
   product_lines: string[]
-  verified: string[]
-  unverified: string[]
-  accepted_narrower: boolean
+  /** What the last join used, per game this file answers for, beside what arrived. Always
+   *  present and `{}` on a run's first fetch; information only — nothing refuses on it. */
+  previous: Record<string, { file: string; rows: number; skus: number }>
   source: string
   /** What was ASKED FOR, beside what arrived (D65). The scope is derived from the box's own
    *  capture claims — its game, and the set hints the operator set — so this is the half they
@@ -2257,6 +2276,9 @@ export type OrderLineProgress = {
    *  underneath a legitimate pull is what makes it non-zero. */
   over: number
   copies: string[]
+  /** Where each recorded copy sits RIGHT NOW, joined at read time off its capture id and
+   *  stored nowhere (D36). Nulls where the card is gone. The copies panel's `pulled` mark. */
+  pulled: OrderPulledCopy[]
   at: string | null
 }
 
@@ -2323,6 +2345,9 @@ export type ResolvedLine = {
   sku: string
   reason: OrderLineReason
   wanted: number
+  /** What the ledger still owes on this line, and what the resolver was asked to find.
+   *  `wanted` is the buyer's number; `wanted - owed` is what has been recorded as pulled. */
+  owed: number
   fulfilled: number
   outstanding: number
   on_hand: number
@@ -2399,11 +2424,29 @@ export type IngestResult = {
   keys: string[]
 }
 
-/** What `POST /orders/fetch` answered: EXACTLY the body `POST /orders/ingest` accepts and
- *  not one key more, so the fetched result is sent on unaltered. A count or a summary added
- *  here would be a field the ingest's `_reject_unknown` refuses by name, and the two routes
- *  would then need an adapter between them for no gain — the caller can count the list. */
-export type OrdersFetched = { orders: OrderIngestOrder[] }
+/** What `POST /orders/fetch {preview: true}` answered (D91): the window counted by the status
+ *  STRING TCGplayer gave each order, verbatim — no vocabulary lives on either side of this wire —
+ *  and, beside each, how many of them the ledger already holds at that status. Nothing was
+ *  detailed and nothing was written. */
+export type OrdersPreview = {
+  range: string
+  total: number
+  by_status: { status: string; count: number; known: number }[]
+  writes_nothing: true
+}
+
+/** What `POST /orders/fetch {statuses: [...]}` answered. `orders` is EXACTLY the body
+ *  `POST /orders/ingest` accepts and is the only part sent on — `ingestOrders(found.orders)` —
+ *  so the counts beside it reach no allowlist; they are what the paste note says about the
+ *  press. `remaining` is what the transport's detail cap left for the next press (D91): seen
+ *  and counted, never dropped without a trace. */
+export type OrdersFetched = {
+  orders: OrderIngestOrder[]
+  matched: number
+  skipped_known: number
+  detailed: number
+  remaining: number
+}
 
 /** One copy coming out of a box. All three are required in both directions.
  *
@@ -2412,6 +2455,25 @@ export type OrdersFetched = { orders: OrderIngestOrder[] }
  *  `capture_id` is the aim check on the way in (a mid-box delete or a re-shoot changes which
  *  physical card sits at a slot) and the WHOLE of the lookup on the way back. */
 export type PullTarget = { box: number; index: number; capture_id: string }
+
+/** One pulled copy's current position, composed per `GET /orders` answer. */
+export type OrderPulledCopy = { capture_id: string; box: number | null; index: number | null }
+
+/** One line of an envelope: the SKU and the copies taken for it, each aimed by capture id. */
+export type FillLine = { sku: string; targets: PullTarget[] }
+
+/** What `POST /orders/fill` answered — the whole envelope in one write, both directions.
+ *  `places` are the PRE-write places, one per target across the lines in request order, for
+ *  the receipt (D58: a post-write label reads departed). `complete` is the ledger's answer
+ *  for the whole order after the write. */
+export type FillResult = {
+  undone: boolean
+  order_key: string
+  complete: boolean
+  lines: { sku: string; newly: number; recorded: number; outstanding: number }[]
+  places: Place[]
+  sales: SaleResult[]
+}
 
 /** What a pull or its undo did.
  *

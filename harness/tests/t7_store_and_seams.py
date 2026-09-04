@@ -308,6 +308,10 @@ def entry(box: int, index: int, **extra) -> queues.QueueEntry:
         "index": index,
         "label": join.Position(box, index).label,
         "photo": str(capture_server.photo_path(box, index)),
+        # RETIRED as a reason the pipeline emits (D3, amended 2026-09-02), and kept here on
+        # purpose: the owner's store holds 16 history events carrying this string, the
+        # routes validate only `STAND_DOWN_REASONS`, and a fixture wearing the code a real
+        # queue once wore is a truer seed than one rewritten to a code that never fired.
         "reason": "metadata_detection_disagreement",
         "candidates": [dict(row) for row in CANDIDATES],
     }
@@ -430,12 +434,16 @@ ARTICUNO_SKU = "8608859"  # 161/159 Near Mint Holofoil, market 22.03 — one row
 SEAM_SKUS = (DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU)
 
 
-def write_export(path, *, live=None):
+def write_export(path, *, live=None, market=None):
     """A Filtered Export holding the three seam rows. `live` overrides `Total Quantity`.
 
     That column is the one D8 and D11 make authoritative and the one `./pkmnscan join` reads
     a SKU's `live` count from, so every case below that moves `live` moves it by rewriting
     this file rather than by writing the number it expects to read back.
+
+    `market` overrides `TCG Market Price` the same way, because all three seam rows sit above
+    the $0.40 threshold in the fixture and a case about the sub-threshold disposition needs one
+    that does not — moved by rewriting the export, which is where `prices_for` reads it from.
     """
     source = tcgcsv.read_export(FIXTURE_EXPORT)
     by_sku = source.by_sku()
@@ -444,6 +452,8 @@ def write_export(path, *, live=None):
         row = dict(by_sku[sku])
         if live is not None and sku in live:
             row[tcgcsv.LIVE_QUANTITY_COLUMN] = str(live[sku])
+        if market is not None and sku in market:
+            row[tcgcsv.MARKET_PRICE_COLUMN] = str(market[sku])
         rows.append(row)
     tcgcsv.write_csv(path, source.header, rows)
     return Path(path)
@@ -505,19 +515,24 @@ def identifications_for(cards) -> dict:
     }
 
 
-def seam_run(checks: Checks, cards, *, live=None):
+def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
     """A joined run over `cards`, in whatever isolated home is current. Returns the run.
 
     Captures a photo per card through the real route first, so the store holds the same
     positions the identifications name — the ordinary case. The one case that deliberately
     skips this is the position `emit` has never seen, which builds its payload by hand.
+
+    `join=False` stops before the join and returns the run with an empty report, for the
+    cases that need to put something in the run directory FIRST and watch the join refuse.
     """
     for box, index, *_ in cards:
         while Store().read().inventory.next_index(box) <= index:
             capture_server.do_capture(capture_payload(box))
     run_dir = runs.create("t7-seam")
     run_dir.write_identifications(identifications_for(cards))
-    export = write_export(run_dir.path("export.csv"), live=live)
+    export = write_export(run_dir.path("export.csv"), live=live, market=market)
+    if not join:
+        return runs.open_run(run_dir.directory), ""
     said = command(checks, "join", str(run_dir.directory), "--export", str(export))
     return runs.open_run(run_dir.directory), said
 
@@ -895,6 +910,32 @@ def check_store_of_record(checks: Checks) -> None:
         checks.equal(
             Store().read().inventory.positions_for_sku("none") , [],
             "a SKU nothing carries answers an empty list through the index",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("4040", condition="Near Mint").observe_live(
+                3, "2026-09-01T12:00:00+00:00"
+            )
+        back = Store().read().inventory.listing_for("4040")
+        checks.equal(
+            (back.live, back.live_as_of),
+            (3, "2026-09-01T12:00:00+00:00"),
+            "`live_as_of` round-trips through the listings table — it rides the payload "
+            "column, and `Inventory.parse` filters on `Listing.__annotations__`, so a new "
+            "field needs no schema bump (D88)",
+        )
+        parsed = master.Inventory.parse(
+            {"version": master.VERSION, "cards": {},
+             "listings": {
+                 "111": {"sku": "111", "pushed": 2, "live": 1, "at": "2026-09-01T12:00:00+00:00"},
+                 "222": {"sku": "222", "pushed": 2, "live": 1},
+             }}
+        ).listings
+        checks.equal(
+            (parsed["111"].live_as_of, parsed["222"].live_as_of),
+            ("2026-09-01T12:00:00+00:00", None),
+            "and a payload written before the field existed parses its `at` INTO it — the "
+            "settlement time on D87's rows — and one with no `at` either parses to None, "
+            "the stampless case where the export keeps its authority",
         )
 
     # ------------------------------------------------ the legacy import, whole and aside
@@ -2045,10 +2086,21 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             moved_entry is not None
             and after.review.entries.get("3/5") is None
             and moved_entry.index == 4
-            and moved_entry.label == join.Position(3, 4).label
             and moved_entry.photo == str(capture_server.photo_path(3, 4)),
-            "the queue entry is re-keyed whole: position, box, index, rendered label, and "
-            "the photo path it names",
+            "the queue entry is re-keyed: position, box, index, and the photo path it names",
+            f"entry was: {moved_entry!r}",
+        )
+        checks.ok(
+            moved_entry is not None and moved_entry.label == join.Position(3, 5).label,
+            "AND ITS STORED LABEL IS NOT REWRITTEN, which is D92 and is the reverse of what "
+            "this case asserted until then. The re-key composed one with `join.Position` and "
+            "no `occupied`, so it was in INDEX space while every route serves a label "
+            "`_queue_row` re-renders in COUNT space — a plausible wrong rendering in the same "
+            "field as the correct ones `cli/resolve.py` writes, one forgotten `places` "
+            "argument from reaching a screen. It keeps the string it arrived with (D56: a "
+            "rendering nobody can correct is joined at read time, not stored), and the "
+            "assertion is written against the OLD position on purpose — that is what a stale "
+            "stored label looks like, and no route may serve it",
             f"entry was: {moved_entry!r}",
         )
         checks.ok(
@@ -6566,13 +6618,21 @@ def check_box_claims(checks: Checks) -> None:
 def check_place_neighbors(checks: Checks) -> None:
     """D30's digital half on the wire: `neighbors` and `section_gaps` in the place block.
 
-    `Card 17` IS THE SEVENTEENTH SLOT, NOT THE SEVENTEENTH CARD YOU CAN COUNT. Every sale
-    and every retirement leaves a permanent gap (D10), and once a section has one, those
-    two numbers diverge for every label behind it. D30's ruling is that a located place
-    block also carries what makes the label countable by hand again: the nearest
-    NON-TERMINAL records on either side, and how many permanent holes this card's own
-    section holds. Asserted on `GET /inventory`'s rows — the route the app polls — because
-    the block is wire-only and the wire is the only place the claim exists.
+    `Card 17` IS THE SEVENTEENTH CARD YOU CAN COUNT, WHICH IS D58 AND IS THE REVERSE OF WHAT
+    THIS PARAGRAPH SAID UNTIL D92. It read "the seventeenth SLOT, not the seventeenth card
+    you can count", which was true when D30 wrote it and was made false on 2026-08-30 by the
+    entry that answered D30. Every sale and every retirement leaves a permanent gap in the
+    INDEX (D10) and the label closes over it, so what diverges behind a gap is the label and
+    the store key — not the label and the hand. D30's ruling still stands and its reason
+    moved: a located place block carries the nearest NON-TERMINAL records on either side, and
+    how many permanent holes this card's own section holds. Asserted on `GET /inventory`'s
+    rows — the route the app polls — because the block is wire-only and the wire is the only
+    place the claim exists.
+
+    BOTH NUMBERS RIDE EACH NEIGHBOUR SINCE D92, and the assertions below pin them together on
+    purpose. This fixture's box already separates them — a sale at 2 and a retirement at 4
+    make index 3 the second card and index 5 the third — so an implementation that sent the
+    key twice, or the count twice, cannot pass.
 
     THE CONSTRUCTION UNDER TEST IS "RECORDS, NOT INDICES", read from three sides. A
     terminal record is skipped as a landmark and counted as a hole — one ruling, two
@@ -6608,10 +6668,15 @@ def check_place_neighbors(checks: Checks) -> None:
         rows = capture_server.do_inventory()["cards"]
         checks.equal(
             rows["4/3"]["place"]["neighbors"],
-            {"prev": {"index": 1, "name": "Mantine"}, "next": {"index": 5, "name": None}},
+            {
+                "prev": {"index": 1, "slot": 1, "name": "Mantine"},
+                "next": {"index": 5, "slot": 3, "name": None},
+            },
             "a card between two gaps names the nearest NON-TERMINAL records — the sold "
             "card at 2 and the retired card at 4 are skipped as landmarks, never named: "
-            "a departed card cannot be the thing you count from (D30)",
+            "a departed card cannot be the thing you count from (D30) — and each side "
+            "carries BOTH numbers (D92): the store key and D58's count, which this box "
+            "has already pulled apart (index 5 is the third card you can count to)",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -6632,11 +6697,14 @@ def check_place_neighbors(checks: Checks) -> None:
         )
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
-            {"index": 3, "name": None},
-            "a neighbour nothing has identified degrades to its index: `name` is null ON "
-            "THE WIRE, and the null is the wire's whole job — the `#3` a screen shows for "
-            "it is the app's rendering, and a placeholder string minted here would be a "
-            "second vocabulary nothing audits",
+            {"index": 3, "slot": 2, "name": None},
+            "a neighbour nothing has identified sends BOTH numbers and no name: `name` is "
+            "null ON THE WIRE, and the null is the wire's whole job — the `#2` a screen "
+            "shows for it is the app's rendering, and a placeholder string minted here "
+            "would be a second vocabulary nothing audits. THE TWO NUMBERS DIVERGE HERE "
+            "(D92) and that is the point of asserting them together: the card at index 3 "
+            "is the SECOND card in this box, because the sale at 2 closed up in front of "
+            "it, and `#3` was what the neighbour row drew until D92",
         )
 
         # --- an unallocated tail is not a gap --------------------------------------------
@@ -8711,6 +8779,184 @@ def check_run_realignment(checks: Checks) -> None:
         )
 
 
+def check_reused_box_refusal(checks: Checks) -> None:
+    """D36 (amended) — a run over a box whose number was deleted and reused is refused outright.
+
+    THE CASE `check_run_realignment` CANNOT REACH, because `realign` never opens the store.
+    Box 1 was deleted 2026-08-25 with 53 Pokemon cards and its number reused 2026-08-29 for
+    133 Riftbound cards (`next_box_number`, D20 amended); `2026-08-22-box1-03` still describes
+    the old drawer, none of its digests are among the new box's photographs, so `realign`
+    answers `unverified` and passes the keys through — after which the loader reads the
+    CURRENT box's records at those keys. Observed on the owner's store: the refusal that fired
+    said *"this run holds 53 riftbound card(s) and no export covers that game"* over a Pokemon
+    run, because the run predates D21's `game` field and the store rung read the Riftbound
+    cards now sitting at its keys, and it sent the operator to change the game on live records
+    that were never this run's.
+
+    THE RULE IS `_box_name_for`'s (D56), hoisted to `store/master.py:box_disowns_run` and read
+    off the store by `Inventory.box_disowns_run`: the registry entry was made AFTER the run
+    started AND the box's cards came from somewhere else. `check_pipeline_routes` asserts the
+    route half over the same rule; this asserts the refusal on both paths and through the
+    command, the two honest pass-throughs, and the rule's branches directly.
+    """
+    checks.note("")
+    checks.note("REUSED BOX NUMBER — a run over a reallocated box is refused (D36 amended)")
+
+    from cli import __main__ as entry
+
+    def payload_for(with_game: bool) -> dict:
+        # Records at keys the NEW box also uses, photographed to bytes on no disk: `realign`
+        # finds no `captures/cards/box1` and answers `unverified`, which is exactly the
+        # pass-through the refusal has to fire in front of. `with_game=False` is the shape
+        # of the real run — it predates D21, so the store rung decides its game.
+        cards = {}
+        for i, (name, number) in {1: ("Dunsparce", "120"), 2: ("Alpha", "001")}.items():
+            record = {
+                "box": 1,
+                "index": i,
+                "photo": f"captures/cards/box1/{i:04d}.jpg",
+                "photo_sha256": hashlib.sha256(f"old-box-1-card-{i}".encode()).hexdigest(),
+                "identification": {
+                    "name": name,
+                    "number": number,
+                    "printed_total": "159",
+                    "confidence": "high",
+                    "finish": None,
+                },
+            }
+            if with_game:
+                record["game"] = "pokemon"
+            cards[f"1/{i}"] = record
+        return {"prompt_fingerprint": "t7-reused", "cards": cards}
+
+    def says(caught, label: str, *needles: str) -> None:
+        text = str(caught) if caught is not None else ""
+        missing = [needle for needle in needles if needle not in text]
+        checks.ok(not missing, label, f"missing {missing!r} in:\n{text}")
+
+    other = "2026-08-29-box1-01"
+    with isolated_home() as home:
+        run = runs.create("box1")
+        run.set(
+            capture_dir=str(home / "captures" / "cards" / "box1"),
+            created_at="2000-01-01T00:00:00+00:00",
+        )
+        run.write_identifications(payload_for(with_game=False))
+        export = write_export(run.path("export.csv"))
+
+        # An EMPTY box disowns nobody, even one registered after the run: the name-it-later
+        # flow `check_pipeline_routes` asserts is the same flow for the join.
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1)
+        plan = resolve.exports_for(run, [str(export)])
+        checks.equal(
+            list(plan.by_game),
+            ["pokemon"],
+            "a box registered after the run but holding no cards is still this run's — an "
+            "empty box is not evidence that the drawer changed",
+        )
+
+        # The number is reused: three Riftbound cards from another run, at the keys this
+        # run's records also use. `ensure_box` stamped the entry above, well after 2000.
+        with Store().write() as snapshot:
+            for n in (1, 2, 3):
+                card, _ = snapshot.inventory.allocate_capture(
+                    1, capture_id=f"reused-{n}", game="riftbound"
+                )
+                snapshot.inventory.record_identification(
+                    card.key,
+                    name="Moonfall",
+                    number="198/219",
+                    printed_total="219",
+                    confidence="high",
+                    run=other,
+                )
+        born = Store().read().inventory.box(1).created_at
+        checks.ok(
+            isinstance(born, str) and born > "2000",
+            "fixture: the registry entry is stamped after the run started",
+            f"created_at: {born!r}",
+        )
+
+        # (a) THE REFUSAL, ON BOTH PATHS AND THROUGH THE COMMAND. The `exports_for` path is
+        # the one that used to fire the misleading refusal: with no `game` on the records,
+        # `_games_needed`'s store rung read `riftbound` off the foreign cards and refused for
+        # want of a Riftbound export. It never gets there now.
+        caught = checks.raises(
+            runs.RunError,
+            lambda: resolve.exports_for(run, [str(export)]),
+            "a run over a box whose number was deleted and reused since is refused on the "
+            "`exports_for` path, before the store rung reads a foreign card's game",
+        )
+        says(
+            caught,
+            "and the refusal names the box, the reuse, the registry stamp, the run whose "
+            "cards are there now, and that nothing was touched",
+            "box 1", "reused", str(born), other, "Nothing was joined",
+        )
+        checks.ok(
+            caught is not None and "riftbound" not in str(caught),
+            "and it is NOT the 'no export covers riftbound' refusal — that one blamed the "
+            "operator's export for the store's reallocation",
+            str(caught),
+        )
+        caught = checks.raises(
+            runs.RunError,
+            lambda: resolve.load(run, {"pokemon": export}),
+            "and on `load` with a mapping handed straight in, which skips `exports_for`",
+        )
+        says(caught, "with the same sentence", "box 1", "reused", str(born), other)
+
+        with quiet() as said:
+            code = entry.main(["join", str(run.directory), "--export", str(export)])
+        checks.equal(code, 1, "`pkmnscan join` over that run exits 1")
+        says(said.getvalue(), "and prints the refusal", "REFUSING", "reused", other)
+        tables = store_tables()
+        checks.equal(
+            (tables["queues"], tables["listings"]),
+            ([], []),
+            "and both queues are empty and no listing was written — refused before anything "
+            "was read at this run's keys, let alone written",
+        )
+
+        # (b) THE TWO HONEST PASS-THROUGHS. The records carry `game` now, so the store rung
+        # is not consulted and the join can be shown to proceed.
+        run.write_identifications(payload_for(with_game=True))
+        with Store().write() as snapshot:
+            snapshot.inventory.box(1).created_at = "1999-01-01T00:00:00+00:00"
+        resolved = resolve.load(run, {"pokemon": export})
+        checks.equal(
+            resolved.unverified_boxes,
+            [1],
+            "a box registered BEFORE the run passes through as `unverified` — photographs "
+            "missing, box unchanged: still the honest pass-through, and `unverified` still "
+            "means what it meant",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.box(1).created_at = born
+            snapshot.inventory.cards.get("1/1").run = run.name
+        resolved = resolve.load(run, {"pokemon": export})
+        checks.equal(
+            resolved.unverified_boxes,
+            [1],
+            "and a box holding this run's cards is this run's drawer, however young the "
+            "registry entry — the card set is what carries it",
+        )
+
+    # (c) THE RULE ITSELF, branch by branch, with the stamps the real case carries.
+    ran = "2026-08-22T22:40:24+00:00"
+    made = "2026-08-29T21:32:35.944+00:00"
+    for label, args, expected in (
+        ("an empty box disowns nobody", (made, [], "r", ran), False),
+        ("a box holding this run's cards is its own", (made, [other, "r"], "r", ran), False),
+        ("an unparseable registry stamp abstains", ("last week", [other], "r", ran), False),
+        ("an absent run stamp abstains", (made, [other], "r", None), False),
+        ("born before the run, holding others' cards: still its own", (ran, [other], "r", made), False),
+        ("born after the run AND holding only others' cards: disowned", (made, [other], "r", ran), True),
+    ):
+        checks.equal(master.box_disowns_run(*args), expected, f"box_disowns_run: {label}")
+
+
 def check_printed_code_profiles(checks: Checks) -> None:
     """`riftbound_card_v1` and `one_piece_card_v1`: the wiring, and the one seam that lies.
 
@@ -9144,6 +9390,25 @@ def check_cli_refusals(checks: Checks) -> None:
                 f"said: {said.getvalue().strip()!r}",
             )
 
+    # A MANIFEST WHOSE EXPORT HAS GONE. `2026-08-22-box1-03` recorded its export under
+    # `~/Downloads`, where it no longer is, and the refusal said `export not found: <path>`
+    # and nothing else — the one `exports_for` refusal with no remedy in it, beside three
+    # siblings that each name what to do next.
+    with isolated_home() as home:
+        gone = runs.create("gone-export")
+        gone.write_identifications({"prompt_fingerprint": "t7", "cards": {}})
+        gone.set(exports={"pokemon": {"path": str(home / "Downloads" / "export.csv")}})
+        with quiet() as said:
+            code = entry.main(["join", str(gone.directory)])
+        checks.equal(code, 1, "join over a manifest whose recorded export is gone exits 1")
+        text = said.getvalue()
+        checks.ok(
+            "--export" in text and "#/runs" in text and "manifest" in text,
+            "and the refusal says the manifest recorded it, and names both remedies — "
+            "`--export` and the fetch on #/runs",
+            f"said: {text.strip()!r}",
+        )
+
     # argparse exits 2 on a usage error, and that is the right code — it is a different
     # failure from a run that could not proceed, and a caller scripting these needs to tell
     # them apart.
@@ -9172,35 +9437,33 @@ def _stages(inventory) -> str:
     return ", ".join(f"{k} {v}" for k, v in inventory.listing_counts().items() if v)
 
 
-def check_emit_bypass(checks: Checks) -> None:
-    """`emit` re-derives the run, so every input to that derivation comes from the run.
+def check_emit_claim_decides(checks: Checks) -> None:
+    """`join` and `emit` re-derive ONE answer for a contradicted claim, and it is the claim's SKU.
 
-    THE DEFECT, FOUND BY THE OWNER PRESSING `Write the import files` ON A BOX THEY HAD JOINED.
-    `cli/cmd_emit.py` called `resolve.load` without `trust_claim`, so it walked the ladder with
-    D3 rung 3 LIVE over a run joined with `--bypass` — inventing a queued position for every
-    bypassed card, finding none of them in either queue file (join deliberately never wrote
-    them), and refusing with *"Run `pkmnscan join` first"* at an operator who had. Re-running
-    join could not clear it, because join was right.
+    REDUCED FROM `check_emit_bypass` ON 2026-09-02, when D3's amendment retired `--bypass`.
+    That case guarded a seam: `emit` re-derives the run rather than reading it, and for six
+    days it re-derived with rung 3 live over a run joined with the flag — inventing a queued
+    position for every bypassed card, finding none of them on disk, and refusing with *"Run
+    `pkmnscan join` first"* at an operator who had (measured on the owner's box 1: 39 of 39).
+    The fix read the flag off the manifest. The amendment deletes the flag, so there is nothing
+    left for `emit` to forget; what remains to assert is that the two commands still agree,
+    and agree on the CLAIM's row rather than the photograph's.
 
-    Measured on the owner's box 1 before the fix: `bypassed: 39` in the manifest, 39 positions
-    invented, 39 absent from disk, and the refusal's first ten positions matched what the screen
-    printed character for character.
-
-    THE REFUSAL WAS THE SECOND-WORST OUTCOME, which is why the case asserts the OUTPUT and not
-    just the exit code. That same resolution is what writes the import files, so had the check
-    passed, those cards would have been routed to review and left out of the CSV — the bypass
-    silently void at the one step that produces output. So this asserts the bypassed card is IN
-    the file, at the SKU its claim names.
+    THE ASSERTION IS THE OUTPUT AND NOT THE EXIT CODE, for the reason the old case gave: the
+    refusal was the second-worst outcome, and had the check passed with the wrong resolution
+    the card would have been routed to review and left out of the CSV. So the contradicted
+    card must be IN the file, at the SKU its claim names, and NOT at the one detection read.
 
     Its own isolated home, this file's own lesson yet again: it emits, which writes `pushed`
     counts that `check_listing_commands` and `check_cli_seams` assert over their own fixtures.
     """
     checks.note("")
-    checks.note("EMIT BYPASS — the run's own resolution decides, not this command's defaults")
+    checks.note("EMIT, CLAIM DECIDES — join and emit re-derive one answer, and it is the claim's")
 
     # Dunsparce 120/159 stocks two condition rows, so a claim of `normal` is a claim the
-    # catalog cannot settle on its own and detection is what contradicts it — D3 rung 3, the
-    # exact rung `--bypass` switches off. A holofoil-only number could not produce the case.
+    # catalog cannot settle on its own, and a `reverse_holo` read is the photograph
+    # disagreeing with it — the exact shape D3's retired cross-check used to review. A
+    # holofoil-only number could not produce the case.
     cards = [(3, 1, "Dunsparce", "120", "normal")]
 
     with isolated_home():
@@ -9208,7 +9471,7 @@ def check_emit_bypass(checks: Checks) -> None:
             while Store().read().inventory.next_index(box) <= index:
                 capture_server.do_capture(capture_payload(box))
 
-        run_dir = runs.create("t7-bypass")
+        run_dir = runs.create("t7-claim-decides")
         payload = identifications_for(cards)
         # THE CLAIM AND THE DETECTION MUST DISAGREE, and `identifications_for` sets both from
         # one field by design — a null finish is its rung-2 case. Patched here rather than by
@@ -9217,37 +9480,22 @@ def check_emit_bypass(checks: Checks) -> None:
         run_dir.write_identifications(payload)
         export = write_export(run_dir.path("export.csv"))
 
-        said = command(
-            checks, "join", str(run_dir.directory), "--export", str(export), "--bypass"
-        )
+        command(checks, "join", str(run_dir.directory), "--export", str(export))
         run_dir = runs.open_run(run_dir.directory)
-
-        checks.ok(
-            run_dir.manifest.get("bypass_detection") is True,
-            "the run RECORDS that it was joined with --bypass. Without this on the manifest "
-            "there is nothing for a later command to read, and every later command re-derives",
-        )
-        checks.equal(
-            run_dir.manifest.get("bypassed"),
-            1,
-            "and records how many cards it cleared, so the count is reported rather than "
-            "inferred from a smaller queue (D3)",
-        )
 
         snapshot = Store().read()
         checks.equal(
             (len(snapshot.review.entries), len(snapshot.parked.entries)),
             (0, 0),
-            "A BYPASSED CARD IS QUEUED NOWHERE, which is the whole point of the flag and the "
-            "fact that made emit refuse: the position emit invented could not be on disk",
+            "A CONTRADICTED CLAIM IS QUEUED NOWHERE — the photograph may no longer put a "
+            "claimed card in front of a human (D3, amended 2026-09-02)",
         )
 
         said = command(checks, "emit", str(run_dir.directory))
         checks.ok(
             "REFUSING to write" not in said,
-            "`emit` DOES NOT REFUSE a run joined with --bypass. It read the flag off the "
-            "manifest exactly as it already read `review_below_confidence`, rather than "
-            "defaulting rung 3 back on and re-deriving a run that is not the one on disk",
+            "`emit` DOES NOT REFUSE: it re-derives the identical resolution join wrote, "
+            "because there is no per-run flag left for it to forget",
         )
 
         # GUARDED, because the failure this case exists for is a REFUSAL — and a refusal
@@ -9267,14 +9515,15 @@ def check_emit_bypass(checks: Checks) -> None:
         checks.ok(
             DUNSPARCE_SKU in written,
             "AND THE CARD IS IN THE FILE AT THE SKU ITS CLAIM NAMES. This is the assertion "
-            "that matters: the refusal was the second-worst outcome, and a fix that only "
-            "silenced it would have left the card routed to review and out of the CSV — the "
-            "bypass void at the one step that writes",
+            "that matters: a resolution that merely stopped refusing could still have routed "
+            "the card to review and left it out of the CSV — the claim void at the one step "
+            "that writes",
         )
         checks.ok(
             DUNSPARCE_REVERSE_SKU not in written,
-            "and NOT at the finish detection claimed. `--bypass` is one rule — detection may "
-            "not contradict a claim — so the claim decides, and rung 3's other job is untouched",
+            "and NOT at the finish detection read. The rule is one line — detection may not "
+            "contradict a claim — so the claim decides, and rung 3's other job, choosing "
+            "inside a multi-member claim, is untouched",
         )
 
 
@@ -9567,11 +9816,31 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
         book = corpus.Corpus.read()
+        # THIS CHECK ONCE ASSERTED THE D9 CONSTANT, AND THE PROMISE IT GUARDED WAS GIVEN UP ON
+        # PURPOSE. D99's first build said a store that had set no threshold would partition
+        # exactly as it did yesterday, and that was true while the threshold was the only figure
+        # with a default. It stopped being true when D9's amendment gave `sub_threshold` a
+        # default of flat $0.49 beside a threshold still reading $0.40: a store that had chosen
+        # NEITHER then partitioned at one price and sold the half below it at another, so a
+        # $0.38 card listed above a $0.42 one. The owner's ruling is that the two are one
+        # variable, so the fallback is one figure and both keys read it.
+        #
+        # What that costs is written here rather than left to be discovered: an existing store
+        # that never set a threshold now partitions at $0.49 instead of $0.40, and cards between
+        # the two figures move from the listed half to the cheap half on the next join. Cards,
+        # not money — each of them still goes out at $0.49 either way, because that is what the
+        # cheap half has been priced at since the amendment.
         checks.equal(
             book.policy_for()["threshold"],
-            str(pricing.THRESHOLD),
-            "a corpus nobody has set a threshold on reads the D9 constant, so this whole "
-            "change is invisible to a store that does not use it",
+            corpus.DEFAULT_CUTOFF,
+            "a corpus nobody has set a cut-off on reads ONE default for both keys, so it can "
+            "never partition at one figure and sell the half below it at another",
+        )
+        checks.equal(
+            book.policy_for()["sub_threshold"],
+            {"flat": corpus.DEFAULT_CUTOFF},
+            "and the cheap-card answer it falls back to IS that figure — the pair cannot "
+            "invert unless somebody writes them apart deliberately",
         )
         book.threshold = "5.00"
         book.sub_threshold = "floor"
@@ -9684,6 +9953,282 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
             "and nothing was written",
         )
 
+
+def check_prices_adopt(checks: Checks) -> None:
+    """`pkmnscan prices adopt` folds, RETIRES, and the two commands refuse until it has (D86, amended).
+
+    THE REFUSAL WAS GATED ON AN EMPTY CORPUS, AND ON THE OWNER'S STORE EIGHT FILES SAT BEHIND
+    IT. `join` and `emit` refused a run carrying `decisions.json` only while `inventory/
+    prices.json` held no answers — so from the first adoption onward every legacy file was
+    silently ignored, while CLAUDE.md and D86 described an unconditional refusal. And `adopt`
+    itself refused to run a second time without `--force`, whose implementation folded the run
+    files into a FRESH corpus — every answer written on `#/pricing` since the first fold would
+    have gone with it.
+
+    These cases pin the shape that replaces it: the guard is unconditional and fires before
+    anything is read or written; `adopt --write` retires each folded file to
+    `decisions.json.adopted`; a re-adopt keeps the corpus's answers and retires the files
+    without `--force`; `--force` folds OVER the corpus and names the hold it costs; and the
+    sub-threshold disposition has a standing default (D9, amended 2026-09-02) so a fresh
+    store's first emit is not refused for want of it.
+
+    Its own isolated home per case, for this file's usual reason: emit writes `pushed`.
+    """
+    from cli import __main__ as entry
+
+    checks.note("")
+    checks.note("PRICES ADOPT — fold, retire, and refuse until then")
+
+    cards = [(3, 1, "Articuno", "161", None)]
+    older_doc = {
+        "sub_threshold": {"flat": ".5"},
+        "overrides": {ARTICUNO_SKU: {"withheld": "bullish"}},
+    }
+    newer_doc = {
+        "sub_threshold": "floor",
+        "overrides": {ARTICUNO_SKU: "3.45"},
+        "no_market_data": {DUNSPARCE_SKU: "1.00"},
+    }
+
+    def legacy_run(document: dict):
+        made = runs.create("t7-legacy")
+        path = made.directory / runs.DECISIONS
+        path.write_text(json.dumps(document, indent=2) + "\n", "utf-8")
+        return made, path.read_bytes()
+
+    # ---------------------------------------------------------- (1) the first adoption
+    with isolated_home():
+        older, older_bytes = legacy_run(older_doc)
+        newer, newer_bytes = legacy_run(newer_doc)
+
+        preview = command(checks, "prices", "adopt")
+        checks.ok(
+            "DRY RUN" in preview
+            and str(older.directory / runs.DECISIONS) in preview.split("would retire", 1)[-1]
+            and preview.count("would retire") == 2,
+            "the preview says DRY RUN and names BOTH files under `would retire` — what will "
+            "leave the run directory is written down before it moves",
+            preview,
+        )
+        checks.ok(
+            (older.directory / runs.DECISIONS).is_file()
+            and (newer.directory / runs.DECISIONS).is_file()
+            and not files.prices_path().exists(),
+            "and the preview moved nothing: both files where they were, no corpus written",
+        )
+
+        said = command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        checks.equal(
+            (
+                book.answers[ARTICUNO_SKU].value,
+                book.answers[DUNSPARCE_SKU].value,
+                book.answers[DUNSPARCE_SKU].channel,
+                book.sub_threshold,
+            ),
+            ("3.45", "1.00", "unknown", "floor"),
+            "newest wins: the later price over the earlier hold, the no-market-data answer "
+            "on its own channel, and the policy from the newest run that stated one",
+        )
+        checks.ok(
+            "A HOLD WAS REPLACED BY A PRICE" in said and ARTICUNO_SKU in said,
+            "and the hold that lost is NAMED, in as many words — the direction that cost money",
+            said,
+        )
+        checks.ok(
+            not (older.directory / runs.DECISIONS).exists()
+            and not (newer.directory / runs.DECISIONS).exists()
+            and (older.directory / runs.DECISIONS_ADOPTED).read_bytes() == older_bytes
+            and (newer.directory / runs.DECISIONS_ADOPTED).read_bytes() == newer_bytes
+            and "retired" in said,
+            "`--write` RETIRES each folded file to `decisions.json.adopted`, byte for byte — "
+            "the run keeps the record it was priced with, under a name nothing refuses on",
+            said,
+        )
+
+    # ------------------------------------------ (2) a re-adopt keeps the corpus's answers
+    def answered_corpus():
+        book = corpus.Corpus.read()
+        book.answers["9999001"] = corpus.Answer(value="9.99")
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value={"withheld": "keeping"})
+        book.write()
+
+    third_doc = {
+        "sub_threshold": {"flat": ".5"},
+        "overrides": {ARTICUNO_SKU: "3.45", "9999002": "0.10"},
+    }
+
+    with isolated_home():
+        legacy_run(older_doc)
+        legacy_run(newer_doc)
+        command(checks, "prices", "adopt", "--write")
+        answered_corpus()
+        third, _ = legacy_run(third_doc)
+
+        said = command(checks, "prices", "adopt", "--write")
+        book = corpus.Corpus.read()
+        checks.equal(
+            (
+                book.answers[ARTICUNO_SKU].value,
+                book.answers["9999001"].value,
+                book.answers["9999002"].value,
+                book.sub_threshold,
+            ),
+            ({"withheld": "keeping"}, "9.99", "0.10", "floor"),
+            "WITHOUT `--force`, THE CORPUS KEEPS WHAT IT ALREADY ANSWERS: the hold set on "
+            "#/pricing survives the file's price, a SKU in no file is untouched, a SKU the "
+            "corpus never held is added, and the policy is not moved by the file's `.5`",
+        )
+        checks.ok(
+            "kept" in said and ARTICUNO_SKU in said.split("kept", 1)[-1],
+            "and the answer it kept is named under `kept`, with what the file said beside it",
+            said,
+        )
+        checks.ok(
+            not (third.directory / runs.DECISIONS).exists()
+            and (third.directory / runs.DECISIONS_ADOPTED).is_file(),
+            "the file is retired all the same — every SKU it answers is answered in the "
+            "corpus, so it has nothing left to say",
+        )
+        with quiet() as again:
+            code = entry.main(["prices", "adopt", "--write"])
+        checks.equal(
+            (code, "nothing to adopt" in again.getvalue()),
+            (0, True),
+            "a second `adopt --write` with no files left exits 0 and says so — the migration "
+            "is re-runnable, which is what lets a session run it without checking first",
+        )
+
+    # ------------------------------------------------- (3) --force folds OVER the corpus
+    with isolated_home():
+        legacy_run(older_doc)
+        legacy_run(newer_doc)
+        command(checks, "prices", "adopt", "--write")
+        answered_corpus()
+        legacy_run(third_doc)
+
+        said = command(checks, "prices", "adopt", "--write", "--force")
+        book = corpus.Corpus.read()
+        checks.equal(
+            (book.answers[ARTICUNO_SKU].value, book.answers["9999001"].value),
+            ("3.45", "9.99"),
+            "`--force` lets the file win where the two differ, and a SKU in no file SURVIVES "
+            "— the old `--force` folded into a fresh corpus and would have dropped it",
+        )
+        checks.ok(
+            "A HOLD WAS REPLACED BY A PRICE" in said and ARTICUNO_SKU in said,
+            "and the hold it cost is named — the corpus's own answer is the oldest entry in "
+            "the history, so a price folded over a screen hold is reported as the loss it is",
+            said,
+        )
+
+    # ------------------------------------------------------ (4) join refuses, early
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards, join=False)
+        (run_dir.directory / runs.DECISIONS).write_text('{"rule": "match"}\n', "utf-8")
+        argv = ["join", str(run_dir.directory), "--export", str(run_dir.path("export.csv"))]
+        with quiet() as said:
+            code = entry.main(argv)
+        text = said.getvalue()
+        after = Store().read()
+        got = (
+            code,
+            "prices adopt --write" in text,
+            "Nothing was joined" in text,
+            bool(runs.open_run(run_dir.directory).manifest.get("joined")),
+            len(after.review.entries) + len(after.parked.entries),
+        )
+        want = (1, True, True, False, 0)
+        checks.ok(
+            got == want,
+            "JOIN REFUSES A LEGACY FILE UNCONDITIONALLY, NAMES THE COMMAND, AND HAS WRITTEN "
+            "NOTHING when it says so — no `joined` in the manifest, nothing in either queue. "
+            "The guard sat after the store write and fired only on an empty corpus before",
+            f"expected: {want!r}\nactual:   {got!r}\n{text}",
+        )
+        command(checks, "prices", "adopt", "--write")
+        with quiet() as said:
+            code = entry.main(argv)
+        checks.ok(
+            code == 0,
+            "and once the file is retired the same join exits 0",
+            f"exit {code}\n{said.getvalue()}",
+        )
+
+    # ------------------------------------------------------- (5) emit refuses, per run
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        (run_dir.directory / runs.DECISIONS).write_text('{"rule": "match"}\n', "utf-8")
+        with quiet() as said:
+            code = entry.main(["emit", str(run_dir.directory)])
+        text = said.getvalue()
+        got = (
+            code,
+            "prices adopt --write" in text,
+            "Nothing was written" in text,
+            run_dir.path(runs.import_listed_name("pokemon")).exists(),
+        )
+        want = (1, True, True, False)
+        checks.ok(
+            got == want,
+            "emit refuses the same file the same way, before any CSV exists",
+            f"expected: {want!r}\nactual:   {got!r}\n{text}",
+        )
+
+    with isolated_home():
+        first, _ = seam_run(checks, cards)
+        second, _ = seam_run(checks, cards)
+        (second.directory / runs.DECISIONS).write_text('{"rule": "match"}\n', "utf-8")
+        with quiet() as said:
+            code = entry.main(["emit", str(first.directory), str(second.directory)])
+        text = said.getvalue()
+        got = (code, second.name in text, "prices adopt --write" in text)
+        want = (1, True, True)
+        checks.ok(
+            got == want,
+            "THE MERGED EMIT REFUSES TOO, NAMING THE RUN THAT CARRIES THE FILE — the merged "
+            "path had no guard at all, so a send of several runs walked straight past what "
+            "a send of one refused",
+            f"expected: {want!r}\nactual:   {got!r}\n{text}",
+        )
+
+    # -------------------------------------------- (6) the standing default, flat $0.49
+    with isolated_home():
+        run_dir, said = seam_run(
+            checks, [(3, 1, "Dunsparce", "120", "normal")], market={DUNSPARCE_SKU: "0.12"}
+        )
+        policy = json.loads(files.prices_path().read_text())["policy"]
+        checks.equal(
+            policy["sub_threshold"],
+            {"flat": "0.49"},
+            "A FRESH CORPUS'S SUB-THRESHOLD POLICY IS FLAT $0.49 AFTER THE FIRST JOIN (D9, "
+            "amended 2026-09-02): the default is applied on read and reaches the file on the "
+            "join's own write, so nothing has to be pressed before the first emit",
+        )
+        checks.ok(
+            "sub-threshold    flat at $0.49" in said and "EMIT WILL REFUSE" not in said,
+            "the join names the standing disposition on its own line and stops nagging — "
+            "`EMIT WILL REFUSE` fires for a genuinely blocking reason only",
+            said,
+        )
+        before = files.prices_path().read_bytes()
+        command(checks, "emit", str(run_dir.directory))
+        # READ OUT OF THE MERGED FILE, WHICH IS WHERE ONE PRESS PUTS THE ROW (D99). This case
+        # is about the sub-threshold PRICE, not about the file layout: it asserted
+        # `import-subthreshold.csv` when it was written, because that was the only shape emit
+        # had. The default became one `import.csv` with `--split-threshold` as the way back,
+        # so the row moved file and the assertion did not change its subject —
+        # `check_threshold_and_file_shape` above owns the layout question.
+        written = {
+            row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN]
+            for row in tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
+        }
+        checks.equal(
+            (written.get(DUNSPARCE_SKU), files.prices_path().read_bytes() == before),
+            ("0.49", True),
+            "and emit prices the sub-threshold card at the default without touching the "
+            "corpus — the answer was already there; emit only reads it",
+        )
 
 def check_live_reconcile(checks: Checks) -> None:
     """The whole store against one live export, both directions (D87).
@@ -9804,6 +10349,44 @@ def check_live_reconcile(checks: Checks) -> None:
             "destroys the cumulative record it read, so its own second pass answers a "
             "different question",
         )
+
+        # AN OLDER EXPORT CANNOT UNSETTLE IT (D87 amended, 2026-09-02). The settlement dated
+        # every listing to the file's mtime; a second export with different numbers, dated
+        # an hour before it, is a reading the store has already overtaken — kept in the
+        # preview, kept in the write. Moved forward past the settlement, the same file wins.
+        settled_at = live_path.stat().st_mtime
+        older_rows = [
+            dict(row, **{tcgcsv.LIVE_QUANTITY_COLUMN: str(pushed[row[tcgcsv.SKU_COLUMN]] + 1)})
+            for row in rows
+            if row[tcgcsv.SKU_COLUMN] in pushed
+        ]
+        older_path = run_dir.path("older.csv")
+        tcgcsv.write_csv(older_path, source.header, older_rows)
+        os.utime(older_path, (settled_at - 3600, settled_at - 3600))
+        preview = command(checks, "reconcile", "--live", str(older_path))
+        checks.ok(
+            f"{len(older_rows)} SKU(s) kept: store newer than this export" in preview
+            and "0 copy(ies) of `live` would be corrected" in preview,
+            "the preview says every differing SKU is KEPT — the store's reading is newer "
+            "than the file's — and promises no correction",
+            preview,
+        )
+        command(checks, "reconcile", "--live", str(older_path), "--write")
+        checks.equal(
+            {sku: entry.live for sku, entry in Store().read().inventory.listings.items()},
+            {sku: entry.live for sku, entry in after.items()},
+            "and the write, computed by the same rule as the preview, changes no `live`",
+        )
+        os.utime(older_path, (settled_at + 3600, settled_at + 3600))
+        written = command(checks, "reconcile", "--live", str(older_path), "--write")
+        checks.equal(
+            {sku: Store().read().inventory.listings[sku].live for sku in pushed},
+            {sku: pushed[sku] + 1 for sku in pushed},
+            "dated after the settlement, the same file is adopted — the export keeps D8 and "
+            "D11's authority for the moment it was read, and loses it only to a reading the "
+            "store took later",
+        )
+        checks.ok("0 listing(s) kept" in written, "and nothing was kept that time", written)
         checks.ok(
             "unexplained" in said and DUNSPARCE_SKU in said,
             "and it is REPORTED by SKU rather than counted (D59's rule): a copy that quietly "
@@ -9974,12 +10557,6 @@ def check_pricing_route(checks: Checks) -> None:
                 "the CSV in front of them while they price, and a subset chosen here is a "
                 "decision about what matters taken by the wrong file",
             )
-            checks.equal(
-                payload["remembered_sub_threshold"],
-                None,
-                "with no earlier run there is nothing to remember, and the answer is null "
-                "rather than a guess — D9 forbids a default and this is a LABEL, not one",
-            )
             # WHEN THE TABLE WAS WRITTEN, WHICH IS THE ONLY AGE A PRICE CAN HONESTLY CARRY.
             # `#/inventory`'s card panel draws `$5.47 · read 2 days ago` off this, and the
             # second half is not decoration: `join` is free, re-runnable and routinely pointed
@@ -10014,9 +10591,10 @@ def check_pricing_route(checks: Checks) -> None:
             # THE ANSWER IS THE CORPUS'S, AND A LATER RUN DOES NOT HAVE TO BE REMINDED OF IT.
             # `remembered_sub_threshold` walked up to five sibling run directories looking for
             # the newest answer, because each run held its own — a label offered so the
-            # operator did not have to re-decide, which D9 forbids defaulting. With one
-            # document there is nothing to remember: the answer IS the policy, and the next run
-            # is priced by it without a screen offering anything.
+            # operator did not have to re-decide, which D9 then forbade defaulting. It is gone
+            # from every payload now (D86, amended 2026-09-02): with one document there is
+            # nothing to remember — the answer IS the policy, it has a default (D9 amended),
+            # and the next run is priced by it without a screen offering anything.
             book = corpus.Corpus.read()
             book.sub_threshold = "floor"
             book.write()
@@ -10696,7 +11274,12 @@ def check_listing_commands(checks: Checks) -> None:
             "and the COUNT onto the SKU: three copies pushed, nothing further, at the "
             "condition the ladder resolved",
         )
-        checks.ok(listing.at, "stamped, so `join`'s stale warning has something to read")
+        checks.ok(
+            listing.at and listing.live_as_of is None,
+            "`at` is stamped — the touch stamp, which nothing reads — and `live_as_of` is "
+            "not: an emit takes no reading of `live`, and that stamp is what the arbitration "
+            "reads (D87 amended), so a forged one here would outrank a real export",
+        )
         checks.equal(
             inventory.listing_counts(),
             {master.PUSHED: 4, master.STAGED: 0, master.LIVE: 0},
@@ -11014,24 +11597,58 @@ def check_listing_commands(checks: Checks) -> None:
             said,
         )
 
-        # DOWNWARD TOO. The export is the authority (D8, D11) and the stored number is an
-        # optimistic local estimate, so a join that only ever raised it would let a sale on
-        # TCGplayer leave this Mac permanently overstating what is for sale.
+        # DOWNWARD TOO — WHERE THE EXPORT IS THE NEWER READING. The export is the authority
+        # (D8, D11) for the moment it was read, and a join that only ever raised the stored
+        # number would let a sale on TCGplayer leave this Mac permanently overstating what is
+        # for sale. BOTH DIRECTIONS ARE DATED WITH `os.utime` RATHER THAN RELIED ON: `set`
+        # stamps `live_as_of` to the millisecond and the file is written after it, so the
+        # order would hold in practice — and a case about ordering should say which order.
+        # Articuno is pinned at the store's own 4 so the counts below are Dunsparce alone.
         with Store().write() as snapshot:
             snapshot.inventory.listing(DUNSPARCE_SKU).set(master.LIVE, 9)
-        fell = write_export(run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2})
-        command(checks, "join", str(run_dir.directory), "--export", str(fell))
+        fell = write_export(
+            run_dir.path("export.csv"), live={DUNSPARCE_SKU: 2, ARTICUNO_SKU: 4}
+        )
+        later = time.time() + 3600
+        os.utime(fell, (later, later))
+        said = command(checks, "join", str(run_dir.directory), "--export", str(fell))
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
         checks.equal(
-            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
-            2,
-            "a stored 9 against an export that says 2 becomes 2 — set from the export, never "
-            "nudged toward it",
+            (listing.live, listing.live_as_of),
+            (2, runs.describe_source(fell)["mtime"]),
+            "a stored 9 against a NEWER export that says 2 becomes 2, dated to the FILE'S "
+            "time — a newer export sets `live`, never nudges it",
+        )
+        checks.ok("1 SKU(s) moved" in said, "and the report counts it as moved", said)
+
+        # AND NOT WHERE THE STORE'S READING IS THE NEWER ONE (D87 amended, 2026-09-02).
+        with Store().write() as snapshot:
+            snapshot.inventory.listing(DUNSPARCE_SKU).set(master.LIVE, 9)
+        stamped = Store().read().inventory.listing_for(DUNSPARCE_SKU).live_as_of
+        earlier = time.time() - 3600
+        os.utime(fell, (earlier, earlier))
+        said = command(checks, "join", str(run_dir.directory), "--export", str(fell))
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            (listing.live, listing.live_as_of),
+            (9, stamped),
+            "an OLDER export cannot overwrite a reading the store took after it, and the "
+            "stamp stands too — the measured re-join with a run's recorded export, fetched "
+            "fifteen minutes before the emit, took the owner's store from 1,072 live copies "
+            "to 700 on exactly this path",
+        )
+        checks.ok(
+            "1 SKU(s) kept: store newer than this export" in said
+            and f"{DUNSPARCE_SKU}  store 9 (as of {stamped}) vs export 2" in said,
+            "and the report NAMES what it kept, with both readings and the store's stamp, "
+            "rather than counting it (D59's rule)",
+            said,
         )
 
     # --- the cap is a QUANTITY, and a sold copy gives its slot back (D59) -----------------
     #
     # ITS OWN `isolated_home`, and this file has now recorded that lesson four times — the
-    # sharpest being `check_emit_bypass`, which emits and therefore writes `pushed` counts
+    # sharpest being `check_emit_claim_decides`, which emits and therefore writes `pushed` counts
     # that the block above asserts as absolute dicts over its own fixtures. This one emits
     # three times.
     #
@@ -11084,32 +11701,62 @@ def check_listing_commands(checks: Checks) -> None:
             "two sales take the live count to two, which is the room the cap now has",
         )
 
-        # A STALE EXPORT CANNOT RE-OPEN THE CAP, and this is the assertion for the `max()` in
-        # `cli/resolve.py:_copies_out`. The export still says four — the operator has not
-        # downloaded a fresh one since the sales — and D8 and D11 make that column
-        # authoritative, so it is a FLOOR the store's own smaller physical count may not
-        # argue below. Offering two copies here would list against slots TCGplayer is still
-        # holding, on the strength of a reading that has gone backwards.
+        # A STALE EXPORT CANNOT CLOSE THE CAP AGAINST THE STORE'S NEWER READING (D87
+        # amended, 2026-09-02). The export still says four — the operator has not
+        # downloaded a fresh one since the sales — and until this date that reading was a
+        # FLOOR the store could not argue below, so this case pinned "every copy in this
+        # run is already listed" and its own comment admitted THE SENTENCE WAS THE COMMITTED
+        # ONE, NOT THE CAP ONE. The two sales are observations the store made AFTER the
+        # file (`bump(LIVE, -1)` stamps `live_as_of`), the file is dated an hour before them
+        # so the ordering is asserted rather than relied on, and the store's 2 is the newer
+        # reading: TCGplayer holds two, the cap has room for two, and the two backstock
+        # copies are exactly what it should offer.
+        earlier = time.time() - 3600
+        os.utime(landed, (earlier, earlier))
         stale = command(checks, "join", str(run_dir.directory), "--export", str(landed))
         checks.ok(
-            "8608459 Dunsparce copies=6 — every copy in this run is already listed "
-            "or has left the box" in stale,
-            # THE SENTENCE IS THE COMMITTED ONE, NOT THE CAP ONE, AND THAT IS THIS FIXTURE
-            # BEING HONEST ABOUT WHAT IT CAN PROVE. Six copies with two sold leaves four,
-            # and TCGplayer holds four — so `uncommitted_positions` is EMPTY and
-            # `nothing_to_add` answers on that before it ever reaches the cap. This case
-            # pinned `4 live, at the cap of 4` until D59, which asserted a branch the
-            # fixture cannot reach; the floor itself is demonstrated by the eight-copy
-            # partial-import case below, where two copies really are still offerable.
-            "a STALE export reporting four live offers nothing and SAYS WHY — a reading "
-            "taken before the sales cannot free a slot, and every copy this run still "
-            "holds is one TCGplayer is holding too",
+            "1 SKU(s) kept: store newer than this export" in stale,
+            "a STALE export reporting four live is KEPT OUT and the report says so — a "
+            "reading taken before the sales cannot put the sold copies back",
             stale,
+        )
+        checks.equal(
+            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
+            2,
+            "and the store's own two stands",
+        )
+        held = resolve.load(
+            runs.open_run(run_dir.directory), landed
+        ).matches[DUNSPARCE_SKU]
+        checks.equal(
+            (held.copies_out, held.add_to_quantity),
+            (2, 2),
+            "a stale export cannot CLOSE the cap against the store's newer reading: "
+            "`copies_out` is the newer 2, not the file's 4 — `SkuMatch.copies_out` used to "
+            "`max` the row's own column back over `_copies_out`'s answer, which put the 4 "
+            "back — and the two backstock copies have room",
+        )
+        # AND IT CANNOT RE-OPEN IT EITHER, which is the D59 hazard `_copies_out` said it did
+        # not close: after a reconcile `pushed` and `staged` are both zero, and an export
+        # that under-reports would compute `room = cap - 0` and send the SKU again.
+        reopened = write_export(run_dir.path("reopened.csv"), live={DUNSPARCE_SKU: 0})
+        os.utime(reopened, (earlier, earlier))
+        held = resolve.load(
+            runs.open_run(run_dir.directory), reopened
+        ).matches[DUNSPARCE_SKU]
+        checks.equal(
+            (held.copies_out, held.add_to_quantity),
+            (2, 2),
+            "an older export reading ZERO cannot re-open the cap either — two, not four: "
+            "the store's newer reading is the floor, closed by time rather than by trusting "
+            "either side",
         )
 
         # --- and the fresh one refills ---------------------------------------------------
         before_bytes = run_dir.path(runs.IMPORT_MERGED).read_bytes()
         fresh = write_export(run_dir.path("fresh.csv"), live={DUNSPARCE_SKU: 2})
+        later = time.time() + 3600
+        os.utime(fresh, (later, later))
         refilled = command(checks, "join", str(run_dir.directory), "--export", str(fresh))
         checks.ok(
             # THE SKU MUST BE ABSENT FROM THE no-room BLOCK, NOT MERELY UNNAMED BY ONE
@@ -11506,6 +12153,109 @@ def check_boxes_and_listings(checks: Checks) -> None:
         master.UnknownState,
         lambda: listing.bump("captured"),
         "and a position state is not a listing stage — bump refuses it",
+    )
+
+    # --- `live` is a DATED observation, and an older reading cannot overwrite it ---------
+    # D87 amended, 2026-09-02. `live_as_of` is when the reading was taken, `at` is when the
+    # record was last touched, and the two are separate so that no other write can forge a
+    # fresher live observation than anything made. Its own record, because the round trip
+    # below asserts `listing` as the bumps above left it.
+    listing = master.Listing(sku="dated")
+    checks.equal(
+        listing.live_observed_at, None,
+        "a record nothing has read `live` for has NO observation time — `at` is not one, "
+        "and a fresh record given `at` as a fallback outranked every export older than "
+        "its own creation",
+    )
+    listing.set(master.LIVE, 4)
+    stamped = listing.live_as_of
+    checks.ok(
+        stamped is not None and stamped == listing.at,
+        "`set(LIVE)` dates the reading now — an observation this process made",
+    )
+    listing.set(master.STAGED, 1)
+    checks.equal(
+        listing.live_as_of, stamped,
+        "and `set(STAGED)` leaves it alone: `at` moved, the reading's stamp did not",
+    )
+    checks.equal(
+        listing.observe_live(4, "2999-01-01T00:00:00+00:00"), master.UNCHANGED,
+        "a reading equal to the stored figure is UNCHANGED whatever its age — nothing to "
+        "arbitrate, nothing touched, which is what keeps `reconcile --live` idempotent",
+    )
+    checks.equal(
+        (listing.observe_live(2, "2000-01-01T00:00:00+00:00"), listing.live, listing.live_as_of),
+        (master.KEPT, 4, stamped),
+        "an OLDER reading is KEPT out: the store's figure and its stamp both stand",
+    )
+    checks.equal(
+        (listing.observe_live(2, "2999-01-01T00:00:00+00:00"), listing.live, listing.live_as_of),
+        (master.ADOPTED, 2, "2999-01-01T00:00:00+00:00"),
+        "a NEWER one is ADOPTED and `live_as_of` takes the FILE'S time, never now — dating "
+        "an export's reading to the moment it was copied in would forge a fresher "
+        "observation than the file made",
+    )
+    checks.equal(
+        listing.live_reading(None, None), 2,
+        "no export row at all keeps the stored number — the SKU a run's export does not cover",
+    )
+    checks.equal(
+        listing.live_reading(7, "2999-01-01T00:00:00+00:00"), 2,
+        "and a tie goes to the store: an equal-second reading cannot be shown newer",
+    )
+    listing.bump(master.LIVE, -1)
+    checks.ok(
+        listing.live_as_of == listing.at and listing.live_as_of != "2999-01-01T00:00:00+00:00",
+        "`bump(LIVE)` — a sale's ±1 — dates the reading now, so the store then knows more "
+        "than any export fetched before the sale",
+    )
+    legacy = master.Listing.from_record(
+        {"sku": "legacy", "live": 3, "at": "2026-09-01T12:00:00+00:00"}
+    )
+    checks.equal(
+        legacy.live_observed_at, legacy.at,
+        "a STORED record written before `live_as_of` existed reads `at` as its observation "
+        "time, materialised at the parse — D87's settlement rows, whose `at` IS the "
+        "settlement time",
+    )
+    checks.equal(
+        master.Listing.from_record(
+            {"sku": "unread", "live": 0, "at": "2026-09-01T12:00:00+00:00", "live_as_of": None}
+        ).live_observed_at,
+        None,
+        "while one that carries the key as null is read as written: absent is legacy, null "
+        "is unread, and the parse is the one place that tells them apart",
+    )
+    checks.equal(
+        legacy.live_reading(0, "2026-09-01T11:45:00+00:00"), 3,
+        "so a file fetched fifteen minutes before that settlement loses to it — the measured "
+        "defect, at the size it occurred",
+    )
+    checks.equal(
+        legacy.live_reading(0, "2026-09-01T12:15:00+00:00"), 0,
+        "and one fetched after it wins",
+    )
+    stampless = master.Listing(sku="stampless", live=3)
+    checks.equal(
+        stampless.live_reading(0, "2026-09-01T12:00:00+00:00"), 0,
+        "no stamp on the store's side is the stampless case, and the export keeps the "
+        "authority it always had — T3's hand-built fixtures",
+    )
+    releasing = master.Listing(
+        sku="releasing", pushed=2, live=2,
+        at="2020-01-01T00:00:00+00:00", live_as_of="2020-01-01T00:00:00+00:00",
+    )
+    releasing.release(1)
+    checks.equal(
+        releasing.live_as_of, "2020-01-01T00:00:00+00:00",
+        "a D34 release that stopped at `pushed` learned nothing about `live` and leaves its "
+        "stamp where the last reading put it",
+    )
+    releasing.release(3)
+    checks.ok(
+        releasing.live == 0 and releasing.live_as_of == releasing.at
+        and releasing.live_as_of != "2020-01-01T00:00:00+00:00",
+        "and one that reached `live` dates the reading now — an observation like a sale",
     )
     checks.raises(
         master.UnknownState,
@@ -12158,49 +12908,45 @@ def check_pipeline_routes(checks: Checks) -> None:
                 )
                 checks.equal((status, error_code(body)), (400, expected), label)
 
-            # ------------------------------------------------------------- the decisions PUT
-            status, body, _ = request(
-                port,
-                "PUT",
-                f"/pipeline/runs/{made.directory.name}/decisions",
-                payload={"decisions": {"rule": "match"}},
-            )
-            checks.equal(
-                (status, error_code(body)),
-                (409, "decisions_not_written"),
-                "the pricing answer refuses a run that has not been joined — `join` is what "
-                "writes decisions.json with every SKU that needs an answer already in it, "
-                "and a route that created the file would invent the question as well",
-            )
-            (made.directory / runs.DECISIONS).write_text('{"rule": "match"}\n')
-            status, body, _ = request(
-                port,
-                "PUT",
-                f"/pipeline/runs/{made.directory.name}/decisions",
-                payload={"decisions": {"rule": "undercut:5", "sub_threshold": "floor"}},
-            )
-            checks.equal(
-                (status, json.loads((made.directory / runs.DECISIONS).read_text())),
-                (200, {"rule": "undercut:5", "sub_threshold": "floor"}),
-                "and once it exists the route replaces it wholesale — one document the "
-                "operator is editing, and a merge would need this route to understand a "
-                "schema it deliberately does not own",
-            )
-            status, body, _ = request(
-                port,
-                "PUT",
-                f"/pipeline/runs/{made.directory.name}/decisions",
-                payload={"decisions": "floor"},
-            )
-            checks.equal(
-                (status, error_code(body)),
-                (400, "decisions_invalid"),
-                "a non-object answer is refused rather than written — emit owns what a "
-                "disposition MEANS, but this route still owns what a document IS",
-            )
         finally:
             httpd.shutdown()
             thread.join(timeout=5)
+
+    # --- an uploaded export carries its own time, and the stored copy wears it ------------
+    # D87 amended: the stored file's mtime is when its `Total Quantity` was read, and the
+    # store arbitrates `live` by it. Both `join`'s uploads and the `--live` upload land here.
+    with isolated_home():
+        directory = files.inventory_dir() / ".reconcile"
+        directory.mkdir(parents=True, exist_ok=True)
+        content = "TCGplayer Id,Total Quantity\n1,2\n"
+        when = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+        stored = pipeline_routes._store_upload(
+            directory,
+            {"name": "my.csv", "content": content, "modified": int(when.timestamp() * 1000)},
+            "live-",
+        )
+        checks.equal(
+            runs.describe_source(stored)["mtime"],
+            "2026-09-01T12:00:00.000+00:00",
+            "an upload sent with `modified` — `File.lastModified`, in MILLISECONDS — lands "
+            "with THAT mtime, because the write time would date a week-old export to now and "
+            "let it outrank every reading the store has taken since",
+        )
+        plain = pipeline_routes._store_upload(
+            directory, {"name": "plain.csv", "content": content}, "live-"
+        )
+        checks.ok(
+            abs(plain.stat().st_mtime - time.time()) < 60,
+            "and one sent without it still lands, at the write time",
+        )
+        odd = pipeline_routes._store_upload(
+            directory, {"name": "odd.csv", "content": content, "modified": 12}, "live-"
+        )
+        checks.ok(
+            abs(odd.stat().st_mtime - time.time()) < 60,
+            "an unsane stamp — before 2000 here — is ignored rather than trusted: a bogus "
+            "one reading as newer than everything would settle the whole store",
+        )
 
 
 def check_open_section(checks: Checks) -> None:
@@ -12464,7 +13210,8 @@ def check_export_fetch(checks: Checks) -> None:
 
     WHAT IS PROVABLE HERE AND WHAT IS NOT, said plainly so a green run is not misread.
     Provable: that a session redirected to a login page never becomes a parsed CSV, that a WAF
-    403 has its own name, that a narrower export refuses before it can mislist, that a refusal
+    403 has its own name, that a re-fetch of identical bytes lands on the file the run already
+    holds, that a refusal
     keeps nothing, that the cookie reaches the socket and reaches no file, and that a fetched
     file is the one `join` then actually joins against. NOT provable: whether TCGplayer's WAF
     accepts this client when the request carries a real session. That is one live fetch by the
@@ -12476,8 +13223,8 @@ def check_export_fetch(checks: Checks) -> None:
     # THE FAKE PORTAL. It serves whatever `stub["mode"]` currently says, which is how one
     # socket covers a good download, an expired session in BOTH of its shapes, a WAF block and
     # an export that has quietly narrowed. Real fixture rows throughout — `write_export`
-    # builds them out of the committed SV09 file — because the guard counts SKUs and condition
-    # rows per number, and invented rows would be testing the fixture.
+    # builds them out of the committed SV09 file — because the receipt counts rows and SKUs,
+    # and invented rows would be testing the fixture.
     stub = {
         "mode": "csv",
         "body": b"",
@@ -12656,84 +13403,6 @@ def check_export_fetch(checks: Checks) -> None:
                         payload=payload or {},
                     )
 
-                # ------------------------------ THE GUARD'S OWN ARITHMETIC, ON BUILT ROWS
-                #
-                # `_coverage` DIRECTLY RATHER THAN THROUGH THE ROUTE, because what these
-                # three cases separate is invisible from the outside: all three REFUSE, and
-                # what differs is whether the refusal claims a FINISH was lost. Both
-                # defects they pin shipped in the first build and both were found by
-                # measuring against the owner's real exports rather than against a fixture.
-                nm = tcgcsv.read_export(FIXTURE_EXPORT).by_sku()
-                fc = pipeline_routes._finish_conditions(["pokemon"])
-
-                def built(rows, name):
-                    path = home / name
-                    tcgcsv.write_csv(path, tcgcsv.read_export(FIXTURE_EXPORT).header, rows)
-                    return tcgcsv.read_export(path)
-
-                plain, reverse = dict(nm[DUNSPARCE_SKU]), dict(nm[DUNSPARCE_REVERSE_SKU])
-                played = dict(plain)
-                played[tcgcsv.CONDITION_COLUMN] = "Lightly Played"
-                played[tcgcsv.SKU_COLUMN] = "9000001"
-                renamed = dict(reverse)
-                renamed[tcgcsv.NAME_COLUMN] = plain[tcgcsv.NAME_COLUMN] + " (Reverse)"
-
-                # 1. A PLAY CONDITION IS NOT A FINISH. D12 scopes this product to Near Mint
-                #    and the committed fixtures are Near-Mint-only, so filtering to Near
-                #    Mint is the operator doing the right thing. The first build counted
-                #    every condition string and called it thinning: measured on the owner's
-                #    box-3 export, all 153 of its numbers read as thinned against the wide
-                #    riftbound file and NOT ONE had lost a finish.
-                only_played_went = pipeline_routes._coverage(
-                    built([plain, reverse], "cov-fetch-1.csv"),
-                    built([plain, reverse, played], "cov-base-1.csv"),
-                    fc,
-                )
-                checks.equal(
-                    only_played_went["thinned"],
-                    [],
-                    "losing a PLAY CONDITION is not losing a finish — the refusal may still "
-                    "fire on the row that went, but it may not claim a reverse holo is "
-                    "about to list at the normal row's price when the finishes are intact",
-                )
-                checks.equal(
-                    only_played_went["lost_skus"],
-                    ["9000001"],
-                    "and the row that went is still reported, because it did go",
-                )
-
-                # 2. A FINISH GOING IS THE THING THIS EXISTS FOR.
-                finish_went = pipeline_routes._coverage(
-                    built([plain], "cov-fetch-2.csv"),
-                    built([plain, reverse], "cov-base-2.csv"),
-                    fc,
-                )
-                checks.equal(
-                    len(finish_went["thinned"]),
-                    1,
-                    "a number that had Near Mint AND Near Mint Reverse Holofoil and now has "
-                    "one is D3 rung 2's input, and it is exactly what the operator cannot "
-                    "see from anywhere else",
-                )
-
-                # 3. THE KEY MIRRORS THE LOOKUP, AND `Product Name` IN IT LOSES REAL CASES.
-                #    Finish variants usually share a name — 143 of sv09's 144 multi-row
-                #    numbers do, which is why the third leg looked free. Keyed (set, number)
-                #    the wide riftbound export has 550 numbers stocked in more than one
-                #    finish; keyed with the name it has 522. This is one of the 28.
-                differently_named = pipeline_routes._coverage(
-                    built([plain], "cov-fetch-3.csv"),
-                    built([plain, renamed], "cov-base-3.csv"),
-                    fc,
-                )
-                checks.equal(
-                    len(differently_named["thinned"]),
-                    1,
-                    "a finish listed under a DIFFERENT product name is still that number's "
-                    "finish — a key carrying the product name calls them two products and "
-                    "reports no thinning at all",
-                )
-
                 # ------------------------------------------------ the transport refusals
                 for mode, expected, label in (
                     (
@@ -12780,11 +13449,11 @@ def check_export_fetch(checks: Checks) -> None:
                 status, raw, _ = fetch()
                 body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, body.get("ok"), body.get("verified")),
-                    (200, True, ["pokemon"]),
+                    (status, body.get("ok"), body.get("previous")),
+                    (200, True, {"pokemon": {"file": "export.csv", "rows": 3, "skus": 3}}),
                     "the ordinary case: the export downloads, `exports_for` rules on it "
-                    "before anything is joined, and it comes back VERIFIED — this run had a "
-                    "previous export to check against and this one lost nothing",
+                    "before anything is joined, and the receipt carries what the last join "
+                    "used — per game, its file, rows and SKUs — and refuses nothing on it",
                 )
                 checks.equal(
                     (body.get("skus"), body.get("games")),
@@ -12847,6 +13516,30 @@ def check_export_fetch(checks: Checks) -> None:
                     "used would report success and change nothing",
                 )
 
+                # ------------------------------------------- IDENTICAL BYTES, ONE FILE
+                #
+                # The name put a one-second stamp BEFORE the digest, so no two fetches a
+                # second apart ever composed the same name and a re-fetch of identical bytes
+                # always added a copy — run `2026-08-31-box3-01` holds two byte-identical
+                # 366 KB exports 29 seconds apart, while the comment above the name claimed
+                # the opposite. The digest is looked up first now, and a hit IS the file.
+                status, raw, _ = fetch()
+                body = json.loads(raw or b"{}")
+                checks.equal(
+                    (status, body.get("ok"), fetched_files(), body.get("file")),
+                    (200, True, kept, kept[0]),
+                    "a re-fetch of identical bytes lands on the file the run already holds "
+                    "— still one file, and the receipt names it — rather than adding a "
+                    "second copy under a later stamp",
+                )
+                checks.equal(
+                    (body.get("previous") or {}).get("pokemon", {}).get("file"),
+                    kept[0],
+                    "and `previous` names that same file, because it is what the last join "
+                    "used: the receipt says so rather than refusing over a comparison of a "
+                    "file with itself",
+                )
+
                 # --------------------------------------------------- naming a file by hand
                 for wanted, expected_status, expected, label in (
                     (
@@ -12890,17 +13583,15 @@ def check_export_fetch(checks: Checks) -> None:
                         (status, error_code(raw)), (expected_status, expected), label
                     )
 
-                # ------------------------------------------------------ THE NARROWING GUARD
+                # ------------------------------------------- A NARROWER FILE IS REPORTED
                 #
-                # The measured hazard, and the reason this route has a guard at all.
-                # Completeness against the CATALOG cannot be read off a file: the Pricing tab
-                # narrows by set, by printing, by condition and by whether a listing carries a
-                # photo, the axes are independent, and the last of them leaves no trace at all
-                # (`Photo URL` is empty in every export this project has ever read, filtered
-                # and unfiltered alike). What CAN be checked is this run's own previous
-                # export. The case below is the QUIET failure rather than the loud one:
-                # Dunsparce has a Near Mint row and a Near Mint Reverse Holofoil row, and a
-                # file carrying only the first turns it into a number the CATALOG decides.
+                # D64's delta guard refused this file: Dunsparce has a Near Mint row and a
+                # Near Mint Reverse Holofoil row, and a file carrying only the first turns it
+                # into a number the CATALOG decides (D3 rung 2). Retired 2026-09-02 (D64,
+                # amended): D65 names the scope, so the positive check is the whole guard,
+                # and the delta refused every run's FIRST fetch by construction. What the
+                # receipt keeps is the comparison — the last joined export's rows beside this
+                # one's — so the narrowing is visible without a refusal in the way.
                 source = tcgcsv.read_export(FIXTURE_EXPORT)
                 by_sku = source.by_sku()
                 thinner = home / "thinner.csv"
@@ -12909,68 +13600,46 @@ def check_export_fetch(checks: Checks) -> None:
                 )
                 stub["body"] = thinner.read_bytes()
                 status, raw, _ = fetch()
+                body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, error_code(raw)),
-                    (409, "export_narrower"),
-                    "an export that lost a printing REFUSES against the file this run was "
-                    "last joined against — and it refuses at the fetch, where the fault is "
-                    "attributable, rather than at the join where it would read as a pricing "
-                    "result",
-                )
-                message = str(
-                    (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
-                )
-                checks.ok(
-                    "rung 2" in message and DUNSPARCE_REVERSE_SKU in message,
-                    "and the refusal says which SKU went AND what losing it costs: a number "
-                    "left with one condition row is decided by that row, so a reverse holo "
-                    "with no finish claim would resolve to the normal row and list at its "
-                    "price, silently",
-                    message[:400],
+                    (status, body.get("ok")),
+                    (200, True),
+                    "an export narrower than the one this run was last joined against is "
+                    "KEPT — nothing refuses on the comparison any more, because the scope "
+                    "was named and the file is checked for that instead",
                 )
                 checks.equal(
                     len(fetched_files()),
-                    1,
-                    "the refused download is deleted, and the file the last GOOD fetch wrote "
-                    "is untouched — a refusal may not take a working export with it",
+                    2,
+                    "and different bytes get a name of their own beside the earlier file: "
+                    "the digest lookup finds identical bytes and nothing else",
                 )
-                status, raw, _ = fetch({"accept_narrower": True})
-                body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, body.get("ok"), body.get("accepted_narrower")),
-                    (200, True, True),
-                    "and it is an acknowledgement rather than a wall: an operator who "
-                    "narrowed the portal filter on purpose says so in a field, which is "
-                    "D33's gate one register down — a field a stray request does not carry",
+                    (
+                        body.get("rows"),
+                        (body.get("previous") or {}).get("pokemon", {}).get("rows"),
+                    ),
+                    (2, 3),
+                    "and the receipt states the delta the guard used to refuse on — two rows "
+                    "now against the three the last join used — as information the operator "
+                    "reads rather than a wall they press through",
                 )
 
-                # ---------------------------------------- nothing to check a first fetch against
+                # ------------------------------------ a first fetch has nothing earlier
                 stub["body"] = whole.read_bytes()
                 bare = runs.create("t7-unjoined")
                 bare.write_identifications(identifications_for(cards))
                 status, raw, _ = request(
                     port, "POST", f"/pipeline/runs/{bare.directory.name}/export", payload={}
                 )
-                checks.equal(
-                    (status, error_code(raw)),
-                    (409, "export_unverified"),
-                    "a run with no previous export has NOTHING to check a fetch against and "
-                    "says so, rather than accepting one quietly — an absence of evidence is "
-                    "not evidence, and this is the one state where the guard can say nothing",
-                )
-                status, raw, _ = request(
-                    port,
-                    "POST",
-                    f"/pipeline/runs/{bare.directory.name}/export",
-                    payload={"accept_unverified": True},
-                )
                 body = json.loads(raw or b"{}")
                 checks.equal(
-                    (status, body.get("ok"), body.get("unverified")),
-                    (200, True, ["pokemon"]),
-                    "and that acknowledgement is SEPARATE from the narrowing one, because "
-                    "they are separate sentences — and the report still says which games "
-                    "went unchecked rather than reporting them as verified",
+                    (status, body.get("ok"), body.get("previous")),
+                    (200, True, {}),
+                    "a run with no previous export reports NONE rather than refusing — a run "
+                    "directory is new per run, so `export_unverified` fired on every run's "
+                    "first fetch and cost each one an acknowledgement and a second download "
+                    "of the same file (D64, amended 2026-09-02)",
                 )
 
                 # ------------------------------ THE GATE IS WHAT PROTECTS THE CREDENTIAL
@@ -13038,7 +13707,7 @@ def check_export_fetch(checks: Checks) -> None:
                 )
 
                 # ---------------------------------------------------------- the wrong file
-                before = len(fetched_files())
+                before = fetched_files()
                 stub["body"] = (
                     Path(FIXTURE_EXPORT).parent / "riftbound_export_untouched.csv"
                 ).read_bytes()
@@ -13047,13 +13716,33 @@ def check_export_fetch(checks: Checks) -> None:
                     (status, error_code(raw)),
                     (409, "export_wrong_game"),
                     "an export for a game this run holds no card of is refused by name — the "
-                    "portal's filter pointed at the wrong product line, which is a thing to "
-                    "fix in the portal rather than a file to join against",
+                    "category this process asked for came back carrying another product "
+                    "line, which is a registry or endpoint fault rather than a file to join "
+                    "against",
                 )
                 checks.equal(
                     len(fetched_files()),
-                    before,
+                    len(before),
                     "and that refusal keeps nothing either",
+                )
+                checks.equal(
+                    fetched_files(),
+                    before,
+                    "and the files the earlier GOOD fetches wrote survive it untouched — a "
+                    "refusal deletes only what it built, never a recorded export",
+                )
+                message = str(
+                    (json.loads(raw or b"{}").get("error") or {}).get("message") or ""
+                )
+                checks.ok(
+                    "pokemon" in message
+                    and "Riftbound League of Legends Trading Card Game" in message
+                    and "Pricing tab" not in message,
+                    "and the sentence names the game that was asked for and the product line "
+                    "that arrived, and sends nobody to the Pricing tab — since D65 the "
+                    "category is named by this process, so the portal's saved filter is not "
+                    "what is wrong",
+                    message[:400],
                 )
                 # --------------------------- THE VOCABULARY THE CAPTURE SCREEN OFFERS
                 #
@@ -13146,7 +13835,7 @@ def check_export_fetch(checks: Checks) -> None:
                 stub["mode"] = "csv"
                 stub["body"] = whole.read_bytes()
                 stub["posted"] = []
-                fetch({"accept_narrower": True, "accept_unverified": True})
+                fetch()
                 sent = json.loads(
                     urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                 ) if stub["posted"] else {}
@@ -13210,7 +13899,7 @@ def check_export_fetch(checks: Checks) -> None:
                     stub["mode"] = "csv"
                     stub["body"] = whole.read_bytes()
                     stub["posted"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True, **(payload or {})})
+                    fetch(payload or {})
                     return json.loads(
                         urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
                     ) if stub["posted"] else {}
@@ -13344,7 +14033,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=one\n")
                     stub["seen"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    fetch()
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=one",
@@ -13357,7 +14046,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                     dotenv.write_text("TCGPLAYER_STORE_COOKIE=TCGAuthTicket_Production=two\n")
                     stub["seen"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    fetch()
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=two",
@@ -13369,7 +14058,7 @@ def check_export_fetch(checks: Checks) -> None:
 
                     os.environ["TCGPLAYER_STORE_COOKIE"] = "TCGAuthTicket_Production=from-env"
                     stub["seen"] = []
-                    fetch({"accept_narrower": True, "accept_unverified": True})
+                    fetch()
                     checks.equal(
                         stub["seen"][-1] if stub["seen"] else None,
                         "TCGAuthTicket_Production=from-env",
@@ -14346,6 +15035,20 @@ def check_order_ledger(checks: Checks) -> None:
             "AND POSITION 3/3 NOW HOLDS A CARD THAT WAS NEVER PULLED — a ledger storing "
             "['3/2', '3/3'] would name o4 here and send that card to the buyer",
         )
+        drawn = answers(checks, capture_server.do_orders, "GET /orders answers after the shift")
+        if drawn is not None:
+            shifted = next(order for order in drawn["orders"] if order["key"] == key)
+            checks.equal(
+                sorted(
+                    (entry["capture_id"], entry["box"], entry["index"])
+                    for entry in shifted["progress"][0]["pulled"]
+                ),
+                [("o2", 3, 1), ("o3", 3, 2)],
+                "AND THE POSITIONS THE SCREEN DRAWS FOR THE PULLED COPIES FOLLOWED THE CARDS: "
+                "joined at read time off the capture id, so o2 reads 3/1 now and o4's slot is "
+                "named for nobody — a stored position would have pointed the copies panel at "
+                "the card that inherited the slot (D36)",
+            )
         recorded = moved.ledger.recorded(key, "9191486")
         checks.equal(
             sorted(recorded.copies),
@@ -14894,10 +15597,10 @@ def check_order_screen(checks: Checks) -> None:
             )
             checks.equal(
                 sorted(by_number["OLD"]),
-                ["fulfilled", "line", "on_hand", "order", "order_key", "outstanding",
+                ["fulfilled", "line", "on_hand", "order", "order_key", "outstanding", "owed",
                  "picks", "pooled", "reason", "retired", "sku", "sold", "wanted"],
                 "and a LINE is the reason, the breakdown behind it and the copies it found "
-                "— thirteen keys, no lane and no stamp among them",
+                "— fourteen keys, no lane and no stamp among them",
             )
 
             inventory = Store().read().inventory
@@ -15020,6 +15723,31 @@ def check_order_screen(checks: Checks) -> None:
                 "POSITION. The two differ, and the response carries the FIRST: a sale moves "
                 "the box's occupancy (D58), so a receipt composed afterwards would name "
                 "where the box has closed up to rather than the slot the card came out of",
+            )
+
+        after_screen = answers(
+            checks, capture_server.do_orders, "GET /orders after the pull answers"
+        )
+        if after_screen is not None:
+            row = after_screen["resolution"]["orders"][0]["lines"][0]
+            checks.equal(
+                (
+                    row["wanted"], row["owed"], row["fulfilled"], row["outstanding"],
+                    row["reason"], sorted(pick["index"] for pick in row["picks"]),
+                ),
+                (3, 2, 2, 0, "resolved", [2, 3]),
+                "THE RESOLVER IS ASKED FOR WHAT IS STILL OWED. One of three is recorded, so "
+                "the line wants two more, finds two and is `resolved` — not `short` with a "
+                "third pick the buyer is not owed. `wanted` stays the order's quantity and "
+                "`owed` is the ledger's; before this the resolver was handed the raw quantity "
+                "and over-allocated against every other order for the SKU",
+            )
+            checks.equal(
+                after_screen["orders"][0]["progress"][0]["pulled"],
+                [{"capture_id": "p1", "box": 3, "index": 1}],
+                "AND THE PULLED COPY'S POSITION IS JOINED AT READ TIME off its capture id — "
+                "composed for this answer and stored nowhere (D36) — so the copies panel can "
+                "mark the slot a pulled card came out of",
             )
 
         refusal(
@@ -16754,12 +17482,563 @@ def check_shipping_routes(checks: Checks) -> None:
                 os.environ[name] = value
 
 
+def check_order_fetch_route(checks: Checks) -> None:
+    """`POST /orders/fetch` in both of its bodies (D91), against canned pages and no socket.
+
+    THE FIRST ROUTE-LEVEL COVERAGE THIS ROUTE HAS HAD. `check_shipping_routes`' T3 block proves
+    the transport's pieces — the projection, the body builder, the refusal codes — and nothing
+    proved that `do_order_fetch` maps the transport's dict into the body `do_order_ingest`
+    accepts; that contract lived in two docstrings. It is asserted here by feeding one route's
+    answer to the other. And the reason the route has two bodies is asserted as a measurement:
+    a window larger than the cap is walked whole and refused nowhere, because the cap counts
+    DETAIL calls (D91) — until it did, the owner's 370-order window had never returned an order.
+
+    NO SOCKET. `urllib.request.build_opener` answers canned pages, the seam the T3 block uses,
+    because this suite runs on the Stop hook and a case that reached a third party would put a
+    stranger's uptime on the path that decides whether work is done. The cookie is this block's
+    own fixture, read through `envfile.get_live` off a temp file, for `check_export_fetch`'s
+    reason: an earlier `load()` over a real `.env` would otherwise hand the stub the operator's
+    session.
+    """
+    checks.note("")
+    checks.note("ORDER FETCH — POST /orders/fetch, two bodies, no socket (D91)")
+
+    cookie = "TCGAuthTicket_Production=t7-fetch-not-a-session; other=1"
+    dotenv = Path(tempfile.gettempdir()) / "t7-order-fetch.env"
+    dotenv.write_text(
+        f"TCGPLAYER_STORE_COOKIE={cookie}\nPKMNSCAN_TCG_SELLER_KEY=a2ffc195\n",
+        encoding="utf-8",
+    )
+    env_keys = ("PKMNSCAN_TCG_ORDERS_URL", "TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY")
+    previous = {name: os.environ.get(name) for name in env_keys}
+    env_before = (envfile.ENV_FILE, set(envfile._from_file), envfile._loaded)
+    envfile.ENV_FILE = dotenv
+    envfile._from_file.clear()
+    envfile._loaded = False
+
+    # SIXTY ORDERS IN THREE STATUSES: three search pages of 25, and more than any cap this
+    # block will set. The strings are the API's own spelling as seen on the owner's account.
+    statuses = ["Shipped"] * 40 + ["Ready to Ship"] * 15 + ["Cancelled"] * 5
+    window = [
+        {
+            "orderNumber": f"A2FFC195-{at:06X}-{at % 7:05d}",
+            "orderDate": f"2026-08-{(at % 28) + 1:02d}",
+            "orderStatus": status,
+            "buyerName": "Buyer Placeholder",
+        }
+        for at, status in enumerate(statuses, start=1)
+    ]
+    detailed: list = []
+
+    class _Reply:
+        """What `_open` reads off an opener: a status, headers, and a body."""
+
+        def __init__(self, payload) -> None:
+            self.status = 200
+            self.headers = {"Content-Type": "application/json"}
+            self._body = json.dumps(payload).encode("utf-8")
+
+        def read(self, size=-1):  # noqa: ARG002 — the opener's signature
+            return self._body
+
+    class _Canned:
+        """An opener answering search pages and details out of `window`, recording each."""
+
+        def __init__(self) -> None:
+            self.requests: list = []
+
+        def open(self, request, data=None, timeout=None):  # noqa: A003, ARG002
+            self.requests.append(request)
+            url = request.full_url
+            if "/orders/search" in url:
+                body = json.loads(request.data.decode("utf-8"))
+                frm, size = int(body["from"]), int(body["size"])
+                return _Reply({"totalOrders": len(window), "orders": window[frm : frm + size]})
+            asked = url.rsplit("/", 1)[1].split("?")[0]
+            match = next(entry for entry in window if entry["orderNumber"] == asked)
+            detailed.append(asked)
+            return _Reply(
+                {
+                    "orderNumber": asked,
+                    "createdAt": match["orderDate"],
+                    "status": match["orderStatus"],
+                    "buyerName": "Buyer Placeholder",
+                    "shippingAddress": {"line1": "101 Example St", "city": "Springfield"},
+                    "paymentType": "Visa",
+                    "products": [
+                        {"skuId": 9191486, "quantity": 2, "name": "Moonfall", "unitPrice": 11.88}
+                    ],
+                }
+            )
+
+    canned = _Canned()
+    real_opener = urllib.request.build_opener
+    try:
+        for name in ("TCGPLAYER_STORE_COOKIE", "PKMNSCAN_TCG_SELLER_KEY"):
+            os.environ.pop(name, None)
+        os.environ["PKMNSCAN_TCG_ORDERS_URL"] = "http://127.0.0.1:1"
+        checks.equal(
+            envfile.get_live("TCGPLAYER_STORE_COOKIE"),
+            cookie,
+            "the reader answers this block's own fixture cookie and not the operator's",
+        )
+        urllib.request.build_opener = lambda *args, **kwargs: canned
+
+        with isolated_home():
+            # ---- 1. the preview: the pages walked whole, nothing detailed, nothing written
+            preview = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True}),
+                "the preview body answers",
+            )
+            if preview is not None:
+                checks.equal(
+                    sorted(preview),
+                    ["by_status", "range", "total", "writes_nothing"],
+                    "the preview's key set, whole",
+                )
+                checks.equal(
+                    preview["total"],
+                    60,
+                    "A WINDOW LARGER THAN THE CAP IS WALKED WHOLE AND REFUSED NOWHERE. The cap "
+                    "counts detail calls and not orders in the window (D91) — until it did, the "
+                    "owner's 370-order window answered `order_too_many` on every press and this "
+                    "route had never handed the ledger an order",
+                )
+                checks.equal(
+                    preview["by_status"],
+                    [
+                        {"status": "Shipped", "count": 40, "known": 0},
+                        {"status": "Ready to Ship", "count": 15, "known": 0},
+                        {"status": "Cancelled", "count": 5, "known": 0},
+                    ],
+                    "counted by the STRING the wire returned, largest first — no status "
+                    "vocabulary lives on this side of the wire, and which of these means "
+                    "'needs picking' is the operator's tick",
+                )
+                checks.equal(
+                    [request.get_method() for request in canned.requests],
+                    ["POST", "POST", "POST"],
+                    "three search pages of 25 and NOT ONE detail request",
+                )
+                checks.equal(detailed, [], "no order was detailed by a preview")
+                checks.ok(
+                    cookie not in json.dumps(preview) and "Buyer" not in json.dumps(preview),
+                    "and neither the credential nor a buyer is in the answer",
+                )
+            checks.equal(
+                capture_server.do_orders()["orders"],
+                [],
+                "the preview WROTE NOTHING — the ledger is still empty",
+            )
+
+            # ---- 2. the fetch: only the ticked status, ingest-shaped, accepted verbatim
+            del canned.requests[:]
+            fetched = answers(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"statuses": ["Ready to Ship"], "skip_known": True}
+                ),
+                "the fetch body answers",
+            )
+            if fetched is not None:
+                checks.equal(
+                    sorted(fetched),
+                    ["detailed", "matched", "orders", "remaining", "skipped_known"],
+                    "the fetch's key set, whole: the ingest body and the four counts",
+                )
+                checks.equal(
+                    (
+                        fetched["matched"],
+                        fetched["skipped_known"],
+                        fetched["detailed"],
+                        fetched["remaining"],
+                    ),
+                    (15, 0, 15, 0),
+                    "fifteen matched the ticked status; all fifteen detailed, none skipped, "
+                    "none left over",
+                )
+                checks.equal(
+                    len(detailed),
+                    15,
+                    "EXACTLY the ticked orders were detailed — the forty shipped and the five "
+                    "cancelled cost no request, which is the whole saving",
+                )
+                checks.equal(
+                    sorted(fetched["orders"][0]),
+                    ["lines", "number", "placed_at", "source", "status"],
+                    "each order is the ingest's shape, key set whole",
+                )
+                checks.equal(
+                    fetched["orders"][0]["lines"],
+                    [{"sku": "9191486", "quantity": 2, "name": "Moonfall", "unit_price": "11.88"}],
+                    "and each line is the ingest's spelling, the SKU coerced to a string",
+                )
+                ingested = answers(
+                    checks,
+                    lambda: capture_server.do_order_ingest({"orders": fetched["orders"]}),
+                    "AND THE INGEST ACCEPTS THE FETCH'S ANSWER VERBATIM — the contract both "
+                    "routes' docstrings state, asserted by feeding one to the other",
+                )
+                if ingested is not None:
+                    checks.equal(
+                        (ingested["added"], ingested["total"]),
+                        (15, 15),
+                        "fifteen orders landed in the ledger",
+                    )
+
+            # ---- 3. the delta: known at this status is skipped; a moved status is detailed again
+            del canned.requests[:]
+            del detailed[:]
+            again = answers(
+                checks,
+                lambda: capture_server.do_order_fetch(
+                    {"statuses": ["Ready to Ship"], "skip_known": True}
+                ),
+                "the second press answers",
+            )
+            if again is not None:
+                checks.equal(
+                    (
+                        again["matched"],
+                        again["skipped_known"],
+                        again["detailed"],
+                        again["remaining"],
+                        again["orders"],
+                    ),
+                    (15, 15, 0, 0, []),
+                    "THE LEDGER IS THE DELTA: all fifteen are held at this status, so the second "
+                    "press details nothing and pays three search pages",
+                )
+                checks.equal(len(canned.requests), 3, "three requests, all search pages")
+            preview_after = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True}),
+                "the preview after an ingest answers",
+            )
+            if preview_after is not None:
+                row = next(
+                    entry for entry in preview_after["by_status"]
+                    if entry["status"] == "Ready to Ship"
+                )
+                checks.equal(
+                    row["known"],
+                    15,
+                    "and the preview's `known` is the same compare the delta makes — what it "
+                    "says the ledger holds is exactly what the fetch will skip",
+                )
+            moved = window[40]
+            moved["orderStatus"] = "Shipped"
+            del detailed[:]
+            third = answers(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": ["Shipped"], "skip_known": True}),
+                "a fetch of the shipped status answers",
+            )
+            if third is not None:
+                checks.equal(
+                    third["detailed"],
+                    41,
+                    "AN ORDER WHOSE STATUS MOVED IS DETAILED AGAIN, beside the forty never "
+                    "fetched — how a shipped order's new word reaches the ledger without a "
+                    "full re-fetch",
+                )
+                checks.ok(
+                    moved["orderNumber"] in detailed,
+                    "the moved order is among the detailed",
+                    f"detailed {len(detailed)}",
+                )
+            moved["orderStatus"] = "Ready to Ship"
+
+            # ---- 4. the cap counts detail calls, and the leftover is counted rather than dropped
+            del detailed[:]
+            capped = order_transport.fetch_open_orders(
+                "LastThreeMonths", statuses=["Shipped"], limit=10
+            )
+            checks.equal(
+                (capped.total, capped.matched, capped.detailed, capped.remaining),
+                (60, 40, 10, 30),
+                "A LIMIT OF TEN OVER FORTY MATCHES DETAILS TEN AND REPORTS THIRTY REMAINING. The "
+                "window of sixty is not refused; the drop is loud and finite, and the next press "
+                "picks the thirty up because the ledger will then know these ten",
+            )
+            checks.equal(len(detailed), 10, "ten detail requests and no more")
+
+            # ---- 5. the refusals
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({}),
+                "statuses_required",
+                "a body naming no status is refused rather than detailing the window — the "
+                "one-press fetch is the thing that never worked",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": []}),
+                "statuses_required",
+                "an empty tick list is the same refusal",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": True, "statuses": ["Shipped"]}),
+                "fields_conflict",
+                "the two bodies do not mix",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"statuses": ["Shipped"], "page_size": 100}),
+                "field_not_settable",
+                "THE PAGE SIZE AND THE CAP ARE STILL NOT THE CLIENT'S — `_reject_unknown` "
+                "refuses by name, so no page can raise this account's request budget",
+            )
+            refusal(
+                checks,
+                lambda: capture_server.do_order_fetch({"preview": "yes"}),
+                "preview_invalid",
+                "a stringified flag is refused rather than read as true",
+            )
+    finally:
+        urllib.request.build_opener = real_opener
+        envfile.ENV_FILE, restore_from_file, envfile._loaded = env_before
+        envfile._from_file.clear()
+        envfile._from_file.update(restore_from_file)
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        dotenv.unlink(missing_ok=True)
+
+
+def check_order_fill(checks: Checks) -> None:
+    """`POST /orders/fill` — the envelope: every line of one order in one transaction, and its
+    undo. The order walk's one write.
+
+    The owner's failure at the drawer was moving on to the next card and only then wondering
+    whether the last one was marked sold. So the walk writes nothing per card, and this route
+    records the whole envelope on one press — every copy still aimed by its own `capture_id`
+    (D36), the whole thing refused if one target is wrong, the whole thing reversible in one
+    press. D29's validate-all-then-write-all at envelope scale, through the same two phases
+    `/orders/pull` uses, lifted into `_prepare_targets` and `_ledger_pull` so the aim check is
+    one implementation behind both doors.
+    """
+    checks.note("")
+    checks.note("ORDER FILL — POST /orders/fill, the envelope in one transaction")
+
+    def target(box: int, index: int, capture_id: str) -> dict:
+        return {"box": box, "index": index, "capture_id": capture_id}
+
+    def stock(box: int, count: int, sku: str, prefix: str) -> None:
+        for at in range(1, count + 1):
+            capture_server.do_capture(
+                {
+                    "box": box,
+                    "capture_id": f"{prefix}{at}",
+                    "image": base64.b64encode(
+                        b"\xff\xd8\xff" + bytes([at]) * 64
+                    ).decode("ascii"),
+                }
+            )
+        with Store().write() as snapshot:
+            for at in range(1, count + 1):
+                snapshot.inventory.record_identification(
+                    f"{box}/{at}", name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"{box}/{at}"].sku = sku
+
+    with isolated_home():
+        stock(3, 3, "9191486", prefix="a")
+        stock(4, 2, "9199579", prefix="b")
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("9191486").set(master.LIVE, 3)
+        capture_server.do_order_ingest(
+            {
+                "orders": [
+                    {
+                        "source": "TCGplayer",
+                        "number": "E-1",
+                        "placed_at": "2026-09-01T10:00:00.000+00:00",
+                        "lines": [
+                            {"sku": "9191486", "quantity": 2, "name": "Moonfall"},
+                            {"sku": "9199579", "quantity": 1, "name": "Brutalizer"},
+                        ],
+                    }
+                ]
+            }
+        )
+        key = order_store.order_key("TCGplayer", "E-1")
+        envelope = {
+            "source": "TCGplayer",
+            "number": "E-1",
+            "lines": [
+                {"sku": "9191486", "targets": [target(3, 1, "a1"), target(3, 2, "a2")]},
+                {"sku": "9199579", "targets": [target(4, 1, "b1")]},
+            ],
+        }
+
+        # ---- 1. one refused target refuses the whole envelope, and line one is not written
+        wrong = json.loads(json.dumps(envelope))
+        wrong["lines"][1]["targets"][0]["capture_id"] = "not-the-card-on-screen"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(wrong),
+            "fill_entry_refused",
+            "ONE REFUSED TARGET REFUSES THE WHOLE ENVELOPE — a mis-aimed copy on line two "
+            "is answered as one refusal naming the line and the position",
+        )
+        snapshot = Store().read()
+        checks.equal(
+            (
+                snapshot.ledger.recorded(key, "9191486").fulfilled,
+                snapshot.inventory.cards["3/1"].state,
+                snapshot.inventory.cards["3/2"].state,
+            ),
+            (0, master.IDENTIFIED, master.IDENTIFIED),
+            "and line one's two good targets were NOT written — the envelope is one "
+            "transaction, so a half-recorded envelope cannot exist",
+        )
+
+        # ---- 2. the fill
+        filled = answers(
+            checks, lambda: capture_server.do_order_fill(envelope), "the envelope fills"
+        )
+        if filled is not None:
+            checks.equal(
+                sorted(filled),
+                ["complete", "lines", "order_key", "places", "sales", "undone"],
+                "the answer's key set, whole",
+            )
+            checks.equal(
+                (
+                    filled["complete"],
+                    filled["undone"],
+                    [(row["sku"], row["newly"], row["recorded"], row["outstanding"])
+                     for row in filled["lines"]],
+                ),
+                (True, False, [("9191486", 2, 2, 0), ("9199579", 1, 1, 0)]),
+                "three copies over two lines recorded on ONE press, and the order is complete",
+            )
+            checks.equal(
+                [place["label"] for place in filled["places"]],
+                ["Box 3 · Section 1 · Card 1", "Box 3 · Section 1 · Card 2",
+                 "Box 4 · Section 1 · Card 1"],
+                "the PRE-WRITE places, one per target in request order across the lines — "
+                "where the operator just was, for the receipt (D58)",
+            )
+            snapshot = Store().read()
+            checks.equal(
+                [snapshot.inventory.cards[k].state for k in ("3/1", "3/2", "4/1")],
+                [master.SOLD, master.SOLD, master.SOLD],
+                "every copy is sold, in the same write as the ledger rows",
+            )
+            checks.equal(
+                snapshot.inventory.listings["9191486"].live,
+                1,
+                "and the SKU's `live` fell by the two copies that left",
+            )
+            checks.equal(
+                snapshot.ledger.unfulfilled(), [], "the order owes nothing — `unfulfilled` is empty"
+            )
+            checks.equal(
+                capture_server._Places(snapshot.inventory).of(3, 1)["label"],
+                join.departed_label(3, 1),
+                "a `_Places` built after the write reads the slot as departed — the answer "
+                "carried the label from before",
+            )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(envelope),
+            "already_sold",
+            "pressing the envelope again refuses — the ledger dedups the capture ids and "
+            "`_sell` will not sell one card twice",
+        )
+        checks.equal(
+            Store().read().ledger.recorded(key, "9191486").fulfilled,
+            2,
+            "and the refusal cost the line nothing",
+        )
+
+        # ---- 3. the undo reverses the whole envelope in one press
+        undone = answers(
+            checks,
+            lambda: capture_server.do_order_fill({"undo": True, **envelope}),
+            "the undo reverses the whole envelope",
+        )
+        if undone is not None:
+            checks.equal(
+                (
+                    undone["undone"],
+                    undone["complete"],
+                    [(row["sku"], row["newly"], row["recorded"], row["outstanding"])
+                     for row in undone["lines"]],
+                ),
+                (True, False, [("9191486", 2, 0, 2), ("9199579", 1, 0, 1)]),
+                "every line forgotten and every copy owed again, in one write",
+            )
+            snapshot = Store().read()
+            checks.equal(
+                [snapshot.inventory.cards[k].state for k in ("3/1", "3/2", "4/1")],
+                [master.IDENTIFIED, master.IDENTIFIED, master.IDENTIFIED],
+                "every copy is back on hand",
+            )
+            checks.equal(
+                snapshot.inventory.listings["9191486"].live, 3, "and `live` is back to three"
+            )
+
+        # ---- 4. an undo under the wrong line
+        answers(checks, lambda: capture_server.do_order_fill(envelope), "filled again")
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(
+                {
+                    "undo": True, "source": "TCGplayer", "number": "E-1",
+                    "lines": [{"sku": "9199579", "targets": [target(3, 1, "a1")]}],
+                }
+            ),
+            "fill_line_mismatch",
+            "AN UNDO NAMES ITS LINES AND THE LEDGER MUST AGREE — a copy sent under the wrong "
+            "SKU is refused rather than forgotten off the line that holds it",
+        )
+        checks.equal(
+            Store().read().inventory.cards["3/1"].state,
+            master.SOLD,
+            "and the copy stayed sold",
+        )
+
+        # ---- 5. the door
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(
+                {"source": "TCGplayer", "number": "E-1", "lines": []}
+            ),
+            "lines_required",
+            "an envelope of nothing is refused",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill({**envelope, "sku": "9191486"}),
+            "field_not_settable",
+            "a field from the per-line route is refused by name",
+        )
+        doubled = json.loads(json.dumps(envelope))
+        doubled["lines"][1]["sku"] = "9191486"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_fill(doubled),
+            "duplicate_line",
+            "one SKU on two lines of an envelope is refused",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
-    check_emit_bypass(checks)
+    check_emit_claim_decides(checks)
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
+    check_prices_adopt(checks)
     check_merged_emit_cap(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
@@ -16802,12 +18081,15 @@ def run() -> Result:
     check_review_stand_down(checks)
     check_review_catalog(checks)
     check_run_realignment(checks)
+    check_reused_box_refusal(checks)
     check_printed_code_profiles(checks)
     check_cli_refusals(checks)
     check_listing_commands(checks)
     check_order_resolver(checks)
     check_order_ledger(checks)
     check_order_screen(checks)
+    check_order_fetch_route(checks)
+    check_order_fill(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
     check_price_history(checks)

@@ -89,7 +89,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + port-agreement + set-hint-agreement +
-                    #   screen-freshness + ignore-check + lint + vale + typecheck.
+                    #   screen-freshness + sigil-check + ignore-check + lint + vale +
+                    #   typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
@@ -121,7 +122,6 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run first.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
                                    #   --dry-run  preview both queues, write nothing
-                                   #   --bypass   trust the finish claim over the photo (D3)
 ./pkmnscan emit     <run-dir> [<run-dir> ...]
                                    # write ONE import CSV, `import.csv`. Free, re-runnable.
                                    #   ONE PRESS WRITES ONE SPREADSHEET (D99) — across runs,
@@ -158,6 +158,9 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   pushed copies, so the cap arithmetic saw 93 live copies
                                    #   where there were 1,079.
                                    #   It moves QUANTITIES and marks no card sold (D7).
+                                   #   A reading OLDER than the store's own `live_as_of` is
+                                   #   kept, not written, and named in the report — the
+                                   #   same rule `join` applies (D87 amended 2026-09-02).
                                    #   Reachable on `#/runs`, under the run panel.
 ```
 
@@ -342,7 +345,12 @@ A screen is not finished because it compiles.
   every record to the slot its `photo_sha256` is at now, before anything reads a position.
   It refuses on an ambiguous digest, on two records carrying one digest, and on a
   digest-less record in a box that has moved; it reports a box it cannot check against its
-  photographs as unverified rather than treating its cards as gone.
+  photographs as unverified rather than treating its cards as gone. **A box whose number was
+  deleted and reused after the run is refused outright** (D36 amended) — box 1 held 53 Pokemon
+  cards on 2026-08-22 and 133 Riftbound cards since 2026-08-29 — by
+  `cli/resolve.py:refuse_reallocated`, on `store/master.py:box_disowns_run`, the rule the
+  route already withheld a box's name by (D56): `realign` reads photographs and not the store,
+  and passed such a run through as unverified onto another drawer's records.
 - **Only two columns are ever written**: `Add to Quantity`, `TCG Marketplace Price`.
   `TCGplayer Id` is never modified. Everything else round-trips byte-identical.
 - **Batch API, not sequential calls.** v1 claimed Batch and shipped real-time. Model:
@@ -429,6 +437,9 @@ A screen is not finished because it compiles.
   2026-09-02 on the owner's question). `pipeline/corpus.py` over `inventory/prices.json` holds
   every listing answer — a price, or a hold with its reason, watch and note — plus the standing
   `rule`/`basis`/`sub_threshold`. A run directory carries NO pricing answer any more.
+  **`sub_threshold` has a default — flat $0.49** (`pipeline/corpus.py:DEFAULT_SUB_THRESHOLD`;
+  D9 amended 2026-09-02), applied where the key is absent or null and written on the next
+  save, so a fresh store's first emit is not refused for want of an answer already given once.
 
   **Why it moved: a run's `decisions.json` held two different kinds of fact.** `rule`, `basis`
   and `sub_threshold` are arguably properties of the lot (D48); `overrides` and
@@ -439,9 +450,13 @@ A screen is not finished because it compiles.
   drawn as an ordinary row with no note anywhere.
 
   **The migration is `pkmnscan prices adopt` and it previews first.** Newest-wins, and it names
-  the holds a later price replaced rather than counting them. **A legacy run file is never read
-  as a fallback** — that would put the duplication back on the first re-join of an old run — so
-  `join` and `emit` refuse with a sentence naming the command.
+  the holds a later price replaced rather than counting them. `--write` RETIRES each folded
+  file to `decisions.json.adopted`, and a re-adopt over answered SKUs retires without `--force`.
+  **A legacy run file is never read as a fallback** — that would put the duplication back on
+  the first re-join of an old run — so `join` and `emit` refuse UNCONDITIONALLY, before
+  anything is read or written, with a sentence naming `prices adopt --write`. That refusal was
+  gated on an EMPTY corpus until 2026-09-02, and eight files on the owner's store sat ignored
+  behind it.
 
   **What is per-run still: a POLICY override**, `Corpus.overrides`, for the lot that genuinely
   wants its own `sub_threshold`. Nothing writes one today; D86 names that as a reopening
@@ -789,6 +804,10 @@ D86  The pricing answer is one file for the store, and the worklist spans runs
 D87  The reconcile is store-wide, and what it writes is `live`
 D88  The store of record is SQLite, and a write is one transaction
 D89  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
+D90  The envelope is the unit of the write, and an order drives the walk as a mode of the inventory screen
+D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
+D92  A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
+D93  The copies panel is the picker, and a full line refuses the take
 D94  Banchi is the product's name, and `--bn-*` is the vocabulary every screen speaks
 D95  The shell is a rail, a palette and a reference sheet, and the Fulfiller's crash has no door out
 D96  The screens answer to the owner's interview, and main's history is not the authority
@@ -797,10 +816,11 @@ D98  The cheap-card figure is the control, the floor choice is retired, and a ru
 D99  The cut-off is a figure the operator sets, and one press writes one spreadsheet
 ```
 
-**D90 to D93 are MAIN's and are not in this tree yet.** They arrive with the merge: the envelope
-walk, the two-press fetch, the card-number sigil and the copies picker. This branch's own entries
-start at D94 for that reason, and D99 is here rather than at D90 because main took that number
-first — the rule is renumber your own, never another's.
+**D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
+without being adopted: the envelope walk and the copies picker were declined in favour of this
+product's own per-copy walk and copy map, and the card-number sigil is deferred. D96 carries the
+owner's reasoning for each. **D99 is numbered where it is because main took D90 while this branch
+was open** — the rule is renumber your own, never another's.
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
 - `docs/DEBTS.md` — known gaps in the verification tooling, deliberately unfixed. Read it
@@ -823,10 +843,14 @@ first — the rule is renumber your own, never another's.
   NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. **Its T6 — an order DRIVING the inventory walk, so the screen advances
-  from card to card as each copy is pulled — is RECORDED and NEITHER, on the owner's want of
-  2026-08-30.** It is a second form of step 11 rather than a fifteenth step; §3 carries the
-  three determinations, of which the one that bites is that the walk's control has to post the
-  pull and not the sale. Not `docs/specs/order-flow.md`, the sell path.
+  from card to card as each copy is pulled — is BUILT as of 2026-09-02 (D90), and the UNIT OF
+  THE WRITE is the envelope rather than the card.** One press per order records every copy in
+  it as pulled and sold; the walk itself writes nothing per card, and in order mode the next
+  order is not offered until that press has landed. It is a second form of step 11 rather than
+  a fifteenth step and gets no build-order row; §3 carries the three determinations, of which
+  the one that bites is that the walk's control has to post the pull and not the sale. Its own
+  open question — whether the queue survives a reload — is answered by the route parameter.
+  Not `docs/specs/order-flow.md`, the sell path.
 - `docs/specs/code-cards.md` — the code-card track end to end: the QR decode (BUILT, and
   measured at 140/140 physically-possible frames with zero mis-reads), the ledger (BUILT),
   the product claim that retires C2's OCR (BUILT), and the channel decision (RECORDED, and

@@ -109,6 +109,7 @@ function line(over: Partial<ResolvedLine> = {}): ResolvedLine {
     sku: SKU,
     reason: 'resolved',
     wanted: 1,
+    owed: 1,
     fulfilled: 1,
     outstanding: 0,
     on_hand: 1,
@@ -145,7 +146,7 @@ function order(over: Partial<OrderRow> = {}): OrderRow {
     open: true,
     lines: [line().line],
     progress: [
-      { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null },
+      { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null },
     ],
   }
   return { ...base, ...over }
@@ -189,7 +190,7 @@ function oneOpenOrder(): OrdersPayload {
  */
 async function open(
   page: Page,
-  options: { orders?: OrdersPayload; pull?: unknown } = {},
+  options: { orders?: OrdersPayload; pull?: unknown; preview?: unknown; fetched?: unknown } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
 
@@ -203,6 +204,48 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(options.pull ?? { undone: false, order_key: '', sku: '', newly: 1, recorded: 1, outstanding: 0, places: [], sales: [] }),
+    })
+  })
+
+  /* THE FETCH ROUTE, IN BOTH BODIES (D91). Registered before `/orders$` like every write-shaped
+     route here: the read regex is the looser one. A preview body answers the window by status; a
+     statuses body answers the ingest-shaped orders plus the four counts. Recorded, not performed
+     — nothing here reaches TCGplayer, and nothing may: this file runs against whatever real
+     server is listening on this checkout's port. */
+  await page.route(/\/orders\/fetch$/, async (route) => {
+    const body = route.request().postDataJSON() as { preview?: boolean }
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        body.preview === true
+          ? (options.preview ?? {
+              range: 'LastThreeMonths',
+              total: 370,
+              by_status: [
+                { status: 'Shipped', count: 280, known: 0 },
+                { status: 'Cancelled', count: 88, known: 0 },
+                { status: 'Ready to Ship', count: 2, known: 0 },
+              ],
+              writes_nothing: true,
+            })
+          : (options.fetched ?? {
+              orders: [
+                {
+                  source: 'TCGplayer',
+                  number: ORDER_NUMBER,
+                  placed_at: '2026-08-30',
+                  status: 'Ready to Ship',
+                  lines: [{ sku: SKU, quantity: 1, name: 'Volcanion', unit_price: '11.88' }],
+                },
+              ],
+              matched: 2,
+              skipped_known: 0,
+              detailed: 2,
+              remaining: 0,
+            }),
+      ),
     })
   })
 
@@ -499,3 +542,79 @@ test('a paste is projected before it is sent, and what was dropped is named', as
   await expect(dropped).toContainText('shippingAddress')
   await expect(dropped).toContainText('email')
 })
+
+/* -------------------------------------------------------------------------------------- 8 */
+
+/* THREE OF MAIN'S CASES ARE DELETED HERE, WITH THE FEATURES THEY COVERED (D96).
+
+   `the fetch is two presses: the window by status, then only the ticked statuses (D91)` — the
+   owner ruled the two-press flow out: the press asks and takes in the same gesture. D91's real
+   requirement, that somebody NAME the statuses rather than the server guess them, is kept: the
+   single press reads them off the preview and sends back exactly what came out. The case that
+   survives is the one below, over the cap and what a press leaves behind.
+
+   `every open order offers the walk, and the header offers all of them at once` and `a ledger
+   with nothing open offers no walk at all` — both assert the entry points into D90's envelope
+   walk on `#/inventory?order=`, a screen mode this product does not draw. They went with
+   `order-walk.spec.ts` and for its reason: a spec that can never pass is not coverage.
+
+   All three are in main's history and come back whole if the walk is ever built here. */
+
+
+
+/* -------------------------------------------------------------------------------------- 9 */
+
+test('a fetch the cap cut short says how many it left, and an empty one still re-reads', async ({
+  page,
+}) => {
+  const wire = await open(page, {
+    fetched: { orders: [], matched: 130, skipped_known: 30, detailed: 0, remaining: 100 },
+  })
+  const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
+  const mounted = reads()
+  /* The way in is the header's control, as every other case on this screen opens it. */
+  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  /* ONE PRESS, DRIVEN AS ONE. Main reached this state through a status step — check, tick, fetch
+     — and the owner ruled that step out. What the press does underneath is still two calls, and
+     the assertion below is what keeps the second one honest: the statuses it sends are the ones
+     the preview answered, never a list this screen composed. */
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length)
+    .toBe(2)
+  const asked = wire.filter((one) => one.path.endsWith('/orders/fetch'))
+  expect((asked[0]?.body as { preview?: boolean }).preview).toBe(true)
+  expect((asked[1]?.body as { statuses?: string[] }).statuses).toEqual([
+    'Shipped',
+    'Cancelled',
+    'Ready to Ship',
+  ])
+
+  /* NOTHING TO INGEST IS NOT NOTHING TO SAY. The note names the cap's leftover as a number and
+     tells the operator the next press picks it up; and the screen re-reads the ledger anyway,
+     because "nothing new for me" and "nothing moved" are different facts. */
+  /* THE COUNTS MOVED OUT OF THE PASTE NOTE AND INTO A RECEIPT OF THEIR OWN. Same figures, same
+     rule about absence — a clause is drawn only where its number is real, because a rendered
+     `0 remaining` is a claim this wire cannot always make. */
+  await expect(page.locator('.orders-receipt')).toContainText('100 remaining')
+  await expect(page.locator('.orders-receipt')).toContainText('30 already in the ledger')
+  expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
+  await expect.poll(reads).toBe(mounted + 1)
+})
+
+/* -------------------------------------------------------------------------------------- 10
+ *
+ * THE WAY INTO THE WALK, ASSERTED WHERE IT IS DRAWN. `app/tests/order-walk.spec.ts` enters every
+ * one of its cases by navigating the URL, so until this case existed the two links on this screen
+ * were rendered by the app and asserted by nothing — the exact shape of CLAUDE.md's route-is-not-
+ * a-feature rule, one register down: the capability was reachable and nothing proved it.
+ *
+ * THEY ARE `<a href>` AND NOT BUTTONS, which is what makes middle-click, Cmd-click and the
+ * keyboard work; the href is the whole handoff (D49's argument for `#/pricing?run=`), so asserting
+ * the string IS asserting the mechanism. The key is percent-encoded because `source:number`
+ * carries a colon. */
+
+
+/* -------------------------------------------------------------------------------------- 11 */
+

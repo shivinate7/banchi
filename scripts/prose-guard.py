@@ -55,12 +55,24 @@ MIN_RULING_CHARS = 12
 MAX_RULINGS = 3
 
 # Exactly scripts/decision-context.py's heading regex. The em-dash separator is the half
-# scripts/docs-audit.py does NOT require — its roster regex is `^##\s+(D[1-9][0-9]?)\b` —
+# scripts/docs-audit.py does NOT require — its roster regex is `^##\s+(D[1-9][0-9]{0,2})\b` —
 # so a heading rewritten to `## D57: Title` passes the audit and blanks the hook. That
 # asymmetry is the single most dangerous edit this rewrite can make, and it is why this
 # check exists at all.
-HEADING_RE = re.compile(r"^##\s+(D[1-9][0-9]?)\s*[—-]\s*(.+)$")
-ANY_H2_RE = re.compile(r"^##\s+(D[1-9][0-9]?)\b")
+#
+# THREE DIGITS SINCE 2026-09-02, and this file is why the widen could not stop at
+# scripts/docs-audit.py. Capped at two, both patterns below stop matching at the hundredth
+# entry — and `check_structure` then reports nothing wrong with a file it cannot read, so
+# the audit's `decision structure` row goes green over an entry count that is not the file's.
+# Measured before the fix: a three-digit heading appended to docs/DECISIONS.md left that row
+# reporting "92 entries" over a file holding 93. The bound is docs-audit's `_ID_DIGITS`,
+# spelled out here rather than imported because that script imports THIS one.
+#
+# THE CEILING IS WRITTEN AS A WORD AND NEVER AS AN ID, here and in scripts/docs-audit.py:
+# this file is scanned for citations, so an id past the end of docs/DECISIONS.md is a
+# dangling one wherever it is written, comment or not.
+HEADING_RE = re.compile(r"^##\s+(D[1-9][0-9]{0,2})\s*[—-]\s*(.+)$")
+ANY_H2_RE = re.compile(r"^##\s+(D[1-9][0-9]{0,2})\b")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 # Fenced blocks are lifted out BEFORE inline backticks are read, and this was a real
 # defect rather than a refinement. The inline pattern is `` `([^`]+)` ``, so a ``` fence
@@ -217,7 +229,7 @@ def check_budget(path: Path, budget: int) -> List[Finding]:
 FACT_PATTERNS: Dict[str, str] = {
     "code": r"`([^`]+)`",
     "paths": r"\b[\w./-]+\.(?:py|tsx|ts|css|md|json|csv|sh|txt)\b",
-    "decisions": r"\bD\d{1,2}\b",
+    "decisions": r"\bD\d{1,3}\b",
     "measures": r"\b\d[\d,.]*\s?(?:x|px|%|ms|KB|MB|GB|s)\b",
     "dates": r"\b20\d\d-\d\d-\d\d\b",
 }

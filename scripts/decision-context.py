@@ -82,7 +82,7 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
             gists[current] = (title, pick_rulings(bolds))
 
     for line in read(DECISIONS_PATH).splitlines():
-        heading = re.match(r"^##\s+(" + prefix + r"[1-9][0-9]?)\s*[—-]\s*(.+)$", line)
+        heading = re.match(r"^##\s+(" + prefix + r"[1-9][0-9]{0,2})\s*[—-]\s*(.+)$", line)
         if heading:
             store()
             current, title, bolds = heading.group(1), heading.group(2).strip(), []

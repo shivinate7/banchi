@@ -137,6 +137,11 @@ function loneCopy(row: Row): SearchCopy | null {
     key: row.key,
     state: row.card.state,
     state_at: row.card.state_at,
+    /* D90's aim key, carried here too. `GET /search` sends one per copy so a pull can be aimed
+       without walking to the card first; a copy built locally from an inventory row has the same
+       fact on its card and must pass it on, or this one copy is the only one in the product that
+       cannot be aimed at. */
+    capture_id: row.card.capture_id,
     has_photo: row.card.photo !== null,
     place,
   }

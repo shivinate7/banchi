@@ -91,8 +91,8 @@ runs/<YYYY-MM-DD>-<label>-<nn>/
   manifest.json         Inputs: capture dir, export path + mtime + sha256, prompt
                         fingerprint, flags, batch ids, cost.
   identifications.json  What this run read, before caching.
-  decisions.json        The pricing decision. Written by join, edited by you (or the
-                        app at step 7), read by emit.
+  decisions.json.adopted  A pre-D86 answer file, folded by `prices adopt` and retired.
+                        Nothing reads it; the live answers are `inventory/prices.json`.
   report.txt            The join report, both directions, verbatim.
   import.csv            THE import file — one press, one spreadsheet (D99). Across
                         games and across the listed/sub-threshold split.
@@ -327,20 +327,22 @@ short-circuit in front of it, because every rung `resolve` walks infers a finish
 evidence and an answer is not an inference. It falls through to the ladder when the current
 export no longer carries that SKU, or carries it under a different Condition.
 
-**And one thing can now be switched off inside it: rung 3, per run, by `--bypass`** (added
-2026-08-24; D3 amended). `resolve` gains `trust_claim`, and the rule is that where a finish
-claim exists detection may not contradict it — though it may still choose inside a
-multi-member one. Nothing else moves: a card with no claim walks the identical ladder,
-`metadata_not_stocked` and `no_catalog_row` still refuse, and a bypassed card resolves at
-rung 1 carrying `Resolution.bypassed` so the run can count it. The measurement that bought
-it is `docs/GATES.md`'s box-2 section — 42% of a 544-card box contradicting a claim the owner
-confirmed correct on every card.
+**Rung 3 no longer contradicts a finish claim, and the flag that used to switch that off is
+gone** (`--bypass`, added 2026-08-24; retired 2026-09-02, D3 amended). For nine days
+`resolve` took `trust_claim` and, where a finish claim existed, let detection choose inside it
+but not against it. Every run since Gate B was joined with the flag on — 256 cards, 16 of 16
+rulings to the claim, box 2's 230 disagreements all wrong — and a switch every run flips is a
+default wearing a flag. So the rule is the ladder's now: a detection outside the claimed set is
+dropped, `metadata_detection_disagreement` is retired, and `Resolution.bypassed` and the
+manifest's `bypass_detection`/`bypassed` keys went with it — old manifests keep them, unread.
+Nothing else moves: a card with no claim walks the identical ladder, and `metadata_not_stocked`
+and `no_catalog_row` still refuse.
 
-**`--dry-run` previews it and writes nothing.** It walks the ladder twice — with the flag and
-without — diffs the two queues by reason code, and returns before the first write: no queues,
-no `decisions.json`, no `report.txt`, no manifest. Walking twice is free, and a preview built
-from a different source than the write is a preview that can be wrong in the one way that
-matters, so the counts come off `entries_for` — the same function the write uses.
+**`--dry-run` previews the join and writes nothing.** It walks the ladder once, counts what
+would queue by reason code, and returns before the first write: no queues, no
+`inventory/prices.json` change, no `report.txt`, no manifest. A preview built from a different source than
+the write is a preview that can be wrong in the one way that matters, so the counts come off
+`entries_for` — the same function the write uses.
 
 **Raw reason codes, no gloss table.** `app/src/ReviewQueue.tsx` holds the only label map in
 the product and says in its own comment that nothing keeps it in step with the Python
@@ -428,27 +430,32 @@ never sneak a price under it. Floor and threshold are both `$0.40` by default. T
 `policy.threshold` (D99) — `pipeline/pricing.py:THRESHOLD` is what a store that has never
 set one reads. The **floor** is still the constant; nobody has asked for that one.
 
-### 6.3 Sub-threshold disposition — `decisions.json`
+### 6.3 Sub-threshold disposition — `inventory/prices.json` `policy.sub_threshold`, default flat $0.49 (D86; D9 amended 2026-09-02)
 
 D9 forbids the script from guessing what happens to a sub-threshold card. The decision is
-**a file, not a flag**, so the step 7 React screen becomes a nicer editor for an existing
-contract rather than a second code path.
+**a document, not a flag**, so `#/pricing` is an editor for an existing contract rather than
+a second code path.
 
-`join` writes `decisions.json` pre-filled with every sub-threshold SKU — name, market price,
-copy count, suggested price — and the run-wide choice **unset**. You edit it today; the app
-edits the same file through the capture server later. `emit` reads it and refuses to write
-if the run-wide choice is still unset.
+The answer is the store's standing policy and not a run's (D86): `pipeline/corpus.py` reads
+`policy.sub_threshold` out of `inventory/prices.json` and projects it into every run's
+`Decisions`. Where the key is absent or null the corpus applies the default, **flat $0.49**
+(`DEFAULT_SUB_THRESHOLD`), on read, and writes it on the next save — so a fresh store's first
+`emit` is not refused for want of an answer the owner has already given once. `"floor"` and a
+written flat price say what they say. The press that changes it is on `#/pricing`, and `join`
+names the standing disposition on its own `sub-threshold` line every time it runs. What `emit`
+still refuses on is an unanswered `no_market_data` card, and that rule is unchanged.
 
 ```jsonc
 {
-  "rule": "match",
-  "basis": "market",
-  "sub_threshold": null,          // "floor" | {"flat": "0.25"} — MUST be set
-  "overrides": {                  // per-SKU, works above or below threshold
-    "8823901": "0.35"
+  "version": 1,
+  "policy": {
+    "rule": "match",                    // match | undercut:PCT | markup:PCT
+    "basis": "market",                  // market | low
+    "sub_threshold": {"flat": "0.49"}   // "floor" | {"flat": "0.25"} — the default when silent
   },
-  "no_market_data": {             // never auto-priced; priced here or left unlisted
-    "8823944": null
+  "skus": {                             // one answer per SKU, for the whole store (D86)
+    "8823901": {"value": "0.35"},       // a price, above or below the threshold
+    "8823944": {"value": null, "channel": "unknown"}   // no market price: a price, or "unlisted"
   }
 }
 ```
@@ -574,10 +581,12 @@ SKUs at `pushed`, with `staged` and `live` both zero.**
 
     min(live + pushed + staged, max(live, copies not sold))
 
-- **The export is a FLOOR and cannot be argued below.** D8 and D11 put the authority in
-  `Total Quantity`, so the store may never talk the live quantity down — which is also
-  what makes a stale export harmless here, since the store's own claim is still standing
-  beside it.
+- **The NEWER reading of `live` is a FLOOR and cannot be argued below.** D8 and D11 put
+  the authority in `Total Quantity` for the moment the file was read, so the store may
+  never talk the live quantity down on an older reading — and, since 2026-09-02 (D87
+  amended), an older export may not talk it down either: `Listing.live_reading` picks
+  whichever of the store's `live_as_of` and the file's mtime is later, which is what makes
+  a stale export harmless here in both directions.
 - **The physical count is a CEILING, and it is the only thing that can correct a claim
   with no drawdown.** TCGplayer cannot be holding more copies of a SKU than this Mac owns
   and has not sold. No write, no second CSV, and no inference about whether an import
@@ -597,7 +606,9 @@ that did not land. This is the machine-checkable round trip against the real sys
 GATES.md calls the highest-value finding from Gate A.
 
 `live` is refreshed whenever `join` loads a fresh export — the `Total Quantity` column is
-already read for refill math (`SkuMatch.live_before`), so this costs nothing new.
+already read for refill math (`SkuMatch.live_before`), so this costs nothing new — and only
+where the export is the NEWER reading: one older than the store's own `live_as_of` is kept
+out, and the join report names each SKU it kept (D87 amended).
 
 Cards sitting in `staged` for more than **14 days** (configurable) are named in the run
 report — catching an import that was staged and never moved live.
@@ -611,10 +622,9 @@ report — catching an import that was staged and never moved live.
 | `--max-edge` | 1568 | image downscale, longest edge |
 | `--retry-budget` | 1 | per-card retries after a batch failure |
 | `--review-below-confidence` | `low` | `none` \| `low` \| `medium` |
-| `--bypass` | off | `join` only — rung 3 may not contradict a finish claim (D3) |
 | `--dry-run` (join) | off | preview both queues, write nothing |
 | `--basis` | `market` | `market` \| `low` |
-| `--rule` | `match` | `decisions.json`, seeded by the flag |
+| `--rule` | `match` | `inventory/prices.json` `policy.rule`, seeded by the flag on the first join of an empty corpus (D86) |
 | threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py`. The threshold is the default for a store that has never set `policy.threshold` (D99) |
 | live cap | 4 | D7, `join.LIVE_QUANTITY_CAP` |
 | cards per section | *no default* | D10 — dividers are declared, never assumed |

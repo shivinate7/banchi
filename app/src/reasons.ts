@@ -13,16 +13,16 @@
  * up as a machine string on screen rather than as a blank line.
  */
 
-/* The FOURTEEN the pipeline emits — THIRTEEN of them live in the map below, and one,
- * `metadata_detection_disagreement`, retired to `RETIRED_REASON_LABELS` on 2026-09-03 when
- * the owner dropped the question the review screen asked of it. Transcribed from the two
- * modules that emit them: seven from
+/* The THIRTEEN, transcribed from the two modules that emit them: six from
  * `pipeline/variant.py` (the D3 ladder's review reasons, including D23's
  * `rarity_claim_mismatch`) and seven from `pipeline/routing.py` (v2 §5.4's routing reasons,
  * including D35's `number_unread_name_matched`). It read "twelve, six and six" until
- * 2026-08-25, having been written before either of those two landed. docs/DESIGN.md requires each on screen as a human label with
- * the machine string small beneath it, because a friendly label alone is a second vocabulary
- * that nothing audits and a raw string alone is honest and unreadable.
+ * 2026-08-25, having been written before either of those two landed, and "fourteen, seven and
+ * seven" until 2026-09-02, when D3's amendment retired `metadata_detection_disagreement` —
+ * see `RETIRED_REASON_LABELS` below for where that one went. docs/DESIGN.md requires each on
+ * screen as a human label with the machine string small beneath it, because a friendly label
+ * alone is a second vocabulary that nothing audits and a raw string alone is honest and
+ * unreadable.
  *
  * NOTHING KEEPS THIS MAP IN STEP WITH THOSE MODULES, and pretending otherwise would be
  * worse than saying so. A TypeScript file cannot import a Python constant, and no check in
@@ -33,10 +33,11 @@
  * than as a blank line.
  *
  * The labels are still the least tested copy in the product, and Gate B narrowed that rather
- * than closing it. TWO of the fourteen have now fired against a photograph of a card:
- * `metadata_detection_disagreement`, 16 times out of 53 at Gate B, and `no_catalog_row`, which
- * box 2 left standing in the live queue — the case D35 and D37 were both written for. That is
- * two labels with evidence behind them and none at all for the other twelve. (`no_catalog_row`
+ * than closing it. TWO codes have now fired against a photograph of a card:
+ * `metadata_detection_disagreement`, 16 times out of 53 at Gate B — and retired since, because
+ * all 16 rulings went to the toggle — and `no_catalog_row`, which box 2 left standing in the
+ * live queue — the case D35 and D37 were both written for. That is one live label with
+ * evidence behind it and none at all for the other twelve. (`no_catalog_row`
  * ALSO fired 23 times at Gate B against a commons-only export and zero times against the full
  * one, which was a fact about that export rather than about the label; box 2's is not.) A label written for a code that fires weekly and one written
  * for a code that fires once a year are different pieces of copy, and after a real run the
@@ -70,27 +71,32 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
   number_unread_name_matched: 'Number unreadable, matched by name',
   /* Reachable on screen only if the route puts it in a queue. `cli/resolve.py:entries_for`
    * queues `routing.MAIN` and `routing.PARKED`, and `no_market_data` is neither — it is its
-   * own destination, priced by hand in decisions.json. Kept because docs/DESIGN.md names
-   * fourteen, and a map that quietly held thirteen would be the drift this comment is about. */
+   * own destination, priced by hand on #/pricing. Kept because docs/DESIGN.md names
+   * thirteen, and a map that quietly held twelve would be the drift this comment is about. */
   no_market_data: 'No market price',
 }
 
-/* RETIRED — a code the product no longer asks a question about. Nothing on any screen
- * generates one; the labels are kept because a QUEUE ENTRY WRITTEN BEFORE THE RETIREMENT is
- * still a file this app opens, and it should render a name rather than its machine string.
- * Read after the live map and never before it, so a code that ever comes back is live again
- * by being put back above rather than by anybody remembering this list exists.
+/* CODES THE PIPELINE NO LONGER EMITS AND THE STORE STILL HOLDS. A separate map on purpose:
+ * `make docs-audit`'s `reason codes` row reconciles `REASON_LABELS` against the two Python
+ * modules, and a retired code left in that map would be reported as a label for a string the
+ * pipeline cannot emit — which is exactly the finding it should be. But the owner's store
+ * carries 16 `answered` events under `metadata_detection_disagreement`, and the history they
+ * belong to renders the reason; the raw-string fallback would draw those as drift when they
+ * are a record. So the label says "retired", with the date, and the audit does not read
+ * this map.
  *
- * `metadata_detection_disagreement` — the finish toggle and the photograph reading each
- * other's opposite — was retired by the owner on 2026-09-03. It is the most-fired label in
- * this file (16 of 53 at Gate B) and the answer was the same row either way, which is what
- * made it a question not worth a person's attention rather than a question with no data.
- */
+ * Read AFTER the live map and never before it, so a code that ever comes back is live again
+ * by being put back above rather than by anybody remembering this list exists. */
 export const RETIRED_REASON_LABELS: Readonly<Record<string, string>> = {
-  metadata_detection_disagreement: 'Toggle and photo disagree',
+  /* D3, amended 2026-09-02: the photograph may no longer contradict a finish claim. Every one
+   * of the 16 Gate B rulings under this code went to the toggle, which is what made it a
+   * question not worth a person's attention rather than a question with no data. */
+  metadata_detection_disagreement: 'Toggle and photo disagreed (retired 2026-09-02)',
 }
 
-/** Whether a reason is one the product has stopped asking about. */
+/* Whether a reason is one the product has stopped asking about. `#/review` asks this before
+ * it draws a question: a card queued before the retirement is still in the queue and still
+ * has to be answered, but the sentence over it is the retirement rather than the question. */
 export function isRetiredReason(reason: string): boolean {
   return RETIRED_REASON_LABELS[reason] !== undefined
 }

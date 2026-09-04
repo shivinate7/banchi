@@ -68,7 +68,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 # THE ONE INTRA-PACKAGE IMPORT THIS MODULE MAKES, and it is a container rather than a disk.
 # The comment beside `BadPosition` below explains why nothing here reaches `store/files.py`;
@@ -156,6 +156,14 @@ LIVE = "live"
 # caller reaching for the old `set_state(key, LIVE)` and getting a silent per-position flag
 # back. Same guard the server's SERVER_EVENTS rely on.
 LISTING_STAGES = (PUSHED, STAGED, LIVE)
+
+# What `Listing.observe_live` says it did with a reading of `live`. `UNCHANGED` is a reading
+# equal to the stored one, whatever its age — nothing to arbitrate and nothing touched, which
+# is what keeps `reconcile --live` idempotent. `KEPT` is a reading OLDER than the store's own
+# observation, refused; `ADOPTED` is a newer one, written with the time it was taken.
+ADOPTED = "adopted"
+KEPT = "kept"
+UNCHANGED = "unchanged"
 
 # What a v1 file could carry on a card. Read by `Inventory.parse`'s migration and by nothing
 # else — never widen `check_state` with these.
@@ -269,16 +277,78 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
-def _days_since(stamp: Optional[str]) -> Optional[int]:
+def _parse_stamp(stamp: Optional[str]) -> Optional[datetime]:
+    """An ISO stamp as an aware datetime; naive is read as UTC. None on empty or garbage."""
     if not stamp:
         return None
     try:
         when = datetime.fromisoformat(stamp)
-    except ValueError:
+    except (TypeError, ValueError):
         return None
     if when.tzinfo is None:
         when = when.replace(tzinfo=timezone.utc)
+    return when
+
+
+def _days_since(stamp: Optional[str]) -> Optional[int]:
+    when = _parse_stamp(stamp)
+    if when is None:
+        return None
     return (datetime.now(timezone.utc) - when).days
+
+
+def newer_stamp(a: Optional[str], b: Optional[str]) -> Optional[bool]:
+    """True iff stamp `a` is strictly later than stamp `b`; None if either will not parse.
+
+    PARSED, NOT COMPARED AS STRINGS. `now()` writes milliseconds and `cli/runs.py:
+    describe_source` writes seconds, so `...:24+00:00` and `...:24.500+00:00` differ in a
+    character class before the offset and string order is only accidentally time order —
+    the caveat `server/pipeline_routes.py:_box_name_for` carries for the same comparison.
+    Naive stamps are read as UTC, which is what every writer in this store means.
+
+    Three answers rather than a bool, because "cannot tell" is a real outcome a caller has
+    to decide on: `Listing.live_reading` treats it as the stampless case, where the export
+    keeps the authority it has always had.
+    """
+    left, right = _parse_stamp(a), _parse_stamp(b)
+    if left is None or right is None:
+        return None
+    return left > right
+
+
+def box_disowns_run(
+    created_at: Optional[str],
+    runs_present: Iterable[str],
+    run: str,
+    ran_at: Optional[str],
+) -> bool:
+    """True iff the box under this number is a different drawer from the one `run` was over.
+
+    THE RULE `server/pipeline_routes.py:_box_name_for` HAS HELD SINCE D56, LIFTED HERE BECAUSE
+    A SECOND CALLER REFUSES ON IT. `next_box_number` allocates the lowest FREE integer (D20
+    amended), so a box that is deleted and a box that arrives later share a number, and a run
+    over the first keeps describing it: `2026-08-22-box1-03` is over 53 Pokemon cards that
+    `do_delete_box` removed on 2026-08-25, and box 1 has held 133 Riftbound cards since
+    2026-08-29. The route withholds the newcomer's name from that run; `cli/resolve.py:
+    refuse_reallocated` refuses to join it at all (D36 amended). Both decide by this function,
+    so the screen and the command cannot disagree about which drawer a run was over.
+
+    TWO CONDITIONS, BOTH REQUIRED, AND EACH RULES OUT THE OTHER'S FALSE POSITIVE:
+
+      the registry entry was made AFTER the run started
+      and the box's cards DISOWN the run — it holds some, and none of them is this run's
+
+    The stamp alone would refuse a box named after its run, which is ordinary. The card set
+    alone would refuse a fresh run over a box already holding another run's cards, since
+    `run` is written onto a card by `identify` and a live run owns none until then. An empty
+    box disowns nobody. Either stamp absent or unparseable is "cannot tell", and this
+    abstains towards the box being the run's own — the claim it can least afford to make
+    about runs it knows nothing about.
+    """
+    present = set(runs_present)
+    if not present or run in present:
+        return False
+    return newer_stamp(created_at, ran_at) is True
 
 
 @dataclass
@@ -610,10 +680,17 @@ class Listing:
     which physical copies they are is deliberately not recorded — every unsold copy of a SKU
     is equally sellable, so an address here would be a fiction the pull then has to honour.
 
-    `live` IS AN OPTIMISTIC LOCAL ESTIMATE BETWEEN RUNS, and always was. D8 and D11 put the
-    authority in the TCGplayer export's `Total Quantity`, which `./pkmnscan join` reads on
-    every run — so a sale decrementing this number is a guess that the next join corrects,
-    never a second source of truth competing with the export.
+    `live` IS THE STORE'S LAST OBSERVATION OF WHAT TCGPLAYER HOLDS, WITH THE TIME IT WAS
+    TAKEN, and it was "an optimistic local estimate between runs" until 2026-09-02 (D59 and
+    D87, amended). D8 and D11 put the authority in the TCGplayer export's `Total Quantity`,
+    and an export still corrects this number — but only where the export was READ LATER
+    than the store's own reading. Two readings of the same quantity taken at different
+    moments are not a fact and an estimate; they are two observations, and the newer one
+    wins. Measured on the owner's store: a run's recorded export, fetched fifteen minutes
+    before that run was emitted, carried a blank `Total Quantity` for every SKU it had just
+    listed, and a re-join with it — the ordinary "Join again" on `#/runs` — took the store
+    from 1,072 live copies over 406 SKUs to 700 over 266, overwriting D87's settlement.
+    `observe_live` is the one rule, and `live_as_of` is what it arbitrates on.
     """
 
     sku: str
@@ -623,6 +700,37 @@ class Listing:
     live: int = 0
     at: Optional[str] = None
     staged_at: Optional[str] = None
+    # WHEN THE `live` READING WAS TAKEN — not when this record was touched. The export
+    # file's mtime for `join` and `reconcile --live` (a fetch's mtime is its fetch time, an
+    # upload's is the file's own), and `now()` for a sale's ±1 and a D34 release, which are
+    # observations this process makes itself. `at` is stamped by every writer of every
+    # field and reads as "last touched", which is why it is not overloaded to carry this:
+    # a `set(STAGED, …)` would then forge a fresher live observation than anything made.
+    # None means NO READING YET — a record `emit` created and nothing has read `live` for —
+    # and the export then wins whatever its age, because a default is not an observation.
+    # A stored record written before the field existed has no key at all, and `from_record`
+    # reads its `at` as the observation time — which is what protects D87's settlement rows,
+    # whose `at` IS the settlement time. The two are told apart at the parse and nowhere
+    # else: absent is legacy, null is unread.
+    live_as_of: Optional[str] = None
+
+    @classmethod
+    def from_record(cls, record: dict) -> "Listing":
+        """A stored payload as a `Listing` — the ONE place a legacy row is read.
+
+        A row written before `live_as_of` existed carries no such key, and its `at` is the
+        last time anything wrote it — for D87's settlement rows the settlement itself, for
+        the rows a join or a sale last touched that reading. Materialised here rather than
+        computed in a property, because a property could not tell that row from a fresh one
+        `Inventory.listing` made a moment ago with `at=now()` and no reading at all — and
+        that one, given the same fallback, outranked every export older than its own
+        creation, including the run's recorded export on the very path D87's amendment was
+        built to close. A row that carries the key, null or not, is read as written.
+        """
+        known = _known(cls, record)
+        if "live_as_of" not in record:
+            known["live_as_of"] = record.get("at")
+        return cls(**known)
 
     @property
     def held(self) -> int:
@@ -652,13 +760,68 @@ class Listing:
         """
         return max(0, int(self.pushed)) + max(0, int(self.staged))
 
+    @property
+    def live_observed_at(self) -> Optional[str]:
+        """When the stored `live` was read. None is a record nothing has read `live` for
+        — see the field, and `from_record` for why a legacy row's `at` is not read here."""
+        return self.live_as_of
+
+    def live_reading(self, quantity: Optional[int], as_of: Optional[str]) -> int:
+        """The `live` figure to believe, given an export's reading taken at `as_of`.
+
+        THE ONE RULE, read by `cli/resolve.py:_copies_out` for the cap and by `observe_live`
+        for the store, so the two cannot disagree. `quantity` None is a SKU the export has
+        no row for: the store's reading stands, which is how D87's settlement reaches the
+        cap for every SKU a run's own export does not cover. A row with a blank cell is a
+        reading of ZERO at the file's time — the defect case — and loses to a newer one.
+
+        Ties go to the store. Both stamps are to the millisecond (`describe_source` and
+        `now()`), and an export whose mtime equals the store's stamp cannot be shown to be
+        newer; a reading that cannot be shown newer is not adopted.
+        No parseable stamp on either side — a hand-built fixture, a record nothing has
+        read `live` for yet — is the stampless case, and there the export keeps the
+        authority D8 and D11 gave it before this field existed.
+        """
+        if quantity is None:
+            return max(0, int(self.live))
+        quantity = max(0, int(quantity))
+        verdict = newer_stamp(as_of, self.live_observed_at)
+        if verdict is None or verdict:
+            return quantity
+        return max(0, int(self.live))
+
+    def observe_live(self, quantity: int, as_of: Optional[str]) -> str:
+        """Offer the store a reading of `live` taken at `as_of`. Returns what happened.
+
+        `UNCHANGED` when the reading equals the stored figure, whatever its age — nothing
+        to arbitrate, nothing touched, and `reconcile --live`'s second pass stays a no-op.
+        `KEPT` when `live_reading` prefers the store's own figure: the file is older than
+        the store's observation, and it is refused untouched. `ADOPTED` otherwise: `live`
+        takes the reading, `live_as_of` takes THE FILE'S time, and `at` takes now.
+
+        ASSIGNED DIRECTLY RATHER THAN THROUGH `set`, which stamps `live_as_of` with `now()`
+        — right for a sale this process just made, and a forgery here, where it would date
+        an export's reading to the moment it was copied in rather than the moment it was
+        taken, and outrank a later settlement it should have lost to.
+        """
+        quantity = max(0, int(quantity))
+        if quantity == max(0, int(self.live)):
+            return UNCHANGED
+        if self.live_reading(quantity, as_of) == max(0, int(self.live)):
+            return KEPT
+        self.live = quantity
+        self.live_as_of = as_of
+        self.at = now()
+        return ADOPTED
+
     def set(self, stage: str, value: int) -> int:
         """Set one stage absolutely, floored at zero. Returns the new value.
 
-        `join` reads `live` off the export and assigns it rather than nudging it, because
-        D8 and D11 put the authority there — the stored number is an estimate and the
-        export is the fact. Separate from `bump` so that a caller has to say which of the
-        two it means, and so neither has to re-stamp `at` by hand.
+        Separate from `bump` so that a caller has to say which of the two it means, and so
+        neither has to re-stamp `at` by hand. `join` and `reconcile --live` do NOT come
+        through here for `live` any more: they hold a reading with its own time and go
+        through `observe_live`. Setting `live` here is an observation THIS PROCESS is making
+        now — D34's release path, a fixture — so it is dated now.
         """
         if stage not in LISTING_STAGES:
             raise UnknownState(f"{stage!r} not in {LISTING_STAGES}")
@@ -667,10 +830,17 @@ class Listing:
         self.at = now()
         if stage == STAGED and value > 0:
             self.staged_at = self.staged_at or self.at
+        if stage == LIVE:
+            self.live_as_of = self.at
         return value
 
     def bump(self, stage: str, by: int = 1) -> int:
-        """Move one stage's count by `by`, floored at zero. Returns the new value."""
+        """Move one stage's count by `by`, floored at zero. Returns the new value.
+
+        A sale's ±1 on `live` (`server/capture_server.py:do_mark_sold`) is an observation
+        made now, so it is dated now: the store then knows more than any export fetched
+        before the sale, and `observe_live` keeps that knowledge against such a file.
+        """
         if stage not in LISTING_STAGES:
             raise UnknownState(f"{stage!r} not in {LISTING_STAGES}")
         value = max(0, int(getattr(self, stage)) + int(by))
@@ -678,6 +848,8 @@ class Listing:
         self.at = now()
         if stage == STAGED and by > 0:
             self.staged_at = self.at
+        if stage == LIVE:
+            self.live_as_of = self.at
         return value
 
     def release(self, budget: int) -> Dict[str, int]:
@@ -759,6 +931,11 @@ class Listing:
             self.staged_at = None
         if gave:
             self.at = now()
+            if gave.get(LIVE):
+                # A D34 release that reached `live` is an observation made now, like a sale.
+                # One that stopped at `pushed` or `staged` learned nothing about `live` and
+                # leaves its stamp where the last reading put it.
+                self.live_as_of = self.at
         return gave
 
 
@@ -831,8 +1008,7 @@ class Inventory:
             known = {k: v for k, v in record.items() if k in Box.__annotations__}
             boxes[str(key)] = Box(**known)
         for key, record in (payload.get("listings") or {}).items():
-            known = {k: v for k, v in record.items() if k in Listing.__annotations__}
-            listings[str(key)] = Listing(**known)
+            listings[str(key)] = Listing.from_record(record)
 
         for key, record in (payload.get("cards") or {}).items():
             known = {k: v for k, v in record.items() if k in Card.__annotations__}
@@ -854,6 +1030,9 @@ class Inventory:
                     entry.at = entry.at or card.state_at
                     if stage == STAGED:
                         entry.staged_at = entry.staged_at or card.state_at
+                    if stage == LIVE:
+                        # A v1 `live` state was a reading taken when the card wore it.
+                        entry.live_as_of = entry.live_as_of or card.state_at
             cards[key] = card
 
         # Every box a card names gets a registry entry, with NO declared layout — which is
@@ -1301,6 +1480,34 @@ class Inventory:
         """The registry entry for this box, or None. Never invents one."""
         return self.boxes.get(str(_as_position_int(number, "box")))
 
+    def box_disowns_run(self, box, run: str, ran_at: Optional[str]) -> Optional[str]:
+        """The sentence refusing `run` over `box`, or None when the box is the run's own.
+
+        `box_disowns_run` (module-level) is the rule; this reads its inputs off the store —
+        the registry entry's `created_at` and the `run` column of every card in the box, one
+        column read and no card objects (D88). The sentence names what the rule saw, because
+        the operator has to be able to check it against the `sqlite3` CLI: the entry's stamp,
+        the count, and the runs whose cards are there now. A box the registry has never seen
+        is nobody's to disown.
+        """
+        entry = self.box(box)
+        if entry is None:
+            return None
+        number = int(entry.box)
+        present = [
+            value
+            for _, (value,) in self.cards.select(("run",), box=number)
+            if isinstance(value, str) and value.strip()
+        ]
+        if not box_disowns_run(entry.created_at, present, run, ran_at):
+            return None
+        others = ", ".join(sorted(set(present)))
+        return (
+            f"box {number} was deleted and its number reused after this run (registry "
+            f"entry created {entry.created_at}, holding {len(present)} card(s) from run "
+            f"{others})"
+        )
+
     def ensure_box(self, number, *, name: Optional[str] = None) -> Box:
         """The box, creating an undeclared one if the registry has never seen it.
 
@@ -1639,7 +1846,7 @@ class Inventory:
     )
     LISTINGS = TableSpec(
         "listings",
-        parse=lambda key, record: Listing(**_known(Listing, record)),
+        parse=lambda key, record: Listing.from_record(record),
         dump=asdict,
         columns=lambda entry: {
             "condition": entry.condition,

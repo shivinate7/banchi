@@ -51,7 +51,10 @@ import type {
   RunSummary,
   IngestResult,
   OrderIngestOrder,
+  FillLine,
+  FillResult,
   OrdersFetched,
+  OrdersPreview,
   OrdersPayload,
   PullResult,
   PullTarget,
@@ -345,11 +348,15 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
  * void. Measured on the owner's store before it went: it cost 15px on every copy row in a box
  * that had ever had a sale, and it was the reason the line wrapped to three lines at all.
  *
- * A NEIGHBOUR NOTHING HAS IDENTIFIED DEGRADES TO ITS INDEX — `#41`, never a blank. Known
- * hazard, recorded rather than fixed here: `PlaceNeighbor.index` is the STORE key and D58
- * made the drawn number a count of cards, so on a box with departures those diverge and the
- * `#41` can name something that is not the slot you would count to. It is wrong the same way
- * it was before this change; widening it is a decision about what the server sends. */
+ * A NEIGHBOUR NOTHING HAS IDENTIFIED DEGRADES TO ITS SLOT — `#41`, never a blank. IT
+ * DEGRADED TO THE INDEX UNTIL D92, and this paragraph recorded that as a known hazard for
+ * two days rather than fixing it: `PlaceNeighbor.index` is the STORE key and D58 made the
+ * drawn number a count of cards, so on a box with departures those diverge and the `#41`
+ * named something that is not the slot you would count to. The note ended "widening it is a
+ * decision about what the server sends", and that is the decision D92 took — `_company` now
+ * sends `slot` beside `index`, this composes the slot, and nothing renders a bare `#` over a
+ * store key. Measured when it went: box 3 was 76 apart, and 5 of its on-hand cards carry no
+ * name, so those rows were the ones actually drawing it. */
 export type PlaceParts = {
   prev: PlaceNeighbor | null
   next: PlaceNeighbor | null
@@ -363,7 +370,7 @@ export function placeParts(place: Place | undefined): PlaceParts | null {
   if (neighbors === undefined || neighbors === null) return null
 
   const { prev, next } = neighbors
-  const name = (side: PlaceNeighbor): string => side.name ?? `#${side.index}`
+  const name = (side: PlaceNeighbor): string => side.name ?? `#${side.slot}`
 
   let said: string
   if (prev !== null && next !== null) said = `between ${name(prev)} and ${name(next)}`
@@ -1729,14 +1736,14 @@ export async function startRun(cart: readonly RunLeg[]): Promise<RunStarted> {
 }
 
 /**
- * The per-SKU pricing table for one run, with this run's answers and the last run's
- * sub-threshold choice. FREE and read-only: it creates nothing and prices nothing.
+ * The per-SKU pricing table for one run, with the corpus's answers scoped to it. FREE and
+ * read-only: it creates nothing and prices nothing.
  *
- * TWO FILES IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE. `pricing.json` and
- * `decisions.json` are both downloadable through `GET .../file` already, so a screen could
- * fetch them separately and need no server change at all — but two fetches can straddle a
- * re-join, and a table describing one join beside answers written against another is a
- * screen quietly pricing the wrong set of cards.
+ * THE TABLE AND THE ANSWERS IN ONE CALL, WHICH IS THE WHOLE REASON THIS IS A ROUTE.
+ * `pricing.json` is downloadable through `GET .../file` and the corpus has `getPricingCorpus`,
+ * so a screen could fetch them separately and need no server change at all — but two fetches
+ * can straddle a re-join, and a table describing one join beside answers written against
+ * another is a screen quietly pricing the wrong set of cards.
  *
  * Refusals worth branching on: `pricing_not_written` (the run predates the file, or has not
  * been joined — the remedy is a re-join and the message says so) and `no_such_run`.
@@ -1785,8 +1792,10 @@ export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path:
 }
 
 /**
- * Replace the corpus. Wholesale, for `putDecisions`' reason: the screen round-trips every key
- * it does not understand, so a hand-written `_note` survives a client that never heard of it.
+ * Replace the corpus. Wholesale, for D49's reason: the screen round-trips every key it does
+ * not understand, so a hand-written `_note` survives a client that never heard of it. This is
+ * the ONE pricing write in the app — the per-run `PUT .../decisions` it replaced is deleted
+ * (D86, amended 2026-09-02).
  */
 export async function putPricingCorpus(
   corpus: PricingCorpus,
@@ -1836,8 +1845,8 @@ export async function emitMerged(
  * separator. A named run is drawn whether or not the server would have chosen it — asking for
  * one has already answered the question the filter exists to ask.
  *
- * IT IS A READ AND IT SPENDS NOTHING. The write path is unchanged and still per run:
- * `putDecisions` below, once per run holding the SKU being answered.
+ * IT IS A READ AND IT SPENDS NOTHING. The write path is `putPricingCorpus` above — one
+ * document for the store, however many runs are on screen.
  */
 export async function getPricingWorklist(runs: readonly string[] = []): Promise<PricingWorklist> {
   const query = runs.map((run) => `run=${encodeURIComponent(run)}`).join('&')
@@ -1952,17 +1961,13 @@ export async function getRun(name: string): Promise<RunDetail> {
  * (D64). Free: it spends nothing, and `POST /pipeline/identify` is still the only route that
  * can. Reported separately from the join so a failure is attributable to one or the other.
  *
- * THE TWO ACKNOWLEDGEMENTS ARE NOT DEFAULTS AND MUST NOT BECOME ONE. `acceptUnverified` says
- * this run has no previous export to check against; `acceptNarrower` says this file covers
- * less than the last one and the operator means it. Sending either unasked would turn a guard
- * that refuses a silently variant-thinned export — the one that mislists a reverse holo at
- * the normal row's price — into a field nobody reads.
- *
- * Refusals worth branching on: `export_unverified` and `export_narrower`, which are the two
- * an operator can answer, and which the screen answers by calling this again with the
- * matching flag. Everything else — `tcg_cookie_missing`, `tcg_session_expired`,
- * `tcg_blocked`, `export_wrong_game` — is a `ServerError` carrying a sentence to read and no
- * control to press.
+ * EVERY REFUSAL IS A SENTENCE WITH NOTHING TO PRESS. `tcg_cookie_missing`,
+ * `tcg_session_expired`, `tcg_blocked`, `export_wrong_game` and `export_scope_incomplete`
+ * each arrive as a `ServerError` carrying a sentence to read, and each is fixed somewhere
+ * other than this screen. The two acknowledgements this once took — `acceptUnverified` and
+ * `acceptNarrower` — went with the delta guard they answered (D64, amended 2026-09-02): D65
+ * names the scope, so the file is checked for what was asked, and the receipt's `previous`
+ * says what the last join used beside what arrived.
  */
 /**
  * The real set names for a game (D65), for the capture screen's hint field.
@@ -2006,8 +2011,6 @@ export async function getExportScope(
 export async function fetchExport(
   name: string,
   options: {
-    acceptUnverified?: boolean
-    acceptNarrower?: boolean
     /** Which category to ask for. Required only where the run holds more than one game —
      *  one fetch answers for one category, because `CategoryId` is scalar in the portal. */
     game?: string
@@ -2022,8 +2025,6 @@ export async function fetchExport(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      accept_unverified: options.acceptUnverified,
-      accept_narrower: options.acceptNarrower,
       game: options.game,
       scope: options.scope,
       set_ids: options.setIds,
@@ -2042,7 +2043,10 @@ export async function runStep(
     basis?: 'market' | 'low'
     reviewBelowConfidence?: 'none' | 'low' | 'medium'
     dryRun?: boolean
-    bypass?: boolean
+    /* The emit options, on the per-run step for the same reason `emitMerged` above takes
+       them: one press writes ONE `import.csv`, and either split is asked for rather than
+       arrived at by default. `bypass` sat here until D3's amendment retired the finish
+       cross-check — there is no claim left for a flag to override. */
     listedOnly?: boolean
     splitGames?: boolean
     splitThreshold?: boolean
@@ -2059,7 +2063,6 @@ export async function runStep(
       basis: options.basis,
       review_below_confidence: options.reviewBelowConfidence,
       dry_run: options.dryRun,
-      bypass: options.bypass,
       listed_only: options.listedOnly,
       split_games: options.splitGames,
       split_threshold: options.splitThreshold,
@@ -2068,7 +2071,7 @@ export async function runStep(
 }
 
 /**
- * Where a run artefact can be downloaded. The import CSVs, the report, `decisions.json`.
+ * Where a run artefact can be downloaded. The import CSVs, the report, `pricing.json`.
  *
  * A URL rather than a fetch, because the browser's own download is what the operator wants
  * — this is the file that goes into TCGplayer's Import to Staged, and a string in a text
@@ -2077,25 +2080,6 @@ export async function runStep(
  */
 export function runFileUrl(name: string, file: string): string {
   return `${base}/pipeline/runs/${encodeURIComponent(name)}/file?name=${encodeURIComponent(file)}`
-}
-
-/**
- * D9's sub-threshold answer, which gates `emit` and nothing else.
- *
- * Replaces the whole document, because it is one file the operator is editing and a merge
- * would need this route to understand a schema it deliberately does not own — `emit` owns
- * what a disposition MEANS and refuses on it. Read the current file through `runFileUrl`
- * first; that is the same read-modify-write the run report tells a terminal user to do.
- */
-export async function putDecisions(
-  name: string,
-  decisions: Record<string, unknown>,
-): Promise<{ ok: boolean; run: string; written: string }> {
-  return (await request(`/pipeline/runs/${encodeURIComponent(name)}/decisions`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ decisions }),
-  })) as { ok: boolean; run: string; written: string }
 }
 
 /* ------------------------------------------------------------------ the code-card track */
@@ -2269,18 +2253,91 @@ export async function ingestOrders(orders: readonly OrderIngestOrder[]): Promise
  * unaltered. That is the shape's whole purpose: no adapter between the two, and the fetch
  * enters the app through the same one door the paste does.
  *
+ * TWO PRESSES SINCE D91, BECAUSE ONE NEVER WORKED ON THIS ACCOUNT: the three-month window
+ * holds 370 orders against a detail cap of 100, and the single-body fetch was refused on every
+ * press. `previewOrders` below walks the cheap search pages and counts the window by status;
+ * this call details only the `statuses` the operator ticked — the strings the preview returned,
+ * verbatim, no vocabulary on either side — and, with `skip_known`, only the orders the ledger
+ * does not already hold at that status. Past the transport's cap the rest comes back as
+ * `remaining`, and the next press picks it up.
+ *
  * `range` is one of the transport's `KNOWN_RANGES`; omit it for its default. Refusals worth
  * branching on are the transport's own codes — `order_cookie_missing`,
  * `order_seller_key_rejected` (a 403, which reads exactly like an expired session and is
  * not one: `PKMNSCAN_TCG_SELLER_KEY` is missing), `order_session_expired` — each carrying a
  * sentence naming what to fix.
  */
-export async function fetchOrders(range?: string): Promise<OrdersFetched> {
+export async function fetchOrders(options: {
+  statuses: readonly string[]
+  skip_known?: boolean
+  range?: string
+}): Promise<OrdersFetched> {
   return (await request('/orders/fetch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(range === undefined ? {} : { range }),
+    body: JSON.stringify({
+      statuses: [...options.statuses],
+      ...(options.skip_known === undefined ? {} : { skip_known: options.skip_known }),
+      ...(options.range === undefined ? {} : { range: options.range }),
+    }),
   })) as OrdersFetched
+}
+
+/**
+ * Count this account's orders by status before fetching any (D91). Writes nothing and details
+ * nothing: one search page per 25 orders in the window, and the status strings TCGplayer used,
+ * verbatim, each with how many of its orders the ledger already holds. The tick list
+ * `fetchOrders` takes is drawn from this and from nothing in this file.
+ */
+export async function previewOrders(range?: string): Promise<OrdersPreview> {
+  return (await request('/orders/fetch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(range === undefined ? { preview: true } : { preview: true, range }),
+  })) as OrdersPreview
+}
+
+/**
+ * Record a whole envelope — every line of one order — as pulled and sold, in ONE write.
+ *
+ * THE ORDER WALK'S ONE DOOR. `#/inventory`, driven by an order, writes nothing per card; the
+ * press that says the envelope is filled sends every line's copies here, each aimed by its
+ * own `capture_id`, and `POST /orders/fill` records all of them or none — one refusal names
+ * the line and the position (`fill_entry_refused`), and nothing moves. Not N calls to
+ * `pullCopy`: one SKU per call means a half-recorded envelope on the second refusal, and
+ * `undoPull` refuses `pull_spans_lines`. The answer carries the PRE-write `places` for the
+ * receipt (D58) and `complete`, the ledger's word on the whole order after the write.
+ */
+export async function fillEnvelope(
+  order: { source: string; number: string },
+  lines: readonly FillLine[],
+): Promise<FillResult> {
+  return (await fill({ source: order.source, number: order.number, lines: [...lines] })) as FillResult
+}
+
+/**
+ * Reverse a whole envelope in one write — the receipt's Undo. Unlike `undoPull`, this NAMES
+ * its lines: the screen holds what it sent, and the server refuses `fill_line_mismatch` if
+ * the ledger holds a copy under a different line than the one named.
+ */
+export async function undoEnvelope(
+  order: { source: string; number: string },
+  lines: readonly FillLine[],
+): Promise<FillResult> {
+  return (await fill({
+    undo: true,
+    source: order.source,
+    number: order.number,
+    lines: [...lines],
+  })) as FillResult
+}
+
+async function fill(body: Record<string, unknown>): Promise<FillResult> {
+  return (await request('/orders/fill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as FillResult
 }
 
 /* One route in both directions — `POST /orders/pull`, with `{"undo": true}` to reverse — and
@@ -2372,6 +2429,12 @@ export async function undoPull(targets: readonly PullTarget[]): Promise<PullResu
  * The body is the `CsvUpload` object itself and nothing more.
  */
 export async function readShippingExport(upload: CsvUpload): Promise<ShippingBatch> {
+  // NAME AND CONTENT ONLY — `modified` is `CsvUpload`'s newest field (D59/D87 amended), added
+  // for a fetched or uploaded PRICING export so `live` can be arbitrated by which reading is
+  // newer. This batch touches no disk and settles nothing against `live`; carrying the file's
+  // timestamp here would be a field this route reads for no reason, which is exactly the
+  // opsec argument above the read side of this wire ("what comes back carries no buyer" —
+  // the same discipline applies to what goes out).
   return (await request('/shipping/batches', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -163,7 +163,14 @@ class OrderLine:
         # is exactly one place it can be forgotten, and it cannot be.
         object.__setattr__(self, "sku", str(self.sku).strip())
         object.__setattr__(self, "quantity", int(self.quantity))
-        if self.quantity < 1:
+        # ZERO IS A LINE ALREADY FILLED, AND IT IS ALLOWED ON PURPOSE. The server asks this
+        # engine for what is still OWED — the ledger's outstanding, not the buyer's quantity
+        # (`capture_server._engine_order`) — so a line whose copies are all pulled arrives
+        # wanting nothing: `_Draw.line` picks none, `_reason` answers `resolved` at once, and
+        # the breakdown behind it is still counted, which is how a filled line keeps its
+        # figures on screen without a second implementation of this class. A negative
+        # quantity is still the bug it always was.
+        if self.quantity < 0:
             raise ValueError(f"an order line for {self.sku!r} wants {self.quantity} copies")
         if self.kind not in LINE_KINDS:
             raise UnknownLineKind(

@@ -1254,27 +1254,28 @@ export function Pricing() {
    *  default, which is the figure the deck is showing and the caption is naming. */
   const cheapDigits = useCallback((): string => cut, [cut])
 
-  /** THE RULE THE LOADED RUN WAS JOINED UNDER. `rule_price` on every row was computed with
-   *  it and frozen into `pricing.json`, so it is the ONE per-SKU figure this screen may draw
-   *  for a rule the server has no preset column for. Null with several runs loaded, where
-   *  there is no single join to speak for the rows. */
-  const joinedRule = useMemo(() => (run === null ? null : (work?.defaults?.[run] ?? null)), [work, run])
-
   /** What a row would list at under the standing rule, or `''` where this screen has no
    *  figure for it. THE CLIENT PERFORMS NO ARITHMETIC ON MONEY: the three presets ship a
-   *  precomputed column each, and a custom rule ships nothing until the run is re-joined —
-   *  so a custom rule that is not the join's own leaves the field EMPTY rather than drawing
-   *  the last rule's price under a label claiming this one. */
+   *  precomputed column each, so a preset the document currently names has an honest per-SKU
+   *  figure and is drawn.
+   *
+   *  A CUSTOM RULE DRAWS NOTHING, AND THAT IS THE HONEST ANSWER RATHER THAN A MISSING FEATURE.
+   *  `rule_price` was computed by the LAST JOIN and frozen into `pricing.json` (D54), and
+   *  NOTHING ON THE WIRE SAYS WHICH RULE THAT JOIN RAN UNDER — `PricingWorklist` carries the
+   *  rows, the roster and two run-wide figures, and no per-run rule among them. This read a
+   *  `work.defaults` that no route has ever sent, so the comparison it was making always came
+   *  out false; the blank it produced was right, and it is written as the rule now instead of
+   *  reached by accident. Drawing `rule_price` here would put the previous rule's price under
+   *  a label naming this one, which is the D54 staleness the presets exist to avoid. */
   const ruleFigure = useCallback(
     (sku: PricingSku): string => {
       const match = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis)
       if (match !== undefined) return sku.presets[match.key] ?? ''
+      /* No rule written at all: the join's own figure is the only rule there has been. */
       if (typeof doc?.rule !== 'string') return sku.rule_price ?? ''
-      const sameRule = joinedRule !== null && joinedRule.rule === doc.rule
-      const sameBasis = (joinedRule?.basis ?? 'market') === (doc.basis ?? 'market')
-      return sameRule && sameBasis ? (sku.rule_price ?? '') : ''
+      return ''
     },
-    [doc, joinedRule],
+    [doc],
   )
 
   /** The suggestion a row opens carrying: the cheap-card answer on a cheap row, the standing
@@ -1338,19 +1339,19 @@ export function Pricing() {
       setBook((current) =>
         current === null ? current : { ...current, policy: { ...current.policy, rule, basis: draft.basis } },
       )
-      /* The join's own rule is the only per-SKU figure on this wire, so a custom rule that is
-         not it empties the untyped fields rather than leaving the last rule's price under a
-         label claiming this one. */
-      const sameAsJoin = joinedRule !== null && joinedRule.rule === rule && (joinedRule.basis ?? 'market') === draft.basis
+      /* THE UNTYPED FIELDS GO EMPTY, AND THERE IS NO CASE WHERE THEY DO NOT. `rule_price` is
+         the figure the LAST JOIN computed and froze (D54), and nothing on this wire says which
+         rule that join ran under — see `ruleFigure` above — so a per-SKU figure drawn under a
+         custom rule would be the previous rule's price wearing this one's label. Emit prices
+         these rows; the toast below says so. */
       let onRule = 0
       for (const row of rows) {
         if (row.bucket === 'sub_threshold') continue
         if (answerFor(row) !== undefined) continue
         onRule += 1
         const input = inputs.current.get(row.sku)
-        const next = sameAsJoin ? (row.rule_price ?? '') : ''
-        if (!input || input.value === next) continue
-        input.value = next
+        if (!input || input.value === '') continue
+        input.value = ''
         flash(input)
       }
       setNote(null)
@@ -1359,12 +1360,12 @@ export function Pricing() {
         title: `Rule set · ${customShort(draft)} of ${BASIS_LABEL[draft.basis]}`,
         body:
           `${onRule} row${onRule === 1 ? '' : 's'} you have not set go out at this rule.` +
-          (sameAsJoin ? '' : ' Emit prices them — this screen has no per-row figure until the run is joined under it.'),
+          ' Emit prices them — this screen has no per-row figure until the run is joined under it.',
         icon: 'tag',
         ttlMs: 9000,
       })
     },
-    [doc, rows, answerFor, joinedRule],
+    [doc, rows, answerFor],
   )
 
   const undoLast = useCallback(() => {
@@ -3549,7 +3550,13 @@ function HoldPanel({
         </label>
       </div>
       <div className="pricing-holdpanel-actions">
-        <span className="pricing-holdpanel-fine">Every copy stays out of every import file until you release it.</span>
+        <span className="pricing-holdpanel-fine">
+          {/* A HOLD IS ONE ANSWER FOR THE WHOLE STORE (D86, amended 2026-09-02) and the fine
+              print says so: it lives in `inventory/prices.json`, not in the run, so it
+              outlives every run over this box rather than dying with the directory. */}
+          Every copy stays out of every import file until you release it — one answer for the
+          whole store, outliving every run over this box.
+        </span>
         <Button variant="quiet" size={sheet ? 'lg' : 'sm'} onClick={onCancel}>
           Cancel
         </Button>

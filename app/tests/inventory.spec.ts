@@ -56,7 +56,11 @@ type Wire = { method: string; path: string; body: unknown }
  *  to each row from `pipeline/join.py:Position`. The screen renders them and computes none of
  *  them — types.ts forbids the arithmetic and D10 is why — so a fixture that omitted them would
  *  be testing the gap panel rather than the walk. */
-type Neighbor = { index: number; name: string | null }
+/* BOTH SPACES, as the server sends them since D92: `slot` is D58's count and is what a
+   nameless neighbour draws, `index` is the store key and is never drawn bare. The fixtures
+   below keep them UNEQUAL on purpose — a box with a departure in front is the case that
+   tells a renderer reading the wrong field from one reading the right one. */
+type Neighbor = { index: number; slot: number; name: string | null }
 
 function card(input: {
   index: number
@@ -412,7 +416,6 @@ const PRICING = {
     ],
   },
   decisions: null,
-  remembered_sub_threshold: null,
   written_at: PRICED_AT,
 }
 
@@ -2957,8 +2960,8 @@ const NEIGHBOURLY: Cards = {
        the reason the joined sentence could not be scanned and the reason the epithet has to
        demote rather than disappear. */
     neighbors: {
-      prev: { index: 18, name: 'Galio, Indefaticable' },
-      next: { index: 20, name: 'Evelynn, Entrancing' },
+      prev: { index: 18, slot: 17, name: 'Galio, Indefaticable' },
+      next: { index: 20, slot: 19, name: 'Evelynn, Entrancing' },
     },
   }),
   '2/3': card({
@@ -2972,7 +2975,7 @@ const NEIGHBOURLY: Cards = {
     /* THE BOX'S FRONT: no card in front of it, so one row and not a pretend `between`. Its
        neighbour is also the case with NO comma, which must render whole rather than being cut
        at some other punctuation. */
-    neighbors: { prev: null, next: { index: 4, name: 'Conscription' } },
+    neighbors: { prev: null, next: { index: 4, slot: 3, name: 'Conscription' } },
   }),
 }
 
@@ -3723,8 +3726,8 @@ test('the card carries what its run said the market was, and how old that readin
      UNDERSCORE AND ALL, because it is `pipeline/routing.py`'s own `NO_MARKET_DATA` and
      DESIGN.md's owner-screen rule is the machine string. Spelled `no market data` it would be
      neither the constant nor a human label — the second vocabulary D22 refuses — and would grep
-     to nothing against `decisions.json`'s own `no_market_data` block, which is where a card in
-     this state is actually priced. */
+     to nothing against the `no_market_data` block `GET .../pricing` serves, which is where a
+     card in this state is actually priced. */
   await page.locator('.browse-row').nth(3).click()
   await expect(page.locator('.browse-fact', { hasText: 'Market' }).locator('dd')).toHaveText(
     'no_market_data',

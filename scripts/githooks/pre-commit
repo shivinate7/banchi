@@ -197,4 +197,60 @@ if [ "${PKMNSCAN_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command 
   esac
 fi
 
+# Fifth rule, and the second that is not about opsec: the sigil check (D92).
+#
+# A bare `#` on an owner-side screen is D58's COUNT of the cards in a box, and three
+# renderers drew the STORE KEY with the same sigil — on the owner's box 3 those spaces are
+# 76 apart, so `#27` named two different cards on one screen. scripts/sigil-check.py never
+# writes, needs nothing but a system python3, and reads only tracked source, so it has the
+# same profile as the docs audit above and belongs in the same place.
+#
+# IT BLOCKS, WHERE THE AUDIT'S COUPLING QUESTION DOES NOT, and the difference is that this
+# has no "question" mode: a finding is a number on a screen that is wrong, not prose that
+# might be stale. The escape hatch is per-line and demands a reason (`sigil-ok: <why>`),
+# which is the right place to argue an exception — in the file, next to the code.
+#
+# WHOLE-TREE AND NOT `--staged`, deliberately. The check is fast enough (48 files) that
+# scoping it would buy nothing, and a violation is a violation wherever it sits: staging
+# only the fix to one screen should not let a second one through.
+#
+# THE SELF-TEST RUNS HERE TOO, WHICH `audit-self-test` DELIBERATELY DOES NOT, and the
+# difference is the one D18 actually draws. That target is off the commit path because it
+# WRITES — it builds a temporary directory of fixtures. This one writes nothing: sixteen
+# cases over string literals, no filesystem, microseconds. D18 forbids a commit gate that
+# writes, not one that checks itself, and a checker whose extractors have silently stopped
+# matching is exactly the failure this repo has paid for most.
+#
+# A FAILING SELF-TEST WARNS AND ALLOWS, where a finding blocks. Same reasoning the docs
+# audit applies to its own exit 64: a broken checker is not evidence that a screen is
+# wrong, and blocking on one would make the bypass habitual.
+#
+# Bypass:  PKMNSCAN_SIGIL=off git commit ...
+if [ "${PKMNSCAN_SIGIL:-}" != "off" ] && [ -f scripts/sigil-check.py ] && command -v python3 >/dev/null 2>&1; then
+  if ! selftest_out="$(python3 scripts/sigil-check.py --self-test </dev/null 2>&1)"; then
+    echo "$selftest_out" >&2
+    echo "WARNING: scripts/sigil-check.py --self-test FAILED, so its extractors no longer" >&2
+    echo "match the code they are meant to read. THE SIGIL CHECK BELOW MEANS NOTHING until" >&2
+    echo "that is fixed. Allowing the commit: a broken checker is not evidence of a bug." >&2
+  fi
+  sigil_out="$(python3 scripts/sigil-check.py </dev/null 2>&1)"
+  sigil_status=$?
+  case "$sigil_status" in
+    0) ;;
+    1)
+      echo "$sigil_out" >&2
+      fail "a bare \`#\` is drawn over a store key — see the findings above.
+  Draw the slot (D58's count); keep the index for addressing. If the key really is
+  what belongs there, say so on the line or in the comment above it:
+      sigil-ok: <why this record has no slot to draw instead>
+  Bypass once with:  PKMNSCAN_SIGIL=off git commit ..."
+      ;;
+    *)
+      echo "WARNING: scripts/sigil-check.py exited $sigil_status — the sigil check did not run." >&2
+      echo "$sigil_out" >&2
+      echo "Allowing the commit: a broken checker is not evidence a screen is wrong." >&2
+      ;;
+  esac
+fi
+
 exit 0

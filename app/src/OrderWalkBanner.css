@@ -1,0 +1,271 @@
+/* The order walk's banner — the order driving `#/inventory`, its stop, its envelope, its exit.
+ *
+ * OFF `.inventory-note`'S SHAPE: surface, a `--line` border, the radius. No `--accent` anywhere;
+ * the argument is in `OrderWalkBanner.tsx`'s header. Nothing here changes size on hover (D50),
+ * and every control's cursor comes from base.css.
+ *
+ * ONE ROW, `nowrap`, AND ITS HEIGHT NEVER CHANGES. Measured in a browser at 1280x720 against a
+ * seeded store, 2026-09-02, rather than estimated: `.browse-controls` sits at y=106 and is 42px,
+ * the plain walk's `.browse-body` starts at y=160, and with the mode on this banner occupies
+ * exactly that y — 50px tall, its inner row 32px — and the walk starts at y=222.
+ *
+ * SO THE MODE COSTS THE WALK 62px AND COSTS THE SCREEN'S FIRST CONTENT NOTHING. docs/DESIGN.md's
+ * "first row of real content within 150px" floor is missed by 10px at this width WITH OR WITHOUT
+ * the banner — the plain walk's own first row is at 160 — so the banner does not create that
+ * miss and does not widen it. What it does spend is 62px of visible walk at every stop, and that
+ * is the price of the one write being on screen wherever you are in the order rather than behind
+ * a fold at the end of it.
+ *
+ * EVERY CHILD IS `flex: none` EXCEPT THE CARD NAME, which ellipsises between a 6ch floor and a
+ * 20ch ceiling. That is what makes "the body never moves" structural rather than a promise: with
+ * `wrap`, one long product name at 1280 would silently make this two rows and shift the whole
+ * walk down mid-arrow, which is D28's defect with a card in your hand.
+ *
+ * THE ROW CANNOT OVERFLOW, and the ceiling above is why. Measured at 1280: `scrollWidth` and
+ * `clientWidth` are both 1222, and the document's are both 1280 — no overflow and no sideways
+ * page scroll. The name is the only child that can grow and it is capped; the order number is
+ * this account's fixed 21-character format; every other span is a key word or a count. Re-measure
+ * if a span is added, and re-measure at 1280 rather than at 1440.
+ */
+
+.inventory-walk {
+  margin-top: var(--s3);
+  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.inventory-walk-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 32px;
+  min-width: 0;
+}
+
+.inventory-walk-row > * {
+  flex: none;
+}
+
+/* The only thing on the row allowed to give. */
+.inventory-walk-name {
+  flex: 0 1 auto;
+  min-width: 6ch;
+  max-width: 20ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* THE KEY WORDS — `.browse-boxcap`'s register, 200px to the left of this on the same screen. A
+   label, never a control, and never the thing the eye lands on first. */
+.inventory-walk-key {
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* An identifier, so the util face and no letter-spacing — `.orders-order-number`'s register
+   without its `word-break`, because this row may not wrap. */
+.inventory-walk-order {
+  font-family: var(--util);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* THE FIGURES THAT ARM A PRESS, at `.browse-status-picked`'s weight. `stop k of n` at the left
+   and `mark k of n sold` at the right are the two numbers "am I done?" is asked of. */
+.inventory-walk-count {
+  font-family: var(--util);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.inventory-walk-said {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+/* `.browse-quiet`'s register, re-declared rather than borrowed: a class from another component's
+   stylesheet is a coupling nothing would catch when that component's rules move. The exit is
+   quiet on purpose — two bordered controls side by side put the way out one mis-press from the
+   write. Underline on hover changes no box (D50). */
+.inventory-walk-quiet {
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r);
+  padding: 0;
+  white-space: nowrap;
+}
+
+.inventory-walk-quiet:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.inventory-walk-stranded {
+  text-decoration: none;
+}
+
+/* RIGHT-PACKED, AND `Stop walking` IS ALWAYS ITS LAST CHILD, so the envelope's disappearance
+   leaves an empty rectangle rather than sliding the exit into the coordinate a finger was
+   travelling toward. `.fulfillment-step`'s lesson, one screen over. */
+.inventory-walk-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex: none;
+}
+
+/* `.inventory-plain` carries its own `margin-left: auto`; inside a cluster that already has one,
+   two autos fight and the gap collapses unpredictably. */
+.inventory-walk-end .inventory-plain,
+.inventory-walk-envelope .inventory-plain {
+  margin-left: 0;
+}
+
+.inventory-walk-fill {
+  white-space: nowrap;
+}
+
+.inventory-walk-next {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- wave mode's envelopes */
+
+.inventory-walk-envelopes {
+  list-style: none;
+  margin: var(--s2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.inventory-walk-envelope {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 40px;
+  padding: var(--s1) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  /* The 2px inset ink rail the box strip, the walk row and the copies list all use for "this
+     one" — one idiom for one meaning, across four lists. */
+  box-shadow: inset 2px 0 0 0 transparent;
+}
+
+.inventory-walk-envelope[aria-current='true'] {
+  box-shadow: inset 2px 0 0 0 var(--ink);
+}
+
+/* `.orders-order-done`'s idiom: an order that is finished is drawn, not deleted. */
+.inventory-walk-envelope-done {
+  border-style: dashed;
+}
+
+/* IN THE BUTTON'S OWN FOOTPRINT — 32px tall with the same padding — so a second press lands on
+   a word rather than on whatever slid up into the rectangle. */
+.inventory-walk-filled {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  font-family: var(--util);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- the copy rows' marks */
+
+/* `.orders-pick-held`'s register exactly, so a fact reads the same on both screens that draw
+   one. TWO TONES AND THE SPLIT IS THE INSTRUCTION: muted informs (this copy is somebody else's,
+   this one has gone, this one you are not taking), ink tells the hand to act (this is one of the
+   ones going in the envelope). Ink-against-muted is this screen's own selection idiom and costs
+   no second colour. */
+.inventory-copy-mark {
+  flex: none;
+  align-self: center;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.inventory-copy-mark-take {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* WHY A ROW HAS NO CONTROL BESIDE IT (D93). The mark's own register, so a reason reads as one
+   rather than as a control that has stopped working — a full line's `2 of 2 taken`, and a record
+   with no capture id to aim by. Not a button: there is nothing to press, and a disabled button
+   would say there is. */
+.inventory-copy-note {
+  flex: none;
+  align-self: center;
+  font-family: var(--util);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* THE ONE RULE NO ROW CAN SHOW ON ITS OWN. Every copy carries its own take since D93, so this
+   stopped being "how to reach a copy" and became the capacity rule: a full line refuses the
+   take. One sentence, drawn only while a stop's own group is on screen. */
+.inventory-walk-hint {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 76ch;
+}
+
+/* AN ENVELOPE'S PLACES, STACKED. `.inventory-receipt` is a wrapping flex row, so four places laid
+   into it directly run together on two lines — and each place is itself `Box 2 · Section 1 ·
+   Card 1`, so the whitespace between two of them is the same whitespace as inside one. A block
+   of its own, one line each, is what makes them countable against the cards in the hand. */
+.inventory-receipt-places {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}

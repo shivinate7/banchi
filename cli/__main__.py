@@ -147,15 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
     joined.add_argument(
         "--dry-run",
         action="store_true",
-        help="report what WOULD queue and what --bypass would clear, and write nothing. "
-        "Free and side-effect-free: no queues, no decisions.json, no report, no manifest.",
-    )
-    joined.add_argument(
-        "--bypass",
-        action="store_true",
-        help="trust the capture-time finish claim over a disagreeing photo (D3 rung 3 is "
-        "not consulted where a claim exists). Cards with NO claim are unaffected — there "
-        "is nothing to resolve them by. Recorded in the manifest and in the run report.",
+        help="report what WOULD queue and write nothing. Free and side-effect-free: no "
+        "queues, no inventory/prices.json change, no report, no manifest.",
     )
 
     # ----------------------------------------------------------------------------- emit
@@ -215,12 +208,17 @@ def build_parser() -> argparse.ArgumentParser:
     # nobody watched is how those three would have gone quiet a second time.
     prices = sub.add_parser("prices", help="the pricing corpus: adopt the run files, or read it")
     prices_sub = prices.add_subparsers(dest="prices_command")
-    adopt = prices_sub.add_parser("adopt", help="fold every run's decisions.json into one file")
+    adopt = prices_sub.add_parser(
+        "adopt",
+        help="fold every run's legacy decisions.json into inventory/prices.json and retire it",
+    )
     adopt.add_argument("--write", action="store_true", help="actually write; previews without it")
     adopt.add_argument(
         "--force",
         action="store_true",
-        help="adopt again over a corpus that already holds answers",
+        help="fold the run files OVER answers the corpus already holds — the file's answer "
+        "wins where they differ. Never needed to retire files whose answers the corpus "
+        "already has.",
     )
     show = prices_sub.add_parser("show", help="what the corpus holds")
     show.add_argument("--held", action="store_true", help="list every card held back")

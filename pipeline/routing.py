@@ -19,7 +19,8 @@ Four destinations, not two:
                    a tap, and mixing it in with the $12 ones is how the $12 ones get missed.
   NO_MARKET_DATA   matched, but the catalog row carries a blank or $0.00 market price.
                    Not a queue and not sub-threshold — it is a price to be entered by hand
-                   in decisions.json. D9: a missing price is an unknown price.
+                   on #/pricing (inventory/prices.json). D9: a missing price is an unknown
+                   price.
 
 The main/parked cut is made on PRICE, and on the cheapest candidate when nothing resolved —
 cheapest, because that is the price the card is worth *at least*, and routing on the

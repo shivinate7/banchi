@@ -1277,8 +1277,74 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
 
 # ---------------------------------------------------------------------- decision ids
 
-_DECISION_RE = re.compile(r"\bD([1-9][0-9]?)\b")
-_CODES_DECISION_RE = re.compile(r"\bC([1-9][0-9]?)\b")
+# THE CAP IS SPELLED ONCE, BECAUSE IT WAS SPELLED SEVEN TIMES HERE AND NOBODY RECOUNTED IT.
+# `[1-9][0-9]?` read decision ids for a year and went vacuous at the hundredth entry: a
+# heading stops being a heading to this file and a citation stops being a citation, so
+# `decision ids`, `decision ids in code`, `decision index`, `decision structure` and
+# `renumbered ids` all report GREEN over a file they can no longer see. docs/DEBTS.md carried
+# that as a triggered debt from 2026-08-30 until this landed; the trigger fired at the
+# ninetieth entry and the file reached D92 before anyone discharged it. The entry is gone from
+# that file rather than rewritten as closed — its own preamble sends closure narrative to git,
+# and D72 carries what a reader needs.
+#
+# PROVED RATHER THAN ASSUMED, which is what the debt entry demanded and why it stayed open:
+# a three-digit heading appended to docs/DECISIONS.md left `decision ids` reporting 92 D
+# headings over 93, `decision structure` reporting 92 entries over the same 93, `decision
+# index` reporting "92 indexed, matching 92 headings" while that entry sat outside the index,
+# and a dangling three-digit citation unreported. Four rows, all green, over a file none of
+# them could read.
+#
+# THREE DIGITS AND NO FURTHER, deliberately. A four-digit id matches nothing here — the
+# silent-widening failure is not fixed by making the bound infinite, it is fixed by the bound
+# living in ONE place with a self-test case behind it. When the thousandth entry comes into
+# view, this line is the edit and the cases below are what say so.
+#
+# A CEILING IN THIS PROSE IS SPELLED AS A WORD AND NEVER AS AN ID. `_DECISION_RE` scans this
+# file, so "the hundredth entry" written the other way is a citation of an entry that does not
+# exist and `decision ids in code` reports it. That is not hypothetical: D72's reopening
+# condition opened with the id, invisibly, for as long as these patterns could not read three
+# digits — and failed the audit the moment they could.
+_ID_DIGITS = r"[1-9][0-9]{0,2}"
+
+_DECISION_RE = re.compile(r"\bD(" + _ID_DIGITS + r")\b")
+_CODES_DECISION_RE = re.compile(r"\bC(" + _ID_DIGITS + r")\b")
+
+# A RUFF SUPPRESSION IS NOT A CITATION, AND AT THREE DIGITS IT LOOKS EXACTLY LIKE ONE.
+# Three real lines carry a pydocstyle code whose number is three digits long —
+# server/tcg_export.py:332, server/order_transport.py:610 and server/pipeline_routes.py:1643
+# — and mccabe's complexity code joins them the moment anyone writes one. The two-digit cap
+# could not reach their third digit, so widening it turns every one into a citation of an
+# entry that does not exist. That is exactly why docs/DEBTS.md kept the cap rather than
+# fixing it, and why the widen could not land without this.
+#
+# MEASURED, NOT PREDICTED. With the cap at three and this strip disabled, `decision ids in
+# code` reported all three as dangling citations and `repo map` — which is MECHANICAL —
+# blocked the commit over four files.
+#
+# THE DIRECTIVE IS BLANKED, NEVER THE LINE. This repo writes prose after the codes, an
+# em-dash and a sentence explaining the suppression, and that prose may cite an entry like
+# any other comment. Dropping the whole line would trade a false positive for a blind spot,
+# which is the trade this file exists to refuse.
+#
+# The code list follows ruff's own grammar: the bare directive, one code, or several
+# separated by commas or spaces. It ends at the first token that is not a rule code, which
+# is what leaves the em-dash prose readable. The directive is deliberately NOT spelled out
+# in this comment — ruff parses one wherever it appears, including here, and warns that the
+# surrounding prose is not a code list. The self-test below holds the literal forms, in
+# string literals, where ruff does not look.
+_NOQA_RE = re.compile(
+    r"#\s*noqa(?::\s*[A-Za-z]+[0-9]+(?:[,\s]+[A-Za-z]+[0-9]+)*)?",
+    re.IGNORECASE,
+)
+
+
+def without_noqa(line: str) -> str:
+    """`line` with any ruff/flake8 suppression directive blanked out.
+
+    A space rather than an empty string: nothing here reads column offsets, and a space
+    cannot weld the tokens on either side of the directive into one.
+    """
+    return _NOQA_RE.sub(" ", line)
 
 
 def decision_headings(path: Path, letter: str) -> Set[str]:
@@ -1299,7 +1365,7 @@ def decision_heading_lines(path: Path, letter: str) -> List[Tuple[str, int]]:
     """
     if not exists(path):
         return []
-    pattern = re.compile(r"^##\s+(" + letter + r"[1-9][0-9]?)\b")
+    pattern = re.compile(r"^##\s+(" + letter + _ID_DIGITS + r")\b")
     out: List[Tuple[str, int]] = []
     for number, line in enumerate(read(path).splitlines(), start=1):
         match = pattern.match(line)
@@ -1314,7 +1380,11 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 
     def scan(paths: Iterable[Path], severity_findings: List[Finding]) -> None:
         for path in paths:
-            for number, line in enumerate(read(path).splitlines(), start=1):
+            for number, raw in enumerate(read(path).splitlines(), start=1):
+                # A suppression directive names a rule code, never an entry. See
+                # `without_noqa` — the directive goes, the prose after it stays readable,
+                # which is why this very sentence is still scanned for citations.
+                line = without_noqa(raw)
                 for digits in _DECISION_RE.findall(line):
                     if "D" + digits not in singles:
                         severity_findings.append(
@@ -1432,25 +1502,32 @@ def branch_base() -> str:
     return ""
 
 
-def headings_at(rev: str, path: str = "docs/DECISIONS.md") -> Dict[str, str]:
-    """title -> id, as of `rev`. Empty when the blob is unreadable at that commit."""
-    pattern = re.compile(r"^##\s+(D[1-9][0-9]?)\s+—\s+(.+?)\s*$")
+_TITLED_HEADING_RE = re.compile(r"^##\s+(D" + _ID_DIGITS + r")\s+—\s+(.+?)\s*$")
+
+
+def titles_by_id(text: str) -> Dict[str, str]:
+    """title -> id, over the text of docs/DECISIONS.md at any revision.
+
+    ONE reader, because it was two identical regexes in two functions and a widen that
+    reached one of them would have left the other reporting a renumber against a state it
+    could not see. Pure, so `--self-test` can drive it without a repository — the same split
+    `moves_across` below already makes for the same reason.
+    """
     out: Dict[str, str] = {}
-    for line in git("show", f"{rev}:{path}").splitlines():
-        match = pattern.match(line)
+    for line in text.splitlines():
+        match = _TITLED_HEADING_RE.match(line)
         if match:
             out[match.group(2)] = match.group(1)
     return out
+
+
+def headings_at(rev: str, path: str = "docs/DECISIONS.md") -> Dict[str, str]:
+    """title -> id, as of `rev`. Empty when the blob is unreadable at that commit."""
+    return titles_by_id(git("show", f"{rev}:{path}"))
 
 
 def headings_now() -> Dict[str, str]:
-    pattern = re.compile(r"^##\s+(D[1-9][0-9]?)\s+—\s+(.+?)\s*$")
-    out: Dict[str, str] = {}
-    for line in read(ROOT / "docs" / "DECISIONS.md").splitlines():
-        match = pattern.match(line)
-        if match:
-            out[match.group(2)] = match.group(1)
-    return out
+    return titles_by_id(read(ROOT / "docs" / "DECISIONS.md"))
 
 
 def moves_across(states: Sequence[Dict[str, str]]) -> List[Tuple[str, str, str]]:
@@ -1518,7 +1595,7 @@ def check_renumbered_decisions(report: Report) -> None:
         now = re.compile(r"\b" + new + r"\b")
         sites: List[str] = []
         for name in touched:
-            text = read(ROOT / name)
+            text = "\n".join(without_noqa(line) for line in read(ROOT / name).splitlines())
             lines = [
                 number
                 for number, line in enumerate(text.splitlines(), start=1)
@@ -1593,26 +1670,31 @@ def code_haystack() -> str:
 ENTRY_BUDGET = 12000
 
 
-def _prose_guard():
-    """scripts/prose-guard.py, or None.
+def _sibling(name: str):
+    """A script under scripts/ as a module, or None.
 
-    Imported rather than reimplemented: it already replicates decision-context.py's three
-    selectors, and a second copy here is the drift this file exists to catch. The filename
-    has a hyphen, hence importlib. Returns None on any failure — a missing guard must cost
-    two rows, never the whole audit.
+    Imported rather than reimplemented: prose-guard.py already replicates
+    decision-context.py's three selectors, and a second copy here is the drift this file
+    exists to catch. The filenames have hyphens, hence importlib. Returns None on any
+    failure — a missing sibling must cost the rows that need it, never the whole audit.
     """
-    path = ROOT / "scripts" / "prose-guard.py"
+    path = ROOT / "scripts" / name
     if not path.exists():
         return None
     try:
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location("prose_guard", path)
+        spec = importlib.util.spec_from_file_location(name.replace("-", "_")[:-3], path)
         module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
         spec.loader.exec_module(module)  # type: ignore[union-attr]
         return module
-    except Exception:  # noqa: BLE001 - a broken guard must not take the audit down
+    except Exception:  # noqa: BLE001 - a broken sibling must not take the audit down
         return None
+
+
+def _prose_guard():
+    """scripts/prose-guard.py, or None."""
+    return _sibling("prose-guard.py")
 
 
 def check_decision_structure(report: Report) -> None:
@@ -1662,7 +1744,7 @@ def check_decision_index(report: Report) -> None:
 
     want = [
         (m.group(1), m.group(2).strip())
-        for m in (re.match(r"^##\s+(D\d{1,2})\s*[—-]\s*(.+)$", line)
+        for m in (re.match(r"^##\s+(D" + _ID_DIGITS + r")\s*[—-]\s*(.+)$", line)
                   for line in read(decisions).split("\n"))
         if m
     ]
@@ -1672,7 +1754,7 @@ def check_decision_index(report: Report) -> None:
     fenced, block = False, []
     for line in read(claude).split("\n"):
         if line.lstrip().startswith("```"):
-            if fenced and block and all(re.match(r"^D\d{1,2}\s", b) for b in block if b.strip()):
+            if fenced and block and all(re.match(r"^D" + _ID_DIGITS + r"\s", b) for b in block if b.strip()):
                 got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
                        for b in block if b.strip()]
                 break
@@ -1904,7 +1986,19 @@ def literals_from_module(path: Path) -> Dict[str, object]:
 
 
 def cited_decisions(path: Path) -> Set[str]:
-    return {"D" + digits for digits in _DECISION_RE.findall(read(path))}
+    """Every decision id a file cites, suppressions excluded.
+
+    THE THIRD SITE, and the one docs/DEBTS.md got wrong. That entry judged this reader "not
+    separately broken — it compares against `decision_headings`", and about the CAP it was
+    right: an id it cannot read is one `governed_by` never asks about. About the WIDEN it was
+    wrong in the other direction. This is a `repo map` finding, which is MECHANICAL, so the
+    three real `# noqa: D102` / `# noqa: D401` lines in server/ turned into four blocked
+    commits the moment the third digit came into reach — measured, on the first full run
+    after the widen, and the reason `without_noqa` is applied here and not only to the
+    citation scan.
+    """
+    lines = (without_noqa(line) for line in read(path).splitlines())
+    return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
 
 
 def check_map(report: Report, allowed: Dict[str, str]) -> None:
@@ -3473,7 +3567,7 @@ def check_withhold_reasons(report: Report) -> None:
                 "app/src/holds.ts",
                 f"{reason!r} is offered by the screen and is not in "
                 f"pipeline/decisions.py:WITHHOLD_REASONS — `_withheld` refuses it, so "
-                f"choosing it writes a decisions.json the next join cannot read.",
+                f"choosing it writes an inventory/prices.json the next join cannot read.",
             )
         )
     for reason in sorted(authored - offered):
@@ -3631,7 +3725,7 @@ def check_pricing_presets(report: Report) -> None:
 
     `cli/cmd_join.py:PRESETS` is `(key, rule, basis)` and prices every SKU under every preset
     so the client performs no arithmetic on money. `app/src/Pricing.tsx:PRESETS` is what a
-    press on the pricing screen writes into `decisions.json` — and it has to write the RULE,
+    press on the pricing screen writes into `inventory/prices.json` — and it has to write the RULE,
     because D49 refuses to write the suggestions themselves: an override is layer 1 of
     `prices_for` and would beat the rule at layer 4, producing a run where changing the preset
     silently changed nothing.
@@ -3644,9 +3738,9 @@ def check_pricing_presets(report: Report) -> None:
     check compared the two tables, and the screen never drew which rule was live.
 
     BLOCKING, for the reason `check_withhold_reasons` above gives and which applies here
-    verbatim: `PUT /pipeline/runs/<name>/decisions` validates nothing, so two declarations
-    agreeing is the whole defence. A rule the screen writes and `pricing.Rule.parse` refuses is
-    a run `emit` cannot price.
+    nearly verbatim: `PUT /pricing` refuses a rule `pricing.Rule.parse` cannot read, but a
+    refused save is an answer that never landed, so two declarations agreeing is still the
+    whole defence. A rule the screen writes and the parser refuses is a run `emit` cannot price.
 
     THE LABELS AND THE BLURBS ARE NOT CHECKED, the same carve-out and the same reason: they are
     prose for a person, and a rule about wording would be this audit taking a view on English.
@@ -4554,7 +4648,7 @@ def css_token_scopes(text: str) -> Tuple[Dict[str, str], Dict[str, str], Set[str
             for name, value in _CSS_PROPERTY_RE.findall(body[match.end():end])
             if name.startswith("bn-")
         ]
-        for name, value in declared:
+        for name, _value in declared:
             every.add("--" + name)
         if any(start <= match.start() < stop for start, stop in conditional):
             continue
@@ -5790,6 +5884,14 @@ _RUNS_PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:py|sh|mjs)")
 # the same file in different modes, and the hook runs a third — so a path match alone answers
 # "on the commit path" for both, which this row caught on its first run against the tree it
 # was written for. A check is on that path when the hook invokes its script IN ITS MODE.
+#
+# MATCHED PER LINE, AND IT WAS MATCHED OVER THE WHOLE FILE UNTIL D92. The sentence above is
+# what this always meant; `path in hook and flag in hook` is not that, because the two can sit
+# on different lines and mean nothing about each other. Adding a SECOND self-testing check to
+# the hook proved it: `--self-test` then appeared in the file for `sigil-check`, and this row
+# immediately reported `audit-self-test` — which the hook does not run, and which D18 requires
+# it not to — as being on the commit path. A false negative would be worse than the loose
+# match: it would report a check as gating commits when nothing runs it.
 _RUNS_FLAG_RE = re.compile(r"--[a-z][a-z-]*")
 
 CHECK_ENTRY_KEYS = (
@@ -5947,7 +6049,10 @@ def check_commit_path(report: Report) -> None:
         where = "{0} — {1}".format(rel(CHECKS_REGISTRY), name)
         paths = _RUNS_PATH_RE.findall(entry["runs"])
         flags = _RUNS_FLAG_RE.findall(entry["runs"])
-        invoked = any(path in hook for path in paths) and all(flag in hook for flag in flags)
+        invoked = any(
+            any(path in line for path in paths) and all(flag in line for flag in flags)
+            for line in hook.splitlines()
+        )
         claimed = bool(entry["commit_path"])
 
         if claimed and not invoked:
@@ -6440,7 +6545,7 @@ NON_PATHS = [
     # module of the same name in ordinary prose is still found (see REAL_PATHS).
     "- **One route spends and is named for it** — `POST /pipeline/identify`. It refuses",
     "`GET /pipeline/runs/<name>/file` — one artefact's bytes, for download",
-    "`PUT /pipeline/runs/<name>/decisions` — D9's sub-threshold answer",
+    "`GET /pipeline/pricing` — one worklist over several runs",
     "`DELETE /inventory/<box>/<index>` — D10's hard delete of a record",
     "Refill on later imports as `Add to Quantity = min(cap - live, backstock)`",
     "The repo sits under `~/Library/Mobile Documents/com~apple~CloudDocs/`",
@@ -6516,6 +6621,142 @@ def self_test() -> int:
 
     one = moves_across([{ORDER: "D67", LINK: "D53"}, {ORDER: "D69", LINK: "D53"}])
     ok(one == [("D67", "D69", ORDER)], "only the entry that moved is reported, not its neighbours", str(one))
+
+    # EVERY PATTERN THAT READS A DECISION ID, AT THE DIGIT THAT USED TO END THEM (D16).
+    # docs/DEBTS.md recorded this as a TRIGGERED debt: seven patterns in this file and four
+    # more across scripts/ capped at `[1-9][0-9]?`, so at the hundredth entry a heading stops
+    # being a heading and a citation stops being a citation — and every row built on them
+    # reports GREEN over a file it can no longer see. The debt named the discharge, and these
+    # cases are its second half: a widen with nothing exercising the third digit is the same
+    # silence one commit later.
+    #
+    # THE IDS ARE COMPOSED, NEVER WRITTEN, and that is not cuteness. `_DECISION_RE` scans
+    # this file, so a literal three-digit id in a fixture is a citation of an entry that does
+    # not exist and `decision ids in code` reports it. Composing is what lets a case name a
+    # number the file has not reached yet — and it is the whole reason this section could not
+    # simply be typed out.
+    # Composing is how a case can name a number the file has not reached yet. It also keeps
+    # the cases testing the BOUND rather than whatever is written today, which is the
+    # opposite of `moves_across` above, where real history is what makes the data honest.
+    print("\na decision id is three digits, and a ruff suppression is not one")
+
+    past_end = f"D{100}"
+    four_digits = f"D{1000}"
+    leading_zero = f"D{0}"
+    codes_past_end = f"C{100}"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        entries = Path(tmp) / "DECISIONS.md"
+        entries.write_text(
+            "## D9 — One digit\n\n## D92 — Two digits\n\n"
+            f"## {past_end} — Three digits\n\n"
+            f"## {four_digits} — Four digits, which is not an id\n\n"
+            f"## {leading_zero} — A leading zero, which is not an id\n",
+            encoding="utf-8",
+        )
+        text = entries.read_text(encoding="utf-8")
+
+        found = [ident for ident, _ in decision_heading_lines(entries, "D")]
+        ok(found == ["D9", "D92", past_end], "the heading roster reads one, two and three digits", str(found))
+        ok(four_digits not in found and leading_zero not in found,
+           "and stops at three digits, and at a leading zero", str(found))
+
+        titles = titles_by_id(text)
+        ok(titles.get("Three digits") == past_end,
+           "the renumber reader titles a three-digit entry", str(titles))
+
+        # `check_decision_index` reconciles CLAUDE.md's fenced index against those headings,
+        # and BOTH of its patterns are exercised here: the heading side, and the shape that
+        # locates the index block by its `D<n> ` lines.
+        indexed = [
+            m.group(1)
+            for m in (re.match(r"^##\s+(D" + _ID_DIGITS + r")\s*[—-]\s*(.+)$", line)
+                      for line in text.split("\n"))
+            if m
+        ]
+        ok(indexed == ["D9", "D92", past_end],
+           "the index check's heading side reads three digits", str(indexed))
+        ok(all(re.match(r"^D" + _ID_DIGITS + r"\s", line)
+               for line in ("D9  One digit", "D92  Two digits", f"{past_end}  Three digits")),
+           "and its fenced-block shape accepts a three-digit index line")
+
+    cited = _DECISION_RE.findall(f"this cites D72 and {past_end} in one line")
+    ok(cited == ["72", "100"], "a two-digit citation still resolves, beside a three-digit one", str(cited))
+    ok(not _DECISION_RE.findall(f"{four_digits} is not an id"), "four digits is not a citation")
+    codes = _CODES_DECISION_RE.findall(f"the code track cites C7 and {codes_past_end}")
+    ok(codes == ["7", "100"], "the C-track citation reads three digits too", str(codes))
+
+    # THE COLLISION THAT KEPT THIS DEBT UNFIXED FOR THREE DAYS AFTER ITS TRIGGER FIRED. All
+    # three suppressions below are real lines in server/, and they were harmless only because
+    # the third digit was out of reach. Widening without `without_noqa` turns every one into
+    # a citation of an entry that does not exist — measured, not predicted: with the strip
+    # disabled and the cap at three, `decision ids in code` reported all three.
+    #
+    # These labels quote the directive on purpose. It means each label is itself a line
+    # carrying a suppression, so the strip has to work for this section to survive its own
+    # row — the case and its evidence are the same string.
+    for line, label in (
+        ("    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102",
+         "`# noqa: D102` is a pydocstyle code, not a citation"),
+        ("def _run_owes(manifest: dict) -> List[str]:  # noqa: D401",
+         "`# noqa: D401` is not a citation either"),
+        ("    if complex_thing():  # noqa: C901",
+         "`# noqa: C901` is not a C-track citation"),
+        ("from server import ports  # noqa: E402, F401",
+         "a multi-code suppression is not a citation"),
+    ):
+        stripped = without_noqa(line)
+        ok(not _DECISION_RE.findall(stripped) and not _CODES_DECISION_RE.findall(stripped),
+           label, repr(stripped))
+
+    # The directive goes; the sentence after it does not. Blanking the whole line would trade
+    # the false positive for a blind spot, which is the trade this file exists to refuse —
+    # and this repo really does write prose after the codes.
+    with tempfile.TemporaryDirectory() as tmp:
+        module = Path(tmp) / "sample.py"
+        module.write_text(
+            "from server import ports  # noqa: E402\n"
+            "def redirect_request(self):  # noqa: D102\n"
+            "    return None  # the renumber rule is D72's\n",
+            encoding="utf-8",
+        )
+        ok(cited_decisions(module) == {"D72"},
+           "`governed_by`'s reader excludes suppressions too — the row it feeds is MECHANICAL",
+           str(cited_decisions(module)))
+
+    kept = without_noqa("    except Exception as exc:  # noqa: BLE001 — 500 is for bugs, see D72")
+    ok(_DECISION_RE.findall(kept) == ["72"],
+       "a citation in the prose AFTER a suppression survives", repr(kept))
+    ok(without_noqa("no directive here, just D72") == "no directive here, just D72",
+       "a line with no suppression is returned unchanged")
+
+    # THE SIBLING READERS, which the rows above depend on and which cannot report for
+    # themselves. `decision structure` IS scripts/prose-guard.py's regex, and the
+    # decision-context hook is what a session reads before editing a governed file. Both
+    # carried the same cap; a widen that stopped at this file would have left the audit
+    # reporting a heading count over a file the guard could not read, which is precisely the
+    # measured symptom above.
+    guard = _prose_guard()
+    ok(
+        guard is not None
+        and bool(guard.ANY_H2_RE.match(f"## {past_end} — Three digits"))
+        and bool(guard.HEADING_RE.match(f"## {past_end} — Three digits")),
+        "scripts/prose-guard.py reads a three-digit heading",
+    )
+    ok(
+        guard is not None and not guard.ANY_H2_RE.match(f"## {four_digits} — Four digits"),
+        "and stops at three, like every pattern above it",
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        entries = Path(tmp) / "DECISIONS.md"
+        entries.write_text(
+            f"## {past_end} — Three digits\n\n**A ruling long enough to be picked up.**\n",
+            encoding="utf-8",
+        )
+        context = _sibling("decision-context.py")
+        gists = context.decision_gists(path=entries) if context else {}
+        ok(past_end in gists, "the decision-context hook resolves a three-digit entry", str(list(gists)))
 
     print("\nextractor finds real references")
     for line, expected in REAL_PATHS:

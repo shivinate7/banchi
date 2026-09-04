@@ -757,7 +757,7 @@ half of the reconciliation `scripts/docs-audit.py`'s `reason codes` row performs
 this paragraph used to say otherwise.** It is not a queue reason: `pipeline/routing.py` makes it the fourth
 destination beside listed, main and parked, and `pipeline/join.py` writes a queue entry only
 for `routing.MAIN` and `routing.PARKED` — so a card with a blank or $0.00 market cell is
-priced by hand in `decisions.json` (D9) and never appears here. The screen carries a label
+priced by hand on `#/pricing` (`inventory/prices.json`, D9/D86) and never appears here. The screen carries a label
 for it all the same, which is right: one line of a lookup table is cheaper than a bare
 machine string rendered the first time routing ever queues one. The claim to keep out of
 this file is the count — fourteen are defined, thirteen are labelled, twelve are reachable,

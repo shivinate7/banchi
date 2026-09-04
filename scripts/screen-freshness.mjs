@@ -147,7 +147,7 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
  * refuses any entry whose own doc comment does not claim in words that it writes nothing. That
  * is the difference between an allowlist and a suppression — this one cannot be extended by
  * adding a line here, only by adding a line here AND making the source say why. */
-const NON_MUTATING = new Set(['preflightRun', 'cropPreview', 'fetchOrders'])
+const NON_MUTATING = new Set(['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'])
 const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates nothing/i
 
 /* The classification this script was written against, asserted by `--self-test` as SETS and
@@ -182,11 +182,12 @@ const RECORDED = {
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
     'undoStandDown', 'undoAnswer', 'answerReviewGroup', 'markSold', 'undoSale', 'retireCard',
     'undoRetire', 'createBox', 'updateBox', 'openSection', 'applyBoxClaims', 'removeCardInPlace',
-    'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep', 'putDecisions',
+    'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep',
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
+    'fillEnvelope', 'undoEnvelope',
   ],
-  nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders'],
+  nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',
     'onServerBoot', 'newCaptureId', 'runFileUrl', 'shippingFileUrl',
@@ -669,11 +670,12 @@ const LIST_SURGERY = new Set(['filter', 'map', 'flatMap', 'concat', 'slice', 'so
 
 /** The root identifier of `target.card.box` — `target`. Null for anything that has none.
  *
- *  THE CASTS ARE PEELED OFF FIRST, and that is not tidiness. `Pricing.tsx` sends
- *  `putDecisions(run, sent as Record<string, unknown>)`, and an `as` is a node in the tree: a
- *  version of this that stopped at it saw no argument named `sent`, could not match the
- *  `savedDoc.current = sent` two lines below, and reported the most carefully argued write on
- *  that screen as having no way back. A cast changes the type and nothing else. */
+ *  THE CASTS ARE PEELED OFF FIRST, and that is not tidiness. `Pricing.tsx` once sent
+ *  `putDecisions(run, sent as Record<string, unknown>)` (the per-run write, deleted with D86's
+ *  amendment), and an `as` is a node in the tree: a version of this that stopped at it saw no
+ *  argument named `sent`, could not match the `savedDoc.current = sent` two lines below, and
+ *  reported the most carefully argued write on that screen as having no way back. A cast
+ *  changes the type and nothing else, and `putPricingCorpus` is sent the same way. */
 function rootIdentifier(node) {
   let n = node
   for (;;) {
@@ -698,9 +700,10 @@ function rootIdentifier(node) {
 
 /** Whether this subtree reaches a server read: an imported read, or a raw `fetch`.
  *
- *  `RunPanel.tsx:openDecisions` is the raw one — `fetch(runFileUrl(openRun,'decisions.json'))`,
- *  the single request in this app that bypasses `server.ts`. It is a read, and a scan that only
- *  knew about `server.ts` imports would call the write beside it unfreshened. */
+ *  `RunPanel.tsx:openDecisions` was the raw one — `fetch(runFileUrl(openRun,'decisions.json'))`,
+ *  the single request in this app that bypassed `server.ts`, deleted with the per-run editor
+ *  (D86, amended 2026-09-02). `fetch` stays recognised here so the next raw read, if one is
+ *  ever written, is a read to this scan rather than an unfreshened write beside it. */
 function reachesRead(screen, node, depth = 0, seen = new Set()) {
   if (depth > 3) return false
   let found = false
@@ -1078,7 +1081,47 @@ function recognisers(screens) {
       for (const node of ctx.scope.nodes) {
         for (const setter of collect(node, isSetter)) {
           const argument = setter.arguments[0]
-          if (argument === undefined || argument.kind !== ts.SyntaxKind.NullKeyword) continue
+          /* A STORE SETTER CLEARS A FIELD, WHICH IS THE SAME ACT ONE LEVEL IN. This read
+             `setX(null)` and nothing else, and it was right while every screen held its own
+             `useState`. `OrdersHubStore` put the shipping stage's batch in a shared store, so the
+             clear is `setHub({ batch: null })` — the identical statement, made about a named
+             field instead of about the whole of the state, and invisible to a check looking for
+             a bare `null` argument. Found by this row firing on `OrdersShipStage.tsx`'s forget,
+             which IS covered: the export is gone at the operator's own instruction, and the
+             screen showing no export is the receipt.
+
+             The narrowing that keeps it honest is unchanged and now applies per FIELD: the field
+             must be one something in this file populates from an await, which is what makes
+             clearing it a way back rather than a way of hiding the disagreement. */
+          const cleared = []
+          if (argument !== undefined && argument.kind === ts.SyntaxKind.NullKeyword) {
+            cleared.push(null)
+          } else if (argument !== undefined && ts.isObjectLiteralExpression(argument)) {
+            for (const property of argument.properties) {
+              if (!ts.isPropertyAssignment(property)) continue
+              if (property.initializer.kind !== ts.SyntaxKind.NullKeyword) continue
+              if (!ts.isIdentifier(property.name)) continue
+              cleared.push(property.name.text)
+            }
+          }
+          if (cleared.length === 0) continue
+          const field = cleared.find((name) => name !== null)
+          if (field !== undefined) {
+            const filledField = collect(ctx.screen.src, (n) =>
+              isSetter(n) &&
+              n.expression.text === setter.expression.text &&
+              n.arguments[0] !== undefined &&
+              ts.isObjectLiteralExpression(n.arguments[0]) &&
+              n.arguments[0].properties.some(
+                (q) =>
+                  ts.isPropertyAssignment(q) &&
+                  ts.isIdentifier(q.name) &&
+                  q.name.text === field &&
+                  (collect(q.initializer, (x) => ts.isAwaitExpression(x)).length > 0 ||
+                    (ts.isIdentifier(q.initializer) && awaitBoundNames(ctx.screen).has(q.initializer.text)))))
+            if (filledField.length > 0) return `${setter.expression.text}({ ${field}: null }), re-fetched elsewhere`
+          }
+          if (!cleared.includes(null)) continue
           const stateName = ctx.screen.stateOf.get(setter.expression.text)
           if (stateName === undefined) continue
           const filled = collect(ctx.screen.src, (n) =>

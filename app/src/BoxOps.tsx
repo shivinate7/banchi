@@ -1212,7 +1212,11 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
       >
         {result.skipped.length === 0
           ? null
-          : `Stepped over: ${result.skipped.map((row) => `#${row.index} ${row.state}`).join(' · ')}`}
+          : /* A bulk write's receipt names the RECORDS it stepped over, by the key it aimed by.
+               These cards were not touched, so none has a slot in the result to count to, and an
+               operator matching this line against the store needs the key it was aimed by. */
+            // sigil-ok: a bulk write's receipt names the records it skipped, by the key it aimed by
+            `Stepped over: ${result.skipped.map((row) => `#${row.index} ${row.state}`).join(' · ')}`}
       </Notice>
     </div>
   )

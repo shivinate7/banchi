@@ -101,7 +101,6 @@ import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
@@ -336,9 +335,9 @@ class Leg:
     convenience bought with accuracy, which is the trade this repo does not make.
 
     EVERY LEG IS STILL ONE RUN OVER ONE BOX. Nothing downstream learns a new shape: a run
-    directory, its manifest scope, `join`, `emit`, `reconcile`, the queue it writes and the
-    `--bypass` decision taken over it are all exactly what they were. What is new is that one
-    press can start several, which is a fact about the REQUEST and not about a run.
+    directory, its manifest scope, `join`, `emit`, `reconcile` and the queue it writes are
+    all exactly what they were. What is new is that one press can start several, which is a
+    fact about the REQUEST and not about a run.
     """
 
     directory: Path
@@ -1302,6 +1301,11 @@ def _box_name_for(
     IT ABSTAINS TOWARDS NAMING. An unparseable or absent timestamp means this cannot tell,
     and withholding on ignorance would strip the name off every run whose manifest predates
     the field — a claim of its own, made about runs this knows nothing about.
+
+    THE RULE LIVES IN THE STORE, `store/master.py:box_disowns_run`, because
+    `cli/resolve.py:refuse_reallocated` refuses the JOIN on it (D36 amended) — one function,
+    so the screen that withholds the name and the command that refuses the run cannot decide
+    the same case two ways. The argument above is the argument for that function.
     """
     if box is None:
         return None
@@ -1309,18 +1313,7 @@ def _box_name_for(
     if found is None:
         return None
     name, made_at, runs_present = found
-    if not runs_present or run in runs_present:
-        return name
-    if not isinstance(ran_at, str) or not isinstance(made_at, str):
-        return name
-    try:
-        born = datetime.fromisoformat(made_at)
-        ran = datetime.fromisoformat(ran_at)
-    except ValueError:
-        # Not lexicographic: `...:24+00:00` and `...:24.500+00:00` differ in a character
-        # class before the offset, so string order is only accidentally time order.
-        return name
-    return None if born > ran else name
+    return None if master.box_disowns_run(made_at, runs_present, run, ran_at) else name
 
 
 def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
@@ -1365,8 +1358,6 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "collected": bool(manifest.get("collected")),
         "joined": bool(manifest.get("joined")),
         "counts": manifest.get("counts") or {},
-        "bypass_detection": bool(manifest.get("bypass_detection")),
-        "bypassed": manifest.get("bypassed"),
         "usage": manifest.get("usage") or {},
     }
 
@@ -1399,43 +1390,6 @@ def do_pipeline_run(name: str) -> dict:
     body["files"] = _artefacts(directory)
     body["manifest"] = _manifest(directory)
     return body
-
-
-def _remembered_sub_threshold(directory: Path) -> Optional[dict]:
-    """The sub-threshold answer the newest OTHER run gave, or `None`.
-
-    "REMEMBER THAT I SAID SO", WITH NO NEW STORAGE — the owner's words when asked what the
-    standing answer should be. Every run already writes its own answer into its own
-    `decisions.json`, so the last one is on disk and needs no second home, no migration and
-    no file that can disagree with the runs it claims to summarise.
-
-    A LABEL AND NEVER A DEFAULT. D9 is explicit that the sub-threshold disposition is a
-    per-run choice and that output is suppressed until it is made — so this removes the time
-    spent DECIDING and not the press. A pre-selected answer is one nobody read.
-
-    Bounded to five directories, newest first, stopping at the first run that answered. No
-    earlier answer means no label, which is correct: there is nothing to remember.
-    """
-    root = files.runs_dir()
-    if not root.is_dir():
-        return None
-    seen = 0
-    for entry in sorted(root.iterdir(), reverse=True):
-        if not entry.is_dir() or entry == directory:
-            continue
-        seen += 1
-        if seen > 5:
-            return None
-        path = entry / run_files.DECISIONS
-        if not path.is_file():
-            continue
-        try:
-            answer = json.loads(path.read_text("utf-8")).get("sub_threshold")
-        except (OSError, ValueError):
-            continue
-        if answer is not None:
-            return {"answer": answer, "run": entry.name}
-    return None
 
 
 def _position_label(
@@ -1526,7 +1480,7 @@ def _relabel_positions(table) -> None:
         # route had for free until it started reading one. Its table comes off the run
         # directory; the store is consulted only to compose a caption. So an unreadable
         # inventory costs the captions and nothing else — the same call the handler below
-        # makes for a malformed `decisions.json`, degrading the way `_Places` does: null,
+        # makes for a malformed corpus, degrading the way `_Places` does: null,
         # never the stored string and never a guess.
         inventory = None
     views = {} if inventory is None else run_resolve.box_views(inventory)
@@ -1560,10 +1514,10 @@ def do_pipeline_pricing(name: str) -> dict:
     market price is — see `written_at` below for why that is a file mtime and what it does not
     claim.
 
-    TWO FILES IN ONE READ, WHICH IS THE WHOLE REASON IT IS A ROUTE RATHER THAN TWO
-    DOWNLOADS. `_DOWNLOADABLE` already matches `.json`, so a screen could fetch
-    `pricing.json` and `decisions.json` through `GET .../file` and needs neither route nor
-    handler — but two fetches can straddle a re-join, and a table describing one join beside
+    THE TABLE AND THE ANSWERS IN ONE READ, WHICH IS THE WHOLE REASON IT IS A ROUTE RATHER
+    THAN A DOWNLOAD BESIDE `GET /pricing`. `_DOWNLOADABLE` already matches `.json`, so a
+    screen could fetch `pricing.json` through `GET .../file` and the corpus through its own
+    route — but two fetches can straddle a re-join, and a table describing one join beside
     answers written against another is a screen quietly pricing the wrong set of cards.
 
     IT IMPORTS NOTHING NEW. `make server` runs bare `python3`, so this module is stdlib-only;
@@ -1611,7 +1565,6 @@ def do_pipeline_pricing(name: str) -> dict:
         "run": directory.name,
         "pricing": pricing,
         "decisions": answers,
-        "remembered_sub_threshold": _remembered_sub_threshold(directory),
         # WHEN THIS TABLE WAS WRITTEN, WHICH IS THE ONLY AGE THIS SERVER CAN HONESTLY GIVE A
         # PRICE. `cli/cmd_join.py` rewrites `pricing.json` on every join, so its mtime is the
         # moment a join last read an export — and every figure under `snap` came out of that
@@ -1640,10 +1593,10 @@ def _run_is_open(manifest: dict, pricing: dict, answers: Optional[dict]) -> bool
     the same question `app/src/readiness.ts:owed` asks the other side of the wire, asked here
     against the Python that actually refuses rather than against a third implementation of it.
 
-    A MALFORMED ANSWERS FILE READS AS OPEN. `do_pipeline_pricing` already rules that an
-    unreadable `decisions.json` must not stop a screen drawing — the operator has to be able
-    to SEE the file that is wrong. The same argument decides this: a run whose answers cannot
-    be parsed is exactly the run somebody needs to open.
+    A MALFORMED CORPUS READS AS OPEN. `do_pipeline_pricing` already rules that an
+    unreadable `inventory/prices.json` must not stop a screen drawing — the operator has to
+    be able to SEE the file that is wrong. The same argument decides this: a run whose answers
+    cannot be parsed is exactly the run somebody needs to open.
     """
     return bool(_run_owes(manifest, pricing, answers))
 
@@ -1736,12 +1689,11 @@ def _policy_threshold(book) -> str:
 def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     """`GET /pipeline/pricing` — one pricing worklist over several runs (D86).
 
-    THE WORKLIST SPANS RUNS; THE ANSWER FILE DOES NOT. That is D48's own resolution applied
-    one register over: there, a send is a cart of boxes and a run is still one box, because a
-    run carries a reading, a `--bypass` ruling and a `decisions.json` that are all properties
-    of what is in the drawer. Every word of that stays true. What this route adds is a VIEW
-    across them, and the write path is untouched — `PUT /pipeline/runs/<name>/decisions` is
-    still per run, and one answer to a merged row is one PUT per run holding that SKU.
+    THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D48's resolution — a send is a cart of
+    boxes and a run is still one box, because a run carries a reading that is a property of
+    what is in the drawer — stays true of the READING. What this route adds is a VIEW across
+    runs; the answer is the corpus's (D86, amended), and there is one write, `PUT /pricing`,
+    whatever is on screen.
 
     WHY A ROUTE RATHER THAN N FETCHES FROM THE CLIENT. Two reasons and the second is the one
     that matters. The default landing is every open run, which on this machine is eight tables
@@ -1768,12 +1720,9 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         return {
             "runs": [],
             "skus": [],
-            "decisions": {},
-            "defaults": {},
             "roster": [],
             "skipped": [],
             "asked": list(wanted),
-            "remembered_sub_threshold": None,
             "live_cap": join.LIVE_QUANTITY_CAP,
             "threshold": None,
             "floor": None,
@@ -1833,8 +1782,6 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     chosen = asked or [row["run"] for row in roster if row["open"]]
 
     summaries: List[dict] = []
-    answers_by_run: Dict[str, Optional[dict]] = {}
-    defaults: Dict[str, dict] = {}
     written_at: Dict[str, int] = {}
     skipped: List[dict] = []
     # sku -> merged row. An `OrderedDict` because the ORDER IS THE HIERARCHY on this screen
@@ -1850,11 +1797,6 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             continue
         directory = _open_run(name)
         summaries.append(_summary(directory, names))
-        answers_by_run[name] = payload.get("decisions")
-        defaults[name] = {
-            "rule": payload["pricing"].get("rule"),
-            "basis": payload["pricing"].get("basis"),
-        }
         if payload.get("written_at") is not None:
             written_at[name] = payload["written_at"]
         for row in payload["pricing"].get("skus") or []:
@@ -1938,14 +1880,10 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     return {
         "runs": summaries,
         "skus": list(merged.values()),
-        "decisions": answers_by_run,
-        # EACH RUN'S OWN `rule` AND `basis`, FOR SEEDING A DOCUMENT THAT DOES NOT EXIST YET.
-        # D54: a screen that seeded `{}` sent a document with no rule, and `Decisions.parse`
-        # then defaulted it to match/market while `cli/cmd_join.py` treats the FILE as
-        # authoritative — one keystroke from silently resetting a run joined at `markup:100`.
-        # PER RUN and never one seed for the worklist, which is D48: box 3 has been joined at
-        # `undercut:1` on `low` and at `match` on `market` on different days.
-        "defaults": defaults,
+        # NO PER-RUN `decisions` AND NO PER-RUN `defaults` (D86, amended 2026-09-02). Both
+        # were served for a screen that seeded and wrote one document per run; the answer is
+        # the corpus's, read once through `GET /pricing`, and a payload carrying eight copies
+        # of it keyed by run was a shape nothing read for a day and a half.
         "written_at": written_at,
         "roster": roster,
         "skipped": skipped,
@@ -1965,14 +1903,11 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # `_pricing_constant`'s reason.
         "threshold": _policy_threshold(book),
         "floor": (summaries and _pricing_constant(chosen, "floor")) or None,
-        # `remembered_sub_threshold` IS GONE FROM THIS PAYLOAD, AND ITS ABSENCE IS THE POINT
-        # (D86, amended). It walked up to five sibling run directories for the newest answer
-        # to a question each run had to be asked separately, and offered it as a LABEL because
-        # D9 forbids defaulting it. There is one answer now — the corpus's policy — so the
-        # next run is priced by it without a screen offering anything, and a button saying
-        # "box 5 answered floor · use it" over a document that already says `floor` is a
-        # control that can only confuse. The per-run route still answers it, for the screens
-        # that draw one run.
+        # `remembered_sub_threshold` IS GONE, HERE AND FROM THE PER-RUN ROUTE (D86, amended
+        # 2026-09-02). It walked up to five sibling run directories for the newest answer to a
+        # question each run had to be asked separately, and offered it as a LABEL because D9
+        # forbade defaulting it. There is one answer now — the corpus's policy, with a default
+        # (D9 amended) — so nothing has to be remembered and no screen offers anything.
         "live_cap": join.LIVE_QUANTITY_CAP,
     }
 
@@ -2275,7 +2210,7 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     IT PRICES NOTHING AND D8 IS NOT REOPENED. `pipeline/pricehistory.py`'s own header is
     emphatic on this and the route is the place it could quietly stop being true: nothing
     here computes a listing price, writes `TCG Marketplace Price`, or reaches
-    `decisions.json`. It is a READING taken beside the export, on the screen where a hold is
+    `inventory/prices.json`. It is a READING taken beside the export, on the screen where a hold is
     set — D49 records that the `bullish` withhold and its `watch_above` threshold have been
     set against the operator's memory of what a card used to cost, and this is the fact that
     was missing. The day a listing price is allowed to depend on a trend, that is a change
@@ -2592,7 +2527,23 @@ def _store_upload(directory: Path, upload: dict, prefix: str) -> Path:
     stem = re.sub(r"[^A-Za-z0-9._-]", "-", Path(raw).name) or "export.csv"
     target = directory / f"{prefix}{stem}"
     target.write_text(content, encoding="utf-8")
+    # THE STORED COPY WEARS THE FILE'S OWN TIME, because that mtime is when the export's
+    # `Total Quantity` was read and the store arbitrates `live` by it (D87 amended,
+    # `store/master.py:Listing.observe_live`). `modified` is the browser's `File.lastModified`
+    # — MILLISECONDS since the epoch — and without it every upload was dated to the moment it
+    # was copied in, so a week-old export outranked every reading the store had taken since.
+    # Sanity-bounded rather than trusted: a stamp before 2000 or past tomorrow is nonsense,
+    # and nonsense that reads as "newer than everything" would settle the whole store.
+    modified = upload.get("modified")
+    if isinstance(modified, (int, float)) and not isinstance(modified, bool):
+        seconds = float(modified) / 1000.0
+        if _UPLOAD_MTIME_FLOOR <= seconds <= time.time() + 86400:
+            os.utime(target, (seconds, seconds))
     return target
+
+
+# 2000-01-01T00:00:00Z. A `File.lastModified` below this is not a time anybody exported at.
+_UPLOAD_MTIME_FLOOR = 946684800.0
 
 
 def _exports_for_join(directory: Path, payload: dict) -> List[str]:
@@ -2711,74 +2662,12 @@ def _pricing_flags(payload: dict) -> List[str]:
 
 
 def _sku_set(export) -> set:
-    """Every `TCGplayer Id` in an export. The unit both halves of the guard count in."""
+    """Every `TCGplayer Id` in an export. The unit the receipt counts SKUs in."""
     return {
         str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
         for row in export.rows
         if str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
     }
-
-
-def _finish_conditions(claimed: Sequence[str]) -> set:
-    """Every condition string that names a FINISH, for the games a file answers for.
-
-    THE REGISTRY'S ANSWER, NOT A GUESS AND NOT EVERY CONDITION IN THE FILE. This is what
-    `pipeline/variant.py` resolves between — `condition_by_finish` is the whole vocabulary
-    the ladder can choose from — and it is the distinction the first build of this guard got
-    wrong.
-    """
-    out: set = set()
-    for game in claimed:
-        entry = game_registry.get(game) or {}
-        out.update((entry.get("condition_by_finish") or {}).values())
-    return out
-
-
-def _printings(export, finishes: set) -> Dict[tuple, set]:
-    """key -> the FINISH conditions stocked for it. Play conditions are not finishes.
-
-    TWO THINGS HERE WERE WRONG IN THE FIRST BUILD AND BOTH WERE FOUND BY MEASURING AGAINST
-    THE OWNER'S REAL EXPORTS RATHER THAN THE THREE-ROW FIXTURE.
-
-    **It counted every condition, so filtering to Near Mint read as thinning.** D12 scopes
-    this product to Near Mint and the committed fixtures are Near-Mint-only (sv09 carries
-    exactly `Near Mint`, `Near Mint Holofoil`, `Near Mint Reverse Holofoil`), while a WIDE
-    export carries eleven to sixteen conditions because it also lists Lightly Played,
-    Moderately Played, Heavily Played and Damaged. Measured on the owner's box-3 export: all
-    153 of its numbers looked "thinned" against the wide riftbound file, and **not one of
-    them had lost a finish** — 145 are stocked only in the foil family and 8 only in the
-    plain one, and what the wide file added was play conditions. So the refusal would have
-    fired on an operator doing exactly the right thing, carrying a sentence about a reverse
-    holo listing at the normal row's price that was simply untrue.
-
-    **And the key carried `Product Name`, which loses real cases.** Finish variants usually
-    share a product name — 143 of sv09's 144 multi-row numbers do — so the third leg looked
-    free. It is not: keyed `(set, number)` the wide riftbound export has **550** numbers
-    stocked in more than one finish, and keyed with the name it has **522**. Twenty-eight
-    numbers whose foil and non-foil are listed under different product names were invisible
-    to the check written to find them.
-
-    SO THE KEY MIRRORS THE LOOKUP INSTEAD. A card with a number is found by its number
-    (`pipeline/join.py`'s composed key), so its finishes group under `(set, number)`. A card
-    with a BLANK number is found by name — D24's code cards, and the blank-`Number` rows
-    D35's rung falls back to — so those group under the name, which is both what
-    distinguishes them and what the ladder actually matched them on. Deriving the key from
-    how the row would be FOUND is what stops it being a third opinion about identity.
-    """
-    out: Dict[tuple, set] = {}
-    for row in export.rows:
-        condition = str(row.get(tcgcsv.CONDITION_COLUMN) or "")
-        if condition not in finishes:
-            continue
-        set_name = str(row.get(tcgcsv.SET_COLUMN) or "")
-        number = str(row.get(tcgcsv.NUMBER_COLUMN) or "").strip()
-        key = (
-            (set_name, number)
-            if number
-            else (set_name, "", str(row.get(tcgcsv.NAME_COLUMN) or ""))
-        )
-        out.setdefault(key, set()).add(condition)
-    return out
 
 
 def _distinct(export, column: str) -> List[str]:
@@ -2789,40 +2678,6 @@ def _distinct(export, column: str) -> List[str]:
         if value and value not in seen:
             seen.append(value)
     return seen
-
-
-def _coverage(fetched, baseline, finishes: set) -> dict:
-    """What this file covers that the run's previous export did not, and what it lost.
-
-    THE GUARD IS A DELTA AGAINST A KNOWN-GOOD FILE, AND IT IS NOT A COMPLETENESS CHECK — the
-    difference is the whole reason D64 exists as an entry rather than as a function. An
-    export's completeness against the CATALOG cannot be certified from its contents: the
-    Pricing tab can narrow by set, by printing, by condition and by whether a listing has a
-    photo, at least one of those leaves no trace in the file at all (`Photo URL` is empty in
-    all eleven exports this project has seen, filtered and unfiltered alike), and the axes are
-    independent — so a file carrying five conditions can still be missing whole printings, and
-    every content-inspection guard is defeated by an axis it does not know about.
-
-    What IS checkable is whether this file covers what the RUN'S OWN PREVIOUS EXPORT covered,
-    because that file is a fact rather than an inference. Two axes, because the two silent
-    failures are different:
-
-      - **SKUs.** A row the run once matched and this file does not carry becomes
-        `no_catalog_row` on the next join. Loud, but still a regression.
-      - **PRINTINGS PER NUMBER.** A number that had several condition rows and now has one is
-        the quiet one: D3 rung 2 (`CATALOG_FORCED`) fires when exactly one row exists for a
-        number, so a variant-thinned file MANUFACTURES single-row numbers and a reverse holo
-        with no finish claim resolves to the normal row and is priced there. Nothing about
-        that reads as a failure anywhere downstream.
-    """
-    lost_skus = sorted(_sku_set(baseline) - _sku_set(fetched))
-    before, after = _printings(baseline, finishes), _printings(fetched, finishes)
-    thinned = sorted(
-        key
-        for key, conditions in before.items()
-        if len(conditions) > 1 and 0 < len(after.get(key, ())) < len(conditions)
-    )
-    return {"lost_skus": lost_skus, "thinned": thinned}
 
 
 def _export_report(path: Path, games: Sequence[str]) -> dict:
@@ -3205,18 +3060,15 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     run's recorded exports it does not replace, BEFORE anything is joined, which is that
     function's own stated contract. So the check is the real rule rather than a second
     approximation of it, and a fetched file that would refuse at join time refuses here where
-    the fault is attributable to the fetch.
+    the fault is attributable to the fetch. The receipt then reports the last export this run
+    was joined against beside this one, per game, and refuses nothing on that comparison —
+    D65 names the scope, so what the file is checked for is what was asked, and a run's first
+    fetch has nothing earlier to be compared with by construction (D64, amended 2026-09-02).
 
     A REFUSAL TEARS DOWN WHAT IT BUILT. The bytes are written first because
     `exports_for` reads files rather than buffers, and every refusal path unlinks them again —
     the rule D48 states for a cart's scope directories, for the same reason: a run directory
     accumulating one dead export per mis-timed press is a run that stops explaining itself.
-
-    TWO ACKNOWLEDGEMENTS, EACH NAMED FOR THE FACT IT ANSWERS. `accept_unverified` says "this
-    run has nothing to compare against and I know it"; `accept_narrower` says "this file
-    covers less than the last one and I mean it". Separate fields because they are separate
-    sentences — the first is an absence of evidence and the second is evidence — and because
-    D33's gate is a field a stray request does not carry rather than a typed string.
     """
     directory = _open_run(name)
 
@@ -3232,23 +3084,39 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
     # THE NAME CARRIES A DIGEST, AND A ONE-SECOND STAMP ALONE WAS A DATA-LOSS BUG. T7 found
     # it: two fetches inside the same second composed the same filename, so the second one
-    # OVERWROTE the first — and the first is what the run was joined against, which made it
-    # the baseline the guard below compares to. A file silently replaced by the very thing
-    # being checked against it passes every check by comparing itself to itself.
+    # OVERWROTE the first — and the first is what the run was joined against. A file silently
+    # replaced by the very thing being checked against it passes every check by comparing
+    # itself to itself. T7's same-second case is the record of that.
     #
-    # A CONTENT DIGEST RATHER THAN A COUNTER OR A FINER CLOCK, because it also makes the
-    # right thing happen on a re-fetch: identical bytes land on the identical name and the
-    # run gains no second copy of a file it already holds, while any change at all gets a
-    # name of its own and can never clobber a predecessor.
-    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    # IDENTICAL BYTES LAND ON THE FILE THE RUN ALREADY HOLDS — AND THAT CLAIM WAS FALSE UNTIL
+    # 2026-09-02. This comment said a re-fetch of identical bytes "lands on the identical
+    # name", while the per-second stamp came BEFORE the digest in that name: two fetches a
+    # second apart never composed the same name, `fresh` was always true, and every re-fetch
+    # added a copy. Measured: run `2026-08-31-box3-01` holds two byte-identical 366 KB exports
+    # 29 seconds apart. So the digest is computed first and the run directory is searched for
+    # a file already carrying it, compared in full — 32 bits of digest is a name, not a proof.
+    # A hit IS the file: an identical re-fetch is a fresh observation of the same reading, so
+    # its mtime is touched, because the export's observation time is read off that mtime. A
+    # miss gets a stamped name of its own and can never clobber a predecessor.
     digest = hashlib.sha256(body).hexdigest()[:8]
-    target = directory / f"{FETCHED_PREFIX}{stamp}-{digest}.csv"
+    held = [
+        path
+        for path in sorted(directory.glob(f"{FETCHED_PREFIX}*-{digest}.csv"))
+        if path.read_bytes() == body
+    ]
     # WHETHER THIS REQUEST CREATED IT DECIDES WHETHER A REFUSAL MAY DELETE IT. "A refusal
     # tears down what it built" is the rule, and the emphasis is on BUILT: re-fetching bytes
     # this run already holds lands on the existing file, and unlinking that would destroy a
-    # recorded export over a guard that fired on something else.
-    fresh = not target.exists()
-    target.write_bytes(body)
+    # recorded export over a refusal that fired on something else.
+    if held:
+        target = held[0]
+        fresh = False
+        os.utime(target, None)
+    else:
+        stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+        target = directory / f"{FETCHED_PREFIX}{stamp}-{digest}.csv"
+        fresh = True
+        target.write_bytes(body)
 
     def refuse(status, code, message):
         if fresh:
@@ -3256,7 +3124,8 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
         return PipelineRefusal(status, code, message)
 
     try:
-        claimed = run_resolve.games_claimed(tcgcsv.read_export(target))
+        fetched_export = tcgcsv.read_export(target)
+        claimed = run_resolve.games_claimed(fetched_export)
     except Exception as caught:  # noqa: BLE001 — a file we cannot parse is the refusal
         raise refuse(
             HTTPStatus.BAD_GATEWAY,
@@ -3293,28 +3162,30 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
 
     answers_for = [game for game in plan.by_game if plan.by_game[game] == target]
     if not answers_for:
+        # NOT THE PRICING TAB. Since D65 `_scope_for_run` names `CategoryId` from the run's
+        # own game, so the portal's saved filter is not consulted and cannot be what is
+        # wrong. What is left is a wrong `tcgplayer_category_id` in `pipeline/games.py`,
+        # `PKMNSCAN_TCG_EXPORT_URL` pointing at the old unscoped endpoint, or TCGplayer
+        # renumbering a category — and the sentence names all three, with the product lines
+        # the file actually carries, because `claimed` is empty whenever none is registered.
+        lines = ", ".join(tcgcsv.product_lines(fetched_export)) or "no product line at all"
         raise refuse(
             HTTPStatus.CONFLICT,
             "export_wrong_game",
-            f"TCGplayer sent an export for {', '.join(claimed) or 'no registered game'}, and "
-            f"this run holds no card of any of them. That is the portal's filter pointed at "
-            f"the wrong product line — change it and fetch again. Nothing was kept.",
+            f"Asked TCGplayer for category {asked['category_id']} ({asked['game']}) and the "
+            f"file that came back carries {lines}; this run holds no card of a game that "
+            f"claims it. The category is `tcgplayer_category_id` for {asked['game']} in "
+            f"pipeline/games.py and the request went to {tcg_export.endpoint()} — one of "
+            f"those is wrong, or TCGplayer renumbered. Nothing was kept.",
         )
-
-    # ------------------------------------------------------------------------ the guard
-    unverified: List[str] = []
-    lost: Dict[str, list] = {}
-    thinned: Dict[str, list] = {}
-    fetched_export = tcgcsv.read_export(target)
 
     # ---------------------------------------------- THE POSITIVE CHECK (D65)
     #
-    # ASKED-FOR RATHER THAN INFERRED, WHICH IS THE WHOLE POINT OF SCOPING THE REQUEST. D64's
-    # delta guard exists because completeness could not be read off a file somebody else had
-    # filtered: three axes narrow an export and one leaves no trace in it. A file fetched to a
-    # scope this process NAMED is complete within that scope by construction, so the question
-    # stops being "what might be missing" and becomes "did I get what I asked for", which the
-    # file can answer.
+    # ASKED-FOR RATHER THAN INFERRED, WHICH IS THE WHOLE POINT OF SCOPING THE REQUEST. The
+    # scope was NAMED by this process — the category, the sets, all printings, every
+    # condition — so the file can be checked for what was asked rather than read for what
+    # somebody else's filter might have left out: the question is "did I get what I asked
+    # for", which the file can answer.
     #
     # It refuses rather than warns because a set that was asked for and did not arrive means
     # the cards in it will queue as `no_catalog_row` — a whole box's worth, silently, from a
@@ -3330,72 +3201,38 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
                 f"{', '.join(absent)}. Every card of a missing set would queue as "
                 f"no_catalog_row. Nothing was kept.",
             )
+
+    # ------------------------------------ WHAT THE LAST JOIN USED, BESIDE WHAT ARRIVED
+    #
+    # INFORMATION, AND NEVER A REFUSAL. D64's delta guard compared this file against the
+    # export the run was last joined with and refused a narrower one; it was retired
+    # 2026-09-02 (D64, amended) because D65 names the scope — so the check above is the
+    # whole guard — and because a run's FIRST fetch has nothing to compare with by
+    # construction, which made every run cost an acknowledgement. The figures stay on the
+    # receipt so that a narrower file is visible to the operator who asked for it. Read off
+    # `run.exports_by_game` directly: `baselines` above deliberately EXCLUDES the games this
+    # file claims. A previous file that no longer parses is OMITTED rather than raised — a
+    # 500 is the one answer this route may not give, and that file's state is not this
+    # fetch's fault.
+    previous: Dict[str, dict] = {}
     for game in answers_for:
-        previous = run.exports_by_game.get(game)
-        if previous is None or not Path(previous).is_file():
-            unverified.append(game)
+        prev = run.exports_by_game.get(game)
+        if prev is None or not Path(prev).is_file():
             continue
-        delta = _coverage(
-            fetched_export,
-            tcgcsv.read_export(Path(previous)),
-            _finish_conditions([game]),
-        )
-        if delta["lost_skus"]:
-            lost[game] = delta["lost_skus"]
-        if delta["thinned"]:
-            thinned[game] = delta["thinned"]
-
-    if (lost or thinned) and not payload.get("accept_narrower"):
-        # ONE CODE FOR TWO READINGS OF ONE FACT, and the second reading is why this refuses
-        # at all. A condition row IS a SKU, so a number cannot lose a printing without losing
-        # the row that carried it — the two lists below can never disagree about WHETHER this
-        # file is narrower, only about what the narrowing costs. Lost SKUs alone are loud:
-        # the cards that matched them queue as `no_catalog_row` on the next join and the
-        # operator sees it. A THINNED NUMBER is the quiet one, and it is the reason this is a
-        # refusal rather than a note.
-        lines = ["This export covers less than the one this run was last joined against."]
-        for game, skus in sorted(lost.items()):
-            shown = ", ".join(skus[:8]) + ("…" if len(skus) > 8 else "")
-            lines.append(
-                f"  {game}: {len(skus)} SKU(s) the last export carried are gone — {shown}. "
-                f"Cards matching them would queue as no_catalog_row."
-            )
-        for game, keys in sorted(thinned.items()):
-            shown = ", ".join(f"{k[0] or '?'} {k[1] or k[-1] or '?'}" for k in keys[:6])
-            lines.append(
-                f"  {game}: and {len(keys)} of them thin a number that had SEVERAL condition "
-                f"rows down to one — {shown}. A number left with one row is decided by that "
-                f"row (D3 rung 2), so a reverse holo with no finish claim would resolve to "
-                f"the normal row and list at its price, silently."
-            )
-        lines.append(
-            "Turn All Printings back on in the Pricing tab, clear any condition filter, and "
-            "fetch again — or send accept_narrower to keep this file anyway. Nothing was "
-            "kept."
-        )
-        raise refuse(HTTPStatus.CONFLICT, "export_narrower", "\n".join(lines))
-
-    if unverified and not payload.get("accept_unverified"):
-        raise refuse(
-            HTTPStatus.CONFLICT,
-            "export_unverified",
-            f"This run has never been joined against a {', '.join(unverified)} export, so "
-            f"there is nothing to check this one against. Completeness cannot be read off an "
-            f"export's own contents — the Pricing tab narrows by set, by printing, by "
-            f"condition and by photo, and the last of those leaves no trace in the file — so "
-            f"the only honest check is against a file this run already used. Confirm the "
-            f"portal's filter is All Printings with no condition filter, then send "
-            f"accept_unverified. Nothing was kept.",
-        )
+        try:
+            was = _export_report(Path(prev), [game])
+        except Exception:  # noqa: BLE001 — omit the game rather than fail the fetch
+            continue
+        previous[game] = {"file": was["file"], "rows": was["rows"], "skus": was["skus"]}
 
     report = _export_report(target, answers_for)
     report.update(
         {
             "ok": True,
             "run": directory.name,
-            "verified": [g for g in answers_for if g not in unverified],
-            "unverified": unverified,
-            "accepted_narrower": bool(lost or thinned),
+            # ALWAYS PRESENT, POSSIBLY EMPTY: a run with no earlier export reports none,
+            # which is a fact about the run and not a fault in the fetch.
+            "previous": previous,
             "source": tcg_export.endpoint(),
             # WHAT WAS ASKED FOR, beside what arrived. A receipt that showed only the result
             # cannot be read for whether the scope was right — and the scope is the operator's
@@ -3433,8 +3270,6 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         argv += _pricing_flags(payload)
         if payload.get("dry_run"):
             argv.append("--dry-run")
-        if payload.get("bypass"):
-            argv.append("--bypass")
     elif step == "emit":
         argv += _exports_for_join(directory, payload)
         argv += _pricing_flags(payload)
@@ -3470,37 +3305,3 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         "summary": _summary(directory),
     }
 
-
-def do_pipeline_decisions(name: str, payload: dict) -> dict:
-    """`PUT /pipeline/runs/<name>/decisions` — the sub-threshold answer D9 makes a file.
-
-    THE PRICING QUESTION GATES `emit` AND NOTHING ELSE, which is the owner's ruling and is
-    already how the pipeline is built: `join` writes `decisions.json` with the run-wide
-    choice UNSET and `emit` refuses while it stays that way. This route is the screen's way
-    to answer it, and it deliberately does not validate the answer's meaning — `emit` owns
-    that refusal, and a second validator here would be a second set of rules about what a
-    disposition is, disagreeing with the first at exactly the moment it mattered.
-
-    Replaces the file wholesale, because it is one document the operator is editing and a
-    merge would need this route to understand the schema it just declined to own. The client
-    reads the current file through `GET /pipeline/runs/<name>/file?name=decisions.json`
-    first, which is the same read-modify-write the run report tells a terminal user to do.
-    """
-    directory = _open_run(name)
-    document = payload.get("decisions")
-    if not isinstance(document, dict):
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "decisions_invalid",
-            "Send `decisions` as the whole decisions.json object.",
-        )
-    target = directory / run_files.DECISIONS
-    if not target.is_file():
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT,
-            "decisions_not_written",
-            f"Run {name} has no {run_files.DECISIONS} yet — `join` is what writes it, with "
-            f"every SKU that needs an answer already filled in.",
-        )
-    target.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-    return {"ok": True, "run": directory.name, "written": str(target)}
