@@ -4399,18 +4399,20 @@ LENGTH = "length"
 # its property names match docs/design-refs/locked.html, and the doc's block is laid out to
 # be read as a palette by a person. A three-line table is cheaper than either file getting
 # worse to spare it.
-DOC_TYPE_TOKENS = {"Display": "display", "Body": "body", "Utility": "util"}
-SPACING_TOKEN = "s"  # positional: the nth number on the Spacing row is `--s<n>`
-RADIUS_TOKEN = "r"
-
-# `Color      #FCFCFD  bg   the page.` and its continuation rows, which carry no label. The
-# optional leading word is what lets the first row of the group parse like the rest.
-_TOKEN_ROW_RE = re.compile(r"^\s*(?:[A-Z][a-z]*\s+)?(#[0-9A-Fa-f]{3,6})\s+([a-z][a-z0-9-]*)\b")
-# Built from the table above rather than beside it: a second enumeration of the same three
-# labels is the drift this whole check exists to catch, and there is no excuse for one here.
-_TYPE_ROW_RE = re.compile(r"^(" + "|".join(DOC_TYPE_TOKENS) + r")\s+(.+?)\s*\(")
-_SPACING_ROW_RE = re.compile(r"^Spacing\s+([\d ]+\d)")
-_RADIUS_ROW_RE = re.compile(r"^Radius\s+(\d+px)\b")
+# THE BLOCK NAMES TOKENS; IT NO LONGER SPELLS A PALETTE IN ROWS. What the old reader parsed —
+# `Color #FCFCFD bg`, three typeface rows, one spacing row, one radius row — is a format that
+# stopped existing when the `--bn-` system landed, and the reader read zero tokens from the new
+# block and said so. These four read what the block actually writes.
+_BN_NAME_RE = re.compile(r"--bn-[a-z0-9]+(?:-[a-z0-9]+)*")
+# `--bn-fs-2xs … --bn-fs-5xl` and `--bn-1 … --bn-10`, in both the ellipsis and the three-dot
+# spelling, because a document written by hand carries both.
+_BN_RANGE_RE = re.compile(r"(--bn-[a-z0-9-]+)\s*(?:…|\.\.\.)\s*(--bn-[a-z0-9-]+)")
+# A bare suffix continuing the name before it: `--bn-r-xs 4 · -sm 6`. Anchored on the separator
+# so a hyphen inside a sentence — "9:16 frame" or "light-on-dark" — is not read as a token.
+_BN_SUFFIX_RE = re.compile(r"[·/]\s*-([a-z0-9]+(?:-[a-z0-9]+)*)\b")
+# `name #hex` pairs on a `·`-separated line, where the name may be a suffix of the one before.
+_BN_PAIR_RE = re.compile(r"(--bn-[a-z0-9-]+|-[a-z0-9-]+)\s+(#[0-9A-Fa-f]{3,6})\b")
+_HEX_RE = re.compile(r"#[0-9A-Fa-f]{3,6}\b")
 
 # The one definition, shared with strip_css_comments() in the `raw color` section below.
 # It was declared twice, identically, once per section — harmless only for as long as the two
@@ -4482,115 +4484,284 @@ def design_token_block(text: str) -> Optional[str]:
     return None
 
 
-def design_tokens(block: str) -> Dict[str, Token]:
-    """Every token the block locks: colours by name, the three faces, the scale, the radius.
+class Claims(NamedTuple):
+    """What the block locks, in the three shapes it writes them.
 
-    A row this cannot read disappears from the doc side rather than being reported here, and
-    that is safe in one direction only — the stylesheet still declares the property, so the
-    comparison reports it as a token the block does not lock. Reformatting the block into a
-    markdown table would therefore fail loudly, one finding per token, rather than passing
-    on an empty comparison. The vacuous case, where nothing at all parses, is caught by the
-    caller.
+    `names` are stated outright. `alts` are the readings of a shorthand whose base is genuinely
+    ambiguous — `-sm` after `--bn-r-xs` is `--bn-r-sm`, while `-lg` after `--bn-r` is
+    `--bn-r-lg` — and a group is satisfied when ANY of its readings is declared. `prefixes`
+    come from a range like `--bn-fs-2xs … --bn-fs-5xl`, which locks a family rather than a
+    list, and covers every declared token beginning with it.
     """
-    tokens: Dict[str, Token] = {}
+
+    names: Set[str]
+    alts: List[Set[str]]
+    prefixes: Set[str]
+    hexes: Dict[str, Tuple[Optional[str], Optional[str]]]
+
+    def covers(self, name: str) -> bool:
+        """Whether the block names this declared token, by any of the three routes."""
+        if name in self.names or any(name in group for group in self.alts):
+            return True
+        return any(name.startswith(prefix + "-") or name == prefix for prefix in self.prefixes)
+
+
+def design_token_claims(block: str) -> Claims:
+    """What the block LOCKS: every token name it names, and the literal hexes it states.
+
+    THE BLOCK IS PROSE LAID OUT AS A PALETTE, NOT A TABLE, and it is deliberately readable
+    rather than parseable — `docs/DESIGN.md` says so where it describes the old reader, and
+    respelling the palette to suit a script is D16's forbidden direction. So this reads what
+    the block unambiguously states and nothing else:
+
+      NAMES        every `--bn-…` identifier, plus two shorthands the block uses for families:
+                   `--bn-r-xs 4 · -sm 6` continues the previous name, and `--bn-fs-2xs … --bn-fs-5xl`
+                   names every token sharing that prefix.
+      HEX VALUES   only where a name is followed by a hex literal. `ink 8%`, `accent 55%`,
+                   `white .72` and `= ink in both themes` are alphas and aliases of another
+                   token — the block says as much in the paragraphs under it — and there is no
+                   second value to keep in step, so there is nothing here to compare.
+
+    WHAT THAT MEANS THE ROW CAN AND CANNOT CATCH, stated rather than left to be discovered.
+    It catches a token declared in the stylesheet that no interview ever chose, a token locked
+    in the doc that nothing renders, and a hex that disagrees between the two files. It does
+    NOT check a duration, a shadow, an easing curve, an alpha, or the value behind a
+    `color-mix()` — those are named and checked for existence, and their values are not locked
+    anywhere a script can read. `docs/DEBTS.md` carries that gap.
+    """
+    names: Set[str] = set()
+    alts: List[Set[str]] = []
+    prefixes: Set[str] = set()
+    hexes: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+    last_full: Optional[str] = None
+
     for line in block.splitlines():
-        colour = _TOKEN_ROW_RE.match(line)
-        if colour:
-            tokens[colour.group(2)] = Token(COLOUR, colour.group(1), token_value(COLOUR, colour.group(1)))
+        full = _BN_NAME_RE.findall(line)
+        for name in full:
+            names.add(name)
+
+        # `--bn-fs-2xs … --bn-fs-5xl` names a family. The prefix is what the two ends share up
+        # to the last hyphen, and every token under it is locked by the range.
+        span = _BN_RANGE_RE.search(line)
+        if span:
+            names.update(_range_names(span.group(1), span.group(2)))
+            if not _range_names(span.group(1), span.group(2)):
+                prefixes.add(_family_prefix(span.group(1), span.group(2)))
+
+        # `--bn-r-xs 4 · -sm 6 · --bn-r 8 · -lg 12` — a bare suffix continues the last full
+        # name. WHICH name is genuinely ambiguous (`-sm` after `--bn-r-xs` means `--bn-r-sm`,
+        # while `-lg` after `--bn-r` means `--bn-r-lg`), so both readings are recorded and the
+        # comparison accepts either. Being generous here is the safe direction: it can only
+        # fail to report a typo in the DOC, and never wave through a token in the stylesheet
+        # that nobody chose, which is the finding that matters.
+        for piece in _BN_SUFFIX_RE.findall(line):
+            base = last_full if not full else full[-1]
+            if base is None:
+                continue
+            reading = {base + "-" + piece}
+            if "-" in base[len("--bn-"):]:
+                reading.add(base.rsplit("-", 1)[0] + "-" + piece)
+            alts.append(reading)
+        if full:
+            last_full = full[-1]
+
+        # A hex claim, in the two shapes the block writes. `·` separates several name/value
+        # pairs on one line (the stage palette); without it the leading name owns the row's
+        # hexes, and a row naming two tokens with `/` gives them to the first — the second is
+        # that colour's tint, which the block's own paragraph says is an alpha.
+        if "·" in line:
+            for name, value in _BN_PAIR_RE.findall(line):
+                if name.startswith("--bn-"):
+                    hexes[name] = (value, None)
+                elif last_full is not None:
+                    hexes[last_full.rsplit("-", 1)[0] + name] = (value, None)
             continue
-        face = _TYPE_ROW_RE.match(line)
-        if face:
-            name = DOC_TYPE_TOKENS[face.group(1)]
-            tokens[name] = Token(TYPEFACE, face.group(2), token_value(TYPEFACE, face.group(2)))
-            continue
-        spacing = _SPACING_ROW_RE.match(line)
-        if spacing:
-            for index, step in enumerate(spacing.group(1).split(), start=1):
-                # The block writes the scale bare where the stylesheet writes px. Reading the
-                # unit in is an assumption, and it is the one the rest of the file supports:
-                # `Radius 4px` on the next row carries its unit, and the Fulfillment table
-                # states every other length in px. What would settle it is the Spacing row
-                # spelling the unit out. Until then a scale in any other unit reads here as a
-                # disagreement, which is the safe direction to be wrong in.
-                tokens[f"{SPACING_TOKEN}{index}"] = Token(LENGTH, step, token_value(LENGTH, step + "px"))
-            continue
-        radius = _RADIUS_ROW_RE.match(line)
-        if radius:
-            tokens[RADIUS_TOKEN] = Token(LENGTH, radius.group(1), token_value(LENGTH, radius.group(1)))
-    return tokens
+        found = _HEX_RE.findall(line)
+        if full and found and line.lstrip().startswith("--bn-"):
+            hexes[full[0]] = (found[0], found[1] if len(found) > 1 else None)
+
+    return Claims(names, alts, prefixes, hexes)
 
 
-def css_root_tokens(text: str) -> Dict[str, str]:
-    """Custom properties declared on `:root`, comments stripped first.
+def _range_names(low: str, high: str) -> Set[str]:
+    """`--bn-1 … --bn-10` enumerated, or an empty set where the ends are not numbered.
 
-    Stripping first is the point: a token commented out during a refactor still reads as a
-    declaration to a regex, and this check would then agree with the doc about a value the
-    browser never sees. Braces are counted rather than stopping at the first `}` so that a
-    `:root` nested inside an at-rule is read whole — docs/DESIGN.md bans a dark theme, and
-    an audit that silently truncated at one is an audit that would not notice it arriving.
+    A NUMBERED RANGE IS A LIST AND A NAMED ONE IS A FAMILY, and treating the first as a prefix
+    was wrong in the way that matters: the shared prefix of `--bn-1` and `--bn-10` is `--bn-1`,
+    which covers `--bn-10` and nothing else, so the spacing scale locked one of its ten steps
+    and the check passed on it. `--bn-fs-2xs … --bn-fs-5xl` genuinely is a family — the ends are
+    words, the members are not enumerable from them — and stays a prefix.
+    """
+    ends = [re.match(r"^(--bn-[a-z0-9-]*?)(\d+)$", name) for name in (low, high)]
+    if not all(ends) or ends[0].group(1) != ends[1].group(1):
+        return set()
+    stem = ends[0].group(1)
+    first, last = int(ends[0].group(2)), int(ends[1].group(2))
+    if last < first:
+        return set()
+    return {f"{stem}{n}" for n in range(first, last + 1)}
+
+
+def _family_prefix(low: str, high: str) -> str:
+    """The prefix two ends of a range share, as a name every member starts with."""
+    shared = ""
+    for a, b in zip(low, high):
+        if a != b:
+            break
+        shared += a
+    return shared.rstrip("-")
+
+
+def css_token_scopes(text: str) -> Tuple[Dict[str, str], Dict[str, str], Set[str]]:
+    """The light palette, the dark one, and every `--bn-` name declared anywhere.
+
+    THE SCOPES ARE KEPT APART, AND THE OLD READER'S MERGING THEM WAS LOSSY RATHER THAN MERELY
+    EMPTY. It folded every `:root` in the file into one dictionary, so `--bn-bg`'s dark value
+    silently overwrote its light one and the check compared the doc's light column against a
+    dark hex. Under a token system where every colour has both, that is a check that cannot be
+    right — the shape had to change before the parsing did.
+
+    A `:root` inside an at-rule contributes NAMES ONLY. The phone/coarse-pointer query raises
+    three control heights, which are a second value for a condition rather than a second theme;
+    comparing them against the doc's light column would report a disagreement that is the
+    stylesheet working. Comments are stripped first, for `css_root_tokens`' old reason: a token
+    commented out during a refactor still reads as a declaration to a regex, and this check
+    would then agree with the doc about a value the browser never paints.
     """
     body = _CSS_COMMENT_RE.sub(" ", text)
-    out: Dict[str, str] = {}
+
+    conditional: List[Tuple[int, int]] = []
+    for at in re.finditer(r"@[a-z-]+[^{;]*\{", body):
+        conditional.append((at.start(), _block_end(body, at.end())))
+
+    # SCOPED TO `--bn-`, AND THE EXCLUSION IS ARGUED IN `token_findings`. The legacy aliases at
+    # the foot of the stylesheet are named in the prose under the block as a spent migration
+    # seam that is to be deleted; a check that demanded they be locked would be fighting the
+    # plan it is auditing.
+    light: Dict[str, str] = {}
+    dark: Dict[str, str] = {}
+    every: Set[str] = set()
     for match in re.finditer(r":root\b[^{]*\{", body):
-        depth = 1
-        index = match.end()
-        while index < len(body) and depth:
-            if body[index] == "{":
-                depth += 1
-            elif body[index] == "}":
-                depth -= 1
-            index += 1
-        for name, value in _CSS_PROPERTY_RE.findall(body[match.end():index]):
-            out[name] = value.strip()
-    return out
+        end = _block_end(body, match.end())
+        declared = [
+            (name, value)
+            for name, value in _CSS_PROPERTY_RE.findall(body[match.end():end])
+            if name.startswith("bn-")
+        ]
+        for name, _value in declared:
+            every.add("--" + name)
+        if any(start <= match.start() < stop for start, stop in conditional):
+            continue
+        selector = body[match.start():match.end()]
+        table = dark if "data-theme='dark'" in selector or 'data-theme="dark"' in selector else light
+        for name, value in declared:
+            table["--" + name] = value.strip()
+    return light, dark, every
 
 
-def token_findings(doc: Dict[str, Token], css: Dict[str, str]) -> List[Finding]:
+def _block_end(body: str, opened: int) -> int:
+    """The index just past the `}` closing a block whose `{` has already been consumed."""
+    depth = 1
+    index = opened
+    while index < len(body) and depth:
+        if body[index] == "{":
+            depth += 1
+        elif body[index] == "}":
+            depth -= 1
+        index += 1
+    return index
+
+
+def token_findings(
+    claims: Claims,
+    light: Dict[str, str],
+    dark: Dict[str, str],
+    every: Set[str],
+) -> List[Finding]:
     """Both directions, and every finding names both files and both values.
 
     Both directions because either half of a drift is the same defect seen from one side. A
     token in the doc and not the stylesheet is a decision the product never implemented; a
-    token in the stylesheet and not the doc is a value the owner never chose, which is the
-    more dangerous of the two — it renders perfectly and no interview ever saw it.
+    token in the stylesheet and not the doc is a value the owner never chose, which is the more
+    dangerous of the two — it renders perfectly and no interview ever saw it.
+
+    SCOPED TO `--bn-` AND NOT TO EVERY CUSTOM PROPERTY. The legacy aliases at the foot of the
+    stylesheet — `--ink`, `--s1`, `--radius` and the rest — are named in the prose under the
+    block as a migration seam that is already spent and is to be deleted. Locking a name the
+    document argues for deleting would make the check fight the plan it is auditing.
     """
     findings: List[Finding] = []
-    for name in sorted(set(doc) | set(css)):
-        locked = doc.get(name)
-        rendered = css.get(name)
-        if locked is None:
-            findings.append(
-                Finding(
-                    f"{rel(TOKENS_CSS)} + {rel(DESIGN)}",
-                    f"`--{name}: {rendered}` is declared in {rel(TOKENS_CSS)}, and the token "
-                    f"block in {rel(DESIGN)} locks no `{name}`.\n"
-                    f"  Lock it there, or delete it here. A token the doc never chose is a "
-                    f"value with no argument behind it.",
-                )
+
+    for name in sorted(claims.names - every):
+        findings.append(
+            Finding(
+                f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                f"{rel(DESIGN)} locks `{name}`, and {rel(TOKENS_CSS)} declares no such "
+                f"property.\n"
+                f"  Nothing renders it, so the locked value is a decision the product does "
+                f"not carry.",
             )
+        )
+
+    for group in claims.alts:
+        if group & every:
             continue
-        if rendered is None:
-            findings.append(
-                Finding(
-                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
-                    f"{rel(DESIGN)} locks `{name}` at `{locked.text}`, and "
-                    f"{rel(TOKENS_CSS)} declares no `--{name}`.\n"
-                    f"  Nothing renders it, so the locked value is a decision the product "
-                    f"does not carry.",
-                )
+        findings.append(
+            Finding(
+                f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                f"{rel(DESIGN)} continues a name into {' or '.join(sorted(group))}, and "
+                f"{rel(TOKENS_CSS)} declares neither.\n"
+                f"  A shorthand that reads onto nothing is a token the block believes it "
+                f"locked and does not.",
             )
+        )
+
+    for prefix in sorted(claims.prefixes):
+        if any(name.startswith(prefix + "-") for name in every):
             continue
-        if token_value(locked.kind, rendered) != locked.value:
-            findings.append(
-                Finding(
-                    f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
-                    f"`{name}` disagrees.\n"
-                    f"  {rel(DESIGN)}:      {locked.text}\n"
-                    f"  {rel(TOKENS_CSS)}: {rendered}\n"
-                    f"  The doc is the source — it records what the owner picked from "
-                    f"rendered alternatives. Change the stylesheet, or take the value back "
-                    f"through an interview and change both.",
-                )
+        findings.append(
+            Finding(
+                f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                f"{rel(DESIGN)} locks the family `{prefix}-…`, and {rel(TOKENS_CSS)} "
+                f"declares nothing under it.\n"
+                f"  A range that covers no token locks nothing at all.",
             )
+        )
+
+    for name in sorted(name for name in every if not claims.covers(name)):
+        findings.append(
+            Finding(
+                f"{rel(TOKENS_CSS)} + {rel(DESIGN)}",
+                f"`{name}: {light.get(name, dark.get(name, ''))}` is declared in "
+                f"{rel(TOKENS_CSS)}, and the token block in {rel(DESIGN)} names no "
+                f"`{name}`.\n"
+                f"  Lock it there, or delete it here. A token the doc never chose is a value "
+                f"with no argument behind it.",
+            )
+        )
+
+    for name in sorted(claims.hexes):
+        for rendered, locked, theme in (
+            (light.get(name), claims.hexes[name][0], "light"),
+            (dark.get(name), claims.hexes[name][1], "dark"),
+        ):
+            if locked is None or rendered is None or not rendered.startswith("#"):
+                # A stylesheet value that is not a literal is an alpha or a mix of another
+                # token, which the block states in words rather than as a second hex. There is
+                # nothing to compare, and reporting it would be reporting the design.
+                continue
+            if token_value(COLOUR, rendered) != token_value(COLOUR, locked):
+                findings.append(
+                    Finding(
+                        f"{rel(DESIGN)} + {rel(TOKENS_CSS)}",
+                        f"`{name}` disagrees in the {theme} theme.\n"
+                        f"  {rel(DESIGN)}:      {locked}\n"
+                        f"  {rel(TOKENS_CSS)}: {rendered}\n"
+                        f"  The doc is the source — it records what the owner picked from "
+                        f"rendered alternatives. Change the stylesheet, or take the value "
+                        f"back through an interview and change both.",
+                    )
+                )
     return findings
 
 
@@ -4650,8 +4821,9 @@ def check_design_tokens(report: Report) -> None:
         )
         return
 
-    doc = design_tokens(block)
-    css = css_root_tokens(read(TOKENS_CSS))
+    claims = design_token_claims(block)
+    light, dark, every = css_token_scopes(read(TOKENS_CSS))
+    doc, css = claims.names, every
     if not doc or not css:
         # A side that parses to nothing must never report a clean row — same rule as a
         # malformed `source_suffixes` scanning nothing and saying so. This is the state
@@ -4672,8 +4844,9 @@ def check_design_tokens(report: Report) -> None:
     report.add(
         "design tokens",
         MECHANICAL,
-        token_findings(doc, css),
-        f"{len(doc)} locked tokens, all rendered as locked",
+        token_findings(claims, light, dark, every),
+        f"{len(every)} declared tokens, every one named by the block; "
+        f"{len(claims.hexes)} hexes compared across both themes",
     )
 
 
@@ -5233,14 +5406,33 @@ def app_routes() -> Tuple[List[Tuple[str, str, bool]], List[str], List[Finding]]
             continue
         rows.append((path.group(1), group.group(1), "hotkey:" in row))
 
-    order = re.search(r"const\s+GROUP_ORDER\s*:[^=]*=\s*", source)
+    # THE NAV'S ORDER, UNDER EITHER OF THE TWO NAMES IT HAS HAD. It was `GROUP_ORDER`, a
+    # list of bare strings; the Banchi shell draws from `GROUPS`, a list of `{id, label}`
+    # objects, because a group now carries a heading as well as an order. Reading only the
+    # old name did not fail loudly — it returned NO groups, which made `expected_rosters()`
+    # hand back an empty dict, which made the `route rosters` row skip every roster a spec
+    # had pinned. A check that stops checking is worse than one that fails, so both spellings
+    # are read and the absence of both is still a finding.
     groups: List[str] = []
+    order = re.search(r"const\s+GROUP_ORDER\s*:[^=]*=\s*", source)
     if order is not None:
         groups = re.findall(r"'([^']*)'", _balanced(source, order.end()))
     if not groups:
+        modern = re.search(r"const\s+GROUPS\s*:[^=]*=\s*", source)
+        if modern is not None:
+            # `{ id: 'work', label: 'Workflow' }` — the id is the group, the label is chrome.
+            groups = re.findall(r"id:\s*'([^']*)'", _balanced(source, modern.end()))
+    if not groups:
         findings.append(
-            Finding(rel(APP_TSX), "defines no readable `GROUP_ORDER`, so a nav ORDER cannot be derived.")
+            Finding(rel(APP_TSX), "defines no readable `GROUP_ORDER` or `GROUPS`, so a nav ORDER cannot be derived.")
         )
+    # A group the shell deliberately keeps out of the nav list is still a drawn group as far
+    # as this row is concerned: its routes are reached from the sidebar foot or the command
+    # palette. `App.tsx:OFF_NAV` is where that intent is declared, so it is read rather than
+    # guessed. Absent, nothing is added and the row behaves exactly as it did.
+    off = re.search(r"const\s+OFF_NAV\s*:[^=]*=\s*", source)
+    if off is not None:
+        groups = list(groups) + [g for g in re.findall(r"'([^']*)'", _balanced(source, off.end())) if g not in groups]
     return rows, groups, findings
 
 
@@ -5430,7 +5622,9 @@ _NUMBER_WORDS = {
 _CENSUS_CLAIMS = (
     ("has ([A-Za-z]+) screens and ([A-Za-z]+) routes", ("total", "total")),
     ("([A-Za-z]+) the owner's, one the Fulfiller's", ("owner",)),
-    ("([A-Za-z]+) screens — capture", ("total",)),
+    # Re-pointed when Home took the root hash and capture moved to `#/capture`: the list this
+    # sentence opens with now begins "home, capture" rather than "capture".
+    ("([A-Za-z]+) screens — home, capture", ("total",)),
     ("all ([A-Za-z]+) routed", ("total",)),
     ("All ([A-Za-z]+) open at a hash", ("total",)),
     ("the other ([A-Za-z]+) carry", ("total_less_one",)),
@@ -6925,68 +7119,123 @@ def self_test() -> int:
 
     sample = "\n".join(
         [
-            "Color      #FCFCFD  bg        the page. Everything sits on this.",
-            "           #1E40AF  accent    unsure, and the only-action fill",
+            "NEUTRALS                 light        dark",
+            "--bn-bg                  #f4f5f8      #0c0e12     the page",
+            "--bn-line                ink 8%       white 8%    the hairline",
             "",
-            "Display    Cabinet Grotesk  (Fontshare)   700/800 only, and only at >= 20px",
-            "",
-            "Spacing    4 8 12        one scale, no other values",
-            "Radius     4px           one value, everywhere",
+            "SPACING                  --bn-1 … --bn-3 = 4 8 12",
+            "RADIUS                   --bn-r-xs 4 · -sm 6 · --bn-r 8",
+            "TYPE                     --bn-fs-2xs … --bn-fs-5xl   10 11 12",
+            "STAGE                    --bn-stage-bg #0c0e12 · -ink #eef0f4",
         ]
     )
-    parsed = design_tokens(sample)
+    claims = design_token_claims(sample)
     ok(
-        set(parsed) == {"bg", "accent", "display", "s1", "s2", "s3", "r"},
-        "every row of the block yields its token, labelled row included",
-        str(sorted(parsed)),
+        {"--bn-bg", "--bn-line", "--bn-1", "--bn-2", "--bn-3", "--bn-r-xs", "--bn-r"} <= claims.names,
+        "a plain row, a numbered range and a full name in a list all yield their token",
+        str(sorted(claims.names)),
     )
-    ok(parsed["s2"].value == "8px", "the bare spacing scale is read in px", str(parsed["s2"]))
     ok(
-        parsed["display"].value == "cabinet grotesk",
-        "the face is read without its host parenthetical",
-        str(parsed["display"]),
+        claims.prefixes == {"--bn-fs"},
+        "a WORDED range locks a family, because its members are not enumerable from its ends",
+        str(claims.prefixes),
+    )
+    ok(
+        any({"--bn-r-sm"} & group for group in claims.alts),
+        "a bare suffix continues the name before it",
+        str(claims.alts),
+    )
+    ok(
+        claims.hexes.get("--bn-bg") == ("#f4f5f8", "#0c0e12"),
+        "a row states a light value AND a dark one, and both are kept",
+        str(claims.hexes.get("--bn-bg")),
+    )
+    ok(
+        "--bn-line" not in claims.hexes,
+        "an alpha of another token states no hex, so there is nothing to compare",
+        str(claims.hexes),
+    )
+    ok(
+        claims.hexes.get("--bn-stage-ink") == ("#eef0f4", None),
+        "a name/value pair mid-line is read, suffix and all",
+        str(claims.hexes),
     )
 
-    rendered = {
-        "bg": "#fcfcfd",
-        "accent": "#1E40AF",
-        "display": "'Cabinet Grotesk', sans-serif",
-        "s1": "4px",
-        "s2": "8px",
-        "s3": "12px",
-        "r": "4px",
-    }
-    ok(not token_findings(parsed, rendered), "two files that agree produce no finding", str(token_findings(parsed, rendered)))
-
-    drifted = dict(rendered, accent="#1e40b0")
-    findings = token_findings(parsed, drifted)
+    scoped = "\n".join(
+        [
+            ":root { --bn-bg: #f4f5f8; --bn-ink: #0f1217; --legacy: var(--bn-bg); }",
+            ":root[data-theme='dark'] { --bn-bg: #0c0e12; }",
+            "@media (pointer: coarse) { :root { --bn-control-h: 42px; } }",
+        ]
+    )
+    light, dark, every = css_token_scopes(scoped)
     ok(
-        len(findings) == 1 and "#1E40AF" in findings[0].message and "#1e40b0" in findings[0].message,
+        light.get("--bn-bg") == "#f4f5f8" and dark.get("--bn-bg") == "#0c0e12",
+        "THE TWO THEMES ARE KEPT APART — merging them let a dark hex answer for a light one",
+        f"light {light.get('--bn-bg')} / dark {dark.get('--bn-bg')}",
+    )
+    ok(
+        "--legacy" not in every,
+        "a legacy alias is not locked, because the doc argues for deleting it",
+        str(sorted(every)),
+    )
+    ok(
+        "--bn-control-h" in every and "--bn-control-h" not in light,
+        "a token declared only under an at-rule is named but not value-compared",
+        f"every={sorted(every)} light={sorted(light)}",
+    )
+
+    agreed = design_token_claims(
+        "\n".join(["--bn-bg   #f4f5f8   #0c0e12   the page", "--bn-ink  #0f1217   #eef0f4   body text"])
+    )
+    css_light = {"--bn-bg": "#f4f5f8", "--bn-ink": "#0f1217"}
+    css_dark = {"--bn-bg": "#0c0e12", "--bn-ink": "#eef0f4"}
+    names = {"--bn-bg", "--bn-ink"}
+    ok(
+        not token_findings(agreed, css_light, css_dark, names),
+        "two files that agree produce no finding",
+        str(token_findings(agreed, css_light, css_dark, names)),
+    )
+
+    drifted = token_findings(agreed, dict(css_light, **{"--bn-ink": "#0f1218"}), css_dark, names)
+    ok(
+        len(drifted) == 1 and "#0f1217" in drifted[0].message and "#0f1218" in drifted[0].message,
         "a changed hex is reported, naming both values",
-        str(findings),
+        str(drifted),
     )
     ok(
-        len(findings) == 1 and "docs/DESIGN.md" in findings[0].message and "app/src/tokens.css" in findings[0].message,
+        len(drifted) == 1 and "docs/DESIGN.md" in drifted[0].message and "app/src/tokens.css" in drifted[0].message,
         "and naming both files",
-        str(findings),
+        str(drifted),
+    )
+    dark_drift = token_findings(agreed, css_light, dict(css_dark, **{"--bn-bg": "#0c0e13"}), names)
+    ok(
+        len(dark_drift) == 1 and "dark theme" in dark_drift[0].message,
+        "AND A DARK VALUE DRIFTING IS ITS OWN FINDING, which the merged reader could not see",
+        str(dark_drift),
     )
     ok(
-        len(token_findings(parsed, {name: value for name, value in rendered.items() if name != "r"})) == 1,
+        len(token_findings(agreed, css_light, css_dark, {"--bn-bg"})) == 1,
         "a locked token the stylesheet never declares is reported",
-        str(token_findings(parsed, {name: value for name, value in rendered.items() if name != "r"})),
+        str(token_findings(agreed, css_light, css_dark, {"--bn-bg"})),
     )
     ok(
-        len(token_findings(parsed, dict(rendered, shadow="#000000"))) == 1,
+        len(token_findings(agreed, css_light, css_dark, names | {"--bn-shadow-1"})) == 1,
         "and a stylesheet token the block never locked",
-        str(token_findings(parsed, dict(rendered, shadow="#000000"))),
+        str(token_findings(agreed, css_light, css_dark, names | {"--bn-shadow-1"})),
     )
 
-    css = css_root_tokens(":root {\n  --ink: #08090a; /* was --ink: #ffffff; */\n}\n")
-    ok(css == {"ink": "#08090a"}, "a declaration inside a comment is not a token", str(css))
+    commented, _, _ = css_token_scopes(":root {\n  --bn-ink: #08090a; /* was --bn-ink: #fff; */\n}\n")
     ok(
-        css_root_tokens(".card { --ink: #ffffff; }\n") == {},
+        commented == {"--bn-ink": "#08090a"},
+        "a declaration inside a comment is not a token",
+        str(commented),
+    )
+    elsewhere, _, _ = css_token_scopes(".card { --bn-ink: #ffffff; }\n")
+    ok(
+        elsewhere == {},
         "and a custom property on some other selector is not a locked token",
-        str(css_root_tokens(".card { --ink: #ffffff; }\n")),
+        str(elsewhere),
     )
 
     # The extractor against the real file, because the synthetic block above is written to
@@ -6996,8 +7245,11 @@ def self_test() -> int:
         # Discriminated on a string only the step-6 fence carries. The obvious marker —
         # `disabled`, one of its three state names — is also the last word of the `muted`
         # row in this fence, so it failed against the correct block. Measured, not guessed.
+        # The POSITIVE marker moved with the block: it read `Spacing`, which the `--bn-`
+        # rewrite spells `SPACING`, and a self-test pinned to a heading's case is pinned to
+        # the wrong thing. A token prefix no other fence in the file uses is the durable one.
         ok(
-            block is not None and "Spacing" in block and "44px tall" not in block,
+            block is not None and "--bn-" in block and "44px tall" not in block,
             "the Tokens fence is the one extracted, not step 6's button states",
             (block or "")[:70],
         )

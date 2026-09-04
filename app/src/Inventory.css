@@ -1,449 +1,179 @@
-/* The inventory view — one screen, box-spined, with the sale and the retirement on the card
- * the walk is pointing at.
- *
- * WHAT THIS FILE LOST ON 2026-08-23, and it is most of it. The screen used to open with a 32px
- * title, a three-line lede, a two-cell mode switch, its own search field and its own controls
- * row, and then draw a full list of SKU groups with expandable copy tables under them. The
- * owner's correction deleted the modes — "it's basically find a card in a box-based system if
- * anything" — and the group list went with them, because a SKU-keyed list beside a
- * position-keyed walk was the second instance of one thing that D31 exists to stop. Every rule
- * that drew those is gone rather than left orphaned; `scripts/docs-audit.py` does not read CSS,
- * so nothing would have told anyone.
- *
- * THE MEASUREMENT THAT DROVE IT, at 1440x900: 240px of chrome above the walk (27% of the
- * viewport), the first card row at y=475, `.inventory` padded at 32px on a screen
- * docs/DESIGN.md calls the dense end of the scale (4-16), and a 320px list beside ~856px of
- * mostly empty column. What is left of this file is the page frame, the receipts, the two
- * confirm panels and the copies block — everything else belongs to `BoxBrowse.css`.
- *
- * ACCENT APPEARS NOWHERE ON THIS SCREEN, AND THIS PARAGRAPH HAS NOW SAID BOTH THINGS. It read
- * "exactly once, in the confirm panel" — the sale's photo-confirm, a photograph, a position and
- * one action, which is docs/DESIGN.md's definition of a screen that earns a solid fill. D57
- * deleted that panel on 2026-08-30: the owner ruled the photograph redundant against the card
- * band, so `Mark sold` writes on one press and the way back is an `Undo` in the row and on the
- * receipt. Nothing here renders PullConfirm any more.
- *
- * THAT IS THE RULE SATISFIED RATHER THAN BROKEN, which is worth stating because the sentence
- * reads like a loss. The rule says where a fill MAY go, never that a screen must have one —
- * `#/runs` draws none either — and the retire panel that inherited this file's scrim is a choice
- * between four reasons, which is the case that has always been refused a fill. The copy rows get
- * none for the reason CardLocations.css gives: several things to do is not one thing to do.
- *
- * SEPARATION IS THE 1px --line HAIRLINE AND NOTHING ELSE. No shadow, no tint, no header strip —
- * docs/DESIGN.md built a tinted panel bar carrying a name and a count, looked at it, and
- * rejected it.
- *
- * Owner-side: the 4-16 end of the spacing scale, and the Fulfillment floors (20px body, 32px
- * position labels, 44px tap targets) govern a different view. None is asserted here.
- *
- * Mono carries every number, position, state and machine string; the body face carries the card
- * names and the sentences. That split is the one rule doing the most work in this file.
- */
+/* The inventory view: the location card and the copies beside the photograph, the sale, the
+   retirement and its dialog. */
 
-/* PADDED AT 16 AND NOT 32. docs/DESIGN.md: "Owner screens use the 4-16 end of the scale", and
-   this screen was at the loose end of it — 32px of page padding is 64px of the viewport's width
-   and 32px of its height spent before anything is drawn. */
-.inventory {
-  padding: var(--s4);
+.inventory { display: flex; flex-direction: column; min-width: 0; }
 
-  /* 1440 AND NO CENTRING, AS OF 2026-08-24, AND THE OLD PAIR WAS THROWING AWAY 200px.
-     `max-width: 1240px` with `margin: 0 auto` put 100px of dead page down each side of a
-     1440 viewport — on the screen that walks a box, shows a photograph and lists every copy,
-     all of which wanted the width. Measured beside its siblings, this screen was the worst of
-     three different answers to the same question: capture commits 1400, review derives its
-     own from its columns and wastes nothing, and this wasted 13.9%.
-
-     NO `margin: 0 auto`, which is the half that matters. docs/DESIGN.md requires the nav to
-     share the page's reading edge — app/src/App.css pads the strip to this same 16px so the
-     first route name sits directly above a screen's heading — and centring the page breaks
-     exactly that alignment on every viewport wider than the measure. Hard left, like the
-     review queue. */
-  max-width: 1440px;
-}
-
-/* THE PAGE TITLE, RENDERED INTO THE WALK'S OWN HEADER ROW rather than onto a line of its own —
-   `BoxBrowse.tsx` takes it as `head` and the argument is in that file's header row comment.
-
-   20px, not 32. That is the floor Cabinet Grotesk is allowed at (docs/DESIGN.md locks the
-   display face to >= 20px), so it is the smallest this title can honestly be drawn — and the
-   32px it was is a size that earns its place on a screen with one thing on it, not on the
-   screen the owner spends hours inside. Baseline-aligned with the reload beside it. */
-.inventory-title {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  /* NO `margin-right`. It was `--s2`, on top of `.browse-controls`' own `gap: var(--s3)`, so
-     title -> Reload measured 20px against Reload -> count and count -> keys at 12px. 20 is on
-     neither the spacing scale nor in any single declaration, and docs/DESIGN.md's page-chrome
-     rule has the title SHARE the line — a first interval 67% wider than the other two rebuilds
-     the title/toolbar boundary that shared line exists to delete. */
-}
-
-/* ---- notes, and the machine register ---- */
-
-.inventory-note {
-  max-width: 560px;
-  margin-top: var(--s3);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* A sentence a human reads, so the body face. */
-.inventory-note-text {
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-  max-width: 76ch;
-}
-
-/* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, which
-   exists so that what you saw on screen is greppable against the run report and the store. It
-   carries a TOKEN and never the sentence above it again: the code, the field that was null, the
-   key. break-all because these are keys and URLs, and one that overflows its panel is one you
-   cannot copy. Owner-side only; the Fulfillment banned-word list forbids this register. */
-.inventory-machine {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: var(--s2);
-  word-break: break-all;
-}
-
-/* ---- the copies of the selected card, drawn in the walk's detail column ---- */
-
-/* The node `BoxBrowse` renders beside the photograph: the trouble panel, the standing receipts,
-   and the copies. A column with air between rather than hairlines, because each piece is
-   already a bordered panel and two bordered panels flush draw a 2px rule — the second
-   separation weight this system does not have. */
-/* A QUERY CONTAINER, so the copy rows below can answer to the width THEY get rather than to the
-   viewport. `CardLocations.css` asks for exactly this in as many words — its row is a wrapping
-   flex "so the same component is honest in the owner's detail column and in the full-width panel
-   it used to have, with no breakpoint to keep in step". A container query is that sentence made
-   mechanical; a media query would be the breakpoint it refuses. `container-type: inline-size` is
-   already the idiom here — `app/src/CaptureScreen.css` uses it. */
+/* The node beside the photograph. A query container, so the copy rows answer to the width they
+   actually get. */
 .inventory-detail {
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
+  gap: var(--bn-4);
   min-width: 0;
   container-type: inline-size;
   container-name: copies;
 }
-
 .inventory-copies {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--bn-4);
   min-width: 0;
 }
 
-/* THE ONE CARD THE SEARCH CANNOT REACH: no name, no SKU, so no group and deliberately no
-   invented group header. One line — where it is, and the two doors out of inventory — because
-   the three numbers a group carries (`on hand`, `listed`, the cap) have no honest local value
-   and drawing zeros for them would put numbers on screen that name nothing. */
-.inventory-lone {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* THE SIXTH SITE OF D41's TREATMENT, ADDED BY D71, and `--pos-slot` is the only number it
-   chooses. 20px rather than the walk panel's 44: this row carries a position, a state word and
-   two controls inside a ~460px panel, and the register it has always sat in is 13px. 20 is the
-   capture undo sidebar's figure, chosen there for the same shape — a compact row in a column —
-   and it buys the ranking without taking the row to two lines.
-
-   `overflow-wrap: anywhere` GOES WITH THE STRING IT WAS FOR. It existed because the raw label is
-   one long run of words and interpuncts that had to be allowed to break mid-token in a narrow
-   panel; the treatment splits it into a stacked path and a figure, so there is no long token
-   left to break and the property would now only ever break a word that fits. */
-.inventory-lone-place {
-  font-family: var(--util);
-  font-size: var(--pos-slot);
-  --pos-slot: 20px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--ink);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* The two depths, on their own line under the label — `CardLocations.css` argues the same rule
-   for the group's rows and the measurement it rests on is the same one. This row carries a
-   position label, a state word and two controls; at the ~460px this panel gets, a bar sharing
-   that line has under 100px and both captions wrap into four-line columns. Ordered last so the
-   row wraps to two lines and not three, and so nothing is taken from the label — which is the
-   string somebody carries to a shelf. */
-.inventory-lone > .position-bar {
-  flex: 1 1 100%;
-  order: 1;
-}
-
-/* The same widening the group rows get — see CardLocations.css. A card with no name and no SKU
-   draws THIS panel instead of the group, and that is every card in a freshly shot box, so
-   leaving it out would make two renderings of "one copy and where it is" behave differently at
-   the same width. */
-@container copies (min-width: 860px) {
-  .inventory-lone > .position-bar {
-    flex: 1 1 20rem;
-    order: 0;
-  }
-}
-
-/* A command name or a field name inside a sentence: a machine string, so the utility face at
-   the size of the sentence around it. Same treatment as the capture screen's inline position
-   label. */
-.inventory-inline {
-  font-family: var(--util);
-  font-size: 13px;
-  color: var(--ink);
-}
-
-/* ---- the search results, the receipts, and the confirm ---- */
-
-/* The standing writes — sales and retirements inside their undo window — above the copy rows
-   they are about. See the TSX for why they are held by the screen and not by the row: the rows
-   are replaced every time the walk steps to another card, and a twenty-second promise has to
-   outlive that. */
-.inventory-receipts {
+/* ---- the location card ---- */
+.inventory-location {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+  min-width: 0;
 }
-
-.inventory-receipt {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* A sentence a human reads, so the body face — and at full ink, because it is the only thing
-   on the screen reporting something that just changed. */
-.inventory-receipt-said {
-  font-family: var(--body);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-/* The position, mono and tabular like every position in the product. Martian Mono is tabular
-   by construction, so no font-variant-numeric — docs/DESIGN.md picked the face for exactly
-   that. */
-.inventory-receipt-place {
-  font-family: var(--util);
-  font-size: 12px;
-  color: var(--ink);
-}
-
-/* The quiet owner-side control: hairline border, ink label, no fill. Identical to
-   `.inventory-reload` on purpose and declared beside it rather than by adding a class to that
-   selector, because the two are the same control at two call sites and a shared name is how
-   the next edit keeps them together. */
-.inventory-plain {
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  cursor: pointer;
-  margin-left: auto;
-}
-
-.inventory-plain:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.inventory-plain:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-/* THE SCRIM IS THE PAGE GROUND AT PARTIAL ALPHA, not a black wash. There is no token for a
-   shadow or an overlay tint, and docs/DESIGN.md's lesson from --on-accent is that the answer
-   to "no token means what I mean" is a token argued for in that file, never a literal painted
-   here. `--bg` at 0.86 is the ground this app already sits on, dimming what is behind the
-   panel without introducing a colour the palette never locked. */
-.inventory-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
+:root[data-theme='dark'] .inventory-location { background: var(--bn-surface-3); }
+.inventory-location-head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: var(--s5);
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  overflow-y: auto;
+  justify-content: space-between;
+  gap: var(--bn-2);
+}
+.inventory-location-head .bn-label { display: inline-flex; align-items: center; gap: 5px; }
+.inventory-location-boxname {
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.inventory-location-label {
+  color: var(--bn-ink);
+  --pos-slot: 40px;
+  --pos-gap: var(--bn-4);
+  font-size: var(--pos-slot);
+  line-height: 1;
+}
+.inventory-location .nb { --nb-key: 11px; --nb-name: 13px; }
+.inventory-location > .position-bar { margin-top: var(--bn-1); }
+.inventory-location-note { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
+.inventory-location-actions { margin-top: var(--bn-1); }
+.inventory-location-actions .inventory-copy-actions.is-primary { display: flex; align-items: center; gap: var(--bn-2); }
+.inventory-location-actions .inventory-copy-actions.is-primary .bn-btn-primary { flex: 1 1 auto; }
+.inventory-location-actions .bn-receipt { justify-content: space-between; }
+.inventory-receipt-said { font-weight: 600; flex: 1 1 auto; }
+
+/* An open order's claim on this copy — a line, not a pill, because it carries a whole
+   order number and a way over to the order screen. */
+.inventory-wanted {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  min-height: 34px;
+  padding: var(--bn-1) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-warn-tint, var(--bn-surface));
+  color: var(--bn-ink);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
+}
+.inventory-wanted:hover { text-decoration: none; transform: translateY(-1px); }
+.inventory-wanted > .bn-icon:first-child { color: var(--bn-warn); flex: none; }
+.inventory-wanted-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-wanted-number { font-family: var(--bn-font-mono); font-weight: 500; font-size: var(--bn-fs-xs); color: var(--bn-ink-2); }
+.inventory-wanted-go { color: var(--bn-ink-4); flex: none; transition: transform var(--bn-t) var(--bn-ease-spring), color var(--bn-t-fast) var(--bn-ease); }
+.inventory-wanted:hover .inventory-wanted-go { color: var(--bn-accent); transform: translateX(2px); }
+
+@media (max-width: 767px) {
+  .inventory-location-label { --pos-slot: 36px; }
+  /* a thumb presses these: the ghost Retire beside Mark sold, and the dialogs' Cancel */
+  .inventory-location-actions .bn-btn { --btn-h: var(--bn-control-h-lg); }
+  .inv-dialog-foot .bn-btn { --btn-h: var(--bn-control-h-lg); }
 }
 
-/* The panel. Separated from the scrim by the same 1px hairline as everything else — a shadow
-   would be the second separation mechanism this system does not have, and the scrim already
-   does the work of lifting it off the page. */
-.inventory-confirm {
+/* The claim line is a LINK to the order screen, so it takes the same floor as the buttons
+   under it. It follows the pointer rather than the width: an iPad in portrait is 820px wide
+   and all thumb, and 34px is a mouse size. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .inventory-wanted { min-height: var(--bn-control-h-lg); padding: var(--bn-2) var(--bn-3); }
+}
+
+/* ---- the copy actions ---- */
+.inventory-copy-actions { display: inline-flex; align-items: center; gap: var(--bn-1); }
+
+/* the lone copy: a card with no name and no SKU */
+.inventory-lone { min-width: 0; }
+.inventory-inline { font-family: var(--bn-font-mono); font-size: 0.92em; }
+.inventory-machine {
+  display: block;
+  margin-top: var(--bn-1);
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  overflow-wrap: anywhere;
+}
+.inventory-looking { display: flex; flex-direction: column; gap: var(--bn-2); }
+
+/* ---- the retire dialog ---- */
+.inventory-retire-card {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: var(--bn-4);
+  align-items: start;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.inventory-confirm-photo {
+  display: block;
+  width: 84px;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  box-shadow: var(--bn-shadow-1);
+}
+.inventory-retire-nophoto {
+  width: 84px;
+  aspect-ratio: 63 / 88;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  color: var(--bn-ink-4);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+}
+.inventory-retire-where { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; }
+.inventory-confirm-place {
+  color: var(--bn-ink);
+  --pos-slot: 28px;
+  font-size: var(--pos-slot);
+  line-height: 1;
+}
+.inventory-confirm-boxname { font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); }
+
+.inventory-retire-reasons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-2); }
+@media (max-width: 480px) { .inventory-retire-reasons { grid-template-columns: minmax(0, 1fr); } }
+.inventory-retire-reason {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--s3);
-  width: min(420px, 100%);
-  margin: auto;
-  padding: var(--s5);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* The panel's name, and the same words as the button that opened it — docs/DESIGN.md's rule
-   that an action keeps its name through the flow. Display face at 20px, which is the floor
-   that face is allowed at. */
-.inventory-confirm-head {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-
-/* The photograph, sized from the card rather than from the viewport: 63x88mm is the shape of
-   every card this product will ever hold, so the box is the right shape before the image loads
-   and the panel does not jump when it does. No 320px floor — that is a Fulfillment constraint
-   and this is the owner's screen. */
-.inventory-confirm-photo {
-  display: block;
-  width: 100%;
-  aspect-ratio: 63 / 88;
-  object-fit: cover;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* The position is the payload: it is what says which copy is about to be retired. Larger than
-   the row's 13px because this is the one thing being checked, and mono so it cannot shift width.
-   It said "about to be sold" until D57 took the sale's panel away; the retirement is the only
-   write left that draws one. */
-/* THE SEVENTH SITE (D71). 20px, up from the 15px this drew the raw string at: the treatment
-   demotes the coarse parts to 11px and promotes only the card number, so the figure can be
-   larger than the string was while the block is narrower — which is the trade D41 measured at
-   every other site. It is what somebody checks against the card in their hand. */
-.inventory-confirm-place {
-  font-family: var(--util);
-  font-size: var(--pos-slot);
-  --pos-slot: 20px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--ink);
-}
-
-/* What the owner calls the box. A label for humans, never an identifier — quieter than the
-   position it sits under, because the position is the thing you walk with. */
-.inventory-confirm-boxname {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.inventory-confirm-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  width: 100%;
-  margin-top: var(--s2);
-}
-
-/* `margin-left: auto` is right for a receipt, where Undo packs to the far end of a wide row, and
-   wrong here, where Cancel is the only thing in the row and would drift to its far end.
-
-   IT SAID "where the two controls are a pair" UNTIL D57, and a `.pull-confirm` rule stood above
-   it giving the sale's confirm button the rest of the row. That button is gone with its panel,
-   so this row holds one control and the rule survives its own reason. */
-.inventory-confirm-actions .inventory-plain {
-  margin-left: 0;
-}
-
-/* The bar sizes to the panel rather than to its own content. */
-.inventory-confirm .position-bar {
-  width: 100%;
-}
-
-/* ---- D26: the retire control ---- */
-
-/* The action slot holding both quiet buttons. A row, not a column: the copy rows budget
-   ~56px and two stacked 32px buttons would double every row for the rare press. Both reuse
-   `.card-locations-sell`'s owner styling — same control, same weight, neither louder,
-   because a slot where Retire outdrew Mark sold would rank the two writes and no ruling
-   ranks them. */
-.inventory-copy-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-}
-
-/* The reason list: one full-width button per reason, stacked. A column because the labels
-   differ in length and a grid of uneven buttons reads as a ranking; the stack reads as the
-   list it is. */
-.inventory-retire-reasons {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  width: 100%;
-}
-
-/* One reason: human label left, machine word right — docs/DESIGN.md's two-register rule
-   drawn horizontally because the control is one line tall. Quiet like every owner-side
-   control: hairline, surface, no fill — four answers, so no accent (see the panel's own
-   comment). */
-.inventory-retire-reason {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s3);
-  width: 100%;
-  min-height: 40px;
-  padding: var(--s2) var(--s3);
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
-}
-
-.inventory-retire-reason:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.inventory-retire-reason:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-.inventory-retire-label {
+  gap: var(--bn-2);
+  min-height: 72px;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
   text-align: left;
+  color: var(--bn-ink);
+  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
 }
-
-/* The machine word rides the button's baseline; the shared class brings its own top margin
-   for the stacked case and it is unwanted here. */
-.inventory-retire-reason .inventory-machine {
-  margin-top: 0;
-}
+.inventory-retire-reason:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); background: var(--bn-surface-3); }
+.inventory-retire-reason:active:not(:disabled) { transform: translateY(0) scale(0.99); }
+.inventory-retire-reason:disabled { opacity: 0.5; }
+.inventory-retire-text { display: flex; flex-direction: column; gap: 2px; }
+.inventory-retire-label { font-size: var(--bn-fs-base); font-weight: 700; }
+.inventory-retire-said { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.inventory-retire-reason .inventory-machine { margin-top: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }

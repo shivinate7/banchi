@@ -1,8 +1,29 @@
-# PKMNSCAN
+# BANCHI
 
-Bulk-list pre-sorted Pokémon TCG singles on TCGplayer with zero attention per card and
-physical location tracking. Two tracks share one rig: singles (this file) and code cards
+Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and know where
+every card physically is. Two tracks share one rig: singles (this file) and code cards
 (`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
+
+## The name is the app's, and nothing beneath it
+
+**Banchi** — 番地, a lot number, the address of a thing — is the name of the PRODUCT a person
+looks at: the web app under `app/`. Every card in the store has an address (box → section →
+card), and the app is named after that idea.
+
+**Everything under the app keeps the name it has always had.** Renaming any of it is a
+defect, not a follow-up:
+
+- the repository and its directory, and the CLI `./pkmnscan` with every subcommand
+- the Python packages — `server/ store/ pipeline/ identify/ geometry/ codes/ cli/`
+- the store on disk (`inventory/store.sqlite`), `PKMNSCAN_HOME`, and every route on the wire
+- `PKMNSCAN_MAIN=off`, the git hooks' escape hatch, printed in every refusal
+- the harness, the fixtures, `docs/`, and `make` itself
+
+The rename is a front-end fact and it reaches exactly these places: `app/index.html`'s title
+and meta, the brand block in `app/src/App.tsx`'s sidebar, the document title per screen,
+the `banchi.*` keys in `localStorage`, and the copy on every screen. **Nothing on the wire
+changed.** A session that "finishes" the rename by touching `server/` or `store/` has moved
+the store of record for a word.
 
 **The gating system is retired as of 2026-08-23.** Gate A passed 2026-07-26; Gate B passed
 2026-08-22 with 53 real cards end to end — the first numbers this project has about cards
@@ -102,20 +123,24 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable.
                                    #   --dry-run  preview both queues, write nothing
 ./pkmnscan emit     <run-dir> [<run-dir> ...]
-                                   # write import CSVs. Free, re-runnable. SEVERAL RUNS WRITE
-                                   #   ONE FILE and the live cap is spent ONCE across them
-                                   #   (D86) — `add_to_quantity` is per-run against a GLOBAL
-                                   #   cap, so N separate emits over one SKU is an over-push.
-                                   #   Measured: three separate emits over three real runs
-                                   #   wrote 2 SKUs past the cap of 4; one merged emit wrote 0.
-                                   #   --listed-only  above-threshold rows only
-                                   #   --split-games  one file per game
-./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus
-                                   #   and RETIRE it (`decisions.json.adopted`). Previews by
-                                   #   default; newest-wins, and it NAMES the holds a later
-                                   #   price replaced rather than counting them. A re-adopt over
-                                   #   answered SKUs keeps the corpus's and needs no --force;
-                                   #   --force folds the files OVER the corpus, never a fresh one.
+                                   # write ONE import CSV, `import.csv`. Free, re-runnable.
+                                   #   ONE PRESS WRITES ONE SPREADSHEET (D99) — across runs,
+                                   #   across games, and across the listed/sub-threshold
+                                   #   split, which was two files per game per run until
+                                   #   2026-09-03. The live cap is spent ONCE across
+                                   #   everything it writes (D86): `add_to_quantity` is
+                                   #   per-run against a GLOBAL cap, so N separate emits over
+                                   #   one SKU is an over-push. Measured: three separate emits
+                                   #   over three real runs wrote 2 SKUs past the cap of 4;
+                                   #   one merged emit wrote 0.
+                                   #   --listed-only      above-threshold rows only (a filter,
+                                   #                      not a split — the rest wait)
+                                   #   --split-threshold  the old pair back: import-listed.csv
+                                   #                      and import-subthreshold.csv
+                                   #   --split-games      one file per game
+./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
+                                   #   Previews by default; newest-wins, and it NAMES the holds
+                                   #   a later price replaced rather than counting them.
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view of
                                    #   what is held back — D49 named its absence, D62 repeated
                                    #   it, and it is one line now that the answers are one file.
@@ -138,6 +163,161 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   same rule `join` applies (D87 amended 2026-09-02).
                                    #   Reachable on `#/runs`, under the run panel.
 ```
+
+## The front end
+
+Vite + React 19 + TypeScript over the capture server and nothing else: no pipeline logic in
+the browser, no second store, no auth, no login. `app/src/server.ts` is the only place a
+client call is written and `app/src/types.ts` the only place the wire's shapes are declared.
+
+### The screens
+
+**The app has eleven screens and eleven routes** — ten the owner's, one the Fulfiller's.
+`app/src/App.tsx`'s `ROUTES` table is the count. **Recount from the table; never increment a
+sentence**, and see "the census" below for what enforces that.
+
+```
+#/             Home           the product as a picture: the six-stage spine
+                              (Capture → Runs → Review → Pricing → Orders → Shipping) with the
+                              live figure under each stage, the boxes, the runs, one action.
+                              Every figure is the one that stage's own screen draws, read from
+                              the same source, so Home can never be a step ahead of it.
+#/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
+                              the motion trigger and its tuning
+#/runs         Runs           the pipeline: the free preflight, the two-step money gate, join /
+                              emit / reconcile, the run log, and the import CSVs as downloads
+#/review       Review         one card at a time, photo first — the answer writes and advances
+#/pricing      Pricing        the hand-pricing worklist across runs, one row per SKU, the rule
+                              strip, and D49's deliberate holds
+#/orders       Orders         which copies this buyer gets and where they are, ranked by how
+                              many of them sit in one box, pulled one copy at a time
+#/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
+                              export, in three lanes
+#/inventory    Inventory      the box walk and everything that hangs off it: search, a card's
+                              copies and its sale, and the box's own operations
+#/codes        Codes          the code-card track: read a box's QRs into the ledger, the lanes
+                              the pile is tiered into, and a lane handed to a buyer
+#/fulfillment  Cards to pull  the second persona's whole product: pull, photo-confirm, mark
+                              sold. Rendered with NO shell at all.
+#/gallery      Kit            the component sheet, rendered by the build so it cannot go stale
+```
+
+**`#/orders` and `#/shipping` are two stages of one screen and two routes.** `Orders.tsx`
+exports `OrdersHub`, `Shipping.tsx` does nothing but point the second route at it with
+`stage="ship"`, and the Ship stage's own body lives in `OrdersShipStage.tsx`. Two routes
+rendering one hub, joined by a stage strip and a client-side join on order number — nothing
+is written across the seam. This is not D31's defect returning: D31 deleted two routes drawing
+the same records with no relationship between them; these are two stages of one sale, and each
+is a real destination the nav, the palette and `,O` / `,S` all reach.
+
+**`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
+not routes and never come back; the box walk is the spine and search narrows it. The box's own
+operations — rename, dividers, seal, claims, the mid-box remove, the box delete, and D89's
+photo reclaim — are in its **Manage box** sheet.
+
+**Two routes are deliberately not in the nav** and `OFF_NAV` in `App.tsx` declares it rather
+than leaving it implied: the Fulfiller's screen, reached from the sidebar foot and the palette
+because it opens in its own tab, and the kit, reached from the palette only. Both are
+registered routes and both must stay reachable. `scripts/docs-audit.py`'s `route rosters` row
+reads that constant; deleting it turns a passing check into a false alarm.
+
+**The census.** Every published route or screen count in this file, in `README.md` and in
+`docs/map.py` is reconciled against the `ROUTES` table by `make docs-audit`'s `route census`
+row, and every spec's pinned roster by `route rosters`. Both are MECHANICAL and both fail a
+commit. They exist because this count was wrong seven times in three files with nothing
+reading it, and because the TESTS had the same disease — a sweep over "every route" off a
+hand-typed list of hashes silently walked the routes it had. `app/tests/cursor.spec.ts` reads
+the nav strip now. The census also refuses to go quiet: a claim reworded past the pattern
+watching it is reported as an unwatched sentence.
+
+### The design system
+
+`app/src/tokens.css` is the system, and **it is the only file in `app/` that may name a
+color.** Every token is `--bn-*` — color, type, spacing, radius, elevation, motion, the
+shell's own metrics — and the legacy names the old sheet exported (`--ink`, `--muted`,
+`--line`, `--s1…`, `--r`, `--util`) survive at the bottom as aliases so no stylesheet was
+orphaned. **Write new CSS with `--bn-*`.**
+
+**Both themes are real.** Light is the default; `:root[data-theme='dark']` redefines every
+surface and ink together, `app/index.html` applies a stored choice before first paint, and the
+toggle stamps `data-theme-switching` on `<html>` so the whole page cross-fades as one
+mechanism rather than panel by panel. A screen that has not been LOOKED AT in dark is not
+verified; a hard-coded color is invisible in light and wrong in dark, which is why
+`make docs-audit`'s `raw color` row reads the stylesheets for hex literals.
+
+**The stage tokens are dark in both themes** — `--bn-stage-*`, for viewfinders and photo
+heroes, where the ground is dark because the subject is a photograph.
+
+**Type has three roles.** `--bn-font-display` (Manrope) for headings and big figures,
+`--bn-font-ui` (Inter) for everything, `--bn-font-mono` (JetBrains Mono) for machine strings
+only — SKUs, run names, reason codes, key caps, card numbers. Numbers in tables are Inter with
+`font-variant-numeric: tabular-nums`, not mono. Body is 14px.
+
+**The kit is `app/src/kit/` and `app/src/kit.css`**, and `#/gallery` renders all of it. The
+components are `Button`, `Kbd`, `Pill`, `Chip`, `PageHeader`, `EmptyState`, `Notice`,
+`Segmented`, `Stat`, `Logo` and `Icon`, plus `kit/toast.tsx`'s global toast stack; the classes
+are the `.bn-*` set (`.bn-page`, `.bn-panel`, `.bn-well`, `.bn-table`, `.bn-list`,
+`.bn-dialog`, `.bn-sheet`, `.bn-receipt`, `.bn-skeleton`, and the rest). **Reach for the kit
+before writing a primitive**, and when it genuinely lacks one, build it with a screen-prefixed
+class and say so — a fourth hand-rolled button is how a design system dies.
+
+**Register.** Sentences on screen, not machine strings; the pipeline's own string stays
+available on hover and in the run log. Enum values are labelled, never printed raw
+(`premium` → `Premium`). Empty states are a real sentence and one action. Danger is red, money
+moments are deliberate and carry the figure in the label, success is green, live is vermilion.
+An icon never appears alone without an accessible name.
+
+**Motion is part of the system, not decoration.** Durations and easing curves are tokens; the page
+enters, list rows stagger off `--bn-stagger`, selection changes and receipts and progress
+animate, buttons press. `app/src/base.css` honours `prefers-reduced-motion` and keeps turning
+only the loops that carry meaning — a busy ring, a skeleton, a live dot. Never let motion be
+the only carrier of information.
+
+### The shell
+
+`App.tsx` is a hand-written hash router and the whole chrome. Read it as the shell: eleven
+hash routes, no routing library, no nested routes, one table. Every screen renders inside it
+except the Fulfiller's:
+
+- **A sidebar that collapses to a rail** on wide windows — 236px or 64px, ⌘. toggles it, the
+  choice is remembered in `banchi.rail`. Nine nav items in four groups; the brand, the
+  hand-off link, the palette, the theme toggle and the capture server's own state sit in the
+  foot.
+- **A top bar and a bottom tab bar on phones**, with the rest of the screens in a left drawer
+  behind More.
+- **A command palette on ⌘K**, the only control that opens `#/gallery`. It searches each
+  route's own `keywords`, so a screen is findable by the verbs it holds.
+- **`,` then a letter jumps anywhere**, with an on-screen which-key overlay and a one-second
+  window. ⌘← / ⌘→ step the workflow ring in the order the nav draws it (D51).
+- **A keyboard reference sheet on `?`**, and from the palette. It lists every binding in the
+  product grouped by where it applies, and each group says in a sentence that a screen's keys
+  are dead while another screen is open. `?` is the only unmodified key the shell takes and it
+  yields to typing — `app/src/keys.ts` makes that judgement for every handler in the app. The
+  inline ⌘←/⌘→ key caps are deliberately not drawn anywhere; this sheet is the one reference,
+  so **a new binding is not done until it is in `SHORTCUTS`.**
+- **An error boundary per route, in two shapes.** The owner's crash page offers a reload and a
+  way home. The Fulfiller's — the `plain` variant — offers ONE button that reopens the screen
+  he is on, at his floors, with no brand mark and no error text, because `docs/DESIGN.md`'s
+  constraints table forbids a route out of his view and a crash is the moment he is most
+  likely to press whatever is offered.
+- **A toast stack**, an offline banner for the capture server, and the document title.
+
+The Fulfiller's route is `persona: 'fulfiller'`, and `hasChrome` renders none of the above for
+it. Not-rendered rather than hidden: not focusable, not reachable by a screen reader, not one
+specificity change from coming back.
+
+### Verifying a screen
+
+A screen is not finished because it compiles.
+
+- `cd app && npx tsc --noEmit` prints nothing.
+- **Look at it at 1440, 820 and 390**, the three widths this build was verified at, **in both
+  themes**. No horizontal page scroll at 390.
+- Anything a thumb presses is 40px or more. The control-height tokens raise themselves under
+  767px and on a coarse pointer, so do not hand-roll a mouse-sized control on a phone.
+- `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser — 20px
+  body, 32px position labels, 320px photograph, 44px targets, 7:1 contrast, no jargon, no
+  route out. **Those floors serve a real person and are not part of any redesign.**
 
 ## Things you will get wrong without being told
 
@@ -193,13 +373,23 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   is about to serve. **If you are looking at an empty inventory in a worktree, that is
   correct** — the real one is the main checkout's.
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
-- **Not a Claude artifact**: no `window.storage`, no `facingMode: "environment"`, and
-  nothing about a card or the inventory in `localStorage`. Inventory state is server-side
-  JSON; camera uses a device picker. Two devices share one truth. **The one exception is
-  `app/src/useCamera.ts`**, which keeps two facts about THIS rig in `localStorage` — the
-  chosen camera's `deviceId` and the capture rotation. Both are device-local by nature and
-  would be wrong if shared; neither is inventory. Nothing lints this, so the argument lives
-  in the comments beside the two keys.
+- **Not a Claude artifact**: no `window.storage`, no `facingMode: "environment"`, and nothing
+  about a card or the inventory in `localStorage`. Inventory state is server-side, in the
+  store; the camera uses a device picker. Two devices share one truth.
+
+  **Four keys are stored on the device, and each is a fact about THIS machine rather than
+  about a card**: `pkmnscan.capture.deviceId` and `pkmnscan.capture.rotation`
+  (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
+  `banchi.theme` and `banchi.rail` (`app/src/kit/index.tsx` and `App.tsx` — how this browser
+  is dressed), and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS device last
+  checked TCGplayer, so a fetch receipt can say what is new since; the owner ruled it belongs
+  there on 2026-09-03). None of them is a card, a position or an order.
+
+  **The rule has a reader now.** `app/eslint.config.js`'s `no-restricted-syntax` bans
+  `localStorage` in `app/src`, with `useCamera.ts` exempted by name and the other call sites
+  carrying an inline disable that states the argument. A guard that is routinely disabled
+  inline is one the next person disables without reading, so the exemptions are few and each
+  one says why beside the key.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at 4 live.
 - **The pipeline is reachable from a screen as of 2026-08-24** (D33), **and lives on `#/runs`
@@ -292,12 +482,11 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   (D26). `POST /boxes/<box>/photos/reclaim` deletes the photographs of a box's SOLD cards and
   keeps every record, each carrying `photo_sha256` and `photo_reclaimed_at` from then on. Sold
   only: a retired card's photograph is what lets the retirement be questioned, and a card on
-  hand needs its photograph for the pull preview. The control is on `#/inventory`'s box
-  operations, gated like the box delete and shaped like the listing release — the free count
+  hand needs its photograph for the pull preview. The control is in `#/inventory`'s **Manage
+  box** sheet, gated like the box delete and shaped like the listing release — the free count
   (`GET /boxes/<box>/photos`) is on screen before the control that fires exists. What it gives
   up is named: D36's realign can no longer re-bind THOSE cards by digest, which is right for
   cards that have left the box, and the digest on the record is what the history keeps.
-
 - **`emit` OVER SEVERAL RUNS WRITES ONE FILE, AND THE CAP IS SPENT ONCE ACROSS THEM** (D86).
   `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a cap that
   is GLOBAL, so runs joined before either emitted each believe the whole cap is theirs. This is
@@ -343,89 +532,6 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
   the one place the client reads either — `Box 3 · RB Epics`, and `Box 3` ALONE where the box
   has no name, because a name is optional and a placeholder would draw a fault where there is
   none.
-- **AN ORDER WALK WRITES AT THE ENVELOPE, NEVER AT THE CARD, AND NEVER THROUGH THE PLAIN SALE**
-  (D90). `#/inventory?order=<key>` and `#/inventory?orders=open` put the box walk under an
-  order's control: it lands on the first copy that order needs, the arrows step the queue
-  instead of the box, and the copies panel follows the focus as it always has. **Nothing is
-  recorded per card.** One press — `POST /orders/fill`, `fillEnvelope` in
-  `app/src/server.ts` — records every copy of one order as pulled and sold in ONE
-  transaction, and in order mode the next order is not offered until it lands. The way back
-  is `undoEnvelope`, which names the lines it is reversing and refuses `fill_line_mismatch`
-  if the ledger disagrees; a refusal anywhere aggregates to `fill_entry_refused` and nothing
-  is written.
-
-  **`Mark sold` is HIDDEN on every row while an order drives, and that is the seam the whole
-  feature turns on.** `POST /inventory/<box>/<index>/sold` writes card state and **not** the
-  ledger, so a card sold that way while an order is driving leaves its line owed forever and
-  the operator ships a card the ledger still wants. `Retire` stays — it is a claim about a
-  card and belongs to nobody's order.
-
-  **WHICH COPIES FILL A LINE IS PICKED OFF THE COPIES PANEL, ONE PRESS PER COPY, IN ANY BOX**
-  (D93, 2026-09-02, on the owner's *"I basically should be able to pick which two I sell"*).
-  The resolver's allocation is the DEFAULT and not the answer: every unsold copy of the line's
-  SKU carries `Take` / `Don't take` (D7 — every unsold copy is sellable), the ink mark `taking`
-  says what the envelope will record, and `GET /search` sends a `capture_id` per copy so the aim
-  works without walking to it first. **A full line refuses the take** — at `2 of 2` the other
-  rows draw the count where their control would be, because nothing may leave the envelope on a
-  press aimed at something else; don't-take one to make room. Taking APPENDS, so the walk stands
-  still; dropping the copy it is standing on moves it to the next copy the envelope is taking.
-  **What the picker costs if you skip it**: lift a different copy out of the drawer without
-  pressing `Take` and the envelope records the slot the walk was standing on — the right SKU at
-  the wrong address, and nothing can tell.
-
-- **The app has ten screens and ten routes** — nine the owner's, one the Fulfiller's. It
-  said six and six while `app/src/App.tsx` carried seven; D31 then merged two away —
-  `#/boxes` and `#/pull` are gone, and both are modes of `#/inventory` now — a THIRD mode
-  joined them on 2026-09-02, the order walk (D90), which is a driver over that same one
-  screen and adds no route — D39 added
-  `#/runs` back on 2026-08-29, which is the pipeline on a route of its own between Capture and
-  the review queue, D49 added `#/pricing` on 2026-08-30, which is where a listing price is
-  set by hand, and D69 added `#/orders` and `#/shipping` on 2026-08-30 — the order screen,
-  which says which copies a buyer gets and where they are, and the shipping lane, which says
-  which envelope an order goes in, out of a file the ledger has never seen. D70 added `#/codes` the same day — the code-card
-  track, which shares the rig and nothing downstream (D14). **The count above was RECOUNTED
-  from the `ROUTES` table rather than incremented**, which is the only way of arriving at it
-  that has ever been right, and it was recounted again when these two branches met: each had
-  incremented correctly against a tree the other had already moved.
-
-  **THE COUNT IN THIS FILE WAS WRONG MORE OFTEN THAN IT WAS RIGHT, AND NOTHING CHECKED IT
-  UNTIL 2026-08-31 — and when a reader finally arrived it turned out the TESTS had the same
-  disease.** `app/tests/cursor.spec.ts` swept "every route" off seven hashes typed out by hand
-  and never saw `#/orders`, `#/shipping` or `#/codes`; `app/tests/nav.spec.ts` pinned the
-  Cmd-arrow ring and missed `#/codes`. Three screens were asserted by nothing and
-  `make design-check` was green, because a roster missing a route does not fail — it walks the
-  routes it has. The cursor sweep reads the nav strip now.
-
-  **The prose failed the same way, seven times.** It was false from D39 until D49 in FIVE
-  places at once, none of which failed a check; false in a sixth on 2026-08-30, when
-  `README.md`'s fenced screen list carried five entries and was missing `runs` and `pricing`
-  outright, so D69's repair had to restore two screens before it could add two; and false a
-  SEVENTH time hours after that repair, when D70's `#/codes` reached the `ROUTES` table and
-  this file and neither `README.md`'s list nor either of `docs/map.py`'s two route counts —
-  which then disagreed with each other as well as with the tree.
-
-  **Two `make docs-audit` rows end it, one over the specs and one over the prose.**
-  `route rosters` fails a COMMIT where a spec's pinned list of routes disagrees with
-  `App.tsx`'s table. `route census` does the same for every published screen or route count in
-  this file, in `README.md` and in `docs/map.py`, reconciled against that same table, so a
-  route added without recounting fails the commit. D18 deleted the last published count on
-  purpose, on the grounds that a verifiable fact nobody can disagree with is not load-bearing
-  prose; that argument holds for a number in a report and does not hold here, where the
-  sentence is what a session reads to learn the shape of the product. So this count stays and
-  gets a reader instead, and the two rulings sit side by side rather than one repealing the
-  other. **Recount from the table; never increment** — the instruction is unchanged, and it is
-  now enforced rather than asked for. The census row also refuses to go quiet: a claim reworded
-  past the pattern watching it is reported as an unwatched sentence, because a check that
-  silently stops covering prose is the failure it exists to end. What it deliberately does NOT
-  check is the ordinals in `docs/map.py`, which count the order routes were ADDED and not their
-  place in the table.
-  The merged components survive as `BoxOps` and `BoxBrowse`; only their routes
-  went. **The two movements are not in tension**: the merge deleted two routes rendering one
-  thing, and the addition gave a route to something no route rendered.
-  The shell renders no nav over the Fulfiller's, because `docs/DESIGN.md`'s constraints table
-  forbids any route *out* of it, and the owner's nav would fail four other rows of the same
-  table on its own. Not-rendered rather than hidden: not focusable, not reachable by a screen
-  reader, not one specificity change from coming back.
 
 Deeper schema facts (Condition strings, secrets like `161/159`, blank-Number rows,
 apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
@@ -467,6 +573,13 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   an API contract can be benchmarks, never components.
 - **Opsec, repo-wide**: a live unredeemed code card is a bearer instrument. No code-card
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
+- **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
+  a primitive the kit already has is not rewritten in a screen sheet; a screen is verified at
+  1440, 820 and 390, in light and in dark, before it is called done. **This rule replaces
+  `docs/DESIGN.md`'s locked token table as the thing a session designs against** — that table
+  still holds the Fulfillment view's floors, which are unchanged and still asserted by
+  `make design-check`, but its color and type block records a palette the app no longer
+  paints and `make docs-audit` says so on every run.
 - **Main moves by pull request. A session never commits to it and never pushes it.**
   Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
   GitHub. `main` then advances in this clone by `git pull` and no other way.
@@ -537,10 +650,12 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   fast-forward, once by a direct push. GitHub's own branch protection is unavailable here (403,
   private repo on the free plan), so this is the substitute and not a belt-and-braces addition
   to it. A refusal is not a bug report: it means put the work on a branch.
-
 ## Working agreement
 
 - Run `make harness` before you tell me something works. Show me the output, not a claim.
+- **Show me the screen before you tell me it looks right.** Render it at 1440, 820 and 390 in
+  both themes and look at the images. A screenshot you did not open is not verification, and
+  the one thing a typecheck cannot tell you is whether the thing is any good.
 - Read docs/DECISIONS.md before proposing an architecture change. Every entry there is
   settled; if you want to reopen one, say which entry and why, and wait for me.
 - Report format: result first, then files touched, then risks. No task restatement, no
@@ -693,7 +808,19 @@ D90  The envelope is the unit of the write, and an order drives the walk as a mo
 D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
 D92  A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
 D93  The copies panel is the picker, and a full line refuses the take
+D94  Banchi is the product's name, and `--bn-*` is the vocabulary every screen speaks
+D95  The shell is a rail, a palette and a reference sheet, and the Fulfiller's crash has no door out
+D96  The screens answer to the owner's interview, and main's history is not the authority
+D97  The copy map ranks and never picks, and a line says what remains
+D98  The cheap-card figure is the control, the floor choice is retired, and a run may still differ from the store
+D99  The cut-off is a figure the operator sets, and one press writes one spreadsheet
 ```
+
+**D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
+without being adopted: the envelope walk and the copies picker were declined in favour of this
+product's own per-copy walk and copy map, and the card-number sigil is deferred. D96 carries the
+owner's reasoning for each. **D99 is numbered where it is because main took D90 while this branch
+was open** — the rule is renumber your own, never another's.
 
 - docs/GATES.md — gates, harness contract, `## What shipped` and `## What is open` (D80).
 - `docs/DEBTS.md` — known gaps in the verification tooling, deliberately unfixed. Read it
@@ -780,6 +907,12 @@ D93  The copies panel is the picker, and a full line refuses the take
   not the whole answer** — D84's four lost cards were only provable by downsampling the run's
   own JPEGs to the trace's 38x28 watch region and matching them frame against photograph. A
   trace says what the machine decided; only the photographs say what was there.
-- docs/DESIGN.md — design tokens and the Fulfillment view's hard constraints.
+- `docs/DESIGN.md` — **two halves, and only one of them still describes this tree.** The
+  Fulfillment view's hard constraints table is live, binding and asserted in a browser by
+  `make design-check`: 20px body, 32px position labels, a 320px photograph, 44px targets, 7:1
+  contrast, no jargon, and no route out of that view. The token block beside it records the
+  palette and type of the sheet Banchi replaced; `app/src/tokens.css` is the system now, and
+  `make docs-audit`'s `design tokens` row reports the disagreement on every run until the two
+  are reconciled by someone who owns that file.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

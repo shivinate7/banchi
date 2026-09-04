@@ -35,7 +35,7 @@ import { settleFonts } from './fontsReady'
  * the owner's says. Nothing here can weaken one of his constraints: a cursor is not a text size,
  * a tap target, a contrast ratio or a route.
  *
- * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is seven Python tests
+ * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is nine Python tests
  * at the Stop hook; this starts a browser. `make design-check` runs it.
  */
 
@@ -50,8 +50,9 @@ import { settleFonts } from './fontsReady'
  *
  * SO THE HASHES COME OFF THE NAV, WHICH IS `ROUTES` RENDERED. `App.tsx` builds that strip by
  * mapping the same table it routes from — one table, deliberately, so the chrome and the
- * render cannot disagree — so every registered route has a link in it and a route added next
- * month arrives here with no edit to this file. That is the same claim the sweep makes about
+ * render cannot disagree — so every route the chrome offers has a link in it and a route added
+ * next month arrives here with no edit to this file. The two routes the chrome does NOT offer
+ * are accounted for in the block above `routesFromNav`. That is the same claim the sweep makes about
  * controls, applied one level up: discover them, never be handed them.
  *
  * WHAT IS ASSERTED PER ROUTE IS THE ARRIVAL, not a per-route selector, because a selector list
@@ -71,15 +72,31 @@ import { settleFonts } from './fontsReady'
  * rule rather than exempting the exception is the same choice the disabled arm makes below.
  *
  * `#/fulfillment` IS REACHED BY THE HARVEST AND DRAWS NO NAV ITSELF, which is fine and worth
- * saying: the strip is read once, on `#/`, and his route is in the owner's table like every
- * other. Nothing here renders his chrome or asserts one of his floors — see the header. */
+ * saying: the sidebar is read once, on `#/`, and his route is a link in it like every other.
+ * Nothing here renders his chrome or asserts one of his floors — see the header.
+ *
+ * RE-POINTED AT THE BANCHI SIDEBAR, 2026-09-03, AND THE HARVEST HAD TO WIDEN TO KEEP WHAT IT
+ * HAD. The rebuild moved the strip along the top into a collapsible sidebar, made `#/` Home
+ * and moved capture to `#/capture` — all of which this reads off the markup and none of which
+ * is a change to what is asserted. What IS a change: the Fulfiller's link and the kit gallery
+ * are no longer inside `<nav>`. His now sits in the sidebar's foot, so the harvest takes every
+ * `.bn-nav-link` in the sidebar rather than only the ones the `<nav>` holds — otherwise this
+ * file would have quietly stopped sweeping the one persona its header spends a paragraph
+ * insisting on. The gallery has left the chrome altogether and is reached from the command
+ * palette, so it is named below: it is where this repo renders every control shape against the
+ * tokens, and a sweep that dropped it would have lost the richest route it walks. Naming ONE
+ * route is not the pinned roster this file's header refuses — the roster is still discovered,
+ * and a screen added to the sidebar next month is still swept with no edit here. */
 async function routesFromNav(page: import('@playwright/test').Page): Promise<string[]> {
   await page.goto('/#/')
   await settleFonts(page)
-  await expect(page.locator('main.capture'), 'the capture screen is the way in').toBeVisible()
+  await expect(page.locator('main.home'), 'Home is the way in').toBeVisible()
 
+  /* EVERY LINK THE SIDEBAR DRAWS, `<nav>` OR FOOT. The phone drawer builds a second copy of
+     the same list from the same table, and it is not mounted here — scoping to `.bn-side`
+     keeps this reading one of them rather than depending on which. */
   const hashes = await page.evaluate(() =>
-    Array.from(document.querySelectorAll<HTMLAnchorElement>('nav.app-nav a.app-nav-link')).map(
+    Array.from(document.querySelectorAll<HTMLAnchorElement>('.bn-side a.bn-nav-link')).map(
       (a) => a.getAttribute('href') ?? '',
     ),
   )
@@ -87,12 +104,33 @@ async function routesFromNav(page: import('@playwright/test').Page): Promise<str
   /* THE HARVEST IS GUARDED, because a selector that matches nothing would turn this whole
      sweep into a loop over an empty list — green, instantly, forever. That is a test that
      cannot fail, which this file's own synthetic case exists to say is not coverage. A FLOOR
-     rather than a count: it fails loudly when the nav stops rendering or is renamed, and it
-     cannot go stale in the direction that matters, since a route ADDED still gets swept. */
-  expect(hashes.length, 'the nav rendered no links — is `nav.app-nav a.app-nav-link` still it?')
+     rather than a count: it fails loudly when the sidebar stops rendering or is renamed, and
+     it cannot go stale in the direction that matters, since a route ADDED still gets swept. */
+  expect(hashes.length, 'the sidebar rendered no links — is `.bn-side a.bn-nav-link` still it?')
     .toBeGreaterThan(3)
-  expect(hashes, 'the capture screen must be in the strip the roster is read from').toContain('#/')
-  return hashes
+  expect(hashes, 'Home must be in the sidebar the roster is read from').toContain('#/')
+
+  /* AND THE HARVEST STILL REACHES PAST THE `<nav>`, asserted as the structural fact rather
+     than by naming his hash — a route named here is a roster of one, and this file's whole
+     argument is that a roster goes green when it goes stale. The Fulfiller's link is the only
+     `.bn-nav-link` the sidebar draws outside `<nav>`; if it moves back inside, or out of the
+     sidebar altogether, this says so instead of the sweep quietly shrinking by a persona. */
+  const outsideNav = await page.evaluate(
+    () =>
+      Array.from(document.querySelectorAll('.bn-side a.bn-nav-link')).filter(
+        (a) => a.closest('nav') === null,
+      ).length,
+  )
+  expect(outsideNav, 'the sidebar foot drew no link — the Fulfiller has left the sweep').toBe(1)
+
+  /* `#/gallery` IS NAMED, and it is the one route here that is not discovered. The rebuild took
+     it out of the chrome — it is reached from the command palette now — and it is where this
+     repo renders every control shape against the tokens: 169 of the 418 elements this sweep
+     looks at are on it. Dropping it to keep the roster purely derived would have halved the
+     coverage of a file written after a 41-defect sweep. One named route beside a discovered
+     list is not the pinned roster the header refuses: a screen added to the sidebar next month
+     is still swept with no edit here. */
+  return [...hashes, '#/gallery']
 }
 
 type Found = {
@@ -169,13 +207,45 @@ function expected(f: Found): string {
 }
 
 test('every rendered control tells the pointer what it is', async ({ page }) => {
+  /* THE ONE TEST IN THIS SUITE THAT LOADS EVERY SCREEN, AND THE ONLY ONE THAT ASKS THE REAL
+     SERVER FOR ALL OF THEM. Both facts follow from what it is for and neither is a smell: a
+     sweep that discovers controls cannot stub routes it has not been told about, and a roster
+     read off the sidebar is a roster of every screen. So this case alone pays the whole module
+     graph's cold Vite compile AND every screen's real fetches, while six other workers compile
+     against the same dev server and the same single-threaded capture server behind it.
+     Measured on this rig: 1.8s alone against a warm server, 41.4s alone against a cold one.
+
+     THE RAISE IS FOR THE COLD COMPILE AND NOTHING ELSE, and it is not what was actually wrong —
+     see `networkidle` below, which is the real fault and is fixed there rather than paid for
+     here. Raising a budget WEAKENS NOTHING, the same distinction `playwright.config.ts` argues
+     for its own `expect.timeout`: it does not change which routes are walked, which controls
+     are classified, or the rule they are held to. It changes how long a true statement is given
+     to become true, and a control saying `pointer` while disabled is still saying it at 60s. */
+  test.setTimeout(60_000)
+
   const wrong: string[] = []
   let total = 0
 
   for (const route of await routesFromNav(page)) {
     await page.goto(`/${route}`)
     await settleFonts(page)
-    await page.waitForLoadState('networkidle').catch(() => {})
+    /* BEST-EFFORT, AND NOW BOUNDED, WHICH IS THE WHOLE OF THE BUG THIS FILE SPENT TWO FULL
+       `make design-check` RUNS FAILING ON. The `.catch(() => {})` already said this wait is a
+       courtesy — let a screen's fetches land so the sweep classifies the controls they draw —
+       but with no timeout of its own it inherits the test's, so a route that never goes idle
+       does not fall through to the sweep, it eats the entire budget and reports as a timeout on
+       the NEXT line. Instrumented under a real seven-worker run, `#/` alone burned 119.6s of a
+       120s budget here and the sweep never reached route two: Home fires six unstubbed loads at
+       a single-threaded capture server that six other workers are also queued against, and
+       `networkidle`'s 500ms of quiet never arrives. Alone against a warm server the same route
+       settles in 1.4s, which is why this only ever failed in the full suite.
+
+       THE BOUND WEAKENS NOTHING AND WIDENS THE SWEEP. Nothing is asserted about the network
+       here; what is asserted is below, and the `<main>` wait that follows still has the config's
+       15s to become true. A route whose data never lands is now swept for whatever it did draw,
+       rather than taking the other ten routes down with it — and this file's header already
+       accepts that a control the empty store never renders is not checked. */
+    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {})
     /* THE ORDER OF THESE TWO IS NOT ARBITRARY. `toHaveCount(0)` is satisfied by an element
        that has not rendered YET, so asking it first would pass vacuously on a slow mount and
        then be satisfied a second time by `main.no-such-view` itself, which is a `<main>`. So
@@ -229,7 +299,12 @@ test('a typed-into field darkens its edge under the pointer, and nothing moves',
      cursor one and is left alone here. What is still true, and is what this case actually
      needs, is that the gallery is the only route drawing a `.search-field-box` against an empty
      store. That is the measurement; the count of routes it was taken over is not load-bearing
-     and is stated only so the next person knows what was walked. */
+     and is stated only so the next person knows what was walked.
+
+     TWO ROUTES IN THAT SENTENCE MOVED ON 2026-09-03 and the measurement did not: `#/` is Home
+     now and the Box field it names is on `#/capture`. Re-probed there, the gallery is still the
+     only route drawing a `.search-field-box` with nothing in the store, which is the fact this
+     case rests on. */
   await page.goto('/#/gallery')
   await settleFonts(page)
   await expect(page.locator('main.gallery')).toBeVisible()

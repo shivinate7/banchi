@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 // Order matters: tokens define the custom properties base.css and every component read.
 import './tokens.css'
 import './base.css'
+import './kit.css'
 
 import { App } from './App'
 

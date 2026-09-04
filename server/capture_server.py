@@ -8915,6 +8915,35 @@ class CaptureHandler(BaseHTTPRequestHandler):
     server_version = "pkmnscan-capture/1"
     protocol_version = "HTTP/1.1"
 
+    #: AN IDLE KEEP-ALIVE CONNECTION LETS ITS THREAD GO. Without this the server holds one
+    #: thread per open CONNECTION for as long as the peer keeps it, and `BaseHTTPRequestHandler`
+    #: defaults `timeout` to None — so a thread parked on `readline` for the next request never
+    #: comes back. `ThreadingHTTPServer` bounds neither the count nor the lifetime, and the two
+    #: together are unbounded growth rather than a leak: nothing is lost, it is all still
+    #: waiting.
+    #:
+    #: MEASURED ON THIS MACHINE, twice in one working day: 1,178 handler threads alive, every
+    #: one of them blocked in `PyEval_AcquireThread` — waiting for the interpreter lock, not for
+    #: the store — at 1,318% CPU, with the process holding :8182 and answering nothing. Restarts
+    #: cleared it and it came back, because what accumulates is browser tabs and Playwright
+    #: contexts across a long session, and every one of them is behaving correctly.
+    #:
+    #: FIFTEEN SECONDS, AND IT IS NOT A DEADLINE ON A REQUEST. It is the socket's timeout, so it
+    #: bounds each read and write and not the handler's own work: a capture waiting out
+    #: `files.LOCK_TIMEOUT_SECONDS` (30) behind `./pkmnscan identify` performs no socket
+    #: operation while it waits and is never cut off mid-refusal. What it bounds is a thread
+    #: parked on `readline` for a request that is not coming, which is every connection a closed
+    #: tab leaves behind.
+    #:
+    #: WHAT IT DOES NOT FIX, said plainly so the next session does not mistake this for a cure:
+    #: a burst of genuinely concurrent clients. Measured immediately after this landed — 80
+    #: Playwright browsers under `make design-check`, 969 threads inside ten minutes at 338% CPU.
+    #: Those connections are ACTIVE, and no idle timeout touches them. Bounding them needs a
+    #: worker pool, and a pool over HTTP/1.1 keep-alive has to answer what happens when every
+    #: worker is held by an idle connection — this class's own docstring records what happened
+    #: the last time connections were refused rather than queued. That is its own task.
+    timeout = 15
+
     # -------------------------------------------------------------------- responding
 
     def _origin(self) -> Optional[str]:

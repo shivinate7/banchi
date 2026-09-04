@@ -1081,7 +1081,47 @@ function recognisers(screens) {
       for (const node of ctx.scope.nodes) {
         for (const setter of collect(node, isSetter)) {
           const argument = setter.arguments[0]
-          if (argument === undefined || argument.kind !== ts.SyntaxKind.NullKeyword) continue
+          /* A STORE SETTER CLEARS A FIELD, WHICH IS THE SAME ACT ONE LEVEL IN. This read
+             `setX(null)` and nothing else, and it was right while every screen held its own
+             `useState`. `OrdersHubStore` put the shipping stage's batch in a shared store, so the
+             clear is `setHub({ batch: null })` — the identical statement, made about a named
+             field instead of about the whole of the state, and invisible to a check looking for
+             a bare `null` argument. Found by this row firing on `OrdersShipStage.tsx`'s forget,
+             which IS covered: the export is gone at the operator's own instruction, and the
+             screen showing no export is the receipt.
+
+             The narrowing that keeps it honest is unchanged and now applies per FIELD: the field
+             must be one something in this file populates from an await, which is what makes
+             clearing it a way back rather than a way of hiding the disagreement. */
+          const cleared = []
+          if (argument !== undefined && argument.kind === ts.SyntaxKind.NullKeyword) {
+            cleared.push(null)
+          } else if (argument !== undefined && ts.isObjectLiteralExpression(argument)) {
+            for (const property of argument.properties) {
+              if (!ts.isPropertyAssignment(property)) continue
+              if (property.initializer.kind !== ts.SyntaxKind.NullKeyword) continue
+              if (!ts.isIdentifier(property.name)) continue
+              cleared.push(property.name.text)
+            }
+          }
+          if (cleared.length === 0) continue
+          const field = cleared.find((name) => name !== null)
+          if (field !== undefined) {
+            const filledField = collect(ctx.screen.src, (n) =>
+              isSetter(n) &&
+              n.expression.text === setter.expression.text &&
+              n.arguments[0] !== undefined &&
+              ts.isObjectLiteralExpression(n.arguments[0]) &&
+              n.arguments[0].properties.some(
+                (q) =>
+                  ts.isPropertyAssignment(q) &&
+                  ts.isIdentifier(q.name) &&
+                  q.name.text === field &&
+                  (collect(q.initializer, (x) => ts.isAwaitExpression(x)).length > 0 ||
+                    (ts.isIdentifier(q.initializer) && awaitBoundNames(ctx.screen).has(q.initializer.text)))))
+            if (filledField.length > 0) return `${setter.expression.text}({ ${field}: null }), re-fetched elsewhere`
+          }
+          if (!cleared.includes(null)) continue
           const stateName = ctx.screen.stateOf.get(setter.expression.text)
           if (stateName === undefined) continue
           const filled = collect(ctx.screen.src, (n) =>

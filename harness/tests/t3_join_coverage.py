@@ -677,11 +677,14 @@ def _check_committed_from_counts(c, export) -> None:
             "quantity now, not four cards each flagged at a position",
         )
         c.equal(
-            tcgcsv.read_export(run.path(runs.IMPORT_LISTED)).by_sku()[SEVEN_COPY_SKU][
+            tcgcsv.read_export(run.path(runs.IMPORT_MERGED)).by_sku()[SEVEN_COPY_SKU][
                 tcgcsv.QUANTITY_COLUMN
             ],
             "4",
-            "one row, Add to Quantity 4, three copies left in the box (D7)",
+            "one row, Add to Quantity 4, three copies left in the box (D7) — and it is in "
+            "`import.csv`, because ONE FILE is what a press writes now. This read "
+            "`import-listed.csv` until 2026-09-03; the buckets are one file unless "
+            "--split-threshold asks for two",
         )
 
         staged_path = _export_file(run.path("staged.csv"), export)
@@ -697,12 +700,12 @@ def _check_committed_from_counts(c, export) -> None:
         _command(c, "join", str(run.directory), "--export", str(live_export))
         # CAPTURED BEFORE THE SECOND EMIT — the claim below is that this file is not touched,
         # which cannot be checked against a file the assertion's own command rewrote.
-        sent = run.path(runs.IMPORT_LISTED).read_bytes()
+        sent = run.path(runs.IMPORT_MERGED).read_bytes()
         _command(c, "emit", str(run.directory))
 
         after = Store().read().inventory.listing_for(SEVEN_COPY_SKU)
         c.equal(
-            run.path(runs.IMPORT_LISTED).read_bytes(),
+            run.path(runs.IMPORT_MERGED).read_bytes(),
             sent,
             "THE SECOND EMIT WRITES NO SECOND ROW. Four copies are already live on "
             "TCGplayer and the cap is four, so there is nothing to add — a second row here "
@@ -714,7 +717,7 @@ def _check_committed_from_counts(c, export) -> None:
             "byte equality — the file still holds exactly what was sent",
         )
         c.equal(
-            tcgcsv.read_export(run.path(runs.IMPORT_LISTED)).by_sku()[SEVEN_COPY_SKU][
+            tcgcsv.read_export(run.path(runs.IMPORT_MERGED)).by_sku()[SEVEN_COPY_SKU][
                 tcgcsv.QUANTITY_COLUMN
             ],
             "4",
@@ -1007,8 +1010,10 @@ def _check_game_partition(c, export) -> None:
         )
         c.ok(
             not run_dir.path(runs.REPORT).is_file()
-            and not run_dir.path(runs.IMPORT_LISTED).is_file(),
-            "and wrote nothing into the run directory",
+            and not list(run_dir.directory.glob("import*.csv")),
+            "and wrote nothing into the run directory — globbed rather than named, because "
+            "`emit` writes `import.csv` by default and two other shapes behind flags, and a "
+            "check that names one of them is a check three shapes can walk past",
         )
 
         # --- the two-game round trip through the real commands ---------------------
@@ -1039,20 +1044,21 @@ def _check_game_partition(c, export) -> None:
             "and the riftbound card in the riftbound catalog — never each other's",
         )
 
-        _command(c, "emit", str(run_dir.directory))
-        listed = tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+        _command(c, "emit", str(run_dir.directory), "--split-games")
+        listed = tcgcsv.read_export(run_dir.path(runs.import_merged_name("pokemon")))
         riftbound_listed = tcgcsv.read_export(
-            run_dir.path(runs.import_listed_name("riftbound"))
+            run_dir.path(runs.import_merged_name("riftbound"))
         )
         c.equal(
             [r[tcgcsv.SKU_COLUMN] for r in listed.rows],
             [SEVEN_COPY_SKU],
-            "one import file per game: the un-suffixed file holds the pokemon row alone",
+            "--split-games writes one import file per game: import-pokemon.csv holds the "
+            "pokemon row alone",
         )
         c.equal(
             [r[tcgcsv.SKU_COLUMN] for r in riftbound_listed.rows],
             [RIFTBOUND_DEFY_SKU],
-            "and import-listed-riftbound.csv its own row alone",
+            "and import-riftbound.csv its own row alone",
         )
         c.equal(
             (
@@ -1060,8 +1066,46 @@ def _check_game_partition(c, export) -> None:
                 {r[tcgcsv.PRODUCT_LINE_COLUMN] for r in riftbound_listed.rows},
             ),
             ({"Pokemon"}, {RIFTBOUND_LINE}),
-            "no import file spans two Product Lines — the accepted fixture proves the "
-            "format for one line only",
+            "and under that flag no import file spans two Product Lines — the accepted "
+            "fixture proves the format for one line only, and this is the way back if "
+            "Import to Staged turns the merged file away",
+        )
+
+    # --- and the DEFAULT is one file, across the games and across the buckets -------
+    #
+    # THE OWNER'S ASK, ASSERTED RATHER THAN DESCRIBED: *"emit by default only should now
+    # emit only one spreadsheet by default"*. It is a second isolated home rather than a
+    # second press in the one above, because the first press spends the cap: every copy is
+    # at `pushed` afterwards and a second emit correctly writes nothing (D54), so a merged
+    # file could not be observed there at all.
+    with _isolated_home() as home:
+        _capture(2)
+        run_dir = runs.create("t3-one-file")
+        run_dir.write_identifications(_two_game_payload())
+        sv09_path = _export_file(home / "export.csv", export)
+        riftbound_path = home / "riftbound.csv"
+        riftbound_path.write_bytes((REPO_ROOT / RIFTBOUND_FIXTURE).read_bytes())
+        _command(
+            c, "join", str(run_dir.directory),
+            "--export", str(sv09_path), "--export", str(riftbound_path),
+        )
+        _command(c, "emit", str(run_dir.directory))
+        c.equal(
+            sorted(path.name for path in run_dir.directory.glob("import*.csv")),
+            [runs.IMPORT_MERGED],
+            "one press, one spreadsheet — no per-game file and no listed/sub-threshold pair",
+        )
+        merged = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED))
+        c.equal(
+            sorted(r[tcgcsv.SKU_COLUMN] for r in merged.rows),
+            sorted([SEVEN_COPY_SKU, RIFTBOUND_DEFY_SKU]),
+            "and it carries both games' rows, which is the whole of what one file means",
+        )
+        c.equal(
+            len({r[tcgcsv.SKU_COLUMN] for r in merged.rows}),
+            len(merged.rows),
+            "with no SKU twice — two rows sharing a TCGplayer Id in one import file is "
+            "undefined behaviour, and merging is where that could have been lost",
         )
 
     # --- the manifest: exports keyed by game, the old scalar backfilled on read -----

@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ComponentType, ErrorInfo, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { isEditableTarget } from './keys'
-import type { ComponentType } from 'react'
+import { rememberRail, storedRail, storedTheme } from './deviceMemory'
+import { getStatus, onServerBoot } from './server'
+import { Button, Icon, Kbd, Logo, applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
+import { Toaster, toast } from './kit/toast'
 
-import { ServerReloaded } from './ServerReloaded'
+import { Home } from './Home'
 import { CaptureScreen } from './CaptureScreen'
 import { Runs } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
@@ -15,513 +19,135 @@ import { Fulfillment } from './Fulfillment'
 import { Gallery } from './Gallery'
 import './App.css'
 
-/* The app shell: ten routes across two personas, and the chrome that moves between them.
- *
- * IT WAS SEVEN UNTIL 2026-08-23 AND D31 TOOK TWO. `#/boxes` and `#/pull` rendered the same 767
- * records `#/inventory` renders, and the owner named the result: they "read as separate
- * instances of one thing". Both collapsed into `#/inventory`, which now has two ways in —
- * search by card, and browse by box → section → card — and box operations sit on the box
- * header inside the browse. Their components did not die with their routes: `BoxBrowse.tsx` is
- * the old pull walk and `BoxOps.tsx` is the old boxes screen's panel, both rendered by
- * `Inventory.tsx`.
- *
- * `CLAUDE.md` SAID SIX WHILE THIS TABLE CARRIED SEVEN, which is the drift D31 records and
- * fixes: the gallery was the seventh and nothing was counting. TEN now — capture, runs,
- * review, pricing, orders, shipping, inventory, codes, fulfillment, gallery — NINE of them
- * the owner's and ONE the Fulfiller's. The not-rendered-rather-than-hidden rule for the
- * Fulfiller's nav is untouched, because it was never about how many owner routes there are.
- *
- * THIS LINE SAID `NINE` FROM D70 UNTIL 2026-08-31, which is the paragraph below happening
- * again in the same file, one entry later: D69 took the count to nine and was written down,
- * D70 added `#/codes` and was not. The count above is RECOUNTED from the table rather than
- * incremented — see below for why that is the only way of arriving at it that has ever been
- * right — and `app/tests/cursor.spec.ts` was swept off a hand-typed roster that missed the
- * same three routes for the same reason. Nothing reconciles THIS sentence; what is
- * reconciled now is the specs, by `scripts/docs-audit.py`'s `route rosters` row.
- *
- * THIS COMMENT SAID `Five now` FROM D39 UNTIL D49, WHICH IS THE SAME DRIFT IN THE FILE THAT
- * OWNS THE TABLE. `#/runs` landed and this line was not touched, so the one place a reader
- * would check the count against the code was itself a count nobody had checked. Nothing on
- * the commit path reconciles it; the only defence is the person editing the table below
- * reading up this far. THE COUNT ABOVE WAS RECOUNTED FROM THE TABLE RATHER THAN
- * INCREMENTED, which is the only way of arriving at it that has ever been right.
- *
- * Hash routing, hand-written. A router library was the alternative and it loses on every
- * axis that matters here: a flat list of routes, no path parameters, no nested layouts, no
- * data loaders, two devices. What it would buy is a dependency to keep current and an API the
- * next session has to know; what it would replace is one listener and one lookup, small
- * enough to read in full rather than trust. 7b doubled the route count and added a second
- * persona without touching either, which is the case that argument was made against.
- *
- * Hash rather than the History API for a second, separate reason: pushState paths need
- * whatever serves the bundle to rewrite unknown paths back to index.html. That is Vite
- * today and something unnamed on the Mac at Gate B, and a route that breaks depending on
- * who is serving is a bad trade for a prettier URL. A hash never reaches a server.
- */
+/* ============================================================================
+   BANCHI SHELL
+   A sidebar that collapses to a rail, a phone app bar with a bottom tab bar, a ⌘K palette,
+   a which-key overlay for the `,` leader, a server banner, an error boundary per route, a
+   toast stack, and a document title per screen. The Fulfiller's screen gets none of it.
+   ========================================================================== */
 
-/** Whose screen this is. D5's split, carried in the route table because it is the only place
- *  that can act on it — see `CHROME_FREE` below for the one thing it decides. */
 type Persona = 'owner' | 'fulfiller'
+type Group = 'home' | 'work' | 'sell' | 'library' | 'aside'
 
-/* HOW OFTEN THE OWNER IS IN A SCREEN, which is the only thing the nav's shape encodes.
- *
- * The nav was a flat row of links when there were three routes and stayed one at seven, so
- * `Gallery` — a component sheet that exists to keep step 6's button from going stale — was
- * drawn exactly as loudly as the screen the owner spends an hour a day in. A row where
- * everything is equally important has thrown away the only thing it knows.
- *
- *   run    the loop a session actually is: shoot a box, then answer what the run could not.
- *   look   the questions that arrive while doing it — what is in the boxes, how this box is
- *          laid out, what is at this position. Reached when asked, not on a rhythm.
- *   aside  not the owner's work at all. The Fulfiller's whole product, which the owner opens
- *          to see what he sees; and the component sheet.
- *
- * ONE AXIS AND NOT TWO. Grouping by persona was the obvious alternative and it is the wrong
- * cut: it puts Fulfillment alone on one side and the other six together on the other, which
- * is a fact the nav already carries in a much stronger form — his view is the one this nav
- * does not render over at all. Cadence is the fact the row was missing.
- */
-type Group = 'run' | 'look' | 'aside'
-
-type Route = {
+export type Route = {
   readonly path: string
-  /** Utility face, uppercase — see App.css. Names the view, not the machinery behind it. */
   readonly label: string
+  readonly title?: string
+  readonly icon: IconName
   readonly view: ComponentType
   readonly persona: Persona
   readonly group: Group
-  /** Second key of the `,` chord — see `LEADER`. Absent means the route has no key and draws
-   *  no chip: docs/DESIGN.md's "every choice shows its key" runs in both directions, and a
-   *  chip for a key nothing binds is worse than no chip at all. */
   readonly hotkey?: string
+  readonly nav?: boolean
+  readonly tab?: boolean
+  /** What a person might TYPE to find this screen in the palette — the verbs it holds. */
+  readonly keywords?: string
 }
 
-/* One table drives both the nav and the render. The alternative — a `ROUTES` array for the
- * chrome and a `switch` for the render — is more greppable and keeps two lists of the same
- * path strings that nothing checks agree. That is the drift D16 exists to catch, in
- * miniature, so the table wins and the switch is gone. It mattered more at nine routes than at
- * three, and it is what made removing two of them a two-line edit rather than a hunt.
- *
- * ORDERED THE WAY THE OWNER WORKS, which is what a nav built from this table is read as: shoot
- * a box, run the pipeline over it, answer what the run could not, then look up what is in the
- * boxes — walk one, check a position against its photo, and sell a copy out of it, all three
- * now being one screen. `#/runs` took its place in the middle of that sentence on 2026-08-29,
- * which is where the work actually happens: it was inside `#/inventory` — the `look` row — and
- * the four commands are the loop, not a lookup. `#/orders` and `#/shipping` extend that
- * sentence past the point where the cards stop being ours (D69): shoot, run, answer, price,
- * orders arrive, orders ship. The
- * Fulfiller's view and the component sheet sit after that run of six because neither is a
- * step in it. `group` now says that out loud rather than leaving it to the order alone, which
- * is a fact the reader had to already know to see.
- *
- * `persona` IS REQUIRED ON EVERY ROW rather than optional-and-defaulted. A new screen has to
- * say whose it is, and the cost of getting that wrong is asymmetric — an owner screen marked
- * `fulfiller` loses its nav, while a Fulfiller screen marked `owner` puts a strip of links to
- * the capture screen's hard-delete undo (D10) under the thumb of the person docs/DESIGN.md
- * says may reach no destructive action at all. `group` is required for the same reason one
- * step down: a new screen that does not say how often it is used gets drawn as though it were
- * used constantly, which is the defect this field was added to fix.
- */
-const ROUTES: readonly Route[] = [
-  { path: '/', label: 'Capture', view: CaptureScreen, persona: 'owner', group: 'run', hotkey: 'c' },
-  /* THE PIPELINE, ON ITS OWN ROUTE SINCE 2026-08-29 (D39, the owner's ruling). It was a panel on
-   * `#/inventory` from D33 until then, and D33's argument for putting it there was about SCOPE:
-   * a run is done to a box or to cards ticked in one, and that screen is where both are chosen.
-   * `Runs.tsx` is what answers that argument rather than what ignores it — the box is picked
-   * again by a strip of its own, and the ticked selection is HANDED OVER from the one
-   * mass-select in the product (see `runHandoff.ts`), so nothing here re-implements the walk
-   * and there is still exactly one place a selection can be made.
-   *
-   * `group: 'run'` AND THE MIDDLE OF IT. The four commands are the loop of a session, and the
-   * table's own definition of `look` — "reached when asked, not on a rhythm" — is what the
-   * panel's old address said about them and what nobody had noticed it was saying. */
-  { path: '/runs', label: 'Runs', view: Runs, persona: 'owner', group: 'run', hotkey: 'r' },
-  {
-    path: '/review',
-    label: 'Review queue',
-    view: ReviewQueue,
-    persona: 'owner',
-    group: 'run',
-    /* `q` FOR QUEUE, AND IT IS THE ONE ROUTE HERE WHOSE KEY IS NOT ITS INITIAL. `r` went to
-     * `#/runs` on 2026-08-29 at the owner's instruction, and the reason it went there rather
-     * than the reverse is that `Runs` has no second word to fall back on and this route does.
-     * The mapping stays memorable for the reason the LEADER comment gives — a letter out of the
-     * route's own name, not an arbitrary slot — and the comment now says so instead of claiming
-     * every key is an initial. */
-    hotkey: 'q',
-  },
-  {
-    /* D49. AFTER the review queue and not before it, which is the owner's ruling and reverses
-     * what the first design pass proposed. The argument that decided it: answering the queue
-     * changes what the next join resolves, so pricing before the queue is worked prices a set
-     * that is about to move. Pricing is the last thing done before `emit`, and this strip now
-     * reads in the order the work happens — shoot, run, answer, price.
-     *
-     * `p`, WHICH WAS `#/pull`'s RETIRED CHORD — see the block below, amended in the same
-     * commit that took the key. */
-    path: '/pricing',
-    label: 'Pricing',
-    view: Pricing,
-    persona: 'owner',
-    group: 'run',
-    hotkey: 'p',
-  },
-  /* THE ORDER SCREEN AND THE SHIPPING LANE, 2026-08-30 (D69). Two routes rather than one,
-   * and they sit here — after `#/pricing`, before `#/inventory` — because the `run` group
-   * reads in the order the work happens and this is where the work happens: shoot, run,
-   * answer, price, ORDERS ARRIVE, ORDERS SHIP. The two questions are genuinely different and
-   * are asked at different moments. `#/orders` answers "which copies does this buyer get, and
-   * where in the boxes are they" out of D63's ledger. `#/shipping` answers "which envelope
-   * does this order go in" out of TCGplayer's own shipping export, which is a file the
-   * ledger has never seen — D61 rules on the lanes and D66 on the surface, and neither
-   * question is a mode of the other.
-   *
-   * `o` AND `s` ARE THE LETTERS THE OWNER WOULD SAY OUT LOUD NAMING THE SCREENS, which is
-   * what the LEADER comment actually asks for rather than "the initial". Both were free:
-   * `c r q p i` were taken and `b` is still unassigned. CaptureScreen binds a bare `s` for
-   * its divider, and that is NOT a collision — the leader consumes the second press in the
-   * capture phase on `window`, which is the whole mechanism that makes a route key allowed
-   * to be a letter another screen already owns.
-   *
-   * `/fulfillment` STILL GETS NO HOTKEY and must not be given one here by symmetry. The ring
-   * below is derived from `hotkey !== undefined`, so a key on that row would put the
-   * Fulfiller's view — which renders no chrome and therefore no way out — one mistyped chord
-   * away from stranding whoever pressed it. */
-  { path: '/orders', label: 'Orders', view: Orders, persona: 'owner', group: 'run', hotkey: 'o' },
-  { path: '/shipping', label: 'Shipping', view: Shipping, persona: 'owner', group: 'run', hotkey: 's' },
-  {
-    path: '/inventory',
-    label: 'Inventory',
-    view: Inventory,
-    persona: 'owner',
-    group: 'look',
-    hotkey: 'i',
-  },
-  /* `/boxes` AND `/pull` STOOD HERE AND ARE GONE (D31, 2026-08-23), with their `b` and `p`
-   * chords. Recorded rather than deleted silently, because the obvious repair when somebody
-   * finds a dead `#/pull` bookmark is to add the row back — and the row is not what was
-   * wrong. The screens are inside `/inventory`: `BoxOps` draws what `/boxes` drew, on the
-   * header of the box being walked, and `BoxBrowse` is `/pull`'s walk with its strip choosing
-   * the box instead of scrolling to it. A dead hash lands on `NoSuchView`, which names the
-   * routes that exist.
-   *
-   * `i` reaches both halves now, and neither `b` nor `p` was reassigned to the mode switch
-   * inside it. The chord is a ROUTE table (`ROUTES.find` on `hotkey`), and a second key space
-   * layered over it — some chords go to routes, some to modes within one route — is a rule
-   * with an exception, which is the thing the leader's one-rule-no-exceptions comment above is
-   * written to protect.
-   *
-   * `p` NAMES `#/pricing` AS OF 2026-08-30 (D49), AND THIS PARAGRAPH IS AMENDED RATHER THAN
-   * LEFT TO GO FALSE. What the sentence above rules out is a chord reaching a MODE inside a
-   * route, which is a second key space over a route table; `#/pricing` is a route, so taking
-   * `p` for it obeys that rule rather than bending it, and `p` is the letter the owner would
-   * say out loud naming the screen — which is what the LEADER comment actually asks for.
-   *
-   * What it costs, named: a stale `,p` aimed at the old pull preview now lands on Pricing
-   * instead of on `NoSuchView`. That press reads nothing, writes nothing and spends nothing.
-   * `b` is still unassigned. */
-  /* D5's second persona, and the one route here that is somebody else's whole product. It is
-   * listed all the same: his device opens this hash and stays on it, but the owner needs a way
-   * in to see what he sees, and a screen reachable only by typing a URL is a screen that gets
-   * checked once. The link points INTO the view, which is not what the constraints table
-   * forbids — that row is about routes OUT, and none exists once the nav stops rendering.
-   *
-   * NO HOTKEY, and the reason is that same missing way out rather than tidiness. This view
-   * renders no chrome, so a mistyped chord landing on it would strand whoever pressed it in a
-   * room with no door — they would have to know to type a hash to leave. A route reachable
-   * only by a deliberate click cannot be arrived at by accident. */
-  /* THE CODE-CARD TRACK (C9-C11), AND `group: 'look'` RATHER THAN `'run'`. The four commands
-   * on `#/runs` are a session's loop and this is not one of them: a code-card box is read
-   * once, in seconds, with no model call and nothing to price — so it is reached when asked,
-   * which is exactly what this table's own definition of `look` says.
-   *
-   * NOT A PANEL ON `#/runs`, and D14 is the reason rather than screen size. That screen
-   * resolves cards against a TCGplayer export and prices them; a code is joined against
-   * nothing and priced against nothing. It would also sit the one control that hands over a
-   * bearer instrument beside the one that spends money, and those want different
-   * confirmations for different reasons.
-   *
-   * `d` FOR co-D-es, because `c` is the capture screen and this track's own initial is
-   * taken. Same rule the review queue's `q` follows — a letter out of the route's own name
-   * rather than an arbitrary slot. */
-  { path: '/codes', label: 'Codes', view: Codes, persona: 'owner', group: 'look', hotkey: 'd' },
-  {
-    path: '/fulfillment',
-    label: 'Fulfillment',
-    view: Fulfillment,
-    persona: 'fulfiller',
-    group: 'aside',
-  },
-  // Step 6's component sheet, no longer the root. It stays in the build because a
-  // component sheet that is rendered by the build is one that cannot go stale. No hotkey:
-  // it is not a step in any loop, and the keys exist for the loop.
-  { path: '/gallery', label: 'Gallery', view: Gallery, persona: 'owner', group: 'aside' },
+export const ROUTES: readonly Route[] = [
+  { path: '/', label: 'Home', icon: 'home', view: Home, persona: 'owner', group: 'home', hotkey: 'h', nav: true, keywords: 'start overview' },
+  { path: '/capture', label: 'Capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section' },
+  { path: '/runs', label: 'Runs', icon: 'play', view: Runs, persona: 'owner', group: 'work', hotkey: 'r', nav: true, keywords: 'pipeline identify join emit reconcile import csv' },
+  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked' },
+  { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist' },
+  { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger' },
+  { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
+  { path: '/inventory', label: 'Inventory', icon: 'box', view: Inventory, persona: 'owner', group: 'library', hotkey: 'i', nav: true, tab: true, keywords: 'boxes find a card where search sold retire move' },
+  { path: '/codes', label: 'Codes', icon: 'qr', view: Codes, persona: 'owner', group: 'library', hotkey: 'd', nav: true, keywords: 'code cards qr redeem read a box' },
+  { path: '/fulfillment', label: 'Cards to pull', icon: 'hand', view: Fulfillment, persona: 'fulfiller', group: 'aside' },
+  { path: '/gallery', label: 'Kit', icon: 'grid', view: Gallery, persona: 'owner', group: 'aside' },
 ]
 
-/** Drawn in this order, and the only place the group order is fixed. Deriving it from the
- *  order rows happen to appear in `ROUTES` would make a re-ordered table silently re-order
- *  the nav's groups too. */
-const GROUP_ORDER: readonly Group[] = ['run', 'look', 'aside']
+const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [
+  { id: 'home', label: null },
+  { id: 'work', label: 'Workflow' },
+  { id: 'sell', label: 'Sell' },
+  { id: 'library', label: 'Library' },
+]
 
-/* THE SHELL DRAWS NO CHROME OVER THE FULFILLER'S VIEW, and this is the decision this file
- * makes on 7b's behalf rather than a detail of it.
+/* THE GROUPS THE NAV DELIBERATELY DOES NOT DRAW, declared rather than implied.
  *
- * docs/DESIGN.md's constraints table requires zero destructive actions reachable from that
- * view and asserts no route to settings or import. The nav is a strip of links to every other
- * screen, and the capture screen one of them reaches carries an undo that hard-deletes a
- * record, a sidecar and a photo (D10). It is also measured by the same table's other rows: the
- * links are small, in the utility face, with tap targets well under 44px and set closer
- * together than 12px. Every one of those is correct on the owner's screens — "the owner's
- * screens are a tool — dense is fine" — and every one of them is a failure on his.
+ * `aside` holds the two routes reached from somewhere other than the nav list: the
+ * Fulfiller's screen, which sits in the sidebar foot because it opens in its own tab and is
+ * not one of the owner's screens, and the component kit, which is reachable from the command
+ * palette only. Both are registered routes and both must stay reachable — they are simply not
+ * items in the workflow list.
  *
- * NOT RENDERED, rather than hidden in CSS. Fulfillment.css carried a `display: none` rule
- * while this file was another group's, and said itself that it was a bridge: a component that
- * is not rendered cannot be reached by a keyboard, a screen reader or a stray tap, while
- * `display: none` earns those three properties by accident and loses them to one specificity
- * change. That rule is deleted; this is the fix it named.
- *
- * A SET RATHER THAN A `route.persona !== 'owner'` COMPARISON at the render, because the
- * question the shell asks is "does this view get chrome", and personas are not the only reason
- * an answer could be no. AN UNRESOLVED HASH IS THE SECOND REASON, and it is not a persona at
- * all — see `hasChrome` below, which is where that answer is now decided.
- */
+ * IT IS A CONSTANT BECAUSE A CHECK READS IT. `scripts/docs-audit.py`'s `route rosters` row
+ * reconciles every route's group against the groups the nav draws, and without this it can
+ * only conclude that two routes have gone unreachable. Deleting this line does not change
+ * what the app draws; it changes a passing check into a false alarm, which is the failure
+ * mode that teaches people to ignore checks. */
+const OFF_NAV: readonly Group[] = ['aside']
+
+/** Is this route an item in the nav list, or is it reached some other way? */
+function inNav(route: Route): boolean {
+  return route.nav === true && !OFF_NAV.includes(route.group)
+}
+
 const CHROME_FREE: ReadonlySet<Persona> = new Set<Persona>(['fulfiller'])
+const LEADER = ','
+const CHORD_MS = 1000
 
-/* CHROME IS DRAWN FOR A KNOWN OWNER ROUTE AND FOR NOTHING ELSE. The `route === undefined ||`
- * that used to open this expression is the hazard this function exists to close.
- *
- * The old reading was that an unresolved hash is the owner's dead end, so it should keep his
- * nav as the way out of it. That is a guess about who is looking, made by the one part of the
- * app that cannot possibly know: a hash is whatever the browser was pointed at, and a stale
- * bookmark, a mistyped character or a link from an old note reaches this branch identically on
- * either device. D5's second persona is a retired, non-technical family member whose device is
- * supposed to open exactly one screen and stay on it — and the nav the old branch handed him
- * is a row of small links to the capture screen, whose undo hard-deletes a record, its sidecar
- * and its photo with no backup (D10). Every other line in this file spends real effort keeping
- * that strip off his device; a mistyped hash walked around all of it.
- *
- * SO THE SAFE READING IS THE FULFILLER'S, and it is chosen because the two wrong answers cost
- * wildly different amounts. Read it as his and be wrong, and the owner — who knows every route
- * in this app by name — loses one click on a page that hands him a labelled way back. Read it
- * as the owner's and be wrong, and a person who has never seen the owner's screens is handed
- * them, at a density docs/DESIGN.md's constraints table says he cannot read, with a
- * hard-delete two taps away. An asymmetric cost decides an unknowable question; it does not
- * need to be resolved, only survived.
- *
- * WHAT REPLACES THE NAV IS NOT NOTHING — see `NoSuchView`, which answers the question this
- * branch refuses to guess at by asking it out loud and drawing one door per persona.
- */
 function hasChrome(route: Route | undefined): boolean {
   return route !== undefined && !CHROME_FREE.has(route.persona)
 }
 
-/* ---- the keyboard ---- */
-
-/* A LEADER KEY AND THEN A ROUTE'S INITIAL, e.g. `,` then `r` for the review queue.
- *
- * docs/DESIGN.md is direct about the owner's side — "an hour in the queue is a keyboard and
- * not a mouse", "Every choice shows its key" — and the nav was the one owner-side control in
- * the product with no key at all. What stopped it being a bare letter is that the letter space
- * is contested and getting more so: `c` and `u` are the capture screen's, `s` and `c` and the
- * digits are the review queue's, `/` is the search field's, the arrows are the pull preview's,
- * and a picker landing on the capture screen wants more of them. A bare `n` for the next
- * screen would work on the day it was written and quietly fire twice a fortnight later, on
- * somebody else's screen, in somebody else's file.
- *
- * A CHORD IS NOT MERELY A WAY TO FIND FREE KEYS — it is what makes the collision impossible
- * rather than unlikely. While the leader is armed the next keydown is consumed here and
- * delivered nowhere else (see the capture-phase listener below), so a route key may be a
- * letter another screen has already bound: `,` then `c` reaches the capture screen and does
- * not also take a photograph. Every route therefore gets a letter out of its own NAME, which is
- * the only mapping with nothing to memorise. A scheme where Capture had to be some other letter
- * because `c` was taken would be a scheme the owner has to learn.
- *
- * THAT READ "its own initial" UNTIL 2026-08-29, and the weaker claim is the true one. `#/runs`
- * arrived and took `r`; the review queue moved to `q`, for queue. Two routes here start with
- * the same letter and the tie has to break somewhere — what keeps it learnable is that the key
- * is still a letter the owner would say out loud when naming the screen, which `q` is and a
- * free slot like `x` would not have been. If a third `r` route ever arrives, this is the
- * paragraph that says what the rule actually is.
- *
- * PUNCTUATION FOR THE LEADER, DELIBERATELY. Every contested key in the paragraph above is a
- * letter or a digit, because every one of them is a mnemonic for something on its screen. `,`
- * is nobody's mnemonic, it is unshifted, and it is what vim's leader convention already trains
- * the fingers to do. `g`, the other obvious choice — gmail and github both use it for exactly
- * this — was rejected precisely because it IS a mnemonic: the picker arriving on the capture
- * screen is a game and rarity picker, and `g` is the first letter it will reach for.
- *
- * WHAT IS BOUND AND WHAT IS NOT: the six routes of the run and the lookups, none of the
- * aside. See the `aside` rows in ROUTES for why Fulfillment in particular must not have one.
- *
- * `s` IS THE LIVE PROOF OF THE PARAGRAPH ABOVE. `CaptureScreen.tsx:SECTION_KEY` is a bare
- * `s` that puts a divider in a box, and D69 gave the same letter to `#/shipping` — the two
- * cannot collide, because an armed leader consumes the second press here and delivers it
- * nowhere. If a change ever moves this listener off the capture phase, that is the pair that
- * breaks first, and it breaks by writing a divider nobody asked for.
- *
- * MODIFIERS ARE NEVER PART OF THE CHORD. A held Cmd, Ctrl or Alt returns before anything
- * else happens, exactly as trigger.ts, ReviewQueue.tsx and BoxBrowse.tsx all do: Cmd-comma is
- * the browser's and the OS's, and a shell that eats it has broken something it does not own.
- * Shift is left off that list for trigger.ts's reason — it does not change which key was
- * pressed, and a held Shift silently killing the nav is the worse of the two failures.
- *
- * THAT SENTENCE SAID "NEVER PART OF IT" UNTIL 2026-08-30, AND `IT` HAD TO BE NARROWED TO THE
- * CHORD. `useRouteStep` below takes Cmd-arrow deliberately, at the owner's instruction, and
- * the amendment is what keeps this paragraph from reading as a rule that thing breaks. It is
- * still the rule HERE and for the reason given: a chord is two unmodified presses, and a
- * leader that needed a modifier would be competing for the key space it was invented to
- * escape.
- */
-const LEADER = ','
-
-/* HOW LONG THE LEADER STAYS ARMED. An armed leader eats the next keystroke, so a leader that
- * never expired would turn one stray comma into a keystroke lost an hour later, on a screen
- * where that keystroke was an answer or a capture. Long enough to be a deliberate two-key
- * sequence typed by a hand that paused to think; short enough that an accident has cost its
- * one key before you notice. Not a token — this is a duration and not a measurement, and
- * docs/DESIGN.md's scale is spacing.
- *
- * ONE SECOND, NOT 1500ms, AS OF 2026-08-24, and the number now comes from somewhere rather
- * than from taste. Vim's `timeoutlen` and which-key's default are both 1000ms, so a hand
- * trained on either already expects this window; practitioners routinely cut it to 500.
- * The rig supplies the harder bound: the feeder emits every ~623ms, so the old 1500ms was
- * 2.4 card-cycles during which this handler would swallow whatever was typed — on the one
- * screen where a swallowed key is a card that went past the lens unrecorded. The sentence
- * above already said an armed leader eats the next keystroke; it just never counted how
- * many cards fit inside the eating. docs/specs/ui-research.md carries the sources. */
-const CHORD_MS = 1000
-
-
-/** `location.hash` as a route path: '' and '#' and '#/' all mean the root. */
+/* ---- hash routing ------------------------------------------------------------ */
 function currentPath(): string {
-  // THE QUERY IS NOT PART OF THE PATH, and this router did not know that until D49 gave a
-  // route a parameter. `#/pricing?run=<name>` is how `#/runs` links a SPECIFIC run — a link
-  // rather than a handoff, because a run name has one source of truth and needs no second
-  // `sessionStorage` key with its own clearing rules. Without this strip the whole string is
-  // compared against `path` and matches nothing, so the link lands on `NoSuchView`: the
-  // screen renders, the route table is right, and the one thing that is wrong is invisible
-  // from either. The screen reads its own parameter off `location.hash`.
   const raw = window.location.hash.replace(/^#/, '').split('?')[0] ?? ''
   if (raw === '') return '/'
-  // Strip one trailing slash so '#/pull/' is not a fourth route that renders nothing.
-  // Guarded on length so the root itself survives.
   return raw.length > 1 ? raw.replace(/\/$/, '') : raw
 }
 
 function useHashPath(): string {
   const [path, setPath] = useState(currentPath)
-
   useEffect(() => {
     const read = () => setPath(currentPath())
     window.addEventListener('hashchange', read)
-    // Read once on subscribe as well. Between the first render and this effect the hash
-    // can already have moved — StrictMode's double-invoke is the cheap case, a hash set
-    // during module init is the real one — and a listener alone would never see it.
     read()
     return () => window.removeEventListener('hashchange', read)
   }, [])
-
   return path
 }
 
-/* The leader, armed. Returns null when it is not, and a token that changes on every arm when
- * it is — a boolean would work for the rendering and not for the timer, because re-arming has
- * to restart the countdown and `true` set to `true` again is not a change React can see.
- *
- * `enabled` is the chrome decision, passed in rather than re-derived. A screen with no nav has
- * no keys: on the Fulfiller's view because a keyboard route out is exactly the route out the
- * constraints table forbids, and on the unresolved-hash page because that page is the one
- * place in the app that does not know whose it is, which is the whole of the argument at
- * `hasChrome`. Both fall out of one condition, which is the reason that function returns a
- * boolean about chrome rather than an answer about personas.
- *
- * `path` is here for the disarm at the foot of this function and for nothing else.
- */
+export function go(path: string): void {
+  window.location.hash = `#${path}`
+}
+
+/* ---- the `,` leader ------------------------------------------------------------- */
 function useLeader(enabled: boolean, path: string): number | null {
   const [arm, setArm] = useState<number | null>(null)
-
   useEffect(() => {
     if (!enabled) {
       setArm(null)
       return
     }
-
-    /* CAPTURE PHASE, AND IT IS THE MECHANISM RATHER THAN A DETAIL. A listener registered on
-     * `window` for the capture phase is the first one the browser calls for any keydown,
-     * before every listener on `document`, on React's root container and on any element, in
-     * either phase. `stopPropagation` there is what lets the second key of a chord be a letter
-     * another screen has bound: the press is consumed before that screen is offered it.
-     *
-     * It assumes no other listener in the app registers in the capture phase, where order
-     * would fall back to registration order. Nothing does today — trigger.ts, ReviewQueue.tsx,
-     * BoxBrowse.tsx, Inventory.tsx and SearchField.tsx all bubble — and this comment is
-     * where a future capture-phase listener will find out that it has a conflict.
-     *
-     * The bluntness is bounded by the arming, which is the reason this is safe to do at all:
-     * unarmed, this handler compares one key and returns. It can only swallow a keystroke that
-     * the owner asked it to swallow, one press earlier, on a screen whose chrome is telling
-     * him it is armed.
-     */
     const onKeyDown = (event: KeyboardEvent) => {
-      // The browser's and the OS's. Cmd-comma in particular is a real shortcut on this rig.
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      // A comma typed into the set hint is a comma, not a leader.
       if (isEditableTarget(event.target)) return
-
       if (event.key === LEADER) {
-        /* Arming, or re-arming and restarting the clock. Held down, this is the branch a
-         * repeat lands in as well, so a leaned-on comma stays armed instead of oscillating
-         * between armed and disarmed as each repeat is read as a second key. */
         event.preventDefault()
         event.stopPropagation()
         setArm((previous) => (previous ?? 0) + 1)
         return
       }
-
       if (arm === null) return
-
-      /* ARMED: THIS PRESS BELONGS TO THE NAV AND TO NOTHING ELSE, whatever it is. One rule and
-       * no exceptions, including Escape and including a key that names no route.
-       *
-       * Letting an unrecognised second key through was the alternative and it is the one that
-       * bites: `,` then `3` would fall through to the review queue and write an answer, and `,`
-       * then `u` would fall through to the capture screen and delete a card. The cost of the
-       * rule as written is one lost keystroke after a stray comma; the cost of the other rule
-       * is a write nobody asked for. It is also the simpler sentence to hold in your head,
-       * which is what makes the chips lighting up in the nav a complete explanation of what is
-       * about to happen.
-       */
       event.preventDefault()
       event.stopPropagation()
       setArm(null)
-
       const target = ROUTES.find((candidate) => candidate.hotkey === event.key.toLowerCase())
       if (target === undefined) return
-      window.location.hash = `#${target.path}`
+      go(target.path)
     }
-
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [enabled, arm])
-
-  /* A THIRD WAY, AND IT IS THE ROUTE ITSELF MOVING. A chord is spent on arriving somewhere,
-   * so an arm that survives an arrival is an arm nobody is holding: the next key is eaten on
-   * a screen the operator did not press it from, which is the trap the two effects below are
-   * already written against. It fires for every arrival and not only for the chord's own —
-   * a nav link, the browser's Back, and `useRouteStep`'s Cmd-arrow all land here, and the
-   * last of those is why this is not merely tidiness. The chord's own navigation has already
-   * set the arm to null one line earlier, so this is a no-op on that path and React bails on
-   * the identical state rather than re-rendering. */
   useEffect(() => {
     setArm(null)
   }, [path])
-
-  /* Two ways to disarm without pressing anything: time, and leaving. The blur case is the one
-   * that would otherwise be a trap — tab away with a leader armed, come back an hour later,
-   * and the first key you press is eaten by a chord you have forgotten starting. */
   useEffect(() => {
     if (arm === null) return
-
     const disarm = () => setArm(null)
     const timer = window.setTimeout(disarm, CHORD_MS)
     window.addEventListener('blur', disarm)
@@ -530,275 +156,995 @@ function useLeader(enabled: boolean, path: string): number | null {
       window.removeEventListener('blur', disarm)
     }
   }, [arm])
-
   return arm
 }
 
-/* ---- stepping the strip ---- */
-
-/* CMD-ARROW WALKS THE STRIP IN THE ORDER IT IS DRAWN — D51, and the owner said it of the five
- * keys the chord already had (2026-08-30): "cmd+arrow keys doesn't have me going in order
- * between c r q p i, can you resolve?"
- *
- * The chord is a JUMP — seven destinations since D69, each reached by naming it. What the shell has never
- * had is a STEP, and the nav is drawn in the order the work happens: shoot, run the pipeline,
- * answer what it could not, price it, then look up where a card is. "The next one along" was
- * the one thing about that row a key could not say. Cmd-arrow was already being pressed for
- * it and was being answered by the browser's history, which is a different question wearing
- * the same shape: a back stack orders by when a screen was ARRIVED AT, so it walks the same
- * two routes forever if that is what the last two presses were, and it leaves the app
- * entirely at the bottom of it.
- *
- * THIS IS THE ONE PLACE THE SHELL TAKES A MODIFIER, AND IT COSTS SOMETHING REAL. Cmd-arrow is
- * Back and Forward in Chrome and in Safari, so this is not a free key — it is taken on the
- * owner's instruction, and what makes it affordable is that neither browser has only one way
- * back: Cmd-[ and Cmd-] and the two-finger swipe are all untouched, and none of them is a
- * shortcut the browser refuses to hand the page (the reserved list is Cmd-N, Cmd-W, Cmd-T,
- * Cmd-Q and their kind). It is bounded to the owner's own routes by `enabled`, exactly as the
- * chord is: the Fulfiller's view and the unresolved-hash page have no keys at all.
- *
- * IT BUBBLES, WHERE THE LEADER CAPTURES, and the difference is not an oversight. The leader
- * takes the capture phase because its whole purpose is to consume a key another screen has
- * bound, and that bluntness is bounded by having to be armed one press earlier. A step key is
- * never armed, so a permanent capture-phase listener would be a standing claim on a key it
- * mostly does not want; it does not need one either, because every arrow handler in the app —
- * BoxBrowse's walk, RunPanel's crop preview — returns on a held Cmd before it reads the key.
- * What this does need is `preventDefault`, which is what stops the browser navigating, and
- * that works from either phase.
- */
+/* ---- ⌘← / ⌘→ steps the workflow ring ------------------------------------------------ */
 const STEP_KEYS = [
   { key: 'ArrowLeft', delta: -1 },
   { key: 'ArrowRight', delta: 1 },
+  { key: 'ArrowUp', delta: -1 },
+  { key: 'ArrowDown', delta: 1 },
 ] as const
-
-/* THE RING IS THE ROUTES THAT HAVE A KEY, IN THE ORDER THE NAV DRAWS THEM. Both halves are
- * derived rather than written down a second time, and each closes something the other cannot.
- *
- *   WHICH   `hotkey !== undefined` already means "reachable from the keyboard", and the two
- *           rows without one are without one for reasons that apply here word for word:
- *           Fulfillment must not be arrivable by accident, because it renders no way out
- *           (see its row in ROUTES), and the gallery is not a step in any loop. A separate
- *           list would be a second answer to a question the table has already answered, and
- *           the first screen added without being put in both would be the bug.
- *   ORDER   GROUP_ORDER first, then the table — which is what the nav actually renders, and
- *           NOT what the table alone says. They agree today. The day somebody re-orders
- *           ROUTES without touching GROUP_ORDER, a ring built from the table would step in an
- *           order the strip does not draw, and stepping in the drawn order is the whole of
- *           what this is for.
- */
-const RING: readonly Route[] = GROUP_ORDER.flatMap((group) =>
-  ROUTES.filter((candidate) => candidate.group === group && candidate.hotkey !== undefined),
-)
-
-/** The group the hint trails, so the chips sit at the end of the ring they describe rather
- *  than at the end of the bar — where `.app-nav-group-aside` would put them next to the two
- *  routes the step cannot reach. Derived from the ring for that reason. */
-const STEP_HINT_GROUP: Group | undefined = RING[RING.length - 1]?.group
-
-/** What the nav advertises and what the handler binds, in one place. `aria-keyshortcuts`
- *  takes DOM key values, which is also what `STEP_KEYS` matches on. */
-const STEP_SHORTCUTS = STEP_KEYS.map((step) => `Meta+${step.key}`).join(' ')
+const RING: readonly Route[] = ROUTES.filter((r) => r.hotkey !== undefined)
+const STEP_SHORTCUTS = 'Meta+ArrowLeft Meta+ArrowRight'
 
 function useRouteStep(enabled: boolean, path: string): void {
   useEffect(() => {
     if (!enabled) return
-
     const onKeyDown = (event: KeyboardEvent) => {
-      /* Cmd on this rig (D13: the Mac), Ctrl for anything that is not one. Alt is excluded
-       * outright rather than merely not required: Cmd-Alt-arrow is "previous/next tab" in
-       * Chrome, and a step that also changed tab would be answering for a press it did not
-       * read. Shift is not inspected, for trigger.ts's reason — it does not change which key
-       * was pressed. */
       if (event.altKey) return
       if (!event.metaKey && !event.ctrlKey) return
-      // In a field this is the caret going to the start or the end of the line, which is the
-      // thing the hands are doing when they are in one.
       if (isEditableTarget(event.target)) return
-
       const step = STEP_KEYS.find((candidate) => candidate.key === event.key)
       if (step === undefined) return
-
-      /* A SCREEN OUTSIDE THE RING KEEPS THE BROWSER'S KEY. The gallery is the live case: it
-       * has chrome, so this listener is mounted, and it is deliberately not a step in the
-       * loop — so there is no "next one along" from it, and the honest answer is to leave the
-       * press alone rather than to invent a landing. */
       const at = RING.findIndex((candidate) => candidate.path === path)
       if (at === -1) return
-
-      /* PREVENTED EVEN WHERE THE MOVE REFUSES, which is BoxBrowse's rule for its own arrows
-       * and is the half that makes the two ends readable. A refusal at the end is still this
-       * handler answering for the key; letting it fall through would mean Cmd-left sometimes
-       * steps a route and sometimes leaves the app for whatever the history stack holds,
-       * which is precisely the "not in order" this exists to fix. */
       event.preventDefault()
-
-      /* NEVER A WRAP, AND EVERY END STOPS — BoxBrowse says it in those words and the reason
-       * transfers: the strip is a row with a first and a last, and a row that starts again is
-       * a row you can no longer count along. Falling off either end is `undefined` here
-       * rather than a clamp, so nothing has to know the length. */
       const target = RING[at + step.delta]
       if (target === undefined) return
-      window.location.hash = `#${target.path}`
+      go(target.path)
     }
-
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [enabled, path])
 }
 
-/* An unknown hash renders this rather than falling back to the capture screen.
- *
- * The fallback was the obvious choice and is wrong here: the root route is the screen that
- * photographs cards into a box, so a stale bookmark or a typed '#/pulls' would land on a
- * live capture screen looking exactly like the view that was asked for. Per docs/DESIGN.md's
- * copy rules an error says what happened and what to do next, which is also why this names
- * the hash it could not resolve instead of saying "not found".
- *
- * IT NOW DRAWS ITS OWN WAY OUT, because as of `hasChrome` there is no nav above it to be the
- * way out. That is not a consolation prize for losing the nav — it is the better answer, and
- * the nav was only ever standing in for it. The nav is nine links at a density docs/DESIGN.md
- * says one of this app's two users cannot read; this is two doors, one per persona, and the
- * page can hand them over without having to decide which of the two people is holding it.
- *
- * SO IT IS DRAWN TO THE FULFILLER'S FLOORS — 20px body, 44px targets, 12px apart, no word from
- * the banned list — and drawn that way for the same reason `hasChrome` reads the ambiguity his
- * way. His floors are legible to the owner; the owner's density is not legible to him. Meeting
- * the stricter of the two standards is what "cannot know who is looking" cashes out to when
- * something actually has to be rendered. None of it is asserted by
- * app/tests/fulfillment.spec.ts, whose battery is scoped to his view and should stay scoped to
- * it: this page is not his view, it is the page that might be.
- *
- * HIS DOOR IS FIRST AND THE OWNER'S IS SECOND, on the same asymmetry. The owner reads two
- * labels and takes the second; the person who has trouble reading small print takes the first
- * thing on the page, and the first thing on the page is his.
- *
- * NO ACCENT FILL ON EITHER, which docs/DESIGN.md decides for us: solid accent means there is
- * exactly one thing to do, and "a screen with two answers gets no fill". Filling his door
- * would be the shell claiming to know an answer it has just finished admitting it does not
- * have.
- */
+/* ---- server presence ----------------------------------------------------------------- */
+type ServerState = 'unknown' | 'online' | 'offline'
+
+function useServerPresence(enabled: boolean): { state: ServerState; cards: number | null; retry: () => void } {
+  const [state, setState] = useState<ServerState>('unknown')
+  const [cards, setCards] = useState<number | null>(null)
+  const check = useCallback(async () => {
+    try {
+      const status = await getStatus()
+      setState('online')
+      setCards(status.cards)
+    } catch {
+      setState('offline')
+    }
+  }, [])
+  useEffect(() => {
+    if (!enabled) return
+    void check()
+    const timer = window.setInterval(() => void check(), 15000)
+    const onFocus = () => void check()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [enabled, check])
+  useEffect(() => {
+    if (!enabled) return
+    return onServerBoot(() => {
+      toast({ kind: 'status', icon: 'refresh', title: 'Server restarted', body: 'Banchi is running your latest code.' })
+      void check()
+    })
+  }, [enabled, check])
+  return { state, cards, retry: () => void check() }
+}
+
+/* ---- theme ---------------------------------------------------------------------------- */
+function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(readTheme)
+  useEffect(() => {
+    // Follow the system while the owner has not chosen; a stored choice wins.
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const follow = () => {
+      if (storedTheme() !== null) return
+      const next: Theme = media.matches ? 'dark' : 'light'
+      if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+      else document.documentElement.removeAttribute('data-theme')
+      setTheme(next)
+    }
+    follow()
+    media.addEventListener('change', follow)
+    return () => media.removeEventListener('change', follow)
+  }, [])
+  const toggle = useCallback(() => {
+    // One cross-fade for the whole page (base.css reads this), then components keep their own.
+    const root = document.documentElement
+    root.setAttribute('data-theme-switching', 'true')
+    window.setTimeout(() => root.removeAttribute('data-theme-switching'), 360)
+    setTheme((previous) => {
+      const next: Theme = previous === 'dark' ? 'light' : 'dark'
+      applyTheme(next)
+      return next
+    })
+  }, [])
+  return [theme, toggle]
+}
+
+/* ---- rail state ----------------------------------------------------------------------
+   A browser with no opinion gets one from its own width: below 1280 the rail is the honest
+   default, and above it there is room for the words. */
+function readRail(): boolean {
+  return storedRail() ?? window.innerWidth < 1280
+}
+
+/* ---- error boundary ------------------------------------------------------------------ */
+class RouteBoundary extends Component<
+  { readonly path: string; readonly plain?: boolean; readonly children: ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('screen crashed', error, info.componentStack)
+  }
+  componentDidUpdate(previous: { path: string }) {
+    if (previous.path !== this.props.path && this.state.error !== null) this.setState({ error: null })
+  }
+  render() {
+    if (this.state.error === null) return this.props.children
+
+    /* THE FULFILLER'S CRASH PAGE OFFERS NO DOOR OUT, and that is the whole difference.
+       docs/DESIGN.md's constraints table forbids any route out of his view, and a crash is
+       not an exemption from it — it is the moment he is most likely to press whatever is
+       offered. So he gets his own floors (20px body, 44px targets) and exactly one control,
+       which retries the screen he is on. No wordmark, no error text, no link home. */
+    if (this.props.plain) {
+      return (
+        <main className="crash-plain">
+          <h1 className="crash-plain-title">This screen stopped.</h1>
+          <p className="crash-plain-say">Nothing is lost. Tap the button to open it again.</p>
+          <button type="button" className="crash-plain-door" onClick={() => this.setState({ error: null })}>
+            Open it again
+          </button>
+        </main>
+      )
+    }
+
+    return (
+      <main className="no-such-view">
+        <div className="no-such-view-card bn-anim-in">
+          <Logo size={40} />
+          <h1 className="bn-title" style={{ marginTop: 16 }}>
+            This screen stopped.
+          </h1>
+          <p className="bn-lede" style={{ marginTop: 8 }}>
+            Something in it threw. Reloading the screen usually clears it; if not, the error below says what.
+          </p>
+          <p className="no-such-view-path" style={{ marginTop: 12 }}>
+            {this.state.error.message}
+          </p>
+          <div className="no-such-view-doors">
+            <button type="button" className="no-such-view-door" onClick={() => this.setState({ error: null })}>
+              <Icon name="refresh" /> Reload this screen <Icon name="arrowRight" />
+            </button>
+            <a className="no-such-view-door" href="#/">
+              <Icon name="home" /> Go home <Icon name="arrowRight" />
+            </a>
+          </div>
+        </div>
+      </main>
+    )
+  }
+}
+
+/* ---- unknown route -------------------------------------------------------------------- */
 function NoSuchView({ path }: { path: string }) {
   return (
     <main className="no-such-view">
-      <h1 className="no-such-view-title">Nothing is at this address.</h1>
-      <p className="no-such-view-say">This screen was asked for:</p>
-      <p className="no-such-view-path">#{path}</p>
-      <p className="no-such-view-say">There is no screen with that name. Go to one of these:</p>
-      {/* Named exactly as their own screens name them. docs/DESIGN.md's copy rules: an action
-          keeps its name through the whole flow, and "Cards to pull" is the heading of the view
-          this door opens. A door labelled with a description of a screen is a door you have to
-          read twice.
-
-          INVENTORY IS FIRST SINCE D31, and it is the door this screen most often needs to
-          offer. `#/boxes` and `#/pull` were real addresses until 2026-08-23 and both are now
-          bookmarks, links in old notes, and whatever a browser autocompletes — so the two most
-          likely ways to arrive here both end at the screen those two became. A door that
-          answered a dead `#/pull` with "Capture" would send somebody to the one screen that
-          takes photographs when what they wanted was to look at one. */}
-      <a className="no-such-view-door" href="#/inventory">
-        Inventory
-      </a>
-      <a className="no-such-view-door" href="#/fulfillment">
-        Cards to pull
-      </a>
-      <a className="no-such-view-door" href="#/">
-        Capture
-      </a>
+      <div className="no-such-view-card bn-anim-in">
+        <Logo size={40} />
+        <h1 className="bn-title" style={{ marginTop: 16 }}>
+          Nothing lives at this address.
+        </h1>
+        <p className="bn-lede" style={{ marginTop: 8 }}>
+          Banchi has no screen called <span className="no-such-view-path">#{path}</span>. Try one of these.
+        </p>
+        <div className="no-such-view-doors">
+          <a className="no-such-view-door" href="#/">
+            <Icon name="home" /> Home <Icon name="arrowRight" />
+          </a>
+          <a className="no-such-view-door" href="#/inventory">
+            <Icon name="box" /> Inventory <Icon name="arrowRight" />
+          </a>
+          <a className="no-such-view-door" href="#/fulfillment" target="_blank" rel="noopener">
+            <Icon name="hand" /> Cards to pull <Icon name="external" />
+          </a>
+        </div>
+      </div>
     </main>
   )
 }
 
+/* ---- command palette -------------------------------------------------------------------- */
+type Command = { readonly id: string; readonly group: string; readonly label: string; readonly icon: IconName; readonly hint?: string; readonly keywords?: string; readonly run: () => void }
+
+function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: () => void; commands: readonly Command[] }) {
+  const [query, setQuery] = useState('')
+  const [cursor, setCursor] = useState(0)
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!open) return
+    setQuery('')
+    setCursor(0)
+    const timer = window.setTimeout(() => input.current?.focus(), 10)
+    return () => window.clearTimeout(timer)
+  }, [open])
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (q === '') return commands
+    return commands.filter((c) => `${c.group} ${c.label} ${c.hint ?? ''} ${c.keywords ?? ''}`.toLowerCase().includes(q))
+  }, [commands, query])
+  useEffect(() => {
+    setCursor((c) => Math.min(c, Math.max(0, matches.length - 1)))
+  }, [matches.length])
+  const leave = useLeave(open)
+  if (!leave.mounted) return null
+  const leaving = leave.leaving ? 'true' : undefined
+  const grouped: { group: string; items: Command[] }[] = []
+  for (const command of matches) {
+    const last = grouped[grouped.length - 1]
+    if (last !== undefined && last.group === command.group) last.items.push(command)
+    else grouped.push({ group: command.group, items: [command] })
+  }
+  let index = -1
+  return (
+    <>
+      <div className="bn-scrim" onClick={onClose} data-leaving={leaving} />
+      <div className="bn-cmdk" role="dialog" aria-label="Command palette" data-leaving={leaving}>
+        <div className="bn-cmdk-input">
+          <Icon name="search" size={18} className="bn-muted" />
+          <input
+            ref={input}
+            value={query}
+            placeholder="Jump to a screen…"
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault()
+                setCursor((c) => Math.min(c + 1, matches.length - 1))
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault()
+                setCursor((c) => Math.max(c - 1, 0))
+              } else if (event.key === 'Enter') {
+                event.preventDefault()
+                const hit = matches[cursor]
+                if (hit !== undefined) {
+                  onClose()
+                  hit.run()
+                }
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                onClose()
+              }
+            }}
+          />
+          <Kbd>esc</Kbd>
+        </div>
+        <div className="bn-cmdk-list" role="listbox">
+          {matches.length === 0 ? <div className="bn-cmdk-empty">Nothing matches “{query}”.</div> : null}
+          {grouped.map((section) => (
+            <div key={section.group}>
+              <div className="bn-cmdk-group">{section.group}</div>
+              {section.items.map((command) => {
+                index += 1
+                const at = index
+                return (
+                  <button
+                    key={command.id}
+                    type="button"
+                    role="option"
+                    aria-selected={at === cursor}
+                    className="bn-cmdk-item"
+                    onMouseEnter={() => setCursor(at)}
+                    onClick={() => {
+                      onClose()
+                      command.run()
+                    }}
+                  >
+                    <Icon name={command.icon} size={16} />
+                    <span>{command.label}</span>
+                    {command.hint ? <span className="bn-cmdk-item-hint">{command.hint}</span> : null}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+        <div className="bn-cmdk-foot">
+          <span>
+            <Kbd>↑</Kbd> <Kbd>↓</Kbd> move
+          </span>
+          <span>
+            <Kbd>↵</Kbd> open
+          </span>
+          <span>
+            <Kbd>,</Kbd> + letter jumps anywhere
+          </span>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ---- which-key overlay for the leader ------------------------------------------------------ */
+function WhichKey({ armed }: { armed: boolean }) {
+  if (!armed) return null
+  return (
+    <div className="bn-whichkey bn-anim-pop" role="status" aria-live="polite">
+      <div className="bn-whichkey-title">
+        <Kbd>,</Kbd> then…
+      </div>
+      <div className="bn-whichkey-grid">
+        {RING.map((route) => (
+          <span key={route.path} className="bn-whichkey-item">
+            <Kbd>{route.hotkey?.toUpperCase()}</Kbd>
+            {route.label}
+          </span>
+        ))}
+      </div>
+      <span className="bn-whichkey-drain" style={{ animationDuration: `${CHORD_MS}ms` }} />
+    </div>
+  )
+}
+
+/* ---- the shortcuts sheet ------------------------------------------------------------------
+   THE ONLY PLACE THE PRODUCT SAYS IT IS KEYBOARD-DRIVEN. The rebuild took the inline ⌘←/⌘→
+   keycaps out of the nav and the owner chose one reference over putting them back, so this
+   sheet has to be COMPLETE: every binding, read out of the screen that owns it, grouped by
+   where it applies. A screen's keys are dead while another screen is open and each group
+   says so in a sentence rather than leaving it to be discovered.
+
+   The caps here are written with a bare <kbd> rather than the kit's <Kbd>, which is
+   aria-hidden — correct beside a labelled button, wrong here, where the key IS the content
+   and a screen reader that skips it reads a list of verbs with no shortcuts in it. */
+
+type Binding = {
+  /** One entry per alternative that does the same thing; a chord is one string (`⌘K`, `,C`). */
+  readonly keys: readonly string[]
+  readonly does: string
+  /** The condition, when the key is armed by something narrower than the screen. */
+  readonly when?: string
+  /** Read the caps as a sequence rather than as alternatives. */
+  readonly seq?: boolean
+}
+
+type KeyGroup = {
+  readonly id: string
+  readonly title: string
+  readonly icon: IconName
+  readonly where: string
+  /** The screen this group belongs to, so the sheet can offer the way there. */
+  readonly at?: string
+  readonly rows: readonly Binding[]
+}
+
+/* The capture screen's option keycaps, in its own order: `CaptureScreen.tsx` builds them by
+   striking its twelve reserved letters out of `1234567890a…z`. Written out rather than
+   summarised, because the nth key is the nth option and an operator counts along the row. */
+const CAPTURE_OPTION_KEYS = '1234567890adeijklmnqwxyz'.toUpperCase().split('')
+
+const SHORTCUTS: readonly KeyGroup[] = [
+  {
+    id: 'anywhere',
+    title: 'Anywhere',
+    icon: 'keyboard',
+    where: 'Works on every one of your screens.',
+    rows: [
+      { keys: ['?'], does: 'Open this sheet' },
+      { keys: ['⌘K', 'Ctrl K'], does: 'Open the command palette' },
+      { keys: ['⌘←', '⌘→'], does: 'Step to the screen before or after this one, in workflow order' },
+      { keys: ['⌘↑', '⌘↓'], does: 'The same step, for a keyboard without arrow pairs' },
+      { keys: ['⌘.'], does: 'Collapse the sidebar to its rail, or open it again' },
+      { keys: ['Esc'], does: 'Close whatever is over the screen — this sheet, the palette, the phone menu' },
+    ],
+  },
+  {
+    id: 'jump',
+    title: 'Jump to a screen',
+    icon: 'zap',
+    where: 'Press the comma, then the letter. The letters appear on screen and you have a second to choose.',
+    rows: [
+      { keys: [',H'], does: 'Home' },
+      { keys: [',C'], does: 'Capture' },
+      { keys: [',R'], does: 'Runs' },
+      { keys: [',Q'], does: 'Review' },
+      { keys: [',P'], does: 'Pricing' },
+      { keys: [',O'], does: 'Orders' },
+      { keys: [',S'], does: 'Shipping' },
+      { keys: [',I'], does: 'Inventory' },
+      { keys: [',D'], does: 'Codes' },
+    ],
+  },
+  {
+    id: 'palette',
+    title: 'The command palette',
+    icon: 'command',
+    where: 'Only while the palette is open.',
+    rows: [
+      { keys: ['↑', '↓'], does: 'Move down the list' },
+      { keys: ['↵'], does: 'Run the highlighted command' },
+      { keys: ['Esc'], does: 'Close it and leave the screen as it was' },
+    ],
+  },
+  {
+    id: 'capture',
+    title: 'Capture',
+    icon: 'camera',
+    at: '/capture',
+    where: 'Only while Capture is open.',
+    rows: [
+      { keys: ['C'], does: 'Take the photograph', when: 'while the trigger is on Manual' },
+      { keys: ['S'], does: 'Put a divider in, at the card you are about to shoot' },
+      { keys: ['U'], does: 'Undo the newest capture' },
+      { keys: ['B'], does: 'Open or close the Box field' },
+      { keys: ['H'], does: 'Open or close the Set hint field' },
+      { keys: ['G'], does: 'Open or close the Game field' },
+      { keys: ['R'], does: 'Open or close the Rarity field', when: 'when the game has rarities' },
+      { keys: ['F'], does: 'Open or close the Finish field', when: 'when the game has finishes' },
+      { keys: ['P'], does: 'Open or close the Product field' },
+      { keys: ['V'], does: 'Open or close the Camera field' },
+      { keys: ['O'], does: 'Open or close the Rotation field' },
+      { keys: ['T'], does: 'Open or close the Trigger field' },
+      {
+        keys: CAPTURE_OPTION_KEYS,
+        seq: true,
+        does: 'Choose the option with that keycap beside it',
+        when: 'while a field is open — the caps run in this order, and options past the last one are mouse-only',
+      },
+      { keys: ['↵'], does: 'Take the box you typed, or make a new one', when: 'in the Box field' },
+      { keys: ['Esc'], does: 'Close the open field' },
+    ],
+  },
+  {
+    id: 'runs',
+    title: 'Runs',
+    icon: 'play',
+    at: '/runs',
+    where: 'Only while Runs is open.',
+    rows: [{ keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a preview is on screen' }],
+  },
+  {
+    id: 'review',
+    title: 'Review',
+    icon: 'inbox',
+    at: '/review',
+    where: 'Only while Review is open.',
+    rows: [
+      { keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], seq: true, does: 'Answer with that candidate — or that row of the export, while the lookup is open' },
+      { keys: ['G'], does: 'Answer the whole group at once', when: 'when every card left asks the same question' },
+      { keys: ['↵'], does: 'Confirm the group', when: 'while the group offer is up' },
+      { keys: ['Esc'], does: 'Go back to one card at a time', when: 'while the group offer is up' },
+      { keys: ['S'], does: 'Skip this card and come back to it' },
+      { keys: ['C'], does: 'Clear the skips and start round again', when: 'when everything left is skipped' },
+      { keys: ['X'], does: 'Close this question without answering it' },
+      { keys: ['1', '2', '3', '4', '5', '6', '7'], seq: true, does: 'Pick the reason it is closed', when: 'while the close panel is up' },
+      { keys: ['L'], does: 'Look this card up in the export' },
+      { keys: ['Esc'], does: 'Leave the lookup, or the close panel, or the queue drawer' },
+      { keys: ['R'], does: 'Reload the queue' },
+      { keys: ['U'], does: 'Undo the newest answer' },
+    ],
+  },
+  {
+    id: 'pricing',
+    title: 'Pricing',
+    icon: 'tag',
+    at: '/pricing',
+    where: 'Only while Pricing is open. Everything but R and T is pressed inside a price field.',
+    rows: [
+      { keys: ['R'], does: 'Reload the worklist', when: 'not on a phone' },
+      { keys: ['T'], does: 'Hold to read the price history of the row under the pointer; let go and it closes' },
+      { keys: ['M'], does: 'Snap the price to Market' },
+      { keys: ['L'], does: 'Snap the price to Low' },
+      { keys: ['S'], does: 'Snap the price to Low with shipping' },
+      { keys: ['D'], does: 'Snap the price to Direct low' },
+      { keys: ['N'], does: 'Snap the price to what it is now', when: 'when the card is already listed' },
+      { keys: ['H'], does: 'Hold this card back instead of pricing it' },
+      { keys: ['P'], does: 'Show the photograph of this card' },
+      { keys: ['U'], does: 'Undo the last answer' },
+      { keys: ['↵'], does: 'Write this price and drop to the next card' },
+      { keys: ['⇧↵'], does: 'Write this price and go back up one' },
+      { keys: ['↑', '↓'], does: 'Write this price and move' },
+      { keys: ['Esc'], does: 'Put the standing answer back and leave the field' },
+      { keys: ['B'], does: 'Hold it because you are bullish', when: 'while the hold panel is up' },
+      { keys: ['K'], does: 'Hold it because you are keeping it', when: 'while the hold panel is up' },
+      { keys: ['X'], does: 'Hold it for a later batch', when: 'while the hold panel is up' },
+      { keys: ['↵'], does: 'Set the hold', when: 'while the hold panel is up' },
+      { keys: ['Esc'], does: 'Cancel the hold, or close the history, the photograph, the files dialog or the run picker' },
+    ],
+  },
+  {
+    id: 'inventory',
+    title: 'Inventory',
+    icon: 'box',
+    at: '/inventory',
+    where: 'Only while Inventory is open.',
+    rows: [
+      { keys: ['/'], does: 'Jump into the search field; Esc hands focus back and keeps what you typed' },
+      { keys: ['←', '→'], does: 'Step to the card before or after this one in the walk' },
+      { keys: ['PgUp', 'PgDn'], does: 'Jump by section', when: 'with the card list focused' },
+      { keys: ['Home', 'End'], does: 'Go to the first or last card the filter leaves', when: 'with the card list focused' },
+      { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
+      { keys: ['Esc'], does: 'Close the open sheet or panel' },
+    ],
+  },
+  {
+    id: 'orders',
+    title: 'Orders',
+    icon: 'cart',
+    at: '/orders',
+    where: 'Only while Orders is open, in the two-pane layout on a wide window.',
+    rows: [
+      { keys: ['J', '↓'], does: 'Select the next order' },
+      { keys: ['K', '↑'], does: 'Select the order before it' },
+    ],
+  },
+  {
+    id: 'codes',
+    title: 'Codes',
+    icon: 'qr',
+    at: '/codes',
+    where: 'Only while Codes is open.',
+    rows: [{ keys: ['Esc'], does: 'Close the open sheet' }],
+  },
+  {
+    id: 'fulfillment',
+    title: 'Cards to pull',
+    icon: 'hand',
+    where: 'The hand-off screen. It runs without this shell, so these two are all it answers to — and this sheet cannot be opened from it.',
+    rows: [
+      { keys: ['/'], does: 'Jump into the search field' },
+      { keys: ['Esc'], does: 'Close the enlarged photograph' },
+    ],
+  },
+]
+
+const BINDING_COUNT = SHORTCUTS.reduce((total, group) => total + group.rows.length, 0)
+
+function Caps({ row }: { row: Binding }) {
+  return (
+    <span className="app-keys-caps">
+      {row.keys.map((cap, at) => (
+        <span key={`${cap}-${at}`} className="app-keys-cap">
+          {at === 0 || row.seq ? null : <span className="app-keys-join">or</span>}
+          <kbd className="bn-kbd">{cap}</kbd>
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function KeysSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const panel = useRef<HTMLDivElement>(null)
+  const leave = useLeave(open)
+
+  /* Focus comes back to whatever the operator was on. Keyed on `open` alone, so the restore
+     fires the moment it closes rather than after the leave animation. */
+  useEffect(() => {
+    if (!open) return
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = overflow
+      if (before !== null && document.contains(before)) before.focus({ preventScroll: true })
+    }
+  }, [open])
+
+  /* And focus goes INTO the sheet — on `leave.mounted` as well as `open`, because `useLeave`
+     raises `mounted` from an effect: on the first render after the press the dialog is not in
+     the document yet and the ref is still null. Focusing on `open` alone silently did nothing
+     and left the operator's focus on the page behind the scrim. Tab then cycles inside. */
+  useEffect(() => {
+    if (!open || !leave.mounted) return
+    const frame = window.requestAnimationFrame(() => panel.current?.focus({ preventScroll: true }))
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, leave.mounted])
+
+  if (!leave.mounted) return null
+  const leaving = leave.leaving ? 'true' : undefined
+
+  const trap = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || panel.current === null) return
+    const stops = [...panel.current.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')]
+    const first = stops[0]
+    const last = stops[stops.length - 1]
+    if (first === undefined || last === undefined) return
+    const active = document.activeElement
+    if (event.shiftKey && (active === first || active === panel.current)) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  return (
+    <>
+      <div className="bn-scrim" onClick={onClose} data-leaving={leaving} />
+      <div
+        ref={panel}
+        className="bn-dialog app-keys"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-keys-title"
+        tabIndex={-1}
+        onKeyDown={trap}
+        data-leaving={leaving}
+      >
+        <header className="app-keys-head">
+          <div className="app-keys-head-top">
+            <h2 className="app-keys-title" id="app-keys-title">
+              <Icon name="keyboard" size={20} />
+              Keyboard shortcuts
+            </h2>
+            <Button variant="ghost" icon="x" kbd="Esc" onClick={onClose} className="app-keys-close">
+              Close
+            </Button>
+          </div>
+          {/* Its own line, at every width: beside the button it wrapped to five lines on a
+              phone and pushed the first real row off the screen. */}
+          <p className="app-keys-lede">
+            Banchi is meant to be driven from the keyboard. Everything it answers to is here, in {BINDING_COUNT} entries
+            — a row that shows several caps is a run of keys, not one. A screen’s own keys work only while that screen
+            is open.
+          </p>
+        </header>
+
+        <div className="app-keys-body">
+          {SHORTCUTS.map((group) => (
+            <section key={group.id} className="app-keys-group">
+              <h3 className="app-keys-group-title">
+                <Icon name={group.icon} size={15} />
+                {group.title}
+              </h3>
+              <p className="app-keys-where">
+                {group.where}
+                {group.at === undefined ? null : (
+                  <>
+                    {' '}
+                    <a className="app-keys-goto" href={`#${group.at}`} onClick={onClose}>
+                      Go there
+                      <Icon name="arrowRight" size={12} />
+                    </a>
+                  </>
+                )}
+              </p>
+              <dl className="app-keys-rows">
+                {group.rows.map((row, at) => (
+                  <div
+                    key={`${group.id}-${at}`}
+                    className={row.keys.length > 3 ? 'app-keys-row app-keys-row-wide' : 'app-keys-row'}
+                  >
+                    <dt>
+                      <Caps row={row} />
+                    </dt>
+                    <dd className="app-keys-does">
+                      {row.does}
+                      {row.when === undefined ? null : <span className="app-keys-when">{row.when}</span>}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+
+        <footer className="app-keys-foot">
+          <span>
+            <kbd className="bn-kbd">?</kbd> opens this sheet from anywhere, unless you are typing in a field.
+          </span>
+          <span className="app-keys-foot-end">
+            <kbd className="bn-kbd">Esc</kbd> closes it
+          </span>
+        </footer>
+      </div>
+    </>
+  )
+}
+
+/* ---- nav link ------------------------------------------------------------------------------- */
+function NavLink({ route, current, onNavigate }: { route: Route; current: boolean; onNavigate?: () => void }) {
+  return (
+    <a
+      className="bn-nav-link app-nav-link"
+      href={`#${route.path}`}
+      aria-current={current ? 'page' : undefined}
+      data-tip={route.label}
+      onClick={onNavigate}
+    >
+      <Icon name={route.icon} size={18} />
+      <span className="bn-nav-text">{route.label}</span>
+      {route.hotkey ? <Kbd>,{route.hotkey.toUpperCase()}</Kbd> : null}
+    </a>
+  )
+}
+
+/* ---- sidebar ---------------------------------------------------------------------------------- */
+function Sidebar({
+  path,
+  rail,
+  onToggleRail,
+  armed,
+  server,
+  cards,
+  theme,
+  onToggleTheme,
+  onPalette,
+}: {
+  path: string
+  rail: boolean
+  onToggleRail: () => void
+  armed: boolean
+  server: ServerState
+  cards: number | null
+  theme: Theme
+  onToggleTheme: () => void
+  onPalette: () => void
+}) {
+  return (
+    <aside className="bn-side">
+      <a className="bn-brand" href="#/" aria-label="Banchi home">
+        <Logo size={32} />
+        <span className="bn-brand-text">
+          <span className="bn-brand-name">Banchi</span>
+          <span className="bn-brand-tag">every card has an address</span>
+        </span>
+      </a>
+      <button type="button" className="bn-side-collapse" onClick={onToggleRail} aria-label={rail ? 'Expand the sidebar' : 'Collapse the sidebar'}>
+        <Icon name={rail ? 'chevronRight' : 'chevronLeft'} size={14} />
+      </button>
+      <nav className="bn-nav app-nav" aria-label="Screens" aria-keyshortcuts={STEP_SHORTCUTS} data-armed={armed ? 'true' : undefined}>
+        {GROUPS.map((group) => (
+          <div key={group.id} className="bn-nav-group">
+            {group.label ? <div className="bn-nav-group-label">{group.label}</div> : null}
+            {ROUTES.filter((r) => r.group === group.id && inNav(r)).map((route) => (
+              <NavLink key={route.path} route={route} current={route.path === path} />
+            ))}
+          </div>
+        ))}
+      </nav>
+      <div className="bn-side-foot">
+        <a className="bn-nav-link" href="#/fulfillment" target="_blank" rel="noopener" data-tip="Cards to pull">
+          <Icon name="hand" size={18} />
+          <span className="bn-nav-text">Cards to pull</span>
+          <Icon name="external" size={14} className="bn-faint" />
+        </a>
+        <Button variant="ghost" icon="command" onClick={onPalette} data-tip="Search">
+          <span className="bn-side-foot-text">Search</span>
+          <Kbd>⌘K</Kbd>
+        </Button>
+        <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
+          <span className="bn-side-foot-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+        </Button>
+        <div className="bn-server" data-state={server} title={server === 'offline' ? 'The capture server is not answering' : 'Capture server'}>
+          <span className={`bn-dot ${server === 'online' ? 'bn-dot-ok' : server === 'offline' ? 'bn-dot-danger' : ''}`} />
+          <span className="bn-side-foot-text">
+            {server === 'online' ? 'Server online' : server === 'offline' ? 'Server offline' : 'Checking server…'}
+            {server === 'online' && cards !== null ? <span className="bn-server-detail"> · {cards.toLocaleString()} cards</span> : null}
+          </span>
+        </div>
+      </div>
+    </aside>
+  )
+}
+
+/* ---- phone chrome ------------------------------------------------------------------------------- */
+/* Every owner screen draws its own h1 directly under this bar, so the bar carries the
+   wordmark rather than repeating (or, on Codes, contradicting) the screen's name. */
+function PhoneBar({ route, onMenu, onPalette }: { route: Route | undefined; onMenu: () => void; onPalette: () => void }) {
+  return (
+    <header className="bn-topbar">
+      <a className="bn-topbar-brand" href="#/" aria-label="Banchi home">
+        <Logo size={26} />
+      </a>
+      <span className="bn-topbar-title">{route === undefined ? 'Not found' : 'Banchi'}</span>
+      <Button variant="ghost" icon="search" iconOnly onClick={onPalette}>
+        Search
+      </Button>
+      <Button variant="ghost" icon="menu" iconOnly onClick={onMenu}>
+        Menu
+      </Button>
+    </header>
+  )
+}
+
+function TabBar({ path, onMore }: { path: string; onMore: () => void }) {
+  const tabs = ROUTES.filter((r) => r.tab)
+  return (
+    <nav className="bn-tabbar" aria-label="Primary">
+      {tabs.map((route) => (
+        <a key={route.path} className="bn-tab-link" href={`#${route.path}`} aria-current={route.path === path ? 'page' : undefined}>
+          <Icon name={route.icon} size={22} />
+          <span>{route.label}</span>
+        </a>
+      ))}
+      <button type="button" className="bn-tab-link" onClick={onMore}>
+        <Icon name="more" size={22} />
+        <span>More</span>
+      </button>
+    </nav>
+  )
+}
+
+function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState }) {
+  const leave = useLeave(open)
+  if (!leave.mounted) return null
+  const leaving = leave.leaving ? 'true' : undefined
+  return (
+    <>
+      <div className="bn-scrim" onClick={onClose} data-leaving={leaving} />
+      <div className="bn-sheet bn-sheet-left bn-drawer" role="dialog" aria-label="Screens" data-leaving={leaving}>
+        <div className="bn-drawer-head">
+          <a className="bn-brand" href="#/" onClick={onClose}>
+            <Logo size={30} />
+            <span className="bn-brand-text">
+              <span className="bn-brand-name">Banchi</span>
+              <span className="bn-brand-tag">every card has an address</span>
+            </span>
+          </a>
+          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
+            Close
+          </Button>
+        </div>
+        <nav className="bn-nav" aria-label="All screens">
+          {GROUPS.map((group) => (
+            <div key={group.id} className="bn-nav-group">
+              {group.label ? <div className="bn-nav-group-label">{group.label}</div> : null}
+              {ROUTES.filter((r) => r.group === group.id && inNav(r)).map((route) => (
+                <NavLink key={route.path} route={route} current={route.path === path} onNavigate={onClose} />
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="bn-side-foot">
+          <a className="bn-nav-link" href="#/fulfillment" target="_blank" rel="noopener">
+            <Icon name="hand" size={18} />
+            <span className="bn-nav-text">Cards to pull</span>
+            <Icon name="external" size={14} className="bn-faint" />
+          </a>
+          <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </Button>
+          <div className="bn-server" data-state={server}>
+            <span className={`bn-dot ${server === 'online' ? 'bn-dot-ok' : server === 'offline' ? 'bn-dot-danger' : ''}`} />
+            {server === 'online' ? 'Server online' : server === 'offline' ? 'Server offline' : 'Checking server…'}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ---- the app ------------------------------------------------------------------------------------ */
 export function App() {
   const path = useHashPath()
   const route = ROUTES.find((candidate) => candidate.path === path)
   const chrome = hasChrome(route)
   const arm = useLeader(chrome, path)
   useRouteStep(chrome, path)
+  const [rail, setRail] = useState(readRail)
+  const [theme, toggleTheme] = useTheme()
+  const [palette, setPalette] = useState(false)
+  const [drawer, setDrawer] = useState(false)
+  const [keysOpen, setKeysOpen] = useState(false)
+  const { state: server, cards, retry } = useServerPresence(chrome)
+
+  useEffect(() => {
+    const name = route?.label ?? 'Not found'
+    document.title = route?.persona === 'fulfiller' ? 'Cards to pull' : route?.path === '/' ? 'Banchi' : `${name} · Banchi`
+  }, [route])
+
+  useEffect(() => {
+    setDrawer(false)
+    setPalette(false)
+    setKeysOpen(false)
+  }, [path])
+
+  const toggleRail = useCallback(() => {
+    setRail((previous) => {
+      const next = !previous
+      rememberRail(next)
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!chrome) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setPalette((open) => !open)
+        return
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key === '.') {
+        event.preventDefault()
+        toggleRail()
+        return
+      }
+      /* `?` IS THE ONLY UNMODIFIED KEY THE SHELL TAKES, and it yields to typing. A question
+         mark is a legitimate character in a box name, a card name and a search — `keys.ts`
+         is the one place that judgement is made and every other handler in the app already
+         asks it. The palette's own input answers to the same test, so `?` typed there is
+         typed and not swallowed. */
+      if (event.key === '?' && !event.repeat && !isEditableTarget(event.target)) {
+        event.preventDefault()
+        setKeysOpen(true)
+        return
+      }
+      if (event.key === 'Escape') {
+        setPalette(false)
+        setDrawer(false)
+        setKeysOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [chrome, toggleRail])
+
+  const commands = useMemo<Command[]>(() => {
+    const goTo: Command[] = ROUTES.filter((r) => r.nav).map((r) => ({
+      id: `go:${r.path}`,
+      group: 'Go to',
+      label: r.label,
+      icon: r.icon,
+      hint: r.hotkey ? `, ${r.hotkey.toUpperCase()}` : undefined,
+      keywords: r.keywords,
+      run: () => go(r.path),
+    }))
+    const extras: Command[] = [
+      { id: 'pull', group: 'Hand-off', label: 'Open Cards to pull in a new tab', icon: 'hand', run: () => window.open('#/fulfillment', '_blank') },
+      { id: 'theme', group: 'Appearance', label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode', icon: theme === 'dark' ? 'sun' : 'moon', run: toggleTheme },
+      { id: 'rail', group: 'Appearance', label: rail ? 'Expand the sidebar' : 'Collapse the sidebar', icon: 'columns', hint: '⌘ .', run: toggleRail },
+      { id: 'keys', group: 'Help', label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', keywords: 'hotkeys bindings reference cheatsheet keys shortcut arrow leader', run: () => setKeysOpen(true) },
+      { id: 'kit', group: 'Developer', label: 'Component kit', icon: 'grid', run: () => go('/gallery') },
+    ]
+    return [...goTo, ...extras]
+  }, [theme, rail, toggleRail, toggleTheme])
+
+  if (!chrome) {
+    return (
+      <RouteBoundary path={path} plain>
+        {route === undefined ? <NoSuchView path={path} /> : <route.view />}
+      </RouteBoundary>
+    )
+  }
 
   return (
-    <>
-      {/* Plain anchors, no click handler. An href to a hash changes location and fires
-          hashchange on its own, which is the whole reason hash routing costs nothing —
-          intercepting the click to call a navigate() would add code to reproduce what the
-          browser already does, and would break middle-click and open-in-new-tab with it. */}
-      {chrome ? (
-        <nav
-          className="app-nav"
-          aria-label="Screens"
-          /* The step, said once on the element it acts on. The chips below are aria-hidden
-             and could not carry it: two arrow glyphs announce as nothing a listener could
-             act on, and this attribute is the one form of the same fact that does. */
-          aria-keyshortcuts={STEP_SHORTCUTS}
-          /* The armed leader, on the element the keys belong to. An attribute rather than a
-             class for aria-current's reason one line down: it is a fact about the document,
-             App.css selects on it, and the two cannot drift. Undefined rather than "false"
-             so the attribute is absent when it is not armed — `[data-armed]` then means what
-             it says. */
-          data-armed={arm === null ? undefined : 'true'}
-        >
-          {GROUP_ORDER.map((group) => (
-            /* A group is a div and not a second <nav> or a <ul>. The links are already in a
-               navigation landmark with a name, and cadence is a fact about how loudly to draw
-               them rather than a fact a screen reader has any use for — a second landmark, or
-               three, would announce a structure the owner did not ask about every time he
-               enters the chrome. What the grouping is for is entirely visual: see App.css. */
-            <div key={group} className={`app-nav-group app-nav-group-${group}`}>
-              {ROUTES.filter((candidate) => candidate.group === group).map((candidate) => (
-                <a
-                  key={candidate.path}
-                  className="app-nav-link"
-                  href={`#${candidate.path}`}
-                  // aria-current, not a class name, because the current route is a fact about the
-                  // document rather than a style. App.css selects on it, so the two cannot drift.
-                  aria-current={candidate.path === path ? 'page' : undefined}
-                >
-                  {candidate.label}
-                  {candidate.hotkey === undefined ? null : (
-                    /* aria-hidden, unlike the chips on the review queue and the pull preview.
-                       Those sit beside a control and label it; this one sits INSIDE the link,
-                       so without it every route announces itself as "Capture ,C" — the hint
-                       swallowed into the name of the thing it was hinting at. The keys are
-                       drawn for an eye on a row it has already learned, and a screen-reader
-                       user reaching this nav is on the tab key rather than the chord. */
-                    <kbd className="app-nav-key" aria-hidden="true">
-                      {LEADER}
-                      {candidate.hotkey.toUpperCase()}
-                    </kbd>
-                  )}
-                </a>
-              ))}
-              {/* THE STEP'S OWN HINT, drawn once and trailing the ring rather than sitting on
-                  every link. docs/DESIGN.md's "every choice shows its key" is what puts it on
-                  screen at all — a binding nothing advertises is a binding only the person
-                  who asked for it will ever use — and it is one hint because there is one
-                  binding, where `,C` is per route because the destination is what changes.
-
-                  aria-hidden for the reason the chips inside the links are: it is drawn for an
-                  eye, and `aria-keyshortcuts` on the nav above says the same thing in the form
-                  a screen reader can use. NOT `.app-nav-key`, deliberately: that class lights
-                  up when the leader is armed, and the step is never armed — wearing the class
-                  would make these two chips claim a state they do not have. */}
-              {group === STEP_HINT_GROUP ? (
-                <span className="app-nav-step" aria-hidden="true">
-                  <kbd>⌘←</kbd>
-                  <kbd>⌘→</kbd>
-                </span>
-              ) : null}
-            </div>
-          ))}
-        </nav>
-      ) : null}
-
-      {route === undefined ? <NoSuchView path={path} /> : <route.view />}
-
-      {/* "The capture server reloaded" (D53), and it hangs off `chrome` — the SAME condition
-          the nav does — rather than off a route test of its own. That is not tidiness: the
-          Fulfiller's view would fail three rows of docs/DESIGN.md's constraints table at once
-          if this drew there. It is 11px against a 20px floor on every text node, it says
-          "server", which is on that table's banned-word list, and D31 keeps that spec
-          unweakened. Reusing `hasChrome` means a route added to the Fulfiller's side of the
-          product cannot acquire this by being forgotten about. */}
-      {chrome ? <ServerReloaded /> : null}
-    </>
+    <div className="bn-shell" data-rail={rail ? 'true' : undefined} data-route={route?.path ?? 'none'}>
+      <Sidebar
+        path={path}
+        rail={rail}
+        onToggleRail={toggleRail}
+        armed={arm !== null}
+        server={server}
+        cards={cards}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onPalette={() => setPalette(true)}
+      />
+      <div className="bn-shell-main">
+        <PhoneBar route={route} onMenu={() => setDrawer(true)} onPalette={() => setPalette(true)} />
+        {server === 'offline' ? (
+          <div className="bn-banner" role="alert">
+            <Icon name="alert" size={16} />
+            <span className="bn-grow">
+              Banchi can’t reach the capture server. Screens will show stale or empty data until it answers.
+            </span>
+            <Button size="sm" variant="quiet" icon="refresh" onClick={retry}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
+        <div key={path} className="bn-view">
+          <RouteBoundary path={path}>{route === undefined ? <NoSuchView path={path} /> : <route.view />}</RouteBoundary>
+        </div>
+      </div>
+      <TabBar path={path} onMore={() => setDrawer(true)} />
+      <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
+      <WhichKey armed={arm !== null} />
+      <Toaster />
+    </div>
   )
 }

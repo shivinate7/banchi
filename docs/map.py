@@ -341,8 +341,8 @@ COMPONENTS = [
                                     "Writes `live` only where the export is NEWER than the "
                                     "store's own reading — `Listing.observe_live`, per game, "
                                     "against the file's mtime — and says what it kept, by SKU "
-                                    "with both readings (D87 amended).",
-                            "governed_by": ["D3", "D7", "D8", "D11", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87"], "tested_by": ["T4", "T7"]},
+                                    "with both readings (D87 amended). Partitions at the corpus's stored `policy.threshold` (D99).",
+                            "governed_by": ["D3", "D7", "D8", "D9", "D11", "D16", "D25", "D34", "D36", "D49", "D54", "D58", "D59", "D86", "D87", "D99"], "tested_by": ["T4", "T7"]},
             "cmd_prices.py": {"does": "`pkmnscan prices adopt` folds every run's legacy "
                                       "decisions.json into the corpus — previews unless given "
                                       "--write, newest-wins, and NAMES the holds a later price "
@@ -356,11 +356,20 @@ COMPONENTS = [
                                       "named as missing and D62 repeated.",
                               "governed_by": ["D9", "D49", "D62", "D86"],
                               "tested_by": ["T7"]},
-            "cmd_emit.py": {"does": "write import CSVs; refuses while a price is unanswered. Prices "
-                                    "from inventory/prices.json (D86) rather than from the run "
-                                    "manifest (D49); refuses a run still carrying a legacy "
-                                    "decisions.json, single or merged, naming `prices adopt "
-                                    "--write`. "
+            "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
+                                    "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
+                                    "across runs, across games and across the "
+                                    "listed/sub-threshold split, which was two files per game "
+                                    "per run until 2026-09-03. `--split-threshold` puts the "
+                                    "old pair back under the old names, `--split-games` is "
+                                    "the way back if Import to Staged refuses a "
+                                    "multi-Product-Line file, and `--listed-only` is a filter "
+                                    "rather than a split. The cut-off that decides the "
+                                    "buckets is the corpus's stored `policy.threshold`. Prices "
+                                    "from inventory/prices.json (D86) rather than from the run manifest (D49); "
+                                    "refuses a run still carrying a legacy "
+                                    "decisions.json, single or merged, naming "
+                                    "`prices adopt --write`. "
                                     "A RE-EMIT ADDS AND NEVER SUBTRACTS (D54): it never opens an "
                                     "import file until it has at least one row for it, because the "
                                     "writer emits a header before it iterates and an empty write "
@@ -376,13 +385,8 @@ COMPONENTS = [
                                     "CSV row was written. Not match.positions — every terminal "
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
-                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged; "
-                                         "`--live` settles the whole store's `live` against one "
-                                         "My Pricing export (D87), through `Listing.observe_live`, "
-                                         "so a reading older than the store's own is kept and "
-                                         "named — preview and write computed by one rule",
-                                 "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87"], "tested_by": ["T7"]},
+                            "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
                                    "reason `pipeline/orders.py` may not hold it: it reads a run "
@@ -471,8 +475,16 @@ COMPONENTS = [
                                     "a <=4-character abbreviation; ambiguity answers None and both "
                                     "callers widen rather than guess.",
                             "governed_by": ["D2", "D3", "D22", "D65"], "tested_by": ["T3"]},
-            "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data refusal",
-                           "governed_by": ["D8", "D9"], "tested_by": ["T5"]},
+            "pricing.py": {"does": "rules, rounding, floor clamp, threshold, no_market_data "
+                                   "refusal. THRESHOLD is the DEFAULT and not the answer "
+                                   "(D99): the cut-off in force is pipeline/corpus.py's "
+                                   "policy.threshold, parsed by check_threshold — a positive "
+                                   "price or an InvalidThreshold naming the value — and "
+                                   "carried to every partition on SkuMatch.threshold. A store "
+                                   "that has never set one reads the constant, so D9's $0.40 "
+                                   "and its labor-bar derivation are untouched. The FLOOR is "
+                                   "still a constant; nobody has asked for that one.",
+                           "governed_by": ["D8", "D9", "D86", "D99"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
                            "governed_by": ["D3", "D4", "D9", "D29", "D35"], "tested_by": ["T4"]},
             # THE ONLY MODULE IN THIS PACKAGE THAT IMPORTS `store`, and the edge is one-way:
@@ -599,8 +611,13 @@ COMPONENTS = [
                                   "whose every answer the corpus now holds. `sub_threshold` "
                                   "DEFAULTS TO FLAT $0.49 when the policy is silent — absent or "
                                   "null — applied on read and written on the next save (D9 "
-                                  "amended 2026-09-02).",
-                          "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86"],
+                                  "amended 2026-09-02). `policy.threshold` is D9's "
+                                  "cut-off as a stored figure (D99) — a labor bar is a "
+                                  "fact about the operator's hour rather than about any "
+                                  "card, so it sits beside rule and basis and is "
+                                  "validated at parse time like both.",
+                          "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86",
+                                          "D99"],
                           "tested_by": ["T7"]},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
@@ -624,8 +641,10 @@ COMPONENTS = [
                                  "cap is theirs. Measured: three separate emits over three real "
                                  "runs wrote two SKUs past the cap of 4; one merged emit wrote "
                                  "none. Writes nothing — cli/cmd_emit.py owns the file and the "
-                                 "store.",
-                         "governed_by": ["D7", "D48", "D49", "D54", "D59", "D86", "D87"],
+                                 "store. `_agree_policy` refuses a send whose runs override "
+                                 "`threshold` differently, for the reason it already refused "
+                                 "two `sub_threshold`s: one file needs one answer (D99).",
+                         "governed_by": ["D7", "D48", "D49", "D54", "D59", "D86", "D87", "D99"],
                          "tested_by": ["T7"]},
             "decisions.py": {"does": "the pricing decision, parsed — the corpus's parser (D86): "
                                      "pipeline/corpus.py projects inventory/prices.json into one "
@@ -1231,7 +1250,7 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23"],
+                "governed_by": ["D15", "D16", "D23", "D90", "D96"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -1872,19 +1891,19 @@ COMPONENTS = [
         # the motion trigger's constants are tuned here (src/motion.ts) even though the
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
-        "does": "the web app. TEN routes behind a hand-written hash router, NINE of them the "
-                "owner's — the capture screen that Gate B runs on, the runs screen the "
-                "pipeline lives on, the review queue, the pricing worklist, the order "
-                "screen and the shipping lane (D69 gave each its own route rather than "
-                "making one a mode of the other), the one "
-                "inventory view (D31 folded the box walk and the pull preview into it, and "
-                "D90 let an ORDER drive it as a third mode — a URL parameter on the same "
-                "screen, adding no route and moving no count), the "
-                "code-card screen D70 gave its own route, and "
-                "step 6's component gallery — and one "
-                "the Fulfiller's, which the shell deliberately draws no nav over. The count "
-                "here is RECOUNTED off src/App.tsx's ROUTES table and never incremented: it "
-                "has been wrong more often than right — it said "
+        "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
+                "themes, and every screen redrawn against it. ELEVEN routes behind a "
+                "hand-written hash router, TEN of them the owner's — home, which took the root "
+                "hash and is where the six-stage spine is drawn; the capture screen that Gate B "
+                "runs on, now at `#/capture`; the runs screen the pipeline lives on; the review "
+                "queue; the pricing worklist; the order screen and the shipping lane (D69 gave "
+                "each its own route rather than making one a mode of the other); the one "
+                "inventory view (D31 folded the box walk and the pull preview into it); the "
+                "code-card screen D70 gave its own route; and `#/gallery`, which is the KIT — "
+                "step 6's component page grown into every primitive the product is built from. "
+                "One is the Fulfiller's, and the shell deliberately draws no chrome over it. "
+                "The count here is RECOUNTED off src/App.tsx's ROUTES table and never "
+                "incremented: it has been wrong more often than right — it said "
                 "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
                 "outright. TWO ROWS RECONCILE IT NOW and neither existed when the sentence "
                 "here ended `and nothing reconciles it`: scripts/docs-audit.py's "
@@ -1892,8 +1911,8 @@ COMPONENTS = [
                 "CLAUDE.md or in README.md disagrees with that table, and its "
                 "`route rosters` row fails one where a spec's hand-typed list of routes "
                 "does. Playwright "
-                "specs assert docs/DESIGN.md's Fulfillment floors, one against step "
-                "6's component and one against the Fulfillment view.",
+                "specs assert docs/DESIGN.md's Fulfillment floors, one against the kit's "
+                "pull-confirm and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
         # What the orphan rule scans here, and the reason this directory needs the key at
         # all: the default is `.py` one level deep, which over a tree holding no Python and
@@ -1933,12 +1952,29 @@ COMPONENTS = [
                 "docs-audit stayed green. The wiring pass on 2026-08-13 registered the routes, "
                 "added one client function per route, and took design-check to 30 of 30. The "
                 "finding survives the fix: nothing on the commit path can tell whether a screen "
-                "can be opened, and the one check that can is not on it.",
+                "can be opened, and the one check that can is not on it. "
+                "THE 2026-09 REBUILD IS THE LARGEST EDIT THIS DIRECTORY HAS TAKEN AND IT LANDED "
+                "UNDER NO BUILD-ORDER STEP. Every screen sheet was rewritten against `--bn-*` "
+                "tokens, the shell was replaced, `src/kit.css` and `src/kit/` arrived, "
+                "`ServerReloaded` was deleted into a toast, and Home took the root hash. What "
+                "governs it is docs/DESIGN.md rather than a decision entry, and the honest "
+                "reading of that is a gap: a rebuild of the product's whole surface has no `D` "
+                "to cite and no step in SHIPPED to sit under. Adding one is a paired edit with "
+                "docs/GATES.md, which `build order mirror` checks in both directions. "
+                "WHAT IS VERIFIED OF IT: `make design-check`'s Playwright suites, which measure "
+                "the Fulfillment floors and the kit's pull-confirm and nothing else. The rest "
+                "was walked in a browser at 390, 820 and 1440px wide, in both themes.",
         "modules": {
             # ---- the page, and what builds and runs it ----
-            "index.html": {"does": "the single page: the #root main.tsx mounts into, and the "
-                                   "three font faces from their two hosts",
-                           "governed_by": ["D5", "D13"]},
+            "index.html": {"does": "the single page: the #root main.tsx mounts into, the "
+                                   "wordmark title, the SVG favicon out of app/public/, and "
+                                   "the three Banchi faces — Manrope, Inter and JetBrains "
+                                   "Mono, from ONE host now rather than the two the "
+                                   "2026-08-12 palette needed, which is the second license "
+                                   "question docs/DESIGN.md kept open closed by deletion",
+                           "governed_by": ["D5", "D13", "D94"]},
+            "public/favicon.svg": {"does": "the tab icon: the wordmark B with the live dot, the same mark `kit.Logo` draws. Vite serves app/public/ at the site root, which is why it is addressed as `/favicon.svg`.",
+                                   "governed_by": ["D5", "D94"]},
             "devPort.ts": {"does": "the ONE dev port for this checkout, imported by both "
                                    "vite.config.ts and playwright.config.ts so they cannot "
                                    "disagree. The main tree keeps 5173; a linked worktree "
@@ -1966,69 +2002,188 @@ COMPONENTS = [
                                      "governed_by": ["D5", "D16"]},
 
             # ---- the ground: what everything else reads ----
-            "src/tokens.css": {"does": "the locked tokens as CSS custom properties. Tokens and nothing "
-                                       "else. 23 of them: 22 chosen at the 2026-08-12 interview, and "
-                                       "--field-hover granted against the lock on 2026-08-29 (D50) and "
-                                       "picked by measurement rather than from rendered alternatives.",
-                               "governed_by": ["D18", "D50"]},
+            "src/tokens.css": {"does": "BANCHI'S TOKENS, and the only file in app/ allowed to write a "
+                                       "colour. Named `--bn-*` and grouped by the job rather than by "
+                                       "the value: neutrals (bg, surface 1-3, glass), ink 1-4, three "
+                                       "line weights, brand (accent with hover/press/two tints, and "
+                                       "`live`, the vermilion that means a camera or a capture), the "
+                                       "four semantic pairs, three shadows plus an accent glow, the "
+                                       "three faces, an 11-step type scale, the 1-10 spacing scale, "
+                                       "seven radii, the motion set (three durations, three easings, "
+                                       "the list stagger and its cap, four named loops, one disabled "
+                                       "opacity), the `--bn-stage-*` palette that is DARK IN BOTH "
+                                       "THEMES because a viewfinder and a photo hero are, and the "
+                                       "shell metrics. TWO THEMES, ONE SET OF NAMES: light on bare "
+                                       "`:root`, and `:root[data-theme='dark']` redefining the "
+                                       "surfaces, inks, lines, brand, semantics, shadows and button "
+                                       "ground — nothing else, so a component sheet never learns "
+                                       "which theme it is in. The LEGACY ALIASES at the foot "
+                                       "(--ink, --muted, --line, --s1..--s8, --radius, the three "
+                                       "face names) resolve to `--bn-*` and exist so ~40 screen "
+                                       "sheets kept rendering the day this landed; they are the "
+                                       "thing to delete as each sheet is refined. A media query on "
+                                       "`(max-width: 767px), (hover: none) and (pointer: coarse)` "
+                                       "raises the three control heights to a thumb's 40-46px — the "
+                                       "POINTER decides, not the width, because an iPad in portrait "
+                                       "is 820px wide and all thumb.",
+                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94"],
+                               "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
+                                       "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
+                                       "spacing row and one radius, and merges every `:root` in this "
+                                       "file into one dict — so it can express neither an rgba, a "
+                                       "duration, a shadow, an alias nor a token that has a light "
+                                       "AND a dark value. It cannot pass over this file until its "
+                                       "reader is rewritten, and docs/DESIGN.md says so where the "
+                                       "block used to be."},
             # D41 and D45 govern this file because of the CURSOR FLOOR, not the reset. That floor
             # is written with element selectors on purpose — `button`, `select`, the three input
             # kinds, `[role='button']` — so it can never reach a `.position-*` class, which is
             # what keeps D41's Fulfiller firewall and D45's walk-to scoping component-graph facts
             # rather than things a global rule could quietly breach.
-            "src/base.css": {"does": "reset and the page ground, plus the two app-wide control "
-                                     "defaults: the :focus-visible ring, and the cursor floor "
-                                     "added 2026-08-29 after 39 of 142 interactive elements were "
-                                     "measured with no cursor rule any selector could reach. Both "
-                                     "are one specificity, so every per-screen choice outranks "
-                                     "them and nothing here can take a cursor away from a "
-                                     "stylesheet that named one. Light only — there is no dark theme.",
-                             "governed_by": ["D5", "D41", "D45", "D50"]},
+            "src/base.css": {"does": "reset and the page ground, and the four app-wide floors: the "
+                                     "`:focus-visible` ring, the cursor floor added 2026-08-29 after "
+                                     "39 of 142 interactive elements were measured with no cursor "
+                                     "rule any selector could reach, tabular figures on every table, "
+                                     "`output` and `time`, and the reduced-motion floor. All are one "
+                                     "specificity, so every per-screen choice outranks them and "
+                                     "nothing here can take a cursor away from a stylesheet that "
+                                     "named one. TWO THINGS IT GAINED WITH BANCHI: the theme flip is "
+                                     "one mechanism for the whole page — `html[data-theme-switching]` "
+                                     "eases every colour together for --bn-t-slow, because a "
+                                     "cross-fade on <body> alone drew dark panels on a light ground "
+                                     "for a third of a second — and the reduced-motion rule EXEMPTS "
+                                     "the four loops that carry meaning (the busy ring, the skeleton "
+                                     "shimmer, the live dot, the two capture spinners), slowed to "
+                                     "1.4s rather than frozen, because a ring stopped at a partial "
+                                     "arc reads as a disabled button.",
+                             "governed_by": ["D5", "D41", "D45", "D50", "D94"]},
+
+            # ---- the kit: the primitives every screen is built from (D94, 2026-09) ----
+            # D94 IS THE ENTRY, and D50 is the one it discharges: an interactive element's
+            # feedback belongs to the product rather than to each stylesheet, and before the kit
+            # there was no product-level place to put it, so every sheet answered the question
+            # again. A screen that needs a primitive the kit lacks builds it under a
+            # screen-prefixed class and reports it for promotion — it never invents a second
+            # Button. docs/DESIGN.md is the long form of what these files hold.
+            "src/kit.css": {"does": "every primitive's look, one `bn-` prefix, loaded after base.css "
+                                    "and before any screen sheet — so a screen may refine a button "
+                                    "and never has to redraw one. Layout helpers, the page header, "
+                                    "surfaces, seven button variants across four sizes, kbd chips, "
+                                    "pills, chips, the machine-string `code` register, fields, the "
+                                    "segmented control, tabs, key/value lists, stat tiles, tables, "
+                                    "list rows, empty states, notices, the inline receipt, "
+                                    "skeletons, progress, menus, the scrim/sheet/dialog family, the "
+                                    "photo frame, `.bn-crop`, and the toast stack. THE MOTION RULE "
+                                    "IS IN ITS HEADER AND IS LOAD-BEARING: an enter animation ends "
+                                    "at the element's own resting style and is always `backwards` — "
+                                    "a finished `both` keeps its last keyframe over every author "
+                                    "rule, killing `:hover` transforms and making the element a "
+                                    "containing block for fixed descendants. `forwards` is right in "
+                                    "exactly one place, `[data-leaving]`, where the node is about to "
+                                    "unmount.",
+                            "governed_by": ["D5", "D13", "D32", "D50", "D94"]},
+            "src/kit/index.tsx": {"does": "the primitives as components: Button, Kbd, Pill, Chip, "
+                                          "PageHeader, EmptyState, Notice, Segmented, Stat, Logo — "
+                                          "plus three things that are not components and belong "
+                                          "beside them. `useLeave` keeps an overlay mounted one beat "
+                                          "after it closes so the leave animation can run. "
+                                          "`cropStyle` is the arithmetic that turns "
+                                          "`POST /pipeline/crop-preview`'s rectangle into a picture "
+                                          "of the CARD rather than of the stand — it lives here "
+                                          "because it was written twice, on the Home hero and the "
+                                          "pricing thumbnails, and it is the half that is wrong in "
+                                          "silence; the FETCHING is deliberately not here, because "
+                                          "asking once for one card and asking for what a scroll "
+                                          "brings into view are policies rather than geometry. "
+                                          "`readTheme`/`applyTheme` stamp `data-theme` on <html> and "
+                                          "remember the choice in `localStorage` under "
+                                          "`banchi.theme` — device-local like the camera's "
+                                          "deviceId (D27), and nothing about a card.",
+                                  "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95"]},
+            "src/kit/Icon.tsx": {"does": "one icon set, 70 paths on a 24-unit grid at 1.75 stroke "
+                                         "with round joins, drawn in the Lucide idiom so the whole "
+                                         "product speaks one line weight. `currentColor` and "
+                                         "`aria-hidden`, so an icon is never the accessible name of "
+                                         "anything. `ICON_NAMES` is what the kit gallery draws the "
+                                         "whole set from. ADD AN ICON BY ADDING A PATH — a screen "
+                                         "that inlines its own <svg> is the drift this file exists "
+                                         "to prevent.",
+                                 "governed_by": ["D5", "D13", "D94"]},
+            "src/kit/toast.tsx": {"does": "one toast stack for the product: any screen calls "
+                                          "`toast()`, the shell renders `<Toaster/>` once. FOUR "
+                                          "KINDS AND THE DIFFERENCE IS THE RULE — a `receipt` "
+                                          "carries the way back (D28's undo window, D57's sale), a "
+                                          "`status` expires by itself, an `ok` expires, and a "
+                                          "`refusal` stays until it is dismissed, because the "
+                                          "server's own message is the one thing a person may need "
+                                          "to read twice. Nothing here demands an acknowledgement to "
+                                          "dismiss, which docs/DESIGN.md bans. This is where D53's "
+                                          "server-restart notice went when `ServerReloaded` was "
+                                          "deleted.",
+                                  "governed_by": ["D5", "D28", "D53", "D57", "D94"]},
 
             # ---- the shell ----
-            "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens before base",
-                             "governed_by": ["D13"]},
+            "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens, then base, "
+                                     "then the kit — every later sheet resolves against tokens, and "
+                                     "a screen sheet outranks the kit by arriving after it",
+                             "governed_by": ["D13", "D94"]},
             # D16 governs a UI file here for one reason worth keeping: App.tsx drives its nav
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
-            "src/App.tsx": {"does": "the shell: TEN hash routes — five after D31 merged #/boxes "
-                                    "and #/pull into #/inventory, plus #/runs, which D39 gave the "
-                                    "pipeline on 2026-08-29 between Capture and the review queue, "
-                                    "and #/pricing, which D49 gave hand-pricing on 2026-08-30 "
-                                    "AFTER the review queue — answering the queue changes what "
-                                    "the next join resolves, so pricing before it prices a set "
-                                    "that is about to move. `#/runs`'s chord is `r` and the review "
-                                    "queue moved to `q`; `#/pricing` took `p`, which D31 retired "
-                                    "with `#/pull` and this file's own comment said was never "
-                                    "reassigned — amended there in the same commit. "
-                                    "One ROUTES table driving both "
-                                    "the nav and the render, and the persona field that decides "
-                                    "the Fulfiller's view gets no chrome at all. #/boxes WAS "
-                                    "the seventh, registered with D20's screen rather than after "
-                                    "it; D31 deleted the route and kept the screen — the "
-                                    "registration rule stands, the route does not. TWO KEYBOARDS "
-                                    "SINCE 2026-08-30: the `,` chord JUMPS to a route by name, "
-                                    "and D51's Cmd-arrow STEPS along the strip in the order the "
-                                    "nav draws it — the ring derived from `hotkey` and "
-                                    "GROUP_ORDER rather than listed twice, never wrapping, and "
-                                    "the one place this shell takes a modifier. "
-                                    "`#/orders` AND `#/shipping` ARE THE EIGHTH AND NINTH, "
-                                    "2026-08-30 — D69 gave a route to each rather than making the "
-                                    "lane a mode of the order screen. They were absent from this "
-                                    "sentence while D69 sat in the `governed_by` list below it, "
-                                    "which is how the count above it read EIGHT for two routes "
-                                    "longer than it was true. These ordinals count the order the "
-                                    "routes were ADDED, not their place in the table — codes sits "
-                                    "eighth of ten there — which is why the `route census` row "
-                                    "checks the counts and deliberately not these. "
-                                    "`#/codes` IS THE TENTH, 2026-08-30 — the code-card track "
-                                    "on a route of its own under D14's two-tracks-one-rig, with "
-                                    "the chord `d` because `c` is Capture. It sits in `look` "
-                                    "rather than `run`: a code-card box is read once in seconds "
-                                    "with no model call and nothing to price, so it is reached "
-                                    "when asked, which is what this table's own definition of "
-                                    "that group says.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D31", "D33", "D39", "D49", "D51", "D53", "D61", "D63", "D66", "D69", "D70"]},
+            "src/App.tsx": {"does": "THE BANCHI SHELL, and the ROUTES table it is all driven "
+                                    "off. ELEVEN hash routes, TEN the owner's and one the "
+                                    "Fulfiller's: `#/` is Home, which took the root hash in the "
+                                    "2026-09 rebuild and moved capture to `#/capture`; then "
+                                    "capture, runs, review, pricing, orders, shipping, "
+                                    "inventory, codes, the Fulfiller's `#/fulfillment`, and "
+                                    "`#/gallery`, which is the KIT now rather than step 6's "
+                                    "component page. RECOUNT FROM THE TABLE, NEVER INCREMENT — "
+                                    "`route census` fails a commit where this file, CLAUDE.md or "
+                                    "README.md disagrees with it, and `route rosters` does the "
+                                    "same for a spec's pinned list. "
+                                    "ONE TABLE DRIVES FIVE THINGS: the sidebar, the phone tab "
+                                    "bar, the command palette, the document title and the "
+                                    "render. A route carries its group, its icon, its hotkey, "
+                                    "whether it is a nav item, whether it is one of the four "
+                                    "phone tabs, and the words a person might TYPE to find it. "
+                                    "`GROUPS` is the nav order and its headings — home, "
+                                    "Workflow, Sell, Library — and `OFF_NAV` declares the one "
+                                    "group the nav deliberately does not draw: `aside`, holding "
+                                    "the Fulfiller's screen (sidebar foot, opens in its own tab) "
+                                    "and the kit (palette only). Both are constants because "
+                                    "`scripts/docs-audit.py` reads them; without `OFF_NAV` that "
+                                    "row can only conclude two routes have gone unreachable. "
+                                    "THREE KEYBOARDS: `,` is the leader, which draws a "
+                                    "which-key overlay and jumps by `hotkey`; Cmd-arrow steps "
+                                    "the strip in the order the nav draws it (D51), never "
+                                    "wrapping, and is still the one modifier this shell takes "
+                                    "for navigation; and Cmd-K opens the palette, which searches "
+                                    "label and keywords. `isEditableTarget` is what keeps all "
+                                    "three off a typed field. "
+                                    "THE THEME LIVES HERE (2026-09): `useTheme` follows the "
+                                    "system until a choice is stored, the toggle stamps "
+                                    "`data-theme` on <html> and `data-theme-switching` for one "
+                                    "beat so base.css can ease the whole page at once. "
+                                    "D53'S NOTICE IS A TOAST NOW — `useServer` holds the "
+                                    "`onServerBoot` subscription that `ServerReloaded.tsx` used "
+                                    "to, and raises a `status` toast; it still SUBSCRIBES and "
+                                    "never polls for the boot fact, and the 15s `/status` poll "
+                                    "beside it is the online/offline banner rather than the "
+                                    "reload. An error boundary wraps each route, so one screen "
+                                    "throwing leaves the nav standing. "
+                                    "`hasChrome` is unchanged in intent and now covers far "
+                                    "more: sidebar, rail, app bar, tab bar, palette, which-key, "
+                                    "banner and toasts are all drawn only for the owner, and "
+                                    "the Fulfiller's view gets NONE of it — not hidden, not "
+                                    "rendered, because docs/DESIGN.md forbids a route out of "
+                                    "that view and the owner\'s chrome would fail four other "
+                                    "rows of its table on its own. "
+                                    "#/boxes WAS the seventh route and D31 deleted it while "
+                                    "keeping the screen; the ordinals kept in this file count "
+                                    "the order routes were ADDED and not their place in the "
+                                    "table, which is why `route census` checks the counts and "
+                                    "deliberately not these.",
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28", "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61", "D63", "D66", "D69", "D70", "D94", "D95"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -2044,7 +2199,7 @@ COMPONENTS = [
                                       "(`codes_routes._pool`), which is where the money "
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
-                              "governed_by": ["D14", "D24", "D33"]},
+                              "governed_by": ["D14", "D24", "D33", "D70"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -2056,38 +2211,57 @@ COMPONENTS = [
                                       "roster did not list this route, and this checkout's "
                                       "store is empty (D43) so no disabled button renders for "
                                       "it to see even now that it does.",
-                              "governed_by": ["D14", "D32", "D43", "D50"]},
-            "src/App.css": {"does": "the shell's chrome: a 1px hairline under the nav, no tint, no "
-                                    "shadow, why this nav may never render on the "
-                                    "Fulfillment view, and the two chip looks — the chord's, "
-                                    "which lights up when the leader is armed, and D51's step, "
-                                    "which deliberately does not wear that class because it is "
-                                    "never armed",
-                            "governed_by": ["D5", "D10", "D13", "D49", "D51"]},
-            "src/ServerReloaded.tsx": {"does": "says once when the capture server has restarted "
-                                               "under it (D53). SUBSCRIBES, NEVER POLLS: "
-                                               "`server.ts` reads a boot header off responses "
-                                               "the screens were already fetching, so this "
-                                               "generates no traffic at all — the first build "
-                                               "polled `/status` every 5s and gave every "
-                                               "owner-side SPEC an unstubbed call to whatever "
-                                               "real server was listening, which is the hazard "
-                                               "inventory.spec.ts names. Never speaks on first "
-                                               "sight, expires by itself, demands nothing — "
-                                               "docs/DESIGN.md bans an acknowledgement to "
-                                               "dismiss. Rendered on `hasChrome`, the same gate "
-                                               "as the nav, because at 11px and using the word "
-                                               "'server' it would fail three rows of the "
-                                               "Fulfillment constraints table at once. NO "
-                                               "AUTOMATED CASE — docs/DEBTS.md carries why, and "
-                                               "what was verified by hand instead.",
-                                       "governed_by": ["D5", "D31", "D53", "D73"]},
-            "src/ServerReloaded.css": {"does": "that notice: fixed bottom-left so it costs no "
-                                               "layout on screens whose recorded complaint "
-                                               "(D38, D40) is content pushed below the fold, "
-                                               "pointer-events none, accent as an outline dot "
-                                               "and never a fill",
-                                       "governed_by": ["D5", "D38", "D40", "D53", "D73"]},
+                              "governed_by": ["D14", "D32", "D43", "D50", "D58"]},
+            "src/App.css": {"does": "the shell's chrome: the sidebar and the rail it collapses "
+                                    "to, the phone's top bar and its sheet, the bottom tab bar, "
+                                    "the command palette, the which-key overlay, the "
+                                    "online/offline server banner, the unresolved-hash panel, "
+                                    "the shortcuts sheet and the Fulfiller's crash page. TWO "
+                                    "RULES IN IT ARE DESIGN RULINGS RATHER THAN LOOKS: this nav "
+                                    "may never render on the Fulfillment view, and his crash "
+                                    "page carries no wordmark, no error text and no link out — "
+                                    "a crash is the moment he is likeliest to press whatever is "
+                                    "offered, so the only control reopens the screen he is on. "
+                                    "The chord chip lights when the leader is armed; D51's step "
+                                    "deliberately does not wear that class, because it is never "
+                                    "armed.",
+                            "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D51", "D94", "D95"]},
+            # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
+            # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
+            # notice demands nothing; neither needed a component of its own once the shell had a
+            # toast stack. `src/App.tsx:useServer` holds the same `onServerBoot` subscription and
+            # raises a `status` toast — expires by itself, blocks nothing, and still drawn only
+            # under `hasChrome`, so it cannot reach the Fulfiller's view. What was deleted is a
+            # fixed-position component and its stylesheet, not a behaviour.
+            # ---- the home screen (Banchi, 2026-09) ----
+            "src/Home.tsx": {"does": "`#/`: the product drawn as a picture. A hero deck of the "
+                                     "newest identified cards, the SIX-STAGE SPINE — capture, "
+                                     "identify, review, price, sell, ship — with a live figure "
+                                     "under each stage, the boxes, the recent runs, and one "
+                                     "primary action. EVERY FIGURE IS THE STAGE SCREEN'S OWN "
+                                     "FIGURE, taken from the same reader that screen uses: a "
+                                     "run's stage from `RunsStage.stageOf`, the pull backlog "
+                                     "from the ledger's `wanted - recorded`, the pricing count "
+                                     "from the worklist's roster, the ship lane from whatever "
+                                     "export the hub is holding. So Home can be stale but never "
+                                     "a step ahead of the screen it links to — a home page that "
+                                     "derived its own counts would be a second vocabulary, which "
+                                     "is the drift D16 is for. The hero is cropped to the CARD "
+                                     "through `kit.cropStyle` over "
+                                     "`POST /pipeline/crop-preview`, because a rig photograph is "
+                                     "mostly stand; no crop is not a failure and the deck draws "
+                                     "correctly without one, and a reclaimed photograph (D89) "
+                                     "leaves the frame rather than a broken image. Each panel "
+                                     "loads on its own, so no figure waits on another.",
+                             "governed_by": ["D5", "D6", "D10", "D13", "D32", "D33", "D52", "D63", "D69", "D86", "D89", "D94", "D95"]},
+            "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
+                                     "spine, the box and run cards. The one screen in the app "
+                                     "that draws a display figure above 36px — "
+                                     "`clamp(36px, 5vw, 56px)`, the only place the type scale is "
+                                     "left behind, because this page has one job and it is to "
+                                     "orient.",
+                             "governed_by": ["D5", "D32", "D94"]},
+
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
@@ -2099,7 +2273,29 @@ COMPONENTS = [
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D93"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D91", "D92", "D93"]},
+            "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
+                                            "theme and the rail — and nothing else",
+                                    "governed_by": ["D13", "D27", "D94", "D95"],
+                                    "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
+                                            "rule working rather than being worked around. "
+                                            "`app/eslint.config.js` bans the STORE and not the "
+                                            "key, because a selector cannot read a key passed "
+                                            "as a const — so the only exception it can express "
+                                            "is a named FILE. The theme and the rail were read "
+                                            "and written at three call sites in `App.tsx` and "
+                                            "two in `kit/index.tsx`; exempting either would "
+                                            "have waved through anything those files ever "
+                                            "store, and `App.tsx` is the shell. This module and "
+                                            "`src/useCamera.ts` are the two named exceptions "
+                                            "and between them hold every `localStorage` call in "
+                                            "the app. D27 permits only facts about THIS "
+                                            "MACHINE: a theme is chosen for the room the "
+                                            "operator is sitting in, and D13 keeps everything "
+                                            "about a card on the Mac so two devices cannot "
+                                            "disagree. Every access is wrapped — a private "
+                                            "window throws on the accessor itself, and a "
+                                            "preference is never worth a blank screen."},
             "src/useCamera.ts": {"does": "the camera: opened on request and never on mount, "
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
@@ -2218,7 +2414,7 @@ COMPONENTS = [
                     "times, because D10 lets undo reach the newest capture in a box and "
                     "nothing else. The count is drawn on the row, the list is capped and "
                     "scrolled, and a walk stops at the first refusal and says how far it got.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D65", "D81"]},
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -2397,7 +2593,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D28", "D29", "D35", "D37", "D24", "D41", "D46", "D50"],
+                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50"],
             },
             "src/OrderWalkBanner.tsx": {
                 "does": "the banner over #/inventory while an order drives the walk (D90) — "
@@ -2584,6 +2780,27 @@ COMPONENTS = [
                         "through \u2014 a card with no name and no SKU has no group to draw.",
                 "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71"],
             },
+            "src/InventoryOverlay.tsx": {"does": "ONE OVERLAY PRIMITIVE FOR THE INVENTORY "
+                                                 "SCREEN, in four kinds: a right-side sheet, "
+                                                 "the phone's bottom sheet, a centred dialog "
+                                                 "and the photograph's lightbox. Portalled to "
+                                                 "<body> so no ancestor transform can pin it "
+                                                 "— which is the kit's own motion rule stated "
+                                                 "as a consequence — focus-trapped, Escape "
+                                                 "closes, the body stops scrolling behind it, "
+                                                 "and focus returns to whatever opened it. "
+                                                 "`passKeys` is off by default: a sheet over "
+                                                 "the screen must not let the walk's arrow "
+                                                 "keys step the card behind it, and the "
+                                                 "phone's box sheet is the one case that "
+                                                 "wants them through. The panels wear the "
+                                                 "kit's `bn-sheet`/`bn-dialog` classes; what "
+                                                 "is here is the behaviour.",
+                                         "governed_by": ["D5", "D31", "D45", "D94"]},
+            "src/InventoryOverlay.css": {"does": "those four panels' inner rhythm — the kit "
+                                                 "draws the panel, this sets what is inside "
+                                                 "it and how wide the sheet is.",
+                                         "governed_by": ["D5", "D31", "D94"]},
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
                         "since D31 merged #/boxes away. One header per "
@@ -2645,7 +2862,7 @@ COMPONENTS = [
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
-                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D24", "D26"],
+                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D24", "D26", "D69"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -2662,10 +2879,10 @@ COMPONENTS = [
                                     "governed_by": ["D5", "D6"]},
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5"]},
-            "src/Gallery.tsx": {"does": "every state on one page — what `make screenshot` renders",
-                                "governed_by": ["D5", "D67", "D93"]},
-            "src/Gallery.css": {"does": "the gallery sheet's own layout. Not a product screen.",
-                                "governed_by": ["D5"]},
+            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
+                                "governed_by": ["D5", "D50", "D67", "D93", "D94", "D95"]},
+            "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
+                                "governed_by": ["D5", "D94"]},
 
             # ---- the search-and-sell core: one set of components, two densities ----
             #
@@ -2725,7 +2942,8 @@ COMPONENTS = [
                                              "its own overflow because the report draws "
                                              "fixed-width columns a wrap would break.",
                                      "governed_by": ["D50", "D87"]},
-            "src/Runs.tsx": {"does": "#/runs: the page chrome and the box picker, with RunPanel "
+            "src/Runs.tsx": {"does": "#/runs: the page chrome, the box picker, the composer "
+                                     "and the store-wide reconcile, with RunPanel "
                                      "beneath them. Owns the SCOPE and nothing else — a strip of "
                                      "boxes from GET /boxes, and the ticked selection handed over "
                                      "from #/inventory through runHandoff.ts, validated against "
@@ -2747,6 +2965,64 @@ COMPONENTS = [
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
                              "governed_by": ["D5", "D33", "D38", "D39"]},
+            # ---- the runs screen's parts (Banchi, 2026-09) ----
+            "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
+                                          "run panel and Home. The server says which of the four "
+                                          "commands a run is waiting for; this draws that as SIX "
+                                          "stages — identify, join, review, price, emit, "
+                                          "reconcile — because review and pricing are what a run "
+                                          "waits on between join and emit, and a bar that skipped "
+                                          "them would jump from a third to five sixths. "
+                                          "`stageOf` is the one reader, so no screen can be a "
+                                          "stage ahead of another; `runningFor` is a live run's "
+                                          "age and is deliberately not used on a finished one, "
+                                          "where the same arithmetic answers a different "
+                                          "question.",
+                                  "governed_by": ["D33", "D39", "D48", "D56", "D94"]},
+            "src/RunsComposer.tsx": {"does": "THE IDENTIFY COMPOSER: the one press in this product "
+                                             "that spends money, as a staged dialog — which "
+                                             "boxes, how each is read, what it costs, and a "
+                                             "receipt. THE MONEY GATE IS TWO PRESSES AND NO "
+                                             "TYPING (D33): the free preflight has to have run "
+                                             "before the confirm exists, and the confirm carries "
+                                             "the figure in its own label. THE ESTIMATE IS VOID "
+                                             "THE MOMENT THE SCOPE MOVES — a box added, a card "
+                                             "ticked, a reading changed — because a confirm whose "
+                                             "first step described a different send is not a "
+                                             "confirm. ONE PRESS, ONE REQUEST, N RUNS (D48): each "
+                                             "box in the cart is its own run with its own "
+                                             "reading, because which end of D32's "
+                                             "cost-against-sharpness trade is right depends on "
+                                             "what is in the drawer. `Runs.tsx` owns which boxes "
+                                             "are in the cart and where a ticked selection came "
+                                             "from (D39 — `#/inventory` keeps the only mass "
+                                             "select); this owns how each is read and everything "
+                                             "after the press.",
+                                     "governed_by": ["D32", "D33", "D39", "D48", "D65", "D76", "D94"]},
+            "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
+                                        "tail, counts its lines, folds and copies. NOTHING HERE "
+                                        "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
+                                        "command's output on the screen so that what you saw can "
+                                        "be grepped, and a summary is the second vocabulary that "
+                                        "rule exists to refuse.",
+                                "governed_by": ["D33", "D39", "D94"]},
+            "src/RunsDrop.tsx": {"does": "the file controls, as controls that look like the "
+                                         "product: a native file input cannot be styled to sit "
+                                         "beside a kit button, so the input is visually hidden "
+                                         "and its own <label> is the control — a label IS the "
+                                         "accessible name of the input it wraps, so this costs "
+                                         "nothing in reachability. Both forms take a drop as well "
+                                         "as a click.",
+                                 "governed_by": ["D5", "D33", "D94"]},
+            "src/runsOverlay.ts": {"does": "dialog focus for the two runs overlays — the composer "
+                                           "and the store-wide reconcile sheet: focus lands "
+                                           "inside on open, Tab and Shift-Tab stay inside, focus "
+                                           "goes back to the opener on close, Escape closes. Its "
+                                           "own comment says what it is: the behaviour "
+                                           "`InventoryOverlay` has, waiting to be promoted to a "
+                                           "kit Dialog so the product has one of these rather "
+                                           "than two.",
+                                   "governed_by": ["D5", "D33", "D87", "D94"]},
             # ---- the pricing screen (D49, 2026-08-30) ----
             #
             # The owner hand-prices and had never been asked what they wanted a listing price
@@ -2776,7 +3052,7 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85", "D86"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85", "D86", "D89", "D99"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -2937,56 +3213,89 @@ COMPONENTS = [
                                          "CsvUpload — a second reader is how a file that joins "
                                          "on one screen refuses on another.",
                                  "governed_by": ["D33", "D61", "D69", "D87"]},
-            "src/Orders.tsx": {"does": "#/orders: which copies this buyer gets, and where they "
-                                       "are (D69). One read of GET /orders answers the order "
-                                       "list and the resolution out of ONE store snapshot, so "
-                                       "the two cannot disagree; each line draws its reason "
-                                       "large with the machine string beneath it, the six-way "
-                                       "counts breakdown, and each pick's place block and "
-                                       "held_by. The pull is one card and one press, aimed by "
-                                       "the row's own capture_id, and its undo lives on the "
-                                       "receipt rather than on the row — a successful pull "
-                                       "re-resolves and the row unmounts. Orders arrive by "
-                                       "paste (projected by src/orderPaste.ts) or by fetch "
-                                       "behind the same control. IT DRAWS NO POSTAGE LANE: "
-                                       "that is D61's question and #/shipping's answer, "
-                                       "computed from a file this screen never sees. "
-                                       "THE FETCH IS TWO PRESSES SINCE D91, because one press "
-                                       "never worked on this account: `Check TCGplayer` walks "
-                                       "the search pages, details nothing and draws the window "
-                                       "by the status STRING the wire returned — verbatim, an "
-                                       "empty one as the absence it is — with how many of each "
-                                       "the ledger already holds; nothing is pre-ticked, because "
-                                       "which statuses mean `needs picking` is the one thing "
-                                       "about this feed nobody has enumerated. `Fetch N orders` "
-                                       "then details only what was ticked, and the note names "
-                                       "the cap's leftover as `remaining` rather than swallowing "
-                                       "it. IT IS ALSO THE WAY INTO THE WALK (D90): every open "
-                                       "order draws `Walk this order` and the header draws "
-                                       "`Walk every open order`, both as plain <a> links to "
-                                       "#/inventory with a parameter, so middle-click and "
-                                       "Cmd-click work and no state is handed over. Each line "
-                                       "now reads `found of OWED` with what is already pulled "
-                                       "beside it, because the resolver is asked what the ledger "
-                                       "still owes rather than what the buyer bought.",
-                               "governed_by": ["D7", "D10", "D28", "D36", "D39", "D49", "D58", "D61", "D63", "D69", "D90", "D91"]},
+            "src/Orders.tsx": {"does": "THE ORDERS HUB: one screen with two stages (D69), "
+                                       "rendered at `#/orders` with the pull stage selected. "
+                                       "Which copies this buyer gets and where they are — one "
+                                       "read of GET /orders answers the order list and the "
+                                       "resolution out of ONE store snapshot, so the two cannot "
+                                       "disagree; each line draws its reason large with the "
+                                       "machine string beneath it, the six-way counts "
+                                       "breakdown, and each pick's place block and held_by. The "
+                                       "backlog can be worked one order at a time or as ONE "
+                                       "WALK through the boxes, which is the second form of "
+                                       "step 11 the order spec records as wanted. The pull is "
+                                       "one card and one press, aimed by the row's own "
+                                       "capture_id — a mid-box delete, a capture undo or a "
+                                       "re-shoot all change which physical card sits at a slot "
+                                       "(D10, D58) and the server refuses `capture_id_mismatch` "
+                                       "rather than selling whatever is there now. Its undo "
+                                       "lives on the RECEIPT rather than on the row, because a "
+                                       "successful pull unmounts the row it was pressed on, and "
+                                       "the receipt is a kit toast for exactly that reason. "
+                                       "Orders arrive by paste (projected by "
+                                       "src/orderPaste.ts) or by fetch behind the same control. "
+                                       "The tabs move the HASH rather than local state, so "
+                                       "bookmarks, the nav and the `,O`/`,S` chords keep "
+                                       "working — and because that unmounts the hub, everything "
+                                       "worth keeping across the switch lives in "
+                                       "src/OrdersHubStore.ts. IT DRAWS NO POSTAGE LANE ITSELF: "
+                                       "that is D61's question, answered by "
+                                       "src/OrdersShipStage.tsx out of a file this stage never "
+                                       "sees, and what the two stages share is a client-side "
+                                       "join by order number with nothing written across the "
+                                       "seam.",
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
-                                       "rather than offered twice. Since D91 it also carries the "
-                                       "status window the fetch is ticked from, and since D90 "
-                                       "the two links into the order walk.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D90", "D91"]},
-            "src/Shipping.tsx": {"does": "#/shipping: TCGplayer's Orders -> Export Shipping "
-                                         "file read into D61's three lanes, with the Pirate "
-                                         "Ship import CSV as a download and a way to forget the "
-                                         "batch (D69). It knows NO buyer — no name, no address, "
-                                         "no city, no postcode — and the absence is the design: "
-                                         "those details cross the wire exactly once, as the "
-                                         "download. The weight ratio is a rendering and is "
-                                         "never compared here; a float pass over that column "
-                                         "moved the lane counts on the server.",
-                                 "governed_by": ["D53", "D61", "D66", "D69", "D73"]},
+                                       "rather than offered twice.",
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69"]},
+            "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
+                                              "`#/orders` and `#/shipping` are one screen with "
+                                              "two stages, and the shell keys its view on the "
+                                              "hash — so switching stages unmounts and remounts "
+                                              "the hub. What a person would be annoyed to lose "
+                                              "lives here instead of in component state: the "
+                                              "ledger's last answer, an unsent paste, the "
+                                              "filter, and above all THE EXPORT THE CAPTURE "
+                                              "SERVER IS HOLDING, which the server cannot list "
+                                              "back — a client that forgot it would have no way "
+                                              "to find it again. It also declares `SHIP_LANES` "
+                                              "in the order `pipeline/shipping.py:LANES` does, "
+                                              "so the columns and the router cannot disagree. "
+                                              "NOTHING HERE TOUCHES BROWSER STORAGE: it lives as "
+                                              "long as the tab, which is the batch's own "
+                                              "lifetime, and D27 permits persistence rather than "
+                                              "requiring it.",
+                                      "governed_by": ["D27", "D61", "D63", "D66", "D69", "D73", "D94"]},
+            "src/OrdersShipStage.tsx": {"does": "the SHIP stage of that hub: TCGplayer's Orders "
+                                                "-> Export Shipping read into D61's three "
+                                                "lanes, with the Pirate Ship import CSV as a "
+                                                "download and a way to forget the batch. FOUR "
+                                                "ABSENCES ARE THE DESIGN, and its header says so "
+                                                "in the same words: no buyer PII is read out of "
+                                                "the batch or rendered at all; no sort and no "
+                                                "search, so each lane lists the export's own "
+                                                "order and a collapse removes rather than "
+                                                "reorders; no weight field and no insurance "
+                                                "control, because understated postage is charged "
+                                                "back weeks later and insurance is a per-order "
+                                                "choice inside Pirate Ship; and no server read "
+                                                "on mount, because the server holds no list of "
+                                                "batches and there is nothing to read until a "
+                                                "file is handed over. The abstention lane is "
+                                                "D61's third answer drawn as the pile that needs "
+                                                "a person.",
+                                        "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94"]},
+            "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
+                                         "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
+                                         "is src/OrdersShipStage.tsx, which `Orders.tsx` "
+                                         "imports, so the two routes render one screen without "
+                                         "importing each other. D69 gave each a route rather "
+                                         "than making the lane a mode of the order screen; this "
+                                         "file is what keeps that true of the ROUTES while the "
+                                         "screen is one.",
+                                 "governed_by": ["D61", "D66", "D69"]},
             "src/Shipping.css": {"does": "the lane table and its chips, at owner density. The "
                                          "unjudged lane is drawn as an answer rather than as a "
                                          "fault, because D61's third lane is a deliberate "
@@ -3085,33 +3394,44 @@ COMPONENTS = [
                                   # D3 for the fall-through-rather-than-guess rule its validation
                                   # copies; D13 for the browser-storage ban D27 carves out of.
                                   "governed_by": ["D3", "D13", "D27", "D33", "D39"]},
-            "src/RunPanel.tsx": {"does": "THE PIPELINE, ON A SCREEN. The four commands of batch "
-                                         "script v2, on #/runs since D39 and in #/inventory's "
-                                         "content column before it, scoped to the box its picker "
-                                         "names or the cards handed over from the walk. A two-step "
-                                         "money gate with no typing: Check cost prints the command's "
-                                         "own preflight, and only then does the one solid accent fill "
-                                         "on the panel appear. Join, emit and reconcile beside it, "
-                                         "each marked free and re-runnable; every command's stdout "
-                                         "shown verbatim; the import CSVs downloadable, which is the "
-                                         "gap docs/GATES.md names as what Gate B did not close. "
-                                         "The crop is offered as three named PAIRS with a Custom "
-                                         "escape hatch (D32 amended), because the crop and the "
-                                         "max edge are one decision and pairing them wrongly "
-                                         "costs 26% MORE for asking for less; the estimate is "
-                                         "void when either moves. AND THE EXPORT IS FETCHED "
-                                         "RATHER THAN DOWNLOADED AND UPLOADED (D64): one press "
-                                         "fetches and then joins with the file by name, the "
-                                         "receipt says what came back and what the last joined "
-                                         "export held beside it, and every refusal is a sentence "
-                                         "with nothing to press.",
-                                 # D1 is why one step spawns and three answer in the request. D3 is
-                                 # the ladder the join walks. D31
+            "src/RunPanel.tsx": {"does": "THE RUNS, AS MASTER AND DETAIL, on #/runs since D39 "
+                                         "and in #/inventory's content column before it. The "
+                                         "list is every run directory on disk, re-read while "
+                                         "the panel is on screen; the detail is the run the "
+                                         "THREE FREE COMMANDS act on — join, emit (pressed on "
+                                         "#/pricing) and reconcile — drawn as a stepper against "
+                                         "src/RunsStage.tsx's six stages. THE PAID STEP IS NOT "
+                                         "HERE ANY MORE: the identify command and its two-step "
+                                         "money gate moved to src/RunsComposer.tsx in the "
+                                         "2026-09 rebuild, and D33's rule is unchanged by the "
+                                         "move — one route can spend, the preflight is free, "
+                                         "and the confirm carries the figure. IT HOLDS NOTHING "
+                                         "ABOUT A RUN BETWEEN RENDERS EXCEPT WHICH ONE IS OPEN: "
+                                         "every figure is read from "
+                                         "`GET /pipeline/runs/<name>`, so a run started in a "
+                                         "terminal appears here and a run started here survives "
+                                         "the tab closing. Every command's stdout is shown "
+                                         "verbatim in src/RunsLog.tsx's well and the import CSVs "
+                                         "are downloads, which is the gap docs/GATES.md names as "
+                                         "what Gate B did not close. THE EXPORT IS FETCHED "
+                                         "RATHER THAN DOWNLOADED AND UPLOADED (D64), asked for "
+                                         "at the width D76 makes a per-game rule, with "
+                                         "`SCOPE_REASON` saying in the operator's words which "
+                                         "voice chose it. THE DELTA GUARD IS RETIRED and both "
+                                         "`Fetch anyway` buttons went with it: it refused a file "
+                                         "that was smaller or had nothing to compare against — "
+                                         "the very improvement it existed to allow — so the "
+                                         "client answers the server's two refusals once, up "
+                                         "front, and a fetch produces a RECEIPT rather than a "
+                                         "question.",
+                                 # D1 is why one step spawns and three answer in the request. D9 is
+                                 # the decisions document this panel edits as text rather than as a
+                                 # form. D3 is the finish-claim bypass its join control offers. D31
                                  # is why it WAS a panel on #/inventory rather than a route; D39 is
                                  # the owner overruling that, and this file is unchanged by it — the
                                  # scope arrives as a prop either way. D32 is the crop and the
-                                 # max-edge beside it.
-                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86", "D92"]},
+                                 # max-edge, both of which the composer now presses.
+                                 "governed_by": ["D1", "D3", "D9", "D13", "D16", "D28", "D31", "D32", "D33", "D39", "D48", "D49", "D54", "D56", "D64", "D65", "D76", "D86"]},
             "src/RunPanel.css": {"does": "the panel at owner density — the 4-16 end of the scale, mono "
                                          "on every number, and exactly one solid accent fill: the "
                                          "button that spends, drawn only once the estimate is on "
@@ -3301,7 +3621,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -3336,50 +3656,7 @@ COMPONENTS = [
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D28", "D36", "D58", "D63", "D69", "D91", "D49"]},
-            "tests/order-walk.spec.ts": {
-                "does": "AN ORDER DRIVING THE BOX WALK, IN A BROWSER (D90) — the only thing "
-                        "that looks at the mode at all, since tests/inventory.spec.ts walks "
-                        "#/inventory plainly and asserts no stop, no arrow step and no envelope "
-                        "press. Thirteen cases, and the "
-                        "strongest of them are ABSENCES and MEASUREMENTS rather than renders: no "
-                        "row offers `Mark sold` anywhere on the screen while an order drives, one "
-                        "envelope press sends one POST /orders/fill carrying every line's own "
-                        "capture_id and ZERO /sold and ZERO /orders/pull, the banner's row does "
-                        "not change height across an arrow step (D28), and `Stop walking` does "
-                        "not move into the rectangle a filled envelope vacated. The rest walk the "
-                        "mode end to end: the arrows stepping the queue across boxes and stopping "
-                        "at both ends, a full line refusing the take and a cross-box copy taken "
-                        "off the list without the walk moving to it (D93), a copy dropped with "
-                        "the walk advancing on its own, the receipt "
-                        "reversing the whole envelope through the same route, wave mode "
-                        "interleaving two orders in (box, index) order with one envelope each, a "
-                        "key the ledger does not hold falling through to the plain walk, and a "
-                        "409 drawing its code with nothing recorded. THE FIRST STOP IS "
-                        "DELIBERATELY NOT THE BOX'S FIRST CARD, which is what makes every landing "
-                        "assertion non-vacuous — with picks at 2/1 a mode that drove nothing "
-                        "would pass — and the fall-through case asserts the plain walk's own "
-                        "landing for the same reason. Not a harness test: it starts a browser, so "
-                        "`make design-check` runs it and `make harness` does not.",
-                # D7 is the fungibility the cross-box take case rests on; D36 is why the fixture
-                # re-derives rather than stores; D45 is the walk-to a copy row still offers; D49
-                # is the URL-as-handoff the entry links use; D52 and D58 are the photo and the
-                # label the landing assertions read.
-                "governed_by": ["D7", "D28", "D36", "D45", "D49", "D52", "D58", "D90", "D93"],
-                "note": "TWO THINGS IT DOES NOT COVER, NAMED SO NEITHER IS MISTAKEN FOR ASSERTED. "
-                        "The `held` mark — `spoken for by order N`, drawn where a pick carries "
-                        "`held_by` — is uncovered: the fixture's competing pick deliberately "
-                        "carries none, so the muted-tone case asserts `for order N` instead. And "
-                        "the ENTRY LINKS are asserted by neither spec — `Walk this order` and "
-                        "`Walk every open order` are rendered by app/src/Orders.tsx and every "
-                        "case here enters by navigating the URL itself, so nothing checks that "
-                        "the press on #/orders composes the hash the walk reads.\n\n"
-                        "ITS ORDER NUMBERS CONTAIN NO `D<digits>` SUBSTRING ON PURPOSE. The "
-                        "`repo map` row scans a module for decision citations and takes any "
-                        "`D` followed by one or two digits as one, so a fixture order numbered "
-                        "`D12-…` would demand a governed_by entry for a decision this file has "
-                        "no opinion about.",
-            },
+                                     "governed_by": ["D24", "D28", "D36", "D49", "D58", "D63", "D69", "D90", "D91", "D96"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -3405,7 +3682,7 @@ COMPONENTS = [
                                               "ask while the screen was a pile. Not a harness "
                                               "test — it starts a browser; `make design-check` "
                                               "runs it.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "

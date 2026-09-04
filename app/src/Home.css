@@ -1,0 +1,230 @@
+.home { display: flex; flex-direction: column; gap: var(--bn-7); }
+
+/* The hero sits in the same band as every other screen's header: eyebrow at the top of the
+   page, not centred against the art. */
+.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--bn-8);
+  padding: 0 0 var(--bn-4);
+}
+.home-hero-text { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
+.home-hero-text .bn-eyebrow { white-space: nowrap; }
+.home-title {
+  font-family: var(--bn-font-display);
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.home-lede { font-size: var(--bn-fs-xl); color: var(--bn-ink-3); }
+.home-lede strong { color: var(--bn-ink); font-weight: 700; }
+.home-actions { display: flex; gap: var(--bn-3); margin-top: var(--bn-3); flex-wrap: wrap; }
+
+.home-hero-art { display: block; padding-right: var(--bn-6); margin-top: -8px; pointer-events: none; }
+/* The chip hangs off the bottom-left corner, so the card's own caption has to end above it or
+   the number line is read through a pill. `--deck-chip` is that reserved band: the front card
+   pads its content by it, and the deck's own bottom margin clears the part that hangs out. */
+.home-deck { position: relative; width: 220px; height: 310px; margin: 0 auto 24px; --deck-chip: 30px; }
+.home-deck-card {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+  border: 1px solid var(--bn-line);
+  animation: home-deck-in var(--bn-t-emphasis) var(--bn-ease-out) backwards;
+}
+.home-deck-card-3 { transform: rotate(-9deg) translate(-26px, 10px); opacity: 0.55; animation-delay: 60ms; }
+.home-deck-card-2 { transform: rotate(-4deg) translate(-12px, 4px); opacity: 0.8; animation-delay: 120ms; }
+.home-deck-card-1 {
+  transform: rotate(3deg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation-delay: 180ms;
+}
+/* A REAL PHOTOGRAPH, so this is a frame around an image rather than a painted rectangle.
+   `cover` because the deck's aspect is the deck's, not the camera's, and a card photographed
+   on the stand is portrait with room to spare at the top; `object-position` favours the upper
+   half, where the art and the name are. The gradient stays underneath as the ground a slow or
+   missing image falls back to. */
+.home-deck-card-1 { padding-bottom: calc(12px + var(--deck-chip)); }
+/* The window the photograph is seen through. It clips, so a cropped photograph can be scaled
+   past the frame and still sit inside the card. */
+.home-deck-frame {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: block;
+  overflow: hidden;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 30% 25%, var(--bn-live-tint), transparent 55%),
+    linear-gradient(160deg, var(--bn-accent-tint-2), var(--bn-surface-2) 60%, var(--bn-accent-tint));
+}
+/* `.bn-crop` (kit.css) does the positioning and the cropped state; what is Home's is where the
+   uncropped fallback sits — the upper half, where the art and the name are. */
+.home-deck-photo { object-position: 50% 38%; }
+
+.home-deck-name { font-family: var(--bn-font-display); font-weight: 700; font-size: 13px; letter-spacing: -0.01em; }
+.home-deck-meta { font-family: var(--bn-font-mono); font-size: 10px; color: var(--bn-ink-3); }
+/* The address chip is a stage: dark in both themes, so "Card 17" reads at 6.6:1 either way. */
+.home-deck-address {
+  position: absolute;
+  left: -30px;
+  bottom: -12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-stage-bg);
+  color: var(--bn-stage-ink);
+  font-family: var(--bn-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: var(--bn-shadow-3);
+  animation: home-deck-in var(--bn-t-emphasis) var(--bn-ease-spring) backwards;
+  animation-delay: 420ms;
+}
+.home-deck-address .bn-icon { color: var(--bn-stage-live); }
+.home-deck-sep { opacity: 0.4; }
+.home-deck-card-no { color: var(--bn-stage-accent); }
+/* `from` only, on purpose: each card lands on ITS OWN rotation, which a `to { transform: none }`
+   would strip. The end of an enter animation is the element's resting style. */
+@keyframes home-deck-in { from { opacity: 0; transform: translateY(14px); } }
+@media (max-width: 767px) {
+  .home-hero { grid-template-columns: 1fr; gap: 0; padding-top: 0; }
+  /* Hidden WITHOUT `display: none`: Chromium's full-page capture matches this media query for
+     a frame, and a display toggle restarts the deck's enter animations — so every screenshot
+     of this screen at 1440 showed an empty hero. A zero-height, invisible block toggles nothing. */
+  .home-hero-art { height: 0; overflow: hidden; visibility: hidden; margin: 0; padding: 0; }
+  .home-actions { flex-direction: column; margin-top: var(--bn-2); }
+  .home-actions .bn-btn { width: 100%; }
+}
+
+/* the spine */
+.home-spine {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--bn-3);
+}
+.home-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  padding: var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  color: var(--bn-ink);
+  text-decoration: none;
+  min-width: 0;
+  transition: transform var(--bn-t) var(--bn-ease), box-shadow var(--bn-t) var(--bn-ease);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.home-stage:hover { text-decoration: none; transform: translateY(-2px); box-shadow: var(--bn-shadow-2); }
+.home-stage-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-2);
+  margin-bottom: var(--bn-2);
+}
+.home-stage-accent .home-stage-icon { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.home-stage-warn .home-stage-icon { background: var(--bn-warn-tint); color: var(--bn-warn); }
+.home-stage-ok .home-stage-icon { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.home-stage-label { font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); text-transform: uppercase; letter-spacing: var(--bn-tracking-caps); }
+.home-stage-figure {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-3xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.home-stage-figure-quiet { color: var(--bn-ink-3); }
+.home-stage-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-stage-arrow { position: absolute; right: -10px; top: 50%; transform: translateY(-50%); color: var(--bn-ink-4); z-index: 1; }
+@media (max-width: 1100px) {
+  .home-spine { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .home-stage-arrow { display: none; }
+}
+@media (max-width: 560px) {
+  .home-spine { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* panels */
+.home-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-4); }
+@media (max-width: 900px) { .home-grid2 { grid-template-columns: 1fr; } }
+.home-more { display: inline-flex; align-items: center; gap: 4px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
+.home-more:hover { color: var(--bn-accent); text-decoration: none; }
+@media (max-width: 767px) {
+  /* the only way into the full lists from here: the same words, a thumb's worth of hit area */
+  .home-more { min-height: 40px; padding: 0 var(--bn-2); margin: -11px calc(-1 * var(--bn-2)); }
+}
+.home-boxes, .home-runs { display: flex; flex-direction: column; padding: var(--bn-2); }
+.home-skel-row { height: 44px; margin: 4px var(--bn-2); }
+.home-empty { padding: var(--bn-5); color: var(--bn-ink-3); font-size: var(--bn-fs-md); text-align: center; }
+
+.home-box, .home-run {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  color: var(--bn-ink);
+  text-decoration: none;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.home-box:hover, .home-run:hover { background: var(--bn-surface-3); text-decoration: none; }
+.home-box-num {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-family: var(--bn-font-display);
+  font-weight: 800;
+  font-size: var(--bn-fs-base);
+  flex: none;
+}
+.home-box-text, .home-run-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.home-box-name, .home-run-box { font-weight: 600; font-size: var(--bn-fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-box-meta, .home-run-name { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-box-bar { width: 96px; height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; flex: none; }
+.home-box-bar > span { display: block; height: 100%; background: var(--bn-accent); border-radius: 3px; transition: width var(--bn-t-slow) var(--bn-ease); }
+.home-box-count { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); width: 40px; text-align: right; flex: none; }
+.home-run-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+@media (max-width: 560px) { .home-box-bar { display: none; } }
+@media (max-width: 767px) {
+  .home-run-box { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
+
+/* THE DECK IS A LINK NOW — it opens the card it is showing. It was decoration; it is the
+   newest photograph in the store, so pressing it should go there. The lift is the same one
+   every other card on this page uses, and the frames beneath do not move, so the stack reads
+   as one object rather than three that animate apart. */
+a.home-deck {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--bn-r-lg);
+  transition: transform var(--bn-t) var(--bn-ease);
+}
+a.home-deck:hover { text-decoration: none; }
+a.home-deck:hover .home-deck-card-1 { transform: translateY(-4px) rotate(0deg); box-shadow: var(--bn-shadow-3); }
+a.home-deck:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 6px; }
+.home-deck[data-empty='true'] .home-deck-card { opacity: 0.35; }

@@ -170,6 +170,11 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
         live_cap=max(leg.match.live_cap for leg in legs),
         rule=newest.match.rule,
         basis=newest.match.basis,
+        # THE NEWEST LEG'S, LIKE THE ROW AND THE RULE. `_agree_policy` has already refused a
+        # send whose runs carry different `threshold` overrides, so every leg agrees here —
+        # carrying it explicitly is what keeps `MergedSku.match.listable` from quietly
+        # answering with the module constant instead of the operator's figure.
+        threshold=newest.match.threshold,
         committed_positions=_union(legs, lambda m: m.committed_positions),
         held_out=(
             None
@@ -231,7 +236,7 @@ def _agree_policy(policies: Mapping[str, Mapping[str, object]]) -> None:
     """
     if len(policies) < 2:
         return
-    for label in ("rule", "basis", "sub_threshold"):
+    for label in ("rule", "basis", "sub_threshold", "threshold"):
         seen: "OrderedDict[str, List[str]]" = OrderedDict()
         for name, policy in policies.items():
             seen.setdefault(_token(policy.get(label)), []).append(name)

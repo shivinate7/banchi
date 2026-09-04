@@ -2,20 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>pkmnscan</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Banchi</title>
+    <meta name="application-name" content="Banchi" />
+    <meta name="description" content="Banchi — every card has an address." />
+    <meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
 
-    <!-- Three faces, two hosts — docs/DESIGN.md flags the Fontshare licence as unread and
-         self-hosting as a step 7 question. Same links as docs/design-refs/locked.html, so
-         the sheet and the app fall back to the same system faces offline. -->
+    <!-- Theme before paint: a stored choice wins, otherwise the system's. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('banchi.theme');
+          var dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+        } catch (e) {}
+      })();
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Martian+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
   </head>

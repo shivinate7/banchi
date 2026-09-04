@@ -1,17 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type RefObject,
+} from 'react'
+import { createPortal } from 'react-dom'
 
 import {
   describeFailure,
   getPriceHistory,
   getPriceTrends,
   emitMerged,
+  cropPreview,
   getPricingCorpus,
   getPricingWorklist,
   putPricingCorpus,
   getRun,
   getRuns,
   photoUrl,
-  runFileUrl,
   runStep,
   type Failure,
 } from './server'
@@ -31,85 +42,28 @@ import type {
 } from './types'
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { isEditableTarget } from './keys'
-import { FLAT_KEY, FLOOR_CHOICE, OWED_LABELS, owed, subThresholdSkus } from './readiness'
+import { FLAT_KEY, owed, subThresholdSkus, type OwedReason } from './readiness'
 import { PriceHistoryPanel, RANGE_LABEL, type HistoryRead } from './PriceHistory'
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { RunFiles } from './RunFiles'
 import { runBoxLabel } from './runScope'
+import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented, type Crop, type IconName } from './kit'
+import { toast } from './kit/toast'
 import './Pricing.css'
 
-/* HAND-PRICING, ON A ROUTE OF ITS OWN — D49, from an interview the owner asked for.
+/* #/pricing — THE HAND-PRICING WORKLIST (D49, D86).
  *
- * They had never been asked what they wanted a listing price to BE: `match` on `market` was
- * the CLI default running by accident through every run this project has done. Their answer
- * was two sentences and both of them shape this file. *"I want all the data from the CSV
- * shown when I make the decision, but I actually intend to be hand-pricing for now"* — so
- * every export cell is on the row and nothing is summarised. And *"almost everything coming
- * next is all above 0.40"*, which inverts the only measurement anyone had: across the two
- * Pokemon runs on disk the total value of every per-item pricing decision available was
- * ZERO, and the next boxes are the other thing.
- *
- * SO THIS IS A WORKLIST, NOT A REPORT. It is built for a hundred real decisions in a
- * sitting, which is why the whole of the interaction is one unmodified keystroke per common
- * act and why the list is forbidden from moving under a finger.
- *
- * WHAT IT REFUSES TO BE. Not a second review queue: which card this is was settled upstream
- * by D3, D4 and D35, so this screen asks only what it is worth. Not a spreadsheet in the
- * sense `docs/DESIGN.md` names Collectr and Discogs by — the hierarchy is carried by the
- * sort and by the decimal point, and there are deliberately NO price type-size bands, since
- * `ReviewQueue.css`'s own comment calls its breakpoints a guess. Not a second answer to a
- * question another screen owns: the box, the cart and the money gate stay on `#/runs`
- * (D39, D48), and NOTHING HERE SPENDS.
- *
- * THE CLIENT PERFORMS NO ARITHMETIC ON MONEY. Every number it can put in a field came
- * pre-rounded out of `pricing.json`, which `cli/cmd_join.py` computed through
- * `pipeline/pricing.py` — the one place allowed to. Re-implementing `Rule.apply` +
- * `round_money` + `clamp_floor` here would put that module's rounding-before-clamping order
- * in two languages with nothing auditing the second.
- */
+ * A hundred real decisions in a sitting: accept the rule's suggestion, type a price, snap to
+ * an export column, or hold the card — then write the import files. One answer per card, for
+ * the whole store, in `inventory/prices.json`. The client performs no arithmetic on money:
+ * every figure it can put in a field came pre-rounded out of the join. */
 
-/** How long a receipt stands. A COUNT would be wrong here and a clock is right, which is the
- *  opposite of the review queue's ruling and for a reason that inverts cleanly: there, an
- *  answer is irreversible at the store and the window is the only way back. Here the write
- *  is `inventory/prices.json`, `join` reads it and `emit` is free and re-runnable, so the
- *  receipt is a courtesy and the undo stack behind it is what matters. */
+/** How deep the undo stack goes. */
 const UNDO_DEPTH = 10
 
-/** How many SKUs one batched trend request asks about — D79.
- *
- *  IT IS A LATENCY NUMBER AND NOT A COURTESY ONE. The server sleeps `COURTESY_DELAY_SECONDS`
- *  between live fetches whatever the chunking, so this changes nothing the mirrors see; what
- *  it decides is how long the operator looks at an empty column. Eight SKUs is two ranges each
- *  — sixteen requests, about five seconds — so a 46-row box arrives as six waves instead of
- *  one 37-second blank. Larger wastes the wait; smaller pays a round trip per two cards. */
+/** How many SKUs one batched trend request asks about — a latency number, not a courtesy one. */
 const TREND_CHUNK = 8
 
-/** The three presets, matching `cli/cmd_join.py:PRESETS` key for key AND rule for rule. The
- *  owner chose these three and their percentages in the interview; a fourth is a change to
- *  that tuple and to this table, and to nothing else.
- *
- *  THE `rule`/`basis` PAIR IS HERE BECAUSE A PRESS HAS TO WRITE IT, and it is duplicated
- *  under the same guard D49 put on `WITHHOLD_REASONS`: `scripts/docs-audit.py`'s
- *  `pricing presets` row reconciles this table against that tuple and BLOCKS on a mismatch.
- *  `PUT /pricing` validates the policy's rule and basis, but a refusal there is a save that
- *  did not land, so two declarations agreeing is still what stands between this screen and
- *  an `inventory/prices.json` that `emit` refuses.
- *
- *  It is not arithmetic and must never become arithmetic. `cli/cmd_join.py:PRESETS` prices
- *  every row in Python precisely so `Rule.apply` + `round_money` + `clamp_floor` are not
- *  re-implemented here; what travels is the NAME of a rule, which the pipeline then applies. */
-/** A run's date, short, for the picker's headline. Null when there is no usable stamp.
- *
- *  THE HEADLINE IS `Box 1 · UNL Rares` AND A BOX GETS MORE THAN ONE RUN, so without this two
- *  buttons over one drawer are the same string and the only thing separating them is the run
- *  id in the meta line — which `docs/DESIGN.md`'s human-label-large rule deliberately draws
- *  small. Reported as "why does pricing show two box 1s".
- *
- *  DAY AND MONTH, NO CLOCK. Two runs over one box on one day is possible and this would not
- *  separate them; the run id underneath still does, and a timestamp in a headline spends the
- *  width that made the label readable in the first place. The year is omitted for
- *  `BoxBrowse.tsx:capturedAt`'s reason — every run on this machine is from this one, so
- *  printing it on all four says nothing. */
 function runDay(stamp: string | null | undefined): string | null {
   if (typeof stamp !== 'string' || stamp.trim() === '') return null
   const at = new Date(stamp)
@@ -117,66 +71,310 @@ function runDay(stamp: string | null | undefined): string | null {
   return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+/** The three presets, matching `cli/cmd_join.py:PRESETS` key for key AND rule for rule.
+ *  Audited by `scripts/docs-audit.py`'s `pricing presets` row. Labels are free; the tuple is not. */
 const PRESETS: { key: string; label: string; rule: string; basis: string; says: string }[] = [
   {
     key: 'market_match',
     label: 'Match market',
     rule: 'match',
     basis: 'market',
-    says: 'The recent actual-sale average, matched exactly. What every run has done so far.',
+    says: 'The recent actual-sale average, matched exactly.',
   },
   {
     key: 'market_undercut_5',
     label: 'Market −5%',
     rule: 'undercut:5',
     basis: 'market',
-    says: '5% under the recent actual-sale average, clamped at the $0.40 floor after rounding.',
+    says: '5% under the recent actual-sale average, clamped at the floor after rounding.',
   },
   {
     key: 'low_undercut_1',
     label: 'TCG Low −1%',
     rule: 'undercut:1',
     basis: 'low',
-    says:
-      '1% under the cheapest current listing, so you are the cheapest rather than tied with ' +
-      'it. Rows with no TCG Low Price are left alone and named.',
+    says: '1% under the cheapest current listing. Rows with no TCG Low price are left alone.',
   },
 ]
 
+/* ---------------------------------------------------------------------- the custom rule */
+
+/** THE FOURTH ANSWER, AND IT IS AN ANSWER RATHER THAN AN ESCAPE HATCH (the owner, 2026-09-03).
+ *
+ *  `pipeline/pricing.py` has always taken three rules over two bases — `match`, `undercut:PCT`,
+ *  `markup:PCT`, priced against `market` or `low` — and the three presets above spend five of
+ *  the combinations. Everything else was reachable only by hand-editing the file, which this
+ *  screen documented in a sentence and offered no way to do. It is a control now: the same
+ *  strip, the same standing `policy.rule` / `policy.basis`, written the same way a preset
+ *  writes them.
+ *
+ *  The KIND is the grammar `Rule.parse` accepts, so it is composed here and never invented. */
+const CUSTOM_KEY = 'custom'
+
+type RuleKind = 'undercut' | 'markup'
+type RuleBasis = 'market' | 'low'
+
+/** The three answers the operator gives. `pct` is what is TYPED, which is wider than what may
+ *  be written — the alphabet below admits `""` and a trailing dot on the way to a figure. */
+type CustomRule = { kind: RuleKind; pct: string; basis: RuleBasis }
+
+/** THE ACCEPTED ALPHABET FOR A PERCENTAGE, CLOSED, exactly as `PRICE` is for money: digits,
+ *  at most one dot, at most two places after it, at most three before. A letter is refused at
+ *  the keystroke rather than at the write. */
+const PCT = /^\d{0,3}(\.\d{0,2})?$/
+
+const KIND_LABEL: Record<RuleKind, string> = { undercut: 'Undercut', markup: 'Markup' }
+const BASIS_LABEL: Record<RuleBasis, string> = { market: 'Market', low: 'TCG Low' }
+
+/** What each basis IS, in the clause the presets' own sentences use, so a custom sentence and
+ *  a preset sentence are the same English. */
+const BASIS_SAYS: Record<RuleBasis, string> = {
+  market: 'the recent actual-sale average',
+  low: 'the cheapest current listing',
+}
+
+/** The standing rule read back as a custom answer, or null where it is a preset, unset, or a
+ *  string this screen cannot compose (a hand-written `match` with a percentage, say). This is
+ *  the whole round-trip: `policy.rule` is a free string on the wire and survives the PUT. */
+function parseCustomRule(rule: string | undefined | null, basis: string | undefined | null): CustomRule | null {
+  if (typeof rule !== 'string') return null
+  const [kind, pct] = rule.trim().toLowerCase().split(':')
+  if (kind !== 'undercut' && kind !== 'markup') return null
+  if (pct === undefined || !/^\d{1,3}(\.\d{1,2})?$/.test(pct)) return null
+  const where: RuleBasis = basis === 'low' ? 'low' : 'market'
+  return { kind, pct: String(Number(pct)), basis: where }
+}
+
+/** Why this percentage cannot be written, in a sentence, or null when it can. The bounds are
+ *  `pipeline/pricing.py:Rule.parse`'s own — a negative inverts the rule and an undercut of 100%
+ *  or more prices at or below zero — refused here so the operator reads a sentence instead of
+ *  emit refusing a run later. */
+function badPercent(kind: RuleKind, pct: string): string | null {
+  const text = pct.trim()
+  if (text === '') return 'Type a percentage and this becomes the standing rule.'
+  if (!/^\d{1,3}(\.\d{1,2})?$/.test(text)) return 'A percentage is digits, with up to two places after the point.'
+  const value = Number(text)
+  if (!Number.isFinite(value)) return 'A percentage is digits, with up to two places after the point.'
+  if (value === 0) return 'Nothing off the basis price is Match market — pick that instead.'
+  if (kind === 'undercut' && value >= 100) return `Undercutting by ${text}% prices at or below zero.`
+  return null
+}
+
+/** The rule as `pipeline/pricing.py` spells it. Never composed anywhere else. */
+function customRuleText(rule: CustomRule): string {
+  return `${rule.kind}:${rule.pct.trim()}`
+}
+
+/** The sentence under the strip, built from the presets' own clauses. */
+function customSays(rule: CustomRule, floor: string | null): string {
+  const move = rule.kind === 'undercut' ? 'under' : 'above'
+  const head = `${rule.pct.trim()}% ${move} ${BASIS_SAYS[rule.basis]}`
+  const tail =
+    rule.basis === 'low'
+      ? '. Rows with no TCG Low price are left alone.'
+      : rule.kind === 'undercut'
+        ? `, clamped at the $${floor} floor after rounding.`
+        : '.'
+  return head + tail
+}
+
+/** The rule in the shorthand a row has room for: `−7%`, `+12%`. */
+function customShort(rule: CustomRule): string {
+  return `${rule.kind === 'undercut' ? '−' : '+'}${rule.pct.trim()}%`
+}
+
 /** The four columns a letter key snaps the price to, in the order they are drawn. */
-const SNAPS: { key: string; field: keyof PricingSku['snap']; label: string }[] = [
-  { key: 'm', field: 'market', label: 'MARKET' },
-  { key: 'l', field: 'low', label: 'LOW' },
-  { key: 's', field: 'low_with_shipping', label: '+SHIP' },
-  { key: 'd', field: 'direct_low', label: 'DIRECT' },
+const SNAPS: { key: string; field: keyof PricingSku['snap']; label: string; says: string; column: string }[] = [
+  { key: 'm', field: 'market', label: 'Market', says: 'Market', column: 'TCG Market Price' },
+  { key: 'l', field: 'low', label: 'Low', says: 'Low', column: 'TCG Low Price' },
+  { key: 's', field: 'low_with_shipping', label: '+Ship', says: 'Low with shipping', column: 'TCG Low Price With Shipping' },
+  { key: 'd', field: 'direct_low', label: 'Direct', says: 'Direct low', column: 'TCG Direct Low' },
 ]
 
-const SECTIONS: { bucket: PricingSku['bucket']; title: string; note: string }[] = [
+const SECTIONS: {
+  bucket: PricingSku['bucket']
+  title: string
+  icon: IconName
+  note: (cut: string) => string
+}[] = [
   {
     bucket: 'listable',
-    title: 'Listed',
-    note: 'At or above the $0.40 threshold. These become import-listed.csv.',
+    title: 'Above the cut-off',
+    icon: 'tag',
+    note: (cut) => `Market at or above $${cut}. These are priced by the standing rule.`,
   },
   {
     bucket: 'sub_threshold',
-    title: 'Sub-threshold',
-    note:
-      'Below $0.40. The run-wide answer prices them unless you set one here; they become ' +
-      'import-subthreshold.csv.',
+    title: 'Under the cut-off',
+    icon: 'minus',
+    note: (cut) => `Market below $${cut}, so these go out at $${cut} — unless you type a price on the row.`,
   },
   {
     bucket: 'no_market_data',
     title: 'No market price',
-    note:
-      'The catalog carries no price for these. D9: a missing price is an unknown price, not ' +
-      'a low one — emit refuses while any is unanswered.',
+    icon: 'alert',
+    note: () => 'The catalog carries no price for these. A missing price is unknown, not low — the files cannot be written while any is unanswered.',
   },
 ]
 
-/** THE ACCEPTED ALPHABET, CLOSED. `[0-9.]`, at most one dot, at most two digits after it.
- *  That closure is what makes every letter unambiguously a command rather than a character,
- *  which is the entire safety argument for a keyboard that works with the hands in a field. */
+/** THE ACCEPTED ALPHABET, CLOSED. `[0-9.]`, at most one dot, at most two digits after it. Every
+ *  letter is therefore a command rather than a character. */
 const PRICE = /^\d*(\.\d{0,2})?$/
+
+/* ---------------------------------------------------------------- the cheap-card answer */
+
+
+/** The sub-threshold answer in either of its two shapes, or nothing written. */
+type SubAnswer = string | { flat: string } | null
+
+/** A figure that can be WRITTEN, which is narrower than what may be TYPED: the field's alphabet
+ *  admits `""` and a trailing dot on the way to a price, and `Decimal("0.")` is an error on the
+ *  other side of the wire. */
+function priceable(text: string): boolean {
+  return /^\d+(\.\d{1,2})?$/.test(text.trim())
+}
+
+/* ------------------------------------------------------------------------ the cut-off
+ *
+ * ONE FIGURE, TWO JOBS (the owner, 2026-09-03). D9 wrote the threshold and the cheap-card
+ * price as two settings, and this screen drew them as two: a threshold of $0.40 deciding
+ * which cards were cheap, and a separate flat answer of $0.49 those cards listed at. Held
+ * apart they invert — a card at $0.38 is cheap and goes out at $0.49, a card at $0.42 is
+ * listable and goes out at $0.42, so the cheap card lists ABOVE the one that cleared the bar.
+ * The owner's ruling is that they are the same variable: everything under the cut-off lists
+ * AT the cut-off, and nothing under it can ever price above something over it.
+ *
+ * SO ONE PRESS WRITES BOTH KEYS. `policy.threshold` is what `pipeline/join.py` partitions by
+ * and `policy.sub_threshold` is what it prices the lower half at; this screen never writes one
+ * without the other, at the store and at the run. */
+
+/** The store's standing cut-off — a default, not a silent write (the owner, 2026-09-03). */
+const STORE_DEFAULT_CUT = '0.49'
+
+/** Money as integer cents, or null where the text is not a figure. Cents rather than floats
+ *  because the comparison decides which file a card goes in: `0.1 + 0.2` has no business
+ *  anywhere near a partition. */
+function cents(text: string | null | undefined): number | null {
+  if (typeof text !== 'string') return null
+  const trimmed = text.trim()
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null
+  return Math.round(Number(trimmed) * 100)
+}
+
+/** THE CHEAP-CARD PRICE AS IT STANDS ON DISK, where it is not the cut-off — `null` where the
+ *  two agree, which is every store this screen has written since the figures became one.
+ *
+ *  A STORE WRITTEN UNDER THE OLD TWO-FIGURE MODEL CAN SAY BOTH THINGS AT ONCE, and this
+ *  machine's own does: `threshold: "0.40"` beside `sub_threshold: {flat: "0.24"}`. Neither is
+ *  wrong and the screen may not pick between them silently — drawing the cut-off alone would
+ *  claim cheap cards go out at $0.40 while `emit` would write $0.24. So it is reported, and one
+ *  press resolves it, because every commit here writes both keys. */
+function strandedFlat(doc: DecisionsDocument, cut: string): string | null {
+  const answer = doc.sub_threshold
+  if (answer === null || answer === undefined) return null
+  if (typeof answer === 'string') return 'the floor'
+  const flat = String((answer as Record<string, unknown>)[FLAT_KEY] ?? '')
+  return flat !== '' && cents(flat) !== cents(cut) ? `$${flat}` : null
+}
+
+/** A written cut-off on a policy object, or null where nothing is written. */
+function writtenCut(policy: Record<string, unknown> | undefined): string | null {
+  const value = policy?.['threshold']
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
+}
+
+/** Which section a row draws in, AT A GIVEN CUT-OFF.
+ *
+ *  `pipeline/pricing.py:is_listable` in the client's own terms: no market data is unpriced and
+ *  never cheap (D9), and everything else is `market >= cut`. The market cell decides it and the
+ *  basis is not consulted — a threshold reads Market whatever the rule is priced from.
+ *
+ *  THE OPERATOR STILL CANNOT MOVE A ROW BY TYPING ON IT, which is what D28 protects: the only
+ *  input here is the cut-off, a policy figure, and a policy change is exactly the moment the
+ *  list is SUPPOSED to re-partition. A price typed on a row moves nothing, as before. */
+function bucketAt(sku: PricingSku, cut: string): PricingSku['bucket'] {
+  if (sku.bucket === 'no_market_data') return sku.bucket
+  const market = cents(sku.snap.market)
+  const line = cents(cut)
+  if (market === null || line === null) return sku.bucket
+  return market >= line ? 'listable' : 'sub_threshold'
+}
+
+
+/** How old a reading is, in words. A live figure is never drawn without one (the owner,
+ *  2026-09-03): a count with no age reads as a fact about the marketplace when it is a fact
+ *  about the last time this store looked. */
+function ageWords(at: number | null | undefined): string | null {
+  if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) return null
+  const seconds = Math.max(0, Date.now() / 1000 - at)
+  if (seconds < 90) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.max(1, Math.round(hours / 24))
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`
+  const months = Math.round(days / 30)
+  return `${months} month${months === 1 ? '' : 's'} ago`
+}
+
+/** This run's own sub-threshold override, or `undefined` where it follows the store.
+ *
+ *  `pipeline/corpus.py:policy_for` folds exactly this key over the standing policy —
+ *  `over.get("sub_threshold", self.sub_threshold)` — so a run written here is a run the
+ *  pipeline prices differently. D86 named the shape and left it unwritten; this screen is
+ *  what writes it. */
+function runOverride(book: PricingCorpus | null, run: string | null): SubAnswer | undefined {
+  if (book === null || run === null) return undefined
+  const table = book.policy?.per_run
+  const entry = table?.[run]
+  if (entry === undefined || !('sub_threshold' in entry)) return undefined
+  const value = entry['sub_threshold']
+  if (typeof value === 'string') return value
+  if (typeof value === 'object' && value !== null && FLAT_KEY in value) return value as { flat: string }
+  return undefined
+}
+
+/** This run's own cut-off, or `undefined` where it follows the store. */
+function runCut(book: PricingCorpus | null, run: string | null): string | undefined {
+  if (book === null || run === null) return undefined
+  return writtenCut(book.policy?.per_run?.[run]) ?? undefined
+}
+
+/** Patch one run's policy, returning a NEW corpus. A key set to `undefined` is cleared, and an
+ *  entry left empty — and `per_run` itself — is pruned, so following the store again leaves no
+ *  trace of having differed from it.
+ *
+ *  `pipeline/corpus.py:policy_for` folds exactly these keys over the standing policy —
+ *  `over.get("threshold", self.threshold)` and the same for `sub_threshold` — so a run written
+ *  here is a run the pipeline partitions AND prices differently. D86 named the shape and left
+ *  it unwritten; this screen is what writes it. */
+function withRunPolicy(book: PricingCorpus, run: string, patch: Record<string, unknown>): PricingCorpus {
+  const table: Record<string, Record<string, unknown>> = { ...(book.policy?.per_run ?? {}) }
+  const entry: Record<string, unknown> = { ...(table[run] ?? {}) }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete entry[key]
+    else entry[key] = value
+  }
+  if (Object.keys(entry).length === 0) delete table[run]
+  else table[run] = entry
+  const policy = { ...book.policy }
+  if (Object.keys(table).length === 0) delete policy.per_run
+  else policy.per_run = table
+  return { ...book, policy }
+}
+
+/** Short chip labels for the hold reasons; the full sentence is drawn beneath the chips. */
+const HOLD_SHORT: Record<WithholdReason, string> = {
+  bullish: 'Bullish',
+  keeping: 'Keeping this one',
+  next_batch: 'A later batch',
+}
+
+/** A server word drawn as a label: the first letter is raised, the rest is left alone. */
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
 
 function isWithheld(value: unknown): value is WithheldRecord | 'unlisted' {
   return value === 'unlisted' || (typeof value === 'object' && value !== null && 'withheld' in value)
@@ -186,69 +384,21 @@ function heldReason(value: WithheldRecord | 'unlisted'): string {
   return value === 'unlisted' ? '' : String(value.withheld ?? '')
 }
 
-/** Where a section's answer is written. THE WRITE TARGET IS A PROPERTY OF THE SECTION, NOT OF
- *  THE ROW, and getting it wrong ships a run `emit` refuses: a price typed on a
- *  `no_market_data` row and written to `overrides` WOULD price the card — `prices_for`
- *  short-circuits on the override — and would STILL block `emit`, because `blocking` reads
- *  `no_market_data` alone. The operator would be told to edit the file they had just
- *  edited. */
+/** Where a section's answer is written: a property of the SECTION, not the row. */
 function targetOf(bucket: PricingSku['bucket']): 'overrides' | 'no_market_data' {
   return bucket === 'no_market_data' ? 'no_market_data' : 'overrides'
 }
 
-/** WHY THIS RUN ADDS NO ROW FOR THIS SKU, AS A HEADING — or null for the ordinary row that
- *  adds one. The sentence is `pipeline/join.py:SkuMatch.nothing_to_add` verbatim and is never
- *  reassembled here (D59); the fallback states the bare fact `at_cap` means, for a
- *  `pricing.json` an older join wrote with no sentence beside it.
- *
- *  IT IS A GROUP KEY AND NOT A ROW NOTE, which is the whole of the change. Every row that
- *  cannot add carried the same sentence in its own right margin — 51 SKUs deep, that is one
- *  sentence drawn twenty times down a list whose remaining rows are the ones with an answer
- *  still to give. Rows sharing a reason share a heading, and the reason is stated once.
- *
- *  THE SERVER SAYS WHY AND THE SCREEN DRAWS IT, WHICH IS THE PART THAT WAS PAID FOR. This
- *  sentence used to be "nothing to add this run — TCGplayer already holds {live_before}",
- *  composed on the client out of the export's live column alone — which reads 0 for every copy
- *  sitting on an import nobody has reconciled. Measured on the owner's store: 167 pushed copies
- *  across 72 SKUs, zero live and zero staged, and `live_before` reads 0 on every SKU of both
- *  runs on disk — so wherever it drew at all it read "TCGplayer already holds 0" under a row
- *  adding nothing BECAUSE TCGplayer was holding them. A row that stops appearing in an import
- *  file is close enough to the silent drop `CLAUDE.md` forbids that saying nothing would have
- *  beaten saying that.
- *
- *  THE FALLBACK IS NOT DEFENSIVE PADDING. This table is `pricing.json` READ OFF DISK, and a
- *  file an earlier join wrote carries `at_cap` with no sentence beside it — measured, both runs
- *  in `runs/` today. An older file states the bare fact, which is exactly what `at_cap` means,
- *  and invents no reason for it. Those rows group under it together, which is the honest
- *  reading: one heading over the cards this run adds nothing for and no claim as to why. */
+/** Why this run adds no row for this SKU, as a heading — or null for the ordinary row. */
 function groupOf(sku: PricingSku): string | null {
   return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
 }
 
-/** THE HEADING OVER THE ROWS THE OPERATOR HAS ALREADY ANSWERED WITH A HOLD. The screen's own
- *  sentence and not the server's, because a hold is this screen's answer (D49) and
- *  `inventory/prices.json` records the reason per SKU rather than one for the group — the
- *  machine token stays on each row, which is where a `withheld: bullish` is greppable from. */
 const HELD_HEAD = 'held back from this run'
 
-/** THE SKUs DRAWN AS HELD WHEN THE PAGE OPENED — a snapshot, taken in `load` and untouched
- *  until the next one, which is what makes a hold sink on the REOPENING and never under the
- *  hand that just pressed `H` (D28, D78).
- *
- *  READ THE WAY THE ROW READS IT, and that is why this walks the table rather than the two
- *  answer maps: `targetOf` decides which map a row's answer lives in, so a stale `overrides`
- *  key for a `no_market_data` SKU draws nothing and must sink nothing. The group and the word
- *  `Holding` are then the same test, run once each.
- *
- *  `'unlisted'` COUNTS, and it is not an edge case: it is the answer a `no_market_data` row
- *  takes to say this card is not being listed, it draws `Holding` in the price column exactly
- *  as a reasoned hold does, and it keeps the card out of the same import file. A group of rows
- *  that will not list is the honest set; one that took the reasoned half alone would leave the
- *  other half sitting among the unanswered rows looking like work. */
-function heldOnArrival(
-  rows: readonly PricingSku[],
-  doc: DecisionsDocument,
-): ReadonlySet<string> {
+/** The SKUs drawn as held when the page opened — a snapshot, so a hold sinks on the REOPENING
+ *  and never under the hand that just pressed H (D28, D78). */
+function heldOnArrival(rows: readonly PricingSku[], doc: DecisionsDocument): ReadonlySet<string> {
   const overrides = (doc.overrides ?? {}) as Record<string, unknown>
   const unpriced = (doc.no_market_data ?? {}) as Record<string, unknown>
   const out = new Set<string>()
@@ -259,45 +409,21 @@ function heldOnArrival(
   return out
 }
 
-/** One thing the list draws: a heading, or a row. Discriminated on `head` because the two are
- *  SIBLINGS in the list rather than a heading owning a nested list of its own — the caption
- *  above them is a sibling of the rows for the same reason, and a wrapper would stop the rows
- *  being what the section's own grid template applies to. */
 type Drawn = { head: string; count: number } | { head: null; sku: MergedSku }
 
-/** One keystroke, and what the card was answered before it.
- *
- *  ONE VALUE AGAIN. It was a per-run map for as long as the answers were, and `undefined`
- *  still means the key was absent and undoing DELETES it — D49's rule for clearing an answer,
- *  since there is deliberately no delete verb anywhere for this. */
 type Undo = {
   sku: string
   before: CorpusAnswer | undefined
   channel: 'price' | 'unknown'
 }
 
-/* ------------------------------------------------------- the corpus, as this screen (D86)
+/** The corpus as the document every reader on this screen understands. Read-only projection.
  *
- * ONE DOCUMENT, AND EVERY READER ON THIS SCREEN UNCHANGED. The answers used to be one
- * `decisions.json` per run, which is why this file briefly carried a merge, a fan-out write
- * and a conflict detector — machinery whose only job was to reconcile a duplication. The owner
- * retired the duplication instead: *"why is it we've made a federalist state system when this
- * is best done as a centralized system?"*
- *
- * `corpusAsDoc` IS THE WHOLE SEAM. `answers`, `unpriced`, the preset chips, the sub-threshold
- * controls and `owed` all read a `DecisionsDocument`, and they keep doing so — the corpus is
- * projected into that shape rather than every reader learning a new one. The projection is
- * one-way; writes go through `setAnswer` below, into the corpus.
- */
-
-/** The corpus as the document every reader on this screen already understands.
- *
- *  THE TWO TABLES ARE KEPT APART BY `channel`, and that is not cosmetic:
- *  `pipeline/decisions.py:blocking` reads `no_market_data` ALONE to decide whether `emit` must
- *  refuse, and `app/src/readiness.ts` mirrors it. Route a hand-entered answer for a card the
- *  catalog has no price for through `overrides` instead and the price is still right while the
- *  gate stops being able to see it — a screen reporting nothing owed for a run `emit` refuses. */
-function corpusAsDoc(book: PricingCorpus | null): DecisionsDocument {
+ *  `run` FOLDS THAT RUN'S POLICY OVERRIDE OVER THE STORE'S, in `corpus.py:policy_for`'s own
+ *  order, so the readiness line, the row labels and the panel all read one effective answer
+ *  rather than three that can disagree. Null run — several loaded, or none — is the store's
+ *  policy alone, which is what a merged send is priced by. */
+function corpusAsDoc(book: PricingCorpus | null, run: string | null = null): DecisionsDocument {
   if (book === null) return {}
   const overrides: Record<string, unknown> = {}
   const unpriced: Record<string, unknown> = {}
@@ -306,172 +432,368 @@ function corpusAsDoc(book: PricingCorpus | null): DecisionsDocument {
     const table = answer.channel === 'unknown' ? unpriced : overrides
     table[sku] = answer.value
   }
+  const over = (run === null ? undefined : book.policy?.per_run?.[run]) ?? {}
+  const sub = runOverride(book, run)
   return {
-    rule: book.policy?.rule,
-    basis: book.policy?.basis,
-    sub_threshold: book.policy?.sub_threshold ?? null,
+    rule: (typeof over['rule'] === 'string' ? over['rule'] : undefined) ?? book.policy?.rule,
+    basis: (typeof over['basis'] === 'string' ? over['basis'] : undefined) ?? book.policy?.basis,
+    sub_threshold: sub ?? book.policy?.sub_threshold ?? null,
     overrides: overrides as DecisionsDocument['overrides'],
     no_market_data: unpriced as DecisionsDocument['no_market_data'],
   }
 }
 
-/** Set or clear one card's answer, returning a NEW corpus.
- *
- *  `undefined` DELETES THE KEY and returns the row to its suggestion, which is D49's rule for
- *  clearing an answer — there is deliberately no delete verb anywhere for this. Every other key
- *  in the document is spread through untouched, so a hand-written `_note` and anything a later
- *  version adds survive a screen that has never heard of them. */
-function setAnswer(
-  book: PricingCorpus,
-  sku: string,
-  value: unknown,
-  channel: 'price' | 'unknown',
-): PricingCorpus {
+/** Set or clear one card's answer, returning a NEW corpus. `undefined` deletes the key. */
+function setAnswer(book: PricingCorpus, sku: string, value: unknown, channel: 'price' | 'unknown'): PricingCorpus {
   const skus = { ...(book.skus ?? {}) }
   if (value === undefined) delete skus[sku]
   else skus[sku] = { ...(skus[sku] ?? {}), value: value as never, channel }
   return { ...book, skus }
 }
 
-/** The run picker — a filter over the worklist since D86, and no longer a gate in front of it.
- *
- *  MULTI-SELECT, MIRRORING `Runs.tsx`'s BOX CART (D48). Nothing ever argued for the
- *  single-select this replaces: D49 defends where the run comes from — *"a picker here cannot
- *  disagree with anything"*, because `GET /pipeline/runs` is the single source — and says
- *  nothing about how many may be picked. A set over that same single source has the identical
- *  property. D39's one-mass-select rule is about CARDS and is untouched; `#/inventory` still
- *  owns the only one.
- *
- *  FOUR THINGS ARE PINNED BY `app/tests/pricing.spec.ts` AND ALL FOUR SURVIVE: one
- *  `.pricing-run` chip per joined run, `.pricing-run-name` exactly `runBoxLabel(row)`, an
- *  unnamed box drawing its number alone, and `.pricing-run-id` still carrying the full run
- *  directory. What is added is the fifth line the chip never had.
- *
- *  THE FIGURE IS A REMAINDER AND NOT A TOTAL. `counts.skus` is the SIZE of a job — box 2's
- *  109 SKUs are one `floor` press and box 3's 199 are 117 real decisions — so a picker
- *  drawing it could not answer the only question being asked of it. `owes` comes from
- *  `Decisions.blocking`, the Python that actually refuses an emit.
- *
- *  ASCENDING BY BOX, WHICH IS THE ORDER THE SHELF IS IN. `GET /pipeline/runs` sorts by
- *  directory name reversed, so within a day this drew box 5, box 4, box 3 — backwards against
- *  `Runs.tsx`'s stated rule, *"the order they sit on a shelf and the order the strip on
- *  `#/inventory` already draws"*. Date descending between days, because the newest sitting is
- *  the one being worked. */
+/** The runs named on the hash. `run` repeats rather than carrying a comma list. */
+function runsInHash(): string[] {
+  const query = window.location.hash.split('?')[1] ?? ''
+  return new URLSearchParams(query).getAll('run').filter((name) => name !== '')
+}
+
+/** Close a popover on an outside press or Escape. */
+function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!open) return
+    const press = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) onClose()
+    }
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('pointerdown', press)
+    document.addEventListener('keydown', key)
+    return () => {
+      document.removeEventListener('pointerdown', press)
+      document.removeEventListener('keydown', key)
+    }
+  }, [ref, open, onClose])
+}
+
+/** Whether the shell is in its phone layout (top bar + tab bar), where popovers become sheets. */
+function usePhone(): boolean {
+  const [phone, setPhone] = useState(() => window.matchMedia('(max-width: 767px)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)')
+    const sync = () => setPhone(query.matches)
+    query.addEventListener('change', sync)
+    return () => query.removeEventListener('change', sync)
+  }, [])
+  return phone
+}
+
+/** Where the shell's content column starts, so a drawer can sit beside the sidebar or the rail. */
+function shellLeft(): number {
+  const main = document.querySelector('.bn-shell-main')
+  return main === null ? 0 : Math.round(main.getBoundingClientRect().left)
+}
+
+/** The run picker — a filter over the worklist, never a gate in front of it (D86). Multi-select,
+ *  drawn in date-desc / box-asc order. The drawer large, the directory small beneath it (D56). */
 function PickRuns({
   runs,
   picked,
   onToggle,
+  onClear,
 }: {
   runs: readonly RosterRun[]
   picked: ReadonlySet<string>
   onToggle: (run: string) => void
+  onClear: () => void
 }) {
   const order = [...runs].sort((a, b) => {
     const day = (b.created_at ?? '').slice(0, 10).localeCompare((a.created_at ?? '').slice(0, 10))
     if (day !== 0) return day
     return (a.box ?? 0) - (b.box ?? 0) || a.run.localeCompare(b.run)
   })
+  const open = runs.filter((row) => row.open).length
   return (
     <div className="pricing-runs" role="group" aria-label="Which runs to price">
-      {order.map((row) => {
-        /* THE DRAWER LARGE, THE DIRECTORY SMALL BENEATH IT (D56). This chip drew the run name
-           over a SKU count — a date, a box digit and a number — and the owner named it
-           exactly: *"not just the date and the raw box number."* It is `docs/DESIGN.md`'s
-           human-label-large, machine-string-small rule pointed at a picker: the box is what a
-           person is choosing between, and the run directory is the greppable identity of the
-           thing they are choosing.
-
-           THE RUN NAME IS NOT DEMOTED OUT OF USEFULNESS, and it must not be. Two runs over
-           one box draw the SAME headline — box 1 and box 3 both do this on the owner's store
-           — so the second line is the only thing telling them apart.
-
-           A RUN WITH NO BOX FALLS BACK TO ITS OWN NAME AS THE HEADLINE, rather than drawing
-           an empty line above one. */
-        const label = runBoxLabel(row)
-        const day = runDay(row.created_at)
-        const on = picked.has(row.run)
-        return (
-          <button
-            key={row.run}
-            type="button"
-            className={`pricing-run${on ? ' pricing-run-on' : ''}${row.open ? ' pricing-run-open' : ''}`}
-            aria-pressed={on}
-            onClick={() => onToggle(row.run)}
-          >
-            <span className="pricing-run-name">
-              {label ?? row.run}
-              {label === null || day === null ? null : ` · ${day}`}
-            </span>
-            <span className="pricing-run-meta">
-              {label === null ? null : <span className="pricing-run-id">{row.run}</span>}
-              <span>{row.counts?.skus ?? '?'} SKUs</span>
-            </span>
-            {/* WHAT IS LEFT, OR THAT NOTHING IS. Both are worth a line: a run that owes
-                nothing is the one an operator should not open, and before this the only way
-                to learn that was to open it. */}
-            <span className={`pricing-run-owes${row.open ? '' : ' pricing-run-done'}`}>
-              {row.owes.length === 0 ? 'answered' : row.owes.join(' · ')}
-            </span>
-          </button>
-        )
-      })}
+      <div className="pricing-runs-head">
+        <span className="bn-label">Runs</span>
+        <span className="pricing-runs-count">
+          {picked.size === 0 ? `${open} with pricing left · showing all of them` : `${picked.size} picked`}
+        </span>
+      </div>
+      <div className="pricing-runs-list">
+        {order.map((row) => {
+          const label = runBoxLabel(row)
+          const day = runDay(row.created_at)
+          const on = picked.has(row.run)
+          return (
+            <button
+              key={row.run}
+              type="button"
+              className={`pricing-run${on ? ' pricing-run-on' : ''}${row.open ? ' pricing-run-open' : ''}`}
+              aria-pressed={on}
+              onClick={() => onToggle(row.run)}
+            >
+              <span className="pricing-run-check" aria-hidden="true">
+                <Icon name="check" size={12} />
+              </span>
+              <span className="pricing-run-text">
+                <span className="pricing-run-name">
+                  {label ?? row.run}
+                  {label === null || day === null ? null : ` · ${day}`}
+                </span>
+                <span className="pricing-run-meta">
+                  {label === null ? null : <span className="pricing-run-id">{row.run}</span>}
+                  <span>{row.counts?.skus ?? '?'} SKUs</span>
+                </span>
+              </span>
+              <span className={`pricing-run-owes bn-pill ${row.open ? 'bn-pill-warn' : 'bn-pill-ok pricing-run-done'}`}>
+                {row.owes.length === 0 ? 'Answered' : sentence(row.owes.join(' · '))}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {picked.size === 0 ? null : (
+        <div className="pricing-runs-foot">
+          <Button size="sm" variant="ghost" icon="x" onClick={onClear}>
+            Show everything unpriced
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
 
-/** The runs named on the hash. `run` REPEATS rather than carrying a comma list, matching the
- *  wire (`getPricingWorklist`) and `/trends` behind it, for their reason: a comma inside a
- *  value is indistinguishable from the separator. A single `?run=` is the link `#/runs` has
- *  always written and still resolves to a worklist of one, so every URL made before D86 lands
- *  on exactly the screen it did. */
-function runsInHash(): string[] {
-  const query = window.location.hash.split('?')[1] ?? ''
-  return new URLSearchParams(query).getAll('run').filter((name) => name !== '')
+/**
+ * A LIVE COUNT IS NEVER DRAWN WITHOUT ITS AGE (the owner, 2026-09-03).
+ *
+ * `3 live` alone reads as a fact about the marketplace. It is a fact about the last time this
+ * store looked: the figure was frozen into `pricing.json` when the run was joined, and the
+ * listings row it came from was last moved by a `reconcile --live`. Zero is the sharpest case
+ * — a SKU with copies pushed and none live is usually an unreconciled push rather than an
+ * empty shelf — so it is drawn too, with the same age beside it.
+ */
+function LiveCount({ live, age }: { live: number; age: string | null }) {
+  return (
+    <span
+      className="pricing-live"
+      data-none={live === 0 ? 'true' : undefined}
+      title={
+        `What TCGplayer was holding live for this SKU when the run was joined${age === null ? '' : `, ${age}`}. ` +
+        'A reconcile on Runs takes a fresh reading.'
+      }
+    >
+      <span className="bn-dot bn-dot-live" aria-hidden="true" />
+      {live} live
+      {age === null ? null : <span className="pricing-live-age">· read {age}</span>}
+    </span>
+  )
+}
+
+function SkeletonRows({ count }: { count: number }) {
+  return (
+    <section className="pricing-section" aria-hidden="true">
+      <header className="pricing-section-head">
+        <span className="bn-skeleton" style={{ width: 160, height: 18 }} />
+      </header>
+      <div className="pricing-list">
+        {Array.from({ length: count }, (_, i) => (
+          <div key={i} className="pricing-row pricing-row-skel" style={{ '--i': String(i) } as CSSProperties}>
+            <span className="bn-skeleton" style={{ width: 36, height: 48 }} />
+            <span className="bn-skeleton" style={{ width: `${40 + ((i * 17) % 35)}%`, height: 14 }} />
+            <span className="bn-skeleton" style={{ width: 110, height: 34 }} />
+            <span className="bn-skeleton" style={{ width: 52, height: 12 }} />
+            <span className="bn-skeleton" style={{ width: 52, height: 12 }} />
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+
+/* THE ROW THUMBNAILS ARE CROPPED TO THE CARD (the same treatment the Home hero has).
+ *
+ * A rig photograph is mostly stand — on box 6 the card sits at [240, 1051, 1649, 3020] inside a
+ * 2160x3840 frame — and at 36x48 that left the card a smudge in the middle of a dark rectangle,
+ * which is no help at all to an operator pricing a hundred cards by eye. `POST
+ * /pipeline/crop-preview` is the SAME detector the batch reading uses, it is free, it calls no
+ * model, and it returns the rectangle; `cropStyle` (kit) turns it into a picture of the card.
+ *
+ * WHY THE FETCHING IS ITS OWN LITTLE MACHINE HERE, rather than a request per row:
+ *
+ *   - ONE CARD PER CALL, ALWAYS. `indices` is a scope, not a batch — the route answers with one
+ *     `sample`, picked out of the scope by `offset`. So a row is a request, and the only levers
+ *     left are how many rows ask and when.
+ *   - STRICTLY SERIAL, and this one is not a preference. The route builds a scope directory named
+ *     `box<n>-<count>-<unix seconds>` and deletes any directory already at that name; every
+ *     single-index request for one box inside the same second therefore collides on the SAME
+ *     name and rmtree's its neighbour mid-read. Measured against this server: 12 concurrent
+ *     requests, 11 failed with a FileNotFoundError out of the symlink. One in flight at a time.
+ *   - ONLY WHAT IS ON SCREEN. An IntersectionObserver asks when the row comes within 400px of
+ *     the viewport, so an 11-row worklist costs 11 requests and a 109-row one costs the dozen
+ *     that were actually looked at.
+ *   - ANSWERED ONCE PER SESSION. The reading is a property of a photograph, and a photograph at
+ *     `box/index` does not change under a pricing sitting, so the cache outlives the mount and a
+ *     scroll back up costs nothing.
+ *   - `max_edge: 256` because the response carries the prepared JPEG as a data URI and nothing
+ *     here draws it: 523KB a row at the default, 20KB at the floor. The rectangle is computed
+ *     against the ORIGINAL size and is identical either way.
+ *
+ * A refusal, a missing rect, or a server that is not there leaves `cover` in place. The row was
+ * legible before this and must never be worse for it. */
+type CropRead = Crop | null
+
+/** Answered readings, `box/index` -> crop or null. Module scope: it survives the mount. */
+const CROPS = new Map<string, CropRead>()
+/** Asked for, not yet answered. Drained one at a time by `pumpCrops`. */
+const CROP_QUEUE: string[] = []
+const CROP_WATCH = new Map<string, Set<() => void>>()
+let cropPumping = false
+
+function cropKey(box: number, index: number): string {
+  return `${box}/${index}`
+}
+
+function wantCrop(key: string): void {
+  if (CROPS.has(key) || CROP_QUEUE.includes(key)) return
+  CROP_QUEUE.push(key)
+  void pumpCrops()
+}
+
+async function pumpCrops(): Promise<void> {
+  if (cropPumping) return
+  cropPumping = true
+  try {
+    for (;;) {
+      const key = CROP_QUEUE.shift()
+      if (key === undefined) return
+      if (CROPS.has(key)) continue
+      const [box, index] = key.split('/').map(Number)
+      let read: CropRead = null
+      try {
+        const { sample } = await cropPreview({ box: box!, indices: [index!], crop: true, maxEdge: 256 })
+        if (sample.rect != null && sample.frame != null && sample.crop_refused == null) {
+          read = { frame: sample.frame, rect: sample.rect }
+        }
+        /* A REFUSAL IS AN ANSWER and is remembered: `crop_refused`, no rectangle, an unreadable
+           frame. Asking again would get the same one out of the same photograph. */
+        CROPS.set(key, read)
+      } catch {
+        /* A FAILURE IS NOT AN ANSWER, so nothing is written down. The row stays uncropped for
+           this mount — its observer has already fired — and the next visit to the screen asks
+           again, which is what a capture server that was restarting deserves. */
+      }
+      const told = CROP_WATCH.get(key)
+      if (told !== undefined) for (const tell of told) tell()
+    }
+  } finally {
+    cropPumping = false
+  }
+}
+
+/** Where the window sits on the card, and it is the hero's figure for a different reason.
+ *  36x48 over a detected rectangle averaging 0.55 wide-to-tall shows about three-quarters of
+ *  the height, so a quarter goes; which quarter was decided by looking at eight real rows at
+ *  0.50, 0.42 and 0.34. The detector's rectangle is generous BELOW the card — it takes in the
+ *  stand's TRADING CARD GAME strip — so a centred window (0.50) cuts the top off the art and
+ *  keeps the strip, and 0.34 puts the card's own top edge at the window's top and drops the
+ *  strip instead. The art, the name and the first lines of text, which is what a name in the
+ *  next column is being checked against. */
+const THUMB_FOCUS = 0.34
+
+/** The row's photograph: a press that opens the drawer, and the crop that makes it worth
+ *  looking at. Its own component so one answered reading redraws one thumbnail rather than a
+ *  hundred priced rows. */
+function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number] | null; name: string; onOpen: () => void }) {
+  const key = at === null ? null : cropKey(at.box, at.index)
+  const [crop, setCrop] = useState<CropRead>(() => (key === null ? null : CROPS.get(key) ?? null))
+  const host = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (key === null) return
+    const answered = CROPS.get(key) ?? null
+    setCrop(answered)
+    if (CROPS.has(key)) return
+    const tell = () => setCrop(CROPS.get(key) ?? null)
+    let watching = CROP_WATCH.get(key)
+    if (watching === undefined) {
+      watching = new Set()
+      CROP_WATCH.set(key, watching)
+    }
+    watching.add(tell)
+    const node = host.current
+    let eye: IntersectionObserver | null = null
+    if (node !== null && typeof IntersectionObserver === 'function') {
+      eye = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((entry) => entry.isIntersecting)) return
+          eye?.disconnect()
+          eye = null
+          wantCrop(key)
+        },
+        { rootMargin: '400px 0px' },
+      )
+      eye.observe(node)
+    } else {
+      wantCrop(key)
+    }
+    return () => {
+      watching?.delete(tell)
+      if (watching?.size === 0) CROP_WATCH.delete(key)
+      eye?.disconnect()
+    }
+  }, [key])
+
+  return (
+    <button
+      ref={host}
+      type="button"
+      className="pricing-thumb"
+      aria-label={`Photograph of ${name}`}
+      title="Photograph · P"
+      onClick={onOpen}
+      data-cropped={crop !== null ? 'true' : undefined}
+    >
+      {at === null ? (
+        <Icon name="image" size={14} />
+      ) : (
+        <img
+          className="bn-crop"
+          src={photoUrl(at.box, at.index)}
+          alt=""
+          loading="lazy"
+          data-cropped={crop !== null ? 'true' : undefined}
+          style={cropStyle(crop, THUMB_FOCUS)}
+          /* Undone, re-shot or reclaimed (D89): leave the frame, never a broken image glyph. */
+          onError={(event) => {
+            event.currentTarget.style.visibility = 'hidden'
+          }}
+        />
+      )}
+    </button>
+  )
 }
 
 export function Pricing() {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
-  /** WHICH RUNS THE WORKLIST IS OVER, AND EMPTY MEANS "WHATEVER STILL HAS WORK IN IT".
-   *
-   *  THE EMPTY SET IS A REAL STATE AND NOT AN UNSET ONE, which is the whole shape of D86.
-   *  `#/pricing` used to open on a picker and hold `run: string | null`, so the operator's
-   *  first act on a screen built for *"a hundred real decisions in a sitting"* was always to
-   *  answer a question — which box — that the pipeline can already answer for them. With no
-   *  selection the server chooses every run that still owes something, so the screen opens on
-   *  the work rather than on a menu. Picking runs NARROWS that; it no longer gates it.
-   *
-   *  A SET OF RUN NAMES, MIRRORING `Runs.tsx`'s `picked: ReadonlySet<number>` (D48). Same
-   *  name, same shape, same toggle, and drawn in the server's order rather than the order
-   *  they were ticked — selection order would make the picker and the list disagree about
-   *  which run comes first for no reason anybody chose. */
+  /** Which runs the worklist is over; EMPTY means "whatever still has work in it" (D86). */
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(runsInHash()))
   const [work, setWork] = useState<PricingWorklist | null>(null)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
-  /** THE PRICING CORPUS — one document for the store, and the authority (D86, amended).
-   *
-   *  IT WAS A MAP KEYED BY RUN AND THE OWNER RETIRED THAT: *"why is it we've made a
-   *  federalist state system when this is best done as a centralized system?"* A price is a
-   *  fact about a SKU, so one stored per run meant one answer per drawer a card had been
-   *  photographed in — 66 SKUs on this machine, 8 answered twice, 3 of those a hold overridden
-   *  by a later price. `doc` below is a `DecisionsDocument`-shaped READ of this, which is what
-   *  lets every reader on this screen stay exactly as it was.
-   *
-   *  THE FAN-OUT WRITE IS GONE WITH IT. `write` sets one key here and one `PUT /pricing`
-   *  follows; there is no second file for it to disagree with. */
+  /** The pricing corpus — one document for the store, and the authority (D86). */
   const [book, setBook] = useState<PricingCorpus | null>(null)
-
-  /** The merged press: whether it is sending, and whether the operator wants only the
-   *  above-threshold rows. `listedOnly` is the owner's checkbox — *"i can hit a checkmark to
-   *  export just the valuable cards (splitting off the threshold ones) otherwise it defaults
-   *  to all"* — so the default is everything and the split is opt-in. */
   const [sendingAll, setSendingAll] = useState(false)
   const [listedOnly, setListedOnly] = useState(false)
+  /* ONE PRESS WRITES ONE SPREADSHEET (D99), AND THE SPLIT IS AN OPTION BEHIND IT (the owner,
+     2026-09-03). Off is the product's answer: across runs, across games and across the two
+     sides of the cut-off, emit writes `import.csv`. On, it writes the pair back —
+     `import-listed.csv` and `import-subthreshold.csv` — for the send that genuinely wants
+     them staged separately. It is never on by default and never remembered. */
+  const [splitFiles, setSplitFiles] = useState(false)
 
-  /* TOGGLING A RUN NARROWS OR WIDENS THE WORKLIST, and un-ticking the last one returns it to
-     "everything unpriced" rather than to an empty screen. The empty set is the default state
-     and means the server chooses, so there is no way to arrive at a deliberately blank
-     worklist by pressing chips — which is the state that would look like a bug. */
   const toggleRun = useCallback((name: string) => {
     setPicked((held) => {
       const now = new Set(held)
@@ -480,171 +802,70 @@ export function Pricing() {
       return now
     })
   }, [])
+  const clearPicked = useCallback(() => setPicked(new Set()), [])
   const [saving, setSaving] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
   const [holdFor, setHoldFor] = useState<string | null>(null)
-
-  /* THE HOLDS AS THE SERVER LAST HANDED THEM OVER. State and not a memo over `doc`: the whole
-   * property is that it does NOT track the document the operator is editing. */
   const [sunkHolds, setSunkHolds] = useState<ReadonlySet<string>>(() => new Set())
   const [photoFor, setPhotoFor] = useState<{ sku: string; at: number } | null>(null)
 
-  /* ------------------------------------------------------------- the price history (D62)
-   *
-   * TWO WAYS IN, AND WHAT SEPARATES THEM IS WHAT ENDS THEM. `peek` is the HELD one: point at
-   * a row, hold `t`, and the panel stands for exactly as long as the key is down. `pinned` is
-   * the `T` button's click and the panel's own Keep, and it stands until it is closed. The
-   * owner asked for the first on 2026-08-31 and gave the gesture whole — "it holds as my
-   * cursor moves as long as i hold T, and then as soon as i release it goes away" — because
-   * the reading is worth having on a card being weighed and the panel outliving the glance
-   * is the part that grates.
-   *
-   * `peek ?? pinned` RATHER THAN ONE SLOT, SO A GLANCE CANNOT SPEND A PIN. An operator holding
-   * one card open who points at another row and holds `t` gets that row for the hold and their
-   * own card back on the release. One slot would have handed the pin to whatever was glanced
-   * at last, and a pin quietly re-aimed is worse than no pin: the panel prints its SKU, so it
-   * would not be WRONG on screen, merely no longer the card the operator asked about.
-   *
-   * NEITHER ONE FOLLOWS FOCUS, which is the property D62 closed structurally rather than with
-   * a debounce: a reading is a request to two public mirrors, so a panel re-read on the
-   * focused row would fire one request per arrow key — fifty for a walk down this list, at a
-   * free mirror, for readings nobody asked for. Nor does either follow the POINTER: pointing
-   * at a row asks for nothing at all, and only the press reads. */
+  /* The price history (D62): `peek` is the held `t`, `pinned` is the click. `peek ?? pinned`. */
   const [pinned, setPinned] = useState<string | null>(null)
   const [peek, setPeek] = useState<string | null>(null)
   const historyFor = peek ?? pinned
-  /* Every reading this session has taken, by SKU. Kept across closes so re-opening a card is
-   * free, and NOT cleared when the run changes: a SKU's sales history is a fact about the
-   * card rather than about the run that priced it, so the same reading is correct on any run
-   * that matched it. The server's own on-disk cache (`pipeline/pricehistory.py`'s TTLs) is
-   * what decides staleness; this only avoids asking it twice in one sitting. */
   const [history, setHistory] = useState<Record<string, HistoryRead>>({})
 
-  /* ---------------------------------------------------------------- the trend strip (D79)
-   *
-   * D62 MADE THE HISTORY A PRESS PER CARD AND NAMED WHAT WOULD REOPEN IT — *"the panel being
-   * opened on every card… the honest answer is a batched route and a column on the row"*. The
-   * owner asked for that on 2026-08-31. This is the state behind that column, and it is
-   * SEPARATE from `history` above rather than a widening of it: the two carry different
-   * payloads for different drawings, and merging them would put the panel's every-figure
-   * reading and the row's shape-and-sign in one bag whose shape neither consumer could trust.
-   *
-   * IT IS KEYED BY RUN AND CLEARED WHEN THE RUN CHANGES, which is the opposite of `history`
-   * above and correct for the opposite reason. A reading is a fact about a CARD, so it is
-   * kept across runs. This is a reading over a run's OPEN rows — which rows those are is a
-   * fact about the run — so a strip carried across a run change would draw the last run's
-   * answer set against this run's list. */
+  /* The trend strip (D79): keyed by run, cleared when the loaded set changes. */
   const [trends, setTrends] = useState<Record<string, TrendRead>>({})
   const [trendRun, setTrendRun] = useState<{
     run: string
-    /** How many rows the walk will ask about, and how many it has heard back on. The row
-     *  strip fills in waves and this is what lets the screen say so — 37.7s of courtesy delay
-     *  arriving as six partial answers rather than one blank half-minute. */
     total: number
     done: number
-    /** The rows never asked about: this run can add nothing for them, so the batch skips them
-     *  on the owner's instruction. COUNTED rather than hidden — a strip drawn over 46 of 60
-     *  rows with no number beside it reads as fourteen failures. */
     skipped: number
-    /** The two ranges' spans, off the first answer that carried them. STATED ONCE HERE and
-     *  never on a row: they are identical across every SKU of a run (measured, all 46 on
-     *  `2026-08-31-box3-01`), and a row has no width for a date. */
     spans: TrendRange[] | null
     reading: boolean
   } | null>(null)
-  /* WHICH WALK IS LIVE. A run change or a second press abandons the one in flight, and every
-   * chunk checks this before it writes — without it, a walk started over run A keeps filling
-   * the strip after the operator has moved to run B, one chunk at a time, for half a minute.
-   * A ref and not state: nothing draws it, and a re-render per chunk boundary is already paid
-   * for by the answer that chunk carries. */
   const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
 
-  /* ------------------------------------------------------------------ shipping this run (D54)
-   *
-   * `emit`'s press and its import CSVs live HERE now, on the screen where every answer it
-   * refuses without is made. `#/runs` keeps the step's head, its note and a link over, so the
-   * pipeline still reads as four parts.
-   *
-   * `detail` IS REQUIRED, NOT DECORATIVE: once the import rows leave `#/runs`, an
-   * already-emitted run's CSVs are reachable from no screen at all without it. NO POLL —
-   * `RunPanel` polls because a run STARTS live, and this screen is entered on one that has
-   * finished; a poll here would re-render a hundred rows to bookkeep a file list. */
+  /* THE CUSTOM RULE'S THREE ANSWERS, HELD AS A DRAFT. The standing rule is the corpus's and
+     the corpus is written on a valid figure only, so a half-typed percentage is a state of
+     this screen and never a state of the document. `pressedCustom` is the segment being
+     chosen before a figure exists — the one moment the strip shows Custom and the standing
+     rule is still a preset's. */
+  const [customDraft, setCustomDraft] = useState<CustomRule>({ kind: 'undercut', pct: '', basis: 'market' })
+  const [pressedCustom, setPressedCustom] = useState(false)
+  const [customBad, setCustomBad] = useState<string | null>(null)
+  const customSeed = useRef<string | null>(null)
+  const customPct = useRef<HTMLInputElement | null>(null)
+  const [runsOpen, setRunsOpen] = useState(false)
+  const [filesOpen, setFilesOpen] = useState(false)
+  const [consoleOpen, setConsoleOpen] = useState(false)
+
+  /* Shipping this run (D54): the emit press and its import CSVs live here. */
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [ship, setShip] = useState<'idle' | 'waiting' | 'sending'>('idle')
-  const [receipt, setReceipt] = useState<{
-    ok: boolean
-    console: string
-    files: readonly RunFile[]
-  } | null>(null)
-  /* ITS OWN TROUBLE STATE. `failure` already has two owners — the load and the save — and a
-     third would let a save success clear an emit error out from under the operator. */
+  const [receipt, setReceipt] = useState<{ ok: boolean; console: string; files: readonly RunFile[] } | null>(null)
   const [shipTrouble, setShipTrouble] = useState<Failure | null>(null)
-  const [flatOpen, setFlatOpen] = useState(false)
   const [armed, setArmed] = useState(false)
+  /* The landing deck flashes when the ship bar's verdict is pressed — the press is at the
+     bottom of a long list and the account of it is at the top. */
+  const deckRef = useRef<HTMLDivElement | null>(null)
 
   const inputs = useRef(new Map<string, HTMLInputElement>())
-  /* THE DOCUMENT THE SERVER LAST CONFIRMED, AND IT IS WHAT `dirty` IS MEASURED AGAINST.
-   * `dirty` was a flag, and a flag cannot tell "the write I just sent" from "the write that
-   * landed while it was in flight" — so clearing it on a response threw away whatever had
-   * been typed since that response left. Comparing the object identity instead makes the
-   * coalescing promise below structural: a write clears the state only for the exact
-   * document it carried, and anything typed during the flight is still unequal when it
-   * lands, so the effect runs again.
-   *
-   * Refs and not state: nothing here draws, and the save loop must not re-render a hundred
-   * rows to bookkeep itself. */
-  /** Which worklist fetch is live — see `load`. */
   const loadWalk = useRef(0)
-
-  /** WHAT THE SERVER LAST CONFIRMED. `dirty` is a comparison against this rather than a flag,
-   *  so it cannot be cleared for a write that did not carry the answer. */
+  /** The digest of `inventory/prices.json` as this screen last saw it, sent with every write so
+   *  the route can refuse one that would revert somebody else's. Empty until the first read. */
+  const revision = useRef<string>('')
   const savedBook = useRef<PricingCorpus | null>(null)
-  /* ONE PUT IN FLIGHT. A boolean again: there is one document, so there is one write, and the
-   * per-run `Set` this briefly was existed only because there were eight files.
-   *
-   * This was the `saving` STATE, read inside the effect — which put
-   * `saving` in the dependency list, so raising it re-ran the effect, and the re-run's
-   * CLEANUP set the in-flight closure's `live` to false. The response then landed on a dead
-   * closure: neither the clear nor `setSaving(false)` ever fired, so the indicator read
-   * `saving…` for the rest of the session, on every save, from the first one. The guard has
-   * to be a value the effect can read without depending on it. */
   const inFlight = useRef(false)
-  /* THE DOCUMENT A WRITE FAILED ON, so a refused PUT is not retried in a spin. `dirty` stays
-   * true after a failure — correctly, the server does not have these answers — and without
-   * this the effect would re-fire the moment `saving` went false, forever. The next keystroke
-   * makes a new document and the retry happens then. */
   const failedBook = useRef<PricingCorpus | null>(null)
-  /* WHICH FIELDS HAVE BEEN TYPED INTO THIS SESSION, and it has to be its own fact rather than
-   * derived from whether an answer is stored. The first draft asked "is there a committed
-   * answer for this SKU?" and cleared the field when there was not — so it cleared on EVERY
-   * keystroke, not just the first, and typing `4.50` left `0` in the field. The clear is a
-   * one-shot per field and the only thing that knows it has fired is this.
-   *
-   * A ref and not state: it must not re-render a hundred rows on the first character of a
-   * price, and nothing draws from it. */
   const touched = useRef(new Set<string>())
+  const pickerRef = useRef<HTMLDivElement | null>(null)
+  const phone = usePhone()
 
-  /* THE RUN COMES FROM THE HASH OR FROM THE PICKER, AND NEVER FROM STORAGE. D39's handoff
-     exists because `#/inventory`'s mass-select is the only one in the product and a second
-     would be two answers to "which cards". A run name has no such property — `GET
-     /pipeline/runs` reads the runs directory and is the single source — so a picker here
-     cannot disagree with anything, and `#/runs` links a specific run through the URL rather
-     than through a second `sessionStorage` key with its own clearing rules. */
   useEffect(() => {
-    /* THE MOUNT READ IS THE `useState` INITIALISER ABOVE AND NOT THIS EFFECT, WHICH IS A
-       CORRECTNESS FIX RATHER THAN A TIDY-UP. Reading it here meant the screen mounted with an
-       empty selection, fired a load for "everything unpriced", then set `picked` from the hash
-       and fired a SECOND load — two responses in flight over one mount. Whichever landed last
-       won `docs`, but `savedDocs` is a ref written outside React's batching, so a render could
-       see the first load's documents against the second load's saved marker. They compare
-       unequal, `dirty` goes true with nothing typed, and the screen PUTs a document the
-       operator never touched — the one write D49 calls the load-bearing absence of this whole
-       screen. Caught by the snap case, which asserts a letter press writes nothing.
-
-       This listener now handles only what it is named for: the hash CHANGING while the screen
-       is mounted, which is `#/runs` linking a specific run at a screen already open. */
     const fromHash = () => {
       const named = runsInHash()
       if (named.length > 0) setPicked(new Set(named))
@@ -668,43 +889,24 @@ export function Pricing() {
     }
   }, [])
 
-  /** Fetch the worklist and seed a document per run. One request whatever the run count.
-   *
-   *  ONE ROUTE RATHER THAN N FETCHES, which is D86's own argument and not an optimisation.
-   *  The default landing is every open run — eight tables and ~909KB on this machine — and
-   *  two of them fetched either side of a `join` describe different worlds. `GET
-   *  /pipeline/pricing` reads them together for the reason `do_pipeline_pricing` already
-   *  reads one run's two files together. */
+  /** Fetch the worklist and the corpus together. One request whatever the run count. */
   const load = useCallback(async (wanted: ReadonlySet<string>) => {
-    /* THE TREND STRIP IS THE LOADED SET'S AND DIES WITH IT (D79). `history` above
-       deliberately survives a reload — a card's sales history is a fact about the CARD — but
-       the strip is a reading over the rows still wanting an answer, and which rows those are
-       is a fact about what is loaded. Abandoning the walk is the other half: a chunked read
-       started over the old set would otherwise keep filling the new one's column, one chunk
-       at a time, for the rest of the half-minute. */
     trendWalk.current += 1
     setTrends({})
     setTrendRun(null)
     setLoading(true)
-    /* WHICH LOAD IS LIVE. Two selections in quick succession are two requests, and the slower
-       one must not land on top of the faster: it would seat `docs` and `savedDocs` for a
-       worklist the screen is no longer showing. The trend walk one line up has had this guard
-       since D79 and for the same reason; this is the same shape over the table itself. */
     loadWalk.current += 1
     const mine = loadWalk.current
     try {
-      // TWO READS, ONE MOMENT. The worklist says which cards are in front of the operator;
-      // the corpus says what has been decided about them. Fetched together so a render can
-      // never draw one against the other's world — the same argument `do_pipeline_pricing`
-      // makes for reading a run's two files in one handler, one level up.
-      const [answer, held] = await Promise.all([
-        getPricingWorklist([...wanted].sort()),
-        getPricingCorpus(),
-      ])
+      const [answer, held] = await Promise.all([getPricingWorklist([...wanted].sort()), getPricingCorpus()])
       if (mine !== loadWalk.current) return
       setWork(answer)
       setBook(held.corpus)
       setSunkHolds(heldOnArrival(answer.skus, corpusAsDoc(held.corpus)))
+      /* THE REVISION IS A REF AND NOT STATE, for the reason the whole guard is out of band: the
+         dirty check is an identity comparison on `book`, and anything that re-renders on every
+         landed write re-dirties the screen. */
+      revision.current = held.revision
       savedBook.current = held.corpus
       failedBook.current = null
       setFailure(null)
@@ -712,11 +914,6 @@ export function Pricing() {
       setReceipt(null)
       setArmed(false)
       setShipTrouble(null)
-      /* THE RUN'S FILES AND ITS PHASE — ONLY WHERE THERE IS ONE RUN. `emit` is per run (D48)
-         and so is everything this detail feeds; a worklist over several has no single answer
-         to "which files", and drawing one run's would be a caption over the wrong list. Its
-         own try, and its own trouble state: a failure here must not blank the pricing table,
-         which is the thing this screen is for. */
       if (answer.runs.length === 1) {
         try {
           setDetail(await getRun(answer.runs[0]?.run as string))
@@ -738,53 +935,33 @@ export function Pricing() {
     }
   }, [])
 
-  /* THE WORKLIST LOADS ON ARRIVAL, WITH NO SELECTION AND NO PRESS. That is the change D86
-     is: an empty `picked` is a real question — "what still has pricing in it" — and the
-     server answers it, so a screen built for a hundred decisions in a sitting stops opening
-     on a menu. Re-runs whenever the selection changes, which is what makes the picker a
-     filter over the list rather than a gate in front of it. */
   useEffect(() => {
     void load(picked)
   }, [picked, load])
 
-  /** The runs actually drawn, in the server's order — ascending by name and so by date.
-   *  This and never `picked`: with no selection the server chose, and every fan-out, every
-   *  merge and every write walks what came back rather than what was asked for. */
   const loaded = useMemo(() => (work?.runs ?? []).map((row) => row.run), [work])
-
-  /** The one run, where there is one. `null` for a worklist over several, which is what
-   *  disables `emit` and the run's file list without either of them needing to ask how many
-   *  runs there are: `emit` is per run (D48), so a press that had to choose between eight
-   *  would be the cross-run over-push this screen exists to surface. */
   const run = loaded.length === 1 ? (loaded[0] as string) : null
+  const doc = useMemo(() => corpusAsDoc(book, run), [book, run])
 
-  /** The corpus as the document every reader here already understands. Read-only; writes go
-   *  through `write` below, into the corpus itself. */
-  const doc = useMemo(() => corpusAsDoc(book), [book])
+  /* THE CUT-OFF IN FORCE, IN THE ORDER `pipeline/corpus.py:policy_for` FOLDS IT: this run's own
+     figure, then the store's, then what the server says the store's is.
+     `work.threshold` IS IN THIS CHAIN AND MUST BE, which cost a test to learn. It is the server's
+     own copy of the same policy — one fetch stale the moment a figure is typed, which is why the
+     two written figures come first — but for a store that has never set one it is the ONLY true
+     answer: `pipeline/corpus.py` defaults `policy.threshold` to `pricing.THRESHOLD`, so `emit`
+     partitions an unwritten store at $0.40. A screen that offered its own default instead drew a
+     split the pipeline would not write, which is the exact class of lie this file's "NO INVENTED
+     FIGURES" rule exists to stop. The constant below it survives only for a payload that cannot
+     be read at all. */
+  const storeCut = writtenCut(book?.policy)
+  const thisRunCut = runCut(book, run)
+  const cut = thisRunCut ?? storeCut ?? work?.threshold ?? STORE_DEFAULT_CUT
 
-  /* UNSAVED IS A COMPARISON, NOT A FLAG: the document on screen is not the document the
-     server confirmed. Derived rather than stored so it cannot be cleared for a write that
-     did not carry it.
-
-     COMPUTED INLINE AND DELIBERATELY NOT MEMOISED, WHICH IS THE ONE THING THIS LINE CANNOT
-     DO. `savedBook` is a REF, so it changes without a render — that is the whole reason it is
-     a ref, and it is what the completion of a write updates. A `useMemo` over it therefore
-     never recomputes when a write LANDS: the screen stayed dirty after the PUT succeeded and
-     the effect below re-fired on its own `saving` dependency forever. Measured as an endless
-     unsaved → saving… → unsaved oscillation against the three race cases this file pins. A
-     plain boolean recomputed every render reads the ref fresh and is stable by VALUE, which is
-     what the effect's dependency needs. */
+  /* UNSAVED IS A COMPARISON, NOT A FLAG — and deliberately not memoised: `savedBook` is a ref. */
   const dirty = book !== null && book !== savedBook.current
 
-  /* ONE PUT IN FLIGHT, COALESCING. The route replaces the document wholesale, so the screen
-     round-trips every key it does not understand — including `_note` and anything a later
-     version of `decisions.py` adds. A commit schedules a write; a change during one re-runs
-     when it lands — which is now true of this loop rather than merely intended, because the
-     write clears only the document it sent. */
+  /* ONE PUT IN FLIGHT, COALESCING. */
   useEffect(() => {
-    /* ONE ANSWER, ONE PUT — and this is what centralising the corpus bought at the write path.
-       It was one PUT per run holding the card, over N documents that could disagree; there is
-       one document now, so there is one write and nothing to reconcile after it. */
     if (!dirty || book === null) return
     if (inFlight.current || book === failedBook.current) return
     const sent = book
@@ -792,7 +969,11 @@ export function Pricing() {
     setSaving(true)
     void (async () => {
       try {
-        await putPricingCorpus(sent)
+        const receipt = await putPricingCorpus(sent, revision.current)
+        /* THE WRITE'S OWN REVISION BECOMES THE ONE WE HOLD. Without this every save after the
+           first is stale against the file this screen just wrote, and the guard refuses the
+           operator's own second keystroke. */
+        revision.current = receipt.revision
         savedBook.current = sent
         failedBook.current = null
         setFailure(null)
@@ -804,14 +985,6 @@ export function Pricing() {
         setSaving(false)
       }
     })()
-    /* `saving` IS IN THE LIST TO RE-FIRE THE EFFECT WHEN A WRITE LANDS, AND IT IS ONLY SAFE
-       THERE BECAUSE THE GUARD IS A REF. Everything the completion changes is a ref — the saved
-       document and the in-flight flag — so a re-render is the only thing that can ask "is there
-       more to send?", and lowering `saving` is that re-render. What made this dependency a
-       hazard before was the CLEANUP: the effect owned an in-flight closure, so the extra run
-       tore that closure down mid-write and the response landed on a dead one. There is no
-       cleanup now, the early return above is what the extra runs hit, and the write outlives
-       every one of them. */
   }, [dirty, book, saving])
 
   useEffect(() => {
@@ -822,292 +995,124 @@ export function Pricing() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty, saving])
 
-  /* ------------------------------------------------------------------- shipping this run (D54) */
-
-  /** What pricing still owes, recomputed live from the document on screen — never fetched.
-   *  See `app/src/readiness.ts` for why this is a second implementation and what audits it. */
-  const owes = useMemo(
-    () => owed(doc, subThresholdSkus(work?.skus ?? [])),
-    [doc, work],
-  )
-
-  /* IT CLAIMS ONLY WHAT IT CHECKED. `readiness.ts` sees two of emit's roughly eight refusals,
-     so "ready to emit" would be a promise this screen cannot keep — and a screen that
-     overstates a check is worse than one that runs none. Drawn in BOTH ship bars: `owes` is
-     computed over the union of every run on screen, so the line says whether a MERGED emit
-     would refuse, and until 2026-09-02 nothing drew it on the multi-run landing at all. */
-  const readyLine = (
-    <p className="pricing-ready">
-      {owes.length === 0
-        ? 'Pricing is answered. Emit can still refuse for a reason this line cannot see.'
-        : `Emit will refuse: still needs ${owes
-            .map((o) => `${OWED_LABELS[o.reason]} (${o.count})`)
-            .join(', ')}.`}
-    </p>
-  )
-
-  /* THE SUB-THRESHOLD CONTROL, ON WHICHEVER LANDING HAS A SUB-THRESHOLD ROW. It is the STORE'S
-     standing policy (D86; D9 amended 2026-09-02 with a default of flat $0.49), not one run's,
-     so gating it behind "exactly one run loaded" — which is where it sat — hid the only press
-     that changes it from the landing the screen opens on. Gated on the union instead: a row
-     under the threshold anywhere on screen is what makes the policy worth drawing.
-
-     THE FLOOR BUTTON NEVER WRITES NULL. It used to toggle, and a second press put `null` back
-     into a policy whose null now means "take the default" — a press that looked like an undo
-     and was a no-op at the file. Pressing floor when floor is already set sends nothing. */
-  const subThresholdRow =
-    subThresholdSkus(work?.skus ?? []).length === 0 ? null : (
-      <div className="pricing-ship-row">
-        <span className="pricing-ship-key">
-          Below ${work?.threshold ?? '0.40'} · {subThresholdSkus(work?.skus ?? []).length} SKUs
-          · standing policy for the store
-        </span>
-        {/* THE ANSWER `emit` REFUSES WITHOUT, ON THE SCREEN WHERE PRICING IS DONE. It was
-            settable only by typing JSON on another route, and `blocking` never consults
-            `overrides` — so hand-pricing every row still left emit refusing. Two of the
-            three runs on disk were parked on exactly this before the default landed. */}
-        <button
-          type="button"
-          className="pricing-plain"
-          aria-pressed={doc?.sub_threshold === FLOOR_CHOICE}
-          onClick={() => {
-            if (doc?.sub_threshold !== FLOOR_CHOICE) setSubThreshold(FLOOR_CHOICE)
-          }}
-        >
-          At the ${work?.floor ?? '0.40'} floor
-        </button>
-        <button
-          type="button"
-          className="pricing-plain"
-          aria-pressed={flatOpen || typeof doc?.sub_threshold === 'object'}
-          onClick={() => setFlatOpen((on) => !on)}
-        >
-          A flat price
-        </button>
-        {!flatOpen && typeof doc?.sub_threshold !== 'object' ? null : (
-          <input
-            className="pricing-ship-flat"
-            /* DELIBERATELY NOT MATCHING `/^Price for /`: `pricing.spec.ts` locates the
-               row field by that name and asserts a held row has none of them. */
-            aria-label="A flat price for every sub-threshold card"
-            defaultValue={
-              typeof doc?.sub_threshold === 'object' && doc.sub_threshold !== null
-                ? doc.sub_threshold[FLAT_KEY]
-                : ''
-            }
-            onBeforeInput={(event) => {
-              const next = event.currentTarget.value + (event as { data?: string }).data
-              if (!PRICE.test(next)) event.preventDefault()
-            }}
-            /* WRITES ONLY ON A COMMITTED, NON-EMPTY, WELL-FORMED VALUE. `{"flat": ""}`
-               reaches `Decimal("")` and raises `MalformedDecisions` at the next join —
-               an hour later, on another screen, about a keystroke nobody remembers. */
-            onBlur={(event) => {
-              const text = event.currentTarget.value.trim()
-              if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
-            }}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter') return
-              event.preventDefault()
-              const text = event.currentTarget.value.trim()
-              if (text !== '' && PRICE.test(text)) setSubThreshold({ [FLAT_KEY]: text })
-            }}
-          />
-        )}
-      </div>
-    )
-
-  /** What THIS RUN'S JOIN sent to review, from the run list already in hand. Zero new fetches.
-   *
-   *  IT IS A JOIN-TIME FIGURE AND THE COPY SAYS SO. `counts` is written by `join` and nothing
-   *  rewrites it until the next one, so it goes stale the instant the operator answers a card
-   *  — stale in the "there is more to do" direction, which is the one `_queue_depth` forbids
-   *  claiming as live. Worded as what the join sent rather than what remains, it is a fact
-   *  about the run and stays true. The live depth is `GET /status`, and it is not per-run. */
-  const queued =
-    runs.find((row) => row.run === run)?.counts?.queued_main ?? 0
-
-  /** Whether this run has already written import rows. Derived, newest evidence first — the
-   *  receipt from a press this session, then the manifest, then the phase. All three are on
-   *  the wire already, and `_phase` reads the same manifest key, so the guard survives even a
-   *  record written by an older checkout. */
+  const queued = runs.find((row) => row.run === run)?.counts?.queued_main ?? 0
   const emitted =
-    receipt?.ok === true ||
-    Boolean(detail?.manifest?.emitted) ||
-    detail?.phase === 'reconcile' ||
-    detail?.phase === 'done'
+    receipt?.ok === true || Boolean(detail?.manifest?.emitted) || detail?.phase === 'reconcile' || detail?.phase === 'done'
 
-  /** Set the run-wide sub-threshold answer. THE LITERALS COME FROM `readiness.ts`, never from
-   *  a label: `pipeline/decisions.py` compares with a bare `==` and does no trim or case
-   *  fold, so a value derived from a button's text is a `MalformedDecisions` at the next join.
-   *
-   *  The spread is what round-trips `_note`, `rule`, `basis`, every answer and every key a
-   *  later `corpus.py` adds — `PUT /pricing` replaces the document wholesale, so this is the
-   *  only thing standing between a press and a lost block. */
-  const setSubThreshold = useCallback(
-    (answer: string | { flat: string } | null) => {
-      /* ONE PRESS, ONE ANSWER, FOR THE WHOLE STORE. It was one write per loaded run, over
-         files that could disagree — the 2026-09-01 sitting answered `sub_threshold` three
-         times in eleven minutes and gave two different answers. The policy is the corpus's
-         now; a lot that genuinely wants its own keeps a per-run override, which is D48's
-         argument surviving in the one place it is actually about. */
-      setBook((current) =>
-        current === null
-          ? current
-          : { ...current, policy: { ...current.policy, sub_threshold: answer } },
-      )
+  /** Set the STORE-WIDE cut-off. BOTH KEYS, ALWAYS: `threshold` is the line the partition is
+   *  drawn at and `sub_threshold` is what the half below it lists at, and the owner's ruling is
+   *  that they are one figure. Writing one without the other is what let a cheap card price
+   *  above a listable one, so this screen has no way to do it. */
+  const setCut = useCallback((figure: string) => {
+    setBook((current) =>
+      current === null
+        ? current
+        : { ...current, policy: { ...current.policy, threshold: figure, sub_threshold: { [FLAT_KEY]: figure } } },
+    )
+  }, [])
+
+  /** Set THIS RUN's own cut-off, or clear it back to the store's. `undefined` is the clear, and
+   *  it clears both keys — a run that follows the store follows it on both halves of the one
+   *  figure or on neither. */
+  const setRunCut = useCallback(
+    (figure: string | undefined) => {
+      if (run === null) return
+      const patch =
+        figure === undefined
+          ? { threshold: undefined, sub_threshold: undefined }
+          : { threshold: figure, sub_threshold: { [FLAT_KEY]: figure } }
+      setBook((current) => (current === null ? current : withRunPolicy(current, run, patch)))
     },
-    [],
+    [run],
   )
 
-  /* THE PRESS SEQUENCES RATHER THAN GATING ON `dirty`, AND THIS IS THE WRITE RACE CLOSED.
-   *
-   * The common gesture is type a price, then press emit. The click blurs the field, which
-   * commits and calls `setDoc`; the handler then runs in the SAME event with the old `doc` in
-   * its closure, so a POST fired there emits against the file as it was before the last
-   * answer. Gating on `dirty` is not the fix — it is true from the first keystroke until the
-   * PUT lands, so the button would flicker on every commit.
-   *
-   * Instead the press raises `waiting`. React batches that with the blur's `setDoc`, so the
-   * very next render carries BOTH the new document and the waiting state, and this effect —
-   * declared AFTER the save effect, so it runs after it — waits for the save loop to go
-   * quiet. The render that releases it is the one the save loop already documents as its only
-   * signal: the write's `finally` lowering `saving`. It rides an existing mechanism rather
-   * than adding one. */
+  /* THE PRESS SEQUENCES RATHER THAN GATING ON `dirty`: `waiting` until the save loop is quiet. */
   useEffect(() => {
     if (ship !== 'waiting' || run === null) return
     if (book !== null && failedBook.current === book) {
-      // THE SAVE LOOP DELIBERATELY STOPS RETRYING A REFUSED DOCUMENT, so without this the
-      // wait would never end. Emitting against answers the server does not have would be
-      // worse than saying so.
       setShip('idle')
       setShipTrouble({
         code: 'answers_not_saved',
-        message:
-          'Your answers could not be saved, so nothing was emitted. Fix the error above and ' +
-          'the next keystroke will retry the save.',
+        message: 'Your answers could not be saved, so nothing was written. Fix the error above and the next keystroke will retry the save.',
       })
       return
     }
-    /* A BOOLEAN AGAIN. It was briefly one entry per run, and an empty `Set` is TRUTHY — so
-       this guard, written against the boolean, went from "a write is in flight" to "always"
-       and the emit press silently did nothing at all. Caught by four cases in this file that
-       had been green for the whole life of the boolean; recorded here because the corpus made
-       it a boolean again and the trap would be re-set by anything that makes it a collection. */
     if (dirty || saving || inFlight.current) return
     setShip('sending')
     void (async () => {
       try {
-        const result = await runStep(run, 'emit')
+        const result = await runStep(run, 'emit', { splitThreshold: splitFiles })
         setReceipt({ ok: result.ok, console: result.console, files: result.files })
-        // NO REFETCH: the step reply carries both the files and the new summary.
-        setDetail((current) =>
-          current === null ? current : { ...current, ...result.summary, files: result.files },
-        )
+        setDetail((current) => (current === null ? current : { ...current, ...result.summary, files: result.files }))
         setShipTrouble(null)
         setArmed(false)
+        const imports = (result.files ?? []).filter((file) => file.is_import)
+        if (result.ok) {
+          toast({
+            kind: 'ok',
+            title: `Import files written · ${imports.length} file${imports.length === 1 ? '' : 's'}`,
+            body: 'Import them to Staged in TCGplayer, then reconcile on Runs.',
+            action: { label: 'Files', onPress: () => setFilesOpen(true) },
+          })
+        } else {
+          toast({
+            kind: 'refusal',
+            title: 'Emit refused',
+            body: result.console.trim().split('\n').slice(-1)[0] ?? '',
+            action: { label: 'Details', onPress: () => setFilesOpen(true) },
+          })
+        }
       } catch (err) {
         setShipTrouble(describeFailure(err))
       } finally {
         setShip('idle')
       }
     })()
-  }, [ship, dirty, doc, book, run, saving])
+  }, [ship, dirty, doc, book, run, saving, splitFiles])
 
-  /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo
-   *  stack. Recording absence is what lets an undo DELETE a key and return the row to its
-   *  suggestion, rather than writing the suggestion into the file. Writing a suggestion is
-   *  the one thing this screen may never do: an override is layer 1 of the ladder and beats
-   *  the rule at layer 4, so a screen that wrote all 108 suggestions would produce a run
-   *  where changing the preset silently changed nothing. */
+  /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack. */
   const write = useCallback(
     (sku: string, bucket: PricingSku['bucket'], value: unknown) => {
-      /* ONE ANSWER, ONE KEY, AND NO FAN-OUT — which is the amendment to D86 as it lands in
-         this function. It briefly wrote the same value into every run holding the card,
-         because the answer lived in each run's own `decisions.json`; the owner retired that
-         shape and the corpus keys by SKU, so a card has one answer by construction. The
-         conflict this file used to detect and draw cannot occur.
-
-         THE UNDO REMEMBERS THE PREVIOUS VALUE, INCLUDING ITS ABSENCE. Recording absence is
-         what lets an undo DELETE the key and return the row to its suggestion rather than
-         writing the suggestion into the file — which is the one thing this screen may never
-         do: an override is layer 1 of the ladder and beats the rule at layer 4, so a screen
-         that wrote its hundred suggestions would produce a run where changing the preset
-         silently changed nothing. */
-      const channel: 'price' | 'unknown' =
-        targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price'
-      setBook((current) => {
-        if (current === null) return current
-        return setAnswer(current, sku, value, channel)
-      })
-      setUndo((stack) =>
-        [{ sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH),
-      )
+      const channel: 'price' | 'unknown' = targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price'
+      setBook((current) => (current === null ? current : setAnswer(current, sku, value, channel)))
+      setUndo((stack) => [{ sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH))
     },
     [book],
   )
 
-  /** Every box the loaded runs touch, for the header's count. Ascending, deduped. */
   const boxesLoaded = useMemo(
-    () => [...new Set((work?.runs ?? []).map((row) => row.box).filter((box) => box !== null))]
-      .sort((a, b) => (a as number) - (b as number)),
+    () =>
+      [...new Set((work?.runs ?? []).map((row) => row.box).filter((box) => box !== null))].sort(
+        (a, b) => (a as number) - (b as number),
+      ),
     [work],
   )
   const table = work?.skus ?? null
-  /* MEMOISED BECAUSE `?? {}` BUILDS A NEW OBJECT EVERY RENDER, and both of these are read as
-     dependencies rather than as values — `answerFor` and `held` below, and the key handler
-     through them. Unmemoised they defeated every memo downstream: `answerFor` was rebuilt on
-     every paint, so `onKey` was too, so the whole chain memoised nothing while looking as
-     though it did. Found by `react-hooks/exhaustive-deps` on the day it was switched on.
-
-     `[doc]` and not `[doc?.overrides]`: the document is replaced wholesale on every write
-     (see the autosave effect), so the narrower key would be a second way of saying the same
-     thing and a third thing to keep in step. */
-  const answers = useMemo(
-    () => (doc?.overrides ?? {}) as Record<string, unknown>,
-    [doc],
+  const answers = useMemo(() => (doc?.overrides ?? {}) as Record<string, unknown>, [doc])
+  const unpriced = useMemo(() => (doc?.no_market_data ?? {}) as Record<string, unknown>, [doc])
+  /* THE LIST IS PARTITIONED AT THE CUT-OFF THIS SCREEN IS SHOWING, not at the one the table
+     was built with. The server draws the split at the figure stored when the table was fetched;
+     the operator can type a new one, and the answer to "how many cards does that make cheap"
+     has to be the list itself moving rather than a number that only comes true after a reload.
+     `bucketAt` is `pipeline/pricing.py:is_listable` in the client's terms, so a cut-off equal to
+     the stored one re-derives exactly the buckets the server sent. */
+  const rows = useMemo(
+    () =>
+      (table ?? []).map((sku) => {
+        const bucket = bucketAt(sku, cut)
+        return bucket === sku.bucket ? sku : { ...sku, bucket }
+      }),
+    [table, cut],
   )
-  const unpriced = useMemo(
-    () => (doc?.no_market_data ?? {}) as Record<string, unknown>,
-    [doc],
-  )
 
-  const rows = useMemo(() => table ?? [], [table])
+  /* READINESS READS THE PARTITION AS DRAWN, not the one the table arrived with: at a cut-off the
+     operator has raised, rows that were listable are cheap now and `emit` will refuse over
+     exactly those. Reading `work.skus` here would say the file is writable and then have the
+     command refuse. */
+  const owes = useMemo(() => owed(doc, subThresholdSkus(rows)), [doc, rows])
 
-  /** THE LIST AS IT IS DRAWN, SECTION BY SECTION, AND THE ONLY PLACE THAT ORDER IS DECIDED.
-   *
-   *  A ROW THAT WANTS NOTHING FROM THE OPERATOR SINKS. `cli/cmd_join.py` writes
-   *  `pricing.json` market-descending and that stands — inside every group it is untouched —
-   *  but a SKU whose every copy is already listed, or one already answered with a hold, is not
-   *  a decision this run is waiting on, and at the top of the section it puts the run's most
-   *  expensive non-questions in front of the operator's eye. Three tiers, in the order the
-   *  operator asked for them: the rows that still want a price, then the ones they have
-   *  already held, then the ones this run can add nothing for at all.
-   *
-   *  THE SUNK TIER IS THE DEEPER FACT WHERE A ROW IS BOTH. A held row that is ALSO at the cap
-   *  goes under the cap's heading, because the hold changes nothing about a SKU this run was
-   *  never going to add a row for — and its `withheld` token still draws beside it, so the
-   *  hold is not lost by being outranked.
-   *
-   *  THE CAP TIER IS GROUPED BY THE SENTENCE, IN FIRST-APPEARANCE ORDER, and there are three
-   *  of them (D59): every copy gone, at the cap, or held by an import this pipeline has not
-   *  seen land. They have three different remedies, so they are three headings and never one
-   *  bucket of leftovers. `Map` insertion order is what orders them — an alphabetical or
-   *  count-based rule would be a second opinion about importance that nothing here has grounds
-   *  for. The hold tier is ONE heading over all of them, because the reason is per SKU and
-   *  already drawn on the row.
-   *
-   *  D28 IS WHY THIS IS SAFE AT ALL, AND IT IS WHY THE HOLDS COME FROM A SNAPSHOT. The list
-   *  must not move under a finger already travelling to the next field. `bucket`, `at_cap` and
-   *  `nothing_to_add` are written by the join and read off disk, so they cannot move a row
-   *  mid-session at all; a hold is this screen's own answer and could, so `sunkHolds` is the
-   *  set as it stood when the page opened and a press of `H` does not move the row under the
-   *  hand that pressed it. It sinks on the reopening, which is what the owner asked for.
-   *
-   *  SO A ROW CAN OUTLIVE ITS GROUP FOR ONE SESSION, and that is the trade taken deliberately:
-   *  release a hold and the row keeps its place under the heading until the next load, drawing
-   *  a price field. The row tells the truth about itself; the heading says why the group is
-   *  there. The alternative is the list moving under the release, which D28 closed. */
+  /** The list as drawn: open rows, then the holds that were standing when the page opened,
+   *  then the groups this run can add nothing for. */
   const sections = useMemo(
     () =>
       SECTIONS.map((section) => {
@@ -1132,31 +1137,23 @@ export function Pricing() {
           items.push({ head: why, count: group.length })
           for (const sku of group) items.push({ head: null, sku })
         }
-        return { ...section, total: inSection.length, items }
+        // Every row sharing one condition and one set says nothing per row; the meta line dims those two.
+        const uniform =
+          inSection.length > 1 &&
+          new Set(inSection.map((sku) => sku.condition)).size === 1 &&
+          new Set(inSection.map((sku) => sku.set_name)).size === 1
+        // The DIRECT column is spent only in a section where at least one row carries a figure for it.
+        const direct = inSection.some((sku) => sku.snap.direct_low !== null)
+        return { ...section, total: inSection.length, items, uniform, direct }
       }).filter((section) => section.total > 0),
     [rows, sunkHolds],
   )
 
-  /** Every drawn row's SKU, top to bottom, across every section — what Enter and the arrows
-   *  step through.
-   *
-   *  IT IS THE DRAWN ORDER AND NOT `rows`, AND THE TWO AGREED UNTIL THE GROUPS SANK.
-   *  `cli/cmd_join.py` sorts the wire market-descending with `None` last, which happens to put
-   *  the three buckets in the three sections' own order — so stepping the wire array walked the
-   *  screen by coincidence, and this array was `rows.map` for as long as that held. Sinking a
-   *  group moves a row within its section and ends it: the advance reads what is drawn, rather
-   *  than a second sequence that has to keep agreeing with it. */
   const order = useMemo(
-    () =>
-      sections.flatMap((section) =>
-        section.items.flatMap((item) => (item.head === null ? [item.sku.sku] : [])),
-      ),
+    () => sections.flatMap((section) => section.items.flatMap((item) => (item.head === null ? [item.sku.sku] : []))),
     [sections],
   )
 
-  /** What the strip has actually got, for the one line above the list that says so. Counted
-   *  rather than tracked: `trends` IS the record, and a second counter kept in step with it
-   *  would be a second answer to the same question. */
   const trendTally = useMemo(() => {
     let read = 0
     let refused = 0
@@ -1168,15 +1165,57 @@ export function Pricing() {
   }, [trends])
 
   const answerFor = useCallback(
-    (sku: PricingSku): unknown =>
-      targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : unpriced[sku.sku],
+    (sku: PricingSku): unknown => (targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : unpriced[sku.sku]),
     [answers, unpriced],
   )
 
-  const held = useMemo(
-    () => rows.filter((sku) => isWithheld(answers[sku.sku])),
-    [rows, answers],
-  )
+  const held = useMemo(() => rows.filter((sku) => isWithheld(answers[sku.sku])), [rows, answers])
+
+  /** The header's progress figures: answered = typed or held, over the rows still open.
+   *  `outRows`/`outCopies` are what a write would actually put in the file — every open row
+   *  that is not held, and the copies behind them.
+   *
+   *  `rule` COUNTS TWO DIFFERENT THINGS AND `cheap` SEPARATES THEM. A row with no typed answer
+   *  goes out at the rule's figure — unless it is sub-threshold, in which case
+   *  `pipeline/join.py:prices_for` writes the cheap-card policy instead. Saying "on the rule"
+   *  over both was false for every cheap row, so `cheap` is carried beside it and `rule`
+   *  stays the total the meter is drawn from. */
+  const progress = useMemo(() => {
+    let total = 0
+    let typed = 0
+    let holds = 0
+    let cheap = 0
+    let closed = 0
+    let outRows = 0
+    let outCopies = 0
+    for (const row of rows) {
+      if (row.at_cap) {
+        closed += 1
+        continue
+      }
+      total += 1
+      const standing = answerFor(row)
+      if (isWithheld(standing)) {
+        holds += 1
+        continue
+      }
+      if (typeof standing === 'string') typed += 1
+      else if (row.bucket === 'sub_threshold') cheap += 1
+      outRows += 1
+      outCopies += row.add_to_quantity
+    }
+    return {
+      total,
+      typed,
+      held: holds,
+      cheap,
+      answered: typed + holds,
+      rule: total - typed - holds,
+      closed,
+      outRows,
+      outCopies,
+    }
+  }, [rows, answerFor])
 
   const move = useCallback(
     (sku: string, by: number) => {
@@ -1186,9 +1225,6 @@ export function Pricing() {
       const field = inputs.current.get(next)
       field?.focus()
       field?.select()
-      // `nearest` AND NOT `center`: D28's finding is that the list must stop MOVING, and
-      // scrolling on every advance — including when the next row is already on screen — is
-      // that defect re-introduced by the fix for it.
       field?.scrollIntoView({ block: 'nearest' })
     },
     [order],
@@ -1196,94 +1232,90 @@ export function Pricing() {
 
   const commit = useCallback(
     (sku: PricingSku, raw: string) => {
-      /* AN UNTOUCHED FIELD COMMITS NOTHING, which is what makes Tab safe. A held Tab through a
-       * hundred rows blurs a hundred fields, and a blur that wrote would turn every one of
-       * those suggestions into an override — layer 1 of the ladder, beating the run's rule at
-       * layer 4, so the next preset press would silently change nothing. Focus is not a
-       * decision and neither is leaving a field you did not type in. */
       if (!touched.current.has(sku.sku)) return
       const text = raw.trim()
-      // EMPTY CLEARS AND RETURNS THE ROW TO ITS SUGGESTION. It is not zero and it is not a
-      // hold; `null` in `overrides` is dropped by the next join, which is how a key is
-      // removed without inventing a delete verb.
       write(sku.sku, sku.bucket, text === '' ? undefined : text)
       touched.current.delete(sku.sku)
     },
     [write],
   )
 
-  const snap = useCallback(
-    (sku: PricingSku, field: keyof PricingSku['snap']) => {
-      const value = sku.snap[field]
-      const input = inputs.current.get(sku.sku)
-      if (value === null) {
-        // A SNAP ONTO A BLANK COLUMN REFUSES AND SAYS SO. Writing "" would reach `_price` in
-        // `decisions.py` and raise at the next join, an hour later. Measured: Direct Low is
-        // blank on 2,060 of 2,476 listable rows, so this is the common case, not the edge.
-        setNote({ sku: sku.sku, text: `this row has no ${field.replace(/_/g, ' ')}` })
-        return
-      }
-      if (input) input.value = value
-      // A SNAP IS A DELIBERATE ACT ON THIS ROW, so it counts as having touched the field —
-      // otherwise the value it set would be discarded unwritten by the very next blur.
-      touched.current.add(sku.sku)
-      setNote(null)
-    },
-    [],
-  )
+  const snap = useCallback((sku: PricingSku, field: keyof PricingSku['snap']) => {
+    const value = sku.snap[field]
+    const input = inputs.current.get(sku.sku)
+    if (value === null) {
+      const says = SNAPS.find((row) => row.field === field)?.says ?? field.replace(/_/g, ' ')
+      setNote({ sku: sku.sku, text: `No ${says} price on this row` })
+      return
+    }
+    if (input) {
+      input.value = value
+      flash(input)
+    }
+    touched.current.add(sku.sku)
+    setNote(null)
+  }, [])
 
-  /** The suggestion a row opens carrying.
+  /** WHAT ONE CHEAP CARD IS ACTUALLY WRITTEN AT, as digits. `pipeline/join.py:prices_for`
+   *  gives every sub-threshold row `sub_threshold.resolve()` — the policy figure — and never
+   *  the rule's own per-SKU figure, which the server has already floored. Drawing the rule's
+   *  figure in the column headed LISTS AT made the deck and the list state two different
+   *  prices for the same card. `doc` has this run's override already folded over the store's,
+   *  so this is one answer for the whole screen. Nothing written falls back to the offered
+   *  default, which is the figure the deck is showing and the caption is naming. */
+  const cheapDigits = useCallback((): string => cut, [cut])
+
+  /** What a row would list at under the standing rule, or `''` where this screen has no
+   *  figure for it. THE CLIENT PERFORMS NO ARITHMETIC ON MONEY: the three presets ship a
+   *  precomputed column each, so a preset the document currently names has an honest per-SKU
+   *  figure and is drawn.
    *
-   *  `rule_price` WAS COMPUTED BY THE LAST JOIN AND CAN BE STALE (D54). Pressing a preset now
-   *  writes `rule`/`basis` into the document, and `pricing.json` is not rewritten until the
-   *  next join — so a screen that only ever read `rule_price` would say the policy prices
-   *  at `undercut:5` while every suggestion on it showed `match`. Where the document's
-   *  pair matches a served preset, that preset's own per-SKU figure is the honest suggestion.
-   *
-   *  STILL NO ARITHMETIC ON MONEY: both numbers came pre-rounded out of `pricing.json`, which
-   *  `cli/cmd_join.py:_preset_prices` computed through `pipeline/pricing.py`. `join` already
-   *  prices all three presets per SKU, which is why this costs a lookup rather than a rule.
-   */
-  const suggestionFor = useCallback(
+   *  A CUSTOM RULE DRAWS NOTHING, AND THAT IS THE HONEST ANSWER RATHER THAN A MISSING FEATURE.
+   *  `rule_price` was computed by the LAST JOIN and frozen into `pricing.json` (D54), and
+   *  NOTHING ON THE WIRE SAYS WHICH RULE THAT JOIN RAN UNDER — `PricingWorklist` carries the
+   *  rows, the roster and two run-wide figures, and no per-run rule among them. This read a
+   *  `work.defaults` that no route has ever sent, so the comparison it was making always came
+   *  out false; the blank it produced was right, and it is written as the rule now instead of
+   *  reached by accident. Drawing `rule_price` here would put the previous rule's price under
+   *  a label naming this one, which is the D54 staleness the presets exist to avoid. */
+  const ruleFigure = useCallback(
     (sku: PricingSku): string => {
       const match = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis)
       if (match !== undefined) return sku.presets[match.key] ?? ''
-      return sku.rule_price ?? ''
+      /* No rule written at all: the join's own figure is the only rule there has been. */
+      if (typeof doc?.rule !== 'string') return sku.rule_price ?? ''
+      return ''
     },
     [doc],
   )
 
+  /** The suggestion a row opens carrying: the cheap-card answer on a cheap row, the standing
+   *  rule's own per-SKU figure everywhere else. */
+  const suggestionFor = useCallback(
+    (sku: PricingSku): string => (sku.bucket === 'sub_threshold' ? cheapDigits() : ruleFigure(sku)),
+    [cheapDigits, ruleFigure],
+  )
+
+  /** A preset writes `rule`/`basis` and NO override; it refills only the rows the operator has
+   *  not set, and lights each one it moved. */
   const applyPreset = useCallback(
     (key: string) => {
       if (table === null) return
-      // A PRESET WRITES `rule`/`basis` AND NO OVERRIDE. It re-renders suggestions and is
-      // structurally incapable of touching a hand-typed price, which is the payoff of
-      // suggestions staying unwritten.
-      //
-      // THIS COMMENT DESCRIBED THE DESIGN AND THE LINE UNDER IT WROTE `preset` — A KEY NO
-      // READER ANYWHERE HAS. `pipeline/decisions.py:parse` does not know the field and
-      // `to_payload` does not emit it, so the next join dropped it, and `rule`/`basis` sat at
-      // `match`/`market` throughout. Pressing `Market -5%` restyled every suggestion on screen
-      // and changed nothing `emit` reads, so a run priced that way emitted at market. Measured
-      // on the owner's riftbound run: that dead key beside `rule: match`, with 2 overrides
-      // across 50 SKUs — 48 cards about to list at a price nobody had chosen.
-      //
-      // It is D49's own named failure — "a run where changing the preset silently changed
-      // nothing" — reached by the other road. That entry refuses to write the suggestions as
-      // overrides, correctly, because an override is layer 1 and beats the rule at layer 4;
-      // what it needs INSTEAD is the rule at layer 4 actually moving, which is this.
       const chosen = PRESETS.find((row) => row.key === key)
       if (chosen === undefined) return
       const missing = rows.filter((row) => row.presets[key] === null)
-      /* THE RULE AND THE BASIS ARE THE CORPUS'S, for `setSubThreshold`'s reason. */
       setBook((current) =>
-        current === null
-          ? current
-          : { ...current, policy: { ...current.policy, rule: chosen.rule, basis: chosen.basis } },
+        current === null ? current : { ...current, policy: { ...current.policy, rule: chosen.rule, basis: chosen.basis } },
       )
       for (const row of rows) {
         const input = inputs.current.get(row.sku)
-        if (input && answerFor(row) === undefined) input.value = row.presets[key] ?? ''
+        if (input && answerFor(row) === undefined) {
+          const next = row.presets[key] ?? ''
+          if (input.value !== next) {
+            input.value = next
+            flash(input)
+          }
+        }
       }
       setNote(
         missing.length === 0
@@ -1293,39 +1325,58 @@ export function Pricing() {
               text:
                 `${rows.length - missing.length} of ${rows.length} rows priced. ` +
                 `${missing.length} have no price in that column and were left alone: ` +
-                missing.slice(0, 6).map((row) => row.name).join(', '),
+                missing.slice(0, 6).map((row) => row.name).join(', ') +
+                (missing.length > 6 ? '…' : ''),
             },
       )
     },
     [rows, table, answerFor],
   )
 
-  const toggleHold = useCallback(
-    (sku: PricingSku) => {
-      if (isWithheld(answers[sku.sku])) {
-        write(sku.sku, sku.bucket, undefined)
-        setHoldFor(null)
+  /** THE CUSTOM RULE, WRITTEN THE WAY A PRESET IS WRITTEN: `policy.rule` and `policy.basis`
+   *  on the corpus, no per-SKU override, and the untyped fields walked to whatever figure the
+   *  screen honestly has for the new rule. A bad percentage writes NOTHING and says why —
+   *  the same shape as a snap onto an empty column. */
+  const applyCustom = useCallback(
+    (draft: CustomRule) => {
+      const bad = badPercent(draft.kind, draft.pct)
+      if (bad !== null) {
+        setCustomBad(bad)
         return
       }
-      setHoldFor(sku.sku)
+      setCustomBad(null)
+      const rule = customRuleText(draft)
+      if (doc?.rule === rule && (doc?.basis ?? 'market') === draft.basis) return
+      setBook((current) =>
+        current === null ? current : { ...current, policy: { ...current.policy, rule, basis: draft.basis } },
+      )
+      /* THE UNTYPED FIELDS GO EMPTY, AND THERE IS NO CASE WHERE THEY DO NOT. `rule_price` is
+         the figure the LAST JOIN computed and froze (D54), and nothing on this wire says which
+         rule that join ran under — see `ruleFigure` above — so a per-SKU figure drawn under a
+         custom rule would be the previous rule's price wearing this one's label. Emit prices
+         these rows; the toast below says so. */
+      let onRule = 0
+      for (const row of rows) {
+        if (row.bucket === 'sub_threshold') continue
+        if (answerFor(row) !== undefined) continue
+        onRule += 1
+        const input = inputs.current.get(row.sku)
+        if (!input || input.value === '') continue
+        input.value = ''
+        flash(input)
+      }
+      setNote(null)
+      toast({
+        kind: 'receipt',
+        title: `Rule set · ${customShort(draft)} of ${BASIS_LABEL[draft.basis]}`,
+        body:
+          `${onRule} row${onRule === 1 ? '' : 's'} you have not set go out at this rule.` +
+          ' Emit prices them — this screen has no per-row figure until the run is joined under it.',
+        icon: 'tag',
+        ttlMs: 9000,
+      })
     },
-    [answers, write],
-  )
-
-  const setHold = useCallback(
-    (sku: PricingSku, reason: WithholdReason, watch: string, text: string) => {
-      const record: WithheldRecord = { withheld: reason }
-      if (watch.trim() !== '') record.watch_above = watch.trim()
-      if (text.trim() !== '') record.note = text.trim()
-      write(sku.sku, 'listable', record)
-      // A HOLD ON A `no_market_data` ROW ALSO WRITES ITS OWN CHANNEL'S ANSWER. `blocking`
-      // reads `no_market_data` alone and would go on refusing the emit otherwise; the
-      // override short-circuits pricing and never reads the second, which is correct.
-      if (sku.bucket === 'no_market_data') write(sku.sku, sku.bucket, 'unlisted')
-      setHoldFor(null)
-      inputs.current.get(sku.sku)?.focus()
-    },
-    [write],
+    [doc, rows, answerFor],
   )
 
   const undoLast = useCallback(() => {
@@ -1339,100 +1390,112 @@ export function Pricing() {
       return { ...current, skus }
     })
     setUndo(rest)
-  }, [undo])
+    // The field is uncontrolled, so its digits are corrected here the way Escape and a preset
+    // already correct them: the restored answer, or the rule's suggestion where there was none.
+    const row = rows.find((one) => one.sku === top.sku)
+    const input = inputs.current.get(top.sku)
+    if (row !== undefined && input) {
+      const before = top.before?.value
+      input.value = typeof before === 'string' ? before : suggestionFor(row)
+      flash(input)
+    }
+    touched.current.delete(top.sku)
+  }, [undo, rows, suggestionFor])
+  /* A toast's undo fires later than the closure it was made in; the ref always holds the latest. */
+  const undoRef = useRef(undoLast)
+  undoRef.current = undoLast
 
-  /* TAKE THE READING FOR ONE SKU, AND ASK NOTHING IF THIS SESSION ALREADY HAS IT.
-   *
-   * ONE READ PER CARD PER SITTING, WHICHEVER GESTURE ASKED FOR IT. The reading is kept by SKU,
-   * so an operator comparing two cards — pinning one, holding `t` over the other, bouncing
-   * back — asks once each and never again. That cache is what makes a gesture cheap enough to
-   * repeat affordable at all: the hold added no new spending, only a second way to reach a
-   * read that was already free after the first.
-   *
-   * `force` IS THE RETRY, and it is the only way past the cache. A refusal is cached like a
-   * reading is: without that, a card whose mirror was down would re-fetch on every press, and
-   * the panel would look like it were doing nothing while quietly hammering a host that is
-   * already struggling. The button says `Try again` because retrying is the operator's call.
-   *
-   * IT OPENS NOTHING. Aiming the panel is `pinHistory` and `peekIn` below, because the two
-   * gestures differ in what they aim and in what closes it, and only this part is common. */
+  /* THE CHEAP ROWS FOLLOW THE ANSWER. The price fields are uncontrolled, so a policy pressed
+     on the deck has to be walked into them — without this the column keeps whatever figure it
+     mounted with and the deck and the list disagree again the moment the answer changes. Only
+     rows nobody has typed into and nobody has answered are moved, and on the first render the
+     figure is already right, so nothing flashes on arrival. */
+  const cheapNow = cheapDigits()
+  useEffect(() => {
+    for (const row of rows) {
+      if (row.bucket !== 'sub_threshold') continue
+      if (touched.current.has(row.sku)) continue
+      const standing = answerFor(row)
+      if (typeof standing === 'string' || isWithheld(standing)) continue
+      const input = inputs.current.get(row.sku)
+      if (!input || input.value === cheapNow) continue
+      input.value = cheapNow
+      flash(input)
+    }
+  }, [cheapNow, rows, answerFor])
+
+  const toggleHold = useCallback(
+    (sku: PricingSku) => {
+      if (isWithheld(answers[sku.sku])) {
+        write(sku.sku, sku.bucket, undefined)
+        setHoldFor(null)
+        toast({
+          kind: 'receipt',
+          title: `Released ${sku.name}`,
+          body: 'Back on the rule until you set a price.',
+          ttlMs: 8000,
+          action: { label: 'Undo', kbd: 'U', onPress: () => undoRef.current() },
+        })
+        return
+      }
+      setHoldFor(sku.sku)
+    },
+    [answers, write],
+  )
+
+  const cancelHold = useCallback((sku: PricingSku) => {
+    setHoldFor(null)
+    inputs.current.get(sku.sku)?.focus()
+  }, [])
+
+  const setHold = useCallback(
+    (sku: PricingSku, reason: WithholdReason, watch: string, text: string) => {
+      const record: WithheldRecord = { withheld: reason }
+      if (watch.trim() !== '') record.watch_above = watch.trim()
+      if (text.trim() !== '') record.note = text.trim()
+      write(sku.sku, 'listable', record)
+      if (sku.bucket === 'no_market_data') write(sku.sku, sku.bucket, 'unlisted')
+      setHoldFor(null)
+      toast({
+        kind: 'receipt',
+        title: `Held ${sku.name}`,
+        body: `${WITHHOLD_LABELS[reason]}${watch.trim() !== '' ? ` · tell me above $${watch.trim()}` : ''}`,
+        ttlMs: 8000,
+        action: { label: 'Undo', kbd: 'U', onPress: () => undoRef.current() },
+      })
+      inputs.current.get(sku.sku)?.focus()
+    },
+    [write],
+  )
+
+  /** Take the reading for one SKU, and ask nothing if this session already has it. */
   const readHistory = useCallback(
     (sku: PricingSku, force = false) => {
       if (run === null) return
       if (!force && history[sku.sku] !== undefined) return
       setHistory((current) => ({ ...current, [sku.sku]: { kind: 'reading' } }))
-      /* `.then().catch()` AND NOT `.then(ok, fail)` — `app/eslint.config.js` refuses the
-         second form and names the morning it cost: a success handler that throws becomes an
-         unhandled rejection, so the panel would sit on `reading…` forever with no failure
-         shown and no control to press. This handler walks a response body, which is exactly
-         the throw that rule is about. */
       getPriceHistory(run, sku.sku)
-        .then((payload) =>
-          setHistory((current) => ({ ...current, [sku.sku]: { kind: 'read', payload } })),
-        )
+        .then((payload) => setHistory((current) => ({ ...current, [sku.sku]: { kind: 'read', payload } })))
         .catch((error) =>
-          setHistory((current) => ({
-            ...current,
-            [sku.sku]: { kind: 'refused', why: describeFailure(error).message },
-          })),
+          setHistory((current) => ({ ...current, [sku.sku]: { kind: 'refused', why: describeFailure(error).message } })),
         )
     },
     [history, run],
   )
 
-  /**
-   * READ THE SHAPE OF EVERY ROW STILL WAITING ON AN ANSWER — one press, D79.
-   *
-   * IT IS A PRESS AND MAY NEVER BECOME AN EFFECT. D62 closed the follow-focus read
-   * structurally because a walk down this list would fire one request per arrow key at a free
-   * public mirror. Batching does not make that cheap — this is ~92 requests, 37.7s cold and
-   * 0.15s warm, measured on `2026-08-31-box3-01` — it makes it ONE DECISION instead of fifty.
-   * Firing this from a `useEffect` on mount would spend that on every visit to this screen for
-   * readings nobody asked for, which is the rudeness D62 named, arriving by the other door.
-   *
-   * IT SKIPS THE ROWS THIS RUN CAN ADD NOTHING FOR, on the owner's instruction of 2026-08-31:
-   * *"I don't need the prices for the rows that have none left."* `at_cap` is the field
-   * `cli/cmd_join.py` writes and the same one those rows are grouped under, so the filter and
-   * the grouping agree by construction rather than by two rules kept in step. They stay
-   * reachable: `T` reads any one of them, which is the right shape for a row an operator has a
-   * reason to be curious about and no reason to be shown.
-   *
-   * CHUNKED, WHICH IS WHY THE STRIP FILLS IN WAVES. One request for 46 SKUs is 37 seconds of
-   * nothing; six requests of eight are six partial answers, and the first arrives in about
-   * five. The server applies its own courtesy delay between live fetches either way, so this
-   * costs the mirrors nothing extra — it is the same walk, reported as it goes.
-   *
-   * SEQUENTIAL AND NOT PARALLEL, DELIBERATELY. `Promise.all` over the chunks would finish in a
-   * sixth of the time by making six sockets race at a host that publishes no rate limit and
-   * asks nothing of us — which is precisely the courtesy `pipeline/pricehistory.py` spends a
-   * constant on. The wall clock is not the thing being optimised; the blank screen is.
-   */
+  /** Read the shape of every row still waiting on an answer — one press, chunked, sequential. */
   const loadTrends = useCallback(() => {
     if (run === null) return
     const open = rows.filter((row) => !row.at_cap).map((row) => row.sku)
     const walk = (trendWalk.current += 1)
-    setTrends(
-      Object.fromEntries(open.map((sku) => [sku, { kind: 'reading' } as TrendRead])),
-    )
-    setTrendRun({
-      run,
-      total: open.length,
-      done: 0,
-      skipped: rows.length - open.length,
-      spans: null,
-      reading: true,
-    })
+    setTrends(Object.fromEntries(open.map((sku) => [sku, { kind: 'reading' } as TrendRead])))
+    setTrendRun({ run, total: open.length, done: 0, skipped: rows.length - open.length, spans: null, reading: true })
 
     const chunks: string[][] = []
-    for (let at = 0; at < open.length; at += TREND_CHUNK) {
-      chunks.push(open.slice(at, at + TREND_CHUNK))
-    }
+    for (let at = 0; at < open.length; at += TREND_CHUNK) chunks.push(open.slice(at, at + TREND_CHUNK))
 
     const read = async () => {
       for (const chunk of chunks) {
-        /* THE ABANDON CHECK, BEFORE THE REQUEST AND AGAIN AFTER IT. Before, so a walk the
-           operator has already replaced stops spending requests; after, so a chunk that was
-           in flight when they did cannot write into the strip that replaced it. */
         if (trendWalk.current !== walk) return
         try {
           const payload = await getPriceTrends(run, chunk)
@@ -1442,17 +1505,10 @@ export function Pricing() {
             for (const sku of chunk) {
               const found = payload.skus[sku]
               const why = payload.refused[sku]
-              /* EVERY ASKED SKU LANDS SOMEWHERE. The route promises both directions and this
-                 is where that promise is spent: a SKU in neither map would otherwise sit on
-                 `reading…` for the rest of the session, which is the silent drop CLAUDE.md
-                 forbids wearing a spinner. */
               next[sku] =
                 found !== undefined
                   ? { kind: 'read', ranges: found.ranges }
-                  : {
-                      kind: 'refused',
-                      why: why ?? 'the batch answered without this SKU and without a reason.',
-                    }
+                  : { kind: 'refused', why: why ?? 'the batch answered without this SKU and without a reason.' }
             }
             return next
           })
@@ -1462,22 +1518,14 @@ export function Pricing() {
               : {
                   ...current,
                   done: current.done + chunk.length,
-                  /* THE SPANS COME OFF THE FIRST ANSWER THAT HAS THEM and are not replaced.
-                     Every SKU of a run carries the same two, so a later chunk would rewrite
-                     them with themselves; taking the first keeps the caption still while the
-                     list fills underneath it. */
                   spans:
                     current.spans ??
-                    Object.values(payload.skus).find((entry) => entry.ranges.length > 0)
-                      ?.ranges ??
+                    Object.values(payload.skus).find((entry) => entry.ranges.length > 0)?.ranges ??
                     null,
                 },
           )
         } catch (error) {
           if (trendWalk.current !== walk) return
-          /* A DEAD CHUNK IS EIGHT REFUSALS AND NOT A STOPPED WALK. A mirror having a bad
-             minute should cost the rows it was asked about, not the thirty behind them —
-             `describeFailure` carries the server's own sentence where there is one. */
           const why = describeFailure(error).message
           setTrends((current) => {
             const next = { ...current }
@@ -1485,51 +1533,32 @@ export function Pricing() {
             return next
           })
           setTrendRun((current) =>
-            current === null || current.run !== run
-              ? current
-              : { ...current, done: current.done + chunk.length },
+            current === null || current.run !== run ? current : { ...current, done: current.done + chunk.length },
           )
         }
       }
       if (trendWalk.current === walk) {
-        setTrendRun((current) =>
-          current === null || current.run !== run ? current : { ...current, reading: false },
-        )
+        setTrendRun((current) => (current === null || current.run !== run ? current : { ...current, reading: false }))
       }
     }
     void read()
   }, [rows, run])
 
-  /* WHICH ROW THE POINTER IS OVER, AND WHICH ONE A HELD KEY LATCHED. BOTH ARE REFS BECAUSE
-     NOTHING DRAWS EITHER. A hovered row in state re-renders a hundred rows on every crossing
-     to bookkeep a fact no row draws — the row's own `:hover` is CSS and needs no help — and
-     the only reader of these two is a key press. */
+  /* Which row the pointer is over, and which one a held key latched. Refs: nothing draws them. */
   const hovered = useRef<string | null>(null)
   const heldSku = useRef<string | null>(null)
 
-  /** The SKU whose price field has focus, or null. Read off the DOM rather than mirrored into
-   *  a third piece of state: `inputs` already maps every field, and a mirror would be one more
-   *  thing to keep true across a filter, a re-sort, a hold and a row that stops having a
-   *  field at all. */
   const focusedSku = useCallback(() => {
     for (const [sku, node] of inputs.current) if (node === document.activeElement) return sku
     return null
   }, [])
 
-  /** Whether an event landed in one of THIS screen's price fields, which is the one place a
-   *  letter is a command rather than a character. */
   const isPriceField = useCallback((target: EventTarget | null) => {
     for (const node of inputs.current.values()) if (node === target) return true
     return false
   }, [])
 
-  /** PIN THE PANEL TO ONE SKU. The deliberate gesture, and the only one that outlives itself.
-   *
-   *  IT CLOSES THE PHOTOGRAPH. Both panels are fixed in the same corner — `PriceHistory.css`
-   *  carries the reason that corner is the right one — so they are mutually exclusive rather
-   *  than overlapping. A peek does NOT close it: a gesture that lasts as long as a key is down
-   *  must not destroy a panel the operator opened on purpose. It hides it while it is up
-   *  instead, at the one render below that draws the corner. */
+  /** Pin the drawer to one SKU. Closes the photograph: one drawer, one card. */
   const pinHistory = useCallback(
     (sku: PricingSku) => {
       if (run === null) return
@@ -1542,78 +1571,54 @@ export function Pricing() {
     [readHistory, run],
   )
 
-  /** PUBLISH THE SHIP BAR'S MEASURED HEIGHT AS `--pricing-ship-h` (D85).
-   *
-   *  `Pricing.css` and `PriceHistory.css` have read this property since D54 and NOTHING HAS
-   *  EVER SET IT. Three declarations took the `64px` fallback every time, against a bar that
-   *  is 125px closed and 433px with an emit receipt up — so the two fixed panels, which are
-   *  positioned to sit above the bar, sat on top of its sub-threshold controls instead. Those
-   *  controls are the answer `emit` refuses to run without, which is what made this worth
-   *  measuring rather than worth another constant.
-   *
-   *  A CALLBACK REF AND NOT AN EFFECT, because the bar is conditional — it is absent until a
-   *  run is picked — and an effect would need the node in state to know when it arrived,
-   *  which is a re-render to bookkeep a number no React code reads. The property is written
-   *  straight to the DOM for the same reason: only the stylesheets read it.
-   *
-   *  `closest` AND NOT A SECOND REF ON THE `<main>`. React assigns child refs before parent
-   *  refs, so a `mainRef.current` read from here would be null on the first mount and the
-   *  panels would take the fallback on exactly the render that matters. The host is one hop up
-   *  and asking the DOM for it has no ordering to get wrong.
-   *
-   *  A `ResizeObserver` AND NOT A ONE-SHOT MEASUREMENT: the bar grows when the receipt lands,
-   *  when a refusal is drawn, and when the window narrows enough to wrap its rows. Every one
-   *  of those is a height change with no re-render of this component behind it. */
+  /** Publish the ship bar's measured height as `--pricing-ship-h` (D85); the drawer reads it. */
   const shipObserver = useRef<ResizeObserver | null>(null)
   const shipHost = useRef<HTMLElement | null>(null)
   const measureShip = useCallback((node: HTMLElement | null) => {
     shipObserver.current?.disconnect()
     shipObserver.current = null
     if (node === null) {
-      /* The bar went away with the run. Clear rather than freeze the last height: a stale
-         clearance would hold a gap open under panels that no longer have anything to clear. */
       shipHost.current?.style.removeProperty('--pricing-ship-h')
+      document.documentElement.style.removeProperty('--pricing-ship-h')
       shipHost.current = null
       return
     }
     const host = node.closest<HTMLElement>('.pricing')
     if (host === null) return
     shipHost.current = host
-    const publish = () => host.style.setProperty('--pricing-ship-h', `${node.offsetHeight}px`)
+    const publish = () => {
+      host.style.setProperty('--pricing-ship-h', `${node.offsetHeight}px`)
+      // The drawer is rendered on <body> (a filled page animation traps `fixed` inside <main>),
+      // so the same figure is mirrored on :root for it.
+      document.documentElement.style.setProperty('--pricing-ship-h', `${node.offsetHeight}px`)
+    }
     publish()
     const observer = new ResizeObserver(publish)
     observer.observe(node)
     shipObserver.current = observer
   }, [])
 
-  /** Close the panel both ways, so nothing that was showing survives the press. */
   const unpin = useCallback(() => {
     heldSku.current = null
     setPeek(null)
     setPinned(null)
   }, [])
 
-  /* HOLD `t`, SEE THE ROW UNDER THE POINTER, LET GO AND IT IS GONE (D62, amended 2026-08-31).
-   *
-   * THE POINTER AIMS AND THE KEY HOLDS, which is the owner's gesture in their own words: "if
-   * i then push T i see that row's T, and it holds as my cursor moves as long as i hold T,
-   * and then as soon as i release it goes away". The row is LATCHED at the press and hover
-   * changes are ignored until the release — re-aiming continuously would swap the panel out
-   * from under a hand that is only crossing the screen to reach it, and the hand crossing to
-   * `Try again` passes over forty other rows on the way.
-   *
-   * IT IS A PRESS, WHICH IS THE PROPERTY D62 SPENT ITSELF ON. A reading is a request to two
-   * public mirrors, so nothing may take one on a movement: hovering a row asks for nothing at
-   * all, and this handler is the whole of what asks.
-   *
-   * ON `window` AND NOT ON THE FIELD. The gesture starts at the pointer, so the hands need not
-   * be in any field for it — and a keyup has to arrive even where the press moved focus, which
-   * a per-field handler cannot promise. The field's own handler still swallows the letter; the
-   * `t` branch in `onKey` is that and nothing else now.
-   *
-   * `blur` RELEASES IT TOO, because a window that loses focus mid-hold never delivers the
-   * keyup. Cmd-Tab away holding `t` and the panel would otherwise be standing when you came
-   * back — which is precisely the thing this gesture exists to stop. */
+  const closeDrawer = useCallback(() => {
+    unpin()
+    setPhotoFor(null)
+  }, [unpin])
+
+  const openPhoto = useCallback(
+    (sku: PricingSku) => {
+      unpin()
+      setPhotoFor((current) => (current !== null && current.sku === sku.sku ? null : { sku: sku.sku, at: 0 }))
+    },
+    [unpin],
+  )
+
+  /* HOLD `t`, SEE THE ROW UNDER THE POINTER, LET GO AND IT IS GONE (D62). On `window`, not on
+     the field; `blur` releases it too. */
   useEffect(() => {
     const release = () => {
       if (heldSku.current === null) return
@@ -1621,21 +1626,11 @@ export function Pricing() {
       setPeek(null)
     }
     const down = (event: KeyboardEvent) => {
-      // `repeat` IS THE WHOLE REASON A HELD KEY IS AFFORDABLE: a key held down fires keydown
-      // over and over, and without this the read would be re-asked at the OS repeat rate.
       if (event.key.toLowerCase() !== 't' || event.repeat) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (heldSku.current !== null) return
-      // THE HOLD PANEL OWNS THE KEYBOARD WHILE IT IS UP — D49's reasons are letter keys too.
       if (holdFor !== null) return
-      /* EVERY OTHER FIELD ON THIS SCREEN IS ONE SOMEBODY TYPES PROSE OR DIGITS INTO — a note,
-         a rule, a basis, the run search. Only the price field's alphabet is closed, so only
-         there is a letter free to mean something. */
       if (isEditableTarget(event.target) && !isPriceField(event.target)) return
-      /* THE POINTER WINS OVER FOCUS, deliberately: the hands are in a field while the eyes and
-         the pointer are on some other row, and the row being ASKED ABOUT is the one being
-         pointed at. Focus is the fallback for the case where nothing is pointed at, so the
-         gesture still works with the mouse parked off the list. */
       const aim = hovered.current ?? focusedSku()
       const row = aim === null ? undefined : rows.find((one) => one.sku === aim)
       if (row === undefined) return
@@ -1653,16 +1648,11 @@ export function Pricing() {
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
       window.removeEventListener('blur', release)
-      /* AND NOTHING ELSE. This effect re-subscribes whenever `readHistory` gets a new identity
-         — which the first `setHistory({kind: 'reading'})` of the hold guarantees — so a
-         `release()` here would close the panel one render after it opened, every time. It cost
-         seven red cases to learn. There is nothing to release on the real unmount either: the
-         refs and the state go with the screen. */
     }
   }, [focusedSku, holdFor, isPriceField, readHistory, rows])
 
   const onKey = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>, sku: PricingSku) => {
+    (event: ReactKeyboardEvent<HTMLInputElement>, sku: PricingSku) => {
       const key = event.key
       if (key === 'Enter') {
         event.preventDefault()
@@ -1673,10 +1663,7 @@ export function Pricing() {
       if (key === 'Escape') {
         event.preventDefault()
         const standing = answerFor(sku)
-        event.currentTarget.value =
-          typeof standing === 'string' ? standing : suggestionFor(sku)
-        // Reverted, so the field is untouched again — an Escape that left it marked would
-        // have the next blur write back the value Escape just undid.
+        event.currentTarget.value = typeof standing === 'string' ? standing : suggestionFor(sku)
         touched.current.delete(sku.sku)
         event.currentTarget.blur()
         return
@@ -1688,10 +1675,7 @@ export function Pricing() {
         return
       }
       if (key.length !== 1 || event.metaKey || event.ctrlKey || event.altKey) return
-      // EVERY LETTER IS A COMMAND, BY CONSTRUCTION. The field's alphabet is closed to
-      // `[0-9.]`, so there is nothing to disambiguate — which is the entire reason this
-      // screen can have a keyboard while the hands are in a field, where every other screen
-      // in the app returns on `isEditableTarget`.
+      // EVERY LETTER IS A COMMAND, BY CONSTRUCTION: the field's alphabet is closed to `[0-9.]`.
       const lower = key.toLowerCase()
       const found = SNAPS.find((row) => row.key === lower)
       if (found) {
@@ -1711,27 +1695,11 @@ export function Pricing() {
       }
       if (lower === 'p') {
         event.preventDefault()
-        /* AND IT CLOSES THE READING, which is the half of the mutual exclusion that was never
-           built: `t` cleared the photograph and `p` did not clear the history, so the two
-           drew over each other in one corner. A press ends a pin; only the pointer ends a
-           peek, and one showing when this fires is hidden rather than closed. */
-        unpin()
-        setPhotoFor((current) =>
-          current !== null && current.sku === sku.sku ? null : { sku: sku.sku, at: 0 },
-        )
+        openPhoto(sku)
         return
       }
-      /* `t` FOR TREND, AND `h` WOULD HAVE BEEN THE OBVIOUS LETTER. It is spent on the hold —
-         which is the control this sits beside and exists to inform, so the collision is with
-         exactly the thing it is for. `t` is unspent on this screen and is a word the owner
-         would say out loud naming what the panel shows, which is the rule `App.tsx` states
-         for the route chords one level up.
-
-         THE ACT ITSELF IS ON `window` NOW, because the pointer aims it and the release ends
-         it — see the effect above. What is left here is the SWALLOW, and it is not optional:
-         without it the letter reaches `onBeforeInput`, which marks the field touched and
-         clears the suggestion on its way to rejecting the character. So `t` in a price field
-         would silently blank a suggested price. */
+      // `t` is the peek, handled on `window`; here it is only swallowed so it never reaches
+      // `onBeforeInput` and blanks a suggestion on its way to being refused.
       if (lower === 't') {
         event.preventDefault()
         return
@@ -1741,353 +1709,651 @@ export function Pricing() {
         snap(sku, 'now')
       }
     },
-    /* `suggestionFor` IS LISTED BECAUSE THE MEMO ABOVE MADE THIS HANDLER STABLE. It was
-       omitted and harmless while `answers` and `unpriced` were rebuilt every render: this
-       callback was rebuilt with them, so its closure could never go stale. Memoising them
-       fixed that churn and would have ARMED the omission — a preset change gives
-       `suggestionFor` a new identity off `[doc]`, and a handler holding the old one would
-       apply the PREVIOUS preset's suggested price to a key the operator pressed after
-       switching. A wrong number on a listing, silently.
-
-       Adding it costs nothing: `suggestionFor` changes exactly when `doc` does, and `doc`
-       already reaches this array through `answerFor`. What it buys is that the two stop
-       being correct by coincidence. */
-    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, unpin],
+    [answerFor, commit, move, snap, suggestionFor, toggleHold, undoLast, openPhoto],
   )
 
-  /* THE PHOTO PANEL FOLLOWS FOCUS WHILE IT IS OPEN, and the same key closes it — so
-     `Escape` keeps its existing two jobs in the field and the panel never takes a binding
-     away from price entry. */
-  const photoSku = useMemo(
-    () => (photoFor === null ? null : rows.find((row) => row.sku === photoFor.sku) ?? null),
-    [photoFor, rows],
-  )
-
-  /* THE COPY THE STRIP IS CURRENTLY ON, resolved once instead of four times inside the panel.
-     The photograph, its caption and the `n of m` all have to name the SAME copy, and four
-     independent `positions[at % length]` expressions were four chances for them not to.
-     `null` where the row carries no position at all — `positions[NaN]` for an empty list —
-     which `cli/cmd_join.py:_pricing_table` never writes (`pipeline/join.py`: no matched SKU
-     may hold zero positions) and so means a hand-edited file rather than a state the pipeline
-     produces. The panel degrades to the no-label form rather than throwing. */
+  const photoSku = useMemo(() => (photoFor === null ? null : rows.find((row) => row.sku === photoFor.sku) ?? null), [photoFor, rows])
   const photoAt = useMemo(
-    () =>
-      photoSku === null || photoFor === null
-        ? null
-        : photoSku.positions[photoFor.at % photoSku.positions.length] ?? null,
+    () => (photoSku === null || photoFor === null ? null : photoSku.positions[photoFor.at % photoSku.positions.length] ?? null),
     [photoSku, photoFor],
   )
+  const historySku = useMemo(() => (historyFor === null ? null : rows.find((row) => row.sku === historyFor) ?? null), [historyFor, rows])
 
-  /* THE CARD THE PANEL IS DRAWN FOR, RESOLVED AGAINST THE CURRENT ROWS. A held `t` outranks a
-     pin while the key is down — `historyFor` is `peek ?? pinned` — so the glance shows the row
-     it latched and the pinned card comes back underneath it on the release.
-
-     `rows` is what the section filter and the held filter leave, so a card filtered out from
-     under an open panel resolves to null and the panel closes itself — which is right: a
-     reading floating over a list that no longer contains its card is a panel about nothing
-     the operator can see. */
-  const historySku = useMemo(
-    () => (historyFor === null ? null : rows.find((row) => row.sku === historyFor) ?? null),
-    [historyFor, rows],
-  )
-
-  /** `Box 3 · RB Epics` for the run being priced, or `null` where nothing can say (D56).
-   *
-   *  `detail` FIRST AND THE LIST SECOND, AND THEY CANNOT DISAGREE — both come out of
-   *  `server/pipeline_routes.py:_summary`, which joins the box against the registry on every
-   *  read. What separates them is freshness: `runs` is fetched once at mount and never again,
-   *  while `detail` is re-read by `load()` and therefore by the Reload button — so a box
-   *  renamed on `#/inventory` shows up here on a press rather than on a page reload. The list
-   *  covers the window before `getRun` has answered and the case where it refused. */
   const scopeName = useMemo(() => {
     if (run === null) return null
     const row = detail !== null && detail.run === run ? detail : runs.find((r) => r.run === run)
     return row === undefined ? null : runBoxLabel(row)
   }, [run, detail, runs])
 
-  const chrome = (
-    <header className="pricing-head">
-      <div className="pricing-head-top">
-        <h1 className="pricing-title">Pricing</h1>
-        <div className="pricing-controls">
-          {/* THE DRAWER, THEN THE RUN, THEN THE COUNT (D56). It read `<run> · N SKUs`, which
-              names the directory and the size of the job and never says what is in the box —
-              the owner's complaint, in the place they were looking when they made it. The run
-              name stays because it is what `emit` and `join` are pointed at; what goes in
-              front of it is the answer to which drawer these hundred prices are for. */}
-          {/* THE SCOPE NAMES WHAT IS LOADED, AND A WORKLIST OVER SEVERAL RUNS SAYS SO RATHER
-              THAN NAMING ONE. `scopeName` is the single-run answer and stays exactly as it
-              was; the multi-run line counts the drawers, because there is no one drawer these
-              prices are for and picking one to print would be a caption over the wrong list. */}
-          <span className="pricing-scope">
-            {loaded.length === 0
-              ? 'Nothing loaded.'
-              : run !== null
-                ? [scopeName, run, `${rows.length} SKUs`]
-                    .filter((part) => part !== null)
-                    .join(' · ')
-                : [
-                    `${boxesLoaded.length || loaded.length} ${
-                      boxesLoaded.length === 1 ? 'box' : 'boxes'
-                    }`,
-                    `${loaded.length} runs`,
-                    `${rows.length} SKUs`,
-                    picked.size === 0 ? 'everything unpriced' : null,
-                  ]
-                    .filter((part) => part !== null)
-                    .join(' · ')}
-          </span>
+  const closePicker = useCallback(() => setRunsOpen(false), [])
+  useDismiss(pickerRef, runsOpen, closePicker)
 
-          {held.length === 0 ? null : (
-            <button
-              type="button"
-              className={`pricing-plain${filterHeld ? ' pricing-plain-on' : ''}`}
-              aria-pressed={filterHeld}
-              onClick={() => setFilterHeld((on) => !on)}
-            >
-              holding {held.length}
-            </button>
-          )}
-          <span className="pricing-save">
-            {saving ? 'saving…' : dirty ? 'unsaved' : 'saved'}
-          </span>
-          <button
-            type="button"
-            className="pricing-plain"
-            onClick={() => void load(picked)}
-            disabled={loading}
+  /* The popover is a dialog: focus moves into it on open and back to the Runs button on close. */
+  const runsWasOpen = useRef(false)
+  useEffect(() => {
+    const anchor = pickerRef.current
+    if (runsOpen) {
+      runsWasOpen.current = true
+      anchor?.querySelector<HTMLButtonElement>('.pricing-run')?.focus()
+    } else if (runsWasOpen.current) {
+      runsWasOpen.current = false
+      anchor?.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')?.focus()
+    }
+  }, [runsOpen])
+
+  useEffect(() => {
+    if (!filesOpen) return
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFilesOpen(false)
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [filesOpen])
+
+  /* Escape closes the pinned drawer (history or photograph) the way it closes every other
+     surface here. The price field keeps its own Escape (revert and blur), and a hold panel,
+     the files dialog or the runs popover answers first while it is open. */
+  useEffect(() => {
+    if (pinned === null && photoFor === null) return
+    const key = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || holdFor !== null || filesOpen || runsOpen || isPriceField(event.target)) return
+      closeDrawer()
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [pinned, photoFor, holdFor, filesOpen, runsOpen, isPriceField, closeDrawer])
+
+  /* R reloads, as it does on Review — outside a field, outside a panel, and never on a phone. */
+  useEffect(() => {
+    if (phone) return
+    const key = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== 'r' || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return
+      if (holdFor !== null || filesOpen || runsOpen || loading) return
+      if (isEditableTarget(event.target)) return
+      event.preventDefault()
+      void load(picked)
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [phone, holdFor, filesOpen, runsOpen, loading, load, picked])
+
+  const activePreset = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis) ?? null
+  /* NO INVENTED FIGURES. The floor is the store's own and a screen that cannot read it says
+     nothing about it rather than printing a plausible literal — this panel drew "$0.40" beside
+     an answer of $0.24 and read as a rule when it was a fallback. The CUT-OFF is not read here
+     at all: `cut`, above, is the live one, and `work.threshold` is the server's copy of the same
+     policy from whenever the table was fetched. */
+  const floor = work?.floor ?? null
+
+  /* THE STANDING RULE READ BACK. A custom rule survives a reload because it is written where
+     a preset's is — `policy.rule` / `policy.basis` on the corpus — so this is the whole of the
+     round trip: the document says `undercut:7` over `low`, no preset owns that pair, and the
+     strip lands on Custom with the fields filled from it. */
+  const standingCustom = activePreset === null ? parseCustomRule(doc?.rule, doc?.basis) : null
+  const customOn = pressedCustom || standingCustom !== null
+  const ruleSegment = customOn ? CUSTOM_KEY : (activePreset?.key ?? '')
+
+  /* The draft follows the document when the document moves under it — a reload, a run switch,
+     an answer adopted from elsewhere — and never while a hand is mid-percentage: the seed is
+     keyed on the rule itself, so a value already seeded is left alone. */
+  const standingKey = standingCustom === null ? null : `${standingCustom.kind}:${standingCustom.pct}:${standingCustom.basis}`
+  useEffect(() => {
+    if (standingKey === null || customSeed.current === standingKey) return
+    customSeed.current = standingKey
+    const [kind, pct, basis] = standingKey.split(':')
+    setCustomDraft({ kind: kind as RuleKind, pct: pct as string, basis: basis as RuleBasis })
+    setCustomBad(null)
+  }, [standingKey])
+
+  /** Pressing a segment. A preset is an answer the moment it is pressed; Custom opens the
+   *  fields and writes nothing until a percentage is in them, because `undercut:` is not a
+   *  rule and a rule of 0% is a different preset. */
+  const pickRule = useCallback(
+    (key: string) => {
+      if (key !== CUSTOM_KEY) {
+        setPressedCustom(false)
+        setCustomBad(null)
+        applyPreset(key)
+        return
+      }
+      setPressedCustom(true)
+      setNote(null)
+      window.setTimeout(() => customPct.current?.focus(), 0)
+    },
+    [applyPreset],
+  )
+
+  /** What the strip says while Custom is chosen: the refusal if there is one, the rule's own
+   *  sentence once it is real, and the invitation before either. */
+  const customLine = customBad ?? (standingCustom === null ? null : customSays(standingCustom, floor))
+  const subCount = subThresholdSkus(rows).length
+  const roster = work?.roster ?? []
+
+  /* WHOSE CUT-OFF IS IN FORCE. `cut` above is the figure; this is where it came from, which is
+     the only other thing a reader needs and the thing the section header names. */
+  const cutFrom: 'run' | 'store' | 'default' =
+    thisRunCut !== undefined ? 'run' : storeCut !== null ? 'store' : 'default'
+  const stranded = strandedFlat(doc, cut)
+
+  /* WHEN THE FIGURES ON THIS SCREEN WERE READ. Every `snap` price and every `listing.live`
+     count was frozen into `pricing.json` by the join, so the join's own write time IS their
+     age. (The moment TCGplayer was last asked — `listings.at` in the store — is not on the
+     wire; this is the nearest honest stamp and it is never later than that one.) */
+  const readAtOf = useCallback(
+    (sku: MergedSku): number | null => {
+      const from = sku.in[sku.in.length - 1]?.run ?? run
+      const stamp = from === null ? undefined : work?.written_at?.[from]
+      return typeof stamp === 'number' ? stamp : null
+    },
+    [work, run],
+  )
+  const readAt = useMemo(() => {
+    const stamps = Object.values(work?.written_at ?? {}).filter((n): n is number => typeof n === 'number')
+    return stamps.length === 0 ? null : Math.max(...stamps)
+  }, [work])
+  const readAge = ageWords(readAt)
+
+  /** Bring the deck into view and light it — the account is at the top, the press is at the
+   *  bottom, and a person who reads "Not yet" on the bar needs the sentence that says why. */
+  const showDeck = useCallback(() => {
+    const node = deckRef.current
+    if (node === null) return
+    node.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    node.classList.remove('is-flash')
+    void node.offsetWidth
+    node.classList.add('is-flash')
+    window.setTimeout(() => node.classList.remove('is-flash'), 1200)
+  }, [])
+
+  /* WHAT THE UNTYPED ROWS GO OUT AT, IN ONE PHRASE, and it is TWO figures rather than one.
+     A row nobody typed into goes out at the rule's figure — unless it is sub-threshold, where
+     the cheap-card answer is what `prices_for` writes. Every place on this screen that used to
+     say "N on the rule" over both now says this, so the lede, the ship bar and the deck cannot
+     state different prices for the same cards. */
+  const cheapMoney = `$${cheapNow}`
+  const ruleRows = Math.max(0, progress.rule - progress.cheap)
+  const standingSays = [
+    ruleRows > 0 ? `${ruleRows} on the rule` : null,
+    progress.cheap > 0 ? `${progress.cheap} cheap at ${cheapMoney}` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ')
+
+  /* The progress figure lives in the lede: "decided" counts what a hand typed or held, and the
+     rows on a standing answer are named beside it so the ship bar's verdict and this line agree. */
+  const pct = progress.total === 0 ? 0 : Math.round((progress.answered / progress.total) * 100)
+  const progressLine =
+    progress.total === 0 ? null : (
+      <span
+        className="pricing-scope-progress"
+        title={`${progress.typed} typed · ${progress.held} held · ${ruleRows} on the rule · ${progress.cheap} cheap at ${cheapMoney}`}
+      >
+        {progress.answered} of {progress.total} decided
+        {standingSays === '' ? '' : ` · ${standingSays}`}
+        {progress.closed > 0 ? ` · ${progress.closed} nothing to add` : ''}
+      </span>
+    )
+
+  const scopeLine =
+    loaded.length === 0 ? (
+      <span>Nothing loaded.</span>
+    ) : run !== null ? (
+      <>
+        {scopeName === null ? null : <span>{scopeName}</span>}
+        <span className="pricing-scope-run bn-mono">{run}</span>
+        <span>{rows.length} SKUs</span>
+        {progressLine}
+      </>
+    ) : (
+      <>
+        <span>
+          {boxesLoaded.length || loaded.length} {boxesLoaded.length === 1 ? 'box' : 'boxes'}
+        </span>
+        <span>{loaded.length} runs</span>
+        <span>{rows.length} SKUs</span>
+        {picked.size === 0 ? <span>everything unpriced</span> : null}
+        {progressLine}
+      </>
+    )
+
+  const chrome = (
+    <header className="bn-head pricing-head">
+      <div className="bn-head-text">
+        <span className="bn-eyebrow">Workflow · Price</span>
+        <h1 className="bn-title pricing-title">
+          <Icon name="tag" size={22} />
+          Pricing
+        </h1>
+        <p className="bn-lede pricing-scope">{scopeLine}</p>
+        {progress.total === 0 ? null : (
+          <div
+            className="bn-progress pricing-head-progress"
+            role="progressbar"
+            aria-label="Progress through the worklist"
+            aria-valuemin={0}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.answered}
           >
-            Reload
-          </button>
-        </div>
+            <span style={{ width: `${pct}%` }} />
+          </div>
+        )}
       </div>
-      <p className="pricing-lede">
-        Sets what every SKU here will list at. One answer per card, for the whole store, in{' '}
-        <code>inventory/prices.json</code> — a price is a fact about the card, not about the
-        drawer it came out of. <a href="#/runs">Emit on Runs</a> writes one run&rsquo;s CSVs;
-        the press below writes one file for everything on screen.
-      </p>
+      <div className="bn-head-actions">
+        <span
+          className={`bn-pill pricing-save ${saving ? 'bn-pill-accent' : dirty ? 'bn-pill-warn' : 'bn-pill-ok'}`}
+          aria-live="polite"
+          title="Every answer is written to inventory/prices.json as you go"
+        >
+          <Icon name={saving ? 'refresh' : dirty ? 'clock' : 'check'} size={12} />
+          {saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved'}
+        </span>
+        <div className="pricing-runs-anchor" ref={pickerRef}>
+          <Button
+            icon="layers"
+            iconRight="chevronDown"
+            aria-expanded={runsOpen}
+            aria-haspopup="dialog"
+            onClick={() => setRunsOpen((open) => !open)}
+            disabled={roster.length === 0}
+          >
+            Runs
+            {picked.size > 0 ? <span className="bn-pill bn-pill-accent pricing-runs-badge">{picked.size}</span> : null}
+          </Button>
+          {runsOpen && roster.length > 0 ? (
+            <>
+              {/* On a phone the picker is a bottom sheet; the scrim sits inside the anchor so the
+                  outside-press dismissal does not fire on it, and its own press closes. */}
+              {phone ? <div className="bn-scrim pricing-runs-scrim" onClick={closePicker} /> : null}
+              <div className="pricing-runs-pop bn-menu" role="dialog" aria-label="Which runs to price">
+                <PickRuns runs={roster} picked={picked} onToggle={toggleRun} onClear={clearPicked} />
+              </div>
+            </>
+          ) : null}
+        </div>
+        <Button
+          variant="ghost"
+          icon="refresh"
+          iconOnly
+          kbd={phone ? undefined : 'R'}
+          className="pricing-reload"
+          onClick={() => void load(picked)}
+          disabled={loading}
+          busy={loading}
+          title={phone ? 'Reload' : 'Reload · R'}
+        >
+          Reload
+        </Button>
+      </div>
     </header>
   )
 
-  /* THE PICKER SHOWS WHEN THERE IS NOTHING TO DRAW, NOT WHEN NOTHING IS PICKED. Before
-     D86 this read `run === null`, so the screen's opening state was always the menu; now an
-     empty selection is answered by the server and the list is what lands. What is left here
-     is the genuine empty: the fetch failed, or every open run has been answered. */
+  /* THE EMPTY STATES: the fetch failed, nothing is joined, the narrowing matched nothing, or
+     every open run has been answered. */
   if (work === null || work.runs.length === 0) {
     const joined = work?.roster ?? []
     return (
-      <main className="pricing">
+      <main className="pricing bn-page">
         {chrome}
-        {failure === null ? null : (
-          <div className="pricing-note-block">
-            <p className="pricing-note-text">{failure.message}</p>
-            <p className="pricing-machine">{failure.code}</p>
-          </div>
-        )}
         {loading ? (
-          <p className="pricing-empty">Reading the runs…</p>
+          <SkeletonRows count={6} />
+        ) : failure !== null ? (
+          /* The server did not answer: that is the whole state, and no claim about the runs is
+             drawn beside it — "no joined runs" would be a false sentence under this one. */
+          <EmptyState
+            icon="alert"
+            title={failure.message}
+            body={
+              <>
+                Nothing on this screen can be shown until the capture server answers.
+                {failure.code ? <span className="pricing-machine pricing-empty-code">{failure.code}</span> : null}
+              </>
+            }
+            actions={
+              <Button icon="refresh" onClick={() => void load(picked)}>
+                Try again
+              </Button>
+            }
+          />
         ) : joined.length === 0 ? (
-          <p className="pricing-empty">
-            No joined runs yet. Identify and join a box on <a href="#/runs">Runs</a> first.
-          </p>
+          <EmptyState
+            icon="play"
+            title="No joined runs yet"
+            body="Identify and join a box on Runs first. Pricing opens on whatever that join leaves to answer."
+            actions={
+              <Button variant="primary" icon="play" onClick={() => (window.location.hash = '#/runs')}>
+                Go to Runs
+              </Button>
+            }
+          />
         ) : picked.size > 0 ? (
-          /* A NARROWING THAT MATCHED NOTHING IS NOT THE SAME EMPTY AS HAVING NO WORK, and
-             saying so is the difference between "you are done" and "you filtered it away". */
-          <p className="pricing-empty">
-            Nothing to price in the runs you picked.{' '}
-            <button type="button" className="pricing-plain" onClick={() => setPicked(new Set())}>
-              Show everything unpriced
-            </button>
-          </p>
+          <EmptyState
+            icon="filter"
+            title="Nothing to price in those runs"
+            body="Every card in the runs you picked already has an answer."
+            actions={
+              <Button variant="primary" icon="x" onClick={clearPicked}>
+                Show everything unpriced
+              </Button>
+            }
+          />
         ) : (
-          /* THE TERMINAL STATE D49 PREDICTED AND THE SCREEN NEVER GOT. That entry read the
-             history — 596 cards, 153 SKUs, zero per-item decisions available — and said in as
-             many words that the honest reading was *"a screen whose job is to report there is
-             nothing to do"*. It could never say it: the only empty state fired when NO run had
-             ever been joined, so eight fully-answered runs drew eight chips and cost ~909KB and
-             sixteen round trips to discover they owed nothing. */
-          <p className="pricing-empty">
-            Nothing owes a pricing answer. Every joined run has been priced and emitted — pick
-            one below to look at it again, or <a href="#/runs">join a box on Runs</a>.
-          </p>
-        )}
-        {joined.length === 0 ? null : (
-          <PickRuns runs={joined} picked={picked} onToggle={toggleRun} />
+          <EmptyState
+            icon="check"
+            title="Everything is priced"
+            body="Every joined run has been priced and emitted. Pick a run to look at it again, or join a box on Runs."
+            actions={
+              <>
+                <Button variant="primary" icon="layers" onClick={() => setRunsOpen(true)}>
+                  Pick a run
+                </Button>
+                <Button icon="play" onClick={() => (window.location.hash = '#/runs')}>
+                  Runs
+                </Button>
+              </>
+            }
+          />
         )}
       </main>
     )
   }
 
   return (
-    <main className="pricing">
+    <main className="pricing bn-page" data-drawer={historySku !== null || (photoSku !== null && photoFor !== null) ? 'open' : undefined}>
       {chrome}
 
-      {/* THE PICKER IS A FILTER OVER THE LIST, NOT A GATE IN FRONT OF IT (D86). It used to be
-          the screen's whole first state; it stays visible now because narrowing is something
-          an operator does DURING a sitting — "just box 3 for a minute" — and a control you
-          have to empty the screen to reach is one nobody uses. Un-ticking the last run returns
-          the worklist to everything unpriced rather than to nothing. */}
-      <PickRuns runs={work.roster} picked={picked} onToggle={toggleRun} />
-
-      {work.skipped.length === 0 ? null : (
-        /* A RUN THAT COULD NOT BE READ IS NAMED, NEVER DROPPED. An eight-run worklist must not
-           silently become a seven-run one because a directory predates `pricing.json` — that
-           is the silent drop `CLAUDE.md` forbids, wearing a shorter list. */
-        <div className="pricing-note-block">
-          {work.skipped.map((row) => (
-            <p className="pricing-machine" key={row.run}>
-              {row.run} skipped · {row.code}
-            </p>
-          ))}
-        </div>
-      )}
-
-      {failure === null ? null : (
-        <div className="pricing-note-block">
-          <p className="pricing-note-text">{failure.message}</p>
-          <p className="pricing-machine">{failure.code}</p>
-        </div>
-      )}
-
-      <div className="pricing-presets" role="group" aria-label="Suggest a price for every row">
-        {PRESETS.map((preset) => (
-          <button
-            key={preset.key}
-            type="button"
-            className="pricing-preset"
-            /* THE ACTIVE CHIP IS DERIVED FROM `rule`/`basis`, NEVER STORED. A remembered
-               selection would be a second answer to "what will an untouched row list at", and
-               the pair the pipeline reads is the only one that can be right — so a rule typed
-               by hand into `inventory/prices.json` correctly lights no chip rather than
-               lighting a stale one. It is drawn at all because nothing on this screen said
-               which rule was live, which is most of why the dead write survived: pressing a
-               chip appeared to work, because the suggestions really did change. */
-            aria-pressed={doc?.rule === preset.rule && doc?.basis === preset.basis}
-            onClick={() => applyPreset(preset.key)}
-            title={preset.says}
-          >
-            {preset.label}
-          </button>
-        ))}
-        <span className="pricing-preset-says">
-          A preset only fills rows you have not set, and sets the store’s rule. Anything else
-          — a different rule or basis — is typed by hand into <code>inventory/prices.json</code>{' '}
-          under <code>policy</code> (<code>rule</code>: match | undercut:PCT | markup:PCT;{' '}
-          <code>basis</code>: market | low); the next join or save reads it, and{' '}
-          <code>pkmnscan prices show</code> prints it.
-        </span>
-      </div>
-
-      {/* THE TREND STRIP'S ONE PRESS — D79, and D62's condition discharged.
-          That entry made the history a press per card so a walk down the list could not fire a
-          request per arrow key, and named what would reopen it: the panel wanted on every card,
-          answered by a batched route and a column on the row. This is that press. It is still a
-          press: nothing polls it and no render fires it, because batching makes ~92 requests at
-          a free public mirror ONE DECISION rather than fifty, not cheap. */}
-      <div className="pricing-trendbar">
-        <button
-          type="button"
-          className="pricing-plain"
-          onClick={loadTrends}
-          disabled={run === null || trendRun?.reading === true}
-        >
-          {trendRun === null
-            ? 'Load trends'
-            : trendRun.reading
-              ? `Reading ${trendRun.done} of ${trendRun.total}…`
-              : 'Read again'}
-        </button>
-        <span className="pricing-trendbar-says">
-          {trendRun === null ? (
-            <>
-              A shape and a sign per row, off two public mirrors. Free, about 35s for a box,
-              and it skips the rows this run can add nothing for — <kbd>T</kbd> still reads
-              any one of those. Every figure stays on the panel.
-            </>
-          ) : (
-            <>
-              {/* THE SPANS, STATED ONCE. Each range draws its own because the WIDER one is the
-                  STALER — weekly buckets are stamped at the start of their week, so `annual`
-                  ran six days behind `month` on one card at one moment (D62, measured). A
-                  shared caption would be wrong for one of them, and forty-six copies of two
-                  dates would be the panel drawn badly. */}
-              {(trendRun.spans ?? []).map((range) => (
-                <span key={range.range} className="pricing-trendbar-span">
-                  {RANGE_LABEL[range.range] ?? range.range} {range.from ?? '?'} → {range.to ?? '?'}
-                </span>
-              ))}
-              {/* THE ONE SENTENCE THIS COLUMN OWES A READER, and the reason it is here rather
-                  than on the row: two ranges disagreeing is the ordinary case and not a fault,
-                  and without it a `+54%` beside a `−30%` on one row reads as a broken screen. */}
-              <span>
-                The ranges overlap and are read separately — the wider one includes these same
-                recent days at a coarser width, so they can point opposite ways.
+      <div className="pricing-body" data-trends={trendRun === null ? 'off' : 'on'}>
+        {work.skipped.length === 0 ? null : (
+          <Notice tone="warn" title="A run could not be read and is left out of this list" className="pricing-notice">
+            {work.skipped.map((row) => (
+              <span className="pricing-machine" key={row.run}>
+                {row.run} · {row.code}
               </span>
-              <span className="pricing-machine">
-                {trendTally.read} read
-                {trendRun.skipped > 0 ? ` · ${trendRun.skipped} not asked` : ''}
-                {trendTally.refused > 0 ? ` · ${trendTally.refused} refused` : ''}
+            ))}
+          </Notice>
+        )}
+
+        {failure === null ? null : (
+          <Notice tone="danger" title={failure.message} code={failure.code} className="pricing-notice">
+            {/* A CONFLICT IS THE ONE REFUSAL HERE WITH SOMEWHERE TO GO. The file moved under this
+                screen — another tab, or an edit on disk — and the write was refused rather than
+                allowed to revert it. Re-reading is the way back, and it costs whatever is typed
+                and unsaved, so the button says that rather than presenting a reload as free. */}
+            {failure.code !== 'corpus_moved' ? null : (
+              <Button size="sm" variant="quiet" icon="refresh" onClick={() => void load(picked)}>
+                Re-read the pricing file, losing what is unsaved here
+              </Button>
+            )}
+          </Notice>
+        )}
+
+        {/* THE LANDING DECK — the two things a person needs before touching a row: what the
+            cheap cards will list at, and whether this can be written at all. Both were
+            further down the page (one behind a run selection, one under a sticky bar at the
+            bottom of a hundred rows) and both are answers to questions asked on arrival. */}
+        {/* THE CUT-OFF PANEL IS ALWAYS DRAWN. It was conditional on there being cards under the
+            line, which was fine while the figure was only an answer ABOUT those cards — now that
+            the figure IS the line, a cut-off typed low enough to empty the lower section would
+            take its own control off the screen and leave no way back to it. */}
+        <div className="pricing-deck" ref={deckRef} data-cards="two">
+          <CutoffPanel
+            count={subCount}
+            above={rows.length - subCount}
+            cut={cut}
+            from={cutFrom}
+            stranded={stranded}
+            runName={run}
+            runLabel={scopeName ?? (run === null ? null : run)}
+            runCount={loaded.length}
+            onCut={setCut}
+            onRunCut={setRunCut}
+            onPickRun={() => setRunsOpen(true)}
+          />
+          <ReadyPanel
+            owes={owes}
+            progress={progress}
+            cheapMoney={cheapMoney}
+            queued={queued}
+            runCount={loaded.length}
+            boxCount={boxesLoaded.length}
+            readAge={readAge}
+            emitted={emitted}
+          />
+        </div>
+
+        <div className="pricing-toolbar">
+          {/* THE RULE STRIP — four answers, and the fourth is written the way the three are.
+              The sentence and the custom fields share ONE line beneath the segments, with the
+              height of a control reserved on it, so picking Custom fills that line instead of
+              pushing the strip down. */}
+          <div className="pricing-rule" role="group" aria-label="Suggest a price for every row">
+            <Segmented<string>
+              className="pricing-rule-seg"
+              label="Rule for the rows you have not set"
+              value={ruleSegment}
+              options={[
+                ...PRESETS.map((preset) => ({ value: preset.key, label: preset.label })),
+                { value: CUSTOM_KEY, label: 'Custom' },
+              ]}
+              onChange={pickRule}
+            />
+            <div className="pricing-rule-line">
+              {customOn ? (
+                <div className="pricing-custom" data-bad={customBad === null ? undefined : 'true'}>
+                  <Segmented<RuleKind>
+                    className="pricing-custom-kind"
+                    label="Price under or over the basis"
+                    value={customDraft.kind}
+                    options={[
+                      { value: 'undercut', label: KIND_LABEL.undercut },
+                      { value: 'markup', label: KIND_LABEL.markup },
+                    ]}
+                    onChange={(kind) => {
+                      const next = { ...customDraft, kind }
+                      setCustomDraft(next)
+                      if (badPercent(kind, next.pct) === null) applyCustom(next)
+                      else setCustomBad(null)
+                    }}
+                  />
+                  <label className="pricing-flat pricing-pct">
+                    <input
+                      ref={customPct}
+                      className="bn-input pricing-flat-input pricing-pct-input"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0"
+                      aria-label="Percentage off the basis price"
+                      aria-invalid={customBad === null ? undefined : true}
+                      value={customDraft.pct}
+                      onChange={(event) => {
+                        const text = event.currentTarget.value
+                        if (!PCT.test(text)) return
+                        setCustomDraft((current) => ({ ...current, pct: text }))
+                        setCustomBad(null)
+                      }}
+                      onBlur={(event) => applyCustom({ ...customDraft, pct: event.currentTarget.value })}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter') return
+                        event.preventDefault()
+                        applyCustom({ ...customDraft, pct: event.currentTarget.value })
+                      }}
+                    />
+                    <span className="pricing-flat-sign pricing-pct-sign" aria-hidden="true">
+                      %
+                    </span>
+                  </label>
+                  <span className="pricing-custom-of">of</span>
+                  <Segmented<RuleBasis>
+                    className="pricing-custom-basis"
+                    label="Which price to work from"
+                    value={customDraft.basis}
+                    options={[
+                      { value: 'market', label: BASIS_LABEL.market },
+                      { value: 'low', label: BASIS_LABEL.low },
+                    ]}
+                    onChange={(basis) => {
+                      const next = { ...customDraft, basis }
+                      setCustomDraft(next)
+                      if (badPercent(next.kind, next.pct) === null) applyCustom(next)
+                    }}
+                  />
+                </div>
+              ) : null}
+              <span
+                className={`pricing-rule-says${customBad === null ? '' : ' pricing-rule-bad'}`}
+                data-keep={customOn ? 'true' : undefined}
+                title="A rule fills only the rows you have not set, and becomes the standing rule."
+              >
+                <Icon name={customBad === null ? 'info' : 'alert'} size={13} />
+                {customOn
+                  ? (customLine ?? 'Type a percentage and this becomes the standing rule.')
+                  : activePreset === null
+                    ? 'No rule matches the standing answer.'
+                    : activePreset.says}
               </span>
-            </>
-          )}
-        </span>
-      </div>
-
-      {note === null ? null : <p className="pricing-refusal">{note.text}</p>}
-
-      {sections.map((section) => {
-        return (
-          <section className="pricing-section" key={section.bucket}>
-            <div className="pricing-section-head">
-              <h2 className="pricing-section-title">{section.title}</h2>
-              <span className="pricing-section-count">{section.total} SKUs</span>
             </div>
-            <p className="pricing-section-note">{section.note}</p>
+          </div>
+          <div className="pricing-toolbar-right">
+            {held.length === 0 ? null : (
+              <Button
+                size="sm"
+                pill
+                icon="lock"
+                variant={filterHeld ? 'primary' : 'default'}
+                className="pricing-filter-held"
+                aria-pressed={filterHeld}
+                onClick={() => setFilterHeld((on) => !on)}
+              >
+                Holding {held.length}
+              </Button>
+            )}
+            {undo.length === 0 ? null : (
+              <Button size="sm" variant="ghost" icon="undo" kbd="U" onClick={undoLast}>
+                Undo
+              </Button>
+            )}
+            <Button
+              size="sm"
+              icon="trendUp"
+              className="pricing-trend-btn"
+              onClick={loadTrends}
+              disabled={run === null || trendRun?.reading === true}
+              busy={trendRun?.reading === true}
+              title={run === null ? 'Trends read one run at a time — pick a single run' : 'Read the shape of every open row off two public mirrors'}
+            >
+              {trendRun === null ? 'Load trends' : trendRun.reading ? `Reading ${trendRun.done} of ${trendRun.total}…` : 'Read again'}
+            </Button>
+          </div>
+        </div>
+
+        {trendRun === null ? null : (
+          <div className="pricing-trendbar" aria-live="polite">
+            {trendRun.reading ? (
+              <>
+                <div className="bn-progress pricing-trend-progress" aria-hidden="true">
+                  <span style={{ width: `${trendRun.total === 0 ? 100 : Math.round((trendRun.done / trendRun.total) * 100)}%` }} />
+                </div>
+                <span className="pricing-trendbar-says">
+                  Reading {trendRun.done} of {trendRun.total} rows — the strip fills in waves.
+                </span>
+              </>
+            ) : (
+              <span className="pricing-trendbar-says">
+                {(trendRun.spans ?? []).map((range) => (
+                  <span key={range.range} className="pricing-trendbar-span bn-pill bn-pill-mono">
+                    {RANGE_LABEL[range.range] ?? range.range} {range.from ?? '?'} → {range.to ?? '?'}
+                  </span>
+                ))}
+                <span className="pricing-trendbar-tally">
+                  {trendTally.read} read
+                  {trendRun.skipped > 0 ? ` · ${trendRun.skipped} not asked` : ''}
+                  {trendTally.refused > 0 ? ` · ${trendTally.refused} refused` : ''}
+                </span>
+                <span
+                  className="pricing-trendbar-why"
+                  title="The ranges overlap and are read separately — the wider one includes these same recent days at a coarser width, so they can point opposite ways."
+                >
+                  <Icon name="info" size={13} /> ranges overlap
+                </span>
+              </span>
+            )}
+          </div>
+        )}
+
+        {note === null || note.sku !== '' ? null : (
+          <Notice tone="warn" className="pricing-notice pricing-refusal">
+            {note.text}
+          </Notice>
+        )}
+
+        {sections.map((section) => (
+          <section
+            className="pricing-section"
+            key={section.bucket}
+            data-bucket={section.bucket}
+            data-direct={section.direct ? 'some' : 'none'}
+          >
+            <header className="pricing-section-head">
+              <div className="pricing-section-lead">
+                <span className={`pricing-section-icon pricing-section-icon-${section.bucket}`}>
+                  <Icon name={section.icon} size={16} />
+                </span>
+                <div className="pricing-section-text">
+                  <h2 className="pricing-section-title">
+                    {section.title}
+                    <span className="bn-pill pricing-section-count">{section.total} SKU{section.total === 1 ? '' : 's'}</span>
+                  </h2>
+                  <p className="pricing-section-note">{section.note(cut)}</p>
+                </div>
+              </div>
+              {section.bucket !== 'sub_threshold' ? null : (
+                /* THE ANSWER ITSELF IS ON THE LANDING DECK, NOT HERE (the owner, 2026-09-03).
+                   What this says is which answer these rows are carrying, and where it came
+                   from — one press away, above the fold, whether or not a run is picked. */
+                <button
+                  type="button"
+                  className="pricing-section-answer"
+                  data-state={cutFrom === 'default' ? 'unset' : cutFrom}
+                  onClick={showDeck}
+                  title="The cut-off is set at the top of this screen"
+                >
+                  <span className="pricing-section-answer-figure">${cut}</span>
+                  <span className="pricing-section-answer-says">
+                    {cutFrom === 'default'
+                      ? 'store default · not written'
+                      : cutFrom === 'store'
+                        ? 'the store’s cut-off'
+                        : 'this run only'}
+                  </span>
+                  <Icon name="chevronUp" size={13} />
+                </button>
+              )}
+            </header>
 
             <div className="pricing-caption" aria-hidden="true">
-              {/* Two empty cells, for the two 32px controls at the front of every row — the
-                  history and the hold. The caption reads the SAME `--pricing-cols` template
-                  the rows do, so a cell missing here does not merely lose a heading: it
-                  leaves the row with an item the grid has no column for, which wraps into an
-                  implicit row and breaks the height invariant below. */}
               <span />
-              <span />
-              <span>Qty</span>
-              <span className="pricing-caption-card">Card</span>
-              {/* ONE LABEL PER RANGE, HERE AND NOT ON THE ROW — the same argument the snap
-                  keys beside it make: the two ranges are the same two on every row, so the
-                  name belongs where the eye already is when reading the column. `RANGE_LABEL`
-                  is `PriceHistory.tsx`'s own table, imported rather than restated, so the
-                  panel and the strip cannot come to call one range two things. */}
+              <span>Card</span>
+              <span className="pricing-caption-qty">Qty</span>
               <span className="pricetrend-keys">
                 {['month', 'annual'].map((range) => (
                   <span key={range}>{RANGE_LABEL[range] ?? range}</span>
                 ))}
               </span>
-              <span>Lists at</span>
               {SNAPS.map((column) => (
-                <span key={column.key} className="pricing-caption-ref">
-                  {column.label} <kbd>{column.key}</kbd>
+                <span key={column.key} className={`pricing-caption-ref pricing-caption-${column.field}`}>
+                  {column.label} <Kbd>{column.key.toUpperCase()}</Kbd>
                 </span>
               ))}
+              <span className="pricing-caption-price">Lists at</span>
+              <span />
             </div>
 
             <div className="pricing-list">
-              {section.items.map((item) => {
-                /* THE HEADING FOR THE ROWS UNDER IT, AND IT IS AN `h3` BECAUSE THAT IS WHAT IT
-                   IS. The section's own title is the `h2` above; these rows are a named part
-                   of it, so the reason is announced once to a screen reader on the way in
-                   rather than repeated in the right margin of every row it covers. No
-                   wrapper: the rows stay direct children of the list, which is what the
-                   section's grid template is written against. */
+              {section.items.map((item, index) => {
                 if (item.head !== null) {
                   return (
                     <h3 className="pricing-group-head" key={`why:${item.head}`}>
                       <span className="pricing-group-why">{item.head}</span>
-                      <span className="pricing-group-count">
-                        {item.count === 1 ? '1 SKU' : `${item.count} SKUs`}
-                      </span>
+                      <span className="pricing-group-count">{item.count === 1 ? '1 SKU' : `${item.count} SKUs`}</span>
                     </h3>
                   )
                 }
@@ -2095,374 +2361,370 @@ export function Pricing() {
                 const standing = answerFor(sku)
                 const withheld = isWithheld(standing)
                 const suggestion = suggestionFor(sku)
-                /* The row's sentence, decided here rather than in the markup, because the
-                   second line composes it with the held token below and a ternary that also
-                   had to yield a value would have been unreadable.
-
-                   IT IS THE OPERATOR'S NOTE AND NOTHING ELSE NOW. `at_cap`'s sentence used to
-                   win this line, which meant a row that was BOTH at the cap and withheld with
-                   a note drew the reason and swallowed the note — the one string on the row
-                   nobody else on the screen holds a copy of. The reason moved up to the
-                   group's heading, where it is stated once for every row it covers, so the
-                   row keeps the aside. */
-                const why = withheld && standing !== 'unlisted' && standing.note
-                  ? standing.note
-                  : null
+                const why = withheld && standing !== 'unlisted' && standing.note ? standing.note : null
+                const first = sku.positions[0] ?? null
+                const boxes = [...new Set(sku.positions.map((place) => place.box))].sort((a, b) => a - b)
+                const state = fieldState(sku, standing, doc, cut, cutFrom !== 'default')
+                const rowNote = note !== null && note.sku === sku.sku ? note.text : null
                 return (
                   <div
                     className="pricing-row"
                     key={sku.sku}
-                    /* THE WHOLE ROW IS THE TARGET, not the `T` alone: the gesture is "point at
-                       a row and hold `t`", and asking the operator to find a 32px button
-                       first would make a pointing gesture into an aiming one. Writing a ref
-                       renders nothing, so this costs a crossing what a CSS `:hover` costs.
-
-                       THE LEAVE IS GUARDED because enter and leave are not promised in an
-                       order: A's leave arriving after B's enter would otherwise null out the
-                       row the pointer is now on. */
+                    style={{ '--i': String(Math.min(index, 14)) } as CSSProperties}
                     onPointerEnter={() => {
                       hovered.current = sku.sku
                     }}
                     onPointerLeave={() => {
                       if (hovered.current === sku.sku) hovered.current = null
                     }}
-                    data-answer={
-                      withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'
-                    }
+                    data-answer={withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'}
                     data-cap={sku.at_cap ? 'full' : 'room'}
                     data-dim={filterHeld && !withheld ? 'true' : undefined}
+                    data-hold={holdFor === sku.sku ? 'open' : undefined}
+                    data-drawn={(historySku?.sku ?? photoSku?.sku) === sku.sku ? 'true' : undefined}
                   >
-                    {/* THE PIN, NOT THE PANEL. `aria-pressed` is this control's own state,
-                        and a `t` held over the row draws the panel without this button having
-                        been pressed at all — reporting that as pressed would announce a state
-                        to a screen reader that nothing on the page is in. */}
-                    <button
-                      type="button"
-                      className="pricing-history"
-                      aria-pressed={pinned === sku.sku}
-                      aria-label={`Price history for ${sku.name}`}
-                      /* THE CLICK IS THE PIN, AND IT IS THE ONLY WAY TO ONE. Holding `t` is
-                         the glance; this is the panel that stays — which is what a refusal's
-                         `Try again`, a scroll through both ranges, and reading while typing a
-                         price all need, none of which can be done with a key held down. */
-                      onClick={() => (pinned === sku.sku ? unpin() : pinHistory(sku))}
-                    >
-                      T
-                    </button>
-
-                    {/* BESIDE THE HISTORY, BECAUSE IT IS THE FACT THE HOLD WAS MISSING. D49
-                        records that `bullish` and `watch_above` are set against the
-                        operator's memory of what a card used to cost; the reading beside it
-                        replaces the memory, so the two sit together.
-
-                        A BUTTON AND NOT ONLY A KEY. docs/DESIGN.md: "every choice shows its
-                        key" — and the converse, from D51, is that a binding nothing
-                        advertises is one only the person who asked for it will ever press.
-                        The letter IS the label here, the same way `T` is on the history. */}
-                    <button
-                      type="button"
-                      className="pricing-hold"
-                      aria-pressed={withheld}
-                      aria-label={withheld ? `Release ${sku.name}` : `Hold ${sku.name}`}
-                      onClick={() => toggleHold(sku)}
-                    >
-                      H
-                    </button>
-
-                    <span className="pricing-qty">
-                      {sku.add_to_quantity} of {sku.copies}
-                    </span>
+                    <PricingThumb at={first} name={sku.name} onOpen={() => openPhoto(sku)} />
 
                     <div className="pricing-id">
                       <span className="pricing-name" title={sku.name}>
                         {sku.name}
                       </span>
                       <span className="pricing-meta">
-                        <span className="pricing-cond">{sku.condition}</span>
-                        {` · ${sku.set_name} · ${sku.row['Number'] ?? ''} · ${sku.row['Rarity'] ?? ''}`}
+                        <span className={`pricing-cond${section.uniform ? ' pricing-meta-same' : ''}`}>{sku.condition}</span>
+                        <span className="pricing-meta-sep">·</span>
+                        <span className={section.uniform ? 'pricing-meta-same' : undefined}>{sku.set_name}</span>
+                        <span className="pricing-meta-sep">·</span>
+                        <span className="bn-mono">{sku.row['Number'] ?? ''}</span>
+                        {sku.row['Rarity'] ? (
+                          <>
+                            <span className="pricing-meta-sep">·</span>
+                            <span>{sku.row['Rarity']}</span>
+                          </>
+                        ) : null}
+                        {sku.listing === null ? null : (
+                          <span className="pricing-row-span">
+                            <span className="pricing-meta-sep">·</span>
+                            <LiveCount live={sku.listing.live} age={ageWords(readAtOf(sku))} />
+                          </span>
+                        )}
+                        {sku.in.length < 2 && !sku.over_cap ? null : (
+                          <span className="pricing-row-span">
+                            <span className="pricing-meta-sep">·</span>
+                            <span className="pricing-span-where">
+                              {boxes.length === 0
+                                ? `${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`
+                                : `${boxes.length === 1 ? 'Box' : 'Boxes'} ${boxes.join(', ')} · ${sku.in.length} run${sku.in.length === 1 ? '' : 's'}`}
+                            </span>
+                            {!sku.over_cap ? null : (
+                              <span
+                                className="pricing-span-cap bn-pill bn-pill-warn"
+                                title={`The runs separately claim more copies than the cap has room for. The copies TCGplayer was holding were read ${ageWords(readAtOf(sku)) ?? 'at an unrecorded time'}.`}
+                              >
+                                Runs claim {sku.claimed_add} · {sku.add_to_quantity} can go
+                              </span>
+                            )}
+                          </span>
+                        )}
+                        {why === null ? null : (
+                          <span className="pricing-row-note">
+                            <span className="pricing-meta-sep">·</span>
+                            <span className="pricing-row-why" title={why}>
+                              “{why}”
+                            </span>
+                          </span>
+                        )}
                       </span>
                     </div>
 
-                    {/* WHICH OF THESE IS MOVING — the question a list answers and a panel
-                        cannot (D79). A shape and a sign; every figure a reading has stays on
-                        `T`'s panel, where there is room to draw the anchor at size and its
-                        bound muted beneath it. `undefined` draws an empty cell, which is the
-                        honest rendering of a row nobody has asked about. */}
-                    <TrendCell read={trends[sku.sku]} />
-
-                    {/* THE HUMAN LABEL HERE, THE MACHINE STRING ON THE ROW'S SECOND LINE —
-                        and the split is arithmetic rather than taste. This column is 120px
-                        and `withheld: next_batch` measures 152px in Martian Mono at 10px
-                        (7px per character, before the 0.06em), so the token CANNOT be drawn
-                        inside the cell on one line. Stacked in here it wrapped to three
-                        lines, stood 54px tall in a 32px track, and overprinted the note
-                        below it — the two strings a held row draws were literally on top of
-                        each other. The second line already spans nine columns and is already
-                        this exact register, so that is where the token goes. */}
-                    {withheld ? (
-                      <span className="pricing-held">Holding</span>
-                    ) : (
-                      <input
-                        className="pricing-input"
-                        type="text"
-                        inputMode="decimal"
-                        aria-label={`Price for ${sku.name}`}
-                        defaultValue={typeof standing === 'string' ? standing : suggestion}
-                        ref={(node) => {
-                          if (node) inputs.current.set(sku.sku, node)
-                          else inputs.current.delete(sku.sku)
-                        }}
-                        onFocus={(event) => event.currentTarget.select()}
-                        onBeforeInput={(event) => {
-                          const native = event.nativeEvent as InputEvent
-                          const insert = native.data ?? ''
-                          if (insert === '') return
-                          const field = event.currentTarget
-                          // THE PREFILL CLEARS ON THE FIRST CHARACTER, LITERALLY AS ASKED:
-                          // "if i type numbers they ought to immediately clear and now my
-                          // typing be inputed as the price". Done at `beforeinput` rather
-                          // than relying on the select() above, because a click plants a
-                          // collapsed caret and an arrow key collapses a selection — and
-                          // neither may be allowed to produce `0.412`.
-                          //
-                          // ONE SHOT PER FIELD, and getting that wrong is not subtle: keyed
-                          // on the STORED answer instead, it cleared on every keystroke and
-                          // typing `4.50` left `0`.
-                          const first = !touched.current.has(sku.sku)
-                          touched.current.add(sku.sku)
-                          if (first && typeof answerFor(sku) !== 'string') field.value = ''
-                          const next =
-                            field.value.slice(0, field.selectionStart ?? 0) +
-                            insert +
-                            field.value.slice(field.selectionEnd ?? 0)
-                          if (!PRICE.test(next)) event.preventDefault()
-                        }}
-                        onKeyDown={(event) => onKey(event, sku)}
-                        onBlur={(event) => commit(sku, event.currentTarget.value)}
-                      />
-                    )}
-
-                    {SNAPS.map((column) => (
-                      <span
-                        key={column.key}
-                        className={`pricing-ref${column.field === 'market' ? ' pricing-ref-market' : ''}`}
-                        title={sku.row[
-                          column.field === 'market'
-                            ? 'TCG Market Price'
-                            : column.field === 'direct_low'
-                              ? 'TCG Direct Low'
-                              : column.field === 'low'
-                                ? 'TCG Low Price'
-                                : 'TCG Low Price With Shipping'
-                        ]}
-                      >
-                        {sku.snap[column.field] === null ? '—' : `$${sku.snap[column.field]}`}
+                    <div className="pricing-facts">
+                      <span className="pricing-qty" title={`${sku.add_to_quantity} of the ${sku.copies} copies on hand go in the file`}>
+                        <span className="bn-sr">Quantity </span>
+                        {sku.add_to_quantity} <span className="pricing-qty-of">of {sku.copies}</span>
                       </span>
-                    ))}
 
-                    {/* WHAT THIS ROW ALONE HOLDS. The run's reason for adding nothing is
-                        the group's heading above these rows — `groupOf` carries why — so what
-                        is left here is the operator's own note on a hold, which is per-row by
-                        nature and is the one string on the screen nothing else keeps a copy
-                        of. */}
-                    {/* ONE LINE, TWO REGISTERS, RIGHT-ALIGNED TOGETHER. The note and the held
-                        row's machine token are both `--util` 10px muted and both belong to
-                        this row, and the row reserves exactly ONE 13px line for that register
-                        — so they share it rather than contend for it. The token is last, which
-                        puts it flush right, directly under the `Holding` it belongs to, and
-                        leaves the reading order human-then-machine that docs/DESIGN.md's rule
-                        asks for.
+                      <TrendCell read={trends[sku.sku]} />
 
-                        THE SENTENCE YIELDS AND THE TOKEN NEVER DOES. `pricing-row-why`
-                        ellipsizes and carries its full text in `title`; the token is
-                        `flex: none`, because it is the greppable half — a `withheld: nex…`
-                        finds nothing in `inventory/prices.json`. Which way the line breaks under
-                        pressure is a decision, and this is it. */}
-                    {/* WHERE THIS CARD IS, WHEN IT IS IN MORE THAN ONE DRAWER — and the
-                        disagreement, where the runs already answered it two ways.
-
-                        THIS IS THE ROW THAT PAYS FOR THE WORKLIST. 78 of 423 SKUs on this
-                        machine sit in more than one run, 8 carried two answers, and 3 of those
-                        were a `withheld` hold answered with a price in a later sitting: SKU
-                        9191210 was held `bullish` above $5 out of box 3 and listed at $3.45 out
-                        of box 4 the next day. Nothing could have said so — a hold lives in its
-                        run and dies with it (D49) — and this line is what says it.
-
-                        THE BOXES AND NOT THE RUN NAMES. A person owns drawers, not
-                        directories; the runs are on the chips above. Deduped and ascending,
-                        which is the order the shelf is in. */}
-                    {sku.in.length < 2 && !sku.over_cap ? null : (
-                      <p className="pricing-row-span">
-                        <span className="pricing-span-where">
-                          {(() => {
-                            const boxes = [
-                              ...new Set(sku.positions.map((place) => place.box)),
-                            ].sort((a, b) => a - b)
-                            return boxes.length === 0
-                              ? `${sku.in.length} runs`
-                              : `${boxes.length === 1 ? 'Box' : 'Boxes'} ${boxes.join(', ')} · ${sku.in.length} runs`
-                          })()}
+                      {SNAPS.map((column) => (
+                        <span
+                          key={column.key}
+                          className={`pricing-ref pricing-ref-${column.field}${column.field === 'market' ? ' pricing-ref-market' : ''}`}
+                          data-empty={sku.snap[column.field] === null ? 'true' : undefined}
+                          title={`${column.column}: ${sku.row[column.column] || '—'} · press ${column.key.toUpperCase()} to use it`}
+                        >
+                          <span className="pricing-ref-label">{column.label} </span>
+                          {sku.snap[column.field] === null ? '—' : `$${sku.snap[column.field]}`}
                         </span>
-                        {/* THE CAP, WHERE THE RUNS SEPARATELY CLAIM MORE THAN CAN GO. Each run
-                            spends `live_cap - copies_out` believing it is alone, so runs joined
-                            before either emitted double-spend the same room — measured, two SKUs
-                            reached `pushed: 6` against a cap of 4. The Qty cell already shows the
-                            true figure; this says the runs disagree with it. */}
-                        {!sku.over_cap ? null : (
-                          <span className="pricing-span-cap">
-                            runs claim {sku.claimed_add}, {sku.add_to_quantity} can go
-                          </span>
-                        )}
-                      </p>
-                    )}
+                      ))}
+                    </div>
 
-                    {why === null && !withheld ? null : (
-                      <p className="pricing-row-note">
-                        {why === null ? null : (
-                          <span className="pricing-row-why" title={why}>
-                            {why}
+                    <div className="pricing-price" data-answer={withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'}>
+                      {withheld ? (
+                        <span className="pricing-held">
+                          <Icon name="lock" size={13} />
+                          Holding
+                        </span>
+                      ) : (
+                        <label className="pricing-field">
+                          <span className="pricing-currency" aria-hidden="true">
+                            $
                           </span>
-                        )}
-                        {withheld ? (
-                          <span className="pricing-machine">
-                            withheld{heldReason(standing) ? `: ${heldReason(standing)}` : ''}
-                          </span>
-                        ) : null}
-                      </p>
-                    )}
+                          <input
+                            className="pricing-input"
+                            type="text"
+                            inputMode="decimal"
+                            placeholder={sku.bucket === 'no_market_data' ? '—' : undefined}
+                            aria-label={`Price for ${sku.name}`}
+                            defaultValue={typeof standing === 'string' ? standing : suggestion}
+                            ref={(node) => {
+                              if (node) inputs.current.set(sku.sku, node)
+                              else inputs.current.delete(sku.sku)
+                            }}
+                            onFocus={(event) => event.currentTarget.select()}
+                            onBeforeInput={(event) => {
+                              const native = event.nativeEvent as InputEvent
+                              const insert = native.data ?? ''
+                              if (insert === '') return
+                              const field = event.currentTarget
+                              // THE PREFILL CLEARS ON THE FIRST CHARACTER, one shot per field.
+                              const firstKey = !touched.current.has(sku.sku)
+                              touched.current.add(sku.sku)
+                              if (firstKey && typeof answerFor(sku) !== 'string') field.value = ''
+                              const next =
+                                field.value.slice(0, field.selectionStart ?? 0) + insert + field.value.slice(field.selectionEnd ?? 0)
+                              if (!PRICE.test(next)) event.preventDefault()
+                            }}
+                            onKeyDown={(event) => onKey(event, sku)}
+                            onBlur={(event) => commit(sku, event.currentTarget.value)}
+                          />
+                          <Icon name="check" size={13} className="pricing-price-check" />
+                        </label>
+                      )}
+                      <span
+                        className={`pricing-state pricing-state-${rowNote === null ? state.tone : 'warn'}${rowNote === null ? '' : ' pricing-refusal'}`}
+                        title={rowNote ?? state.title ?? state.text}
+                      >
+                        {rowNote ?? state.text}
+                      </span>
+                    </div>
 
-                    {holdFor !== sku.sku ? null : (
-                      <HoldPanel sku={sku} onSet={setHold} onCancel={() => setHoldFor(null)} />
+                    <div className="pricing-actions">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="history"
+                        iconOnly
+                        className="pricing-history"
+                        aria-pressed={pinned === sku.sku}
+                        aria-label={`Price history for ${sku.name}`}
+                        title="Price history · hold T to peek"
+                        disabled={run === null}
+                        onClick={() => (pinned === sku.sku ? unpin() : pinHistory(sku))}
+                      >
+                        Price history
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={withheld ? 'unlock' : 'lock'}
+                        iconOnly
+                        className="pricing-hold"
+                        aria-pressed={withheld}
+                        aria-label={withheld ? `Release ${sku.name}` : `Hold ${sku.name}`}
+                        title={withheld ? 'Release · H' : 'Hold back · H'}
+                        onClick={() => toggleHold(sku)}
+                      >
+                        {withheld ? 'Release' : 'Hold'}
+                      </Button>
+                    </div>
+
+                    {holdFor !== sku.sku ? null : phone ? (
+                      createPortal(
+                        <>
+                          <div className="bn-scrim" onClick={() => cancelHold(sku)} />
+                          <HoldPanel sku={sku} sheet onSet={setHold} onCancel={() => cancelHold(sku)} />
+                        </>,
+                        document.body,
+                      )
+                    ) : (
+                      <HoldPanel sku={sku} onSet={setHold} onCancel={() => cancelHold(sku)} />
                     )}
                   </div>
                 )
               })}
             </div>
           </section>
-        )
-      })}
+        ))}
+      </div>
 
-      {/* THE READING, AIMED AT ONE SKU AND NEVER AT THE FOCUSED ROW. `readHistory` carries
-          the reason: a read leaves this machine, so a panel that re-read on the focused row
-          would fire one request per arrow key.
-
-          A PIN SURVIVES THE ROW SCROLLING AWAY, which is the other half of being pinned. The
-          operator opens a reading, walks the list comparing it against other cards, and the
-          panel goes on describing the card they opened it for — with its SKU printed, so
-          which card that is stays answerable. A held `t` ends with the key instead, and the
-          panel says which of the two it is: `Keep open` where letting go would end it,
-          `Close` where a press is what it will take. */}
-      {historySku === null ? null : (
-        <PriceHistoryPanel
-          sku={historySku.sku}
-          name={historySku.name}
-          read={history[historySku.sku]}
-          pinned={pinned === historySku.sku}
-          onClose={unpin}
-          onKeep={() => pinHistory(historySku)}
-          onRetry={() => readHistory(historySku, true)}
-        />
-      )}
-
-      {/* ONE CORNER, ONE PANEL. `p` clears a pinned reading outright, and this guard covers
-          the case a press cannot reach: a held `t` arriving over an open photograph. It hides
-          rather than closes, so the photograph is back on the release and a gesture this
-          cheap to make has spent nothing the operator must restore by hand. */}
-      {photoSku === null || photoFor === null || historyFor !== null ? null : (
-        <aside className="pricing-photo" aria-label={`Photograph of ${photoSku.name}`}>
-          <img src={photoUrl(photoAt?.box ?? 0, photoAt?.index ?? 0)} alt={photoSku.name} />
-          <p className="pricing-photo-caption">
-            {/* THE SERVER'S STRING, COMPOSED ON THIS READ, never the one frozen into
-                `pricing.json` at join time (D58, on D56's rule). It matters here more than
-                anywhere the same string is drawn larger: `photoUrl` addresses the photograph
-                above BY SLOT, so the picture has always been the index's current occupant
-                while the stored caption was the join's. A copy sold since now reads
-                `Box 3 · departed · B3 #17` instead of pointing at the card that closed up
-                behind it, and a divider moved since reads against the layout in the box
-                today. Nothing is composed here — `server/pipeline_routes.py` sends the
-                finished string, as every other position on every other screen arrives.
-
-                `no label · <key>` IS `BoxBrowse`'s OWN FALLBACK and is one vocabulary with
-                it, for its reason: the server answers null where it will not name a place,
-                and `3/17` bare reads like a position and is not one. */}
-            {photoAt === null
-              ? null
-              : photoAt.label ?? `no label · ${photoAt.box}/${photoAt.index}`}
-            {' · '}
-            {(photoFor.at % photoSku.positions.length) + 1} of {photoSku.positions.length}
-          </p>
-          <div className="pricing-photo-controls">
-            <button
-              type="button"
-              className="pricing-plain"
-              onClick={() => setPhotoFor({ sku: photoFor.sku, at: photoFor.at + 1 })}
-              disabled={photoSku.positions.length < 2}
-            >
-              Next copy
-            </button>
-            <button type="button" className="pricing-plain" onClick={() => setPhotoFor(null)}>
-              Close
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* ------------------------------------------------------- the ship bar (D54)
-          STICKY AND IN FLOW, NOT `fixed`, AND THAT IS THE ANSWER TO "HOW DOES THE LIST AVOID
-          BEING COVERED". A sticky last child reserves its own height in the document, so the
-          padding under a ~6,500px list is exactly the bar's height BY CONSTRUCTION —
-          including when the receipt appears and the bar grows. A fixed bar needs a
-          hand-maintained `padding-bottom` on `.pricing` equal to a height that changes, which
-          is the two-declarations-that-must-agree drift this stylesheet already argues against
-          for its grid template. */}
-      {/* THE MERGED PRESS — one import file over every run on screen (D86).
-          `emit` is per run and stays so; what this adds is a send, because the CAP has to be
-          re-derived across it. `pipeline/join.py` spends `live_cap - copies_out` per run
-          against a cap that is global, so pressing the per-run button N times IS the
-          over-push: measured from an identical cleared ledger, three separate emits over
-          three real runs wrote two SKUs past the cap of four and one merged emit wrote none.
-          The bar only exists for a send of more than one, because for one run the press
-          below is that same command with nothing to merge. */}
-      {loaded.length < 2 ? null : (
+      {/* THE DRAWER: the reading, or the photograph, for one card. Beside the sidebar on desktop,
+          a bottom sheet on a phone. A held `t` outranks a pin while the key is down. */}
+      {historySku !== null ? (
+        createPortal(
         <aside
-          className="pricing-ship"
-          ref={measureShip}
-          role="region"
-          aria-label="Ship these runs"
+          className="bn-sheet bn-sheet-left pricing-drawer"
+          aria-label={`Price history for ${historySku.name}`}
+          data-peek={peek !== null ? 'true' : undefined}
+          style={{ '--pricing-drawer-left': `${shellLeft()}px` } as CSSProperties}
         >
-          {subThresholdRow}
-          <div className="pricing-ship-row">{readyLine}</div>
-          <div className="pricing-ship-row">
-            <span className="pricing-ship-key">
-              {loaded.length} runs · {boxesLoaded.length}{' '}
-              {boxesLoaded.length === 1 ? 'box' : 'boxes'} · one file
+          <header className="pricing-drawer-head">
+            <div className="bn-tabs pricing-drawer-tabs" role="tablist">
+              <button type="button" role="tab" className="bn-tab" aria-selected="true">
+                <Icon name="history" size={14} /> History
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className="bn-tab"
+                aria-selected="false"
+                onClick={() => {
+                  unpin()
+                  setPhotoFor({ sku: historySku.sku, at: 0 })
+                }}
+              >
+                <Icon name="image" size={14} /> Photo
+              </button>
+            </div>
+            <Button variant="ghost" size="sm" icon="x" iconOnly onClick={closeDrawer}>
+              Close
+            </Button>
+          </header>
+          <PriceHistoryPanel
+            sku={historySku.sku}
+            name={historySku.name}
+            read={history[historySku.sku]}
+            readAge={ageWords(readAtOf(historySku))}
+            pinned={pinned === historySku.sku}
+            onClose={unpin}
+            onKeep={() => pinHistory(historySku)}
+            onRetry={() => readHistory(historySku, true)}
+          />
+        </aside>,
+        document.body,
+        )
+      ) : photoSku !== null && photoFor !== null ? (
+        createPortal(
+        <aside
+          className="bn-sheet bn-sheet-left pricing-drawer"
+          aria-label={`Photograph of ${photoSku.name}`}
+          style={{ '--pricing-drawer-left': `${shellLeft()}px` } as CSSProperties}
+        >
+          <header className="pricing-drawer-head">
+            <div className="bn-tabs pricing-drawer-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                className="bn-tab"
+                aria-selected="false"
+                disabled={run === null}
+                onClick={() => pinHistory(photoSku)}
+              >
+                <Icon name="history" size={14} /> History
+              </button>
+              <button type="button" role="tab" className="bn-tab" aria-selected="true">
+                <Icon name="image" size={14} /> Photo
+              </button>
+            </div>
+            <Button variant="ghost" size="sm" icon="x" iconOnly onClick={closeDrawer}>
+              Close
+            </Button>
+          </header>
+          <div className="pricing-photo">
+            <div className="pricing-photo-head">
+              <h3 title={photoSku.name}>{photoSku.name}</h3>
+              <span className="pricing-machine">sku {photoSku.sku}</span>
+            </div>
+            <div className="bn-photo pricing-photo-frame">
+              <img src={photoUrl(photoAt?.box ?? 0, photoAt?.index ?? 0)} alt={photoSku.name} />
+            </div>
+            <p className="pricing-photo-caption">
+              <Icon name="pin" size={13} />
+              {photoAt === null ? null : photoAt.label ?? `no label · ${photoAt.box}/${photoAt.index}`}
+              {' · '}
+              {(photoFor.at % photoSku.positions.length) + 1} of {photoSku.positions.length}
+            </p>
+            <div className="pricing-photo-controls">
+              <Button
+                icon="chevronRight"
+                onClick={() => setPhotoFor({ sku: photoFor.sku, at: photoFor.at + 1 })}
+                disabled={photoSku.positions.length < 2}
+              >
+                Next copy
+              </Button>
+              <Button variant="quiet" onClick={() => setPhotoFor(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </aside>,
+        document.body,
+        )
+      ) : null}
+
+      {/* THE SHIP BAR (D54): sticky, in flow, one primary. A merged send over several runs
+          re-derives the cap once across them (D86). */}
+      {loaded.length < 2 ? null : (
+        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship these runs">
+          <div className="pricing-ship-status">
+            <span className="bn-pill bn-pill-accent">
+              <Icon name="layers" size={12} />
+              {loaded.length} runs · {boxesLoaded.length} {boxesLoaded.length === 1 ? 'box' : 'boxes'} · one file
             </span>
-            <span className="pricing-ship-says">
-              The cap is spent once across the send, so a card in three drawers gets one row.
+            <span className="pricing-ready pricing-ship-says">
+              The cap is spent once across the send, so a card in three boxes gets one row.
             </span>
-            <label className="pricing-ship-only">
+          </div>
+          <div className="pricing-ship-act">
+            <label className="bn-check pricing-ship-only">
+              <input type="checkbox" checked={listedOnly} onChange={(event) => setListedOnly(event.currentTarget.checked)} />
+              just the cards above the cut-off
+            </label>
+            {/* THE SPLIT IS MEANINGLESS OVER A FILTERED SEND — "listed only" has already left the
+                lower half out, so there is no second file to write. Disabled rather than hidden:
+                a control that vanishes reads as one you imagined. */}
+            <label className="bn-check pricing-ship-only" data-off={listedOnly ? 'true' : undefined}>
               <input
                 type="checkbox"
-                checked={listedOnly}
-                onChange={(event) => setListedOnly(event.currentTarget.checked)}
+                checked={splitFiles && !listedOnly}
+                disabled={listedOnly}
+                onChange={(event) => setSplitFiles(event.currentTarget.checked)}
               />
-              just the above-threshold cards
+              split it in two, either side of the cut-off
             </label>
-            <button
-              type="button"
+            {receipt === null ? null : (
+              <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
+                {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="lg"
+              icon="send"
               className="pricing-emit"
+              busy={sendingAll}
               disabled={sendingAll}
               onClick={() => {
                 setSendingAll(true)
                 setShipTrouble(null)
                 void (async () => {
                   try {
-                    const result = await emitMerged(loaded, { listedOnly })
-                    setReceipt({
-                      ok: result.ok,
-                      console: result.console,
-                      files: result.files,
-                    })
+                    const result = await emitMerged(loaded, { listedOnly, splitThreshold: splitFiles && !listedOnly })
+                    setReceipt({ ok: result.ok, console: result.console, files: result.files })
+                    const imports = (result.files ?? []).filter((file) => file.is_import)
+                    toast(
+                      result.ok
+                        ? {
+                            kind: 'ok',
+                            title: `${imports.length} import file${imports.length === 1 ? '' : 's'} written`,
+                            body: 'Import to Staged in TCGplayer, then reconcile on Runs.',
+                            action: { label: 'Files', onPress: () => setFilesOpen(true) },
+                          }
+                        : {
+                            kind: 'refusal',
+                            title: 'Emit refused',
+                            body: result.console.trim().split('\n').slice(-1)[0] ?? '',
+                            action: { label: 'Details', onPress: () => setFilesOpen(true) },
+                          },
+                    )
                   } catch (err) {
                     setShipTrouble(describeFailure(err))
                   } finally {
@@ -2471,145 +2733,156 @@ export function Pricing() {
                 })()
               }}
             >
-              {sendingAll ? 'Writing…' : 'Write one import file'}
-            </button>
+              {sendingAll ? 'Writing…' : splitFiles && !listedOnly ? 'Write two import files' : 'Write one import file'}
+            </Button>
           </div>
-          {receipt === null ? null : (
-            <div className="pricing-ship-receipt">
-              <pre className="pricing-console">{receipt.console}</pre>
-              {(receipt.files ?? [])
-                .filter((file) => file.is_import)
-                .map((file) => (
-                  <a
-                    key={file.name}
-                    className="pricing-plain"
-                    href={runFileUrl(loaded[loaded.length - 1] as string, file.name)}
-                    download={file.name}
-                  >
-                    {file.name}
-                  </a>
-                ))}
-            </div>
-          )}
           {shipTrouble === null ? null : (
-            <div className="pricing-note-block">
-              <p className="pricing-note-text">{shipTrouble.message}</p>
-              <p className="pricing-machine">{shipTrouble.code}</p>
-            </div>
+            <Notice tone="danger" title={shipTrouble.message} code={shipTrouble.code} className="pricing-ship-trouble" />
+          )}
+          {!filesOpen || receipt === null ? null : (
+            <ReceiptDialog
+              receipt={receipt}
+              run={loaded[loaded.length - 1] as string}
+              consoleOpen={consoleOpen}
+              onToggleConsole={() => setConsoleOpen((on) => !on)}
+              onClose={() => setFilesOpen(false)}
+            />
           )}
         </aside>
       )}
 
       {run === null ? null : (
-        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run">
-          {subThresholdRow}
-
-          <div className="pricing-ship-row">
-            {readyLine}
-            {queued === 0 ? null : (
-              /* WHAT *JOIN* QUEUED, worded as such: nothing rewrites `counts` until the next
-                 join, so this is a fact about the run rather than a live queue depth. A
-                 queued card is not in `report.matches`, so it is genuinely left out of the
-                 file — the cost is real and the remedy is a re-join. */
-              <p className="pricing-ready pricing-ready-warn">
-                This run’s join sent {queued} card{queued === 1 ? '' : 's'} to{' '}
-                <a href="#/review">review</a>. Emitting now leaves them out of the file.
-              </p>
-            )}
+        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Ship this run" data-ready={owes.length === 0 ? 'true' : 'false'}>
+          {/* THE VERDICT IS A PRESS, AND THE ACCOUNT OF IT IS ON THE DECK. The bar carries the
+              answer and the button; the sentence that says what is still owed lives at the top
+              of the screen, where a person lands. This walks them back to it. */}
+          <div className="pricing-ship-status">
+            <button
+              type="button"
+              className="pricing-ship-verdict"
+              data-ready={owes.length === 0 ? 'true' : 'false'}
+              onClick={showDeck}
+              title="What this means is at the top of the screen"
+            >
+              <span className={`bn-pill ${owes.length === 0 ? 'bn-pill-ok' : 'bn-pill-warn'}`}>
+                <Icon name={owes.length === 0 ? 'check' : 'alert'} size={12} />
+                {owes.length === 0 ? 'Ready' : 'Not yet'}
+              </span>
+              <span className="pricing-ready">
+                {owes.length === 0 ? (
+                  progress.rule > 0 ? (
+                    <>
+                      <strong>{standingSays}</strong>
+                      {progress.answered === 0 ? ' · nothing typed or held' : ` · ${progress.answered} typed or held`}
+                    </>
+                  ) : (
+                    <strong>Pricing is answered</strong>
+                  )
+                ) : (
+                  <>
+                    <strong>Emit will refuse</strong> · {owes.length} thing{owes.length === 1 ? '' : 's'} owed
+                  </>
+                )}
+              </span>
+              <Icon name="chevronUp" size={13} />
+            </button>
           </div>
 
-          <div className="pricing-ship-row pricing-ship-act">
+          <div className="pricing-keys" aria-hidden="true">
+            <span>
+              <Kbd>↵</Kbd> next
+            </span>
+            <span>
+              <Kbd>M</Kbd>
+              <Kbd>L</Kbd>
+              <Kbd>S</Kbd>
+              <Kbd>D</Kbd> snap
+            </span>
+            <span>
+              <Kbd>H</Kbd> hold
+            </span>
+            <span>
+              <Kbd>T</Kbd> history
+            </span>
+            <span>
+              <Kbd>P</Kbd> photo
+            </span>
+            <span>
+              <Kbd>U</Kbd> undo
+            </span>
+          </div>
+
+          <div className="pricing-ship-act">
+            <label className="bn-check pricing-ship-only">
+              <input type="checkbox" checked={splitFiles} onChange={(event) => setSplitFiles(event.currentTarget.checked)} />
+              split it in two, either side of the cut-off
+            </label>
+            {receipt === null ? null : (
+              <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
+                {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}
+              </Button>
+            )}
             {ship === 'waiting' ? (
               <>
                 <span className="pricing-ship-key">Saving your answers…</span>
-                <button
-                  type="button"
-                  className="pricing-plain"
-                  onClick={() => setShip('idle')}
-                >
+                <Button variant="quiet" onClick={() => setShip('idle')}>
                   Cancel
-                </button>
+                </Button>
               </>
             ) : emitted && !armed ? (
               <>
-                {/* ABSENT, NOT DISABLED. A second press used to overwrite the good CSV with a
-                    header-only file and blank the manifest, after which `reconcile` refused a
-                    run that had emitted perfectly — D54 fixed that in the command, and this
-                    is the half that stops the press being made by momentum. */}
                 <span className="pricing-ship-key">
-                  This run has already written its import files.
+                  <Icon name="check" size={13} /> Already written
                 </span>
-                <button
-                  type="button"
-                  className="pricing-plain"
-                  onClick={() => setArmed(true)}
-                >
+                <Button icon="refresh" onClick={() => setArmed(true)}>
                   Write them again
-                </button>
+                </Button>
               </>
             ) : emitted && armed ? (
               <>
-                <span className="pricing-ship-key">
-                  Writing again sends only what has not been sent yet.
-                </span>
-                <button
-                  type="button"
+                <span className="pricing-ship-key">Writing again sends only what has not been sent yet.</span>
+                <Button variant="quiet" onClick={() => setArmed(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  icon="send"
                   className="pricing-emit"
+                  busy={ship === 'sending'}
                   disabled={ship === 'sending'}
                   onClick={() => setShip('waiting')}
                 >
                   {ship === 'sending' ? 'Writing…' : 'Write again'}
-                </button>
-                <button type="button" className="pricing-plain" onClick={() => setArmed(false)}>
-                  Cancel
-                </button>
+                </Button>
               </>
             ) : (
-              /* AN OUTLINE, NEVER A SOLID FILL. `docs/DESIGN.md` reserves the fill for a
-                 screen with exactly one thing to do, and a hundred-row worklist is the
-                 definition of more than one; `pricing.spec.ts` asserts zero accent grounds
-                 here. Emphasis comes from position — the right end of a bar that is always on
-                 screen — rather than from colour. NO KEYBOARD SHORTCUT: every letter on this
-                 screen is typed with the hands in a price field, and a typo that ships a run
-                 is not a mistake worth trading a keystroke for. */
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="lg"
+                icon="send"
                 className="pricing-emit"
+                busy={ship === 'sending'}
                 disabled={ship === 'sending'}
                 onClick={() => setShip('waiting')}
               >
-                {ship === 'sending' ? 'Writing…' : 'Write the import files'}
-              </button>
+                {ship === 'sending' ? 'Writing…' : splitFiles ? 'Write the two import files' : 'Write the import file'}
+              </Button>
             )}
           </div>
 
           {shipTrouble === null ? null : (
-            <div className="pricing-note-block">
-              <p className="pricing-note-text">{shipTrouble.message}</p>
-              <p className="pricing-machine">{shipTrouble.code}</p>
-            </div>
+            <Notice tone="danger" title={shipTrouble.message} code={shipTrouble.code} className="pricing-ship-trouble" />
           )}
 
-          {receipt === null ? null : (
-            <div className="pricing-ship-receipt">
-              <p className={`pricing-ready${receipt.ok ? '' : ' pricing-ready-warn'}`}>
-                {receipt.ok ? 'emit finished' : 'emit refused'}
-              </p>
-              <pre className="pricing-ship-console" aria-label="What emit printed">
-                {receipt.console}
-              </pre>
-              {!receipt.ok ? null : (
-                <>
-                  <RunFiles run={run} files={receipt.files} only="import" />
-                  {/* THE NEXT STEP IS SOMEWHERE ELSE, AND IT IS AN ERRAND. Between these
-                      files and `reconcile` the operator leaves the app entirely. */}
-                  <p className="pricing-ready">
-                    Import these to Staged in TCGplayer, then come back with Export From
-                    Staged and run <a href="#/runs">reconcile on Runs</a>.
-                  </p>
-                </>
-              )}
-            </div>
+          {!filesOpen || receipt === null ? null : (
+            <ReceiptDialog
+              receipt={receipt}
+              run={run}
+              consoleOpen={consoleOpen}
+              onToggleConsole={() => setConsoleOpen((on) => !on)}
+              onClose={() => setFilesOpen(false)}
+            />
           )}
         </aside>
       )}
@@ -2617,70 +2890,701 @@ export function Pricing() {
   )
 }
 
-/** The hold panel. It owns the keyboard while it is up, and its choices are keyed on LETTERS
- *  rather than the digits `#/review`'s panel uses — the digits here are price entry, so a
- *  digit inside a panel raised from a focused price field is unresolvable. */
+/* ============================================================ the landing deck (2026-09-03)
+ *
+ * Two panels, above the list, answering the two questions a person has on arrival: where the
+ * cut-off is, and whether this can be written at all. Both answers used to be somewhere else —
+ * the first inside the sub-threshold section's header and only once a single run was picked,
+ * the second under a sticky bar at the bottom of a hundred rows. */
+
+
+/* THE BIG FIGURE, TYPED INTO DIRECTLY. It carries the display weight of a heading and the
+   behaviour of a field: the `$` is drawn beside it rather than typed, the alphabet is closed to
+   money, Enter and blur commit, Escape puts back what stood. It is an input at every size so
+   there is no click-to-reveal state to discover — the thing that looks like the answer is the
+   thing you change.
+
+   IT HOLDS ITS OWN DRAFT AND PUBLISHES NOTHING UNTIL A COMMIT. Half-typed money — `0.`, `` —
+   is a real keystroke on the way to a price and not a policy, and a field that told its parent
+   about every one of them would re-partition the list under the hand typing into it. */
+function BigMoney({
+  value,
+  onCommit,
+  label,
+}: {
+  value: string
+  onCommit: (next: string) => void
+  label: string
+}) {
+  const [held, setHeld] = useState(value)
+  useEffect(() => {
+    setHeld(value)
+  }, [value])
+  /* A FIGURE THAT CANNOT BE WRITTEN SNAPS BACK TO THE ONE THAT STANDS. The field's alphabet
+     admits `""` and a trailing dot on the way to a price, and `Decimal("0.")` is an error on
+     the other side of the wire — so an empty field is a cleared draft and never a cut-off of
+     nothing. */
+  const commit = (text: string) => {
+    const next = text.trim()
+    if (!priceable(next)) {
+      setHeld(value)
+      return
+    }
+    setHeld(next)
+    onCommit(next)
+  }
+  return (
+    <span className="pricing-cheap-amount">
+      <span aria-hidden="true" className="pricing-cheap-currency">
+        $
+      </span>
+      <input
+        className="pricing-cheap-input"
+        inputMode="decimal"
+        aria-label={label}
+        value={held}
+        size={Math.max(4, held.length + 1)}
+        onChange={(event) => {
+          setHeld(event.currentTarget.value.replace(/[^0-9.]/g, ''))
+        }}
+        onFocus={(event) => event.currentTarget.select()}
+        onBlur={(event) => commit(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            setHeld(value)
+            event.currentTarget.blur()
+            return
+          }
+          if (event.key !== 'Enter') return
+          event.preventDefault()
+          commit(event.currentTarget.value)
+          event.currentTarget.blur()
+        }}
+      />
+    </span>
+  )
+}
+
+/**
+ * THE CUT-OFF — one figure doing two jobs (the owner, 2026-09-03).
+ *
+ * D9 wrote a threshold and a cheap-card price as two settings and this panel drew them as
+ * two, which inverts: at a threshold of $0.40 and a cheap answer of $0.49, a card worth $0.38
+ * lists at $0.49 and a card worth $0.42 lists at $0.42, so the cheap one goes out dearer than
+ * the one that cleared the bar. They are the same variable. Everything under the cut-off lists
+ * AT the cut-off, so nothing below the line can ever price above something over it.
+ *
+ * THE FIGURE IS THE CONTROL. It carries the display weight of a heading and the behaviour of a
+ * field — the `$` is drawn beside it rather than typed, the alphabet is closed to money, Enter
+ * and blur commit, Escape puts back what stood. It is an input at every size, so there is no
+ * click-to-reveal state to discover: the thing that looks like the answer is the thing you
+ * change. What it used to be was a read-out with a segmented row under it offering "a flat
+ * price" or "the $X floor" plus a second small field, so the biggest thing on the panel was the
+ * one thing you could not touch and the same number appeared twice.
+ *
+ * THE PANEL IS DRAWN WHETHER OR NOT ANY CARD IS UNDER THE LINE. A cut-off typed low enough to
+ * empty the lower section would otherwise take its own control off the screen with it, and the
+ * operator would have no way back to the figure they had just moved.
+ */
+function CutoffPanel({
+  count,
+  above,
+  cut,
+  from,
+  stranded,
+  runName,
+  runLabel,
+  runCount,
+  onCut,
+  onRunCut,
+  onPickRun,
+}: {
+  count: number
+  above: number
+  cut: string
+  from: 'run' | 'store' | 'default'
+  stranded: string | null
+  runName: string | null
+  runLabel: string | null
+  runCount: number
+  onCut: (figure: string) => void
+  onRunCut: (figure: string | undefined) => void
+  onPickRun: () => void
+}) {
+  const overridden = from === 'run'
+  const written = from !== 'default'
+  const commit = overridden ? onRunCut : onCut
+
+  return (
+    <section
+      className="bn-panel pricing-cheap"
+      data-written={written ? 'yes' : 'no'}
+      data-override={overridden ? 'true' : undefined}
+      aria-label="The cut-off"
+    >
+      <header className="pricing-deck-head">
+        <span className="pricing-deck-mark">
+          <Icon name="dollar" size={16} />
+        </span>
+        <div className="pricing-deck-heading">
+          {/* The eyebrow names WHOSE figure the number below is, so the panel cannot read as
+              the store's while a run is quietly overriding it. */}
+          <span className="bn-eyebrow">{overridden ? 'Store policy · overridden here' : 'Store policy'}</span>
+          <h2 className="pricing-deck-title">The cut-off</h2>
+        </div>
+        <span className={`bn-pill ${written ? 'bn-pill-ok' : 'bn-pill-warn'}`}>
+          <Icon name={written ? 'check' : 'alert'} size={12} />
+          {written ? 'Written' : 'Default'}
+        </span>
+      </header>
+
+      <div className="pricing-cheap-figure">
+        <BigMoney
+          value={cut}
+          onCommit={commit}
+          label={overridden ? "This run's cut-off" : "The store's cut-off"}
+        />
+        <span className="pricing-cheap-caption">
+          <span className="pricing-cheap-says">
+            {overridden ? 'this run only · ' : 'the line, and what everything under it lists at'}
+          </span>
+          {/* BOTH SIDES OF THE LINE, because the figure moves both. A count of what is under it
+              alone reads as a warning; the pair reads as a partition, which is what it is. */}
+          <span className="pricing-cheap-count">
+            {count} under · {above} above
+          </span>
+        </span>
+      </div>
+
+      {stranded === null ? null : (
+        /* TWO FIGURES WHERE THERE IS NOW ONE. Reported rather than resolved on the operator's
+           behalf: which of the two they meant is not a thing this screen can know, and typing
+           either — or pressing this — writes both keys and ends the disagreement. */
+        <Notice tone="warn" title="This store still holds a separate cheap-card price" className="pricing-cheap-stranded">
+          <span>
+            Cards under the line are priced at <strong>{stranded}</strong> on disk, not at the cut-off. Emit
+            uses that figure until one of them is written over.
+          </span>
+          <Button size="sm" variant="quiet" icon="check" onClick={() => commit(cut)}>
+            Make them both ${cut}
+          </Button>
+        </Notice>
+      )}
+
+      <div className="pricing-cheap-run" data-on={overridden ? 'true' : undefined}>
+        <div className="pricing-cheap-run-head">
+          <span className="bn-label pricing-cheap-run-key">This run only</span>
+          {runName === null ? null : (
+            <span className="pricing-cheap-run-name" title={runName}>
+              {runLabel ?? runName}
+            </span>
+          )}
+          {overridden ? <span className="bn-pill bn-pill-accent">Overriding</span> : null}
+        </div>
+        {runName === null ? (
+          <p className="pricing-cheap-run-off">
+            {runCount} runs are loaded, and an override belongs to one lot. Pick a single run to give it
+            a cut-off of its own.
+            <Button size="sm" variant="ghost" icon="layers" onClick={onPickRun}>
+              Pick a run
+            </Button>
+          </p>
+        ) : (
+          <>
+            {/* ONE CONTROL, AND WHICH ONE DEPENDS ON WHAT IS WRITTEN. The figure above is where
+                the number is typed, for whichever answer is in force, so the only thing left to
+                decide here is WHOSE it is. Overriding starts from the store's own figure, so the
+                first thing typed is a change to a number already on the screen rather than an
+                empty field. */}
+            <div className="pricing-cheap-controls">
+              {overridden ? (
+                <Button size="sm" variant="quiet" icon="undo" onClick={() => onRunCut(undefined)}>
+                  Follow the store again
+                </Button>
+              ) : (
+                <Button size="sm" variant="quiet" icon="tag" onClick={() => onRunCut(cut)}>
+                  Give this run its own cut-off
+                </Button>
+              )}
+            </div>
+            <p className="pricing-cheap-run-says">
+              {overridden ? (
+                <>
+                  This run splits at <strong>${cut}</strong>, and its cheap cards go out at that. Every
+                  other run keeps the store’s.
+                </>
+              ) : (
+                <>These cards follow the store’s cut-off. Nothing is written against this run.</>
+              )}
+            </p>
+          </>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** The two reasons `emit` can refuse that this screen can see, said as a person would.
+ *  `readiness.ts` owns the machine strings and the audited vocabulary; this is the wording,
+ *  and the machine string is drawn beneath it rather than replaced by it. */
+const OWED_SAYS: Record<OwedReason, string> = {
+  sub_threshold_unset: 'The cheap-card answer',
+  no_market_data_unanswered: 'A price for every card with no market value',
+}
+
+/**
+ * WHETHER THIS CAN BE WRITTEN, ON THE LANDING (the owner, 2026-09-03).
+ *
+ * The verdict was only ever in the sticky bar at the bottom, which on a hundred-row worklist
+ * is a sentence you meet after the work rather than before it. The press stays down there;
+ * the account of it is here.
+ */
+function ReadyPanel({
+  owes,
+  progress,
+  cheapMoney,
+  queued,
+  runCount,
+  boxCount,
+  readAge,
+  emitted,
+}: {
+  owes: readonly { reason: OwedReason; count: number }[]
+  progress: {
+    total: number
+    typed: number
+    held: number
+    cheap: number
+    answered: number
+    rule: number
+    closed: number
+    outRows: number
+    outCopies: number
+  }
+  cheapMoney: string
+  queued: number
+  runCount: number
+  boxCount: number
+  readAge: string | null
+  emitted: boolean
+}) {
+  const ready = owes.length === 0
+  /* TWO KINDS OF UNTYPED ROW, AND THEY GO OUT AT DIFFERENT FIGURES. Everything below counts
+     them apart: a listable row nobody typed into takes the rule's figure, a cheap one takes
+     the cheap-card answer. Saying "on the rule" over both was false for every cheap row. */
+  const ruleRows = Math.max(0, progress.rule - progress.cheap)
+  const standing = [
+    ruleRows > 0 ? `${ruleRows} row${ruleRows === 1 ? '' : 's'} still on the rule` : null,
+    progress.cheap > 0 ? `${progress.cheap} cheap card${progress.cheap === 1 ? '' : 's'} on the cheap-card answer` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ')
+  const writesAt =
+    ruleRows > 0 && progress.cheap > 0
+      ? `Emit will write the rule rows at the rule’s figure and the cheap ones at ${cheapMoney}.`
+      : ruleRows > 0
+        ? 'Emit will write them at the rule’s figure.'
+        : `Emit will write them at ${cheapMoney}.`
+  return (
+    <section className="bn-panel pricing-verdict" data-ready={ready ? 'true' : 'false'} aria-label="Whether the import files can be written">
+      <header className="pricing-deck-head">
+        <span className="pricing-deck-mark">
+          <Icon name={ready ? 'check' : 'alert'} size={16} />
+        </span>
+        <div className="pricing-deck-heading">
+          <span className="bn-eyebrow">Before you write</span>
+          <h2 className="pricing-deck-title">{ready ? 'Ready to write' : 'Not ready yet'}</h2>
+        </div>
+        {emitted ? (
+          <span className="bn-pill bn-pill-ok">
+            <Icon name="check" size={12} /> Written
+          </span>
+        ) : null}
+      </header>
+
+      {ready ? (
+        <p className="pricing-verdict-says">
+          {progress.rule > 0 ? (
+            <>
+              <strong>{standing}</strong>
+              {progress.answered === 0 ? ' — nothing typed or held yet.' : ` · ${progress.answered} typed or held.`}{' '}
+              {writesAt}
+            </>
+          ) : (
+            <>
+              <strong>Pricing is answered.</strong> Every row carries a price a hand put there.
+            </>
+          )}
+        </p>
+      ) : (
+        <ul className="pricing-owes">
+          {owes.map((one) => (
+            <li key={one.reason} className="pricing-owes-row">
+              <span className="pricing-owes-mark" aria-hidden="true">
+                <Icon name="alert" size={12} />
+              </span>
+              <span className="pricing-owes-text">
+                <span className="pricing-owes-what">{OWED_SAYS[one.reason]}</span>
+                <span className="pricing-machine">{one.reason}</span>
+              </span>
+              <span className="pricing-owes-count">
+                {one.count} card{one.count === 1 ? '' : 's'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {queued === 0 ? null : (
+        <p className="pricing-verdict-warn">
+          <Icon name="inbox" size={13} />
+          <span>
+            This join sent {queued} card{queued === 1 ? '' : 's'} to <a href="#/review">review</a> — writing now leaves
+            them out.
+          </span>
+        </p>
+      )}
+
+      {/* WHERE THE ANSWERS STAND, as one bar rather than three figures in a sentence. A held
+          row writes nothing, so it is a third colour and not a shade of "done". */}
+      {progress.total === 0 ? null : (
+        <div className="pricing-meter">
+          <div
+            className="pricing-meter-bar"
+            role="img"
+            aria-label={`${progress.typed} typed, ${progress.held} held, ${ruleRows} on the rule, ${progress.cheap} cheap at ${cheapMoney}`}
+          >
+            <span data-part="typed" style={{ flexGrow: progress.typed }} />
+            <span data-part="held" style={{ flexGrow: progress.held }} />
+            <span data-part="rule" style={{ flexGrow: ruleRows }} />
+            <span data-part="cheap" style={{ flexGrow: progress.cheap }} />
+          </div>
+          <ul className="pricing-meter-keys">
+            {(
+              [
+                ['typed', progress.typed, 'typed'],
+                ['held', progress.held, 'held back'],
+                ['rule', ruleRows, 'on the rule'],
+                ['cheap', progress.cheap, `cheap at ${cheapMoney}`],
+              ] as const
+            ).map(([part, count, says]) => (
+              <li key={part} data-part={part} data-zero={count === 0 ? 'true' : undefined}>
+                <span className="pricing-meter-dot" aria-hidden="true" />
+                {count} {says}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="pricing-verdict-out">
+        <Icon name="send" size={13} />
+        <span>
+          {progress.outRows === 0 ? (
+            'Nothing would go in the file — every row is held, or at the cap.'
+          ) : (
+            <>
+              <strong>
+                {progress.outRows} row{progress.outRows === 1 ? '' : 's'}
+              </strong>{' '}
+              and {progress.outCopies} cop{progress.outCopies === 1 ? 'y' : 'ies'} would go in the import file.
+            </>
+          )}
+        </span>
+      </p>
+
+      <dl className="pricing-verdict-facts">
+        <div>
+          <dt>Scope</dt>
+          <dd>
+            {runCount} run{runCount === 1 ? '' : 's'}
+            {boxCount === 0 ? '' : ` · ${boxCount} box${boxCount === 1 ? '' : 'es'}`}
+          </dd>
+        </div>
+        <div>
+          <dt>Prices read</dt>
+          <dd title="Every market figure and every live count on this screen was frozen into the run when it was joined.">
+            {readAge ?? 'not recorded'}
+          </dd>
+        </div>
+        {progress.closed === 0 ? null : (
+          <div>
+            <dt>Nothing to add</dt>
+            <dd title="At the cap, or every copy already listed — this run writes no row for them.">
+              {progress.closed} SKU{progress.closed === 1 ? '' : 's'}
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      <p className="pricing-verdict-fine">Emit can still refuse for a reason this screen cannot see.</p>
+    </section>
+  )
+}
+
+/** What the state label under a price field says, and in which tone. */
+function fieldState(
+  sku: MergedSku,
+  standing: unknown,
+  doc: DecisionsDocument,
+  cut: string,
+  cutWritten: boolean,
+): { text: string; title?: string; tone: 'quiet' | 'ok' | 'warn' } {
+  if (isWithheld(standing)) {
+    // The human label is drawn; the machine string it stands for travels in the title.
+    const reason = heldReason(standing)
+    const label = (HOLD_SHORT as Record<string, string>)[reason] ?? reason
+    return { text: label ? `Held · ${label}` : 'Held', title: reason ? `withheld: ${reason}` : 'withheld', tone: 'quiet' }
+  }
+  if (typeof standing === 'string') return { text: 'Typed', tone: 'ok' }
+  if (sku.bucket === 'no_market_data') return { text: 'Needs a price', tone: 'warn' }
+  if (sku.bucket === 'sub_threshold') {
+    // UNDER THE LINE IS AT THE LINE. One figure decides the section and prices it, so the row
+    // draws the cut-off rather than a second number that could differ from it.
+    if (cutWritten) return { text: `At the $${cut} cut-off`, tone: 'quiet' }
+    // THE DEFAULT IS DRAWN, AND SO IS THE FACT THAT IT IS NOT WRITTEN. A bare "$0.49" here
+    // would be a price nothing on disk agrees to; a bare "no answer" hides the figure the
+    // landing is offering. Both, in the tone of the thing that stops the files being written.
+    return {
+      text: `Default $${cut}`,
+      title: `The store default. Nothing is written, so emit refuses — the cut-off is at the top of this screen.`,
+      tone: 'warn',
+    }
+  }
+  /* ON THE RULE — AND THE ROW SAYS WHICH RULE WHEN IT IS THE OPERATOR'S OWN. A preset is
+     named in the strip and priced in the field beside this label, so "On the rule" is the
+     whole statement. A custom rule has no precomputed column on this wire, so the field can
+     be empty and the label is then the only thing saying what the row goes out at: it carries
+     the figure — `−7%` — and the basis travels in the title with the rule as emit spells it. */
+  const custom = parseCustomRule(doc?.rule, doc?.basis)
+  if (custom !== null) {
+    return {
+      text: `On the rule · ${customShort(custom)}`,
+      title: `${customRuleText(custom)} of ${BASIS_LABEL[custom.basis]} — emit prices this row from the standing rule.`,
+      tone: 'quiet',
+    }
+  }
+  return { text: 'On the rule', tone: 'quiet' }
+}
+
+/** Light a field the screen just moved, so the operator sees which rows a preset changed. */
+function flash(input: HTMLInputElement): void {
+  const host = input.closest<HTMLElement>('.pricing-price')
+  if (host === null) return
+  host.classList.remove('is-flash')
+  void host.offsetWidth
+  host.classList.add('is-flash')
+  window.setTimeout(() => host.classList.remove('is-flash'), 700)
+}
+
+/** The receipt: the files to import, what emit printed, and the errand that follows. */
+function ReceiptDialog({
+  receipt,
+  run,
+  consoleOpen,
+  onToggleConsole,
+  onClose,
+}: {
+  receipt: { ok: boolean; console: string; files: readonly RunFile[] }
+  run: string
+  consoleOpen: boolean
+  onToggleConsole: () => void
+  onClose: () => void
+}) {
+  return createPortal(
+    <>
+      <div className="bn-scrim" onClick={onClose} />
+      <div className="bn-dialog pricing-ship-receipt" role="dialog" aria-label={receipt.ok ? 'The files to import' : 'What emit printed'}>
+        <header className="pricing-receipt-head">
+          <span className={`pricing-receipt-mark ${receipt.ok ? 'is-ok' : 'is-bad'}`}>
+            <Icon name={receipt.ok ? 'check' : 'alert'} size={18} />
+          </span>
+          <div className="pricing-receipt-title">
+            <h2>{receipt.ok ? 'Import files written' : 'Emit refused'}</h2>
+            <p className={`pricing-receipt-sub${receipt.ok ? '' : ' pricing-ready-warn'}`}>
+              {receipt.ok ? 'Written just now.' : 'The console below says why.'}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" icon="x" iconOnly onClick={onClose}>
+            Close
+          </Button>
+        </header>
+        <div className="pricing-receipt-body">
+          {!receipt.ok ? null : (
+            <>
+              <RunFiles run={run} files={receipt.files} only="import" />
+              <ol className="pricing-errand">
+                <li>
+                  <span className="pricing-errand-n">1</span>
+                  <span>Download the files above.</span>
+                </li>
+                <li>
+                  <span className="pricing-errand-n">2</span>
+                  <span>
+                    In TCGplayer, <strong>Import to Staged</strong>, then <strong>Export From Staged</strong>.
+                  </span>
+                </li>
+                <li>
+                  <span className="pricing-errand-n">3</span>
+                  <span>
+                    Come back with that export and <a href="#/runs">reconcile on Runs</a>.
+                  </span>
+                </li>
+              </ol>
+            </>
+          )}
+          <button type="button" className="pricing-console-toggle" aria-expanded={consoleOpen || !receipt.ok} onClick={onToggleConsole}>
+            <Icon name={consoleOpen || !receipt.ok ? 'chevronDown' : 'chevronRight'} size={14} />
+            What emit printed
+          </button>
+          {consoleOpen || !receipt.ok ? (
+            <pre className="pricing-ship-console" aria-label="What emit printed">
+              {receipt.console}
+            </pre>
+          ) : null}
+        </div>
+      </div>
+    </>,
+    document.body,
+  )
+}
+
+/** The hold popover, anchored to its row. Letters, not digits — the digits are price entry. */
 function HoldPanel({
   sku,
+  sheet,
   onSet,
   onCancel,
 }: {
   sku: PricingSku
+  sheet?: boolean
   onSet: (sku: PricingSku, reason: WithholdReason, watch: string, note: string) => void
   onCancel: () => void
 }) {
   const [reason, setReason] = useState<WithholdReason>('bullish')
   const [watch, setWatch] = useState('')
   const [text, setText] = useState('')
+  const chips = useRef(new Map<WithholdReason, HTMLButtonElement>())
+  const panel = useRef<HTMLDivElement | null>(null)
+  const [flip, setFlip] = useState(false)
+
+  useEffect(() => {
+    const head = WITHHOLD_REASONS[0]
+    if (head !== undefined) chips.current.get(head)?.focus()
+  }, [])
+
+  // The popover opens downward off its row unless that would bury it under the sticky ship bar
+  // or push it past the viewport; then it opens upward off the same row. Measured before paint.
+  useLayoutEffect(() => {
+    if (sheet) return
+    const node = panel.current
+    const row = node?.parentElement
+    if (!node || !row) return
+    const rowRect = row.getBoundingClientRect()
+    const shipTop = document.querySelector('.pricing-ship')?.getBoundingClientRect().top ?? window.innerHeight
+    const limit = Math.min(window.innerHeight, shipTop)
+    const below = limit - (rowRect.bottom - 4)
+    const above = rowRect.top + 4
+    setFlip(node.offsetHeight > below && above > below)
+  }, [sheet])
 
   return (
-    <div className="pricing-holdpanel" role="group" aria-label={`Hold ${sku.name}`}>
-      <p className="pricing-holdpanel-lede">
-        Every copy stays out of this run&rsquo;s import file. The card does not move, does not
-        change state and is sellable the moment you release it.
-      </p>
-      <div className="pricing-holdpanel-reasons">
+    <div
+      ref={panel}
+      className={`pricing-holdpanel bn-menu${sheet ? ' pricing-holdpanel-sheet' : ''}`}
+      data-flip={flip ? 'up' : undefined}
+      role="group"
+      aria-label={`Hold ${sku.name}`}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          onCancel()
+          return
+        }
+        const typing = event.target instanceof HTMLInputElement && event.target.type === 'text' && event.target.dataset['note'] === 'true'
+        if (event.key === 'Enter' && !typing) {
+          event.preventDefault()
+          onSet(sku, reason, watch, text)
+          return
+        }
+        if (typing || event.metaKey || event.ctrlKey || event.altKey) return
+        const hit = WITHHOLD_REASONS.find((option) => WITHHOLD_KEYS[option] === event.key.toLowerCase())
+        if (hit !== undefined) {
+          event.preventDefault()
+          setReason(hit)
+          chips.current.get(hit)?.focus()
+        }
+      }}
+    >
+      <div className="pricing-holdpanel-head">
+        <span className="pricing-holdpanel-title">
+          <Icon name="lock" size={14} /> Hold back
+        </span>
+        <span className="pricing-holdpanel-name" title={sku.name}>
+          {sku.name}
+        </span>
+      </div>
+      <div className="pricing-holdpanel-reasons" role="group" aria-label="Why">
         {WITHHOLD_REASONS.map((option) => (
           <button
             key={option}
             type="button"
-            className="pricing-plain"
+            ref={(node) => {
+              if (node) chips.current.set(option, node)
+              else chips.current.delete(option)
+            }}
+            className="pricing-hold-reason"
             aria-pressed={reason === option}
+            title={WITHHOLD_LABELS[option]}
             onClick={() => setReason(option)}
           >
-            {WITHHOLD_LABELS[option]} <kbd>{WITHHOLD_KEYS[option]}</kbd>
+            <span className="pricing-hold-reason-label">{HOLD_SHORT[option]}</span>
+            <Kbd>{WITHHOLD_KEYS[option].toUpperCase()}</Kbd>
+            {WITHHOLD_LABELS[option] === HOLD_SHORT[option] ? null : <span className="bn-sr">{WITHHOLD_LABELS[option]}</span>}
           </button>
         ))}
       </div>
-      <label className="pricing-field">
-        Tell me when market is above $
-        <input
-          type="text"
-          inputMode="decimal"
-          value={watch}
-          onChange={(event) => setWatch(event.target.value)}
-        />
-      </label>
-      <label className="pricing-field pricing-field-wide">
-        Note
-        <input type="text" value={text} onChange={(event) => setText(event.target.value)} />
-      </label>
-      <div className="pricing-holdpanel-actions">
-        <button
-          type="button"
-          className="pricing-plain"
-          onClick={() => onSet(sku, reason, watch, text)}
-        >
-          Hold it
-        </button>
-        <button type="button" className="pricing-plain" onClick={onCancel}>
-          Cancel
-        </button>
+      <p className="pricing-holdpanel-says">{WITHHOLD_LABELS[reason]}</p>
+      <div className="pricing-holdpanel-fields">
+        <label className="bn-field">
+          <span className="bn-field-label">Tell me when market is above $</span>
+          <input
+            className="bn-input bn-input-mono"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={watch}
+            onChange={(event) => setWatch(event.target.value)}
+          />
+        </label>
+        <label className="bn-field">
+          <span className="bn-field-label">Note</span>
+          <input
+            className="bn-input"
+            type="text"
+            data-note="true"
+            placeholder="why, in a few words"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </label>
       </div>
-      <p className="pricing-holdpanel-fine">
-        A hold is one answer for the whole store (<code>inventory/prices.json</code>) and
-        outlives every run over this box.
-      </p>
+      <div className="pricing-holdpanel-actions">
+        <span className="pricing-holdpanel-fine">
+          {/* A HOLD IS ONE ANSWER FOR THE WHOLE STORE (D86, amended 2026-09-02) and the fine
+              print says so: it lives in `inventory/prices.json`, not in the run, so it
+              outlives every run over this box rather than dying with the directory. */}
+          Every copy stays out of every import file until you release it — one answer for the
+          whole store, outliving every run over this box.
+        </span>
+        <Button variant="quiet" size={sheet ? 'lg' : 'sm'} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="primary" size={sheet ? 'lg' : 'sm'} icon="lock" onClick={() => onSet(sku, reason, watch, text)}>
+          Hold it
+        </Button>
+      </div>
     </div>
   )
 }

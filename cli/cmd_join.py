@@ -232,7 +232,10 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
 
     return {
         "run": run_dir.name,
-        "threshold": str(pricing.THRESHOLD),
+        # THE FIGURE THIS JOIN PARTITIONED BY, WHICH IS THE OPERATOR'S AND NOT THE MODULE'S.
+        # `#/pricing` prints "Below $X" over the sub-threshold section off this cell, and a
+        # constant here would have drawn a heading over rows it did not sort.
+        "threshold": str(resolved.threshold),
         "floor": str(pricing.FLOOR),
         "rule": str(choice.rule),
         "basis": choice.basis,
@@ -240,6 +243,11 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
         "games": [
             {
                 "game": g.game,
+                # THREE NAMES BECAUSE THERE ARE THREE SHAPES (D99), and the first is what
+                # a press writes unless a flag says otherwise. The two beside it are what
+                # `--split-threshold` writes and are kept rather than replaced: a screen
+                # offering a download has to be able to name a file an earlier emit left.
+                "import_merged": runs.import_merged_name(),
                 "import_listed": runs.import_listed_name(g.game),
                 "import_subthreshold": runs.import_subthreshold_name(g.game),
             }
@@ -293,6 +301,39 @@ def run(args, say) -> int:
         say(str(refusal))
         return 1
 
+    # ------------------------------------------------- the corpus, BEFORE the ladder walks
+    #
+    # READ HERE AND NOT AT THE TAIL, BECAUSE THE THRESHOLD DECIDES A PARTITION AND NOT A
+    # PRINT. `policy.threshold` is what `SkuMatch.listable` compares Market against, so it
+    # has to be in hand before `resolve.load` builds a single match — the same ordering
+    # `cli/cmd_emit.py` already gives its own read, and for the same reason it gives: a value
+    # read after the thing it governs is a value that governs nothing.
+    #
+    # ONE READ FOR THE WHOLE COMMAND. The seeding block at the tail uses this same `book`,
+    # so a join still writes exactly one document; nothing between here and there touches it.
+    #
+    # `rule` AND `basis` ARE DELIBERATELY NOT TAKEN FROM IT HERE. They are `--rule`/`--basis`
+    # at join time and the corpus's at emit time, which is the seam D49 Part One draws — the
+    # manifest RECORDS what a join ran with — and moving them is a separate argument nobody
+    # has made. The threshold is not a seed: there is no `--threshold`, and the stored figure
+    # is the only one there is.
+    try:
+        book = corpus.Corpus.read()
+    except (
+        decisions.MalformedDecisions,
+        pricing.UnknownRule,
+        pricing.UnknownBasis,
+        pricing.InvalidThreshold,
+    ) as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
+        say("Fix it, or delete it and let this join write a fresh one.")
+        return 1
+    try:
+        threshold = pricing.check_threshold(book.policy_for(run_dir.name)["threshold"])
+    except pricing.InvalidThreshold as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
+        return 1
+
     store = Store()
     snapshot = store.read()
 
@@ -319,6 +360,7 @@ def run(args, say) -> int:
             rule=args.rule,
             basis=args.basis,
             review_below=args.review_below_confidence,
+            threshold=threshold,
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))
@@ -551,12 +593,10 @@ def run(args, say) -> int:
     # A RUN FILE THAT STILL EXISTS IS LEGACY AND IS NOT READ — this command refused on one at
     # its top, before the store was opened. `pkmnscan prices adopt --write` folds it in, once,
     # with a report of every answer it had to choose between, and retires it.
-    try:
-        book = corpus.Corpus.read()
-    except (decisions.MalformedDecisions, pricing.UnknownRule, pricing.UnknownBasis) as exc:
-        say(f"{corpus.FILENAME} is unusable: {exc}")
-        say("Fix it, or delete it and let this join write a fresh one.")
-        return 1
+    #
+    # `book` WAS READ AT THE TOP OF THIS COMMAND TOO, because the threshold it carries had to
+    # be in hand before the ladder walked. Re-reading it here would be a second document, read
+    # a second way, for a file this command is about to write.
 
     # SEEDED, NEVER PRUNED, AND THE ASYMMETRY IS THE WHOLE POINT OF CENTRALISING. `prune` used
     # to drop unanswered entries this run no longer matched, which is right for a file scoped

@@ -536,8 +536,11 @@ order is not offered until it has been pressed. **Reachable at both ends**, whic
 route-is-not-a-feature rule: the entry controls on `#/orders`, the banner and its exit on
 `#/inventory`.
 
-**`make design-check` is where the reachability half is evidenced, and it covers this one** —
-`app/tests/order-walk.spec.ts`, thirteen cases in a browser over a stubbed wire: the parameter
+**`make design-check` WAS where the reachability half was evidenced, and it no longer is** —
+`app/tests/order-walk.spec.ts` was deleted with the mode it covered when the Banchi front end
+declined D90's envelope walk (D96), so the thirteen cases below describe a screen this product
+does not draw. They are left in this paragraph as the record of what the walk WAS proved to do,
+in main's history at `71c6dcb`, and not as a claim about what is tested today. What they covered: the parameter
 reaching the screen, the landing, the arrows stepping the queue across a box, `Mark sold` absent
 from every row, the picker taking a copy in another box without moving the walk, a full line
 refusing the take, one press sending one `POST /orders/fill` and zero `/sold`, the receipt

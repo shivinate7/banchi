@@ -206,6 +206,7 @@ from pipeline import (  # noqa: E402
     orders,
     pirateship,
     pricehistory,
+    pricing,
     shipping,
     tcgcsv,
     variant,
@@ -9500,7 +9501,7 @@ def check_emit_claim_decides(checks: Checks) -> None:
         # GUARDED, because the failure this case exists for is a REFUSAL — and a refusal
         # writes no file, so reading one unconditionally turns a clean red line into a
         # traceback that hides every check behind it. `answers()` above states the same rule.
-        listed = run_dir.path(runs.import_listed_name("pokemon"))
+        listed = run_dir.path(runs.IMPORT_MERGED)
         written = (
             {row[tcgcsv.SKU_COLUMN] for row in tcgcsv.read_export(listed).rows}
             if listed.is_file()
@@ -9599,7 +9600,7 @@ def check_emit_identity_stamp(checks: Checks) -> None:
             "and a shared increment would push the count past `add_to_quantity` and "
             "double-stage on the next import",
         )
-        listed = run_dir.path(runs.import_listed_name("pokemon"))
+        listed = run_dir.path(runs.IMPORT_MERGED)
         rows = [
             row
             for row in tcgcsv.read_export(listed).rows
@@ -9706,7 +9707,7 @@ def check_pricing_authority(checks: Checks) -> None:
         said = command(checks, "emit", str(run_dir.directory))
         written = {
             row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN]
-            for row in tcgcsv.read_export(run_dir.path(runs.import_listed_name("pokemon"))).rows
+            for row in tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
         }
         checks.equal(
             written.get(ARTICUNO_SKU),
@@ -9784,6 +9785,173 @@ def check_pricing_authority(checks: Checks) -> None:
                 (1, True),
                 label,
             )
+
+
+def check_threshold_and_file_shape(checks: Checks) -> None:
+    """The stored D9 cut-off, and how many spreadsheets one press writes.
+
+    TWO CHANGES, ONE SEAM, WHICH IS WHY THEY ARE ASSERTED TOGETHER. The threshold decides
+    which bucket a card is in; the flag decides whether the buckets are two files or one. A
+    case that moved a card across the cut-off without looking at the file it landed in would
+    not have checked the thing the operator sees.
+
+    THE CUT-OFF IS `pipeline/corpus.py`'s `policy.threshold` and D9 has always called it
+    configurable — `pipeline/pricing.py:THRESHOLD` was a module constant no flag, env var or
+    document could reach, which is exactly the shape D10's `CARDS_PER_SECTION` was deleted
+    for. The default is unchanged, so a store that never sets one partitions as it always did.
+
+    THE FIXTURE STRADDLES THE FIGURE ON PURPOSE: Dunsparce is $2.06 and Articuno is $22.03,
+    so a cut-off of $5.00 puts exactly one of them on each side and a partition that ignored
+    the stored value would put both on the same one.
+    """
+    checks.note("")
+    checks.note("THRESHOLD POLICY — the stored cut-off, and one file or two")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Articuno", "161", None),
+    ]
+
+    # --- the default: one spreadsheet, both buckets in it ---------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        # THIS CHECK ONCE ASSERTED THE D9 CONSTANT, AND THE PROMISE IT GUARDED WAS GIVEN UP ON
+        # PURPOSE. D99's first build said a store that had set no threshold would partition
+        # exactly as it did yesterday, and that was true while the threshold was the only figure
+        # with a default. It stopped being true when D9's amendment gave `sub_threshold` a
+        # default of flat $0.49 beside a threshold still reading $0.40: a store that had chosen
+        # NEITHER then partitioned at one price and sold the half below it at another, so a
+        # $0.38 card listed above a $0.42 one. The owner's ruling is that the two are one
+        # variable, so the fallback is one figure and both keys read it.
+        #
+        # What that costs is written here rather than left to be discovered: an existing store
+        # that never set a threshold now partitions at $0.49 instead of $0.40, and cards between
+        # the two figures move from the listed half to the cheap half on the next join. Cards,
+        # not money — each of them still goes out at $0.49 either way, because that is what the
+        # cheap half has been priced at since the amendment.
+        checks.equal(
+            book.policy_for()["threshold"],
+            corpus.DEFAULT_CUTOFF,
+            "a corpus nobody has set a cut-off on reads ONE default for both keys, so it can "
+            "never partition at one figure and sell the half below it at another",
+        )
+        checks.equal(
+            book.policy_for()["sub_threshold"],
+            {"flat": corpus.DEFAULT_CUTOFF},
+            "and the cheap-card answer it falls back to IS that figure — the pair cannot "
+            "invert unless somebody writes them apart deliberately",
+        )
+        book.threshold = "5.00"
+        book.sub_threshold = "floor"
+        book.write()
+
+        said = command(checks, "emit", str(run_dir.directory))
+        checks.equal(
+            sorted(path.name for path in run_dir.directory.glob("import*.csv")),
+            [runs.IMPORT_MERGED],
+            "ONE PRESS, ONE SPREADSHEET. The owner's instruction was that emit *\"should now "
+            "emit only one spreadsheet by default\"*, and this run holds a card on each side "
+            "of the cut-off — the shape that used to write two files",
+        )
+        merged = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).by_sku()
+        checks.equal(
+            sorted(merged),
+            sorted([DUNSPARCE_SKU, ARTICUNO_SKU]),
+            "and the one file carries both sides — the listed card and the sub-threshold "
+            "one, which is what merging the buckets means",
+        )
+        checks.equal(
+            merged[DUNSPARCE_SKU][tcgcsv.PRICE_COLUMN],
+            tcgcsv.format_price(pricing.FLOOR),
+            "THE $2.06 CARD WAS PRICED BY THE SUB-THRESHOLD DISPOSITION, which is the proof "
+            "the stored $5.00 reached the partition: at the $0.40 default this row is "
+            "listable and would carry its own market price instead",
+        )
+        checks.ok(
+            "import           2 row(s)" in said,
+            "and the command names the one file it wrote",
+            said,
+        )
+
+    # --- the same run at the default cut-off, which is the control ------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        command(checks, "emit", str(run_dir.directory))
+        merged = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).by_sku()
+        checks.equal(
+            merged[DUNSPARCE_SKU][tcgcsv.PRICE_COLUMN],
+            tcgcsv.format_price(Decimal("2.06")),
+            "AT $0.40 THE SAME CARD IS LISTED AT MARKET, and no sub-threshold answer was "
+            "needed to emit at all — the row moved buckets because the figure moved, and "
+            "nothing else about the run changed",
+        )
+
+    # --- `--split-threshold` puts the pair back -------------------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        book.threshold = "5.00"
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory), "--split-threshold")
+        checks.equal(
+            sorted(path.name for path in run_dir.directory.glob("import*.csv")),
+            sorted([runs.IMPORT_LISTED, runs.IMPORT_SUBTHRESHOLD]),
+            "--split-threshold writes the old pair, under the old names — an operator who "
+            "wants the valuable cards staged apart from the bulk gets the files they used "
+            "to get, not a differently-named approximation of them",
+        )
+        checks.equal(
+            (
+                [
+                    row[tcgcsv.SKU_COLUMN]
+                    for row in tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED)).rows
+                ],
+                [
+                    row[tcgcsv.SKU_COLUMN]
+                    for row in tcgcsv.read_export(
+                        run_dir.path(runs.IMPORT_SUBTHRESHOLD)
+                    ).rows
+                ],
+            ),
+            ([ARTICUNO_SKU], [DUNSPARCE_SKU]),
+            "and the STORED cut-off decides which file each card lands in, which is the "
+            "whole of what threading it to the emitter was for",
+        )
+        listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
+        checks.equal(
+            listing.pushed,
+            1,
+            "THE CAP IS SPENT ONCE ACROSS EVERYTHING THE PRESS WROTE, not once per file. "
+            "`add_to_quantity` is per SKU and a SKU is in exactly one bucket, so splitting "
+            "the rows across two files cannot double what reaches `pushed`",
+        )
+
+    # --- and a threshold nobody can read is a sentence, not a traceback -------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        path = files.prices_path()
+        document = json.loads(path.read_text())
+        document["policy"]["threshold"] = "free"
+        path.write_text(json.dumps(document))
+        from cli import __main__ as entry
+
+        with quiet() as said:
+            code = entry.main(["emit", str(run_dir.directory)])
+        text = said.getvalue()
+        checks.equal(
+            (code, "is unusable" in text and "'free'" in text),
+            (1, True),
+            "an unusable threshold refuses by name. `InvalidThreshold` is a ValueError and "
+            "NOT a `MalformedDecisions` — the same shape D49 already paid for twice with "
+            "`UnknownRule` and `UnknownBasis`, and nothing above `cli/__main__.py` catches "
+            "one, so the catch has to name it",
+        )
+        checks.ok(
+            not list(run_dir.directory.glob("import*.csv")),
+            "and nothing was written",
+        )
 
 
 def check_prices_adopt(checks: Checks) -> None:
@@ -10045,11 +10213,15 @@ def check_prices_adopt(checks: Checks) -> None:
         )
         before = files.prices_path().read_bytes()
         command(checks, "emit", str(run_dir.directory))
+        # READ OUT OF THE MERGED FILE, WHICH IS WHERE ONE PRESS PUTS THE ROW (D99). This case
+        # is about the sub-threshold PRICE, not about the file layout: it asserted
+        # `import-subthreshold.csv` when it was written, because that was the only shape emit
+        # had. The default became one `import.csv` with `--split-threshold` as the way back,
+        # so the row moved file and the assertion did not change its subject —
+        # `check_threshold_and_file_shape` above owns the layout question.
         written = {
             row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN]
-            for row in tcgcsv.read_export(
-                run_dir.path(runs.import_subthreshold_name("pokemon"))
-            ).rows
+            for row in tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).rows
         }
         checks.equal(
             (written.get(DUNSPARCE_SKU), files.prices_path().read_bytes() == before),
@@ -10652,7 +10824,7 @@ def check_withholding(checks: Checks) -> None:
         book.write()
 
         said = command(checks, "emit", str(run_dir.directory))
-        listed = tcgcsv.read_export(run_dir.path(runs.import_listed_name("pokemon")))
+        listed = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED))
         checks.equal(
             [row[tcgcsv.SKU_COLUMN] for row in listed.rows],
             [DUNSPARCE_SKU],
@@ -10733,7 +10905,7 @@ def check_withholding(checks: Checks) -> None:
         )
         freed = command(checks, "emit", str(run_dir.directory))
 
-        delta = tcgcsv.read_export(run_dir.path(runs.import_listed_name("pokemon")))
+        delta = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED))
         checks.equal(
             [row[tcgcsv.SKU_COLUMN] for row in delta.rows],
             [ARTICUNO_SKU],
@@ -11119,7 +11291,7 @@ def check_listing_commands(checks: Checks) -> None:
             "that function and not a second count kept beside it",
             emitted,
         )
-        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED)).by_sku()
+        rows = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED)).by_sku()
         checks.equal(
             [rows[DUNSPARCE_SKU][tcgcsv.QUANTITY_COLUMN], rows[ARTICUNO_SKU][tcgcsv.QUANTITY_COLUMN]],
             ["3", "1"],
@@ -11133,7 +11305,7 @@ def check_listing_commands(checks: Checks) -> None:
         #
         # CAPTURED BEFORE THE SECOND EMIT, because the assertion below is about the file NOT
         # being touched, and that cannot be checked against a file this block wrote itself.
-        before_bytes = run_dir.path(runs.IMPORT_LISTED).read_bytes()
+        before_bytes = run_dir.path(runs.IMPORT_MERGED).read_bytes()
         command(checks, "join", str(run_dir.directory))
         again = command(checks, "emit", str(run_dir.directory))
         re_inventory = Store().read().inventory
@@ -11178,7 +11350,7 @@ def check_listing_commands(checks: Checks) -> None:
         # before it iterates, so a file rewritten with no rows is a valid CSV of nothing and
         # the row count cannot tell that from the rows never having existed.
         checks.equal(
-            run_dir.path(runs.IMPORT_LISTED).read_bytes(),
+            run_dir.path(runs.IMPORT_MERGED).read_bytes(),
             before_bytes,
             "A RE-EMIT THAT HAS NOTHING NEW TO WRITE DOES NOT TOUCH THE FILE. Rewriting it "
             "with a header and no rows destroys the output the operator was told to import, "
@@ -11187,7 +11359,7 @@ def check_listing_commands(checks: Checks) -> None:
         # LOOKED UP DEFENSIVELY, because the failure this case exists to catch empties the
         # file — and a KeyError here would abort the block before the manifest and round-trip
         # assertions below ever ran, reporting one crash instead of four findings.
-        surviving = tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+        surviving = tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED))
         by_sku = surviving.by_sku()
         checks.equal(
             [
@@ -11494,7 +11666,7 @@ def check_listing_commands(checks: Checks) -> None:
             "it are backstock at known positions (D7) rather than cards this run lost",
         )
         checks.equal(
-            tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+            tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED))
             .by_sku()[DUNSPARCE_SKU][tcgcsv.QUANTITY_COLUMN],
             "4",
             "and the file carries the four",
@@ -11581,7 +11753,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
 
         # --- and the fresh one refills ---------------------------------------------------
-        before_bytes = run_dir.path(runs.IMPORT_LISTED).read_bytes()
+        before_bytes = run_dir.path(runs.IMPORT_MERGED).read_bytes()
         fresh = write_export(run_dir.path("fresh.csv"), live={DUNSPARCE_SKU: 2})
         later = time.time() + 3600
         os.utime(fresh, (later, later))
@@ -11609,7 +11781,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
         inventory = Store().read().inventory
         checks.equal(
-            tcgcsv.read_export(run_dir.path(runs.IMPORT_LISTED))
+            tcgcsv.read_export(run_dir.path(runs.IMPORT_MERGED))
             .by_sku()[DUNSPARCE_SKU][tcgcsv.QUANTITY_COLUMN],
             "2",
             "THE FILE CARRIES THE DELTA AND NOT THE CAP (D54). Four here would re-import the "
@@ -11636,7 +11808,7 @@ def check_listing_commands(checks: Checks) -> None:
             refill,
         )
         checks.ok(
-            run_dir.path(runs.IMPORT_LISTED).read_bytes() != before_bytes,
+            run_dir.path(runs.IMPORT_MERGED).read_bytes() != before_bytes,
             "which is the other side of the re-emit case above: that one must not touch the "
             "file, and this one must",
         )
@@ -11654,7 +11826,7 @@ def check_listing_commands(checks: Checks) -> None:
         eight = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 9)]
         run_dir, _ = seam_run(checks, eight)
         command(checks, "emit", str(run_dir.directory))
-        untouched = run_dir.path(runs.IMPORT_LISTED).read_bytes()
+        untouched = run_dir.path(runs.IMPORT_MERGED).read_bytes()
 
         partial = write_export(run_dir.path("partial.csv"), live={DUNSPARCE_SKU: 2})
         said = command(checks, "join", str(run_dir.directory), "--export", str(partial))
@@ -11676,7 +11848,7 @@ def check_listing_commands(checks: Checks) -> None:
             again,
         )
         checks.equal(
-            run_dir.path(runs.IMPORT_LISTED).read_bytes(),
+            run_dir.path(runs.IMPORT_MERGED).read_bytes(),
             untouched,
             "leaving the first emit's file exactly as the operator was told to import it",
         )
@@ -11702,7 +11874,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
         command(checks, "emit", str(run_dir.directory))
         checks.equal(
-            run_dir.path(runs.IMPORT_LISTED).read_bytes(),
+            run_dir.path(runs.IMPORT_MERGED).read_bytes(),
             untouched,
             "and the file is still the first emit's — a retirement may never re-open the cap",
         )
@@ -17868,6 +18040,7 @@ def run() -> Result:
     check_pricing_authority(checks)
     check_prices_adopt(checks)
     check_merged_emit_cap(checks)
+    check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
     check_withholding(checks)
     check_pricing_route(checks)

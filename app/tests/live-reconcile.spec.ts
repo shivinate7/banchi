@@ -12,6 +12,13 @@ import { settleFonts } from './fontsReady'
  * request carries `write: false`. Both are D33's two-step gate applied to the press that
  * settles the ledger rather than the one that spends.
  *
+ * IT IS A SHEET NOW, NOT AN INLINE PANEL, and every case here goes through the control that
+ * opens it. That is not a layout detail dressed up as behaviour: reachability from a screen IS
+ * the property this file exists to assert, and a sheet nobody can open is the server-only
+ * capability the hard rule refuses. The old assertions asserted their way into a panel that was
+ * merely present in the DOM — which the closed sheet still is — so each is re-pointed at the
+ * opened sheet rather than at markup that happens to exist.
+ *
  * NO REAL REQUEST IS MADE. The route is intercepted and its body recorded, which is what lets
  * these cases assert what the screen WOULD have sent.
  */
@@ -31,6 +38,16 @@ unexplained      55 copy(ies) across 32 SKU(s)
        3    9027215    3    0    0    3  Boots of Swiftness
 `.trim()
 
+/** The sheet itself. A dialog, so a screen reader is told the rest of the page is behind it. */
+const panel = (page: Page) => page.getByRole('dialog', { name: 'Reconcile the whole store' })
+
+/** The control on the Runs header that opens it — the only way in, and the reachability claim. */
+const opener = (page: Page) => page.getByRole('button', { name: 'Reconcile the whole store' })
+
+/** The press that settles. Named apart from the opener above: the opener's accessible name is
+ *  "Reconcile the whole store" and this one's is "Reconcile the store", so the anchors matter. */
+const settle = (page: Page) => page.getByRole('button', { name: /^Reconcile the store$/ })
+
 async function open(page: Page): Promise<Wire[]> {
   const wire: Wire[] = []
   await page.route(/\/pipeline\/reconcile-live$/, async (route) => {
@@ -47,7 +64,7 @@ async function open(page: Page): Promise<Wire[]> {
       }),
     })
   })
-  /* THE REST OF THE SCREEN, ANSWERED EMPTY. This file is about one panel; a box list is what
+  /* THE REST OF THE SCREEN, ANSWERED EMPTY. This file is about one sheet; a box list is what
      the run picker draws and neither reaches nor is reached by it. */
   await page.route(/\/boxes$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"boxes":[]}' }),
@@ -57,10 +74,10 @@ async function open(page: Page): Promise<Wire[]> {
   )
   await page.goto(VIEW)
   await settleFonts(page)
+  await opener(page).click()
+  await expect(panel(page)).toBeVisible()
   return wire
 }
-
-const panel = (page: Page) => page.getByRole('region', { name: 'Reconcile the whole store' })
 
 async function pick(page: Page) {
   await page.locator('.livecheck input[type=file]').setInputFiles({
@@ -77,9 +94,33 @@ test('the store-wide reconcile is reachable from the pipeline screen', async ({ 
      emit · reconcile" — and this is the fourth in the only shape that can answer both
      directions. It is NOT on `#/inventory`, which is where a card's state changes; this
      changes no card's state (D7). */
-  await expect(panel(page)).toBeVisible()
   await expect(panel(page)).toContainText('My Pricing')
   await expect(panel(page)).toContainText('marks no card sold')
+})
+
+test('the sheet is not open until it is asked for, and Escape puts it away', async ({ page }) => {
+  await page.route(/\/boxes$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"boxes":[]}' }),
+  )
+  await page.route(/\/pipeline\/runs$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs":[]}' }),
+  )
+  await page.goto(VIEW)
+  await settleFonts(page)
+
+  /* CLOSED IS AN ABSENCE, not a thing drawn off-screen: the sheet is `hidden`, so it is out of
+     the accessibility tree and nothing in it can be reached by a keyboard or read out. Asserted
+     because the markup IS in the DOM either way — every case below would pass against a sheet
+     no one could open, exactly as they did before this file was re-pointed. */
+  await expect(panel(page)).toHaveCount(0)
+
+  await opener(page).click()
+  await expect(panel(page)).toBeVisible()
+
+  /* Escape is the way out of any modal, and this one settles the ledger — leaving with the
+     keyboard must not need a press aimed at a button. */
+  await page.keyboard.press('Escape')
+  await expect(panel(page)).toHaveCount(0)
 })
 
 test('picking a file previews, and the preview asks for no write', async ({ page }) => {
@@ -100,9 +141,9 @@ test('the settle control does not exist until the preview has answered', async (
   /* ABSENT, NOT DISABLED. D33 spends a paragraph on the difference for the control that
      spends: a disabled button is a thing you can see and intend to press, and the state
      before a preview is one where there is nothing to agree to. */
-  await expect(page.getByRole('button', { name: /Settle the ledger/ })).toHaveCount(0)
+  await expect(settle(page)).toHaveCount(0)
   await pick(page)
-  await expect(page.getByRole('button', { name: /Settle the ledger/ })).toBeVisible()
+  await expect(settle(page)).toBeVisible()
 })
 
 test('the settle press sends the same bytes the preview read, and then goes away', async ({
@@ -112,7 +153,7 @@ test('the settle press sends the same bytes the preview read, and then goes away
   await pick(page)
   await expect.poll(() => wire.length).toBe(1)
 
-  await page.getByRole('button', { name: /Settle the ledger/ }).click()
+  await settle(page).click()
   await expect.poll(() => wire.length).toBe(2)
 
   /* THE SAME FILE, HELD RATHER THAN RE-PICKED. Re-reading it for the write would let the
@@ -123,7 +164,7 @@ test('the settle press sends the same bytes the preview read, and then goes away
 
   /* AND IT LEAVES ONCE IT HAS RUN, so a second press cannot settle the same export twice
      against a ledger the first press already moved. */
-  await expect(page.getByRole('button', { name: /Settle the ledger/ })).toHaveCount(0)
+  await expect(settle(page)).toHaveCount(0)
   await expect(page.locator('.livecheck-console')).toContainText('settled')
 })
 

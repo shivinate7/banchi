@@ -166,7 +166,11 @@ async function open(
  *  `readUpload` runs and the screen posts what it read. `Buffer` is `capture-undo.spec.ts`'s
  *  precedent in this suite — Playwright's `setInputFiles` takes one and nothing else. */
 async function readExport(page: Page): Promise<void> {
-  await page.locator('.shipping-plain input[type="file"]').setInputFiles({
+  /* BY ITS ACCESSIBLE NAME, NOT BY A CLASS. The stage was rebuilt around a drop zone whose
+     input is visually hidden inside its label, so the old `.shipping-plain input` is gone; what
+     has not changed is that the control a person uses to hand this screen an export is a file
+     input they can name. A selector on the name survives the next redraw too. */
+  await page.getByLabel('Read an export').setInputFiles({
     name: 'TCGplayer_ShippingExport_20260830.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(CSV),
@@ -183,7 +187,9 @@ test('the route resolves, and the nav offers it under its own chord', async ({ p
      this repo can tell — harness, lint, typecheck and docs-audit all stay green over it. */
   await expect(page.locator(VIEW)).toBeVisible()
 
-  await expect(page.locator('a.app-nav-link[href="#/shipping"] kbd.app-nav-key')).toHaveText(',S')
+  /* The chord is still `,S`, and it is still printed on the nav link — the keycap's own class
+     went with the rebuild, so this reads the `kbd` inside the link for this route. */
+  await expect(page.locator('a.app-nav-link[href="#/shipping"] kbd')).toHaveText(',S')
 })
 
 /* -------------------------------------------------------------------------------------- 2 */
@@ -271,8 +277,11 @@ test('every row says it in words and in a machine reason, and only judged rows a
      absence of one, and either word here would be a third meaning wearing one label. */
   await expect(unjudged.locator('.shipping-quality')).toHaveCount(0)
 
+  /* The abstention lane is still counted and still named in words of its own — the words are
+     'Needs a look' now, which is the same third answer D61 argued for under a label that says
+     what to do about it. */
   const chip = page.locator('.shipping-chip-unjudged')
-  await expect(chip.locator('.shipping-chip-label')).toHaveText('Unjudged')
+  await expect(chip.locator('.shipping-chip-label')).toHaveText('Needs a look')
   await expect(chip.locator('.shipping-chip-count')).toHaveText('1')
 })
 
@@ -323,16 +332,23 @@ test('an absent figure draws nothing at all, and never a zero', async ({ page })
 /* -------------------------------------------------------------------------------------- 5 */
 
 test('the filter removes and never reorders', async ({ page }) => {
-  const first = 'F1000000-0005E4-00B11'
+  /* THE LANES ARE THREE COLUMNS NOW, so the export's order survives WITHIN a lane rather than
+     across the whole list, and the fixture is shaped to catch a sort inside one: two envelope
+     orders, separated in the export by an order of another lane, whose ids sort the OTHER way
+     round. A screen that sorted its rows would hand back `[secondEnvelope, firstEnvelope]`.
+     A screen that grouped them is what this branch built, and grouping is a layout choice; the
+     promise being asserted is that nothing reorders and the collapse only removes. */
+  const firstEnvelope = 'F3000000-0005E4-00B11'
   const middle = 'F2000000-0006F5-00C22'
-  const last = 'F3000000-000706-00D33'
+  const secondEnvelope = 'F1000000-000706-00D33'
+  const parcel = 'F4000000-000817-00E44'
 
   /* THE ABSTENTION SITS IN THE MIDDLE OF THE EXPORT ON PURPOSE. With it at either end, a screen
      that quietly sorted its list would still pass — the survivors would come back in the order
      they went in by accident. From the middle, a sort has somewhere to move them to. */
   await open(page, {
     batch: batchOf([
-      row({ order: first, lane: 'envelope', reason: 'cards_only', certain: false, value: '4.25' }),
+      row({ order: firstEnvelope, lane: 'envelope', reason: 'cards_only', certain: false, value: '4.25' }),
       row({
         order: middle,
         lane: 'unjudged',
@@ -342,7 +358,8 @@ test('the filter removes and never reorders', async ({ page }) => {
         weight_per_item_oz: '0.0350',
         item_count: 2,
       }),
-      row({ order: last, lane: 'parcel', reason: 'value_at_threshold', certain: true }),
+      row({ order: secondEnvelope, lane: 'envelope', reason: 'cards_only', certain: false, value: '6.10' }),
+      row({ order: parcel, lane: 'parcel', reason: 'value_at_threshold', certain: true }),
     ]),
   })
   await readExport(page)
@@ -352,17 +369,21 @@ test('the filter removes and never reorders', async ({ page }) => {
      fails an assertion about a product that is fine. It cost this file a red run on the first
      full-suite pass. The web-first form retries until the list matches or the timeout ends,
      and asserts exactly the same thing — count, text and order. */
+  const envelope = page.locator('.shipping-lane-col-envelope .shipping-order')
+  await expect(envelope).toHaveText([firstEnvelope, secondEnvelope])
+
   const orders = page.locator('.shipping-order')
-  await expect(orders).toHaveText([first, middle, last])
+  await expect(orders).toHaveText([firstEnvelope, secondEnvelope, parcel, middle])
 
   const chip = page.locator('.shipping-chip-unjudged')
   await chip.click()
   await expect(chip).toHaveAttribute('aria-pressed', 'false')
-  await expect(orders).toHaveText([first, last])
+  await expect(orders).toHaveText([firstEnvelope, secondEnvelope, parcel])
 
   await chip.click()
   await expect(chip).toHaveAttribute('aria-pressed', 'true')
-  await expect(orders).toHaveText([first, middle, last])
+  await expect(orders).toHaveText([firstEnvelope, secondEnvelope, parcel, middle])
+  await expect(envelope).toHaveText([firstEnvelope, secondEnvelope])
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
@@ -387,12 +408,19 @@ test('the parcel file is offered as a download, and the caption says what it doe
   const ship = page.locator('.shipping-ship')
   await expect(ship).toContainText('2 orders in the parcel lane')
 
+  /* THE CAPTION IS BEHIND A DISCLOSURE NOW, so this opens it and asserts the sentences are
+     VISIBLE rather than merely present in the markup — text nobody can read is not a caption.
+     The disclosure itself is the owner's ruling and is not something this file argues with. */
+  await ship.locator('.shipping-caveats summary').click()
+  const caveats = ship.locator('.shipping-caveats p')
+  await expect(caveats).toBeVisible()
+
   /* THE TWO SENTENCES THAT KEEP AN OPERATOR OUT OF TROUBLE. Understated postage is charged back
      weeks later at the far end, where nobody is looking, and insurance is a per-order choice
      made inside Pirate Ship against a value only the owner can see. Both blanks are deliberate
      and the caption is the only place either is said. */
-  await expect(ship).toContainText('Package Weight is blank on every row')
-  await expect(ship).toContainText('No insurance column is written')
+  await expect(caveats).toContainText('Package Weight is blank on every row')
+  await expect(caveats).toContainText('No insurance column is written')
 })
 
 /* -------------------------------------------------------------------------------------- 7 */
@@ -422,11 +450,14 @@ test('a refusal is a sentence and a code, with nothing to press beside it', asyn
   })
   await readExport(page)
 
+  /* The refusal is drawn with the kit's Notice now — the server's sentence in its title slot
+     and the reason code in its own — so this reads those two slots inside the screen's notice.
+     What is asserted is unchanged: the sentence the SERVER wrote, and the code beside it. */
   const note = page.locator('.shipping-note')
-  await expect(note.locator('.shipping-note-text')).toContainText(
+  await expect(note.locator('.bn-notice-title')).toContainText(
     'That file is a Pricing export, not a Shipping export.',
   )
-  await expect(note.locator('.shipping-machine')).toHaveText('export_not_shipping')
+  await expect(note.locator('.bn-notice-code')).toHaveText('export_not_shipping')
 
   /* NO ANSWER CONTROL, AND NO DISABLED RETRY. Every refusal this route sends has one remedy —
      read a different file — and the file input in the header already is that control. A second

@@ -1787,8 +1787,16 @@ export async function reconcileLive(
  * of the operator, out of which runs, with which export rows — it changes as the selection
  * does. This answers what has been decided, and it is the same document either way.
  */
-export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path: string }> {
-  return (await request('/pricing', NO_CACHE)) as { corpus: PricingCorpus; path: string }
+export async function getPricingCorpus(): Promise<{
+  corpus: PricingCorpus
+  path: string
+  revision: string
+}> {
+  return (await request('/pricing', NO_CACHE)) as {
+    corpus: PricingCorpus
+    path: string
+    revision: string
+  }
 }
 
 /**
@@ -1799,12 +1807,23 @@ export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path:
  */
 export async function putPricingCorpus(
   corpus: PricingCorpus,
-): Promise<{ ok: boolean; written: string; answers: number }> {
+  revision?: string,
+): Promise<{ ok: boolean; written: string; answers: number; revision: string }> {
+  /* `revision` IS THE STALE-WRITE GUARD AND IT TRAVELS BESIDE THE DOCUMENT, NEVER IN IT. This
+     route replaces `inventory/prices.json` wholesale, so a screen holding a snapshot from mount
+     silently reverts anything written underneath it on the next keystroke — no error anywhere,
+     on the one file in this product that holds money. Two tabs on `#/pricing` reach that today,
+     and so does `pkmnscan prices adopt --write` while one is open.
+
+     Sending it INSIDE the corpus would put it in the object `Pricing.tsx` dirty-checks by
+     identity, and every landed write would then rebuild that object and re-dirty the screen —
+     an endless unsaved -> saving -> unsaved oscillation. Omitted means "did not read one",
+     which the route allows for the terminal user editing the file by hand. */
   return (await request('/pricing', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ corpus }),
-  })) as { ok: boolean; written: string; answers: number }
+    body: JSON.stringify(revision === undefined ? { corpus } : { corpus, revision }),
+  })) as { ok: boolean; written: string; answers: number; revision: string }
 }
 
 /**
@@ -1817,7 +1836,9 @@ export async function putPricingCorpus(
  */
 export async function emitMerged(
   runs: readonly string[],
-  options: { listedOnly?: boolean; splitGames?: boolean } = {},
+  /* `splitThreshold` restores the old pair of files — `import-listed.csv` and
+     `import-subthreshold.csv` — around D9's cut-off. Emit writes ONE `import.csv` without it. */
+  options: { listedOnly?: boolean; splitGames?: boolean; splitThreshold?: boolean } = {},
 ): Promise<RunStepResult & { runs: string[] }> {
   return (await request('/pipeline/emit', {
     method: 'POST',
@@ -1826,6 +1847,7 @@ export async function emitMerged(
       runs,
       listed_only: Boolean(options.listedOnly),
       split_games: Boolean(options.splitGames),
+      split_threshold: Boolean(options.splitThreshold),
     }),
   })) as RunStepResult & { runs: string[] }
 }
@@ -2040,6 +2062,13 @@ export async function runStep(
     basis?: 'market' | 'low'
     reviewBelowConfidence?: 'none' | 'low' | 'medium'
     dryRun?: boolean
+    /* The emit options, on the per-run step for the same reason `emitMerged` above takes
+       them: one press writes ONE `import.csv`, and either split is asked for rather than
+       arrived at by default. `bypass` sat here until D3's amendment retired the finish
+       cross-check — there is no claim left for a flag to override. */
+    listedOnly?: boolean
+    splitGames?: boolean
+    splitThreshold?: boolean
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2053,6 +2082,9 @@ export async function runStep(
       basis: options.basis,
       review_below_confidence: options.reviewBelowConfidence,
       dry_run: options.dryRun,
+      listed_only: options.listedOnly,
+      split_games: options.splitGames,
+      split_threshold: options.splitThreshold,
     }),
   })) as RunStepResult
 }

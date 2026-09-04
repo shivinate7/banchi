@@ -1,130 +1,53 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import {
-  cropPreview,
   describeFailure,
   fetchExport,
   getExportScope,
   getRun,
   getRuns,
   getTcgSets,
-  photoUrl,
-  preflightRun,
   runStep,
-  startRun,
   type Failure,
 } from './server'
-import type {
-  CropPreview,
-  ExportFetched,
-  ExportScope,
-  RunDetail,
-  RunPreflight,
-  RunStartFailure,
-  RunSummary,
-} from './types'
+import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
 import { readUpload } from './csvUpload'
+import { Button, EmptyState, Icon, Notice, Pill, Segmented, Stat } from './kit'
+import { toast } from './kit/toast'
 import { RunFiles } from './RunFiles'
-import { boxLabel, boxOf, runBoxLabel } from './runScope'
+import { FileButton } from './RunsDrop'
+import { LogWell } from './RunsLog'
+import { COMMANDS, StageBar, StagePill, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
+import type { CartBox } from './RunsComposer'
+import { boxOf, runBoxLabel } from './runScope'
 import './RunPanel.css'
 
-/* THE PIPELINE, ON THE SCREEN THE OPERATOR IS ALREADY STANDING ON.
- *
- * The owner's report, and it was correct: "i also don't see any of the UI you stated you'd be
- * building that let me do all of this within the app???" The four commands had been designed,
- * interviewed and drawn as a mockup, and none of it was built — which is precisely the failure
- * `CLAUDE.md`'s route-is-not-a-feature rule was written for, committed in the same session that
- * wrote the rule.
- *
- * IT SAT ON `#/inventory` UNTIL 2026-08-29 AND NOW HAS A ROUTE OF ITS OWN — `#/runs`, the
- * owner's ruling, recorded as D39, with `Runs.tsx` as the screen. D33's argument for the old
- * address was about SCOPE, and it is worth having in full because it is the specification D39
- * had to satisfy rather than a prediction it disproved: a run is something you do TO a box, or
- * to the cards you have just ticked inside one, so "a separate route would have to re-implement
- * the box strip, the search and the mass-select, and would then be free to disagree with them
- * about what the selection is".
- *
- * THAT COST WAS PAID RATHER THAN WAIVED, AND THE SPLIT IS WHAT THIS FILE CARES ABOUT. The box is
- * re-answered by a strip of its own, which is cheap and cannot disagree with anything. The
- * SELECTION is not re-implemented at all: `#/inventory` keeps the one mass-select in the product
- * and HANDS the ticked indices over (`runHandoff.ts`), so there is still exactly one place a
- * selection can be made. What the move buys is that the four commands stopped being housed on
- * the route `App.tsx`'s own table calls `look` — "reached when asked, not on a rhythm" — while
- * being the loop a session actually is.
- *
- * THIS FILE IS GIVEN A SCOPE AND OWNS EVERYTHING ELSE. The picker, the handoff and the page
- * chrome are `Runs.tsx`'s; every figure, console, poll and the whole money gate are this
- * component's and did not move. That is the same split `BoxBrowse` and `Inventory.tsx` keep.
- *
- * THE FOUR STEPS ARE DRAWN IN ORDER AND ONLY ONE OF THEM SPENDS. That is D1's two-phase split
- * made visible: identify is slow, costs money and is spawned; join, emit and reconcile are free,
- * re-runnable and answer inside the request. The panel says which is which in as many words,
- * because the whole reason the split exists is that the operator should be able to re-run the
- * free half without thinking about it.
- *
- * THE MONEY GATE IS TWO STEPS AND NO TYPING (the owner's ruling). Press Check cost, read the
- * card count and the estimate the command itself printed, then press the confirm that appears
- * beneath them. The confirm cannot be reached without the preflight, which is the point:
- * `docs/DESIGN.md` allows a gate on a genuinely destructive action, and the cheapest honest gate
- * here is making the number impossible not to have seen. A typed confirmation was considered and
- * is what the owner ruled out.
- *
- * EVERY COMMAND'S STDOUT IS SHOWN VERBATIM AND NOTHING HERE SUMMARISES ONE. `docs/DESIGN.md`'s
- * copy rule makes the owner's screens the place the pipeline's own words appear — being able to
- * grep what you saw is worth more than a consistent register — and a join report names SKUs,
- * prices, reason codes and positions that no paraphrase would keep. The one thing this panel
- * adds on top is the download link for a file the console can only name.
+export { runningFor }
+export type { CartBox }
+
+/* THE RUNS, AS MASTER AND DETAIL. The list on the left is every run directory on disk,
+ * re-read while this panel is on screen; the detail on the right is the run the three free
+ * commands act on — join, emit (on Pricing) and reconcile — drawn as a stepper.
  *
  * IT HOLDS NOTHING ABOUT A RUN BETWEEN RENDERS EXCEPT WHICH ONE IS OPEN. Every figure is read
- * from `GET /pipeline/runs/<name>`, which reads the run directory — so a run started in a
- * terminal appears here, a run started here survives this tab being closed, and there is no
- * state in this component that can disagree with the disk.
- */
+ * from `GET /pipeline/runs/<name>`, so a run started in a terminal appears here and a run
+ * started here survives this tab being closed. The paid step lives in `RunsComposer.tsx`. */
 
-/** How often a live run is re-read. A Batch takes minutes to hours, so this is about a screen
- *  that does not look frozen rather than about latency — and the poll stops the moment the run
- *  stops being live, which the server derives from the child's own pid. */
 const POLL_MS = 4000
-
-/** The idle cadence. The only event an idle poll can catch is a person starting a run in a
- *  TERMINAL (D33 makes a run outlive the tab that started it), which is a human act with a
- *  human's tolerance. `POLL_MS` is for a screen that must not look frozen while a batch runs,
- *  which is a different question and a different number. */
 const IDLE_POLL_MS = 20000
 
-/** How long a live run has been going, from its own `created_at`.
- *
- *  THE ONE FACT ABOUT A LIVE RUN THAT IS ON NO OTHER PART OF THIS SCREEN. `identify/batch.py`
- *  logs only when the batch's `processing_status` CHANGES, so the console goes silent for
- *  minutes to hours and a tail written forty minutes ago is indistinguishable from a hang.
- *  There is no per-card signal on the wire and none is invented here — elapsed is MEASURED, and
- *  it is the smallest true thing that separates working from stuck. A progress bar would be a
- *  guess, and this panel does not draw guesses.
- *
- *  LIVE ONLY. On a finished run the same arithmetic is AGE, which is a different fact wearing
- *  the same shape. Under a minute, and on a run carrying no `created_at`, it reads exactly what
- *  it read before this existed. */
-export function runningFor(row: { created_at?: string | null }): string {
-  const at = row.created_at == null ? NaN : Date.parse(row.created_at)
-  const mins = Number.isNaN(at) ? 0 : Math.max(0, Math.floor((Date.now() - at) / 60000))
-  if (mins < 1) return 'running'
-  return mins < 60 ? `running ${mins}m` : `running ${Math.floor(mins / 60)}h ${mins % 60}m`
-}
+/* THE EXPORT DELTA GUARD IS RETIRED, AND WITH IT BOTH "Fetch anyway" BUTTONS. It compared a
+ * fetch against this run's last export and refused a file that was smaller or had nothing to
+ * compare against — which refused the very improvement it existed to allow, and left the
+ * operator pressing past it to get on with the work. This branch answered the two refusals
+ * up front with an `ACCEPT_ALWAYS` pair; D64's own amendment then took the guard out of the
+ * SERVER, so the two acknowledgement fields are gone from the wire and there is nothing left
+ * to answer. A fetch produces a RECEIPT now, not a question — `previousLine` below is that
+ * receipt's second line, and every remaining refusal is a sentence with nothing to press. */
 
-/* The steps, in the order they are performed, with the two facts the panel repeats about each:
- * whether it spends, and whether it can be run again. Authored here rather than derived from
- * `phase`, because `phase` answers "what is this run waiting for" and this answers "what are
- * the four things there are" — a screen that only drew the current step would leave the
- * operator unable to see that emit exists until join had finished. */
-/* WHY THE FETCH IS ASKING FOR WHAT IT IS ASKING FOR (D76), in the operator's words.
- *
- * THE SAME TWO-SIZE RULE THE REVIEW QUEUE'S REASONS FOLLOW: a sentence a person reads, with
- * the machine string kept beside it rather than instead of it. The reason is the whole point
- * of the panel — a scope is only correctable by somebody who can see which of the three
- * voices chose it — so a bare `partial_hints` on screen would be the vocabulary-nothing-audits
- * failure `docs/DESIGN.md` names, arriving by the other road. */
+/* Why the fetch is asking for what it is asking for (D76), in the operator's words. */
 const SCOPE_REASON: Record<string, string> = {
-  game_policy: "this game's whole catalogue comes down in one file, so there is nothing a set filter would buy",
+  game_policy: "this game's whole catalogue comes down in one file, so a set filter would buy nothing",
   operator_asked: 'you asked for the whole category',
   no_hints: 'no card in this run carries a set hint',
   partial_hints: 'some cards carry no set hint, and a filter built from the rest would drop them',
@@ -132,9 +55,6 @@ const SCOPE_REASON: Record<string, string> = {
   no_hints_resolved: 'no hint here resolved to a TCGplayer set',
 }
 
-/* THE THIRD OPTION IS NOT A THIRD AXIS. `rule` means "leave it to the run" — the game's own
- * registry rule, then the cards' unanimity — and it is the default because it is the answer
- * that is right without anybody looking. The other two are overrides and say so. */
 const SCOPE_CHOICES = [
   { key: 'rule', label: 'What this run implies' },
   { key: 'category', label: 'Every set in the category' },
@@ -142,254 +62,262 @@ const SCOPE_CHOICES = [
 ] as const
 type ScopeChoice = (typeof SCOPE_CHOICES)[number]['key']
 
-/* D76's one join lever with no other home. `--rule` and `--basis` are NOT here and must not
- * be: D49 makes `inventory/prices.json` the one place a pricing answer is written, `#/pricing`
- * is the press that writes it, and `check_pricing_presets` exists in `scripts/docs-audit.py`
- * because a SECOND place to say `rule` already produced 48 cards about to list at a price
- * nobody had chosen. Confidence routing is a routing question, it is written nowhere else,
- * and it was reachable only from a terminal. */
 const REVIEW_BELOW = [
-  { key: 'low', label: 'low (default)' },
-  { key: 'medium', label: 'medium — queue more' },
-  { key: 'none', label: 'none — queue nothing on confidence' },
+  { key: 'low', label: 'Low (default)' },
+  { key: 'medium', label: 'Medium — queue more' },
+  { key: 'none', label: 'None — nothing queued on confidence' },
 ] as const
 
-const STEPS = [
-  {
-    key: 'identify',
-    title: 'Identify',
-    cost: 'Costs money',
-    note: 'Reads every photograph with Haiku, in batch. Minutes to hours; it keeps running if you close this tab.',
-  },
-  {
-    key: 'join',
-    title: 'Join',
-    cost: 'Free · re-runnable',
-    note: 'Resolves each card against a TCGplayer export. Writes the queues and the pricing questions.',
-  },
-  {
-    key: 'emit',
-    title: 'Emit',
-    cost: 'Free · re-runnable',
-    note: 'Writes the import CSVs. Refuses while a sub-threshold price is unanswered.',
-  },
-  {
-    key: 'reconcile',
-    title: 'Reconcile',
-    cost: 'Free · re-runnable',
-    note: 'Compares what TCGplayer actually staged against what emit wrote.',
-  },
-] as const
-
-/* HOW THE CARDS ARE READ, as three named PAIRS and an escape hatch — and the pairing is the
- * whole reason this is not two controls any more.
- *
- * D32's finding is that the crop and the max edge are ONE decision, and that the arithmetic
- * runs backwards from intuition: `max_edge` normalises the LONG EDGE, not the area, and a card
- * (aspect 0.72) is a fatter shape than the frame (0.56) — so cropping at an unchanged max edge
- * sends MORE pixels, not fewer. Measured at +26%. That entry says in as many words that it got
- * the cost model wrong in public first and recorded the correction so a later session would not
- * re-derive it the same way; a checkbox sitting beside a free-form number offers precisely that
- * mistake and says nothing about it. A pair cannot be got wrong.
- *
- * EVERY NUMBER BELOW IS A ROW OF D32'S OWN MEASURED FRONTIER over box 2, against a full-frame
- * @1568 baseline of $0.72. Nothing is invented here and nothing is extrapolated to another box,
- * which is why each sentence names the box it was measured on rather than quoting a rate.
- *
- * `Sharpest · 1400` is deliberately not one of the three. It is the row of that table that is
- * strictly dearer than the baseline, and three buttons fit the 340px end of this column where
- * four do not — so it lives behind `Custom`, which reveals the raw controls unchanged. Demoted,
- * not taken away. */
-const READINGS = [
-  {
-    key: 'measured',
-    label: 'Measured best',
-    crop: true,
-    maxEdge: 1200,
-    says:
-      'Finds the card in each photograph and sends only that, at 1200px on its longest side — ' +
-      'the card, not the desk. Your photographs on disk are never touched. Box 2 measured it: ' +
-      '$0.62 against the whole frame’s $0.72, and sharper on the collector number. One it ' +
-      'cannot find a card in is sent whole, and so is one where it found a box that is not ' +
-      'the card — walk the preview and it says which, and why.',
-  },
-  {
-    key: 'cheapest',
-    label: 'Cheapest',
-    crop: true,
-    maxEdge: 900,
-    says:
-      'The same crop to the card, sent smaller at 900px. The cheapest row measured on box 2 — ' +
-      '$0.44 — and the softest: about 13% fewer pixels on the collector number than the whole ' +
-      'frame gives. A photograph it cannot find a card in — or finds the wrong box in — is ' +
-      'sent whole.',
-  },
-  {
-    key: 'whole',
-    label: 'Whole frame',
-    crop: false,
-    maxEdge: 1568,
-    says:
-      'Sends the whole photograph, desk and all, at 1568px. This is the command’s own default ' +
-      'and the only setting a run has been through end to end — Gate B’s 53 cards. $0.72 on box 2.',
-  },
-] as const
-
-/* The sentence for the escape hatch, and it carries the warning the presets make unnecessary.
- * This is where the mistake is reachable again, so this is where it is named. */
-const CUSTOM_SAYS =
-  'Crop and max edge are one decision. Cropping on its own makes the picture BIGGER, not ' +
-  'smaller — a card is a fatter shape than the frame, so a crop at an unchanged 1568 cost 26% ' +
-  'MORE when it was measured. The rig’s useful range runs 900 to 1400.'
-
-/** What a run was over, in the fewest words that are true.
- *
- *  IT NAMES THE DRAWER NOW AND NOT JUST THE NUMBER (D56). `runBoxLabel` joins the run's box
- *  against the registry server-side, so this reads `Box 3 · RB Epics` where the owner has
- *  named the box and `Box 3` where they have not — which is most of what a person scanning
- *  this list is actually trying to tell apart. The number stays beside the name because the
- *  number is the shelf, the capture directory and what every refusal here says.
- *
- *  THE `whole box` / `N cards` HALF STILL NEEDS A REAL SCOPE BLOCK. A box read out of a
- *  capture directory is a derivation, not a claim about what was submitted, and an old run
- *  genuinely does not record whether it covered the whole box — so that clause is drawn only
- *  where the manifest supports it. The alternative was an em dash, which says nothing about a
- *  run whose directory names its box in plain sight. */
-function scopeOf(row: RunSummary): string {
-  const label = runBoxLabel(row)
-  if (label === null) return '—'
-  if (row.scope != null && !row.scope.whole_box) {
-    return `${label} · ${row.scope.cards ?? '?'} cards`
-  }
-  return label
+/* Who started a run, as words rather than the manifest's own token. */
+const STARTER: Record<string, string> = { app: 'this app', cli: 'a terminal', terminal: 'a terminal' }
+function capitalise(word: string): string {
+  return word.length === 0 ? word : word[0]!.toUpperCase() + word.slice(1)
 }
 
-function money(value: number | null | undefined): string {
-  return typeof value === 'number' ? `$${value.toFixed(2)}` : '—'
+const TITLES: Record<Command, string> = {
+  identify: 'Identify',
+  join: 'Join',
+  emit: 'Emit',
+  reconcile: 'Reconcile',
 }
 
 function count(value: number | null | undefined): string {
   return typeof value === 'number' ? String(value) : '—'
 }
 
-/** The console, drawn as the command printed it.
- *
- *  Scrolled to the bottom on every change, because the interesting part of a long command is
- *  always what it said most recently — the same reason the server serves the TAIL of the log
- *  rather than its head. */
-function Console({ text, label }: { text: string; label: string }) {
-  const box = useRef<HTMLPreElement | null>(null)
-  useEffect(() => {
-    if (box.current !== null) box.current.scrollTop = box.current.scrollHeight
-  }, [text])
-  if (text.trim() === '') return null
-  return (
-    <pre className="run-console" ref={box} aria-label={label} tabIndex={0}>
-      {text}
-    </pre>
-  )
+/** The scope, in the words the receipt says it in: the third fact on its headline. */
+function scopeWords(asked: ExportAsked): string {
+  if (asked.scope === 'category') return 'whole category'
+  const names = asked.sets
+  if (names.length === 0) return 'no set named'
+  if (names.length <= 2) return names.join(' and ')
+  const rest = names.length - 2
+  return `${names.slice(0, 2).join(', ')} and ${rest} more set${rest === 1 ? '' : 's'}`
 }
 
-/** One box in the cart, as the picker hands it over: which box, what it is called, and which
- *  cards inside it. The READING is not here — it is chosen per box on this panel, beside the
- *  estimate it moves, because it is part of what the confirm is agreeing to buy.
+/** THE EXPORT BEFORE THIS ONE — the receipt's second line, and the whole of its reassurance:
+ *  it says the figure above is a normal size for this run.
  *
- *  `name` IS DRAWN AND NEVER SENT (D56). `legs` below projects a cart row to what the route
- *  reads, and the name is not in it — so it cannot reach `scopeKey`, which is what voids the
- *  estimate. That matters: renaming a drawer does not change a single byte of the send, and an
- *  estimate retired by a rename would be the money gate crying wolf. It comes from the picker's
- *  own `GET /boxes` rather than from the run list, because a cart row is a box the operator
- *  just chose and no run over it may yet exist. */
-export type CartBox = { box: number; name?: string | null; indices: readonly number[] }
-
-/** How a box is read until somebody says otherwise: D32's measured-best pair.
+ *  THE SHAPE IS `ExportFetched.previous` (D64, amended 2026-09-02): what the LAST JOIN used,
+ *  per game this file answers for, and `{}` on a run's first fetch. It is INFORMATION AND
+ *  NOTHING REFUSES ON IT — the delta guard that once turned this comparison into a refusal is
+ *  retired, D65's positive scope check is the whole guard now, and this line exists so a
+ *  narrower file is visible to the operator who asked for one.
  *
- *  STATED HERE RATHER THAN READ OUT OF `READINGS[0]`, because a lazy initialiser indexing
- *  that table would be a second place the default lives and the two would drift the first
- *  time a row was reordered. The CLI's own defaults are the OTHER corner — crop off, 1568 —
- *  which is what `Whole frame` selects: this screen states a default rather than changing
- *  what an unflagged terminal run means. */
-const DEFAULT_READING = { crop: true, maxEdge: 1200, custom: false }
+ *  BOTH COUNTS CARRY A SEPARATOR. Rows did and SKUs did not, which reads as a typo where the
+ *  two sit a slash apart — `2,008 rows / 1900 SKUs`. A figure is formatted for what it is and
+ *  not for how big it happened to be in the fixture.
+ *
+ *  AND IT NAMES THE FILE, which is the owner's own word for what this receipt is for: the guard
+ *  it replaced refused a narrower export, and what stands in for the refusal is being able to see
+ *  WHICH file the comparison is against. A figure with no file beside it says a number changed
+ *  and not which export to go and look at.
+ *
+ *  ROWS AND SKUS BOTH, because they fail differently: a variant-thinned export loses SKUs
+ *  while its row count barely moves, which is the case that mislists a reverse holo at the
+ *  normal row's price. One line per game, on the same principle as the trend strip's spans —
+ *  a shared figure over two games would be wrong for one of them. */
+function previousLine(fetched: ExportFetched, display: (game: string) => string): string {
+  const was = Object.entries(fetched.previous ?? {})
+  if (was.length === 0) return 'The first export this run has fetched — nothing earlier to set beside it.'
+  return `Last time: ${was
+    .map(
+      ([game, held]) =>
+        `${display(game)} ${held.rows.toLocaleString()} rows / ${held.skus.toLocaleString()} SKUs (${held.file})`,
+    )
+    .join(' · ')} · this one: ${fetched.rows.toLocaleString()} / ${fetched.skus.toLocaleString()}`
+}
 
-type Reading = typeof DEFAULT_READING
+/** What a run was over, in the fewest words that are true. */
+function scopeOf(row: RunSummary): string {
+  const label = runBoxLabel(row)
+  if (label === null) return '—'
+  if (row.scope != null && !row.scope.whole_box) return `${label} · ${row.scope.cards ?? '?'} cards`
+  return label
+}
+
+type BusyKey = 'join' | 'fetch' | 'exports' | 'staged'
+type Trouble = { readonly key: BusyKey | 'poll' | 'detail'; readonly failure: Failure }
+
+type StepState = 'done' | 'current' | 'live' | 'todo'
+
+/** One step of the stepper: a head that folds, and a body drawn only when open. */
+function StepCard({
+  n,
+  title,
+  state,
+  summary,
+  cost,
+  open,
+  onToggle,
+  children,
+}: {
+  readonly n: number
+  readonly title: string
+  readonly state: StepState
+  readonly summary: string
+  readonly cost: ReactNode
+  readonly open: boolean
+  readonly onToggle: () => void
+  readonly children: ReactNode
+}) {
+  return (
+    <section className={`runs-step runs-step-${state}`} data-open={open ? 'true' : undefined}>
+      <button type="button" className="runs-step-head" aria-expanded={open} onClick={onToggle}>
+        <span className="runs-step-mark" aria-hidden="true">
+          {state === 'done' ? (
+            <Icon name="check" size={14} strokeWidth={2.25} />
+          ) : state === 'live' ? (
+            <span className="bn-dot bn-dot-live" />
+          ) : (
+            n
+          )}
+        </span>
+        <span className="runs-step-text">
+          <span className="run-step-title">{title}</span>
+          <span className="runs-step-summary">{summary}</span>
+        </span>
+        <span className="runs-step-cost">{cost}</span>
+        <Icon name="chevronDown" size={16} className="runs-step-chev" />
+      </button>
+      {open ? <div className="runs-step-body">{children}</div> : null}
+    </section>
+  )
+}
 
 type RunPanelProps = {
-  /** THE CART: every box this send is over, in the order the picker offers them, each with
-   *  the cards ticked inside it. `Runs.tsx` owns which boxes are in it and where a ticked
-   *  selection came from; this panel owns how each is read and everything after the press. */
-  cart: readonly CartBox[]
+  readonly cart: readonly CartBox[]
+  readonly openRun: string | null
+  readonly onOpenRun: (run: string | null) => void
+  /** Bumped by the page's Reload; the list re-reads when it moves. */
+  readonly reloadTick: number
+  readonly onIdentify: () => void
+  /** The page's own read failure (the box registry). Drawn here, once, in the list's column,
+   *  so an unreachable server is said one time on the screen rather than by every column. */
+  readonly pageFailure: Failure | null
 }
 
-export function RunPanel({ cart }: RunPanelProps) {
-  /* WHICH RUN IS OPEN, and nothing else about it. Every figure below is read from the server
-   * on the next poll, so this component cannot hold a stale count — the failure that would
-   * otherwise be invisible, because a wrong number on a run panel looks exactly like a right
-   * one. */
-  const [openRun, setOpenRun] = useState<string | null>(null)
+export function RunPanel({ cart, openRun, onOpenRun, reloadTick, onIdentify, pageFailure }: RunPanelProps) {
   const [runs, setRuns] = useState<readonly RunSummary[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [detail, setDetail] = useState<RunDetail | null>(null)
 
-  /* The preflight's answer, which is step one of the money gate. Cleared whenever the scope
-   * moves, because an estimate for box 2 shown beside a confirm that would run box 3 is the
-   * exact shape this gate exists to prevent. */
-  const [quote, setQuote] = useState<RunPreflight | null>(null)
-  const [ticketScope, setTicketScope] = useState<string>('')
+  const [reviewBelow, setReviewBelow] = useState<'none' | 'low' | 'medium'>('low')
+  const [optionsOpen, setOptionsOpen] = useState(false)
 
-  /* THE READING, PER BOX, AND THAT IS THE WHOLE REASON THIS IS A CART RATHER THAN ONE RUN
-   * OVER SEVERAL BOXES. D32's frontier is a cost-against-sharpness trade measured on real
-   * frames, and which end of it is right depends on what is IN the drawer: a box of bulk
-   * commons wants `Cheapest · 900`, a box worth reading a collector number off wants
-   * `Measured best · 1200`. One reading stretched across a send would make the cart a
-   * convenience bought with accuracy.
-   *
-   * SPARSE, AND `DEFAULT_READING` FILLS THE GAPS. A box the operator has not touched has no
-   * entry, so adding one to the cart cannot be a write — and a box that LEAVES the cart keeps
-   * its entry, which is deliberate: re-ticking a box you just unticked should not silently
-   * reset a reading you chose on purpose. Nothing is sent for a box that is not in the cart,
-   * so a stale entry costs a few bytes of state and no correctness at all.
-   *
-   * `custom` IS AN ACT RATHER THAN A DERIVATION, unchanged from when there was one of these.
-   * With the pair set by the presets, the only way to reach an arbitrary number is to ask for
-   * one, and a `custom` that switched itself on whenever the pair stopped matching a row would
-   * leave the operator unable to see which of the two states they were in. */
-  const [readings, setReadings] = useState<Record<number, Reading>>({})
-  const readingFor = useCallback(
-    (box: number): Reading => readings[box] ?? DEFAULT_READING,
-    [readings],
-  )
-  const setReading = useCallback((box: number, patch: Partial<Reading>) => {
-    setReadings((held) => ({ ...held, [box]: { ...(held[box] ?? DEFAULT_READING), ...patch } }))
-    /* AND THE PICTURE FOLLOWS THE READING THAT WAS JUST TOUCHED. Setting a chip on box 7's row
-     * is the act that says "I am deciding about box 7", so the preview is of box 7 from that
-     * press onward — one line, in the one function every reading change goes through, rather
-     * than four call sites each remembering to do it. */
-    setPreviewBox(box)
-  }, [])
-
-  /* ------------------------------------------------------ D76: the fetch's scope, as a lever
-   *
-   * `scopeInfo` is the server's own answer to "what would a press ask for, and why" — the
-   * counts, this game's registry rule, and the derived scope. It is READ, never recomputed:
-   * `_scope_counts` answers both this route and the fetch, so the panel cannot describe a
-   * scope different from the one the button sends.
-   *
-   * `choice`, `game` and `ticked` are the OVERRIDES, and they are held per run rather than
-   * globally so that opening a second run does not inherit the first one's ticks — the same
-   * reason `readings` is keyed by box a few dozen lines up. */
+  /* D76: the fetch's scope, as a lever. Read from the server, never recomputed. */
   const [scopeInfo, setScopeInfo] = useState<ExportScope | null>(null)
   const [scopeGame, setScopeGame] = useState<string | null>(null)
   const [scopeChoice, setScopeChoice] = useState<ScopeChoice>('rule')
   const [scopeTicked, setScopeTicked] = useState<number[]>([])
-  /* The portal's set list for the chosen game, for the tick list. Empty is a legitimate
-   * answer and draws a sentence rather than a fault — `GET /tcg/sets` degrades to `[]` with a
-   * reason whenever the cookie is stale, and D65 argues at length that it must. */
   const [setList, setSetList] = useState<{ name: string; id: string }[]>([])
-  const [reviewBelow, setReviewBelow] = useState<'none' | 'low' | 'medium'>('low')
 
-  /* THE PREVIEW IS FETCHED ONCE PER (RUN, GAME) AND NOT PER KEYSTROKE. Resolving a hint is a
-   * round trip to TCGplayer's own host, so re-asking it every time a checkbox moves would put
-   * the portal behind a tick box. What the overrides change is drawn locally from what this
-   * already returned; only the game changes what the server would have to resolve. */
+  const [fetched, setFetched] = useState<ExportFetched | null>(null)
+  const [fetchRefusal, setFetchRefusal] = useState<Failure | null>(null)
+  const [stepOut, setStepOut] = useState<{ step: Command; ok: boolean; console: string } | null>(null)
+  const stepOutRef = useRef(stepOut)
+  stepOutRef.current = stepOut
+
+  const [busy, setBusy] = useState<BusyKey | null>(null)
+  const [trouble, setTrouble] = useState<Trouble | null>(null)
+
+  const [openStep, setOpenStep] = useState<Command | null>(null)
+
+  /* ---------------------------------------------------------------------- the list */
+  const loadRuns = useCallback(async () => {
+    try {
+      setRuns(await getRuns())
+      setLoaded(true)
+    } catch (err) {
+      setTrouble({ key: 'poll', failure: describeFailure(err) })
+      setLoaded(true)
+    }
+  }, [])
+
+  /* Re-read while on screen: fast while something is live, slow otherwise. Chained timeouts
+     so a slow answer never stacks; the first failure is reported and later ones swallowed. */
+  useEffect(() => {
+    let cancelled = false
+    let timer = 0
+    let announced = false
+    const tick = async () => {
+      let anyLive = false
+      try {
+        const rows = await getRuns()
+        if (cancelled) return
+        setRuns(rows)
+        setLoaded(true)
+        anyLive = rows.some((row) => row.live)
+      } catch (err) {
+        if (!cancelled && !announced) setTrouble({ key: 'poll', failure: describeFailure(err) })
+        announced = true
+        setLoaded(true)
+      }
+      if (!cancelled) timer = window.setTimeout(() => void tick(), anyLive ? POLL_MS : IDLE_POLL_MS)
+    }
+    void tick()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [])
+
+  const firstReload = useRef(true)
+  useEffect(() => {
+    if (firstReload.current) {
+      firstReload.current = false
+      return
+    }
+    void loadRuns()
+  }, [reloadTick, loadRuns])
+
+  /* Per-run state belongs to the run it was produced against. */
+  useEffect(() => {
+    setStepOut(null)
+    setFetched(null)
+    setFetchRefusal(null)
+    setOptionsOpen(false)
+    setTrouble((held) => (held !== null && held.key === 'poll' ? held : null))
+  }, [openRun])
+
+  /* The detail poll runs only while the open run is live. */
+  useEffect(() => {
+    if (openRun === null) {
+      setDetail(null)
+      return
+    }
+    let cancelled = false
+    let timer = 0
+    const tick = async () => {
+      try {
+        const next = await getRun(openRun)
+        if (cancelled) return
+        setDetail(next)
+        if (next.live) timer = window.setTimeout(() => void tick(), POLL_MS)
+        else void loadRuns()
+      } catch (err) {
+        if (!cancelled) setTrouble({ key: 'detail', failure: describeFailure(err) })
+      }
+    }
+    void tick()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [openRun, loadRuns])
+
+  /* The open step follows the run: a new run opens on the step it is waiting for, and a run
+     whose phase moves under a poll follows it — unless a step's own answer is on screen. */
+  const lastRun = useRef<string | null>(null)
+  useEffect(() => {
+    if (detail === null) return
+    const changed = lastRun.current !== detail.run
+    lastRun.current = detail.run
+    if (!changed && stepOutRef.current !== null) return
+    setOpenStep(COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify')
+  }, [detail])
+
+  /* ---------------------------------------------------------- D76: the export's scope */
   useEffect(() => {
     if (openRun === null) {
       setScopeInfo(null)
@@ -398,19 +326,11 @@ export function RunPanel({ cart }: RunPanelProps) {
     let live = true
     void (async () => {
       try {
-        const answer = await getExportScope(
-          openRun,
-          scopeGame === null ? {} : { game: scopeGame },
-        )
+        const answer = await getExportScope(openRun, scopeGame === null ? {} : { game: scopeGame })
         if (!live) return
         setScopeInfo(answer)
-        /* THE PICKER STARTS ON WHAT THE SERVER CHOSE, not on the first row. A run holding one
-         * game has no picker at all and this is where that game's name comes from; a run
-         * holding two draws one, and `asked` is null until the operator answers it. */
         if (scopeGame === null && answer.asked !== null) setScopeGame(answer.asked.game)
       } catch {
-        /* A PANEL THAT CANNOT PREVIEW ITS SCOPE STILL FETCHES. This is the free half; the
-           button below is unaffected, and every refusal it can make is drawn where it lands. */
         if (live) setScopeInfo(null)
       }
     })()
@@ -419,7 +339,6 @@ export function RunPanel({ cart }: RunPanelProps) {
     }
   }, [openRun, scopeGame])
 
-  /* The tick list's vocabulary, loaded only when there is something to tick. */
   useEffect(() => {
     const game = scopeGame ?? scopeInfo?.asked?.game ?? scopeInfo?.games[0]?.game ?? null
     if (game === null || scopeChoice !== 'sets') return
@@ -437,8 +356,6 @@ export function RunPanel({ cart }: RunPanelProps) {
     }
   }, [scopeGame, scopeChoice, scopeInfo])
 
-  /* THE THREE FIELDS THE FETCH SENDS, composed in ONE place so the sentence the panel draws
-   * and the request the button makes are the same decision read twice. */
   const scopeOptions = useMemo(() => {
     const game = scopeGame ?? undefined
     if (scopeChoice === 'category') return { game, scope: 'category' as const }
@@ -446,541 +363,65 @@ export function RunPanel({ cart }: RunPanelProps) {
     return { game }
   }, [scopeGame, scopeChoice, scopeTicked])
 
-  /* THE SENTENCE UNDER THE CONTROLS, and it is the whole reason this panel exists. D65's
-   * receipt said what was asked for AFTER the file was on disk — so the one moment an
-   * operator could correct a wrong scope was the one moment it was not on screen. Composed
-   * from the same three values `scopeOptions` sends, so the two cannot drift.
-   *
-   * `null` where there is nothing honest to say yet — a mixed-game run before a game is
-   * picked, or a preview the portal would not answer. The panel draws the refusal instead. */
-  const scopeSentence = useMemo(() => {
-    const chosen =
-      scopeInfo?.games.find((g) => g.game === (scopeGame ?? scopeInfo?.asked?.game)) ?? null
+  /* What the press will ask for and which voice chose it (D76), composed from the same three
+     values `scopeOptions` sends so the sentence and the request cannot drift. */
+  const scopeSentence = useMemo((): { what: string; why: string | null } | null => {
+    const chosen = scopeInfo?.games.find((g) => g.game === (scopeGame ?? scopeInfo?.asked?.game)) ?? null
     const every = `every set in ${chosen?.display ?? 'this category'}`
-    if (scopeChoice === 'category') return `${every} — you asked for the whole category.`
+    if (scopeChoice === 'category') return { what: every, why: 'you asked for the whole category' }
     if (scopeChoice === 'sets') {
-      if (scopeTicked.length === 0) return 'Tick at least one set, or the fetch has nothing to ask for.'
-      const names = setList
-        .filter((row) => scopeTicked.includes(Number(row.id)))
-        .map((row) => row.name)
-      return `${names.join(', ')} — your tick, which outranks both the rule and the hints.`
+      if (scopeTicked.length === 0) return { what: 'nothing yet', why: 'tick at least one set' }
+      const names = setList.filter((row) => scopeTicked.includes(Number(row.id))).map((row) => row.name)
+      return { what: names.join(', '), why: 'your tick, which outranks both the rule and the hints' }
     }
     const asked = scopeInfo?.asked ?? null
     if (asked === null) return null
     const what = asked.scope === 'category' ? every : asked.sets.join(', ')
-    const why = asked.reason === null ? null : SCOPE_REASON[asked.reason]
-    return why === undefined || why === null ? `${what}.` : `${what} — ${why}.`
+    const why = asked.reason === null ? null : (SCOPE_REASON[asked.reason] ?? null)
+    return { what, why }
   }, [scopeInfo, scopeGame, scopeChoice, scopeTicked, setList])
 
+  /** A game's display name for the eye; the id only when the scope has not answered yet. */
+  const gameDisplay = (game: string): string => scopeInfo?.games.find((row) => row.game === game)?.display ?? game
 
-  /* THE CROP PREVIEW'S STATE. `previewFor` is the reading-and-offset the strip on screen was
-   * drawn for, compared against the one the controls currently name — the same shape
-   * `ticketScope` uses against the estimate, and for the same reason: a picture of a reading
-   * that is no longer selected is worse than no picture, because it is believed. */
-  const [preview, setPreview] = useState<CropPreview | null>(null)
-  const [previewFor, setPreviewFor] = useState('')
-  const [previewOffset, setPreviewOffset] = useState(0)
-  const [previewBusy, setPreviewBusy] = useState(false)
-  const [previewTrouble, setPreviewTrouble] = useState<string | null>(null)
-  /* WHERE THE 1:1 VIEW IS LOOKING, in the SENT image's own pixels, or null for its resting
-   * aim — the collector number where the registry claims one, the middle of the card where it
-   * does not. Null rather than a computed default so that leaving the frame returns the view
-   * to the thing worth reading rather than to wherever the pointer happened to exit. */
-  const [aim, setAim] = useState<{ x: number; y: number } | null>(null)
-  const detailRef = useRef<HTMLDivElement | null>(null)
-
-  const [busy, setBusy] = useState<string | null>(null)
-  const [trouble, setTrouble] = useState<Failure | null>(null)
-  /** Boxes whose child could not be spawned, from the last send. See `doStart`. */
-  const [partial, setPartial] = useState<RunStartFailure[] | null>(null)
-  /* THE FETCH'S TWO OUTCOMES, HELD APART FROM THE JOIN'S AND FROM `trouble` (D64).
-   *
-   * One press is two calls, and a failure has to be attributable to one of them: `trouble` is
-   * the panel-wide banner and would say "the session expired" in the same place a join failure
-   * says "no catalog row". Separate state lets the fetch draw its receipt and its refusal
-   * beside the control that made them, which is also where the acknowledgement belongs. */
-  const [fetched, setFetched] = useState<ExportFetched | null>(null)
-  const [fetchRefusal, setFetchRefusal] = useState<Failure | null>(null)
-
-  const [stepOut, setStepOut] = useState<{ step: string; ok: boolean; console: string } | null>(
-    null,
-  )
-
-  const exportPick = useRef<HTMLInputElement | null>(null)
-  const stagedPick = useRef<HTMLInputElement | null>(null)
-
-  /* THE SCOPE AS ONE STRING, so an effect can compare it. Two numbers and an array cannot be
-   * compared by identity across renders — the array is rebuilt every time `BoxBrowse` reports
-   * — and a deep compare written by hand here would be a second answer to a question a key
-   * already answers. */
-  /* WHAT WOULD ACTUALLY BE SENT, box by box, in the shape `server.ts` puts on the wire. One
-   * derivation feeding the preflight, the confirm and the key below, so the three can never
-   * describe different sends — which is the failure the whole two-step gate exists to
-   * prevent. */
-  const legs = useMemo(
-    () =>
-      cart.map((row) => {
-        const reading = readings[row.box] ?? DEFAULT_READING
-        return {
-          box: row.box,
-          indices: row.indices.length > 0 ? [...row.indices] : undefined,
-          crop: reading.crop,
-          maxEdge: reading.maxEdge,
-        }
-      }),
-    [cart, readings],
-  )
-
-  /* WHETHER EVERY BOX IS READ THE SAME WAY, which decides where the sentence goes.
-   *
-   * THE SENTENCE IS PER READING, NOT PER BOX, AND A CART MADE THAT VISIBLE. D32's amendment
-   * puts three or four lines under the chips saying what the pair costs and what it buys —
-   * right for one box, and a wall for five, because the common case is a cart whose boxes are
-   * all read the same way and the paragraph is then rendered identically once per box.
-   * Observed at two boxes; at five it is fifteen lines of duplicate prose above the control
-   * that spends.
-   *
-   * Derived, never stored: a second piece of state would let the sentence disagree with the
-   * chips, which is the failure `reading` above is written to avoid one register down. Null
-   * when the readings differ, and then each box says its own — which is the case where the
-   * repetition is not repetition at all. */
-  const sharedReading = useMemo(() => {
-    if (cart.length === 0) return null
-    const first = readings[cart[0]?.box ?? -1] ?? DEFAULT_READING
-    const same = cart.every((row) => {
-      const held = readings[row.box] ?? DEFAULT_READING
-      return held.crop === first.crop && held.maxEdge === first.maxEdge && held.custom === first.custom
-    })
-    return same ? first : null
-  }, [cart, readings])
-
-  /* THE WHOLE SEND AS ONE STRING, so an effect can compare it. Boxes, their ticked cards and
-   * their readings cannot be compared by identity across renders — the arrays are rebuilt
-   * every time the picker reports — and a deep compare written by hand here would be a second
-   * answer to a question a key already answers.
-   *
-   * ORDER-SENSITIVE ON PURPOSE, ON THE CARDS AND NOT ON THE BOXES: the indices are sorted
-   * because ticking 4 then 2 is the same send as ticking 2 then 4, and the boxes are left in
-   * cart order because that is the order the legs are sent and the order the answer comes back
-   * in. A key that sorted the boxes would call two different-looking answers the same quote. */
-  const scopeKey = useMemo(
-    () =>
-      legs
-        .map(
-          (leg) =>
-            `${leg.box}:${(leg.indices ?? []).slice().sort((a, b) => a - b).join(',')}` +
-            `:${leg.crop ? 'crop' : 'whole'}:${leg.maxEdge}`,
-        )
-        .join('|'),
-    [legs],
-  )
-
-  const scoped = cart.length > 0
-
-  /* WHAT THE CART CALLS A BOX, for the rows the SERVER answers about. The preflight replies
-     per leg with a scope block — a box number and a card count — and no name, correctly: the
-     route is answering what a send would cost, and what the drawer is called is not part of
-     that. The name is already on screen for these boxes because the operator just picked them,
-     so it is looked up here rather than added to a response that has no use for it. */
-  const cartName = useCallback(
-    (box: number) => cart.find((row) => row.box === box)?.name ?? null,
-    [cart],
-  )
-
-  useEffect(() => {
-    /* THE QUOTE IS VOID THE MOMENT THE SCOPE MOVES. Not merely stale — void: it is the first
-     * step of a two-step confirm, and a confirm whose first step described a different set of
-     * cards is not a confirm at all. Ticking one more card retires the estimate, and so does
-     * adding a box to the cart or changing any box's reading — which is the same rule, now
-     * that a send can be several boxes and each carries its own.
-     *
-     * AND THE READING IS PART OF THE SCOPE, which this key did not say until 2026-08-25. The
-     * estimate is computed from the BYTES each card is sent as, and the crop and the max edge
-     * are what decide those — so unticking the crop after Check cost left a stale figure
-     * standing above a live `Spend $0.62 and identify 36 cards` button, describing a send that
-     * was no longer the one about to happen. The rule above already covered it; the key just
-     * named cards where it should also have named bytes. */
-    if (ticketScope !== '' && ticketScope !== scopeKey) {
-      setQuote(null)
-      setTicketScope('')
-    }
-  }, [scopeKey, ticketScope])
-
-  const loadRuns = useCallback(async () => {
+  /* ------------------------------------------------------------------ the commands */
+  const guard = useCallback(async (key: BusyKey, work: () => Promise<void>) => {
+    setBusy(key)
+    setTrouble(null)
     try {
-      setRuns(await getRuns())
+      await work()
     } catch (err) {
-      setTrouble(describeFailure(err))
+      setTrouble({ key, failure: describeFailure(err) })
+    } finally {
+      setBusy(null)
     }
   }, [])
 
-  /* THE LIST IS RE-READ WHILE THIS PANEL IS ON SCREEN, and the condition is deliberately NOT
-   * "while something is live". A run started in a terminal BEGINS live, so a poll gated on a
-   * snapshot that holds nothing live could never discover the one case D33 says this route
-   * exists for — it would need the operator to reload the page to see their own run. What
-   * varies with liveness is the CADENCE, not whether we look.
-   *
-   * Chained `setTimeout`, never `setInterval`: the detail poll below makes the same choice for
-   * the same reason, which is that a slow answer must not stack requests behind it. No
-   * dependencies, and liveness is read off the response just received rather than off `runs` —
-   * depending on `runs` would tear the timer down and rebuild it on every tick.
-   *
-   * THE FIRST FAILURE IS REPORTED AND EVERY LATER ONE IS SWALLOWED. A dead server on arrival is
-   * worth a sentence; the same sentence rewritten every twenty seconds is a note nobody asked
-   * for, painted over the refusal `emit` printed a minute ago. */
-  useEffect(() => {
-    let cancelled = false
-    let timer = 0
-    let announced = false
-    const tick = async () => {
-      let anyLive = false
-      try {
-        const rows = await getRuns()
-        if (cancelled) return
-        setRuns(rows)
-        anyLive = rows.some((row) => row.live)
-      } catch (err) {
-        if (!cancelled && !announced) setTrouble(describeFailure(err))
-        announced = true
-      }
-      if (!cancelled) {
-        timer = window.setTimeout(() => void tick(), anyLive ? POLL_MS : IDLE_POLL_MS)
-      }
-    }
-    void tick()
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [])
-
-  /* PER-RUN STATE BELONGS TO THE RUN IT WAS PRODUCED AGAINST, and none of it was cleared when
-   * the open run changed. Opening run A, pressing Preview, then clicking run B left A's answer
-   * on screen under B. Rendering a step's answer inside its own step box makes a stale one
-   * MORE believable, not less, which is what turns this from latent into worth fixing. One
-   * effect rather than an edit at each `setOpenRun` call site, so a later caller cannot forget
-   * it. (The per-run `decisions.json` textarea that once shared this reset is deleted — D86,
-   * amended 2026-09-02 — which took with it the sharper hazard, A's edit written into B.) */
-  useEffect(() => {
-    setStepOut(null)
-    /* THE RECEIPT IS THE WORSE OF THE TWO TO LEAVE BEHIND. It names a file, and a file fetched
-       into one run is not a file another run holds — `fetched` is the name the join is handed,
-       so a stale one would ask the server to join a run against a name it does not have. */
-    setFetched(null)
-    setFetchRefusal(null)
-  }, [openRun])
-
-  /* THE POLL, and it runs only while the open run is live. A run the server says is not live
-   * is a directory that is not changing, so polling it would be a request per four seconds
-   * asking a question already answered. */
-  useEffect(() => {
-    if (openRun === null) {
-      setDetail(null)
-      return
-    }
-    let cancelled = false
-    let timer = 0
-
-    const tick = async () => {
-      try {
-        const next = await getRun(openRun)
-        if (cancelled) return
-        setDetail(next)
-        if (next.live) timer = window.setTimeout(() => void tick(), POLL_MS)
-        else void loadRuns()
-      } catch (err) {
-        if (!cancelled) setTrouble(describeFailure(err))
-      }
-    }
-    void tick()
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [openRun, loadRuns])
-
-  const guard = useCallback(
-    async (key: string, work: () => Promise<void>) => {
-      setBusy(key)
-      setTrouble(null)
-      try {
-        await work()
-      } catch (err) {
-        setTrouble(describeFailure(err))
-      } finally {
-        setBusy(null)
-      }
-    },
-    [],
-  )
-
-  /* WHICH BOX THE PICTURE IS OF, once a send can be several (D48). The preview's whole job is
-   * showing what THIS reading sends, and a reading belongs to a box now — so the box whose
-   * chip was last pressed is the one being decided about, and the picture follows it. Null
-   * means "the first in the cart", which makes a cart of one behave exactly as it did before
-   * the cart existed.
-   *
-   * NOT one preview per row: that is N photographs decoded to answer one question, and the
-   * owner already rejected three-abreast on the plainer ground that three pictures in a row
-   * are three pictures too small to read. */
-  const [previewBox, setPreviewBox] = useState<number | null>(null)
-
-  const previewLeg = useMemo(
-    () => legs.find((leg) => leg.box === previewBox) ?? legs[0] ?? null,
-    [legs, previewBox],
-  )
-
-  const previewArgs = useMemo(
-    () =>
-      previewLeg === null
-        ? null
-        : {
-            box: previewLeg.box,
-            indices: previewLeg.indices,
-            crop: previewLeg.crop,
-            maxEdge: previewLeg.maxEdge,
-          },
-    [previewLeg],
-  )
-
-  /* THE PREVIEW'S OWN KEY, AND IT IS NOT THE CART'S. `scopeKey` covers every box and every
-   * reading, because the ESTIMATE is about the whole send; the picture is about one leg. Keyed
-   * on the cart, adding an unrelated box to it would refetch and redraw a photograph that had
-   * not changed. */
-  const previewKey =
-    previewArgs === null
-      ? ''
-      : `${previewArgs.box}:${(previewArgs.indices ?? []).join(',')}` +
-        `:${previewArgs.crop ? 'crop' : 'whole'}:${previewArgs.maxEdge}`
-
-  /* THE PREVIEW FOLLOWS THE READING, and it is keyed on `scopeKey` — the same string that
-   * voids the estimate below. The crop and the max edge are in that key already (D32's
-   * amendment put them there when unticking the crop left a stale figure over a live spend
-   * button), so a reading change redraws the picture and clears the number together. It runs
-   * BEFORE `Check cost` rather than after: this is what the pair is chosen from, and the
-   * estimate is what the choice then costs.
-   *
-   * DEBOUNCED, BECAUSE THE WALK IS HELD DOWN AS OFTEN AS IT IS TAPPED. An arrow key repeating
-   * at ~30/s against a route that decodes a photograph would queue a request per frame for a
-   * card nobody is looking at. 140ms is under the interval a key repeat produces and over the
-   * one a human tapping produces, so a tap is immediate and a hold costs one request when it
-   * stops.
-   *
-   * THE PREVIOUS CARD STAYS UP WHILE THE NEXT IS FETCHED. Blanking would make every press
-   * flash the tallest block in this column out of and back into the document, and the column
-   * beside it holds the button that spends. */
-  useEffect(() => {
-    if (!scoped || previewArgs === null) {
-      setPreview(null)
-      setPreviewFor('')
-      return
-    }
-    const want = `${previewKey}:${previewOffset}`
-    if (previewFor === want) return
-    let live = true
-    const timer = setTimeout(() => {
-      setPreviewBusy(true)
-      void (async () => {
-        try {
-          const answer = await cropPreview({ ...previewArgs, offset: previewOffset })
-          if (!live) return
-          setPreview(answer)
-          setPreviewTrouble(null)
-        } catch (err) {
-          if (!live) return
-          /* NAMED, NOT SWALLOWED. The one refusal an operator will actually meet is
-           * `imaging_unavailable` — Pillow missing from the SERVER's interpreter — and its
-           * remedy is a `make venv` and a restart they cannot guess at from an empty panel. */
-          setPreview(null)
-          setPreviewTrouble(describeFailure(err).message)
-        } finally {
-          if (live) {
-            setPreviewFor(want)
-            setPreviewBusy(false)
-          }
-        }
-      })()
-    }, 140)
-    return () => {
-      live = false
-      clearTimeout(timer)
-    }
-  }, [scoped, previewKey, previewOffset, previewFor, previewArgs])
-
-  /* THE AIM IS RELEASED WHEN THE PICTURE CHANGES. It is a position in the SENT image's
-   * pixels, and those move when the reading or the card does — so an aim carried across a
-   * change would be pointing at a coordinate that no longer means what it meant. */
-  useEffect(() => {
-    setAim(null)
-  }, [previewFor])
-
-  /* A NEW BOX STARTS AT THE FRONT OF ITS OWN WALK. Without this, stepping through box 2 and
-   * then picking box 6 would open box 6 at somebody else's offset.
-   *
-   * KEYED ON THE RESOLVED BOX AND NOT ON `previewBox`, WHICH IS THE DIFFERENCE BETWEEN A NEW
-   * BOX AND A NEW READING. `previewBox` starts null and `previewLeg` falls back to the first
-   * leg, so the first chip press changes the STATE from null to a box without changing which
-   * box is being previewed — and keyed on the state, that press reset the walk. Caught by
-   * `run-panel.spec.ts`'s arrow-key case: step to card 2, press Custom, and the caption fell
-   * back to card 1. Setting the reading of the box you are already looking at must not throw
-   * away where you are in it. */
-  useEffect(() => {
-    setPreviewOffset(0)
-  }, [previewLeg?.box])
-
-  /* THE WALK WRAPS RATHER THAN STOPPING, and it wraps HERE as well as on the route: the
-   * server takes `offset % total` so a stale client can never send a negative, and this keeps
-   * the number the caption prints inside the box the operator is looking at. */
-  const stepPreview = useCallback(
-    (by: number) =>
-      setPreviewOffset((was) => {
-        const total = preview?.total ?? 0
-        return total > 0 ? (was + by + total) % total : Math.max(0, was + by)
-      }),
-    [preview],
-  )
-
-  /* ARROW KEYS WALK THE BOX — the owner asked for them by name, and the buttons beside the
-   * card do the same thing because a key with no visible control is a key nobody finds.
-   *
-   * GUARDED ON THE EVENT'S TARGET, which is the whole subtlety. This panel holds a number
-   * input (Custom's max edge), and an unguarded window listener would steal the caret keys
-   * from it — the operator would be unable to move through a number they were editing. The
-   * guard is written for any text field, so a control added later is covered. Modifier chords
-   * are left alone too: they belong to the browser and to `App.tsx`'s route chords. */
-  useEffect(() => {
-    if (!scoped) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-      if (event.metaKey || event.ctrlKey || event.altKey) return
-      const target = event.target as HTMLElement | null
-      const tag = target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
-        return
-      }
-      event.preventDefault()
-      stepPreview(event.key === 'ArrowRight' ? 1 : -1)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [scoped, stepPreview])
-
-  /* THE 1:1 VIEW'S POSITION, in the sent image's own pixels.
-   *
-   * `background-size: auto` paints the file at its natural size and `background-position`
-   * picks which natural pixel sits in the corner — that pair IS 1:1, with no scaling
-   * arithmetic to get wrong. It is the review queue's loupe, aimed at the PAYLOAD instead of
-   * at the stored photograph, and for the reason that screen gives: FADGI and Metamorfoze
-   * both require this class of judgement at 100%, and a downscale is exactly what is being
-   * judged here.
-   *
-   * CLAMPED INTO THE IMAGE, so the window never shows more empty ground than picture at the
-   * edges of a card. */
-  const detailPosition = useMemo(() => {
-    const sample = preview?.sample
-    if (sample?.sent == null) return undefined
-    const [sentW, sentH] = sample.sent
-    const node = detailRef.current
-    const viewW = node?.offsetWidth ?? 320
-    const viewH = node?.offsetHeight ?? 140
-    let x: number
-    let y: number
-    if (aim !== null) {
-      x = aim.x
-      y = aim.y
-    } else if (sample.band_rect != null) {
-      /* THE RESTING AIM IS THE COLLECTOR NUMBER, left-aligned and vertically centred on the
-         band — the registry knows where it is on a Pokemon card, so the operator should not
-         have to go looking for the one region that decides the run. */
-      x = sample.band_rect[0]
-      y = sample.band_rect[1] + (sample.band_rect[3] - sample.band_rect[1] - viewH) / 2
-    } else {
-      x = (sentW - viewW) / 2
-      y = (sentH - viewH) / 2
-    }
-    x = Math.max(0, Math.min(x, Math.max(0, sentW - viewW)))
-    y = Math.max(0, Math.min(y, Math.max(0, sentH - viewH)))
-    return `${-Math.round(x)}px ${-Math.round(y)}px`
-  }, [preview, aim])
-
-  /* POINTING AT THE FRAME AIMS THE 1:1 VIEW. The frame is drawn at a fraction of the sent
-   * image's size, so a pointer position has to travel two coordinate systems: the box is the
-   * ORIGINAL frame, and the view reads the SENT one. `rect` is the map between them, and its
-   * absence is the whole-frame case where the two differ only by scale.
-   *
-   * IT IS WHAT MAKES A GAME WITH NO BAND USABLE AT ALL. The registry cannot say where a
-   * Riftbound card prints its identifier, and it does not have to: the operator can. */
-  const aimAt = useCallback(
-    (event: PointerEvent<HTMLDivElement>) => {
-      const sample = preview?.sample
-      if (sample?.frame == null || sample.sent == null) return
-      const node = detailRef.current
-      const box = event.currentTarget.getBoundingClientRect()
-      if (box.width === 0 || box.height === 0) return
-      const [frameW, frameH] = sample.frame
-      const cut = sample.rect ?? [0, 0, frameW, frameH]
-      const originalX = ((event.clientX - box.left) / box.width) * frameW
-      const originalY = ((event.clientY - box.top) / box.height) * frameH
-      const sentX = ((originalX - cut[0]) / (cut[2] - cut[0])) * sample.sent[0]
-      const sentY = ((originalY - cut[1]) / (cut[3] - cut[1])) * sample.sent[1]
-      setAim({
-        x: sentX - (node?.offsetWidth ?? 320) / 2,
-        y: sentY - (node?.offsetHeight ?? 140) / 2,
-      })
-    },
-    [preview],
-  )
-
-  const doQuote = () =>
-    guard('quote', async () => {
-      const answer = await preflightRun(legs)
-      setQuote(answer)
-      setTicketScope(scopeKey)
-    })
-
-  const doStart = () =>
-    guard('start', async () => {
-      const answer = await startRun(legs)
-      /* The quote is spent. Clearing it forces a fresh preflight before a second send can be
-       * started, which is what stops a confirm being pressed twice on one estimate. */
-      setQuote(null)
-      setTicketScope('')
-      /* WHAT DID NOT START, KEPT ON SCREEN UNTIL THE NEXT PRESS. `Popen` can fail on the
-       * fourth leg after three have started and no validation sees that coming, so the route
-       * answers with both halves and this is where the failed half is drawn. Swallowing it
-       * would report a partial send as a whole one, which is an invoice nobody can account
-       * for. */
-      setPartial(answer.failed.length > 0 ? answer.failed : null)
-      /* The FIRST run started, which for a cart of one is the only one. Opening it is what
-       * the operator wants next either way — the rest are one click down the list, and a
-       * panel that opened the last of five would be answering a question nobody asked. */
-      const first = answer.started[0]
-      if (first !== undefined) setOpenRun(first.run)
-      await loadRuns()
-    })
-
-  const doStep = (step: 'join' | 'emit' | 'reconcile', extra: Parameters<typeof runStep>[2] = {}) =>
-    guard(step, async () => {
+  const settle = useCallback(
+    async (step: Command, result: { ok: boolean; console: string }) => {
       if (openRun === null) return
-      const result = await runStep(openRun, step, extra)
-      /* THE STEP WE ASKED FOR, NOT THE ONE THE SERVER ECHOED, now that the answer renders
-         inside its own step box. `result.step` is the echo, and it is demonstrably not the
-         local truth: `app/tests/run-panel.spec.ts` mocks all three routes and returns
-         `step: 'join'` for every one. That was harmless while this rendered unconditionally
-         and would now put an emit result inside the Join box — or, on a real mismatch, make
-         the answer vanish from the screen entirely. */
       setStepOut({ step, ok: result.ok, console: result.console })
+      setOpenStep(step)
       setDetail(await getRun(openRun))
       await loadRuns()
+      toast({
+        kind: result.ok ? 'ok' : 'refusal',
+        title: `${TITLES[step]} ${result.ok ? 'finished' : 'refused'}`,
+        body: result.ok ? 'The answer is in the step below.' : 'The command said why — read it in the step.',
+        ttlMs: result.ok ? 4000 : 8000,
+      })
+    },
+    [openRun, loadRuns],
+  )
+
+  const doStep = (step: 'join' | 'emit' | 'reconcile', extra: Parameters<typeof runStep>[2] = {}) =>
+    guard(step === 'join' ? 'join' : 'staged', async () => {
+      if (openRun === null) return
+      const result = await runStep(openRun, step, extra)
+      await settle(step, result)
     })
 
-  /* THE LAST MANUAL STEP IN `runs -> join`, PRESSED (D64).
-   *
-   * ONE PRESS IS TWO CALLS AND THAT IS THE WHOLE FEATURE. What it replaces: open TCGplayer,
-   * press Export Filtered CSV, wait, find the download, come back, pick it. The fetch reports
-   * first and separately, and the join runs only if it landed — a fetch that refused has
-   * written nothing, so joining after one would silently re-use the previous export and look
-   * like the fetch had worked. */
+  /* One press, two calls: fetch the export, then join against it — only if it landed. */
   const doFetchExport = () =>
     guard('fetch', async () => {
       if (openRun === null) return
@@ -997,67 +438,30 @@ export function RunPanel({ cart }: RunPanelProps) {
         return
       }
       setFetched(answer)
-      const result = await runStep(openRun, 'join', {
-        fetched: [answer.file],
-        reviewBelowConfidence: reviewBelow,
-      })
-      setStepOut({ step: 'join', ok: result.ok, console: result.console })
-      setDetail(await getRun(openRun))
-      await loadRuns()
+      const result = await runStep(openRun, 'join', { fetched: [answer.file], reviewBelowConfidence: reviewBelow })
+      await settle('join', result)
     })
 
-  const pickExports = () =>
+  const joinWithExports = (files: File[]) =>
     guard('exports', async () => {
-      const chosen = Array.from(exportPick.current?.files ?? [])
-      if (chosen.length === 0 || openRun === null) return
-      const uploads = await Promise.all(chosen.map(readUpload))
-      const result = await runStep(openRun, 'join', {
-        exports: uploads,
-        reviewBelowConfidence: reviewBelow,
-      })
-      setStepOut({ step: 'join', ok: result.ok, console: result.console })
-      setDetail(await getRun(openRun))
-      await loadRuns()
-      if (exportPick.current !== null) exportPick.current.value = ''
+      if (files.length === 0 || openRun === null) return
+      const uploads = await Promise.all(files.map(readUpload))
+      const result = await runStep(openRun, 'join', { exports: uploads, reviewBelowConfidence: reviewBelow })
+      await settle('join', result)
     })
 
-  const pickStaged = () =>
+  const compareStaged = (files: File[]) =>
     guard('staged', async () => {
-      const chosen = stagedPick.current?.files?.[0]
+      const chosen = files[0]
       if (chosen === undefined || openRun === null) return
       const result = await runStep(openRun, 'reconcile', { stagedExport: await readUpload(chosen) })
-      setStepOut({ step: 'reconcile', ok: result.ok, console: result.console })
-      setDetail(await getRun(openRun))
-      if (stagedPick.current !== null) stagedPick.current.value = ''
+      await settle('reconcile', result)
     })
 
-  /* ------------------------------------------------------------------------------- render */
+  /* --------------------------------------------------------------------------- render */
 
-  const runRow = (row: RunSummary) => (
-    <button
-      key={row.run}
-      type="button"
-      className={`run-row${row.run === openRun ? ' run-row-open' : ''}`}
-      aria-pressed={row.run === openRun}
-      onClick={() => setOpenRun(row.run === openRun ? null : row.run)}
-    >
-      <span className="run-row-name">{row.run}</span>
-      <span className={`run-phase run-phase-${row.phase}`}>
-        {row.live ? runningFor(row) : row.phase}
-      </span>
-      <span className="run-row-scope">{scopeOf(row)}</span>
-    </button>
-  )
-
-  /* THE RUNS FOR THE BOX YOU ARE STANDING IN, FIRST — AND NOTHING IS EVER FILTERED OUT. D33
-     makes a run outlive the tab that started it, so a live run over another box is exactly the
-     thing this list must not hide; `aria-label="Every run"` stays literally true under a
-     reordering and would become a lie under a filter.
-     
-     PARTITIONED, NOT SORTED. The server already returns newest-first — `sorted(..., reverse=True)`
-     over date-prefixed run names — so walking once and pushing into three buckets keeps each
-     group newest-first for free. Comparing `created_at` would be worse than useless: it is
-     `string | null | undefined`, and a run missing it would sort to an arbitrary end. */
+  /* Partitioned, never filtered: running first, then runs over the boxes in the cart, then the
+     rest — and only when there is a cart to group against. */
   const inCart = new Set(cart.map((row) => row.box))
   const running: RunSummary[] = []
   const mine: RunSummary[] = []
@@ -1067,1071 +471,644 @@ export function RunPanel({ cart }: RunPanelProps) {
     else if (inCart.has(boxOf(row) ?? -1)) mine.push(row)
     else other.push(row)
   }
-
-  /* No box in the cart means no box to group against, so the list is drawn exactly as the
-     server sent it — a distinction with nothing to distinguish is chrome.
-
-     THIS TEST WAS INVERTED AND THE GROUPING IT COMPUTED WAS THROWN AWAY. It read
-     `scope.box === null`, so the partition above ran, produced `mine`, and then rendered
-     `runs` in server order whenever a box actually WAS selected — while an unscoped screen,
-     where `mine` is empty by construction, got the three-group order and could draw an
-     `other boxes` caption with no box to be other than. Both halves were backwards at once,
-     which is why neither looked wrong on its own. */
   const grouped = cart.length > 0
-  const runRows = grouped
-    ? [...running, ...mine, ...other].map(runRow)
-    : runs.map(runRow)
+  const groups: { readonly key: string; readonly caption: string | null; readonly rows: RunSummary[] }[] = grouped
+    ? [
+        { key: 'running', caption: 'Running', rows: running },
+        { key: 'mine', caption: 'Picked boxes', rows: mine },
+        { key: 'other', caption: 'Other boxes', rows: other },
+      ].filter((group) => group.rows.length > 0)
+    : [{ key: 'all', caption: null, rows: [...runs] }]
 
-  /* ONLY THE THIRD GROUP IS CAPTIONED, and the useful case is when it is the whole list —
-     that is the caption saying none of these runs are about the box you are in. A live row
-     needs no caption: `.run-phase-identifying` already draws `running` in ink at 600, which
-     is this file's own emphasis grammar. */
-  const otherCaption =
-    grouped && other.length > 0 && other.length < runs.length ? (
-      <p className="run-group" key="other-caption">
-        other boxes
-      </p>
+  const live = runs.filter((row) => row.live).length
+
+  const runRow = (row: RunSummary, i: number) => {
+    const stage = stageOf(row)
+    const open = row.run === openRun
+    return (
+      <button
+        key={row.run}
+        type="button"
+        className={`run-row${open ? ' run-row-open' : ''}`}
+        aria-current={open ? 'true' : undefined}
+        onClick={() => onOpenRun(open ? null : row.run)}
+        style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }}
+      >
+        <span className="run-row-main">
+          {/* The box label is what tells two runs apart, and the 320px master cuts it. */}
+          <span className="run-row-scope" title={scopeOf(row)}>
+            {scopeOf(row)}
+          </span>
+          <span className="run-row-name" title={row.run}>
+            {row.run}
+          </span>
+        </span>
+        <span className="run-row-side">
+          <span className="run-row-when">{whenLabel(row.updated_at ?? row.created_at)}</span>
+          <StagePill stage={stage} />
+        </span>
+        <StageBar stage={stage} className="run-row-bar" />
+      </button>
+    )
+  }
+
+  const stage = detail === null ? null : stageOf(detail)
+  const stepState = (cmd: Command): StepState => {
+    const i = COMMANDS.indexOf(cmd)
+    const s = stage?.step ?? 0
+    if (stage?.live && i === 0) return 'live'
+    if (i < s) return 'done'
+    if (i === s) return 'current'
+    return 'todo'
+  }
+
+  const summaryOf = (cmd: Command): string => {
+    if (detail === null) return ''
+    const st = stepState(cmd)
+    switch (cmd) {
+      case 'identify':
+        if (st === 'live') return `${runningFor(detail)} — identification takes minutes to hours`
+        if (detail.phase === 'identify') return 'Submitted, not yet collected'
+        if (st === 'done')
+          return detail.counts.cards_in === undefined
+            ? 'Collected'
+            : `${count(detail.counts.cards_in)} photographs read by the model`
+        return 'Reads every photograph with the model'
+      case 'join':
+        if (st === 'done')
+          return `${count(detail.counts.skus)} SKUs · ${count(detail.counts.queued_main)} to review · ${count(
+            detail.counts.queued_parked,
+          )} parked`
+        if (st === 'current') return 'Resolve each card against a TCGplayer export'
+        return 'After identify'
+      case 'emit':
+        if (st === 'done') return 'Import files written'
+        if (st === 'current') return 'Price the SKUs and write the import files — on Pricing'
+        return 'After join'
+      case 'reconcile':
+        if (st === 'done') return 'Reconciled against Export From Staged'
+        if (st === 'current') return 'Compare what TCGplayer staged with what emit wrote'
+        return 'After emit'
+      default:
+        return ''
+    }
+  }
+
+  const troubleFor = (keys: readonly Trouble['key'][]) =>
+    trouble !== null && keys.includes(trouble.key) ? (
+      <div className="runs-trouble">
+        <Notice tone="danger" code={trouble.failure.code}>
+          {trouble.failure.message}
+        </Notice>
+        <Button size="sm" variant="ghost" icon="x" iconOnly onClick={() => setTrouble(null)}>
+          Dismiss
+        </Button>
+      </div>
     ) : null
 
+  const result = (cmd: Command) =>
+    stepOut === null || stepOut.step !== cmd ? null : (
+      <div className={`run-result${stepOut.ok ? '' : ' run-result-refused'}`}>
+        <div className="run-result-head">
+          <Pill tone={stepOut.ok ? 'ok' : 'danger'} icon={stepOut.ok ? 'check' : 'alert'}>
+            {TITLES[cmd]} {stepOut.ok ? 'finished' : 'refused'}
+          </Pill>
+          <Button size="sm" variant="ghost" onClick={() => setStepOut(null)}>
+            Dismiss
+          </Button>
+        </div>
+        <LogWell text={stepOut.console} label={`What ${TITLES[cmd]} printed`} />
+      </div>
+    )
 
-  /* THE LIVE COUNT, WHICH USED TO RIDE THE PANEL'S OWN HEAD BESIDE THE FOUR COMMAND NAMES.
-   * That head is gone: on `#/runs` the page draws the title and the scope, and a panel titled
-   * `Runs` under a page titled `Runs` is one of them saying nothing. The four command names
-   * moved to the page's lede, where they are the sentence that says what this screen is.
-   *
-   * THE COUNT MOVED ONTO THE LIST INSTEAD OF DYING WITH THE HEAD, and it belongs there better
-   * than it did on the head: it is a caption for the rows directly beneath it, and `live` is the
-   * one figure on this screen that changes without anybody pressing anything. */
-  const live = runs.filter((row) => row.live).length
-  const tally =
-    runs.length === 0
-      ? null
-      : [
-          `${runs.length} run${runs.length === 1 ? '' : 's'}`,
-          live > 0 ? `${live} running` : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')
+  const toggleStep = (cmd: Command) => setOpenStep((held) => (held === cmd ? null : cmd))
+  const pricingHref = openRun === null ? '#/pricing' : `#/pricing?run=${encodeURIComponent(openRun)}`
+
+  /* One failure on the screen: the page's, or failing that the list's own poll. While it stands
+     the list is not "empty" — it is unknown — and the detail column offers no second button. */
+  const failure = pageFailure ?? (trouble !== null && trouble.key === 'poll' ? trouble.failure : null)
+
+  const loadingPanel = (
+    <div className="bn-panel runs-detail-panel runs-detail-loading" aria-busy="true">
+      {troubleFor(['detail'])}
+      <div className="bn-skeleton" style={{ height: 14, width: 140 }} />
+      <div className="bn-skeleton" style={{ height: 28, width: 320 }} />
+      <div className="bn-skeleton" style={{ height: 12, width: 200 }} />
+      <div className="bn-skeleton" style={{ height: 56, marginTop: 12 }} />
+      <div className="bn-skeleton" style={{ height: 120 }} />
+    </div>
+  )
 
   return (
-    /* NOT FOLDED, AND THE COMMENT THAT USED TO SIT HERE SAID OTHERWISE FOR LONGER THAN THE
-     * CODE DID. It argued the fold on `BoxOps`' measured grounds — ~250px, above the card
-     * detail, reached once a box — and pointed at a `defaultOpen` prop and a `<details>` that
-     * were removed when D33 was amended. The markup below is a plain `<div>`: no disclosure,
-     * no triangle, nothing to press before the four commands are reachable.
-     *
-     * The owner overruled the fold in three messages, the last unambiguous: "both box and
-     * run, i don't want click in functionality, i want their buttons just there." D33 carries
-     * the argument — reached once a box IS every box, which is the definition of the primary
-     * task rather than an exception to it, and NN/g prices a collapsed panel at five
-     * accumulating substeps before the first click of real work.
-     *
-     * WHAT REPLACES THE FOLD'S SAVING IS THE COLUMN, and that sentence has been rewritten once.
-     * It first said the ROW — `.browse-boxrun` at `1fr 1fr`, this panel beside `BoxOps` beneath
-     * the card, so the pair cost one panel's height rather than two. On 2026-08-25 the owner
-     * moved the pair off the card's column entirely: "put box top right, and runs below it."
-     * Beside the card rather than under it, the pair costs the card's column NOTHING, which is
-     * the same argument at its limit rather than a different one. */
-    <div className="run-panel">
-      {/* NO HEAD. It drew `Runs`, the scope and the four command names while this was a panel on
-          somebody else's screen and had to say what it was; on a route of its own the page says
-          all three above it, and a second title under the first is the drift docs/DESIGN.md's
-          page-chrome rule exists to stop — a title block over a toolbar, measured at 240px on
-          this product's worst screen. `Runs.tsx` carries the three pieces: title, scope on its
-          line, command names in the lede. */}
-      {trouble === null ? null : (
-        <div className="run-note">
-          <p className="run-note-text">{trouble.message}</p>
-          {/* The greppable token beneath the sentence — docs/DESIGN.md's human-label-large,
-              machine-string-small rule, the same shape Inventory.tsx draws a refusal in. */}
-          <p className="run-machine">{trouble.code}</p>
+    <div className="runs-body" data-open={openRun !== null ? 'true' : undefined}>
+      {/* ---------------------------------------------------------------- the master */}
+      <aside className="runs-master bn-panel" aria-label="Every run">
+        <div className="runs-master-head">
+          <span className="bn-section-title">
+            <Icon name="history" size={16} /> Runs
+          </span>
+          {runs.length === 0 ? null : (
+            <span className="run-list-head">
+              {runs.length} run{runs.length === 1 ? '' : 's'}
+              {live > 0 ? (
+                <Pill tone="live" className="runs-pill-live">
+                  <span className="bn-dot bn-dot-live" />
+                  {live} running
+                </Pill>
+              ) : null}
+            </span>
+          )}
         </div>
-      )}
-
-      {/* ------------------------------------------------------------- step 1: identify */}
-      <div className="run-step">
-        <div className="run-step-head">
-          <span className="run-step-title">{STEPS[0].title}</span>
-          <span className="run-step-cost run-step-money">{STEPS[0].cost}</span>
-        </div>
-        <p className="run-step-note">{STEPS[0].note}</p>
-
-        <div className="run-identify">
-          <div className="run-identify-controls">
-
-        {/* ------------------------------------------------------------------- the cart
-
-            ONE ROW PER BOX, EACH WITH ITS OWN READING. The strip on this page decides WHICH
-            boxes; this decides how each is read, because the reading is part of what the
-            confirm below is agreeing to buy — the estimate is computed from the bytes each
-            card is sent as, and the crop and the max edge are what decide those.
-
-            EVERY BOX IN THE CART IS ITS OWN RUN. One press starts several children, and
-            nothing downstream learns a new shape: each box gets a run directory, a manifest
-            and a queue. What is new is a fact about the REQUEST, not about a run.
-
-            THE READING IS DRAWN AS A PAIR RATHER THAN AS TWO CONTROLS — see `READINGS` above
-            for the measurement that decides it, and for why a checkbox beside a free number
-            was an invitation to spend more by asking for less. */}
-        {cart.length === 0 ? (
-          <p className="run-needs">Pick a box above. You can pick several.</p>
-        ) : (
-          cart.map((row) => {
-            const held = readingFor(row.box)
-            /* WHICH ROW THE PAIR IS, and the sentence that goes under it. Derived rather than
-               stored, so the chip that reads as chosen and the values actually sent cannot
-               come apart — the failure a second piece of state here would eventually produce.
-               `custom` wins the tie: with the raw controls revealed, the operator is holding
-               the knob whatever the numbers happen to say. */
-            const match =
-              READINGS.find((r) => r.crop === held.crop && r.maxEdge === held.maxEdge) ?? null
-            return (
-              <div className="run-leg" key={row.box}>
-                <p className="run-leg-head">
-                  {/* THE DRAWER BY NAME, ON THE ROW THAT DECIDES WHAT IT COSTS TO READ IT.
-                      D33's gate is two presses over a number the operator cannot miss, and
-                      what that number buys is a box — which until D56 this row could only
-                      call by its digit, on the one screen in the product that spends. */}
-                  <span className="run-leg-box">{boxLabel(row.box, row.name)}</span>
-                  <span className="run-leg-scope">
-                    {row.indices.length > 0
-                      ? `${row.indices.length} ticked card${row.indices.length === 1 ? '' : 's'}`
-                      : 'the whole box'}
-                  </span>
-                </p>
-
-                <div
-                  className="run-controls run-readings"
-                  role="group"
-                  aria-label={`How box ${row.box} is read`}
-                >
-                  {READINGS.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      className="run-button run-reading"
-                      aria-pressed={!held.custom && match?.key === option.key}
-                      onClick={() =>
-                        setReading(row.box, {
-                          custom: false,
-                          crop: option.crop,
-                          maxEdge: option.maxEdge,
-                        })
-                      }
-                    >
-                      {option.label}
-                      <span className="run-reading-edge">{option.maxEdge}</span>
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className="run-button run-reading"
-                    aria-pressed={held.custom}
-                    onClick={() => setReading(row.box, { custom: true })}
-                  >
-                    Custom
-                  </button>
-                </div>
-
-                {held.custom && (
-                  /* THE RAW CONTROLS, UNCHANGED AND DEMOTED RATHER THAN DELETED.
-                     `Sharpest · 1400` and everything else on D32's frontier is reachable
-                     here, and so is every pairing the three chips refuse to offer —
-                     including the wrong one, which is why the sentence beneath this block is
-                     the one that names it. */
-                  <div className="run-controls">
-                    <label className="run-toggle">
-                      <input
-                        type="checkbox"
-                        checked={held.crop}
-                        onChange={(event) =>
-                          setReading(row.box, { crop: event.target.checked })
-                        }
-                      />
-                      Crop to the card
-                    </label>
-                    <label className="run-field">
-                      Max edge
-                      <input
-                        type="number"
-                        min={256}
-                        max={4096}
-                        step={100}
-                        value={held.maxEdge}
-                        onChange={(event) =>
-                          setReading(row.box, { maxEdge: Number(event.target.value) })
-                        }
-                      />
-                      px
-                    </label>
-                  </div>
-                )}
-
-                {/* WHAT THE READING MEANS, BEFORE Check cost IS PRESSED. The command prints
-                    its own crop line into the preflight stdout below, and that line is the
-                    receipt — but a receipt arrives after the decision, and this is the
-                    decision.
-
-                    DRAWN HERE ONLY WHERE THE BOXES DISAGREE. Where they all read the same way
-                    it is hoisted to one line beneath the cart, because the sentence is about
-                    the READING and not about the box — see `sharedReading`. */}
-                {sharedReading !== null ? null : (
-                  <p className="run-step-note run-step-fine">
-                    {held.custom || match === null ? CUSTOM_SAYS : match.says}
-                  </p>
-                )}
-              </div>
-            )
-          })
-        )}
-
-        {sharedReading === null ? null : (
-          /* ONE SENTENCE FOR A CART READ ONE WAY. Same text, same register, same place in the
-             reading order — what changes is that it is said once. */
-          <p className="run-step-note run-step-fine">
-            {sharedReading.custom
-              ? CUSTOM_SAYS
-              : (READINGS.find(
-                  (row) => row.crop === sharedReading.crop && row.maxEdge === sharedReading.maxEdge,
-                )?.says ?? CUSTOM_SAYS)}
-          </p>
-        )}
-
-        <div className="run-actions">
-          <button
-            type="button"
-            className="run-button"
-            disabled={!scoped || busy !== null}
-            onClick={() => void doQuote()}
-          >
-            {busy === 'quote'
-              ? 'Checking…'
-              : cart.length > 1
-                ? `Check cost for ${cart.length} boxes`
-                : 'Check cost'}
-          </button>
-        </div>
-
-        {partial === null ? null : (
-          /* WHAT DID NOT GO, FROM THE LAST PRESS. Drawn as loudly as a refusal because it is
-             one, arriving after the rest of the send already succeeded — the boxes named here
-             have no run and no invoice, and pressing again is what starts them. */
-          <div className="run-note">
-            <p className="run-note-text">
-              {partial.length} box{partial.length === 1 ? '' : 'es'} did not start. The rest of
-              the send did. Press again for {partial.length === 1 ? 'it' : 'them'}.
-            </p>
-            {partial.map((row) => (
-              <p className="run-machine" key={row.box}>
-                box {row.box} · {row.code} · {row.message}
-              </p>
-            ))}
+        {pageFailure !== null ? (
+          <div className="runs-trouble">
+            <Notice tone="danger" code={pageFailure.code}>
+              {pageFailure.message}
+            </Notice>
           </div>
+        ) : (
+          troubleFor(['poll'])
         )}
-
-        {quote === null ? null : (
-          <div className="run-quote">
-            {/* STEP ONE OF THE TWO-STEP CONFIRM, and the confirm below cannot be reached
-                without it. The numbers are the commands' own — lifted out of each box's
-                preflight stdout rather than recomputed anywhere — and the TOTAL is summed on
-                the server, because the figure the confirm is gated on must not be a `reduce`
-                in TypeScript sitting beside the per-box figures it claims to add up. */}
-            <dl className="run-figures">
-              <div>
-                <dt>Photographs</dt>
-                <dd>{count(quote.total.photographs)}</dd>
-              </div>
-              <div>
-                <dt>Already answered</dt>
-                <dd>{count(quote.total.cache_hits)}</dd>
-              </div>
-              <div>
-                <dt>To send</dt>
-                <dd>{count(quote.total.to_send)}</dd>
-              </div>
-              <div className="run-figure-money">
-                <dt>Estimated cost</dt>
-                <dd>{money(quote.total.estimate_usd)}</dd>
-              </div>
-            </dl>
-
-            {quote.scopes.length < 2 ? null : (
-              /* PER BOX, ONLY WHERE THERE IS MORE THAN ONE. For a single box the total IS the
-                 box, and a second row restating it is chrome that says nothing — the same
-                 judgement `otherCaption` makes about a group with nothing to be grouped
-                 against. One line each rather than four figures, because what a person checks
-                 here is that the boxes are the ones they meant and that no single one is
-                 wildly dearer than they expected. */
-              <dl className="run-legs">
-                {quote.scopes.map((leg) => (
-                  <div key={leg.scope.box}>
-                    <dt>{boxLabel(leg.scope.box, cartName(leg.scope.box))}</dt>
-                    <dd>
-                      {count(leg.to_send)} to send · {money(leg.estimate_usd)}
-                      {leg.scope.whole_box ? '' : ` · ${count(leg.scope.cards)} ticked`}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-
-            {(quote.total.cache_hits ?? 0) > 0 && (
-              /* WHAT `Already answered` COSTS YOU, said where that figure is drawn. D32
-                 records it as a known gap kept deliberately: neither the crop nor the max
-                 edge is part of the cache identity, so a box re-read at a different reading
-                 serves the answers it was first read with and reports them as hits. That is
-                 safe and it is not obvious, and the controls it silently ignores are directly
-                 above. Stated as what it means to the person about to press the button rather
-                 than as a fact about a hash — the panel has no business naming
-                 `prompt_fingerprint`. */
-              <p className="run-step-note run-step-fine">
-                Cards already answered keep the answer they were first read with. The readings
-                above only reach the cards being sent.
-              </p>
-            )}
-
-            {quote.total.busy.length > 0 ? (
-              <p className="run-blocked">
-                {quote.total.busy
-                  .map((row) => `${row.run} is already identifying box ${row.box}`)
-                  .join('. ')}
-                . Two runs over one box is two invoices for one answer — open it below and
-                watch it instead. Nothing in this send would start while that is true.
-              </p>
-            ) : quote.total.to_send === 0 ? (
-              <p className="run-blocked">
-                Every one of these cards is already answered and cached. There is nothing to
-                send and nothing to spend.
-              </p>
-            ) : (
-              <button
-                type="button"
-                className="run-button run-button-money"
-                disabled={busy !== null}
-                onClick={() => void doStart()}
-              >
-                {busy === 'start'
-                  ? 'Starting…'
-                  : `Spend ${money(quote.total.estimate_usd)} and identify ` +
-                    `${count(quote.total.to_send)} cards` +
-                    (quote.scopes.length > 1 ? ` in ${quote.scopes.length} boxes` : '')}
-              </button>
-            )}
-
-            {/* EVERY COMMAND'S STDOUT, VERBATIM, BENEATH THE CONTROL RATHER THAN ABOVE IT.
-                D33's copy rule is that the pipeline's own words appear on the owner's screens
-                unsummarised, and they do — one console per box, each labelled with its box.
-                What moved is the ORDER, and only once a cart can hold several: a console is
-                capped at 260px, so five of them above the button would put the confirm most
-                of a screen below the figures it is confirming, which is the one thing the
-                money gate may not allow. The figures are the decision and the consoles are
-                the evidence; the decision goes first. */}
-            {quote.scopes.map((leg) => (
-              <Console
-                key={leg.scope.box}
-                text={leg.console}
-                label={
-                  `What the preflight printed for ${boxLabel(leg.scope.box, cartName(leg.scope.box))}`
+        <div className="run-list">
+          {!loaded ? (
+            Array.from({ length: 5 }, (_, i) => <div key={i} className="bn-skeleton runs-skel-row" />)
+          ) : runs.length === 0 ? (
+            failure !== null ? null : (
+              <EmptyState
+                icon="play"
+                className="run-empty"
+                title="No runs yet"
+                body="Identify a box to start the first one. It is the one step that spends money."
+                actions={
+                  <Button icon="zap" onClick={onIdentify}>
+                    Identify a box
+                  </Button>
                 }
               />
-            ))}
-          </div>
-        )}
-          </div>
-
-          {/* WHAT THE READING SENDS, AS A PICTURE, BESIDE THE CONTROL THAT SETS IT.
-              D32's amendment answered "walk me through how im supposed to understand crop with
-              just this dialog box" with three named pairs and a sentence each. The sentences are
-              true and they are prose about pixels; this is the same answer in the medium the
-              decision is actually about.
-
-              ONE CARD, AT THE SIZE OF ITS OWN COLUMN (the owner, 2026-08-29). It was three
-              abreast under the chips for a few hours, sampled evenly across the box because
-              cards move on the tray — sound about sampling, and it lost to a plainer fact: three
-              pictures in a row are three small pictures, and the operator could not see what
-              they were being shown. The spread is reached by WALKING now, which is also the only
-              version of it that lets you look at a card you actually suspect. */}
-          {scoped && (previewTrouble !== null || preview !== null) && (
-            <div className="run-preview">
-              <div className="run-preview-head">
-                <h4 className="run-preview-title">What this sends</h4>
-                {preview !== null && (
-                  <span className="run-preview-count">
-                    card {preview.offset + 1} of {count(preview.total)}
-                  </span>
+            )
+          ) : (
+            groups.map((group) => (
+              <div className="run-list-group" key={group.key}>
+                {group.caption === null ? null : (
+                  <p className="run-group">
+                    {group.caption}
+                    <span className="run-group-count">{group.rows.length}</span>
+                  </p>
                 )}
+                {group.rows.map(runRow)}
               </div>
-
-              {previewTrouble !== null ? (
-                <p className="run-step-note run-step-fine">{previewTrouble}</p>
-              ) : preview === null ? null : preview.sample.unreadable !== undefined ||
-                preview.sample.frame === undefined ? (
-                <p className="run-preview-fact">
-                  {/* sigil-ok: the key, and here it is doubly the right number — this sentence
-                      is about a FILE that will not decode, and the file is `<index>.jpg`, named
-                      after exactly this. A count would name a card in a box; the trouble is
-                      with a photograph on disk. `CropSample` carries no slot in any case. */}
-                  #{preview.sample.index} — this photograph cannot be decoded, so nothing is
-                  sent for it.
-                </p>
-              ) : (
-                <div className="run-preview-card" aria-busy={previewBusy}>
-                  <div
-                    className="run-preview-frame"
-                    onPointerMove={aimAt}
-                    onPointerLeave={() => setAim(null)}
-                  >
-                    {/* WHAT IS THROWN AWAY, AND IT IS DRAWN AS SUCH. The stored photograph
-                        sits underneath at a low opacity, so the margin outside the cut is
-                        visible as something the run will never see rather than as an equal
-                        part of the picture. */}
-                    <img
-                      className="run-preview-ghost"
-                      src={photoUrl(preview.sample.box, preview.sample.index)}
-                      alt=""
-                      aria-hidden="true"
-                      draggable={false}
-                    />
-                    {/* THE PAYLOAD ITSELF, at the cut's own position. This is the half the
-                        owner asked for: the frame used to draw the stored file, which is the
-                        same bytes at every reading — so the one thing being changed was the
-                        one thing the picture could not show. Positioned in PERCENTAGES of the
-                        frame, so it is right at whatever size the column happens to give it. */}
-                    {preview.sample.sent_image != null && (
-                      <img
-                        className="run-preview-sent"
-                        src={preview.sample.sent_image}
-                        alt={`Box ${preview.sample.box}, card ${preview.sample.index}, as this reading sends it`}
-                        draggable={false}
-                        style={
-                          preview.sample.rect != null && preview.sample.frame != null
-                            ? {
-                                left: `${(preview.sample.rect[0] / preview.sample.frame[0]) * 100}%`,
-                                top: `${(preview.sample.rect[1] / preview.sample.frame[1]) * 100}%`,
-                                width: `${((preview.sample.rect[2] - preview.sample.rect[0]) / preview.sample.frame[0]) * 100}%`,
-                                height: `${((preview.sample.rect[3] - preview.sample.rect[1]) / preview.sample.frame[1]) * 100}%`,
-                              }
-                            : { left: 0, top: 0, width: '100%', height: '100%' }
-                        }
-                      />
-                    )}
-                    {preview.sample.rect != null && preview.sample.frame != null && (
-                      <div
-                        className="run-preview-cut"
-                        style={{
-                          left: `${(preview.sample.rect[0] / preview.sample.frame[0]) * 100}%`,
-                          top: `${(preview.sample.rect[1] / preview.sample.frame[1]) * 100}%`,
-                          width: `${((preview.sample.rect[2] - preview.sample.rect[0]) / preview.sample.frame[0]) * 100}%`,
-                          height: `${((preview.sample.rect[3] - preview.sample.rect[1]) / preview.sample.frame[1]) * 100}%`,
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  {/* THE 1:1 WINDOW, onto the SAME file the frame is drawing. `background-size:
-                      auto` paints it at its natural size, so this is where the reading is
-                      actually legible: the frame is ~28% of the sent pixels and no downscale is
-                      distinguishable at that size, while here 1200 and 900 cannot look alike.
-
-                      IT RESTS ON THE COLLECTOR NUMBER and follows the pointer over the frame.
-                      The registry knows where the number is on a Pokemon card; on a game where
-                      it does not, the operator points at it themselves — which is what makes
-                      this usable for Riftbound at all. */}
-                  <div
-                    ref={detailRef}
-                    className="run-preview-detail"
-                    style={{
-                      backgroundImage:
-                        preview.sample.sent_image != null
-                          ? `url(${preview.sample.sent_image})`
-                          : undefined,
-                      backgroundPosition: detailPosition,
-                    }}
-                    role="img"
-                    aria-label={`Card ${preview.sample.index} at full size, as this reading sends it`}
-                  />
-                  <p className="run-preview-fact">
-                    <span>{aim === null ? 'resting on the collector number' : 'where you are pointing'}</span>
-                    <span>at 1:1</span>
-                    {preview.sample.band_px != null && (
-                      <span>
-                        number {preview.sample.band_px[0]}×{preview.sample.band_px[1]}
-                      </span>
-                    )}
-                  </p>
-                  {preview.sample.band_absent != null && (
-                    /* THE REGISTRY REFUSED A RESTING AIM AND SAYS SO. `pipeline/games.py` holds
-                       which bands a game claims, and only `pokemon` claims a number band — the
-                       fractions in `geometry/crop.py` were measured on a Pokemon card. This
-                       block drew them over a Riftbound card for one afternoon and rendered its
-                       rules text as though it were a collector number. */
-                    <p className="run-step-note run-step-fine">{preview.sample.band_absent}</p>
-                  )}
-
-                  <p className="run-preview-fact">
-                    {/* sigil-ok: a preflight preview over a CAPTURE DIRECTORY, before any join — `CropSample`
-                        carries `box` and `index` and no slot, because nothing here has consulted the
-                        store. The class said `slot` until D92 and meant the key, which is the same
-                        confusion one register down. */}
-                    <span className="run-preview-key">#{preview.sample.index}</span>
-                    {/* THE CARD ABOVE IS THE PAYLOAD, DRAWN SMALL, AND THAT HAS TO BE SAID.
-                        It is ~28% of the sent pixels, and no two downscales are
-                        distinguishable at that size — so an operator comparing 1200 against
-                        900 up there will correctly see no difference and wrongly conclude
-                        there is none. This sentence points at the window that can show it. */}
-                    {preview.sample.sent != null && (
-                      <span>
-                        sends {preview.sample.sent[0]}×{preview.sample.sent[1]}, shown reduced
-                      </span>
-                    )}
-                    {/* A REFUSAL IS NOT THE SAME FACT AS THE CROP BEING OFF, and `rect` alone
-                        cannot tell them apart. Nor are the two refusals the same fact as each
-                        other: nothing found is a photograph to look at, and a box refused as
-                        unfit is a detector that answered confidently and wrongly. */}
-                    {preview.sample.method == null && <span>no card found — sent whole</span>}
-                    {preview.sample.crop_refused != null && (
-                      <span>card found, crop refused — sent whole</span>
-                    )}
-                  </p>
-                  {preview.sample.crop_refused != null && (
-                    /* THE GUARD'S OWN SENTENCE, VERBATIM, UNDER THE PICTURE IT EXPLAINS.
-                       `identify/images.py:crop_refusal` writes a sentence rather than a flag
-                       precisely so it can be read here — the box came back looking like a
-                       card and was a rectangle INSIDE one, and the operator is looking at a
-                       whole frame with no other way to know why. Same treatment as
-                       `band_absent` above, and for the same reason: the pipeline's words, not
-                       this screen's summary of them. */
-                    <p className="run-step-note run-step-fine">{preview.sample.crop_refused}</p>
-                  )}
-
-                  {/* THE WALK. Arrow keys do the same thing, which is what the owner asked
-                      for; these exist because a key with no visible control is a key nobody
-                      finds, and because a pointer is sometimes already in the hand. */}
-                  <div className="run-preview-walk">
-                    <button
-                      type="button"
-                      className="run-button run-preview-step"
-                      aria-label="The card before this one"
-                      onClick={() => setPreviewOffset((was) => was - 1)}
-                    >
-                      ←
-                    </button>
-                    <span className="run-preview-hint">arrow keys walk the box</span>
-                    <button
-                      type="button"
-                      className="run-button run-preview-step"
-                      aria-label="The card after this one"
-                      onClick={() => setPreviewOffset((was) => was + 1)}
-                    >
-                      →
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            ))
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* ------------------------------------------------------------------ the run list */}
-      {tally === null ? null : <p className="run-list-head">{tally}</p>}
-      <div className="run-list" aria-label="Every run">
-        {runRows.length === 0 ? (
-          <p className="run-empty">No runs yet.</p>
-        ) : otherCaption === null ? (
-          runRows
+      {/* ---------------------------------------------------------------- the detail */}
+      <section className="runs-detail">
+        {openRun === null ? (
+          !loaded ? (
+            /* Until the list has answered once, nothing here is known — least of all that there
+               is no run to pick. */
+            loadingPanel
+          ) : (
+            <div className="bn-panel runs-detail-empty">
+              {/* No button in this column: the header carries the screen's one primary. */}
+              <EmptyState
+                icon={failure === null && runs.length === 0 ? 'zap' : 'play'}
+                title={failure === null && runs.length === 0 ? 'Identify a box first' : 'Pick a run'}
+                body={
+                  failure === null && runs.length === 0
+                    ? 'Join, emit and reconcile all work on a run, and the first one starts with a paid identification.'
+                    : 'Join, emit and reconcile act on the run you pick from the list.'
+                }
+              />
+            </div>
+          )
+        ) : detail === null ? (
+          loadingPanel
         ) : (
-          <>
-            {runRows.slice(0, running.length + mine.length)}
-            {otherCaption}
-            {runRows.slice(running.length + mine.length)}
-          </>
-        )}
-      </div>
-
-      {/* --------------------------------------------------------- the run the steps act on */}
-      {detail === null ? (
-        /* SAID ONCE, ABOVE THE THREE BOXES IT GOVERNS, rather than three times inside them.
-           The steps below are drawn whatever happens (see the STEPS comment at the top of this
-           file); what they cannot do without a run is act, and this is the sentence that says
-           which of those two states the operator is in. */
-        <p className="run-needs">
-          {runs.length === 0
-            ? 'Identify a box first — join, emit and reconcile all work on a run.'
-            : 'Pick a run above to point these three at it.'}
-        </p>
-      ) : (
-        <div className="run-open">
-          <div className="run-open-head">
-            <span className="run-open-name">{detail.run}</span>
-            <span className={`run-phase run-phase-${detail.phase}`}>
-              {detail.live ? runningFor(detail) : detail.phase}
-            </span>
-          </div>
-
-          {!detail.joined ? null : (
-            /* WHAT CAME OUT OF THE RUN, on the run rather than in a file. Neither run on disk
-               has a `console.log` — `_console_tail` reads a file only the spawned identify
-               child writes, and both existing runs were started from a terminal — so before
-               this an open run drew its name, its phase and its files and NOTHING about its
-               result. `counts` has ridden every poll since `cli/cmd_join.py` wrote it and the
-               panel discarded it. `docs/GATES.md` names exactly this as what Gate B did not
-               close.
-
-               `.run-figures` VERBATIM, and the reuse is the point: that grid's own comment
-               records the measurement that FOUR figures pack a balanced 2x2 at 96px in this
-               column where three per row was a ragged 123px. Four is the measured-good number,
-               which is why `no_market_data` and `sub_threshold` are deliberately not here — a
-               fifth figure is a third row, and emit's note already states that refusal.
-
-               REVIEW AND PARKED ARE TWO FIGURES AND MUST NEVER BE SUMMED. `report.txt` prints
-               them as two lines because they are two facts: main is worked expensive-first
-               behind a starvation tier, parked is sub-threshold and not listed (D9). A combined
-               "46 queued" is a number no log in this repo carries.
-
-               DRAWN ONLY WHEN `joined`, because counts are written by join. Before it there are
-               none, and four em-dashes are chrome that says nothing. */
-            <dl className="run-figures">
-              <div>
-                <dt>Cards in</dt>
-                <dd>{count(detail.counts.cards_in)}</dd>
+          <div
+            className="bn-panel runs-detail-panel"
+            key={detail.run}
+            data-reconciled={stage !== null && stage.step === 4 ? 'true' : undefined}
+          >
+            <header className="runs-detail-head">
+              <Button className="runs-back" variant="ghost" icon="arrowLeft" onClick={() => onOpenRun(null)}>
+                All runs
+              </Button>
+              <div className="runs-detail-title">
+                <span className="bn-eyebrow">
+                  {detail.scope != null && !detail.scope.whole_box
+                    ? `${count(detail.scope.cards)} ticked cards`
+                    : 'Whole box'}
+                  {' · '}
+                  {whenLabel(detail.updated_at ?? detail.created_at)}
+                  {detail.started_by
+                    ? ` · started from ${STARTER[detail.started_by] ?? capitalise(detail.started_by)}`
+                    : ''}
+                </span>
+                <h2 className="runs-detail-h">{runBoxLabel(detail) ?? detail.run}</h2>
+                <span className="runs-detail-name">{detail.run}</span>
               </div>
-              <div>
-                <dt>SKUs</dt>
-                <dd>{count(detail.counts.skus)}</dd>
-              </div>
-              {/* THE TWO QUEUE FIGURES ARE THE WAY INTO THE QUEUE, and until 2026-08-29 they
-                  were the only numbers on this screen that named a place the app could not
-                  reach: join writes a queue and the panel reported its depth with no route out
-                  of the report. That is `CLAUDE.md`'s route-is-not-a-feature rule in miniature —
-                  a capability with a screen, a screen with no way to it — and it cost one anchor
-                  each.
+              <div className="runs-detail-side">{stage === null ? null : <StagePill stage={stage} />}</div>
+            </header>
 
-                  BOTH GO TO `#/review`, which is the one screen that holds either. The parked
-                  queue is not a second route: `ReviewQueue.tsx` draws both files and its reason
-                  chips filter between them, so a link that promised otherwise would be
-                  promising a screen that does not exist.
-
-                  `aria-label` BECAUSE THE LINK TEXT IS A BARE NUMBER. "46" is a fine thing to
-                  read beside its `dt` and a useless accessible name on its own, and a screen
-                  reader announcing links out of context is exactly the case this attribute is
-                  for. */}
-              <div>
-                <dt>Review</dt>
-                <dd>
-                  <a
-                    className="run-figure-link"
-                    href="#/review"
-                    aria-label={`Answer ${count(detail.counts.queued_main)} in the review queue`}
-                  >
-                    {count(detail.counts.queued_main)}
-                  </a>
-                </dd>
-              </div>
-              <div>
-                <dt>Parked</dt>
-                <dd>
-                  <a
-                    className="run-figure-link"
-                    href="#/review"
-                    aria-label={`See ${count(detail.counts.queued_parked)} parked in the review queue`}
-                  >
-                    {count(detail.counts.queued_parked)}
-                  </a>
-                </dd>
-              </div>
-              <div>
-                {/* THE WAY INTO PRICING, AND IT IS A LINK RATHER THAN A HANDOFF (D49). A run
-                    name has ONE source of truth — `GET /pipeline/runs` reads the runs
-                    directory — so `#/pricing` draws its own picker and cannot disagree with
-                    anything, which is the property D39's ticked selection did not have and
-                    the reason that one needed `sessionStorage`. Carrying the name in the URL
-                    removes the double-pick at no cost: no second storage key, no clearing
-                    rules, and `,P` on its own still lands on a picker that works. */}
-                <dt>Price</dt>
-                <dd>
-                  <a
-                    className="run-figure-link"
-                    href={`#/pricing?run=${encodeURIComponent(detail.run)}`}
-                    aria-label={`Price the ${count(detail.counts.skus)} SKUs in ${detail.run}`}
-                  >
-                    {count(detail.counts.skus)}
-                  </a>
-                </dd>
-              </div>
-            </dl>
-          )}
-
-          <Console text={detail.console} label={`What ${detail.run} printed`} />
-        </div>
-      )}
-
-      {/* ------------------------------------- the other three steps, drawn in every state */}
-      {/* THE PROMISE AT THE TOP OF THIS FILE, KEPT AT LAST. `STEPS` says it is authored rather
-          than derived from `phase` because "a screen that only drew the current step would
-          leave the operator unable to see that emit exists until join had finished" — and that
-          was true of `phase` and false of `detail`: these three lived inside the open-run guard,
-          so with no run picked the panel drew Identify and nothing else, and with no runs at all
-          they existed nowhere on the screen. `app/tests/run-panel.spec.ts` demonstrated the gap
-          in its own body, having to click a run row before it could assert the four titles.
-
-          THE HEADS AND NOTES ALWAYS DRAW; THE CONTROLS DO NOT. What a step IS does not depend on
-          a run — what it can be pressed against does. Absent rather than disabled, which is the
-          discipline the money gate already keeps two blocks up and for the reason `.run-button`'s
-          own comment gives: a disabled button is one attribute away from being pressable. */}
-      {STEPS.slice(1).map((step) => (
-            <div className="run-step run-step-free" key={step.key}>
-              <div className="run-step-head">
-                <span className="run-step-title">{step.title}</span>
-                <span className="run-step-cost">{step.cost}</span>
-              </div>
-              <p className="run-step-note">{step.note}</p>
-
-              {/* THE WAY TO EMIT, AND IT DRAWS IN EVERY STATE — including with no runs on
-                  disk at all (D54). The button it replaces was conditional on a run being
-                  open, so a first-time operator could see that Emit EXISTS (this head, this
-                  note) and nothing on the screen said where it is. That is strictly stronger
-                  than what it replaces rather than a loss.
-
-                  A TEXT LINK RATHER THAN A CONTROL, which is `.run-figure-link`'s own
-                  argument: underline is the web's convention for "this goes somewhere", it
-                  needs no colour of its own, and the accent stays reserved. */}
-              {step.key !== 'emit' ? null : (
-                <p className="run-step-note">
-                  <a
-                    className="run-figure-link"
-                    href={
-                      openRun === null
-                        ? '#/pricing'
-                        : `#/pricing?run=${encodeURIComponent(openRun)}`
-                    }
-                  >
-                    {openRun === null
-                      ? 'Price and emit a run →'
-                      : 'Price and emit this run →'}
-                  </a>
-                </p>
-              )}
-
-              {step.key === 'join' && detail !== null && (
-                <>
-                  {/* THERE WAS A CHECKBOX HERE — "Trust my finish claim over the photo" — and
-                      it is gone because it was ticked on every run since Gate B (D3, amended
-                      2026-09-02). A switch every run flips is a default wearing a flag, so
-                      the rule it encoded is the ladder's own now: where a finish claim
-                      exists, the photo may not contradict it. Nothing on this screen has to
-                      say so, because there is no longer a way to ask for the alternative. */}
-
-                  {/* ------------------------------------------------- D76: the routing lever
-                      HERE AND NOT ON `#/pricing`, because it is not a pricing answer. It
-                      decides which resolved cards face a human, `join` is the command that
-                      applies it, and it was reachable only from a terminal. `--rule` and
-                      `--basis` deliberately stay off this screen — see REVIEW_BELOW. */}
-                  <label className="run-field run-field-inline">
-                    Send to review at or below
-                    <select
-                      className="run-select"
-                      value={reviewBelow}
-                      onChange={(event) =>
-                        setReviewBelow(event.target.value as 'none' | 'low' | 'medium')
-                      }
+            <ol className="runs-stepper" aria-label="The four steps">
+              {COMMANDS.map((cmd, i) => {
+                const st = stepState(cmd)
+                return (
+                  <li key={cmd} className={`runs-stepper-item runs-stepper-${st}`}>
+                    <button
+                      type="button"
+                      className="runs-stepper-btn"
+                      aria-current={st === 'current' || st === 'live' ? 'step' : undefined}
+                      onClick={() => setOpenStep(cmd)}
                     >
-                      {REVIEW_BELOW.map((row) => (
-                        <option key={row.key} value={row.key}>
-                          {row.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {/* ------------------------------------------- D76: the fetch scope, drawn
-                      WHAT THE PRESS WILL ASK FOR, BEFORE IT IS PRESSED. The receipt below
-                      says what was asked AFTER the file is on disk, which is one moment too
-                      late to correct it. Every value here is read off
-                      `GET .../scope`; nothing on this screen recomputes a scope. */}
-                  {scopeInfo === null ? null : (
-                    <div className="run-scope">
-                      <p className="run-scope-head">The export this run will ask for</p>
-
-                      {/* ONE CATEGORY PER FETCH, so a mixed-game run must answer this before
-                          anything else can be drawn. The picker is absent for the ordinary
-                          one-game run rather than drawn with a single option. */}
-                      {scopeInfo.games.length < 2 ? null : (
-                        <label className="run-field run-field-inline">
-                          Category
-                          <select
-                            className="run-select"
-                            value={scopeGame ?? ''}
-                            onChange={(event) => {
-                              setScopeGame(event.target.value)
-                              setScopeTicked([])
-                            }}
-                          >
-                            <option value="">Pick one…</option>
-                            {scopeInfo.games.map((row) => (
-                              <option key={row.game} value={row.game}>
-                                {row.display} · {row.cards} card{row.cards === 1 ? '' : 's'}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-
-                      {/* THE EVIDENCE THE RULE READS, SO THE RULE IS ARGUABLE. `12 of 200
-                          carry a set hint` is the fact that decides whether a set filter is
-                          safe, and it was invisible — which is how one hinted card came to
-                          scope a whole box's export. */}
-                      {scopeInfo.games
-                        .filter((row) => row.game === (scopeGame ?? scopeInfo.asked?.game))
-                        .map((row) => (
-                          <p className="run-step-note run-step-fine" key={row.game}>
-                            {row.hinted} of {row.cards} card{row.cards === 1 ? '' : 's'} carry a
-                            set hint
-                            {row.hints.length === 0 ? '' : ` (${row.hints.join(', ')})`}.{' '}
-                            {row.display}&rsquo;s own rule is{' '}
-                            <code>{row.policy}</code>
-                            {row.policy === 'category'
-                              ? ' — its whole catalogue comes down in one file.'
-                              : ' — narrow to the hinted sets, but only if every card carries one.'}
-                          </p>
-                        ))}
-
-                      <div className="run-scope-choices">
-                        {SCOPE_CHOICES.map((row) => (
-                          <label className="run-toggle" key={row.key}>
-                            <input
-                              type="radio"
-                              name="run-scope-choice"
-                              checked={scopeChoice === row.key}
-                              onChange={() => setScopeChoice(row.key)}
-                            />
-                            {row.label}
-                          </label>
-                        ))}
-                      </div>
-
-                      {scopeChoice !== 'sets' ? null : (
-                        <div className="run-scope-sets">
-                          {setList.length === 0 ? (
-                            <p className="run-step-note run-step-fine">
-                              No set list — that needs the same TCGplayer session the fetch
-                              does. Pick another option, or put a fresh cookie in{' '}
-                              <code>.env</code>.
-                            </p>
+                      <span className="runs-stepper-track" />
+                      <span className="runs-stepper-label">
+                        <span className="runs-stepper-n">
+                          {st === 'done' ? (
+                            <Icon name="check" size={11} strokeWidth={2.5} />
+                          ) : st === 'live' ? (
+                            <span className="bn-dot bn-dot-live" />
                           ) : (
-                            setList.map((row) => (
-                              <label className="run-toggle" key={row.id}>
-                                <input
-                                  type="checkbox"
-                                  checked={scopeTicked.includes(Number(row.id))}
-                                  onChange={(event) =>
-                                    setScopeTicked((held) =>
-                                      event.target.checked
-                                        ? [...held, Number(row.id)]
-                                        : held.filter((id) => id !== Number(row.id)),
-                                    )
-                                  }
-                                />
-                                {row.name}
-                              </label>
-                            ))
+                            i + 1
                           )}
-                        </div>
-                      )}
-
-                      {scopeSentence === null ? null : (
-                        <p className="run-scope-says">{scopeSentence}</p>
-                      )}
-                      {/* THE PREVIEW'S OWN REFUSAL, WHICH IS NOT THE FETCH'S. A mixed-game run
-                          says `game_required` here and the picker above is the answer; a stale
-                          cookie says so here long before the button would. */}
-                      {scopeInfo.message === null ? null : (
-                        <>
-                          <p className="run-step-note run-step-fine">{scopeInfo.message}</p>
-                          <p className="run-machine">{scopeInfo.reason}</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-                  <div className="run-actions">
-                    <button
-                      type="button"
-                      className="run-button"
-                      disabled={busy !== null}
-                      onClick={() =>
-                        void doStep('join', {
-                          dryRun: true,
-                          reviewBelowConfidence: reviewBelow,
-                        })
-                      }
-                    >
-                      {busy === 'join' ? 'Working…' : 'Preview'}
+                        </span>
+                        {TITLES[cmd]}
+                      </span>
                     </button>
-                    <button
-                      type="button"
-                      className="run-button"
-                      disabled={busy !== null}
-                      onClick={() =>
-                        void doStep('join', { reviewBelowConfidence: reviewBelow })
-                      }
+                  </li>
+                )
+              })}
+            </ol>
+
+            {troubleFor(['detail'])}
+
+            {!detail.joined ? null : (
+              <div className="runs-figures">
+                <Stat value={count(detail.counts.cards_in)} label="Cards in" />
+                <Stat value={count(detail.counts.skus)} label="SKUs" />
+                <Stat
+                  value={
+                    <a
+                      className="run-figure-link"
+                      href="#/review"
+                      aria-label={`Answer ${count(detail.counts.queued_main)} in the review queue`}
                     >
-                      Join again
-                    </button>
-                    <label className="run-upload">
-                      <input
-                        type="file"
-                        accept=".csv,text/csv"
-                        multiple
-                        ref={exportPick}
-                        onChange={() => void pickExports()}
-                      />
-                      <span>Join with an export…</span>
-                    </label>
-                    {/* D64: the export fetched rather than downloaded and uploaded. Beside the
-                        picker because it is the same decision — which file this run joins
-                        against — and one press does both halves, fetch then join. */}
-                    <button
-                      type="button"
-                      className="run-button"
-                      disabled={busy !== null}
-                      onClick={() => void doFetchExport()}
+                      {count(detail.counts.queued_main)}
+                    </a>
+                  }
+                  label="To review"
+                />
+                <Stat
+                  value={
+                    <a
+                      className="run-figure-link"
+                      href="#/review"
+                      aria-label={`See ${count(detail.counts.queued_parked)} parked in the review queue`}
                     >
-                      {busy === 'fetch' ? 'Fetching…' : 'Fetch from TCGplayer'}
-                    </button>
-                  </div>
+                      {count(detail.counts.queued_parked)}
+                    </a>
+                  }
+                  label="Parked"
+                />
+                {/* A ghost: the Emit step below holds this route-out as its action. */}
+                <a className="bn-btn bn-btn-ghost runs-price-btn" href={pricingHref}>
+                  Price {count(detail.counts.skus)} SKUs
+                  <Icon name="arrowRight" size={16} />
+                </a>
+              </div>
+            )}
 
-                  {fetched === null ? null : (
-                    <div className="run-fetched">
-                      <p className="run-result-head">Fetched {fetched.file}</p>
-                      <dl className="run-figures">
-                        <div>
-                          <dt>rows</dt>
-                          <dd>{fetched.rows}</dd>
-                        </div>
-                        <div>
-                          <dt>skus</dt>
-                          <dd>{fetched.skus}</dd>
-                        </div>
-                        <div>
-                          <dt>sets</dt>
-                          <dd>{fetched.sets.length}</dd>
-                        </div>
-                        <div>
-                          <dt>finishes</dt>
-                          <dd>{fetched.conditions.length}</dd>
-                        </div>
-                      </dl>
-                      {/* WHAT WAS ASKED FOR, ABOVE WHAT ARRIVED (D65). The export is scoped
-                          by this box's own capture claims, so this line is the operator's own
-                          input read back — and the place a wrong hint becomes visible. */}
-                      <p className="run-step-note run-step-fine">
-                        Asked TCGplayer for {fetched.asked.game}
-                        {fetched.asked.sets.length > 0
-                          ? ` · ${fetched.asked.sets.join(', ')}`
-                          : ' · every set'}
-                        {fetched.asked.widened && fetched.asked.hints.length > 0
-                          ? ` (no hint resolved: ${fetched.asked.unresolved_hints.join(', ')})`
-                          : ''}
-                        {!fetched.asked.widened && fetched.asked.unresolved_hints.length > 0
-                          ? ` (unmatched: ${fetched.asked.unresolved_hints.join(', ')})`
-                          : ''}
-                        {/* WHICH VOICE CHOSE IT, ON THE RECEIPT AS WELL AS ON THE CONTROL
-                            (D76). The panel above says what a press WILL ask for; this says
-                            what the press that already happened asked for — and a receipt
-                            that reported the scope without the reason is what let a
-                            one-hinted-card narrowing look like a correct answer. */}
-                        {fetched.asked.reason === null ||
-                        SCOPE_REASON[fetched.asked.reason] === undefined
-                          ? ''
-                          : ` — ${SCOPE_REASON[fetched.asked.reason]}`}
-                        {fetched.asked.cards === undefined
-                          ? ''
-                          : ` (${fetched.asked.hinted} of ${fetched.asked.cards} hinted).`}
-                      </p>
-                      {/* WHAT THE LAST JOIN USED, BESIDE WHAT ARRIVED. The export this run
-                          was last joined against, per game, next to this one's figures — so
-                          a narrower file is visible to the operator who asked for it.
-                          Nothing here refuses: D65 names the scope, the server's positive
-                          check is the whole guard, and the delta that used to refuse a
-                          narrower file is retired (D64, amended 2026-09-02). */}
-                      {Object.entries(fetched.previous).length === 0 ? (
-                        <p className="run-step-note run-step-fine">
-                          First export for this run — nothing earlier to set beside it.
-                        </p>
-                      ) : (
-                        Object.entries(fetched.previous).map(([game, was]) => (
-                          <p className="run-step-note run-step-fine" key={game}>
-                            Last export this run was joined against for {game}: {was.rows}{' '}
-                            rows / {was.skus} SKUs ({was.file}); this one: {fetched.rows} /{' '}
-                            {fetched.skus}.
-                          </p>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {fetchRefusal === null ? null : (
-                    <div className="run-note run-result-refused">
-                      <p className="run-note-text">{fetchRefusal.message}</p>
-                      <p className="run-machine">{fetchRefusal.code}</p>
-                    </div>
-                  )}
-                  <p className="run-step-note run-step-fine">
-                    Preview writes nothing at all — it walks the ladder twice, with the trust
-                    switch and without, and tells you what each would queue. One export file
-                    per game; leave the picker alone to re-use the last one. Fetching needs
-                    a TCGplayer session in <code>.env</code>, and answers for one game per
-                    press.
-                  </p>
-                </>
-              )}
-
-              {step.key === 'reconcile' && detail !== null && (
-                <div className="run-actions">
-                  <label className="run-upload">
-                    <input
-                      type="file"
-                      accept=".csv,text/csv"
-                      ref={stagedPick}
-                      onChange={() => void pickStaged()}
-                    />
-                    <span>
-                      {busy === 'staged' ? 'Comparing…' : 'Compare with Export From Staged…'}
+            <div className="runs-steps">
+              {/* -------------------------------------------------------------- identify */}
+              <StepCard
+                n={1}
+                title={TITLES.identify}
+                state={stepState('identify')}
+                summary={summaryOf('identify')}
+                cost={
+                  <Pill tone="warn" icon="dollar" className="run-step-money">
+                    Costs money
+                  </Pill>
+                }
+                open={openStep === 'identify'}
+                onToggle={() => toggleStep('identify')}
+              >
+                <div className="runs-kv-row">
+                  {detail.usage.input_tokens != null ? (
+                    <span className="bn-muted">
+                      {detail.usage.input_tokens.toLocaleString()} tokens in · {(detail.usage.output_tokens ?? 0).toLocaleString()}{' '}
+                      out
                     </span>
-                  </label>
+                  ) : null}
+                  {detail.batch_ids.length > 0 ? (
+                    <span className="bn-mono runs-batch">{detail.batch_ids.join(' · ')}</span>
+                  ) : null}
                 </div>
-              )}
-          {/* THE ANSWER INSIDE THE STEP THAT PRODUCED IT. It rendered after all three boxes,
-              so pressing Preview under Join put the reply ~300px further down the column than
-              the button that asked for it — and `_run_sync` does not append to `console.log`,
-              only the detached identify child does, which makes this the ONLY place a join,
-              emit or reconcile answer ever appears on this screen.
+                {detail.live ? (
+                  <p className="runs-step-lede">
+                    <span className="bn-dot bn-dot-live" /> {runningFor(detail)} — it keeps running if you close this
+                    tab, and this panel re-reads it every few seconds.
+                  </p>
+                ) : null}
+                {detail.console.trim() === '' ? (
+                  <p className="runs-step-lede">Nothing was captured here — this run was started from a terminal.</p>
+                ) : (
+                  <LogWell text={detail.console} label="What Identify printed" />
+                )}
+              </StepCard>
 
-              MATCHED ON THE STEP THE CLICK REQUESTED, never on the server's echo. `doStep` now
-              records its own `step` argument, so the value is by construction one of these
-              three keys and no orphan fallback can fire. The echo is not the local truth:
-              `app/tests/run-panel.spec.ts` mocks all three routes and returns `step: 'join'`
-              for every one, which was harmless only while this rendered unconditionally. */}
-          {stepOut === null || stepOut.step !== step.key ? null : (
-            <div className={`run-result${stepOut.ok ? '' : ' run-result-refused'}`}>
-              <p className="run-result-head">
-                {stepOut.step} {stepOut.ok ? 'finished' : 'refused'}
-              </p>
-              <Console text={stepOut.console} label={`What ${stepOut.step} printed`} />
+              {/* ------------------------------------------------------------------ join */}
+              <StepCard
+                n={2}
+                title={TITLES.join}
+                state={stepState('join')}
+                summary={summaryOf('join')}
+                cost={<Pill>Free · re-runnable</Pill>}
+                open={openStep === 'join'}
+                onToggle={() => toggleStep('join')}
+              >
+                <p className="runs-step-lede">
+                  Resolves each card against a TCGplayer export and writes the queues and the pricing questions.
+                </p>
+                {scopeInfo !== null && scopeSentence !== null ? (
+                  <p className="run-scope-says">
+                    <Icon name="external" size={14} />
+                    <span>
+                      Will ask TCGplayer for <strong>{scopeSentence.what}</strong>
+                      {scopeSentence.why === null ? '.' : ` — ${scopeSentence.why}.`}
+                    </span>
+                  </p>
+                ) : null}
+
+                <div className="run-actions">
+                  <Button
+                    variant="primary"
+                    icon="download"
+                    busy={busy === 'fetch'}
+                    disabled={busy !== null}
+                    onClick={() => void doFetchExport()}
+                  >
+                    Fetch from TCGplayer
+                  </Button>
+                  <Button
+                    icon="eye"
+                    busy={busy === 'join'}
+                    disabled={busy !== null}
+                    onClick={() => void doStep('join', { dryRun: true, reviewBelowConfidence: reviewBelow })}
+                  >
+                    Preview
+                  </Button>
+                  <Button
+                    icon="refresh"
+                    disabled={busy !== null}
+                    onClick={() => void doStep('join', { reviewBelowConfidence: reviewBelow })}
+                  >
+                    Join again
+                  </Button>
+                  <FileButton
+                    label="Join with an export…"
+                    multiple
+                    disabled={busy !== null}
+                    busy={busy === 'exports'}
+                    onFiles={(files) => void joinWithExports(files)}
+                  />
+                  <Button
+                    variant="ghost"
+                    icon="settings"
+                    iconRight={optionsOpen ? 'chevronUp' : 'chevronDown'}
+                    aria-expanded={optionsOpen}
+                    onClick={() => setOptionsOpen((v) => !v)}
+                  >
+                    Options
+                  </Button>
+                </div>
+
+                {optionsOpen ? (
+                  <div className="runs-options bn-well">
+                    {/* Two labelled groups, in the same register: what the join queues, and what
+                        the fetch asks for. The well used to open on a lone checkbox. */}
+                    <div className="runs-optgroup">
+                      <p className="run-scope-head">What the join queues</p>
+                      <label className="runs-option runs-option-row">
+                        <span className="bn-field-label">Send to review at or below</span>
+                        <select
+                          className="bn-select run-select"
+                          value={reviewBelow}
+                          onChange={(event) => setReviewBelow(event.target.value as 'none' | 'low' | 'medium')}
+                        >
+                          {REVIEW_BELOW.map((row) => (
+                            <option key={row.key} value={row.key}>
+                              {row.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <p className="run-step-fine">
+                        A card the model read with less confidence than this goes to the review queue instead of
+                        straight to a price.
+                      </p>
+                    </div>
+
+                    {scopeInfo === null ? null : (
+                      <div className="run-scope">
+                        <p className="run-scope-head">The export this run will ask for</p>
+                        {scopeInfo.games.length < 2 ? null : (
+                          <label className="runs-option runs-option-row">
+                            <span className="bn-field-label">Category</span>
+                            <select
+                              className="bn-select run-select"
+                              value={scopeGame ?? ''}
+                              onChange={(event) => {
+                                setScopeGame(event.target.value)
+                                setScopeTicked([])
+                              }}
+                            >
+                              <option value="">Pick one…</option>
+                              {scopeInfo.games.map((row) => (
+                                <option key={row.game} value={row.game}>
+                                  {row.display} · {row.cards} card{row.cards === 1 ? '' : 's'}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        {scopeInfo.games
+                          .filter((row) => row.game === (scopeGame ?? scopeInfo.asked?.game))
+                          .map((row) => (
+                            <p className="run-step-fine" key={row.game}>
+                              {row.hinted} of {row.cards} card{row.cards === 1 ? '' : 's'} carry a set hint
+                              {row.hints.length === 0 ? '' : ` (${row.hints.join(', ')})`}. {row.display}&rsquo;s own
+                              rule is{' '}
+                              {row.policy === 'category'
+                                ? 'the whole category — its catalogue comes down in one file.'
+                                : 'the hinted sets — but only when every card carries a hint.'}
+                            </p>
+                          ))}
+                        <Segmented<ScopeChoice>
+                          className="run-scope-choices"
+                          label="Which sets to ask for"
+                          value={scopeChoice}
+                          options={SCOPE_CHOICES.map((row) => ({ value: row.key, label: row.label }))}
+                          onChange={setScopeChoice}
+                        />
+                        {scopeChoice !== 'sets' ? null : (
+                          <div className="run-scope-sets">
+                            {setList.length === 0 ? (
+                              <p className="run-step-fine">
+                                No set list — that needs the same TCGplayer session the fetch does. Pick another
+                                option, or sign in to TCGplayer again so the fetch has a session.
+                              </p>
+                            ) : (
+                              setList.map((row) => (
+                                <label className="bn-check" key={row.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={scopeTicked.includes(Number(row.id))}
+                                    onChange={(event) =>
+                                      setScopeTicked((held) =>
+                                        event.target.checked
+                                          ? [...held, Number(row.id)]
+                                          : held.filter((id) => id !== Number(row.id)),
+                                      )
+                                    }
+                                  />
+                                  {row.name}
+                                </label>
+                              ))
+                            )}
+                          </div>
+                        )}
+                        {scopeInfo.message === null ? null : (
+                          <Notice tone="warn" code={scopeInfo.reason ?? undefined}>
+                            {scopeInfo.message}
+                          </Notice>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {troubleFor(['join', 'fetch', 'exports'])}
+
+                {fetched === null ? null : (
+                  /* THE RECEIPT. Reassurance, refusing nothing: what came down, how big it was,
+                     and what the last one was — the two guards that used to stand here asked
+                     the operator to argue with a number instead of reading it. */
+                  <div className="run-receipt" role="status">
+                    <span className="run-receipt-mark" aria-hidden="true">
+                      <Icon name="check" size={13} strokeWidth={2.5} />
+                    </span>
+                    <div className="run-receipt-said">
+                      <p className="run-receipt-head">
+                        <span className="run-receipt-what">Export fetched</span>
+                        <span className="run-receipt-rows">{fetched.rows.toLocaleString()} rows</span>
+                        <span>{gameDisplay(fetched.asked.game)}</span>
+                        <span>{scopeWords(fetched.asked)}</span>
+                      </p>
+                      <p className="run-receipt-was">{previousLine(fetched, gameDisplay)}</p>
+                      <span className="run-receipt-tear" aria-hidden="true" />
+                      {/* The counts only. WHY the scope is what it is stands two lines above this,
+                          on the sentence that precedes the press — saying it twice in 200px reads
+                          as a defence of the figure rather than a receipt for it. */}
+                      <p className="run-receipt-fine">
+                        {fetched.skus.toLocaleString()} SKUs · {fetched.sets.length} set
+                        {fetched.sets.length === 1 ? '' : 's'} · {fetched.conditions.length} condition
+                        {fetched.conditions.length === 1 ? '' : 's'}
+                      </p>
+                      {fetched.asked.unresolved_hints.length === 0 ? null : (
+                        <p className="run-receipt-fine">
+                          No TCGplayer set matched {fetched.asked.unresolved_hints.join(', ')} — those cards were
+                          covered by the wider ask.
+                        </p>
+                      )}
+                      <p className="run-receipt-file bn-mono">{fetched.file}</p>
+                    </div>
+                  </div>
+                )}
+
+                {fetchRefusal === null ? null : (
+                  <div className="run-note run-result-refused">
+                    <Notice tone="danger" code={fetchRefusal.code}>
+                      {fetchRefusal.message}
+                    </Notice>
+                  </div>
+                )}
+
+                {result('join')}
+
+                <p className="run-step-fine">
+                  Preview writes nothing — it walks the ladder and says what it would queue. One export file per
+                  game; fetching needs a TCGplayer session.
+                </p>
+              </StepCard>
+
+              {/* ------------------------------------------------------------------ emit */}
+              <StepCard
+                n={3}
+                title={TITLES.emit}
+                state={stepState('emit')}
+                summary={summaryOf('emit')}
+                cost={<Pill>Free · re-runnable</Pill>}
+                open={openStep === 'emit'}
+                onToggle={() => toggleStep('emit')}
+              >
+                <p className="runs-step-lede">
+                  Prices, holds and the sub-threshold answer are set on Pricing, and the same screen writes the
+                  import files. Emit refuses while a sub-threshold price is unanswered.
+                </p>
+                <div className="run-actions">
+                  <a className="bn-btn bn-btn-primary" href={pricingHref}>
+                    <Icon name="tag" size={16} />
+                    Price and emit this run
+                    <Icon name="arrowRight" size={16} />
+                  </a>
+                </div>
+                {/* The per-run rule/basis editor is gone with the file it wrote: the answer is one
+                    document for the whole store (D86), and Pricing is the press that writes it. */}
+                <p className="run-step-fine">
+                  The pricing rule and basis are one answer for the whole store now. They are set on{' '}
+                  <a className="run-fine-link" href={pricingHref}>
+                    Pricing
+                  </a>
+                  , not in this run.
+                </p>
+                {result('emit')}
+              </StepCard>
+
+              {/* ------------------------------------------------------------- reconcile */}
+              <StepCard
+                n={4}
+                title={TITLES.reconcile}
+                state={stepState('reconcile')}
+                summary={summaryOf('reconcile')}
+                cost={<Pill>Free · re-runnable</Pill>}
+                open={openStep === 'reconcile'}
+                onToggle={() => toggleStep('reconcile')}
+              >
+                <p className="runs-step-lede">
+                  After Import to Staged on TCGplayer, download its Export From Staged and compare it with what emit
+                  wrote. Quantities move; nothing is marked sold.
+                </p>
+                <div className="run-actions">
+                  <FileButton
+                    label="Compare with Export From Staged…"
+                    disabled={busy !== null}
+                    busy={busy === 'staged'}
+                    onFiles={(files) => void compareStaged(files)}
+                  />
+                </div>
+                {troubleFor(['staged'])}
+                {result('reconcile')}
+              </StepCard>
             </div>
-          )}
-        </div>
-      ))}
 
-      {/* EVERYTHING EXCEPT THE IMPORT CSVs (D54). `report.txt`, `pricing.json` and
-          `reconcile.txt` are written by the commands pressed on THIS screen, so their
-          receipts belong beside those buttons. The two import files went to `#/pricing` with
-          the press that writes them — docs/GATES.md's recorded gap was that the press and
-          the receipt were in different places, and splitting them again here would
-          reproduce it with a nicer font. */}
-      {detail === null ? null : (
-        <RunFiles run={detail.run} files={detail.files} only="run" />
-      )}
+            <div className="runs-detail-files">
+              <RunFiles run={detail.run} files={detail.files} only="run" />
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

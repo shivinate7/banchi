@@ -444,7 +444,9 @@ Paldean
 unphotographed
 [Dd]ownsampl\w*
 dBase
-
+Banchi
+unrepresentable
+boolean
 [Aa]imable
 [Ff]illable
 [Uu]nintuitive

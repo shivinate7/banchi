@@ -5,176 +5,174 @@ import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar, type Persona } from './PositionBar'
-import './CardLocations.css'
 import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
+import { Button, Icon, Pill } from './kit'
+import './CardLocations.css'
 
 /* One card, every copy of it, and where each copy physically is.
  *
- * THE FLOW THIS IS THE MIDDLE OF: a card sells, somebody types its name, and the answer has to
- * be good enough to walk to a box with. D7 keeps every copy as its own position with its own
- * photo precisely so that a sale can be recorded against one of them, and this is the screen
- * where that map stops being a data structure.
+ * ONE CORE, TWO SKINS, and `persona` is the whole of the difference: same data, same order,
+ * same actions, same tokens. The owner's rows are dense and speak the pipeline's vocabulary;
+ * the Fulfiller's cards are big, plain, and carry no machine string at all — his words only
+ * ever come out of the `fulfiller` branch, so there is no path by which a SKU reaches him.
  *
- * ONE CORE, TWO SKINS, AND `persona` IS THE WHOLE OF THE DIFFERENCE. docs/DESIGN.md's "one
- * system, two densities" applied to a component rather than to a stylesheet: same data, same
- * order, same actions, same tokens. What changes is density, vocabulary and what is shown at
- * all. A second component was the alternative and it is the one this repo has already rejected
- * twice — it doubles the surface and gives two things to keep in step, and the day they drift
- * is the day the Fulfiller's screen shows a card the owner's does not.
- *
- * WHAT THE TWO SKINS MAY SAY IS NOT A STYLE PREFERENCE. The owner's screens speak the
- * pipeline's vocabulary on purpose — `Inventory.tsx` argues that being able to grep what you
- * saw is worth more to the person debugging a run than a consistent register. The Fulfiller's
- * may not: docs/DESIGN.md bans SKU, CSV, import, sync, batch, queue and staged from his copy
- * outright, and Fulfillment.tsx goes further and shows him no machine string at all. Both rules
- * are honoured below by construction rather than by care — the pipeline's words are only ever
- * read inside `persona === 'owner'` branches, so there is no path by which one reaches him.
- *
- * D7 WAS AMENDED ON 2026-08-23 AND THIS COMPONENT IS BUILT AFTER THE AMENDMENT, which is worth
- * saying because the obvious implementation is now the wrong one. Copies are fungible: `live`
- * is a quantity held against the SKU, not a flag on four particular cards, and "every unsold
- * copy is sellable" is the entry's own sentence. So there is no state to filter the sell
- * control on, no such thing as a copy that is backstock, and the count of what is for sale
- * comes off `group.listed` and never off the copies. A version of this that walked the copies
- * looking for `state === 'live'` would find none at all — those words are not members of
- * `store/master.py:STATES` any more — and would silently offer nothing.
+ * Copies are fungible (D7): `live` is a quantity held against the SKU, not a flag on four
+ * particular cards, so every unsold copy is sellable and the count of what is for sale comes
+ * off `group.listed`, never off the copies.
  */
 
-/** A copy the pipeline considers gone. The only terminal state a position carries, and the one
- *  word this file tests `SearchCopy.state` against — see the header for why there is no `live`
- *  to compare with. */
+/* ------------------------------------------------- how old a LIVE reading is (D-rulings) ---
+ *
+ * A LIVE COUNT IS A FACT ABOUT WHEN THIS STORE LAST LOOKED, NOT A FACT ABOUT THE MARKETPLACE.
+ * `store/master.py:Listing` says so in as many words — "an optimistic local estimate between
+ * runs" — so no screen in this group draws the figure without saying how old it is.
+ *
+ * The stamp is `Listing.at` off `GET /inventory`. Every `set`/`bump` re-stamps it, so after a
+ * `join` or a `reconcile --live` it is the moment TCGplayer's own figures were read in.
+ *
+ * IT IS JOINED CLIENT-SIDE BECAUSE `/search` DOES NOT CARRY IT: `SearchGroup.listed` is three
+ * counts and no time at all on this branch. Both come off the same store record, so the join
+ * is exact rather than a guess — but the day `listed` grows an `at` of its own, read that and
+ * delete the join.
+ */
+
+const MINUTE = 60_000
+const HOUR = 3_600_000
+const DAY = 86_400_000
+
+/** `3 days`, `4 hours`, `just now` — coarse on purpose; the exact moment is in the title. */
+export function readingAgo(at: string | null | undefined): string | null {
+  if (typeof at !== 'string' || at.trim() === '') return null
+  const when = Date.parse(at)
+  if (Number.isNaN(when)) return null
+  const elapsed = Math.max(0, Date.now() - when)
+  if (elapsed < 2 * MINUTE) return 'just now'
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} minutes ago`
+  if (elapsed < DAY) {
+    const hours = Math.floor(elapsed / HOUR)
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  }
+  const days = Math.floor(elapsed / DAY)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
+/** The moment itself, as a person's clock says it — the hover behind the coarse phrase. */
+export function readingExact(at: string | null | undefined): string | undefined {
+  if (typeof at !== 'string') return undefined
+  const when = new Date(at)
+  if (Number.isNaN(when.getTime())) return undefined
+  return when.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+/** `read 3 days ago`, drawn beside a live count and never louder than it. */
+export function ReadingAge({ at, className }: { readonly at?: string | null; readonly className?: string }) {
+  const ago = readingAgo(at)
+  return (
+    <span
+      className={['inv-readage', ago === null ? 'is-unread' : '', className ?? ''].filter(Boolean).join(' ')}
+      title={
+        ago === null
+          ? 'Nothing has written a listing figure for this yet.'
+          : `This store last wrote these listing figures ${readingExact(at)}.`
+      }
+    >
+      {ago === null ? 'not read yet' : `read ${ago}`}
+    </span>
+  )
+}
+
+/** An open order that has named one copy, keyed by the copy's store key. Structural, so the
+ *  screen's own richer `Wanted` fits without a second import of it. */
+export type CopyClaim = { readonly order: string }
+
+/** A copy the pipeline considers gone. */
 const SOLD = 'sold'
 
-/* `retired` (D26) joined `sold` as a terminal state a position can carry. On the Fulfiller's
- * skin both read as the same fact — the copy is not in the boxes for him to pull — and
- * "Sold." would be a lie about a card the owner gave away, so the sentence stays honest and
- * generic for the non-sale door. Owner skin renders the state string verbatim as always. */
+/** The other door out (D26). On the Fulfiller's skin both read as the same fact. */
 const RETIRED = 'retired'
 
-/** What the Fulfiller is told about a copy, and the reason it is a lookup rather than the
- *  state string.
- *
- *  Fulfillment.tsx: no machine string appears on his screen. `identified` is a correct and
- *  useless thing to tell a retired man holding a card. Two sentences cover the two cases that
- *  matter to him — it is here, or it is gone — and the default says the safe one rather than
- *  falling through to the raw word, because a state added to `store/master.py` next year must
- *  not be the first machine string he has ever seen. */
+/** What the Fulfiller is told about a copy — two sentences, never the raw state word. */
 function saidState(state: string): string {
   if (state === SOLD) return 'Sold.'
   if (state === RETIRED) return 'No longer in the boxes.'
   return 'In the boxes.'
 }
 
-/** `1 copy` / `4 copies`. A third small copy of this in the app; `Inventory.tsx` has the other
- *  two and neither file could import the other's on the day it was written. A shared module is
- *  the fix if a fourth arrives — the threshold `describeFailure` was held to before it moved
- *  into server.ts. */
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`
+}
+
+/* HOW MUCH ROOM IS LEFT UNDER THE CEILING — said as headroom, never as a second live count.
+ *
+ * `group.listable` is D7's `min(cap, on hand)` computed by the server: what the rule permits
+ * for THIS SKU. Drawn as `up to 3 may be live` it used the same numeral as the live figure two
+ * lines above it, and the two sentences could not be told apart — is three live, or may three
+ * be? Headroom is the same fact in terms nothing else on the panel is measured in. */
+function headroom(group: SearchGroup): string {
+  const room = group.listable - group.listed.live
+  if (group.listable === 0) return 'No copies can go live'
+  if (room > 0) return `Room for ${room} more live`
+  if (room === 0) return `At the ceiling of ${group.listable}`
+  return `${-room} over the ceiling of ${group.listable}`
 }
 
 export type CardLocationsProps = {
   group: SearchGroup
 
-  /** Required, not defaulted. A default would make the Fulfiller's skin the one you get by
-   *  forgetting, or the owner's the one he gets by the same accident, and both are the kind of
-   *  mistake that renders perfectly. */
+  /** Required, not defaulted: a skin you get by forgetting is a skin nobody chose. */
   persona: Persona
 
-  /** Record a sale of ONE copy — the position is the whole of the selection (D7, and
-   *  `server.ts:markSold`). This component does not call the server: the caller owns the
-   *  request, its refusals and its undo window, because those are one decision per screen and
-   *  Fulfillment.tsx already holds a worked example of how much reasoning that is. */
+  /** Record a sale of ONE copy — the position is the whole of the selection. The caller owns
+   *  the request, its refusals and its undo window. */
   onSell: (copy: SearchCopy) => void
 
-  /** The `SearchCopy.key` of a sale in flight, or null. One at a time, deliberately:
-   *  `Store.write()` takes the file lock per call, so several at once stack against a lock and
-   *  return their failures out of order — the same reason the review screen serialises. */
+  /** The `SearchCopy.key` of a sale in flight, or null. One at a time. */
   busyKey: string | null
 
-  /** Copies the caller has already sold and is holding a receipt for. An optimistic overlay
-   *  and nothing more: the wire still says `identified` until the next read, and this is how
-   *  the row stops offering to sell a card twice in the seconds before it. */
+  /** Copies the caller has already sold and is holding a receipt for. An optimistic overlay. */
   soldKeys: ReadonlySet<string>
 
-  /** Each box's own divider layout, keyed by `Place.box` — `GET /boxes`'s `sections_detail`,
-   *  handed straight to every `PositionBar` this component draws and read nowhere else.
-   *
-   *  A MAP PER BOX AND NEVER ONE ARRAY, because a search group is not a box. D7 keeps every
-   *  copy at its own position, so one card that just sold can have copies in three different
-   *  boxes — and each box carries its own list of divider indices (D10, amended 2026-08-23),
-   *  set where the operator physically put them. Today box 1 declares none and is rendered by
-   *  the 25-rule while box 95 declares `[1, 24, 74, 84]`; nothing makes those two layouts
-   *  resemble each other. One array handed to every bar would draw one box's dividers across
-   *  another box's card, confidently, with nothing on screen saying it had guessed — which is
-   *  the same wrong answer `PositionBar:spansOf` refuses to reach by arithmetic, arrived at
-   *  through a prop shape instead. So the shape is the guard: there is no way to pass this
-   *  that loses which box a layout belongs to.
-   *
-   *  OPTIONAL, AND THE BAR IS HONEST WITHOUT IT. `spansOf` falls back to the three runs a
-   *  `Place` states on its own — the part of the box before this card's section, the section,
-   *  the part after — so a caller holding no box records draws a coarser picture and never a
-   *  wrong or an empty one. A map that is missing one box is the same case as no map at all:
-   *  `Map.get` answers undefined and the fallback is the one `spansOf` already documents.
-   *  Nothing here waits for it and nothing reports its absence.
-   *
-   *  BOTH SKINS GET IT. Same data, same order, same picture — the header's rule, and the
-   *  Fulfiller needs it more than the owner does, since he is walking to a box he did not
-   *  fill. One skin drawing the real dividers while the other drew this card's own section is
-   *  precisely the drift one component with two skins exists to prevent. */
+  /** Each box's own divider layout, keyed by `Place.box` — handed to every `PositionBar`.
+   *  A map per box and never one array, because a search group is not a box. Optional; the
+   *  bar is honest without it. */
   sections?: ReadonlyMap<number, readonly SectionDetail[]>
 
-  /** Which copy the caller is currently pointing at, or undefined. OWNER SKIN ONLY, and the
-   *  Fulfiller's ignores it by construction rather than by care: his view has no walk and no
-   *  cursor, so "the current one" is not a fact that exists on his screen. `Fulfillment.tsx`
-   *  passes nothing and gets exactly what it got before.
+  /** Which copy the caller is currently pointing at, or undefined. Owner skin only.
    *
-   *  WHY IT IS NEEDED AT ALL. Since D31's merge the owner reaches this list by selecting a card
-   *  in the box walk, so one of these rows IS the card whose photograph is on screen beside it.
-   *  Unmarked, a group of four identical copies gives no answer to "which of these am I looking
-   *  at" — and the answer decides which slot a hand goes to. Carried as `aria-current` and drawn
-   *  as ink against muted, the same mark the walk's own rows use, so it is one idiom rather than
-   *  a second. */
+   *  A STATEMENT OF WHERE THE WALK STANDS, NEVER A RECOMMENDATION. The row it names is drawn
+   *  in full like every other and keeps its own controls; all it gets extra is a quiet
+   *  `Viewing` marker and a neutral rail, because the owner picks which physical copy to
+   *  reach for and the UI does not get a vote. */
   currentKey?: string
 
-  /** Walk to this copy: the box strip, the list and the photograph all move to it.
-   *
-   *  OWNER SKIN ONLY, and optional — `Fulfillment.tsx` and `Gallery.tsx` pass nothing and get
-   *  exactly what they got before. His view has no walk to move, and D31's ruling is that the
-   *  Fulfiller's surface is downstream of what the owner's build produces rather than a
-   *  counterpoint to it.
-   *
-   *  WHY THE LABEL AND NOT THE ROW. The row already holds a control — `Mark sold`, the retire
-   *  door, or whatever `renderAction` draws — and a button inside a button is invalid markup,
-   *  which is the same reason `aria-current` sits on the `<li>` rather than on anything
-   *  pressable. So the thing that is clickable is the position label, which is also the thing
-   *  that says where the press is about to send you: `Box 95 · Section 2 · Card 4` is both the
-   *  affordance and its own confirmation.
-   *
-   *  NOT DRAWN ON THE CURRENT COPY, which is where the walk already is, and NEVER ON A POOLED
-   *  ONE — D24 makes it a count rather than a location, so there is no slot to walk to and the
-   *  label slot is carrying the pooled fact instead of a position. */
+  /** When this store last wrote this SKU's listing figures — `Listing.at` off `GET
+   *  /inventory`. Optional; absent draws `not read yet` rather than a bare live count. */
+  listedAt?: string | null
+
+  /** Which copies an open order has already named, by copy key. A claimed copy is DRAWN AND
+   *  MARKED, never hidden and never un-pressable: this screen is also where a walk-in sale is
+   *  recorded, and the owner ruled that `Mark sold` stays. */
+  claims?: ReadonlyMap<string, CopyClaim>
+
+  /** Walk to this copy. Owner skin only, optional; never drawn on the current copy or a pooled
+   *  one. */
   onGoTo?: (copy: SearchCopy) => void
 
-  /** Replaces the action slot for EVERY copy, sold ones included.
-   *
-   *  THE SOLD ONES ARE THE POINT OF THE PROP, not an edge case it happens to cover.
-   *  docs/DESIGN.md requires undo on every mark-sold with at least a ten-second window, and
-   *  this component is given `onSell` and no `onUndo` — so a screen that has to satisfy that
-   *  row draws its own receipt-and-undo here, exactly as Fulfillment.tsx does with a per-sale
-   *  timer it owns. Without it the Fulfiller skin below cannot meet that constraint on its
-   *  own, and that is stated rather than hidden. */
+  /** Replaces the action slot for EVERY copy, sold ones included — this is how a screen draws
+   *  its own undo. */
   renderAction?: (copy: SearchCopy) => ReactNode
 }
 
 export function CardLocations(props: CardLocationsProps) {
   const { persona } = props
 
-  /* Photos that failed to load, by copy key. Not derived from `has_photo`: that flag says the
-   * server had bytes when it answered, and undo deletes a photo, so the load can still fail
-   * between the search and the render. Fulfillment.tsx keeps the same state for the same
-   * reason and swaps in a sentence that says where the card still is. */
+  /* Photos that failed to load, by copy key. */
   const [missing, setMissing] = useState<string[]>([])
 
   return persona === 'fulfiller' ? (
@@ -184,37 +182,57 @@ export function CardLocations(props: CardLocationsProps) {
   )
 }
 
-/* Shared by both skins so the two cannot disagree about what may be done to a copy. Sold is
- * the only thing that stops a sale, which is D7's "every unsold copy is sellable" stated as
- * code — there is deliberately no second condition here to keep in step with the decision. */
+/* Sold is the only thing that stops a sale — D7's "every unsold copy is sellable" as code. */
 function isSold(copy: SearchCopy, soldKeys: ReadonlySet<string>): boolean {
   return copy.state === SOLD || copy.state === RETIRED || soldKeys.has(copy.key)
 }
 
-/* A POOLED COPY — the owner's ruling that a code card is a count, not a location
- * (`pipeline/games.py`'s `located` flag; "Code cards are pooled inventory, not located" in
- * docs/DECISIONS.md). Its place block arrives with `located: false`, a null label and the
- * game's display name, and this component's job splits accordingly: the position cell shows
- * the pooled fact, and the position BAR is not drawn at all — a marker some fraction into a
- * box that means nothing is worse than absent, because it is the kind of wrong a glance
- * believes. `!== false` so an older server's blocks, which omit the flag entirely, keep
- * reading as located. */
+/* A pooled copy — a count, not a location (D24). `!== false` so an older server's blocks keep
+   reading as located. */
 function isPooled(copy: SearchCopy): boolean {
   return copy.place.located === false
 }
 
+/** The tone of a state pill. Shared with `BoxBrowse` so the two draw one register. */
+export function stateTone(state: string): 'default' | 'ok' | 'warn' | 'accent' {
+  if (state === SOLD) return 'ok'
+  if (state === RETIRED || state === 'moved') return 'warn'
+  if (state === 'captured') return 'accent'
+  return 'default'
+}
+
+/** A card state as a word — the one map every state pill on the owner's screens draws
+ *  through, so a raw wire value is never printed as a label. An unknown state is still
+ *  shown, capitalised, rather than dropped. */
+const STATE_WORDS: Readonly<Record<string, string>> = {
+  captured: 'Captured',
+  identified: 'Identified',
+  sold: 'Sold',
+  retired: 'Retired',
+  moved: 'Moved',
+}
+export function stateLabel(state: string): string {
+  const known = STATE_WORDS[state]
+  if (known !== undefined) return known
+  const raw = String(state).replace(/_/g, ' ')
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
 // ------------------------------------------------------------------------- the owner's skin
 
-/* Dense rows, and the position bar on EVERY one of them.
+/* EVERY COPY OF THIS CARD, AND WHERE EACH ONE PHYSICALLY IS — the panel the owner picks a copy
+ * out of, so three rules bind it:
  *
- * THE OWNER RULED AGAINST HOVER, and the ruling is the reason this is a row and not a tooltip.
- * "How far into the box" is the thing he opened the screen to learn, and a fact you have to
- * point at to see is a fact you compare one at a time — which is exactly what four copies of
- * one card in four boxes makes impossible. Every bar on screen at once is the feature.
+ *   1. Every copy is drawn, in full. No copy is folded away for being the one the walk happens
+ *      to be standing on, and none is dropped for being far away, sold or spoken for.
+ *   2. Nothing is preselected and nothing is recommended. The row the walk stands on carries a
+ *      quiet `Viewing` marker and a neutral rail — a statement of where you are, not a nudge —
+ *      and it keeps its own controls like every other row.
+ *   3. A copy an open order has already named is MARKED, never hidden and never disabled: this
+ *      is also where a walk-in sale is recorded, and `Mark sold` stays on every live row.
  *
- * The budget is about 56px a row. It is a budget rather than a floor: a box with a name draws
- * a second line in the position cell and the row grows, because the alternative is truncating
- * either a position label or a box name and both are things somebody carries to a shelf.
+ * The position lens is on every row: "how far into the box" is the thing the owner opened the
+ * screen to learn, and every bar on screen at once is the feature.
  */
 function OwnerRows({
   group,
@@ -223,94 +241,98 @@ function OwnerRows({
   soldKeys,
   sections,
   currentKey,
+  listedAt,
+  claims,
   onGoTo,
   renderAction,
 }: Omit<CardLocationsProps, 'persona'>) {
-  /* The machine line, in the shape `Inventory.tsx` established so that this screen and a
-   * `curl /inventory` use one vocabulary. `sku: null` rather than a friendlier phrase for the
-   * group that has none — a card is given a SKU when `emit` writes its row and never before,
-   * and saying so plainly is more use to the owner than hiding it. */
   const number = collectorNumber(group)
+  /* The machine strings — SKU, set code, number — in mono; the condition is a phrase and is
+     drawn beside them in the UI face. */
   const meta =
     group.sku === null
-      ? ['sku: null']
+      ? ['no SKU yet']
       : [
-          `sku ${group.sku}`,
+          `SKU ${group.sku}`,
           ...(group.set_hint === null ? [] : [group.set_hint]),
           ...(number === null ? [] : [number]),
-          ...(group.condition === null ? [] : [group.condition]),
         ]
 
   return (
     <section className="card-locations card-locations-owner">
-      {/* NO CARD NAME ON THE OWNER'S HEAD SINCE 2026-08-26, and it is a deletion rather than a
-          demotion. This drew the name at 20px display while the card panel's own first fact row
-          — `Card: Volcanion` — carries it a few hundred pixels directly above, on the same
-          screen, about the same card. D38 deleted a whole panel over "two renderings of one fact
-          on one screen"; this is the same finding at header scale, and it only became visible
-          when the copies moved up under the band and the two ended up 24px apart.
-
-          IT PAID FOR A COPY ROW. Measured: the head goes 84px -> 30px, which is most of an 83px
-          row, and the rows are what this section is for.
-
-          THE FULFILLER'S NAME IS UNTOUCHED. His skin renders its own `<h2>` in a different
-          branch below, at 32px, and it is the payload of his screen rather than a restatement —
-          nothing on `#/fulfillment` draws a fact list. `meta` stays here on both: `sku` and the
-          condition string appear nowhere else on this route. */}
       <header className="card-locations-head">
-        <p className="card-locations-meta">{meta.join(' · ')}</p>
+        <h3 className="bn-section-title card-locations-title">Every copy of this card</h3>
+        <div className="card-locations-stats">
+          <div className="bn-stat card-locations-stat">
+            <span className="bn-stat-value">{group.copies.length}</span>
+            <span className="bn-stat-label">{group.copies.length === 1 ? 'copy' : 'copies'}</span>
+          </div>
+          <div className="bn-stat card-locations-stat">
+            <span className="bn-stat-value">{group.on_hand}</span>
+            <span className="bn-stat-label">in the boxes</span>
+          </div>
+          {/* THE LIVE FIGURE NEVER STANDS ALONE. It is what this store last believed, so its
+              reading age sits under it, quieter than the count itself. */}
+          <div className="bn-stat card-locations-stat card-locations-live">
+            <span className="bn-stat-value">
+              <span className="bn-dot bn-dot-live" aria-hidden="true" />
+              {group.listed.live}
+            </span>
+            <span className="bn-stat-label">live on TCGplayer</span>
+            <ReadingAge at={listedAt} />
+          </div>
+        </div>
 
-        {/* `listed N of LISTABLE` reads the LIVE count against what D7 permits for THIS SKU —
-            `min(cap, on hand)`, which the server computes. NOT the bare cap, which this drew
-            until 2026-08-25 and which read as a target the stock could not reach: one copy of a
-            card said `listed 0 of 4`. The cap is a rule about a playset; the denominator of a
-            fraction is a claim about what is achievable here, and D20 spends a whole entry on
-            the difference between those two.
-
-            The other two counts are printed beside it rather than folded into it: `staged` and
-            `live` are two facts about two different things — an import that was staged and never
-            moved live has no live quantity at all — and a single number would hide exactly the
-            box that is not earning. */}
+        <p className="card-locations-meta">
+          <span className="card-locations-meta-mono">{meta.join(' · ')}</span>
+          {group.condition === null ? null : (
+            <span className="card-locations-cond">{group.condition}</span>
+          )}
+        </p>
+        {/* THE CEILING, SAID SO IT CANNOT BE READ AS A SECOND READING. `up to 3 may be live`
+            sat two lines under `3 live on TCGplayer` and used the same figure to mean the
+            other thing, so a reader could not tell whether three ARE live or three MAY be.
+            Headroom is the honest form of the same fact. */}
         <p className="card-locations-counts">
-          <span className="card-locations-listed">
-            listed {group.listed.live} of {group.listable}
-          </span>
-          <span className="card-locations-onhand">on hand {group.on_hand}</span>
-          <span className="card-locations-breakdown">
-            pushed {group.listed.pushed} · staged {group.listed.staged} · live{' '}
-            {group.listed.live}
-          </span>
+          Pushed {group.listed.pushed} · Staged {group.listed.staged} · {headroom(group)}
         </p>
       </header>
 
-      <ul className="card-locations-rows">
-        {group.copies.map((copy) => {
+      <ul className="card-locations-rows bn-stagger">
+        {group.copies.map((copy, i) => {
           const sold = isSold(copy, soldKeys)
           const pooled = isPooled(copy)
-          /* D30's sentence for this copy, or null — see the render note below. Read once
-             per row so the presence test and the rendering cannot disagree. */
-          /* The walk-to handler for THIS copy, or null when there is nowhere to send anyone:
-             no caller offering one, a pooled copy with no slot, or the copy the walk is already
-             standing on. Computed once per row so the branch below cannot disagree with itself. */
-          const goesTo =
-            onGoTo === undefined || pooled || copy.key === currentKey
-              ? null
-              : () => onGoTo(copy)
+          const departed = isDeparted(copy.place)
+          const current = copy.key === currentKey
+          const label = copy.place.label
+          const claim = claims?.get(copy.key) ?? null
+
+          /* The walk-to for THIS copy, or null when there is nowhere to send anyone. */
+          const goesTo = onGoTo === undefined || pooled || current ? null : () => onGoTo(copy)
+          /* No bar for a pooled copy (a count has no place), a departed one (a bar cannot draw
+             a card that is in no place) — or the copy the walk is STANDING ON, whose lens is
+             already drawn full size in the location card ~150px above this list, with the same
+             `#N of M` caption under it. Two identical bars a screen apart read as a rendering
+             fault, not as hero-and-list. The row itself stays, in full, with its own controls:
+             what goes is the duplicate widget, not the row. */
+          const noBar = pooled || departed || current
+
           return (
             <li
-              className="card-locations-row"
+              className={[
+                'card-locations-row',
+                noBar ? 'is-nobar' : '',
+                sold || departed ? 'is-gone' : '',
+                current ? 'is-current' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               key={copy.key}
-              /* On the row and not on a control, because it marks WHICH COPY rather than which
-                 thing is pressable — the row is not a button here, unlike the walk's. */
-              aria-current={copy.key === currentKey ? 'true' : undefined}
+              style={{ ['--i' as string]: i }}
+              aria-current={current ? 'true' : undefined}
             >
               <span className="card-locations-place">
                 {pooled ? (
-                  /* The pooled fact where the label would have gone — see `isPooled`. The
-                     display name is the server's stamp off the registry, and the sub-line
-                     carries the store key because it is the only handle a pooled copy has:
-                     `pooled ·` in front so `5/2` cannot read as a position. Owner register,
-                     greppable against the place block that produced it. */
                   <>
                     <span className="card-locations-label">
                       {copy.place.game_display ?? 'Pooled'}
@@ -319,108 +341,30 @@ function OwnerRows({
                   </>
                 ) : (
                   <>
-                    {/* The server's own label, displayed and never composed — types.ts states
-                        the rule on `Place.label` and D10 is why it has teeth: Section and Card
-                        are a view of the index against the box's current divider layout, and
-                        the only formula for it in this repo is `pipeline/join.py:Position`. */}
-                    {/* SLOT-FIRST HERE, PATH-FIRST EVERYWHERE ELSE, and it is a property of
-                        being a LIST rather than a taste call. Down seven copies the coarse parts
-                        are identical on every row, so path-first would stand seven identical
-                        `BOX 2 / SECTION n` blocks in front of the only thing that differs and
-                        push the figures to a ragged x — the dense-grey-table failure
-                        `docs/DESIGN.md` names by the front door. Slot-first puts them in a hard
-                        column at the cell's left edge. `aria-label` carries the server string
-                        either way, so nothing that is not an eye reads a different order.
-
-                        THE BOX NAME RIDES THE BOX LINE, WHICH IS WHAT MAKES THIS FREE. The
-                        two-line path costs +17px a row over the one-line string, and it repays
-                        exactly that by absorbing `.card-locations-boxname`'s first use — already
-                        a muted sub-line stating a fact about the box. Measured: row 114.19 ->
-                        114.17px, list 813.31 -> 813.20. Without the absorption it is +17px/row,
-                        +119px on a seven-copy list, and copies-visible-on-landing 4 -> 3.
-
-                        SO A BOX WITH NO NAME PAYS THE FULL +17px/ROW. `Place.box_name` is
-                        nullable and D20 made names unique but deliberately NOT required. Every
-                        box in the store is named today, so this is latent rather than live, and
-                        nothing warns. */}
-                    {/* `Place.label` IS NULLABLE AND THE OLD MARKUP HID IT. `{copy.place.label}`
-                        rendered nothing for a null and nobody had to think about it; the
-                        component takes a string, so the case has to be answered out loud. It
-                        answers the same way it always behaved — draw nothing — rather than
-                        inventing a placeholder for a card whose position the server did not
-                        send. */}
-                    {/* AND WHERE THE CALLER OFFERS A WALK-TO, THE SAME RENDERING SITS INSIDE A
-                        BUTTON (D45). A TRANSPARENT WRAPPER AND NOT A SECOND TREATMENT: the
-                        control draws no text of its own, inherits the site's font and its
-                        `--pos-slot`, and hands `PositionLabel` the identical three props — so a
-                        walkable row and a look-only one are the same pixels, which is what keeps
-                        this from becoming a seventh site. The button's own `aria-label` says
-                        what pressing it DOES; the server string still travels verbatim on the
-                        `role="group"` inside, whose semantics a button's presentational children
-                        rule makes inert. */}
+                    {/* The server's own label, displayed and never composed. Slot-first here
+                        because this is a list: the figures land in a hard column. Where the
+                        caller offers a walk-to, the same rendering sits inside a button. */}
                     <span className="card-locations-label">
-                      {copy.place.label === null ? null : goesTo === null ? (
-                        <PositionLabel
-                          label={copy.place.label}
-                          lead="slot"
-                          boxNote={copy.place.box_name}
-                        />
+                      {label === null ? null : goesTo === null ? (
+                        <PositionLabel label={label} lead="slot" boxNote={copy.place.box_name} />
                       ) : (
                         <button
                           className="card-locations-goto"
                           type="button"
-                          aria-label={`Walk to ${copy.place.label}`}
+                          aria-label={`Walk to ${label}`}
                           onClick={goesTo}
                         >
-                          <PositionLabel
-                            label={copy.place.label}
-                            lead="slot"
-                            boxNote={copy.place.box_name}
-                          />
+                          <PositionLabel label={label} lead="slot" boxNote={copy.place.box_name} />
+                          <Icon name="arrowUpRight" size={14} className="card-locations-goto-icon" />
                         </button>
                       )}
                     </span>
-                    {/* D30's neighbours, RANKED rather than joined (D41's move one line
-                        down). This row's label names the card's number and these are what let
-                        a hand count to it.
-
-                        IT NO LONGER BORROWS `.card-locations-boxname`, AND THE BORROW IS WHAT
-                        WAS WRONG. That class is 10px uppercase tracked mono — the metadata
-                        register — and this was the one piece of running English in the
-                        product drawn in it, against docs/DESIGN.md's own line that the body
-                        face is reserved for sentences a human reads. The comment here used to
-                        justify the borrow as "this file's stylesheet is not this change's to
-                        grow"; `PlaceNeighbors` is that stylesheet, grown on purpose. The
-                        pooled label above keeps the class, which is what it was for. */}
                     <PlaceNeighbors place={copy.place} />
                   </>
                 )}
               </span>
 
-              {/* The box's own dividers where the caller has them, this card's own section
-                  where it does not — `sections` says which, and the lookup is per copy
-                  because two rows of one group can be in two differently divided boxes.
-                  NO BAR AT ALL FOR A POOLED COPY — `isPooled` has the argument. */}
-              {/* `sectionDepth` ON THE OWNER'S ROWS AND NOT THE FULFILLER'S. This is the row
-                  the owner's own screenshot was taken of, and it is where the box scale alone
-                  misleads: two copies of one card, one at `Section 1 · Card 1` drawing hard
-                  left and one at `Section 3 · Card 1` drawing hard right, both of them the
-                  first card of their section. The second bar is the answer to that, and
-                  `PositionBar.tsx` argues the denominator it uses.
-
-                  The Fulfiller's block below deliberately does NOT pass it — see the prop's
-                  own note: a second caption in his view is a second sentence somebody decided
-                  he needs to read, and that is the owner's call rather than a side effect of
-                  an owner-side ask. */}
-              {/* AND NO BAR FOR A DEPARTED COPY EITHER (D68), which is `BoxBrowse.tsx`'s
-                  existing ruling applied to the other list of the same cards: `app/tests/
-                  inventory.spec.ts` already asserts the walk draws none, on the grounds that a
-                  bar cannot draw a card that is in no place. This list drew one anyway — an
-                  empty track with `where this sits in the box is not known yet` under it, four
-                  times over on one search — so the two screens disagreed about the same card.
-                  What the row keeps is the fact itself: the label says `departed`, the state
-                  says which door, and the neighbours still say what it sat between. */}
-              {pooled || isDeparted(copy.place) ? null : (
+              {noBar ? null : (
                 <PositionBar
                   place={copy.place}
                   persona="owner"
@@ -429,30 +373,47 @@ function OwnerRows({
                 />
               )}
 
-              {/* The pipeline's own word, verbatim. A friendly label here would be a second
-                  vocabulary nothing audits — the drift docs/DESIGN.md shows reason codes as
-                  machine strings to avoid — and this is the screen where being able to grep
-                  what you saw is worth more than a consistent register. */}
-              <span className="card-locations-state">{copy.state}</span>
+              <span className="card-locations-state">
+                {current ? (
+                  <Pill icon="eye" outline className="card-locations-viewing">
+                    Viewing
+                  </Pill>
+                ) : null}
+                {claim === null ? null : (
+                  <a
+                    className="bn-pill bn-pill-warn card-locations-claim"
+                    href="#/orders"
+                    aria-label={`Order ${claim.order} is waiting on this copy`}
+                    title={`Order ${claim.order} is waiting on this copy. It is still yours to sell from here.`}
+                  >
+                    <Icon name="cart" size={12} />
+                    Wanted
+                    {/* The order number itself is 21 characters. It is drawn where the panel is
+                        wide enough to hold it, and the mark alone where it is not — the number
+                        is on the location card above, in the title, and one press away. */}
+                    <span className="card-locations-claim-id">{claim.order}</span>
+                  </a>
+                )}
+                <Pill tone={stateTone(copy.state)}>{stateLabel(copy.state)}</Pill>
+              </span>
 
+              {/* The action, or what stands where one would. A sold copy's own state pill
+                  already says so; only an optimistic sale whose re-read is still in flight
+                  needs a word. */}
               <span className="card-locations-action">
                 {renderAction !== undefined ? (
                   renderAction(copy)
                 ) : sold ? (
-                  <span className="card-locations-gone">sold</span>
+                  copy.state === SOLD || copy.state === RETIRED ? null : <Pill tone="ok">Sold</Pill>
                 ) : (
-                  /* No accent fill. docs/DESIGN.md reserves the solid fill for a screen with
-                     exactly one thing to do, and a list of copies is a screen with several —
-                     filling all of them would teach the fill to mean "press something", which
-                     is the drift the two-jobs rule exists to stop. */
-                  <button
-                    className="card-locations-sell"
-                    type="button"
-                    disabled={busyKey !== null}
+                  <Button
+                    size="sm"
+                    busy={busyKey === copy.key}
+                    disabled={busyKey !== null && busyKey !== copy.key}
                     onClick={() => onSell(copy)}
                   >
                     Mark sold
-                  </button>
+                  </Button>
                 )}
               </span>
             </li>
@@ -465,27 +426,16 @@ function OwnerRows({
 
 // --------------------------------------------------------------------- the Fulfiller's skin
 
-/* EVERY COPY IS ITS OWN CARD, which is the owner's explicit ruling and not the shape that fell
- * out of the layout. The alternative — one chosen copy drawn large with the rest listed as text
- * beneath it — makes the screen decide which copy he walks to, and it is wrong whenever the box
- * it picked is the one across the room. Copies are fungible (D7), so the choice is his and
- * every option has to carry the same information: a photo to confirm against, a position label
- * he can read at arm's length, a bar saying how far in, and its own control.
- *
- * KNOWN HAZARD, RECORDED RATHER THAN QUIETLY DIFFERENT. Fulfillment.tsx puts two steps between
- * looking at a photo and recording a sale — "Pull", then "Mark sold" in a different place —
- * because those were once one control and a double-tap sold the card. Here the action is one
- * press by specification. The photo is on the same card rather than a modal away, so the
- * photo-confirm the design asks for is satisfied structurally; what is not covered is the
- * overshoot. If it ever happens, Fulfillment.tsx's two-step is the fix to reach for first, and
- * `renderAction` is where it would go without touching this component.
- */
+/* Every copy is its own card: a photo to confirm against, a position label he can read at
+ * arm's length, a bar saying how far in, and its own control. Unchanged by the owner-side
+ * rebuild; every floor in docs/DESIGN.md's constraints table binds here. */
 function FulfillerCard({
   group,
   onSell,
   busyKey,
   soldKeys,
   sections,
+  listedAt,
   renderAction,
   missing,
   setMissing,
@@ -495,9 +445,7 @@ function FulfillerCard({
 }) {
   const number = collectorNumber(group)
 
-  /* HIS HEADER CARRIES NO SKU, NO SET CODE AND NO STATE WORDS. The collector number stays
-   * because it is printed on the card in his hand and is how he tells two printings apart; a
-   * set id like `sv1` is not printed on anything and would be one more thing to explain. */
+  /* His header carries no SKU, no set code and no state words. */
   const about = [
     ...(group.condition === null ? [] : [group.condition]),
     ...(number === null ? [] : [number]),
@@ -510,13 +458,14 @@ function FulfillerCard({
           {group.names.length === 0 ? 'This card has no name yet' : group.names.join(' / ')}
         </h2>
         {about.length === 0 ? null : <p className="card-locations-say">{about.join(' · ')}</p>}
-
-        {/* `for sale` is a quantity against the card, not against any one copy — D7 again, and
-            the reason this number cannot be counted off the list below it. No cap and no
-            breakdown: "2 of 4" needs the cap explained, and the words that explain it are on
-            his banned list. */}
+        {/* HIS LIVE COUNT CARRIES ITS AGE TOO, in his words rather than in the pipeline's —
+            "for sale" reads as a fact about the shop when it is a fact about the last time
+            this store looked. Drawn only when the caller hands over the stamp, because
+            "not read yet" is a sentence about plumbing and he is owed none of those.
+            `Fulfillment.tsx` has to pass `listedAt` for this half to appear. */}
         <p className="card-locations-say">
           {count(group.on_hand, 'copy here', 'copies here')} · {group.listed.live} for sale
+          {readingAgo(listedAt) === null ? '' : `, counted ${readingAgo(listedAt)}`}
         </p>
       </header>
 
@@ -524,42 +473,18 @@ function FulfillerCard({
         {group.copies.map((copy) => {
           const sold = isSold(copy, soldKeys)
           const noPhoto = !copy.has_photo || missing.includes(copy.key)
-          /* A pooled copy should never reach this skin at all: Fulfillment.tsx drops every
-           * one before this component renders, with the argument made there beside its
-           * other filters — this skin's job is to send him to a box, and a pooled copy has
-           * none. The guards below (`where`, the label line, the bar) are for the TYPE,
-           * which says a label can be null now, and they render nothing rather than the
-           * word "null" — never a second copy of the view's filter. */
           const where = copy.place.label
-
-          /* D30's sentence, and HE is who the decision is really for: the Fulfiller
-           * creates a permanent gap with every order he pulls, walks to boxes he did not
-           * fill, and has nobody to ask why section 2 counts short. The composer is the
-           * owner's same one — same data, same order, same sentence, the header's
-           * two-skins rule — and its words pass his register: card names, plain "slots"
-           * and "empty", nothing off the banned list. Its one degraded form, `#41` for a
-           * neighbour nothing has named, is a slot number he can count to, not a machine
-           * string. */
           const between = placeSentence(copy.place)
 
           return (
             <li key={copy.key}>
-              {/* An article and not a button. Fulfillment.tsx makes the whole row the target so
-                  that the smallest thing to hit is the size of the row — that rule is about a
-                  row with no control in it, and this card carries one. Nesting a button inside
-                  a button is invalid markup, and two overlapping targets on his screen is the
-                  overshoot hazard the header comment is about. */}
               <article className="card-locations-copy">
                 {noPhoto ? (
-                  /* The photo is gone and the card is not. Says where it still is, because that
-                     is the only part of this he needs to finish the job. */
                   <p className="card-locations-say">
                     The photo is missing. The card is still in the place below.
                   </p>
                 ) : (
                   <img
-                    // Keyed per copy so a failed load cannot leave one card's broken state
-                    // attached to the next card's element.
                     key={copy.key}
                     className="card-locations-photo"
                     src={photoUrl(copy.place.box, copy.place.index)}
@@ -574,17 +499,8 @@ function FulfillerCard({
                 {copy.place.box_name === null ? null : (
                   <p className="card-locations-say">{copy.place.box_name}</p>
                 )}
-                {/* Quiet, under the position label — see `between` above. The say class
-                    because it is a sentence he reads, which also keeps it over the 20px
-                    floor his whole view is asserted against. */}
                 {between === null ? null : <p className="card-locations-say">{between}</p>}
 
-                {/* The same lookup the owner's row makes, for the same reason. He is the one
-                    walking to a box he did not fill, so the difference between the box's real
-                    dividers and this card's own section is worth more on his screen than on
-                    the owner's — and a skin that quietly drew the coarser one would be the
-                    two-skins drift the header refuses. No bar for a pooled copy, as on the
-                    owner's rows — not that one should ever be here; see `where` above. */}
                 {isPooled(copy) ? null : (
                   <PositionBar
                     place={copy.place}
@@ -599,14 +515,6 @@ function FulfillerCard({
                   {renderAction !== undefined ? (
                     renderAction(copy)
                   ) : sold ? null : (
-                    /* GUARDED, NEVER DISABLED. docs/DESIGN.md gives his view no disabled state
-                       at all and `PullConfirm.disabled` is documented owner-side only — a
-                       control that greys out under his finger is one he presses again harder.
-                       A second press while the first is in flight does nothing instead, which
-                       is the ruling Fulfillment.tsx already made and the reason `busyKey` is
-                       read here rather than passed down.
-
-                       No `keyHint`: his screens are touch and show no keys. */
                     <PullConfirm
                       label="Mark sold"
                       onConfirm={() => {

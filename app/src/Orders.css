@@ -1,606 +1,923 @@
-/* THE ORDER SCREEN — the rules for `app/src/Orders.tsx`.
- *
- * PAINTED FROM `var(--token)` AND FROM NOTHING ELSE. There is not one hex literal in this file
- * and there may never be: `scripts/docs-audit.py`'s `raw colour` row is a BLOCKING check over
- * every stylesheet in this directory, so a literal here stops the commit rather than shipping a
- * colour docs/DESIGN.md never locked.
- *
- * THE PAGE CHROME IS `Runs.css`'s AND `Shipping.css`'s, REUSED RATHER THAN REDERIVED — 16px of
- * outer padding on all four sides, the title in the display face at 20px sharing its line with
- * the scope and the controls, a one-line lede at the metadata size, and the first row of real
- * content inside 150px of the top of the viewport. Those are docs/DESIGN.md's numbers, and the
- * two screens D69 added should not each invent an answer to a header problem three screens have
- * already settled.
- *
- * NO SOLID ACCENT GROUND ANYWHERE ON THIS SCREEN. `--accent` is defined as "unsure, and the
- * only-action fill", and this screen has no single action: it reads a paste, it fetches, it
- * pulls one copy of one line out of a list of many, and it takes a pull back. A filled Pull
- * button would claim a primacy that changes row by row, and there are commonly a dozen of them
- * on screen at once.
- *
- * NO `:focus-visible` RULE AND NO `cursor` RULE. base.css owns both, as floors, and it argues at
- * length why: a per-screen focus ring is how one screen came to draw four different ones, and a
- * per-screen cursor is how 39 controls came to have none (D50). Every control here is a
- * `<button>` or a `<textarea>`, both named in that file, so both are already answered.
- *
- * NO HOVER CHANGES A BOX. Not `border-width`, not `padding`, not `font-size`, not
- * `font-weight` — a row that reflows under the pointer moves the thing you were about to press.
- * `--hover` is ROW HOVER and is spent here on exactly two things: the order card and the pick
- * row.
- *
- * NOT THREE-COLUMN. D40's three columns are the inventory screen's answer to a card, its box and
- * its copies. This screen nests — order, line, pick — and nesting reads top to bottom at every
- * width, so it needs no breakpoint.
- */
+/* ============================================================================
+   ORDERS — the hub (Orders · Shipping) and the Pull stage. Tokens only; both themes free.
+   ========================================================================== */
 
-.orders {
-  padding: var(--s4);
+.orders-hub { display: flex; flex-direction: column; gap: var(--bn-4); }
+.orders-hub .bn-head { margin-bottom: 0; }
+.orders-hub .bn-lede strong { color: var(--bn-ink); font-weight: 600; }
+.orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); }
 
-  /* No `max-width` and no centring, matching `.runs`, `.shipping` and `.inventory`. App.css pads
-     the nav strip to this same 16px, so the first route name sits directly above this screen's
-     heading; centring the page breaks that alignment at every width except one. */
-}
+/* ---- the two routes as tabs ------------------------------------------------- */
+.orders-tabs { margin-top: var(--bn-1); }
+.orders-tab,
+.orders-tab:hover { text-decoration: none; }
+.orders-tab .bn-kbd { opacity: 0; transition: opacity var(--bn-t-fast) var(--bn-ease); }
+.orders-tab:hover .bn-kbd,
+.orders-tab:focus-visible .bn-kbd { opacity: 1; }
 
-/* --------------------------------------------------------------------------------- the head */
+/* ---- header hand-off -------------------------------------------------------- */
+.orders-handoff .bn-icon:last-child { color: var(--bn-ink-4); }
+.orders-failure-code { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
-.orders-head {
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-/* `wrap`, and the worst case is what makes it safe: if the scope and the fetch control cannot
-   fit beside the title they wrap onto a second line, nothing is clipped, and the header is still
-   one block rather than the title-block-over-toolbar stack docs/DESIGN.md measured at 240px on
-   the inventory screen. */
-.orders-head-top {
+/* ---- toolbar: the mode and the filter chips ---------------------------------- */
+.orders-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
   flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
 }
+.orders-mode .bn-seg-item { min-height: var(--bn-control-h-sm); }
+.orders-toolbar-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
-.orders-title {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-/* `contents`, so the children are flex items of `.orders-head-top` and the wrap happens BETWEEN
-   controls rather than inside this group. `margin-left: auto` on the first child collects the
-   line's slack between the heading and the controls — App.css's own `.app-nav-group-aside`
-   mechanism, and the shape `Runs.css` and `Shipping.css` settled. */
-.orders-controls {
-  display: contents;
-}
-
-.orders-controls > :first-child {
-  margin-left: auto;
-}
-
-.orders-controls > * {
-  flex: none;
-}
-
-/* THE SCOPE IS THE LEDGER'S OWN SUMMARY — a sentence with counts in it — so the utility face:
-   docs/DESIGN.md gives every count in the product to Martian Mono. */
-.orders-scope {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.orders-lede {
-  color: var(--muted);
-  margin-top: var(--s1);
-  font-size: 13px;
-}
-
-/* `.shipping-plain`'s measurements to the pixel, which are `.runs-plain`'s before them. Two
-   owner panels disagreeing about how tall a button is was a real finding on 2026-08-26 and the
-   answer then was to make them agree; a third screen is not the place to reopen it. */
-.orders-plain {
+.orders-chips { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+.orders-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--s2);
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* A HOVER THAT DARKENS THE EDGE AND MOVES NOTHING. Not `--hover`: that token is row hover, and
-   the rows on this screen are below. Not `--field-hover` either, whose own row in
-   docs/DESIGN.md reads "the same border, under the pointer. Nowhere else" — it is the boundary
-   of something you TYPE INTO, and the one such control here takes it below. `--ink` on the
-   border changes no width, no padding, no size and no weight. */
-.orders-plain:hover:not(:disabled) {
-  border-color: var(--ink);
-}
-
-.orders-plain:disabled {
-  color: var(--muted);
-  border-color: var(--line);
-}
-
-/* ------------------------------------------------------------------------------- a refusal */
-
-.orders-note {
-  max-width: 560px;
-  margin-top: var(--s3);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.orders-note-text {
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-  max-width: 76ch;
-}
-
-/* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, so what was
-   on screen greps against the server's own log. */
-.orders-machine {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: var(--s2);
-  word-break: break-all;
-}
-
-.orders-empty {
-  margin-top: var(--s3);
-  color: var(--muted);
-  font-size: 13px;
-  max-width: 76ch;
-}
-
-/* ------------------------------------------------------------------------------ the receipts */
-
-/* THE WAY BACK, AND IT LIVES HERE RATHER THAN IN THE ROW. A successful pull marks the copy sold,
-   so the resolver stops offering it and the row unmounts — an Undo drawn inside the row would go
-   with it, which is the failure this placement exists to avoid. Above the list, because the
-   thing that just happened is the thing being looked for. */
-.orders-receipts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  margin-top: var(--s3);
-  list-style: none;
-}
-
-.orders-receipt {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.orders-receipt-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-}
-
-/* --------------------------------------------------------------------------- orders arrive */
-
-.orders-paste {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  max-width: 560px;
-  margin-top: var(--s4);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.orders-paste-head {
-  font-family: var(--util);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-/* JSON, SO THE UTILITY FACE. It is pasted machine text and it is read back to check a SKU
-   against an order; a proportional face makes a column of digits unreadable, which is the one
-   thing this box is ever scanned for. `resize: vertical` because a long paste is normal and a
-   horizontal drag would break the panel's own width. */
-.orders-paste-box {
-  width: 100%;
-  min-height: 88px;
-  padding: var(--s2);
-  font-family: var(--util);
-  font-size: 12px;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-  resize: vertical;
-}
-
-/* `--field-hover` IS EXACTLY THIS CASE — docs/DESIGN.md's own row reads "the same border, under
-   the pointer. Nowhere else", and this is the only thing on the screen you type into. It changes
-   colour and nothing else. */
-.orders-paste-box:hover:not(:disabled) {
-  border-color: var(--field-hover);
-}
-
-.orders-paste-box:disabled {
-  color: var(--muted);
-  border-color: var(--line);
-}
-
-.orders-paste-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-}
-
-.orders-paste-source,
-.orders-paste-note {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 76ch;
-}
-
-/* WHAT WAS DROPPED, AND IT IS DRAWN AT INK RATHER THAN AT MUTED. It is the one sentence on this
-   screen that reports the PII boundary doing its job, and a reader who skims past it cannot tell
-   a working projection from a broken one. Same size as its neighbours — the emphasis is the
-   colour, which changes no box. */
-.orders-paste-dropped {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-  max-width: 76ch;
-}
-
-/* THE WINDOW BY STATUS (D91). One row per string the wire returned; the count and the
-   already-in-the-ledger figure sit in the util register beside the name, the same register
-   `.orders-pick-held` uses for a fact that is not a control. The checkbox takes its cursor from
-   base.css, as every toggle does (D50). */
-.orders-statuses {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-}
-
-.orders-statuses-head {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 76ch;
-}
-
-.orders-status-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
-
-.orders-status-pick {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-}
-
-.orders-status-count {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.orders-fetch {
-  align-self: flex-start;
-}
-
-/* ---------------------------------------------------------------------------- the six counts */
-
-/* ALL SIX ALWAYS, INCLUDING A ZERO, and they are drawn identically. A reason that vanished when
-   it held nothing would make "no line came up short today" indistinguishable from "this build
-   stopped counting", and the zero is the reassuring number here rather than the empty one.
-   `sku_unknown` is structurally unreachable from this route and is always a zero; it is drawn
-   the same as the other five, because a reason greyed out would read as broken rather than as
-   not-asked. */
-.orders-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin-top: var(--s4);
-}
-
-.orders-count {
-  display: inline-flex;
-  flex-direction: column;
-  gap: var(--s1);
-  min-width: 140px;
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.orders-count-label {
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.orders-count-machine {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.orders-count-figure {
-  font-family: var(--util);
-  font-size: 16px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--bn-3) 0 10px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  font-size: var(--bn-fs-sm);
   font-weight: 600;
-  color: var(--ink);
-}
-
-/* ------------------------------------------------------------------------------- the orders */
-
-.orders-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  margin-top: var(--s4);
-  list-style: none;
-}
-
-.orders-order {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.orders-order:hover {
-  background: var(--hover);
-}
-
-/* NOTHING IS DRAWN AT REDUCED OPACITY ON THIS SCREEN — there is no `opacity` declaration in this
-   file. A fulfilled order is not a faded one: it is an order with no work left, and it is drawn
-   with the pick list absent rather than with its text dimmed. */
-.orders-order-done {
-  border-style: dashed;
-}
-
-.orders-order-top {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-}
-
-/* The order number is an identifier the operator types into TCGplayer, so the utility face and
-   `break-all`: a `A2FFC195-0000F4-006AC` that wrapped mid-group would be read back wrong. */
-.orders-order-number {
-  font-family: var(--util);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink);
-  word-break: break-all;
-}
-
-.orders-order-source,
-.orders-order-placed {
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.orders-order-figure {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink);
-}
-
-.orders-done-toggle {
-  margin-top: var(--s4);
-}
-
-.orders-list-done {
-  margin-top: var(--s2);
-}
-
-/* -------------------------------------------------------------------------------- the lines */
-
-.orders-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  list-style: none;
-}
-
-/* ONE ROW CHROME FOR ALL SIX REASONS, and that is the point rather than an economy. The reason
-   is said in words and in a machine string; painting the row per reason would make one of the
-   six the loud one and another the quiet one, and there is no reason here that deserves either —
-   `sku_unseen` in particular is the one most likely to look like a defect and least likely to be
-   one. The left rule marks the nesting depth, not the verdict. */
-.orders-line {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  padding: var(--s2) var(--s3);
-  border-left: 1px solid var(--line);
-}
-
-.orders-line-top {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-}
-
-.orders-line-name {
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.orders-line-sku {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.orders-line-figure {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink);
-}
-
-/* The sentence is what is read; the code is what is grepped. */
-.orders-line-says {
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-  max-width: 76ch;
-}
-
-.orders-line-reason {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.orders-line-remedy {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 76ch;
-}
-
-/* Four counts on one line — every number in the product is Martian Mono, tabular by
-   construction, so a column of them lines up without a table. */
-.orders-line-breakdown {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink);
-}
-
-/* -------------------------------------------------------------------------------- the picks */
-
-.orders-picks {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  margin-top: var(--s1);
-  list-style: none;
-}
-
-.orders-pick {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-  padding: var(--s1) var(--s2);
-  border-radius: var(--r);
-}
-
-/* THE SECOND AND LAST SPEND OF `--hover` ON THIS SCREEN. A pick is a row and a row is what that
-   token is for. */
-.orders-pick:hover {
-  background: var(--hover);
-}
-
-/* THE POSITION LABEL MUST NOT WRAP. It is a place to walk to — `Box 3 · Section 2 · Card 17` —
-   and a label broken across two lines is read as two places. `flex: none` keeps it out of the
-   line's shrink, and `nowrap` is the floor under it; `PositionLabel` in `flow="run"` lays the
-   parts out in one dimension for exactly this position. */
-.orders-pick-place {
-  flex: none;
+  color: var(--bn-ink-2);
   white-space: nowrap;
+  transition:
+    background-color var(--bn-t-fast) var(--bn-ease),
+    color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease),
+    transform var(--bn-t-fast) var(--bn-ease);
 }
+.orders-chip:hover { background: var(--bn-surface-3); color: var(--bn-ink); transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+.orders-chip:active { transform: translateY(0) scale(0.98); }
+.orders-chip .bn-icon { color: var(--bn-ink-3); }
+.orders-chip-ok .bn-icon { color: var(--bn-ok); }
+.orders-chip-warn .bn-icon { color: var(--bn-warn); }
+.orders-chip-danger .bn-icon { color: var(--bn-danger); }
+.orders-chip-info .bn-icon { color: var(--bn-accent); }
+/* Selected is accent tint + accent ink, as every other selected state in the product. */
+.orders-chip[aria-pressed='true'] {
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+}
+.orders-chip[aria-pressed='true'] .bn-icon { color: inherit; }
+.orders-chip-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+}
+.orders-chip[aria-pressed='true'] .orders-chip-count { background: var(--bn-accent-tint-2); color: inherit; }
 
-/* THE ROW IS LEFT-PACKED, AND NOTHING IN IT GROWS. An earlier pass gave this the flex-grow
-   `.shipping-file-name` has and the render showed why that is wrong here: the Pull button was
-   thrown to x=1170 with a thousand pixels of nothing between it and the card it acts on, which
-   is the "eye has to travel" failure docs/DESIGN.md names by the front door. Packed left, the
-   buttons still line up in a column WITHOUT being pinned there — every pick under one line is a
-   copy of the SAME card, so `card_name` is the same string on every row and the column falls
-   out of the type. `max-width` is what keeps a long name from re-creating the gap. */
-.orders-pick-card {
-  flex: 0 1 auto;
+/* ---- layout: the list beside the open order ----------------------------------- */
+.orders-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: var(--bn-5);
+  align-items: start;
+}
+@media (max-width: 1279px) {
+  .orders-layout { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); gap: var(--bn-4); }
+}
+.orders-index-pane {
+  position: sticky;
+  top: var(--bn-4);
+  max-height: calc(100vh - var(--bn-8));
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
   min-width: 0;
-  max-width: 32ch;
+}
+.orders-index {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 2px;
+  margin: -2px;
+}
+.orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
+.orders-index-hint { display: flex; align-items: center; gap: 4px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); color: var(--bn-ink-4); }
+.orders-index-hint .bn-kbd { margin-right: 2px; }
+
+.orders-index-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  padding: 10px var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  text-align: left;
+  color: var(--bn-ink);
+  background: transparent;
+  transition:
+    background-color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease),
+    transform var(--bn-t-fast) var(--bn-ease);
+}
+.orders-index-row:hover { background: var(--bn-surface); box-shadow: var(--bn-shadow-1); transform: translateY(-1px); }
+.orders-index-row:active { transform: translateY(0); }
+.orders-index-row[aria-current='true'] {
+  background: var(--bn-accent-tint);
+  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+}
+.orders-index-row[aria-current='true']:hover { transform: none; }
+.orders-index-row[aria-current='true'] .orders-index-number { color: var(--bn-accent); }
+.orders-index-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bn-ink-4); flex: none; }
+.orders-index-dot-ok { background: var(--bn-ok); }
+.orders-index-dot-warn { background: var(--bn-warn); }
+.orders-index-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.orders-index-number {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
+}
+.orders-index-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.orders-index-side { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex: none; }
+.orders-index-figure { font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.orders-index-figure b { font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 800; color: var(--bn-ink); margin-right: 3px; }
+.orders-index-bar { width: 56px; height: 4px; }
+.orders-index-chev { color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
+
+.orders-detail { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
+
+/* ---- the accordion (under 1024px) --------------------------------------------- */
+.orders-list { display: flex; flex-direction: column; gap: var(--bn-3); list-style: none; }
+.orders-acc {
+  padding: 0;
+  overflow: visible;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  animation-delay: var(--delay, 0ms);
+  transition: box-shadow var(--bn-t) var(--bn-ease), transform var(--bn-t) var(--bn-ease);
+}
+.orders-acc:hover { box-shadow: var(--bn-shadow-2); transform: translateY(-1px); }
+.orders-acc-open { box-shadow: var(--bn-shadow-2); }
+.orders-acc-open:hover { transform: none; }
+.orders-acc > .orders-index-row { padding: var(--bn-3) var(--bn-4); min-height: 56px; grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.orders-acc > .orders-index-row:hover { transform: none; box-shadow: none; background: var(--bn-surface-3); }
+.orders-acc-open > .orders-index-row { border-radius: var(--bn-r-lg) var(--bn-r-lg) 0 0; border-bottom: 1px solid var(--bn-line); }
+.orders-acc-open .orders-index-chev { transform: rotate(180deg); }
+.orders-acc-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+  animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards;
+}
+.orders-order-metarow { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); flex-wrap: wrap; }
+
+/* ---- the open order ------------------------------------------------------------ */
+.orders-order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-5);
+  overflow: visible;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  animation-delay: var(--delay, 0ms);
+  transition: box-shadow var(--bn-t) var(--bn-ease);
+}
+.orders-order-done { gap: var(--bn-3); }
+.orders-order-done .orders-order-number { color: var(--bn-ink-3); }
+
+.orders-order-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+.orders-order-id { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* The order is the panel's title — display type, above its lines — so the hierarchy reads
+   order › line › copy. */
+.orders-order-number {
+  margin: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+.orders-order-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-order-meta > * + *::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
+.orders-feed-word q { quotes: '“' '”'; font-style: italic; }
+.orders-order-side { display: flex; align-items: center; gap: var(--bn-2); flex-wrap: wrap; }
+
+.orders-order-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: calc(-1 * var(--bn-1));
+}
+/* Capped: a full-width 4px track at nothing-pulled reads as a rule, not as a meter. */
+.orders-order-progress .bn-progress { width: 100%; max-width: 280px; height: 5px; }
+.orders-order-figure {
+  font-size: var(--bn-fs-sm);
+  font-weight: 500;
+  color: var(--bn-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.orders-order-figure b {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--bn-ink);
+  margin-right: 3px;
+}
+.orders-order-figure i { font-style: normal; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.orders-order-figure i::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
+
+/* ---- lines ---------------------------------------------------------------------- */
+.orders-lines { display: flex; flex-direction: column; list-style: none; border-top: 1px solid var(--bn-line); }
+.orders-line { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4) 0; border-bottom: 1px solid var(--bn-line); }
+.orders-line:last-child { border-bottom: 0; padding-bottom: 0; }
+.orders-line-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--bn-2) var(--bn-3);
+}
+.orders-line-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.orders-line-name {
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-base);
+  font-weight: 600;
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+.orders-line-desc { display: flex; flex-wrap: wrap; gap: 2px var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-line-desc > * + *::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
+
+/* THE FIGURE IS WHAT IS LEFT (the owner's ruling): the remaining count carries the display
+   weight, and what has already gone sits under it at caption size. Never a fraction. */
+.orders-line-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  white-space: nowrap;
+  align-self: center;
+}
+.orders-line-remaining { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.2; }
+.orders-line-remaining b {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+  margin-right: 4px;
+}
+.orders-line-pulled { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.orders-line-figure-done { justify-content: center; }
+
+/* The machine string as a tag: mono, small, demoted — never erased. */
+.orders-tag {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--bn-ink-3);
+  padding: 4px 6px;
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  white-space: nowrap;
+  align-self: center;
 }
 
-/* A POOLED COPY HAS NO POSITION AND SAYS SO (D24). `Place.label` is null by design there, never
-   by fault, and the honest thing to draw is the game and the word. */
-.orders-pick-pooled {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
+/* ---- the reason banner (non-resolved lines only) --------------------------------- */
+.orders-reason {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--bn-3);
+  align-items: start;
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent-tint);
+  color: var(--bn-ink);
 }
+.orders-reason > .bn-icon { margin-top: 2px; color: var(--bn-accent); }
+.orders-reason-warn { background: var(--bn-warn-tint); }
+.orders-reason-warn > .bn-icon { color: var(--bn-warn); }
+.orders-reason-danger { background: var(--bn-danger-tint); }
+.orders-reason-danger > .bn-icon { color: var(--bn-danger); }
+.orders-reason-ok { background: var(--bn-ok-tint); }
+.orders-reason-ok > .bn-icon { color: var(--bn-ok); }
+.orders-reason .orders-tag { align-self: start; }
+.orders-line-says { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
+.orders-line-remedy { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: 2px; max-width: 70ch; }
+.orders-line-breakdown { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: var(--bn-1); font-variant-numeric: tabular-nums; }
 
-/* SPOKEN FOR, DRAWN AS A FACT RATHER THAN AS A DISABLED BUTTON. A greyed-out Pull would be a
-   control that teaches its press means nothing; this copy is not unavailable to press, it is
-   already promised to somebody, and that is a sentence rather than a state. */
-.orders-pick-held {
+/* ---- the walk plan: the whole order, boxes ranked by how much of it each satisfies ----- */
+.orders-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.orders-plan-head { display: flex; align-items: baseline; gap: var(--bn-3); flex-wrap: wrap; }
+.orders-plan-head .bn-label { color: var(--bn-ink-2); }
+.orders-plan-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-plan-stops { display: flex; flex-wrap: wrap; gap: var(--bn-2); list-style: none; }
+.orders-plan-stop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-3);
+  /* The stops share the band rather than huddling at its left edge: a walk of two drawers with
+     500px of empty grey beside it reads as an unfinished row. */
+  flex: 1 1 176px;
+  min-width: 176px;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+/* The first stop is marked, not filled: an accent hairline and a solid rank disc, so "start
+   here" is legible at a glance without the block shouting over the four lines beneath it. */
+.orders-plan-stop[data-lead='true'] { box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2), var(--bn-shadow-1); }
+.orders-plan-rank {
   flex: none;
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-sm);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.orders-plan-stop[data-lead='true'] .orders-plan-rank { background: var(--bn-accent); color: var(--bn-on-accent); }
+.orders-plan-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.orders-plan-name { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.orders-plan-name b {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--bn-ink);
+}
+.orders-plan-name em {
+  font-style: normal;
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--bn-ink-3);
 }
+.orders-plan-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.orders-plan-sect { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 
-.orders-pull {
+/* ---- the copy map: which drawers hold THIS card, densest first ------------------------- */
+.orders-map { display: flex; flex-direction: column; gap: var(--bn-2); }
+.orders-map-lede { display: flex; align-items: flex-start; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-map-lede .bn-icon { color: var(--bn-ink-4); flex: none; margin-top: 2px; }
+/* THE APOLOGY THAT USED TO SIT HERE IS GONE WITH THE DEFECT IT DESCRIBED. `.orders-map-note` said
+   "the store holds 3 copies — this is the one this order was offered", because the map could only
+   draw the resolver's picks. The map is the union of the picks and the store's own card map now,
+   so the lede states the total as a fact and there is nothing to apologise for. What remains is
+   `.orders-store-note`, drawn ONCE at the top of the stage on the one occasion the claim really
+   cannot be made: the card map did not answer. */
+.orders-map-stops { display: flex; flex-wrap: wrap; gap: var(--bn-2); list-style: none; }
+/* ONE LINE PER DRAWER. Stacked blocks were the first drawing and they were wrong at this volume:
+   a twelve-line order carries a dozen maps, most of them naming one drawer, and a 90px card for
+   `Box 3 · 1 copy · Section 1` buries the four lines that genuinely need the ranking. */
+.orders-map-stop {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px var(--bn-3);
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 5px var(--bn-3) 6px;
+  border-radius: var(--bn-r-full);
+  /* THE SECONDARY DRAWERS ARE OUTLINED AND THE LEADER IS THE FILLED ONE. Filling every block and
+     lightening the leader — the first drawing — put the strongest contrast on the blocks the rank
+     had NOT chosen, in both themes: on white, grey neighbours around a near-white leader; in dark,
+     a #090b0e well around a leader at the panel's own #14171c. The rank now reads as fill against
+     outline, which survives both grounds. */
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+  transition:
+    background-color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.orders-map-pin { align-self: center; color: var(--bn-accent); flex: none; margin-right: calc(-1 * var(--bn-2)); }
+/* THE RECOMMENDED STOP, MARKED AND NOT FILLED. It lifts to the panel's own ground and takes an
+   accent hairline; everything about it stays as pressable and as visible as every other block,
+   because the map ranks and never picks. */
+.orders-map-stop[data-lead='true'] {
+  /* FILLED, WHERE ITS NEIGHBOURS ARE OUTLINED, plus an accent hairline. Deliberately NOT the
+     accent TINT every selected thing in this product wears: the map ranks and does not pick, and
+     borrowing the selection colour would say it had.
+
+     THE GROUND IS THE WELL AND ITS NEIGHBOURS HAVE NONE — see the block rule above for why the
+     first drawing, which lightened the leader instead, put the emphasis on the wrong drawers. */
+  background: var(--bn-surface-2);
+  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+}
+/* Pointing at a block lights the copies it holds, and nothing else moves. */
+.orders-map-stop[data-lit='true'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2); }
+.orders-map-stop[data-pooled='true'] .orders-map-name b { font-size: var(--bn-fs-md); }
+.orders-map-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.orders-map-name b {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--bn-ink);
+  line-height: 1.15;
+}
+.orders-map-name em {
+  font-style: normal;
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
+.orders-map-count { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); white-space: nowrap; }
+.orders-map-count b { font-weight: 700; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+.orders-map-spoken { display: inline-flex; align-items: baseline; gap: 4px; font-size: var(--bn-fs-xs); color: var(--bn-warn); white-space: nowrap; }
+.orders-map-spoken .bn-icon { align-self: center; }
+/* Copies in this drawer another OPEN order was offered. Quieter than `spoken for`, which is the
+   ledger's own answer and cannot be taken; this one is only a claim on the same shelf, and the
+   rows it describes keep their buttons. */
+.orders-map-claimed { display: inline-flex; align-items: baseline; gap: 4px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
+.orders-map-claimed .bn-icon { align-self: center; color: var(--bn-ink-4); }
+.orders-map-sections { display: flex; flex-wrap: wrap; gap: 4px; }
+.orders-map-sect {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: var(--bn-r-full);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
+.orders-map-sect b { font-weight: 700; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* Inside the leading box, the section holding the most of this card — the same rule one
+   register down, and the same quiet treatment. */
+.orders-map-sect[data-lead='true'] { color: var(--bn-accent); box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2); background: var(--bn-accent-tint); }
+.orders-map-sect[data-lead='true'] b { color: inherit; }
+
+/* ---- picks ---------------------------------------------------------------------- */
+.orders-picks { display: flex; flex-direction: column; gap: 2px; list-style: none; }
+.orders-pick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bn-4);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  /* `backwards`, so the finished row carries its OWN opacity and the pressing dim below renders;
+     the delay is the card's, inherited, so a pick fades with its card rather than inside an
+     invisible one. */
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+  animation-delay: var(--delay, 0ms);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t) var(--bn-ease);
+}
+.orders-pick:hover { background: var(--bn-surface-3); }
+/* The row whose Pull is on the wire dims until the reread takes it away, so the press is seen
+   to land before the list moves. */
+.orders-pick[data-pressing='true'] { opacity: 0.55; }
+.orders-pick-is-held { color: var(--bn-ink-3); }
+/* The map's leading box, carried down into the gutter of its own rows — a hairline, so the rows
+   stay one list rather than becoming two groups. Only drawn where there is a ranking to express:
+   a line whose copies are all in one drawer has no leader. Carried as a variable rather than as a
+   rule, so hover can add its own edge without erasing the rail. */
+.orders-pick { --pick-rail: transparent; }
+.orders-pick[data-lead='true'] { --pick-rail: var(--bn-accent-tint-2); }
+.orders-pick[data-lit='true'] { background: var(--bn-accent-tint); }
+/* One box, one section: the map block said the path once, so the rows carry the figure alone.
+   The server's whole string still rides `.position-parts`'s `aria-label`, so nothing is lost to
+   a reader that is not an eye. */
+.orders-line-picks[data-one-place='true'] .orders-pick-place .position-path { display: none; }
+/* A copy under a map is an OBJECT — a card you can take — so it gets a ground of its own. Left
+   transparent, a one-place row is a slot figure and a button forty centimetres apart with
+   nothing between them, and the pair stops reading as one row. */
+.orders-line-picks { gap: 4px; }
+/* OUTLINED, NOT FILLED. The map's blocks carry the sunken fill and have to read first; a row
+   wearing the same grey competes with the thing that is meant to be summarising it. */
+.orders-line-picks .orders-pick { box-shadow: inset 0 0 0 1px var(--bn-line), inset 2px 0 0 var(--pick-rail); }
+.orders-line-picks .orders-pick:hover { background: var(--bn-surface-3); box-shadow: inset 0 0 0 1px var(--bn-line-strong), inset 2px 0 0 var(--pick-rail); }
+.orders-line-picks .orders-pick[data-lit='true'],
+.orders-line-picks .orders-pick[data-lit='true']:hover { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2), inset 2px 0 0 var(--pick-rail); }
+
+/* THE POSITION LABEL MUST NOT WRAP: a place broken across two lines reads as two places. The
+   slot figure leads (`lead="slot"`) so the numbers sit in one hard column down the list. */
+.orders-pick-place {
+  --pos-slot: 22px;
+  --pos-path: 11px;
+  --pos-gap: var(--bn-2);
   flex: none;
+  white-space: nowrap;
+  font-family: var(--bn-font-mono);
+}
+.orders-pick-place .position-parts { font-size: var(--pos-slot); }
+.orders-pick-place .position-path { font-family: var(--bn-font-ui); letter-spacing: 0.06em; }
+.orders-pick-place .position-path b { font-family: var(--bn-font-mono); }
+.orders-pick-link { display: inline-block; color: inherit; text-decoration: none; border-radius: var(--bn-r-sm); transition: color var(--bn-t-fast) var(--bn-ease); }
+.orders-pick-link:hover { text-decoration: none; color: var(--bn-accent); }
+.orders-pick-link:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+
+.orders-pick-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--bn-2);
+  min-width: 0;
+  font-size: var(--bn-fs-base);
+  color: var(--bn-ink);
+}
+.orders-pick-name { font-weight: 500; overflow-wrap: anywhere; }
+.orders-pick-cond { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
+/* WHICH COPY THE RESOLVER LANDED ON. An outline and not a fill: it marks a row, it does not
+   select one, and the twelve rows beside it must not read as rejected. */
+.orders-pick-offered {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px 2px;
+  border-radius: var(--bn-r-full);
+  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+  color: var(--bn-accent);
+  background: var(--bn-accent-tint);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/* Another open order was offered this copy. Ink-3 and no ground: a fact about the shelf, sitting
+   below the card's own name in weight, never a warning. */
+.orders-pick-claim {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  /* "wanted by" is one phrase: it may not break across lines, and only the order
+     number after it is allowed to wrap. */
+  text-wrap: pretty;
+  white-space: nowrap;
+}
+.orders-pick-claim .bn-icon { align-self: center; color: var(--bn-ink-4); flex: none; }
+.orders-pick-claim .bn-mono { font-size: var(--bn-fs-2xs); color: var(--bn-ink-2); overflow-wrap: anywhere; white-space: normal; }
+.orders-pick-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--bn-r-xs);
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  background: var(--bn-surface-2);
+  transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-pick-order:hover { color: var(--bn-accent); background: var(--bn-accent-tint); }
+.orders-pick-pooled { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-family: var(--bn-font-ui); }
+.orders-pick-held {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
+.orders-pick-held .bn-mono { font-size: var(--bn-fs-xs); color: var(--bn-ink-2); }
+.orders-pick-held .bn-icon { color: var(--bn-warn); }
+.orders-pull { min-width: 72px; }
+
+/* ---- the fold, and the two notes under a line's rows ------------------------------------ */
+/* A LINE'S COPIES ARE ALL DRAWN AND SOME ARE FOLDED. Six rows are on screen; past eight the rest
+   go behind this, which names how many it holds and which drawer they are in. The map blocks
+   above never fold, so every box a card sits in is visible whether or not this is pressed. */
+.orders-fold { display: flex; }
+.orders-fold-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px var(--bn-3);
+  border-radius: var(--bn-r);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  transition:
+    color var(--bn-t-fast) var(--bn-ease),
+    background-color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.orders-fold-btn .bn-icon { color: var(--bn-ink-4); flex: none; }
+.orders-fold-btn:hover { color: var(--bn-accent); background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2); }
+.orders-fold-btn:hover .bn-icon { color: inherit; }
+.orders-fold-btn:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+/* Copies already pulled for this order. Not a row — they are sold, so they are in no drawer and
+   have nothing to press — but drawn all the same, because the remaining figure above is otherwise
+   a number with no account behind it. */
+.orders-pulled-note {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: var(--bn-1) var(--bn-3) 0;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+}
+.orders-pulled-note .bn-icon { align-self: center; color: var(--bn-ok); flex: none; }
+/* The card map did not answer: said once, at the top of the stage. */
+.orders-store-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bn-2) var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+}
+.orders-store-note > .bn-icon { color: var(--bn-ink-4); flex: none; }
+.orders-store-note > span { min-width: 0; flex: 1 1 24ch; }
+
+@media (max-width: 560px) {
+  .orders-pick { grid-template-columns: auto minmax(0, 1fr); row-gap: var(--bn-2); }
+  .orders-pick > :last-child { grid-column: 1 / -1; justify-self: start; }
+  .orders-pick-held { white-space: normal; }
+  /* The one control this screen exists for, sized for a thumb: the full row and 40px+ tall. */
+  .orders-pick > .orders-pull { justify-self: stretch; width: 100%; justify-content: center; min-height: var(--bn-control-h-lg); }
 }
 
-/* THE WAY INTO THE WALK IS A LINK DRAWN AS THE QUIET BUTTON. `.boxruns-go`'s shape: an `<a>`
-   that reads like the controls beside it, no underline, its cursor from base.css. */
-.orders-walk {
-  text-decoration: none;
+/* ---- the walk ------------------------------------------------------------------- */
+.orders-walk { display: flex; flex-direction: column; gap: var(--bn-4); }
+.orders-walk-head {
+  position: sticky;
+  top: var(--bn-2);
+  z-index: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--bn-3) var(--bn-6);
+  align-items: center;
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+}
+.orders-walk-progress { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.orders-walk-figure { display: flex; align-items: baseline; gap: var(--bn-2); flex-wrap: wrap; }
+.orders-walk-figure strong { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
+.orders-walk-figure span { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-walk-bar { width: 100%; }
+.orders-walk-next { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; text-align: right; min-width: 0; }
+.orders-walk-next-label { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.orders-walk-next-place { font-family: var(--bn-font-mono); font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); }
+.orders-walk-next-card { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+
+.orders-walk-group { padding: 0; overflow: visible; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
+.orders-walk-group-head { display: flex; align-items: baseline; gap: var(--bn-2); padding: var(--bn-3) var(--bn-4); border-bottom: 1px solid var(--bn-line); flex-wrap: wrap; }
+.orders-walk-group-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; letter-spacing: var(--bn-tracking-tight); color: var(--bn-ink); }
+.orders-walk-group-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-walk-group-count { margin-left: auto; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.orders-walk-list { padding: var(--bn-2); }
+/* THE BOX AND THE SECTION ARE THE GROUP HEAD, not the row. A walk group is keyed on
+   `box/section`, so both are identical down every row under it — drawn 19 times in Box 3 they
+   put a wall of identical grey in front of the one part that differs, the card figure. The
+   server's whole string still rides `.position-parts`'s `aria-label`, so nothing is lost to a
+   reader that is not an eye. */
+.orders-walk-list .orders-pick-place .position-path { display: none; }
+.orders-walk-list .orders-pick-card { font-weight: 500; }
+
+/* ---- the way in: paste + fetch -------------------------------------------------- */
+.orders-paste { display: flex; flex-direction: column; gap: var(--bn-3); }
+.orders-paste-box { min-height: 132px; font-size: var(--bn-fs-sm); line-height: 1.5; }
+.orders-paste-row { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+.orders-paste-source { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-paste-note,
+.orders-paste-dropped {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink);
+  background: var(--bn-surface-2);
+  animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards;
+}
+.orders-paste-note .bn-icon { flex: none; margin-top: 2px; color: var(--bn-accent); }
+/* WHAT WAS DROPPED, drawn louder than a note: it is the PII boundary reporting itself. */
+.orders-paste-dropped { background: var(--bn-warn-tint); }
+.orders-paste-dropped .bn-icon { flex: none; margin-top: 2px; color: var(--bn-warn); }
+.orders-paste-dropped .bn-mono { font-size: var(--bn-fs-sm); }
+.orders-arrive { max-width: 760px; animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards; }
+.orders-arrive .bn-panel-body { padding-top: var(--bn-4); }
+.orders-arrive-note { font-size: var(--bn-fs-sm); }
+
+/* ---- the empty ledger ----------------------------------------------------------- */
+.orders-empty { max-width: 720px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
+.orders-empty .bn-empty { padding-bottom: var(--bn-5); }
+.orders-empty .bn-rule { padding: 0 var(--bn-6); }
+.orders-empty .orders-paste { padding: var(--bn-5) var(--bn-6) var(--bn-6); }
+
+/* ---- why each line answered ------------------------------------------------------ */
+.orders-why-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  padding: var(--bn-3) var(--bn-4);
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-ink-2);
+  cursor: pointer;
+  transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-why-summary:hover { color: var(--bn-ink); background: var(--bn-surface-3); }
+.orders-why-summary > .bn-icon:first-child { color: var(--bn-ink-3); }
+.orders-why-chev { margin-left: auto; color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
+.orders-why[open] .orders-why-chev { transform: rotate(180deg); }
+.orders-counts { list-style: none; display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
+.orders-count {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: var(--bn-3);
+  align-items: start;
+  padding: var(--bn-2) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+}
+.orders-count:last-child { border-bottom: 0; }
+.orders-count-figure {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+}
+.orders-count-zero .orders-count-figure { color: var(--bn-ink-4); }
+.orders-count-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.orders-count-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.35; }
+.orders-count-machine { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.orders-count-note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-style: italic; }
+
+/* ---- skeleton ------------------------------------------------------------------ */
+.orders-skeleton { gap: var(--bn-4); }
+.orders-skel-line { height: 20px; width: min(520px, 100%); }
+.orders-skel-chips { height: 30px; width: min(380px, 100%); border-radius: var(--bn-r-full); }
+.orders-skel-card { height: 150px; border-radius: var(--bn-r-lg); }
+
+/* ---- phones ------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .orders-hub { gap: var(--bn-3); }
+  /* The counts are on the tab and the chips; the sentence is the desk's. */
+  .orders-hub .bn-lede { display: none; }
+  .orders-tabs { margin-top: 0; }
+  /* The kit's tab is 38px, which is a mouse size — these two ARE the route switcher on a phone,
+     where the bottom bar carries no Shipping entry. */
+  .orders-tabs .orders-tab { height: var(--bn-control-h-sm); }
+  /* `nowrap` is load-bearing: a WRAPPING column flex container sizes its line to the widest
+     item's max-content, which made the segmented (496px) and the chip row (528px) push the
+     document 138px wider than a 390px phone. */
+  .orders-toolbar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--bn-2); min-width: 0; }
+  .orders-mode { display: flex; min-width: 0; }
+  .orders-mode .bn-seg-item { flex: 1 1 0; min-width: 0; }
+  /* One row of chips that scrolls sideways, each one thumb-sized. */
+  .orders-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--bn-4)); padding: 2px var(--bn-4); }
+  .orders-chips::-webkit-scrollbar { display: none; }
+  .orders-chip { flex: none; height: auto; min-height: var(--bn-control-h-sm); }
+  .orders-acc > .orders-index-row { padding: var(--bn-3); }
+  .orders-acc-body { padding: var(--bn-3); }
+  .orders-order { padding: var(--bn-4); }
+  .orders-line-top { grid-template-columns: minmax(0, 1fr) auto; }
+  .orders-line-top .orders-tag { grid-column: 2; justify-self: end; }
+  .orders-plan { padding: var(--bn-3); }
+  .orders-plan-stop { min-width: 148px; padding: 10px; }
+  .orders-map-stop { min-width: 144px; }
+  /* THE SECONDARY LINKS ARE THUMB-SIZED TOO. `Pull` was the only control on a pick row sized for a
+     hand; the place link (into the box) and the walk row's order link were 34px, 24px and 21px —
+     mouse sizes on the one screen that is worked standing at a drawer. Both are already
+     inline-flex-able, so the height costs no layout. */
+  .orders-pick-link { display: inline-flex; align-items: center; min-height: 40px; }
+  .orders-pick-order { min-height: 40px; padding: 0 10px; }
+  .orders-reason > .bn-btn { grid-column: 2; justify-self: start; min-height: var(--bn-control-h-lg); }
+  .orders-reason { grid-template-columns: auto minmax(0, 1fr); }
+  .orders-reason .orders-tag { grid-column: 2; justify-self: start; }
+  .orders-walk-head { top: calc(var(--bn-topbar-h) + var(--bn-2)); grid-template-columns: 1fr; gap: var(--bn-2); }
+  .orders-walk-next { align-items: flex-start; text-align: left; }
+  .orders-empty .orders-paste { padding: var(--bn-4); }
+  .orders-empty .bn-rule { padding: 0 var(--bn-4); }
+}
+
+/* Phones: the fold is a control a thumb presses, so it takes the same floor as the rest. */
+@media (max-width: 767px) {
+  .orders-fold-btn { min-height: 40px; padding: 0 var(--bn-4); }
+  .orders-pick-claim { white-space: normal; }
+}
+
+/* ---- what the fetch checked, took, and left --------------------------------------
+   A RECEIPT AND NOT A WARNING (the owner's ruling): nothing went wrong when a cap cuts a
+   window short, so this is paper — a surface, a torn line between the two parts, figures in
+   ink and the words around them quiet. The only loud thing is the control that finishes the
+   errand, and it exists only while the wire says something is left. */
+.orders-receipt {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-4) var(--bn-5);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+/* The tear between "what was checked" and "what this press took". */
+.orders-receipt-part + .orders-receipt-part {
+  padding-top: var(--bn-3);
+  border-top: 1px dashed var(--bn-line-strong);
+}
+.orders-receipt-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  font-size: var(--bn-fs-base);
+  font-weight: 600;
+  color: var(--bn-ink);
+}
+.orders-receipt-head .bn-icon { flex: none; color: var(--bn-ink-3); }
+.orders-receipt-when { font-weight: 500; color: var(--bn-ink-3); }
+/* The detail line hangs under the heading's words, not under its icon. */
+.orders-receipt-line,
+.orders-receipt-more {
+  margin-top: var(--bn-1);
+  padding-left: calc(15px + var(--bn-2));
+}
+.orders-receipt-line {
+  font-size: var(--bn-fs-md);
+  line-height: 1.6;
+  color: var(--bn-ink-3);
+}
+.orders-receipt-clause + .orders-receipt-clause::before {
+  content: '·';
+  margin: 0 var(--bn-2);
+  color: var(--bn-ink-4);
+}
+.orders-receipt-fig {
+  font-weight: 650;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+}
+.orders-receipt-more { margin-top: var(--bn-3); }
+
+/* Under the empty ledger the receipt sits inside the panel, so it drops its own ground. */
+.orders-empty-receipt { padding: 0 var(--bn-6) var(--bn-5); }
+.orders-empty-receipt .orders-receipt {
+  background: var(--bn-surface-2);
+  box-shadow: none;
+  max-width: none;
+}
+
+/* On a phone the clauses stack instead of wrapping mid-figure, and the dots between them go:
+   a list of short lines reads as a receipt, a rewrapped sentence does not. */
+@media (max-width: 640px) {
+  .orders-receipt { padding: var(--bn-4); }
+  .orders-receipt-line,
+  .orders-receipt-more { padding-left: 0; }
+  .orders-receipt-line { display: flex; flex-direction: column; gap: 2px; }
+  .orders-receipt-clause + .orders-receipt-clause::before { content: none; }
+  .orders-empty-receipt { padding: 0 var(--bn-4) var(--bn-4); }
 }

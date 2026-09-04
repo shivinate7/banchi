@@ -1,397 +1,1282 @@
-/* The Fulfillment view — the generous end of docs/DESIGN.md's "one system, two densities".
- *
- * Same palette, same three faces, same 4px radius as every owner-side screen in this app.
- * What changes is the scale: the owner's screens use the 4-16 end of the spacing scale and
- * this one uses 24-64, and every floor in the constraints table applies to every rule below —
- * 20px on any text, 32px on any position label, 44px tap targets 12px apart, 7:1 on any text
- * against any ground, a photo at least 320px on its short edge.
- *
- * NONE OF THOSE NUMBERS IS RESTATED IN A COMMENT AS THOUGH IT WERE CHECKED HERE. They are
- * asserted against the rendered page in app/tests/fulfillment.spec.ts, which is what
- * docs/DESIGN.md asks for in as many words: "The agent cannot see its own output, so these
- * are Playwright assertions, not prose." A comment claiming 44px is prose.
- *
- * NO 10px MONO CHIP, NO MACHINE-STRING CLASS, NO REASON-CODE SLOT. Those exist in
- * CaptureScreen.css and PullPreview.css and are correct there; here the smallest type on the
- * screen is 20px and there is no register below it to put a code in.
- *
- * The separation mechanism is the 1px --line hairline and nothing else, as everywhere else in
- * the product. Rows are spaced as well as ruled, which is not decoration: two tap targets
- * that abut are 0px apart and the table requires 12.
- */
-
-/* THE NAV RULE THAT WAS HERE IS GONE, and its absence is the fix rather than a regression.
- *
- * This stylesheet carried `body:has(.fulfillment) .app-nav { display: none }` as a bridge,
- * because the shell was another group's file the day this view was built and the constraints
- * table needed to be true before it could be checked. It named its own replacement: App.tsx
- * not rendering the nav on this route at all, since a component that is not rendered cannot be
- * reached by a keyboard, a screen reader or a stray tap, while `display: none` earns those
- * three properties by accident and loses them to one specificity change. That landed
- * 2026-08-13 — see `CHROME_FREE` in App.tsx — so the rule was deleted rather than kept as a
- * second guard nothing exercises. The assertion in app/tests/fulfillment.spec.ts is what
- * notices if the shell ever starts drawing chrome here again.
- */
+/* ============================================================================
+   CARDS TO PULL — the Fulfiller's screen.
+   ----------------------------------------------------------------------------
+   One reader, one job. Everything here is held to docs/DESIGN.md's Fulfillment floors:
+   body >= 20px, place >= 32px tabular, targets >= 44px and >= 12px apart, 7:1 contrast on
+   every text run in BOTH themes. Text is `--bn-ink` or `--bn-ink-2` only (ink-3 clears 4.8:1
+   at best); the one fill is the deepest accent step in light and the lightest in dark, the
+   two that clear 7:1 under `--bn-on-accent` (8.1 and 8.1). No text over photographs, no
+   text on a translucent ground.
+   ========================================================================== */
 
 .fulfillment {
-  /* One column, always. Not a breakpoint away from being two: docs/DESIGN.md's argument for
-     the review queue's single column is that the same layout works on a laptop and a phone,
-     and this is the view where that matters most — it is the default view on his device and
-     nobody is standing next to him when the layout changes. */
-  max-width: 720px;
-  margin: 0 auto;
-  padding: var(--s6);
+  --ff-fill: var(--bn-accent-press);
+  --ff-on-fill: var(--bn-on-accent);
+  --ff-col: 720px;
+  --ff-col-wide: 1080px;
+  --ff-pad: var(--bn-6);
 
-  display: flex;
-  flex-direction: column;
-  /* 24px, which is both the bottom of this view's spacing range and twice the 12px the table
-     requires between tap targets. One value doing two jobs, and the larger one wins. */
-  gap: var(--s5);
-  align-items: flex-start;
-}
-
-/* THE ONE BREAKPOINT, and it exists because of a measurement rather than a taste.
- *
- * At `--s6` padding a 390px-wide phone leaves 326px for the photo and a 375px one leaves 311
- * — under the 320px short edge the constraints table requires, on the device this view is the
- * default screen of. Rendered and measured before this rule was written; the desktop
- * assertion could not have caught it, which is why the spec now measures the photo at a phone
- * width as well.
- *
- * The padding steps down rather than the photo, because the photo's floor is the constraint
- * and the padding is what is negotiable. 24px is still the bottom of this view's range. */
-@media (max-width: 480px) {
-  .fulfillment {
-    padding: var(--s5);
-  }
-}
-
-.fulfillment-title {
-  font-family: var(--display);
-  font-size: 40px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-/* Every sentence on this screen, at one size. There is deliberately no second body size and
-   no muted variant of it: a "secondary" sentence on a screen with one user is a sentence
-   somebody decided he did not need to read, and the way to have that opinion is to delete the
-   sentence rather than to shrink it. --ink on --bg, 19.4:1. */
-.fulfillment-say {
-  font-family: var(--body);
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--ff-pad) var(--ff-pad) var(--bn-10);
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font-family: var(--bn-font-ui);
   font-size: 20px;
   line-height: 1.5;
-  color: var(--ink);
-  max-width: 34em;
+  /* NO transform and NO animation on this element: the sheet and the big photo are fixed
+     children of it, and a transformed ancestor would pin them to the page, not the screen. */
+}
+:root[data-theme='dark'] .fulfillment { --ff-fill: var(--bn-accent-hover); }
+/* The sheet is capped at `--ff-sheet-max` (below), and the page clears the whole of it. */
+.fulfillment { --ff-sheet-max: min(50vh, 420px); --ff-sheet-max: min(50dvh, 420px); }
+.fulfillment.ff-has-sheet { padding-bottom: calc(var(--ff-sheet-max) + var(--bn-8)); }
+@media (max-width: 767px) {
+  .fulfillment { --ff-pad: var(--bn-4); }
 }
 
-/* A card's name is a thing a human reads, so it is the body face — the one rule that keeps
-   this screen from reading as a spreadsheet. Heavier and larger than a sentence because it is
-   what he matches against the order in his hand. */
-.fulfillment-name {
-  display: block;
-  font-family: var(--body);
-  font-size: 24px;
-  font-weight: 700;
+/* A soft wash at the top of the page. A sibling of the text, never its ground. */
+.ff-glow {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 460px;
+  background: radial-gradient(70% 80% at 50% -10%, var(--bn-accent-tint), transparent 70%);
+  pointer-events: none;
+}
+
+.ff-column {
+  position: relative;
+  max-width: var(--ff-col);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--bn-7);
+  transition: max-width var(--bn-t-slow) var(--bn-ease);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.ff-column[data-wide='true'] { max-width: var(--ff-col-wide); }
+/* Under the big photo the page is HIDDEN, not merely covered: nothing under it can be tabbed
+   to, and nothing under it counts as a target. The hide waits for the lightbox's own fade, so
+   the page never flashes bare before the dark ground arrives; the way back is immediate. */
+/* `content-visibility: hidden` as well as `visibility`: a bare `checkVisibility()` — which is
+   what counts targets on this screen — sees through `visibility` and not through this. The
+   column keeps its last rendered height while its contents are skipped, so the scroll
+   position under the big photo is exactly where he left it. */
+.ff-column { contain-intrinsic-size: auto 1200px; }
+.ff[data-zoom='true'] .ff-column,
+.ff[data-zoom='true'] .ff-sheet {
+  visibility: hidden;
+  content-visibility: hidden;
+  transition:
+    visibility 0s linear var(--bn-t),
+    content-visibility 0s linear var(--bn-t);
+  transition-behavior: allow-discrete;
+}
+
+/* The page's movement vocabulary is the kit's — `bn-page-in`, `bn-pop`, `bn-fade`,
+   `bn-sheet-up`, `bn-drain`, `bn-shimmer`, all loaded globally. The one thing the kit has no
+   word for is the checkmark drawing itself, so that stays here. */
+@keyframes ff-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ---- sentences ------------------------------------------------------------------------ */
+.fulfillment-say,
+.ff-say {
+  font-family: var(--bn-font-ui);
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--bn-ink);
+  max-width: 36em;
+}
+.ff-unplaced { color: var(--bn-ink-2); }
+
+/* ---- header ---------------------------------------------------------------------------- */
+.ff-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  padding-top: var(--bn-2);
+}
+.ff-mark { flex: none; border-radius: 12px; box-shadow: var(--bn-shadow-2); }
+.ff-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ff-greeting {
+  font-size: 20px;
+  font-weight: 500;
   line-height: 1.3;
-  color: var(--ink);
+  color: var(--bn-ink-2);
+}
+.fulfillment-title,
+.ff-title {
+  font-family: var(--bn-font-display);
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: var(--bn-ink);
+}
+@media (max-width: 767px) {
+  .fulfillment-title, .ff-title { font-size: 32px; }
 }
 
-/* The position label. Utility face because docs/DESIGN.md gives every number in the product
-   to Martian Mono, and because it must not shift width between cards — which a mono gives for
-   free rather than by remembering to set `tnum`, and which the spec asserts by measuring two
-   digit strings rather than by trusting this comment.
+.ff-h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  font-family: var(--bn-font-display);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--bn-ink);
+  margin-bottom: var(--bn-4);
+}
+.ff-h2-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-2);
+  flex: none;
+}
+.ff-h2-icon-ok { background: var(--bn-ok-tint); color: var(--bn-ok); }
 
-   Wrapping is allowed at the separators. `Box 3 · Section 2 · Card 17` at this size is wider
-   than a phone, and the alternatives are worse in both directions: shrinking it below the
-   32px floor is forbidden, and truncating a position label hides the digit that decides which
-   slot he opens. */
+/* ---- today: the figure, and where to start --------------------------------------------
+   The first thing on the screen after his name for it: how many cards the open orders are
+   waiting for, and one press that opens the first of them. The fill here is INK, not the
+   accent: the accent fill is reserved for the press that writes (the sale), and this one
+   only opens a card. */
+.ff-today {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-5);
+  padding: var(--bn-6);
+  border-radius: 22px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-3);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.ff-today-text {
+  flex: 1 1 20ch;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+}
+.ff-today-figure {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--bn-1) var(--bn-3);
+}
+.ff-today-num {
+  font-family: var(--bn-font-display);
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+}
+.ff-today-words {
+  font-family: var(--bn-font-display);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--bn-ink);
+}
+.ff-today-say { color: var(--bn-ink-2); }
+
+.ff-start {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-3);
+  min-height: 68px;
+  min-width: 44px;
+  padding: 0 var(--bn-6);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-family: var(--bn-font-ui);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: var(--bn-shadow-2);
+  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.ff-start:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-3); }
+.ff-start:active { transform: scale(0.98); }
+.ff-start-arrow { transition: transform var(--bn-t) var(--bn-ease-spring); }
+.ff-start:hover .ff-start-arrow { transform: translateX(3px); }
+@media (max-width: 560px) {
+  .ff-today { padding: var(--bn-5); }
+  .ff-today-num { font-size: 48px; }
+  .ff-today-words { font-size: 24px; }
+  .ff-start { width: 100%; }
+}
+
+/* Nothing waiting: the same sentence register, with the tick that means "you are done". */
+.ff-today-none {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  padding: var(--bn-5) var(--bn-6);
+  border-radius: 20px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  max-width: none;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.ff-today-none-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+}
+
+/* ---- search: the hero ----------------------------------------------------------------- */
+.ff-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--bn-4);
+  align-items: end;
+}
+.ff-search[data-clear='true'] { grid-template-columns: minmax(0, 1fr) 64px; }
+
+.ff .search-field { width: 100%; }
+.ff .search-field-label {
+  font-family: var(--bn-font-ui);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--bn-ink);
+  margin-bottom: var(--bn-3);
+}
+.ff .search-field-box {
+  position: relative;
+  min-height: 64px;
+  padding: 0 var(--bn-5) 0 60px;
+  border-radius: 18px;
+  border: 2px solid var(--bn-line-strong);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+  transition:
+    border-color var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t) var(--bn-ease),
+    transform var(--bn-t) var(--bn-ease);
+}
+.ff .search-field-box::before {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  transform: translateY(-50%);
+  background: var(--bn-ink-2);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M20 20l-4-4'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M20 20l-4-4'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+.ff .search-field-box:hover { border-color: var(--bn-ink-4); transform: translateY(-1px); box-shadow: var(--bn-shadow-3); }
+/* One ring on focus — base.css's outline — and the border stays where it was. */
+.ff .search-field-box:focus-within {
+  outline: 3px solid var(--bn-ink);
+  outline-offset: 3px;
+  transform: none;
+}
+.ff .search-field-input {
+  min-height: 60px;
+  font-family: var(--bn-font-ui);
+  font-size: 24px;
+  font-weight: 500;
+  padding: var(--bn-3) 0;
+  color: var(--bn-ink);
+}
+.ff .search-field-input::placeholder { color: var(--bn-ink-2); font-weight: 400; }
+
+.ff-clear {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface);
+  color: var(--bn-ink);
+  box-shadow: var(--bn-shadow-1);
+  animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.ff-clear:hover { background: var(--bn-surface-3); transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+.ff-clear:active { transform: scale(0.96); }
+
+/* ---- quiet buttons (Back, Try again) ------------------------------------------------- */
+.ff-quiet,
+.ff-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  min-width: 44px;
+  padding: 0 var(--bn-6) 0 var(--bn-5);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface);
+  color: var(--bn-ink);
+  box-shadow: var(--bn-shadow-1);
+  font-family: var(--bn-font-ui);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.ff-quiet .bn-icon, .ff-back .bn-icon { color: var(--bn-ink-2); }
+.ff-quiet:hover, .ff-back:hover { background: var(--bn-surface-3); transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+.ff-quiet:active, .ff-back:active { transform: scale(0.98); }
+.ff-back { align-self: flex-start; }
+
+/* ---- notice / empty / loading -------------------------------------------------------- */
+.ff-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-4);
+  padding: var(--bn-4) var(--bn-5);
+  border-radius: 18px;
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 2px var(--bn-warn), var(--bn-shadow-1);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.ff-notice-icon { color: var(--bn-warn); flex: none; }
+.ff-notice .fulfillment-say { flex: 1 1 24ch; min-width: 0; }
+
+.ff-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--bn-4);
+  padding: var(--bn-9) var(--bn-6);
+  border-radius: 22px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+.ff-empty-art {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+}
+.ff-empty-title {
+  font-family: var(--bn-font-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  max-width: 24em;
+}
+.ff-empty .ff-quiet { margin-top: var(--bn-2); }
+
+.ff-loading { display: flex; flex-direction: column; gap: var(--bn-3); }
+.ff-loading-say { color: var(--bn-ink-2); margin-bottom: var(--bn-2); }
+.ff-skel {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 18px;
+  background: var(--bn-surface-2);
+}
+.ff-skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--bn-surface-3), transparent);
+  animation: bn-shimmer 1.4s ease-in-out infinite;
+}
+.ff-skel-search { height: 64px; margin-bottom: var(--bn-5); }
+.ff-skel-row { height: 88px; }
+.ff-skel-copy { height: 420px; border-radius: 22px; }
+/* The today card's own footprint, so the figure does not shove the search down when it lands. */
+.ff-skel-today { height: 148px; border-radius: 22px; }
+
+/* ---- Pulled today ----------------------------------------------------------------------- */
+.ff-done-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
+.ff-done-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--bn-1) var(--bn-4);
+  padding: var(--bn-3) var(--bn-5);
+  border-radius: 14px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.ff-done-name { font-weight: 700; }
+.ff-done-place { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* The order number is the string on his packing slip and is matched character by character,
+   so it is set in the machine face — the one place a machine string reaches this screen. */
+.ff-done-order,
+.ff-receipt-order,
+.ff-card-order b,
+.ff-order-title b {
+  font-family: var(--bn-font-mono);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.ff-done-order { color: var(--bn-ink-2); }
+
+/* ---- Orders to fill: the walk, order by order ------------------------------------------ */
+.ff-order-list { display: flex; flex-direction: column; gap: var(--bn-4); }
+.ff-order {
+  border-radius: 18px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  overflow: clip;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  transition: box-shadow var(--bn-t) var(--bn-ease);
+}
+.ff-order:hover { box-shadow: var(--bn-shadow-2); }
+.ff-order-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  min-height: 76px;
+  padding: var(--bn-3) var(--bn-5) var(--bn-3) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+}
+.ff-order-rank {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink);
+  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
+  font-family: var(--bn-font-display);
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ff-order-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ff-order-title { color: var(--bn-ink-2); line-height: 1.3; }
+.ff-order-title b { color: var(--bn-ink); }
+.ff-order-count { color: var(--bn-ink-2); line-height: 1.35; }
+.ff-order-cards { padding: var(--bn-3); }
+.ff-orders-more { margin-top: var(--bn-4); }
+@media (max-width: 480px) {
+  .ff-order-head { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
+  .ff-order-cards { padding: var(--bn-2); }
+}
+
+/* ---- Browse by box ---------------------------------------------------------------------- */
+.ff-browse-lede { color: var(--bn-ink-2); margin: calc(-1 * var(--bn-2)) 0 var(--bn-4); }
+.ff-boxes { display: flex; flex-direction: column; gap: var(--bn-3); }
+.ff-box {
+  border-radius: 18px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  overflow: clip;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  transition: box-shadow var(--bn-t) var(--bn-ease);
+}
+.ff-box:has(.ff-box-head[aria-expanded='true']) { box-shadow: var(--bn-shadow-2); }
+.ff-box-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  min-height: 76px;
+  padding: var(--bn-3) var(--bn-5) var(--bn-3) var(--bn-4);
+  text-align: left;
+  color: var(--bn-ink);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.ff-box-head:hover { background: var(--bn-surface-3); }
+.ff-box-num {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-family: var(--bn-font-display);
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ff-box-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0; }
+.ff-box-name { font-weight: 700; font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
+.ff-box-count { color: var(--bn-ink-2); line-height: 1.3; }
+.ff-box-chev { flex: none; color: var(--bn-ink-2); transition: transform var(--bn-t) var(--bn-ease-spring); }
+.ff-box-head[aria-expanded='true'] .ff-box-chev { transform: rotate(180deg); }
+.ff-box-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-3) var(--bn-3) var(--bn-4);
+  border-top: 1px solid var(--bn-line);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+.ff-box-body .ff-say { padding: 0 var(--bn-2); color: var(--bn-ink-2); }
+
+.fulfillment-list,
+.ff-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-3); }
+.fulfillment-row,
+.ff-row {
+  position: relative;
+  width: 100%;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name chev' 'place chev';
+  align-items: center;
+  column-gap: var(--bn-3);
+  row-gap: 2px;
+  padding: var(--bn-4) var(--bn-4) var(--bn-4) var(--bn-5);
+  border-radius: 14px;
+  text-align: left;
+  color: var(--bn-ink);
+  background: var(--bn-bg);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.fulfillment-row:hover,
+.ff-row:hover { background: var(--bn-surface); transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+.fulfillment-row:active,
+.ff-row:active { transform: none; }
+.ff-row .ff-row-name {
+  grid-area: name;
+  font-family: var(--bn-font-display);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.ff-row-chev { grid-area: chev; color: var(--bn-ink-2); }
+.ff-row .ff-row-place { grid-area: place; }
+
+/* ---- the place ---------------------------------------------------------------------------- */
 .fulfillment-place {
   display: block;
-  font-family: var(--util);
+  font-family: var(--bn-font-display);
   font-size: 32px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
   overflow-wrap: break-word;
 }
+.ff-row .ff-row-place { font-size: 32px; font-weight: 600; color: var(--bn-ink-2); }
+.ff-row .ff-row-place .ff-place-num { color: var(--bn-ink); font-weight: 800; }
+.fulfillment-place-large { font-size: 36px; font-weight: 800; }
+.ff-place-part { white-space: nowrap; }
+.ff-place-key { font-weight: 600; color: var(--bn-ink-2); }
+.ff-place-num { font-weight: 800; color: var(--bn-ink); }
 
-/* On the card panel the position is the payload of the screen rather than one row's caption,
-   so it steps up. 36px and not more: past this the label wraps to three lines on a phone, and
-   a position that has to be reassembled across lines is harder to carry to a box than a
-   smaller one that does not. */
-.fulfillment-place-large {
-  font-size: 36px;
-  font-weight: 600;
+/* ---- the card ------------------------------------------------------------------------------ */
+/* Back on the left, the next card in the walk on the right — the two ways off this card. */
+.ff-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
 }
-
-/* ---- the list ---- */
-
-.fulfillment-list {
-  list-style: none;
-  width: 100%;
+.ff-next { margin-left: auto; }
+.ff-card {
   display: flex;
   flex-direction: column;
-  gap: var(--s5);
+  gap: var(--bn-5);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
+/* On a phone the side column dissolves and its parts take their reading order around the
+   photograph: name, photo, place, button. */
+.ff-card-side { display: contents; }
+.ff-card-head { order: 1; }
+.ff-photo-wrap { order: 2; }
+.ff-where { order: 3; }
+.ff-action { order: 4; }
+.ff-card-head { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
+.fulfillment-name,
+.ff-card-name {
+  font-family: var(--bn-font-display);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+.ff-card-about { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* Where he is in the walk, and which order this card is for. */
+.ff-card-eyebrow {
+  color: var(--bn-ink-2);
+  line-height: 1.35;
+  margin-bottom: var(--bn-1);
+}
+.ff-card-step { font-weight: 700; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+.ff-card-order b { color: var(--bn-ink); }
 
-/* The whole row is the target. Padding at the 24px end of the scale rather than the tap
-   floor: 44px is what a target may not go below, not what a target should be for a reader
-   with reading glasses under a desk lamp. */
-.fulfillment-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s5);
+.ff-photo-wrap { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
+.ff-photo-btn {
+  position: relative;
+  display: block;
   width: 100%;
-  min-height: 44px;
-  padding: var(--s5);
-  text-align: left;
-
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
+  aspect-ratio: 63 / 88;
+  padding: 0;
+  border-radius: 22px;
+  overflow: clip;
+  background: var(--bn-stage-bg);
+  box-shadow: var(--bn-shadow-3);
+  cursor: zoom-in;
+  transition: transform var(--bn-t) var(--bn-ease), box-shadow var(--bn-t) var(--bn-ease);
 }
-
-/* Row hover, which is the only thing --hover exists for. */
-.fulfillment-row:hover {
-  background: var(--hover);
+.ff-photo-btn:hover { transform: translateY(-2px); }
+.ff-photo-btn:active { transform: scale(0.995); }
+.ff-photo-skel {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bn-stage-surface);
 }
-
-/* --ink and not --accent. Accent has exactly two jobs and "this is the row your finger is on"
-   is neither; the outline weight already means the system is unsure, and it must not start
-   meaning "here" on the one screen where the fill has to be unmistakable. */
-.fulfillment-row:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
+.ff-photo-skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--bn-stage-bg-2), transparent);
+  animation: bn-shimmer 1.4s ease-in-out infinite;
 }
-
-/* ---- the card panel ---- */
-
-/* Short edge >= 320px, which the aspect ratio makes the width. Sized from the card rather
-   than from the viewport: 63x88mm is the shape of every card this product will ever hold, so
-   the box is the right shape before the photo loads and the layout does not jump when it
-   does. */
 .fulfillment-photo {
   display: block;
-  width: min(360px, 100%);
+  width: 100%;
+  height: 100%;
   aspect-ratio: 63 / 88;
   object-fit: cover;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  background: var(--bn-stage-bg);
+  opacity: 0;
+  transition: opacity var(--bn-t-slow) var(--bn-ease-out);
 }
-
-/* ---- the search, and the copies it finds ---- */
-
-/* The results, and the way back out of them. A column at the same 24px rhythm as the view
-   itself, so a group of copies is spaced from the control above it exactly as a list row is
-   from the row above it. Nothing here restates a floor from the constraints table — see the
-   header. */
-.fulfillment-results {
-  width: 100%;
+.fulfillment-photo[data-ready='true'] { opacity: 1; }
+.ff-photo-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-2);
+  color: var(--bn-ink-2);
+}
+.ff-photo-missing {
   display: flex;
   flex-direction: column;
-  gap: var(--s5);
+  align-items: center;
+  text-align: center;
+  gap: var(--bn-3);
+  padding: var(--bn-8) var(--bn-5);
+  border-radius: 22px;
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
+  color: var(--bn-ink-2);
 }
 
-/* The groups stretch to the column and the quiet control does not, which is what `.fulfillment`
-   itself does with `align-items: flex-start`. It cannot be set on the parent here: the groups
-   are the thing that has to be full width, and stretching is the default that gives them that.
-   So the exception is written on the one child that wants it, and "Show every card" is the
-   same size as every other plain control on this view rather than a full-width bar. */
-.fulfillment-results > .fulfillment-plain {
-  align-self: flex-start;
+.ff-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-5) var(--bn-6);
+  border-radius: 20px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+}
+.ff-where-label {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  font-weight: 700;
+  color: var(--bn-ink-2);
+}
+.ff-where .ff-place { margin: var(--bn-1) 0; }
+.ff-where-boxname,
+.ff-where-between { color: var(--bn-ink-2); }
+.ff-where-boxname b { color: var(--bn-ink); font-weight: 700; }
+.ff-where-bar { margin: var(--bn-2) 0; }
+
+/* PositionBar, fulfiller skin, re-drawn in this register: a rounded track with the section he
+   is in tinted, a solid pin in the fill colour, and the caption under the track. */
+.ff .position-bar-fulfiller {
+  --pb-track: 26px;
+  --pb-marker: 8px;
+  --pb-gap: var(--bn-2);
+}
+.ff .position-bar-fulfiller .position-bar-track { gap: 3px; }
+.ff .position-bar-fulfiller .position-bar-segment {
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+}
+.ff .position-bar-fulfiller .position-bar-here {
+  background: var(--bn-accent-tint-2);
+  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+}
+.ff .position-bar-fulfiller .position-bar-marker {
+  top: -3px;
+  bottom: -3px;
+  border-radius: var(--bn-r-full);
+  background: var(--ff-fill);
+  box-shadow: 0 0 0 3px var(--bn-surface), var(--bn-shadow-2);
+  transition: none;
+}
+.ff .position-bar-fulfiller .position-bar-marker::after { display: none; }
+.ff .position-bar-fulfiller .position-bar-text {
+  font-family: var(--bn-font-ui);
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink-2);
+  white-space: normal;
+  overflow: visible;
+}
+.ff .position-bar-fulfiller > .position-bar-text-box { order: 0; align-self: flex-start; }
+.ff .position-bar-fulfiller .position-bar-zoom { display: none; }
+
+/* ---- the action ----------------------------------------------------------------------------- */
+.fulfillment-action,
+.ff-action { display: flex; flex-direction: column; gap: var(--bn-6); }
+/* A <button> shrink-wraps even as a flex container; the one fill is always full width here. */
+.ff .pull-confirm { width: 100%; }
+.fulfillment-pulled,
+.ff-pulled {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-3);
+  min-height: 64px;
+  padding: var(--bn-3) var(--bn-5);
+  border-radius: 16px;
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
+  font-family: var(--bn-font-ui);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--bn-ink);
+  animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards;
+}
+.ff-pulled-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+  flex: none;
+}
+.ff-step2 { animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
+.ff-trouble {
+  padding: var(--bn-3) var(--bn-5);
+  border-radius: 14px;
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 2px var(--bn-danger);
+  font-weight: 600;
+  animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards;
 }
 
-/* The field is an <input>, which makes it a tap target and puts it under the same floor as
-   every button on this screen. `.search-field-fulfiller` gives the BOX it sits in a 56px
-   minimum and centres the input inside it, so the input's own height is its text plus its
-   padding — and the input is what the browser hit-tests. A floor on the thing that is
-   actually pressed rather than on the thing that is drawn around it. */
-.fulfillment .search-field-input {
-  min-height: 44px;
+/* The quiet first step on a search result (the fill is reserved for the copy past it). */
+.ff-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--bn-3) var(--bn-5);
+  border-radius: 16px;
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 2px var(--bn-ink);
+  color: var(--bn-ink);
+  font-family: var(--bn-font-ui);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.ff-step:hover { background: var(--bn-surface-3); transform: translateY(-1px); box-shadow: inset 0 0 0 2px var(--bn-ink), var(--bn-shadow-2); }
+.ff-step:active { transform: scale(0.985); }
+
+/* The card panel on a wide screen: photograph left, everything he reads in a column beside it.
+   The side is its own flex column so the button growing never moves the place above it. */
+@media (min-width: 768px) {
+  .ff-card {
+    display: grid;
+    grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+    column-gap: var(--bn-7);
+    align-items: start;
+  }
+  .ff-photo-wrap { grid-column: 1; order: 0; }
+  .ff-card-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bn-5);
+    grid-column: 2;
+    min-width: 0;
+  }
+  .ff-card-head, .ff-where, .ff-action { order: 0; }
+}
+@media (min-width: 1100px) {
+  .ff-card { grid-template-columns: minmax(0, 440px) minmax(0, 1fr); column-gap: var(--bn-8); }
 }
 
-/* THE GROUP IS FLATTENED INSIDE THIS VIEW, AND IT IS A MEASUREMENT THAT DECIDED IT.
- *
- * `CardLocations`'s Fulfiller skin draws each group as a bordered surface with 24px of its
- * own padding, and each copy inside it as a second bordered surface with 24px more. That is
- * right for a screen where the group is the panel; here the view is already the panel and the
- * COPY is what he taps, so the group's own box was a surface drawn on a surface — which the
- * separation mechanism in docs/DESIGN.md, a single 1px hairline, does not ask for.
- *
- * The measurement is what makes it non-negotiable rather than a taste: at 375px the view
- * keeps 24px either side, the group took 24 more and the copy 24 more again, leaving the
- * photo 227px on its short edge against a 320px floor. Two nested boxes is 96px of padding on
- * a 375px screen. The copy keeps its box because it is the thing being chosen between; the
- * group gives its up, and the group's heading is spaced by the parent's own gap instead.
- *
- * A contextual rule rather than an edit to CardLocations.css — the same call `.pull-confirm`
- * below is given, and for the same reason: that component owns its own look, this raises and
- * lowers nothing about the copies inside it, and the owner's dense skin is untouched. */
-.fulfillment .card-locations-fulfiller {
+/* ---- search results: CardLocations, fulfiller skin, in this register --------------------- */
+.fulfillment-results,
+.ff-results { display: flex; flex-direction: column; gap: var(--bn-7); }
+.ff .card-locations-fulfiller {
   background: transparent;
   border: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.ff .card-locations-head { display: flex; flex-direction: column; gap: 2px; padding: 0 var(--bn-1); }
+.ff .card-locations-name {
+  font-family: var(--bn-font-display);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--bn-ink);
+  overflow-wrap: anywhere;
+}
+.ff .card-locations-head > .card-locations-say { font-size: 20px; line-height: 1.5; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+/* The owner's listing count is not his fact. */
+.ff .card-locations-head > .card-locations-say:last-child { display: none; }
+
+.ff .card-locations-copies { display: flex; flex-direction: column; gap: var(--bn-4); }
+.ff .card-locations-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--bn-3);
+  padding: var(--bn-5);
+  border: 0;
+  border-radius: 22px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-2);
+}
+.ff .card-locations-photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  border: 0;
+  border-radius: 16px;
+  background: var(--bn-stage-bg);
+  box-shadow: var(--bn-shadow-2);
+  animation: bn-fade var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.ff .card-locations-place-large {
+  font-family: var(--bn-font-display);
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+  margin-top: var(--bn-1);
+}
+.ff .card-locations-copy > .card-locations-say { font-size: 20px; line-height: 1.5; color: var(--bn-ink-2); }
+/* "between X and Y" arrives lowercase; a sentence he reads starts with a capital. */
+.ff .card-locations-copy > .card-locations-say::first-letter { text-transform: uppercase; }
+/* "In the boxes." says nothing to him: it is the sentence right before the action. */
+.ff .card-locations-copy > .card-locations-say:has(+ .card-locations-action) { display: none; }
+/* "between Star-Crossed and Sprite Fountain" arrives as a fragment; the card panel says the
+   same fact as "It sits before Conscription." The between line is the one immediately before
+   the bar — the box-name line above it has its own stop. */
+.ff .card-locations-copy > .card-locations-say:has(+ .position-bar)::after { content: '.'; }
+.ff .card-locations-copy > .position-bar { margin: var(--bn-1) 0; }
+/* TOP-ANCHORED IN EVERY LAYOUT, so a second control can only ever appear BELOW the one just
+   pressed. `align-self: start` is the whole safety property: wherever this block sits, it grows
+   downward, so `Mark it sold` lands under `Pull` rather than on the rectangle the finger is
+   already over. The wide-screen rule further down sets its row; it must not set `end`. */
+.ff .card-locations-action {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: var(--bn-6);
+  margin-top: var(--bn-2);
+  /* IT RESERVES BOTH STEPS FROM THE START, AND THAT IS A SAFETY PROPERTY RATHER THAN A
+   * SPACING CHOICE.
+   *
+   * The block holds one 64px control before the pull and two after it — the acknowledgement
+   * and the sale, 24px apart. Left to size itself it grew by 88px on the press, the grid it
+   * sits in re-laid out around the taller block, and the whole block travelled UP the page:
+   * measured, `Pull` at document y 947.9 and `Mark it sold` at 953.9, six pixels apart with
+   * identical 64px heights. The second control landed on the first one's rectangle, so a
+   * finger that pressed twice — the ordinary response to a button that did not seem to react —
+   * SOLD THE CARD.
+   *
+   * Anchoring alone does not fix it, because the movement came from the block changing size
+   * rather than from where it was anchored. Reserving the full two-step height means the block
+   * is the same size before and after, so nothing reflows, nothing travels, and the sale can
+   * only ever appear below the acknowledgement. 64 + 24 + 64. */
+  min-height: 152px;
+}
+.ff .card-locations-action .pull-confirm { width: 100%; }
+
+/* The box's name arrives as a bare line under the place — `UNL BBOX GOOD C/UC 1` — and the
+   card panel says the same fact as a sentence. This makes it the same sentence. It is the
+   line that sits between the place and the "between" sentence, which is the ONE shape a
+   named box takes; a box with no name puts the "between" sentence there and it is left
+   alone. Pseudo text, so nothing walking text nodes sees a word it did not before. */
+.ff .card-locations-copy > .card-locations-place-large + .card-locations-say:has(+ .card-locations-say + .position-bar) {
+  font-weight: 700;
+  color: var(--bn-ink);
+}
+.ff .card-locations-copy > .card-locations-place-large + .card-locations-say:has(+ .card-locations-say + .position-bar)::before {
+  content: 'The box is labelled ';
+  font-weight: 400;
+  color: var(--bn-ink-2);
+}
+.ff .card-locations-copy > .card-locations-place-large + .card-locations-say:has(+ .card-locations-say + .position-bar)::after {
+  content: '.';
+  font-weight: 400;
+  color: var(--bn-ink-2);
 }
 
-/* Beneath the one breakpoint this view already had, the photo takes the copy's padding as
-   well — because at 375px there is nothing else left to give it.
-   .fulfillment 24+24, the copy's border 1+1 and its padding 24+24 leave 277px of a 375px
-   screen, and the floor is 320. Bleeding to the copy's padding edges puts it back to 325.
-   The text inside the copy keeps its 24px inset; only the photograph reaches the edges, which
-   is the one element here whose size is a constraint rather than a choice.
-   The side borders and the radius go with it: a hairline down the edge of a full-bleed image
-   is a line with nothing on the other side of it. */
+/* ---- one group: the copy he pulls, then the rest under a disclosure ---------------------- */
+.ff-found { display: flex; flex-direction: column; gap: var(--bn-4); }
+/* The disclosure is a box row: the count where the box number goes, a sentence, a chevron. */
+.ff-more {
+  border-radius: 18px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  overflow: clip;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  transition: box-shadow var(--bn-t) var(--bn-ease);
+}
+.ff-more:has(.ff-more-head[aria-expanded='true']) { box-shadow: var(--bn-shadow-2); }
+.ff-more-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  min-height: 76px;
+  padding: var(--bn-3) var(--bn-5) var(--bn-3) var(--bn-4);
+  text-align: left;
+  color: var(--bn-ink);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.ff-more-head:hover { background: var(--bn-surface-3); }
+.ff-more-num {
+  flex: none;
+  min-width: 48px;
+  height: 48px;
+  padding: 0 var(--bn-2);
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink);
+  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
+  font-family: var(--bn-font-display);
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ff-more-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ff-more-title { font-weight: 700; font-size: 22px; line-height: 1.3; }
+.ff-more-where { color: var(--bn-ink-2); line-height: 1.3; }
+.ff-more-chev { flex: none; color: var(--bn-ink-2); transition: transform var(--bn-t) var(--bn-ease-spring); }
+.ff-more-head[aria-expanded='true'] .ff-more-chev { transform: rotate(180deg); }
+.ff-more-body {
+  padding: var(--bn-3) var(--bn-3) var(--bn-4);
+  border-top: 1px solid var(--bn-line);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+/* The group's name is already on screen above the first copy; the body draws the copies only,
+   each in the row register (page ground, one line) rather than as a second surface card. */
+.ff .ff-more-body .card-locations-fulfiller { animation: none; }
+.ff .ff-more-body .card-locations-head { display: none; }
+.ff .ff-more-body .card-locations-copy { background: var(--bn-bg); box-shadow: inset 0 0 0 1px var(--bn-line); }
 @media (max-width: 480px) {
-  .fulfillment .card-locations-fulfiller .card-locations-photo {
-    width: calc(100% + 2 * var(--s5));
+  .ff-more-head { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
+  .ff-more-body { padding: var(--bn-2) var(--bn-2) var(--bn-3); }
+}
+
+@media (min-width: 768px) {
+  /* 320px, NOT 300, AND IT IS A FLOOR RATHER THAN A TASTE. docs/DESIGN.md's constraints table
+     puts the card photograph in this view at 320px on its short edge, because the Fulfiller
+     confirms the card against it before pulling. 300 was chosen so the text column would end
+     near the photograph's foot; it bought that tidiness by painting the one thing he checks
+     20px under the floor, which is not a trade this view is allowed to make. */
+  .ff .card-locations-copy {
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    column-gap: var(--bn-6);
+    align-items: start;
+  }
+  /* THE ACTION BLOCK GROWS DOWNWARD, AND THAT IS A SAFETY RULE RATHER THAN A LAYOUT TASTE.
+   *
+   * It used to be pinned to the bottom of the photograph's row span (`grid-row: 10;
+   * align-self: end`), which read well while the block held one button — and meant that when
+   * `Pull` was answered and `Mark it sold` appeared, the block grew UPWARD. Measured at 768px
+   * and above: pull at {624, 920, 356x64}, sale at {624, 926, 356x64}. The sale button landed
+   * on the pull button's own footprint, six pixels off. A second tap on Pull — a slow finger,
+   * a double tap, a retired man checking whether the first one took — SOLD THE CARD.
+   *
+   * That is exactly the displacement docs/DESIGN.md's two-step exists to prevent, and it
+   * defeated it by geometry rather than by logic. Anchoring the block to the TOP of its track
+   * means a new control appears below the one just pressed, never under the finger. The slack
+   * now opens beneath the block, which is the cosmetic cost and it is the right way round. */
+  .ff .card-locations-copy:has(> .card-locations-photo) > .card-locations-action {
+    grid-row: 10;
+    align-self: start;
+  }
+  .ff .card-locations-copy > * { grid-column: 2; }
+  /* The place is the card's first line, across both columns: beside a 340px photograph the
+     text column is ~308px, which never fits a 32px place on one line. */
+  .ff .card-locations-copy > .card-locations-place-large {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin: 0 0 var(--bn-1);
+  }
+  .ff .card-locations-copy > .card-locations-photo { grid-column: 1; grid-row: 2 / span 9; }
+  /* No photograph, nothing to hold the first column open for. */
+  .ff .card-locations-copy:not(:has(> .card-locations-photo)) { grid-template-columns: minmax(0, 1fr); }
+  .ff .card-locations-copy:not(:has(> .card-locations-photo)) > * { grid-column: 1; }
+}
+
+/* ---- phone: the photograph reaches the card's edges, so it clears 320px ------------------- */
+@media (max-width: 480px) {
+  .ff .card-locations-copy { padding: var(--bn-4); border-radius: 18px; }
+  .ff .card-locations-photo {
+    width: calc(100% + 2 * var(--bn-4));
     max-width: none;
-    margin-inline: calc(-1 * var(--s5));
-    border-left: 0;
-    border-right: 0;
-    border-radius: 0;
+    margin: calc(-1 * var(--bn-4)) calc(-1 * var(--bn-4)) 0;
+    border-radius: 18px 18px 0 0;
+    box-shadow: none;
+  }
+  .ff-where { padding: var(--bn-4) var(--bn-5); }
+  .fulfillment-place-large { font-size: 34px; }
+  .fulfillment-row, .ff-row { padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); }
+  .ff-row-place { font-size: 32px; }
+  .ff-box-head { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
+}
+
+/* ---- narrow: the place stacks on purpose, the card's number on its own line ------------- */
+@media (max-width: 640px) {
+  .ff-row-place > span:last-child,
+  .ff-place > span:last-child { display: block; }
+  .ff-row-place > span:last-child .ff-place-sep,
+  .ff-place > span:last-child .ff-place-sep { display: none; }
+}
+
+/* ---- the receipt sheet ------------------------------------------------------------------ */
+.ff-sheet {
+  position: fixed;
+  z-index: 61;
+  left: 0;
+  right: 0;
+  bottom: var(--bn-5);
+  margin: 0 auto;
+  width: min(680px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 22px;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-3);
+  /* Never taller than half the screen: past the cap the older receipts scroll inside it. */
+  max-height: var(--ff-sheet-max);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: bn-sheet-up var(--bn-t-slow) var(--bn-ease-spring) backwards;
+}
+@media (max-width: 767px) {
+  .ff-sheet {
+    bottom: 0;
+    width: 100%;
+    border-radius: 22px 22px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
-
-/* A column rather than a single slot, because the pull step and the sale step must not share
-   one. See `.fulfillment-pulled` below for what shared it and what that cost. */
-.fulfillment-action {
-  width: 100%;
-  max-width: 360px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s5);
+.fulfillment-panel,
+.ff-receipt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'icon text undo' 'icon clock clock';
+  align-items: center;
+  column-gap: var(--bn-4);
+  row-gap: var(--bn-3);
+  padding: var(--bn-4) var(--bn-5);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
-
-/* "Pulled." — a sentence occupying the slot the Pull button was in.
- *
- * SAME BOX MODEL AS THE BUTTON IT REPLACES, and that is the whole point rather than tidiness:
- * same font size, same padding, same height floor, so the slot does not change height and
- * "Mark sold" begins below where "Pull" ended. Pull and Mark sold were one control in one
- * place, one state apart, and a double-tap on Pull recorded a sale — the shortest path in this
- * product between looking at a photo and selling the card. Displacing the second control past
- * the first one's footprint is what makes the overshoot land on nothing.
- *
- * NOT DRAWN AS A CONTROL. No fill, no border, no surface: it is the confirmation, and a
- * sentence shaped like a disabled button is a button he will press. --ink on --bg, 19.4:1.
- *
- * Rejected: arming "Mark sold" on a short timer. A control that ignores a press is a control
- * he presses harder, and a timer is invisible to the assertion that has to check this. The
- * spec measures the two boxes and requires that they do not overlap. */
-.fulfillment-pulled {
-  width: 100%;
-  font-family: var(--body);
+.ff-receipt + .ff-receipt { border-top: 1px solid var(--bn-line); }
+.ff-receipt-icon {
+  grid-area: icon;
+  align-self: start;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+}
+.ff-receipt-icon[data-tone='note'] { background: var(--bn-surface-2); color: var(--bn-ink-2); }
+.ff-receipt-text { grid-area: text; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ff-receipt-said {
+  font-family: var(--bn-font-display);
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   line-height: 1.2;
-  min-height: 44px;
-  padding: var(--s5);
-  color: var(--ink);
-  text-align: center;
 }
-
-/* The one control that carries the solid accent fill, raised to this view's scale.
- *
- * A contextual rule rather than an edit to PullConfirm.css: that component owns its three
- * states, its colours and its floors, and this changes none of them — it raises the label and
- * the padding for the view docs/DESIGN.md calls his, and lowers nothing. Its own 20px label
- * and 44px height already clear the floors; this makes the loudest thing he ever sees look
- * like it. */
-.fulfillment .pull-confirm {
-  width: 100%;
-  font-size: 24px;
-  padding: var(--s5);
-  text-align: center;
-}
-
-.fulfillment .pull-confirm-label {
-  text-align: center;
-}
-
-/* ---- the plain controls: back, try again, undo ---- */
-
-/* Everything he can press that is not the one thing to do. Deliberately one class and one
-   look: three different quiet buttons would be three things to learn, and the difference
-   between them is carried by the words on them, which is the only difference he has any use
-   for. Body face, because these are words rather than values. */
-.fulfillment-plain {
-  font-family: var(--body);
+.ff-receipt-what { color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.ff-receipt-name { color: var(--bn-ink); font-weight: 600; }
+.ff-receipt-note { margin-top: var(--bn-1); }
+.ff-undo {
+  grid-area: undo;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-2);
+  min-height: 56px;
+  min-width: 44px;
+  padding: 0 var(--bn-6) 0 var(--bn-5);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-family: var(--bn-font-ui);
   font-size: 20px;
   font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  min-height: 44px;
-  min-width: 44px;
-  padding: var(--s5);
-  cursor: pointer;
+  white-space: nowrap;
+  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), opacity var(--bn-t-fast) var(--bn-ease);
+}
+.ff-undo:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+.ff-undo:active { transform: scale(0.97); }
+.ff-receipt-clock { grid-area: clock; display: flex; align-items: center; gap: var(--bn-3); }
+.ff-receipt-bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bn-surface-2);
+  overflow: hidden;
+}
+.ff-receipt-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: var(--ff-fill);
+  transform-origin: left;
+  animation: bn-drain var(--ff-window, 20s) linear forwards;
+}
+.ff-receipt-secs {
+  font-size: 20px;
+  color: var(--bn-ink-2);
+  font-variant-numeric: tabular-nums;
+  min-width: 3.4ch;
+  text-align: right;
+  white-space: nowrap;
+}
+/* Under reduced motion base.css cuts every animation to 0.01ms, which would drain the bar at
+   once while the clock beside it still reads 20 s. The bar stays full instead, and the ticking
+   figure alone carries the time. */
+@media (prefers-reduced-motion: reduce) {
+  .ff-receipt-bar::after { animation: none; transform: none; }
+}
+@media (max-width: 560px) {
+  .fulfillment-panel, .ff-receipt {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'icon text' 'undo undo' 'clock clock';
+  }
+  .ff-undo { width: 100%; }
 }
 
-.fulfillment-plain:hover {
-  background: var(--hover);
+/* An older receipt folds to a line: the card, Undo, and the seconds. The check and the
+   "Marked sold." heading already said their piece when it was the newest. */
+.ff-receipt-compact {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'icon text undo clock';
+  padding: var(--bn-3) var(--bn-5);
+}
+.ff-receipt-compact .ff-receipt-icon { width: 32px; height: 32px; align-self: center; }
+.ff-receipt-compact .ff-receipt-icon .ff-check { width: 18px; height: 18px; }
+.ff-receipt-compact .ff-receipt-icon .bn-icon { width: 18px; height: 18px; }
+.ff-receipt-compact .ff-receipt-said,
+.ff-receipt-compact .ff-receipt-bar { display: none; }
+.ff-receipt-compact .ff-receipt-note { margin: 0; }
+@media (max-width: 560px) {
+  .ff-receipt-compact {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'icon text text' 'undo undo clock';
+  }
+  .ff-receipt-compact .ff-undo { width: auto; justify-self: start; }
 }
 
-.fulfillment-plain:focus-visible {
-  outline: 3px solid var(--ink);
-  outline-offset: 2px;
-}
+.ff-check path { stroke-dasharray: 26; stroke-dashoffset: 26; animation: ff-draw 360ms var(--bn-ease-out) 120ms forwards; }
 
-/* "Pull", on a search result — the first of the two steps, and the reason the second one
- * cannot be reached by overshooting the first.
- *
- * IT EXISTS TO MATCH `.fulfillment-pulled`'s BOX MODEL EXACTLY. Same font size, same line
- * height, same padding, same width, same height floor. `.fulfillment-plain` above gives it
- * everything else — the body face, the weight, the hairline, the radius, the hover and focus
- * states — so all this rule says is "and it is the size of the sentence that replaces it".
- * That is the whole mechanism: when it is pressed, "Pulled." takes its footprint and "Mark
- * sold" begins below where this button ended, so the second tap of a double-tap lands on a
- * sentence. `app/tests/fulfillment.spec.ts` measures both rectangles rather than trusting
- * this comment; the numbers here only have to agree with `.fulfillment-pulled`.
- *
- * IT HAS TO SIT BELOW `.fulfillment-plain` IN THIS FILE and that is load-bearing, not tidy:
- * both are one class deep, so the later rule wins the font size. Written above it, the
- * 20px there would silently take the 24px here and the two boxes would stop matching — which
- * is a hazard reopening itself as a cascade detail nobody would look for.
- *
- * NO FILL. The card panel's "Pull" is a `PullConfirm` because that screen holds one card and
- * one action; a search can put four copies on screen at once, and four solid accent buttons
- * would make the fill mean "press something" — exactly what docs/DESIGN.md's two-jobs rule is
- * written against. The fill arrives on the second step, where there really is one thing to do. */
-.fulfillment-step {
-  width: 100%;
-  font-size: 24px;
-  line-height: 1.2;
-  text-align: center;
-}
-
-/* ---- the receipts, and the notice that the list may have moved ---- */
-
-/* A panel in the space above whatever screen he is on rather than a strip across the top: it
-   is where he is looking when it appears, and a message that arrives somewhere he is not
-   looking is a message with a window that has already closed.
-
-   ONE CLASS FOR BOTH, and it is `-panel` rather than `-sold` because it stopped being about a
-   sale. A receipt for a card that left his list and a notice that the list may have moved are
-   the same object to him — something above the screen, saying what happened, with at most one
-   quiet thing to press. Two classes would be two looks to learn for one meaning, which is the
-   argument `.fulfillment-plain` already makes about the three quiet buttons.
-
-   THERE CAN BE SEVERAL AT ONCE. Each sale still standing draws its own, because the undo
-   window is per sale — a second mark-sold does not end the first card's window and must not
-   take its panel down. Spacing comes from the parent's 24px gap, which is twice the 12px the
-   constraints table requires between the Undo buttons inside them. */
-.fulfillment-panel {
+/* ---- the big photo ------------------------------------------------------------------------ */
+.ff-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s5);
-  padding: var(--s5);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-4);
+  padding: var(--bn-5);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  cursor: zoom-out;
+  overflow: auto;
+  animation: bn-fade var(--bn-t) var(--bn-ease-out) backwards;
 }
+.ff-zoom-img {
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
+  max-height: calc(100dvh - 120px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  /* A pinch here enlarges the photograph, which is what he pinched for. */
+  touch-action: pinch-zoom;
+  border-radius: 14px;
+  box-shadow: var(--bn-shadow-3);
+  animation: bn-pop var(--bn-t-slow) var(--bn-ease-spring) backwards;
+}
+.ff-zoom-hint { color: var(--bn-bg); font-weight: 600; }
+/* A lightbox sits on a dark ground in BOTH themes. In light that is `--bn-ink`; in dark
+   `--bn-ink` is the light colour, so the page's own ground and ink take over. */
+:root[data-theme='dark'] .ff-zoom { background: var(--bn-bg); color: var(--bn-ink); }
+:root[data-theme='dark'] .ff-zoom-hint { color: var(--bn-ink); }

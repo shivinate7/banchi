@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 import {
   buildLot,
   describeFailure,
   exportCodes,
+  getBoxes,
   getCodes,
   getLots,
   photoUrl,
@@ -11,6 +13,7 @@ import {
   type Failure,
 } from './server'
 import type {
+  BoxRecord,
   CodeEntry,
   CodeExportResult,
   CodeLedger,
@@ -18,52 +21,358 @@ import type {
   LotReceipt,
   LotResult,
 } from './types'
+import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented, Stat, type IconName } from './kit'
+import { toast } from './kit/toast'
 import './Codes.css'
 
-/* THE CODE-CARD TRACK, ON A ROUTE OF ITS OWN — C9, C10 and C11.
+/* CODES — the code-card track on a route of its own (D14, D70).
  *
- * WHY IT IS NOT A PANEL ON `#/runs`. `#/runs` is the four commands of the SINGLES pipeline,
- * and every one of them is about resolving a card against a TCGplayer export and pricing it.
- * A code card is joined against nothing, priced against nothing, and identified by arithmetic
- * rather than by a paid model call — D14's "shares the rig, shares nothing downstream", which
- * is a track boundary rather than a screen-size problem. Putting it there would also put the
- * one control in this product that hands over a bearer instrument next to the one that spends
- * money, and those two want different confirmations for different reasons.
+ * Nothing on this screen spends: the QR is the code, so reading a box is free. What is
+ * irreversible is handing codes over — an export and a lot both reserve permanently — so each
+ * of those is a preview first and a named, red confirm second, inside its own sheet.
  *
- * THE SCREEN'S WHOLE JOB IS C11's TIER. A Pokemon Center ETB code lists at roughly 46x a
- * booster code, and boosters are the overwhelming majority of any pile — so the pile is a long
- * flat floor with a few tall spikes in it, and the one mistake that actually costs money is
- * sweeping a spike into the floor's wholesale lot. Hence the two lanes are the first thing
- * drawn, hence an unclaimed code enters NEITHER lane, and hence the premium lane is drawn
- * first even though it is always the smaller number.
- *
- * NOTHING HERE SPENDS. There is no money gate because the code-card primary path makes no
- * model call at all. What it has instead is a commit gate, on the export: a code handed to a
- * buyer cannot be un-handed and double-selling one is unrecoverable (C3), so the export is a
- * preview until it is confirmed against a named order, and confirming reserves permanently.
- *
- * THE CODES ARE DRAWN IN THE CLEAR. That is the point of the screen — the owner reads a code
- * and pastes it to a buyer. The opsec rules govern what reaches a tracked file, and this
- * screen is deliberately absent from `scripts/views.txt` so `make screenshot` never renders
- * one to `captures/ui/`.
+ * Opsec: a held code is a bearer instrument. Codes are masked on screen until revealed, are
+ * never drawn larger than body size, and the photograph (which IS the QR) is a link rather
+ * than an inline image. This route stays out of `scripts/views.txt` on purpose.
  */
 
 type Lane = 'bulk' | 'premium'
+type Venue = 'ebay' | 'tcgplayer'
+type Delivery = 'physical' | 'digital'
+type SheetName = 'scan' | 'hand' | 'lot'
+type StateFilter = 'all' | 'held' | 'reserved' | 'delivered' | 'dead'
+type LaneFilter = 'all' | 'premium' | 'bulk' | 'unclaimed'
+type LedgerTab = 'codes' | 'lots'
+type LotTab = 'listing' | 'packing' | 'manifest'
+type Tone = 'default' | 'accent' | 'ok' | 'warn' | 'danger'
 
-/** A number the operator is about to act on, drawn big. */
-function Tally({ n, label, tone }: { n: number; label: string; tone?: string }) {
+const VENUES: readonly { value: Venue; label: string }[] = [
+  { value: 'ebay', label: 'eBay' },
+  { value: 'tcgplayer', label: 'TCGplayer' },
+]
+const STATES: readonly { value: StateFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'held', label: 'Held' },
+  { value: 'reserved', label: 'Reserved' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'dead', label: 'Dead' },
+]
+const LANES: readonly { value: LaneFilter; label: string }[] = [
+  { value: 'premium', label: 'Premium' },
+  { value: 'bulk', label: 'Bulk' },
+  { value: 'unclaimed', label: 'Unclaimed' },
+]
+const ROW_CAP = 200
+/** By-product rows drawn when the list folds. Measured at 1440: four rows plus the disclosure
+ *  stand level with the pile's figures and lane bar, and five rows without one fit under them —
+ *  so a sixth kind folds the list to four and the disclosure takes the fifth row's slot. */
+const PRODUCT_FOLD = 4
+
+function venueLabel(venue: string): string {
+  return VENUES.find((v) => v.value === venue)?.label ?? venue
+}
+
+function stateLabel(state: string): string {
+  return STATES.find((s) => s.value === state)?.label ?? state
+}
+
+function deliveryLabel(delivery: string): string {
+  if (delivery === 'physical') return 'Physical'
+  if (delivery === 'digital') return 'Digital'
+  return delivery
+}
+
+function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`
+}
+
+/** The code with every letter and digit replaced, its 3-4-3-3 shape kept. */
+function mask(code: string): string {
+  return code.replace(/[A-Za-z0-9]/g, '•')
+}
+
+function stateTone(state: string): Tone {
+  switch (state) {
+    case 'held':
+      return 'ok'
+    case 'reserved':
+      return 'accent'
+    case 'dead':
+      return 'danger'
+    default:
+      return 'default'
+  }
+}
+
+function laneTone(lane: string): Tone {
+  if (lane === 'premium') return 'accent'
+  if (lane === 'none' || lane === 'unclaimed') return 'warn'
+  return 'default'
+}
+
+function laneLabel(lane: string): string {
+  if (lane === 'premium') return 'Premium'
+  if (lane === 'bulk') return 'Bulk'
+  return 'No lane'
+}
+
+function laneOf(entry: CodeEntry): LaneFilter {
+  if (entry.product === null || entry.product === '') return 'unclaimed'
+  return entry.premium ? 'premium' : 'bulk'
+}
+
+function boxLabel(box: BoxRecord): string {
+  const held = box.on_hand ?? box.cards
+  return `Box ${box.box}${box.name ? ` · ${box.name}` : ''} · ${plural(held, 'card')}`
+}
+
+function when(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return iso.slice(0, 10)
+  return at.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+/* ---- sheet ----------------------------------------------------------------------------------- */
+
+function Sheet({
+  title,
+  icon,
+  onClose,
+  children,
+}: {
+  readonly title: string
+  readonly icon: IconName
+  readonly onClose: () => void
+  readonly children: ReactNode
+}) {
+  const panel = useRef<HTMLDivElement>(null)
+  /* The control that opened the sheet, read during the first render — a field's autoFocus has
+     already moved focus by the time an effect runs — so it gets focus back when the sheet closes. */
+  const [opener] = useState<HTMLElement | null>(() =>
+    document.activeElement instanceof HTMLElement ? document.activeElement : null,
+  )
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.body.setAttribute('data-codes-sheet', '')
+    /* A field with autoFocus has taken focus by now; otherwise the sheet itself takes it, so
+       Tab and a screen reader start inside the dialog rather than on the page behind. */
+    const frame = window.requestAnimationFrame(() => {
+      const el = panel.current
+      if (el !== null && !el.contains(document.activeElement)) el.focus({ preventScroll: true })
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+      document.body.removeAttribute('data-codes-sheet')
+      if (opener !== null && document.contains(opener)) opener.focus({ preventScroll: true })
+    }
+  }, [onClose, opener])
+  /* Portalled to <body>: `main.bn-page` animates a transform, and a transformed ancestor is the
+     containing block for a fixed sheet — rendered inline, the sheet hung off the page column
+     rather than the viewport, and opened from a task card it was off-screen under a scrim. */
+  return createPortal(
+    <>
+      <div className="bn-scrim codes-scrim" onClick={onClose} />
+      <div
+        ref={panel}
+        className="bn-sheet codes-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="codes-sheet-title"
+        tabIndex={-1}
+      >
+        <header className="codes-sheet-head">
+          <span className="codes-sheet-icon">
+            <Icon name={icon} size={18} />
+          </span>
+          <h2 id="codes-sheet-title" className="codes-sheet-title">
+            {title}
+          </h2>
+          <Button variant="ghost" iconOnly icon="x" onClick={onClose}>
+            Close
+          </Button>
+        </header>
+        <div className="codes-sheet-body">{children}</div>
+      </div>
+    </>,
+    document.body,
+  )
+}
+
+/* ---- a code string, masked until asked ----------------------------------------------------------- */
+
+function Code({ code, shown, odd }: { readonly code: string; readonly shown: boolean; readonly odd?: boolean }) {
   return (
-    <div className={`codes-tally${tone ? ` is-${tone}` : ''}`}>
-      <span className="codes-tally-n">{n}</span>
-      <span className="codes-tally-label">{label}</span>
+    <span key={shown ? 'shown' : 'masked'} className={`codes-code${shown ? ' is-shown' : ''}${odd ? ' is-odd' : ''}`}>
+      {shown ? code : mask(code)}
+    </span>
+  )
+}
+
+/** Clipboard state drawn on the control itself — a 'Copied' beat on success, an inline refusal on
+ *  failure — and never a toast: inside a sheet on a phone the stack sits over the sheet's head, and
+ *  the reserve receipt is already the one toast there. */
+function useClipboard(): { readonly copied: boolean; readonly failed: boolean; readonly copy: (text: string) => Promise<void> } {
+  const [copied, setCopied] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const timer = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current)
+    },
+    [],
+  )
+  const copy = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setFailed(false)
+      setCopied(true)
+      if (timer.current !== null) window.clearTimeout(timer.current)
+      timer.current = window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setCopied(false)
+      setFailed(true)
+    }
+  }, [])
+  return { copied, failed, copy }
+}
+
+/** The reserved codes, handed over: masked, revealable, copyable, downloadable. */
+function CodeBlock({ codes, name }: { readonly codes: readonly string[]; readonly name: string }) {
+  const [shown, setShown] = useState(false)
+  const clip = useClipboard()
+  const download = useCallback(() => {
+    const blob = new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${name || 'codes'}.txt`
+    a.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }, [codes, name])
+  return (
+    <div className="codes-block">
+      <div className="codes-block-bar">
+        <span className="bn-label">{plural(codes.length, 'code')}</span>
+        <span className="bn-spacer" />
+        <Button size="sm" variant="ghost" icon={shown ? 'lock' : 'eye'} onClick={() => setShown((s) => !s)} aria-pressed={shown}>
+          {shown ? 'Hide' : 'Reveal'}
+        </Button>
+        <Button
+          size="sm"
+          variant={clip.copied ? 'ok' : undefined}
+          icon={clip.copied ? 'check' : 'copy'}
+          onClick={() => void clip.copy(codes.join('\n'))}
+        >
+          {clip.copied ? 'Copied' : 'Copy all'}
+        </Button>
+        <Button size="sm" icon="download" onClick={download}>
+          Download .txt
+        </Button>
+      </div>
+      {clip.failed ? (
+        <div className="codes-block-notice">
+          <Notice tone="danger" title="The clipboard refused">
+            Reveal the codes and copy them by hand.
+          </Notice>
+        </div>
+      ) : null}
+      <ol className="codes-block-list">
+        {codes.map((code) => (
+          <li key={code}>
+            <Code code={code} shown={shown} />
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
 
+/** The manifest's path on the capture server, with a copy control that reports on itself. */
+function ManifestPath({ path }: { readonly path: string }) {
+  const clip = useClipboard()
+  return (
+    <>
+      <div className="codes-path">
+        <code>{path}</code>
+        <Button
+          size="sm"
+          variant={clip.copied ? 'ok' : 'ghost'}
+          icon={clip.copied ? 'check' : 'copy'}
+          onClick={() => void clip.copy(path)}
+        >
+          {clip.copied ? 'Copied' : 'Copy path'}
+        </Button>
+      </div>
+      {clip.failed ? (
+        <Notice tone="danger" title="The clipboard refused">
+          Select the path and copy it by hand.
+        </Notice>
+      ) : null}
+    </>
+  )
+}
+
+/* ---- a number the operator just caused ------------------------------------------------------------- */
+
+function Figure({ n, of, label }: { readonly n: number; readonly of?: number; readonly label: ReactNode }) {
+  return (
+    <div className="codes-figure">
+      <span className="codes-figure-n">
+        {n.toLocaleString()}
+        {of === undefined ? null : <small> of {of.toLocaleString()}</small>}
+      </span>
+      <span className="codes-figure-label">{label}</span>
+    </div>
+  )
+}
+
+function ProductTable({ rows }: { readonly rows: readonly { product: string; display: string; premium: boolean; count: number }[] }) {
+  return (
+    <table className="bn-table codes-mini-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Lane</th>
+          <th className="num">Codes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.product}>
+            <td>{row.display}</td>
+            <td>
+              <Pill tone={row.premium ? 'accent' : 'default'}>{row.premium ? 'Premium' : 'Bulk'}</Pill>
+            </td>
+            <td className="num">{row.count.toLocaleString()}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/* ==================================================================================================== */
+
 export function Codes() {
   const [ledger, setLedger] = useState<CodeLedger | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
+  /* A failure to READ the ledger is the page's, not a sheet's: it is drawn as an empty state
+     with the way back in it, and never inside a task sheet. */
+  const [loadFailure, setLoadFailure] = useState<Failure | null>(null)
+  const [retrying, setRetrying] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [pending, setPending] = useState<string | null>(null)
+  const [boxes, setBoxes] = useState<BoxRecord[] | null>(null)
+
+  const [sheet, setSheet] = useState<SheetName | null>(null)
 
   const [box, setBox] = useState('')
   const [scan, setScan] = useState<CodeScanResult | null>(null)
@@ -74,15 +383,24 @@ export function Codes() {
   const [committed, setCommitted] = useState<CodeExportResult | null>(null)
 
   const [filter, setFilter] = useState('')
+  const [stateFilter, setStateFilter] = useState<StateFilter>('all')
+  const [laneFilter, setLaneFilter] = useState<LaneFilter>('all')
+  const [tab, setTab] = useState<LedgerTab>('codes')
+  const [revealAll, setRevealAll] = useState(false)
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set())
+  const [showAll, setShowAll] = useState(false)
+  const [dupOpen, setDupOpen] = useState(false)
+  const [allProducts, setAllProducts] = useState(false)
 
   /* THE LOT BUILDER. Box-scoped and physical by default, which is the shape the owner
      settled on 2026-08-30: 1,000-card lots, shipped, eBay or TCGplayer only. */
   const [lotBox, setLotBox] = useState('')
-  const [lotVenue, setLotVenue] = useState('ebay')
-  const [lotDelivery, setLotDelivery] = useState<'physical' | 'digital'>('physical')
+  const [lotVenue, setLotVenue] = useState<Venue>('ebay')
+  const [lotDelivery, setLotDelivery] = useState<Delivery>('physical')
   const [lotPlan, setLotPlan] = useState<LotResult | null>(null)
   const [lotId, setLotId] = useState('')
   const [lotBuilt, setLotBuilt] = useState<LotResult | null>(null)
+  const [lotTab, setLotTab] = useState<LotTab>('listing')
   const [lots, setLots] = useState<LotReceipt[]>([])
 
   const load = useCallback(async () => {
@@ -90,24 +408,39 @@ export function Codes() {
       const [ledgerNext, lotsNext] = await Promise.all([getCodes(), getLots()])
       setLedger(ledgerNext)
       setLots(lotsNext.lots)
-      setFailure(null)
+      setLoadFailure(null)
     } catch (err) {
-      setFailure(describeFailure(err))
+      setLoadFailure(describeFailure(err))
     }
   }, [])
 
+  const retry = useCallback(async () => {
+    setRetrying(true)
+    try {
+      await load()
+    } finally {
+      setRetrying(false)
+    }
+  }, [load])
+
   useEffect(() => {
     void load()
+    getBoxes()
+      .then((summary) => setBoxes([...summary.boxes].sort((a, b) => b.box - a.box)))
+      .catch(() => setBoxes([]))
   }, [load])
+
+  const closeSheet = useCallback(() => setSheet(null), [])
 
   const runScan = useCallback(
     async (dryRun: boolean) => {
       const n = Number(box)
       if (!Number.isSafeInteger(n) || n < 1) {
-        setFailure({ code: 'box_required', message: 'Type the box number whose photographs should be scanned.' })
+        setFailure({ code: 'box_required', message: 'Choose the box whose photographs should be scanned.' })
         return
       }
       setBusy(true)
+      setPending(dryRun ? 'scan-preview' : 'scan')
       try {
         setScan(await scanCodes({ box: n, preview: dryRun }))
         setFailure(null)
@@ -116,6 +449,7 @@ export function Codes() {
         setFailure(describeFailure(err))
       } finally {
         setBusy(false)
+        setPending(null)
       }
     },
     [box, load],
@@ -123,6 +457,7 @@ export function Codes() {
 
   const runPreview = useCallback(async () => {
     setBusy(true)
+    setPending('hand-preview')
     setCommitted(null)
     try {
       setPreview(await exportCodes({ lane }))
@@ -131,6 +466,7 @@ export function Codes() {
       setFailure(describeFailure(err))
     } finally {
       setBusy(false)
+      setPending(null)
     }
   }, [lane])
 
@@ -143,17 +479,24 @@ export function Codes() {
       return
     }
     setBusy(true)
+    setPending('hand-commit')
     try {
       const done = await exportCodes({ lane, confirm: true, orderId: orderId.trim() })
       setCommitted(done)
       setPreview(null)
       setOrderId('')
       setFailure(null)
+      toast({
+        kind: 'ok',
+        title: `${plural(done.count, 'code')} reserved to ${done.order_id ?? 'the order'}`,
+        body: 'Copy them to the buyer from the sheet. They will never be offered again.',
+      })
       await load()
     } catch (err) {
       setFailure(describeFailure(err))
     } finally {
       setBusy(false)
+      setPending(null)
     }
   }, [lane, orderId, load])
 
@@ -162,11 +505,12 @@ export function Codes() {
     if (lotDelivery === 'physical' && (!Number.isSafeInteger(n) || n < 1)) {
       setFailure({
         code: 'box_required',
-        message: 'A physical lot is scoped to a box — type the box number.',
+        message: 'A physical lot is scoped to a box — choose the box.',
       })
       return
     }
     setBusy(true)
+    setPending('lot-plan')
     setLotBuilt(null)
     try {
       setLotPlan(
@@ -184,12 +528,14 @@ export function Codes() {
       setFailure(describeFailure(err))
     } finally {
       setBusy(false)
+      setPending(null)
     }
   }, [lotBox, lotVenue, lotDelivery])
 
   const commitLot = useCallback(async () => {
     const n = Number(lotBox)
     setBusy(true)
+    setPending('lot-commit')
     try {
       const done = await buildLot({
         scope: lotDelivery === 'physical' ? 'box' : 'count',
@@ -201,465 +547,1066 @@ export function Codes() {
         lotId: lotId.trim() || undefined,
       })
       setLotBuilt(done)
+      setLotTab(done.listing !== undefined ? 'listing' : done.packing !== undefined ? 'packing' : 'manifest')
       setLotPlan(null)
       setLotId('')
       setFailure(null)
+      toast({
+        kind: 'ok',
+        title: `Lot ${done.lot_id ?? ''} built`.replace(/\s+/g, ' ').trim(),
+        body: `${plural(done.count, 'code')} reserved. The listing, packing slip and manifest are in the sheet.`,
+      })
       await load()
     } catch (err) {
       setFailure(describeFailure(err))
     } finally {
       setBusy(false)
+      setPending(null)
     }
   }, [lotBox, lotVenue, lotDelivery, lotId, load])
+
+  /* ---- the ledger, filtered ------------------------------------------------------------- */
 
   const rows = useMemo(() => {
     if (ledger === null) return []
     const needle = filter.trim().toLowerCase()
-    if (!needle) return ledger.entries
-    return ledger.entries.filter(
-      (e) =>
+    return ledger.entries.filter((e) => {
+      if (stateFilter !== 'all' && e.state !== stateFilter) return false
+      if (laneFilter !== 'all' && laneOf(e) !== laneFilter) return false
+      if (!needle) return true
+      return (
         e.code.toLowerCase().includes(needle) ||
         (e.product_display ?? '').toLowerCase().includes(needle) ||
         (e.set_hint ?? '').toLowerCase().includes(needle) ||
         (e.order_id ?? '').toLowerCase().includes(needle) ||
-        e.state.includes(needle),
+        (e.buyer ?? '').toLowerCase().includes(needle) ||
+        e.state.includes(needle)
+      )
+    })
+  }, [ledger, filter, stateFilter, laneFilter])
+
+  const laneCounts = useMemo(() => {
+    const counts: Record<LaneFilter, number> = { all: 0, premium: 0, bulk: 0, unclaimed: 0 }
+    if (ledger === null) return counts
+    for (const e of ledger.entries) {
+      if (stateFilter !== 'all' && e.state !== stateFilter) continue
+      counts.all += 1
+      counts[laneOf(e)] += 1
+    }
+    return counts
+  }, [ledger, stateFilter])
+
+  const filterKey = `${stateFilter}|${laneFilter}|${filter.trim().toLowerCase()}`
+  const visible = showAll ? rows : rows.slice(0, ROW_CAP)
+  const filtered = stateFilter !== 'all' || laneFilter !== 'all' || filter.trim() !== ''
+
+  const toggleRow = useCallback((code: string) => {
+    setRevealed((prev) => {
+      const next = new Set(prev)
+      if (next.has(code)) next.delete(code)
+      else next.add(code)
+      return next
+    })
+  }, [])
+
+  const clearFilters = useCallback(() => {
+    setFilter('')
+    setStateFilter('all')
+    setLaneFilter('all')
+  }, [])
+
+  /* ---- pieces -------------------------------------------------------------------------- */
+
+  const failureNode =
+    failure === null ? null : (
+      <div className="codes-failure bn-anim-pop">
+        <Notice tone="danger" title={failure.message} code={failure.code || undefined} />
+        <Button variant="ghost" size="sm" iconOnly icon="x" onClick={() => setFailure(null)}>
+          Dismiss
+        </Button>
+      </div>
     )
-  }, [ledger, filter])
+
+  const boxField = (value: string, onChange: (next: string) => void, autoFocus?: boolean) => (
+    <label className="bn-field codes-field">
+      <span className="bn-field-label">Box</span>
+      {boxes !== null && boxes.length > 0 ? (
+        <select className="bn-select" value={value} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus}>
+          <option value="">Choose a box…</option>
+          {boxes.map((b) => (
+            <option key={b.box} value={String(b.box)}>
+              {boxLabel(b)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          className="bn-input"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ''))}
+          placeholder="Box number"
+          autoFocus={autoFocus}
+        />
+      )}
+    </label>
+  )
+
+  const held = ledger === null ? 0 : ledger.lanes.premium + ledger.lanes.bulk + ledger.lanes.unclaimed
+  const segments =
+    ledger === null
+      ? []
+      : [
+          { key: 'premium', label: 'Premium', n: ledger.lanes.premium },
+          { key: 'bulk', label: 'Bulk', n: ledger.lanes.bulk },
+          { key: 'unclaimed', label: 'Unclaimed', n: ledger.lanes.unclaimed },
+        ]
+  const maxProduct = ledger === null ? 0 : Math.max(0, ...ledger.by_product.map((r) => r.count))
+  /* folding five kinds to four behind a one-row disclosure would hide one row to show one control */
+  const productsFold = ledger !== null && ledger.by_product.length > PRODUCT_FOLD + 1
+
+  const openSheet = (name: SheetName) => {
+    setFailure(null)
+    setSheet(name)
+  }
+
+  /* ---- render -------------------------------------------------------------------------- */
 
   return (
-    <main className="codes">
-      <header className="codes-head">
-        <h1>Code cards</h1>
-        <p className="codes-quiet">
-          The QR carries the redemption code, so reading one costs nothing and calls nothing.
-          What this screen decides is which of two populations a code belongs to — and the
-          only mistake that costs real money is letting a premium code leave in a bulk lot.
-        </p>
-      </header>
+    <main className="codes bn-page">
+      <PageHeader
+        eyebrow="Library"
+        title="Codes"
+        icon="qr"
+        lede="Read a box of code cards for free, keep the premium codes out of the bulk lot, and hand a code to a buyer exactly once."
+        actions={
+          <>
+            <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={busy}>
+              Reload
+            </Button>
+            <Button variant="primary" icon="qr" onClick={() => openSheet('scan')}>
+              Read a box
+            </Button>
+          </>
+        }
+      />
 
-      {failure === null ? null : (
-        <p className="codes-fail" role="alert">
-          {failure.message}
-          {failure.code ? <code> {failure.code}</code> : null}
-        </p>
-      )}
-
-      {/* ---------------------------------------------------------------- scan */}
-      <section className="codes-panel">
-        <h2>Read a box</h2>
-        <p className="codes-quiet">
-          Decodes every code-card photograph in one box. Free — no model call, no network.
-        </p>
-        <div className="codes-row">
-          <label className="codes-field">
-            <span>Box</span>
-            <input
-              inputMode="numeric"
-              value={box}
-              onChange={(e) => setBox(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="9"
-            />
-          </label>
-          <button type="button" onClick={() => void runScan(true)} disabled={busy}>
-            Preview
-          </button>
-          <button type="button" className="codes-go" onClick={() => void runScan(false)} disabled={busy}>
-            Read the box
-          </button>
+      {sheet === null ? failureNode : null}
+      {loadFailure !== null && ledger !== null ? (
+        <div className="codes-failure bn-anim-pop">
+          <Notice tone="danger" title={loadFailure.message} code={loadFailure.code || undefined}>
+            The screen is showing the ledger as it was last read.
+          </Notice>
+          <Button variant="ghost" size="sm" icon="refresh" busy={retrying} disabled={retrying} onClick={() => void retry()}>
+            Try again
+          </Button>
         </div>
-        {scan === null ? null : (
-          <div className="codes-result">
-            <p>
-              <strong>
-                {scan.decoded} of {scan.code_cards}
-              </strong>{' '}
-              code card{scan.code_cards === 1 ? '' : 's'} decoded
-              {scan.preview ? ' (preview — nothing written)' : ''}.
-              {scan.photographs !== scan.code_cards
-                ? ` ${scan.photographs - scan.code_cards} photo(s) of other games were left alone.`
-                : ''}
-            </p>
-            {scan.unread.length === 0 ? null : (
-              <>
-                <p className="codes-warn">
-                  {scan.unread.length} card{scan.unread.length === 1 ? '' : 's'} did not read.
-                  None is lost — each keeps its photograph and its position, and the remedy is
-                  the next reader: the paid vision transcription, then a human.
-                </p>
-                <ul className="codes-unread">
-                  {scan.unread.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        )}
-      </section>
+      ) : null}
 
-      {/* ---------------------------------------------------------------- lanes */}
       {ledger === null ? (
-        <p className="codes-quiet">Reading the ledger…</p>
-      ) : (
-        <>
-          <section className="codes-panel">
-            <h2>What is on hand</h2>
-            <div className="codes-tallies">
-              <Tally n={ledger.lanes.premium} label="premium — list individually" tone="premium" />
-              <Tally n={ledger.lanes.bulk} label="bulk — sells by the lot" />
-              <Tally n={ledger.lanes.unclaimed} label="no product claim" tone={ledger.lanes.unclaimed ? 'warn' : undefined} />
-              <Tally n={ledger.counts.reserved ?? 0} label="reserved to an order" />
-              <Tally n={ledger.counts.delivered ?? 0} label="delivered" />
-              <Tally n={ledger.counts.dead ?? 0} label="dead" />
-            </div>
-            {ledger.lanes.unclaimed === 0 ? null : (
-              <p className="codes-warn">
-                {ledger.lanes.unclaimed} held code{ledger.lanes.unclaimed === 1 ? '' : 's'}{' '}
-                {ledger.lanes.unclaimed === 1 ? 'carries' : 'carry'} no product claim, so{' '}
-                <strong>neither lane will take {ledger.lanes.unclaimed === 1 ? 'it' : 'them'}</strong>. That is
-                deliberate: treating an unclaimed code as a booster would be right most of the
-                time, and the times it is wrong a $1.50 code leaves in a penny lot and nobody
-                finds out. Set the Product field on the capture screen, or correct these cards
-                on the inventory screen.
-              </p>
-            )}
-            {ledger.by_product.length === 0 ? null : (
-              <table className="codes-tiers">
-                <tbody>
-                  {ledger.by_product.map((row) => (
-                    <tr key={row.product}>
-                      <td className={row.premium ? 'is-premium' : ''}>
-                        {/* THE LANE, NOT A GUESS AT IT. This cell drew `premium ? … : 'bulk'`
-                            and so labelled an UNCLAIMED code `bulk` while the export lane was
-                            correctly refusing to take it — the table and the lane disagreeing
-                            about one code, on the screen built to keep them apart. */}
-                        {row.lane === 'none' ? '—' : row.lane}
-                      </td>
-                      <td>{row.display}</td>
-                      <td className="codes-num">{row.count}</td>
-                    </tr>
+        loadFailure === null ? (
+          <div className="codes-loading" aria-busy="true" aria-label="Reading the ledger">
+            <div className="bn-panel codes-pile">
+              <div className="codes-pile-main">
+                <div className="codes-pile-head">
+                  <div className="bn-skeleton" style={{ width: 96, height: 16 }} />
+                  <div className="bn-skeleton" style={{ width: 200, height: 14 }} />
+                </div>
+                <div className="codes-stats">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <div key={i} className="codes-skel-stat">
+                      <div className="bn-skeleton" style={{ width: 64, height: 36 }} />
+                      <div className="bn-skeleton" style={{ width: 72, height: 14 }} />
+                      <div className="bn-skeleton" style={{ width: 96, height: 12 }} />
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-
-          {/* ------------------------------------------------------------ duplicates */}
-          {ledger.duplicates.length === 0 ? null : (
-            <section className="codes-panel is-alarm">
-              <h2>{ledger.duplicates.length} duplicate code(s)</h2>
-              <p>
-                One code was read at two different positions. That is either one card
-                photographed twice, or <strong>two cards bearing one code — in which case one
-                of them is worth nothing.</strong> Look at both photographs before selling
-                either. Nothing here guesses which is which, because a rule would be wrong
-                about half the time.
-              </p>
-              <ul className="codes-unread">
-                {ledger.duplicates.map((e) => (
-                  <li key={e.code}>
-                    <code>{e.code}</code> — box {e.box}/{e.index}
-                    {e.duplicate_positions.map((p) => ` and ${p.box}/${p.index}`).join('')}
-                  </li>
-                ))}
-              </ul>
+                </div>
+                <div className="codes-pile-bar">
+                  <div className="bn-skeleton" style={{ height: 14, borderRadius: 7 }} />
+                  <div className="codes-legend">
+                    {Array.from({ length: 3 }, (_, i) => (
+                      <div key={i} className="bn-skeleton" style={{ width: 84, height: 12 }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <aside className="codes-products" aria-hidden="true">
+                <div className="codes-products-head">
+                  <div className="bn-skeleton" style={{ width: 92, height: 16 }} />
+                  <div className="bn-skeleton" style={{ width: 44, height: 12 }} />
+                </div>
+                <div className="codes-skel-products">
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <div key={i} className="codes-skel-product">
+                      <div className="bn-skeleton" style={{ width: `${[62, 30, 74, 40][i]}%`, height: 14 }} />
+                      <div className="bn-skeleton" style={{ width: 48, height: 20, borderRadius: 999 }} />
+                      <div className="bn-skeleton" style={{ width: 36, height: 14 }} />
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            </div>
+            <div className="codes-tasks" aria-hidden="true">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div key={i} className="codes-task codes-skel-task">
+                  <div className="bn-skeleton" style={{ width: 40, height: 40, borderRadius: 12 }} />
+                  <div className="bn-skeleton" style={{ width: '55%', height: 18 }} />
+                  <div className="bn-skeleton" style={{ width: '90%', height: 14 }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bn-panel codes-empty codes-unreadable">
+            <EmptyState
+              icon="alert"
+              title="The ledger could not be read"
+              body={
+                <>
+                  <span className="codes-failure-msg">{loadFailure.message}</span>
+                  The capture server did not answer with the ledger, so nothing on this screen can be shown yet.
+                  {loadFailure.code ? <code className="bn-notice-code codes-failure-code">{loadFailure.code}</code> : null}
+                </>
+              }
+              actions={
+                <Button icon="refresh" busy={retrying} disabled={retrying} onClick={() => void retry()}>
+                  Try again
+                </Button>
+              }
+            />
+          </div>
+        )
+      ) : ledger.total === 0 ? (
+        <>
+          <div className="bn-panel codes-empty">
+            <EmptyState
+              icon="qr"
+              title="No codes on file yet"
+              body="Capture code cards with the Game set to Pokémon code cards, then read the box. Decoding is free — no model call, no network."
+              actions={
+                <>
+                  <Button icon="qr" onClick={() => openSheet('scan')}>
+                    Read a box
+                  </Button>
+                  <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
+                    Go to capture
+                  </Button>
+                </>
+              }
+            />
+          </div>
+          {lots.length === 0 ? null : (
+            <section className="bn-panel codes-ledger">
+              <div className="bn-panel-head">
+                <span className="bn-section-title">
+                  <Icon name="package" size={16} /> Lots
+                </span>
+              </div>
+              <LotsTable lots={lots} />
             </section>
           )}
-
-          {/* ------------------------------------------------------------ export */}
-          <section className="codes-panel">
-            <h2>Hand codes to a buyer</h2>
-            <p className="codes-quiet">
-              Confirming reserves every code it returns, permanently. A reserved code is never
-              offered again — which is the only thing standing between this pile and selling
-              one code twice.
-            </p>
-            <div className="codes-row">
-              <div className="codes-lanes" role="group" aria-label="lane">
-                {(['premium', 'bulk'] as Lane[]).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    className={lane === l ? 'is-on' : ''}
-                    onClick={() => {
-                      setLane(l)
-                      setPreview(null)
-                      setCommitted(null)
-                    }}
-                  >
-                    {l} ({ledger.lanes[l]})
-                  </button>
-                ))}
-              </div>
-              <button type="button" onClick={() => void runPreview()} disabled={busy}>
-                Preview
-              </button>
-            </div>
-
-            {preview === null ? null : (
-              <div className="codes-result">
-                <p>
-                  <strong>{preview.available}</strong> code(s) in the {preview.lane} lane.{' '}
-                  {preview.note}
-                </p>
-                {preview.available === 0 ? null : (
-                  <div className="codes-row">
-                    <label className="codes-field">
-                      <span>Order name</span>
-                      <input
-                        value={orderId}
-                        onChange={(e) => setOrderId(e.target.value)}
-                        placeholder="wholesale-2026-08-30"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="codes-commit"
-                      onClick={() => void runCommit()}
-                      disabled={busy || !orderId.trim()}
-                    >
-                      Reserve {preview.available} code(s)
-                    </button>
+        </>
+      ) : (
+        <>
+          {/* -------------------------------------------------------------- alerts */}
+          {ledger.duplicates.length === 0 && ledger.lanes.unclaimed === 0 ? null : (
+            <div className="codes-banners">
+              {ledger.duplicates.length === 0 ? null : (
+                <div className="codes-banner is-danger" role="status">
+                  <Icon name="alert" size={18} />
+                  <div className="codes-banner-text">
+                    <strong>{plural(ledger.duplicates.length, 'duplicate code')}</strong> — one code read at two positions. Either one
+                    card was photographed twice, or two cards bear one code and one of them is worth nothing. Look at both photographs
+                    before selling either.
                   </div>
-                )}
-              </div>
-            )}
-
-            {committed === null ? null : (
-              <div className="codes-result is-done">
-                <p>{committed.note}</p>
-                <textarea
-                  className="codes-codes"
-                  readOnly
-                  rows={Math.min(12, (committed.codes ?? []).length + 1)}
-                  value={(committed.codes ?? []).join('\n')}
-                />
-                <p className="codes-quiet">
-                  Copy these to the buyer. Nothing here sends anything anywhere — there is no
-                  channel integration, on purpose: no channel has been executed even once, and
-                  building delivery automation against an unproven one is the mistake
-                  docs/specs/code-cards.md §6.3 names.
-                </p>
-              </div>
-            )}
-          </section>
-
-          {/* -------------------------------------------------------------- the lots */}
-          <section className="codes-panel">
-            <h2>Build a lot</h2>
-            <p className="codes-quiet">
-              A physical lot is <strong>the whole box, or nothing</strong>. Anything left in
-              the box would go in the parcel anyway, so a lot that took only part of one
-              would produce a correct ledger and a packing slip that lies. Move the strays
-              out first — the refusal names them by index.
-            </p>
-            <div className="codes-row">
-              <div className="codes-lanes" role="group" aria-label="delivery">
-                {(['physical', 'digital'] as const).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    className={lotDelivery === d ? 'is-on' : ''}
-                    onClick={() => {
-                      setLotDelivery(d)
-                      setLotPlan(null)
-                      setLotBuilt(null)
-                    }}
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    iconRight={dupOpen ? 'chevronUp' : 'chevronDown'}
+                    aria-expanded={dupOpen}
+                    onClick={() => setDupOpen((o) => !o)}
                   >
-                    {d}
-                  </button>
-                ))}
+                    Review duplicates
+                  </Button>
+                </div>
+              )}
+              {dupOpen && ledger.duplicates.length > 0 ? (
+                <ul className="codes-dups bn-anim-in">
+                  {ledger.duplicates.map((e) => {
+                    const shown = revealAll || revealed.has(e.code)
+                    const positions = [{ box: e.box, index: e.index }, ...e.duplicate_positions]
+                    return (
+                      <li key={e.code} className="codes-dup">
+                        <button
+                          type="button"
+                          className="codes-code-btn"
+                          onClick={() => toggleRow(e.code)}
+                          aria-pressed={shown}
+                          aria-label={shown ? 'Hide this code' : 'Reveal this code'}
+                        >
+                          <Code code={e.code} shown={shown} odd={!e.well_formed} />
+                          <Icon name={shown ? 'lock' : 'eye'} size={13} />
+                        </button>
+                        <span className="codes-dup-where">
+                          {positions.map((p, i) =>
+                            p.box === null || p.index === null ? (
+                              <span key={i} className="bn-faint">
+                                No position
+                              </span>
+                            ) : (
+                              <a
+                                key={i}
+                                href={photoUrl(p.box, p.index)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="codes-dup-link"
+                                aria-label={`Open the photograph at box ${p.box}, index ${p.index}`}
+                              >
+                                <Icon name="image" size={13} /> Box {p.box} · index <span className="codes-index">{p.index}</span>
+                              </a>
+                            ),
+                          )}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : null}
+              {ledger.lanes.unclaimed === 0 ? null : (
+                <div className="codes-banner is-warn" role="status">
+                  <Icon name="alert" size={18} />
+                  <div className="codes-banner-text">
+                    <strong>{plural(ledger.lanes.unclaimed, 'held code')}</strong>{' '}
+                    {ledger.lanes.unclaimed === 1 ? 'carries' : 'carry'} no product claim, so neither lane will take{' '}
+                    {ledger.lanes.unclaimed === 1 ? 'it' : 'them'}. Treating one as a booster would be right most of the time — and
+                    the time it is wrong, a premium code leaves in a penny lot.
+                  </div>
+                  <Button size="sm" iconRight="arrowRight" onClick={() => (window.location.hash = '#/inventory')}>
+                    Fix on Inventory
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ---------------------------------------------------------------- hero */}
+          <section className="bn-panel codes-pile" aria-label="The pile">
+            <div className="codes-pile-main">
+              <div className="codes-pile-head">
+                <span className="bn-section-title">
+                  <Icon name="layers" size={16} /> The pile
+                </span>
+                <span className="codes-pile-sum">
+                  <strong>{plural(held, 'code')}</strong> on hand · {ledger.total.toLocaleString()} on file
+                </span>
               </div>
-              <div className="codes-lanes" role="group" aria-label="venue">
-                {['ebay', 'tcgplayer'].map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    className={lotVenue === v ? 'is-on' : ''}
-                    onClick={() => setLotVenue(v)}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-              <label className="codes-field">
-                <span>{lotDelivery === 'physical' ? 'Box' : 'How many'}</span>
-                <input
-                  inputMode="numeric"
-                  value={lotBox}
-                  onChange={(e) => setLotBox(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder={lotDelivery === 'physical' ? '12' : '1000'}
+              <div className="codes-stats">
+                <Stat className="codes-stat is-premium" value={ledger.lanes.premium.toLocaleString()} label={<><span>Premium</span><span className="codes-stat-sub">sold singly</span></>} />
+                <Stat className="codes-stat" value={ledger.lanes.bulk.toLocaleString()} label={<><span>Bulk</span><span className="codes-stat-sub">sold by lot</span></>} />
+                <Stat
+                  className={`codes-stat${ledger.lanes.unclaimed > 0 ? ' is-warn' : ''}`}
+                  value={ledger.lanes.unclaimed.toLocaleString()}
+                  label={<><span>Unclaimed</span><span className="codes-stat-sub">no lane</span></>}
                 />
-              </label>
-              <button type="button" onClick={() => void planLot()} disabled={busy}>
-                Plan
-              </button>
+                <Stat className="codes-stat is-gone is-first-gone" value={(ledger.counts.reserved ?? 0).toLocaleString()} label={<><span>Reserved</span><span className="codes-stat-sub">to an order</span></>} />
+                <Stat className="codes-stat is-gone" value={(ledger.counts.delivered ?? 0).toLocaleString()} label={<><span>Delivered</span><span className="codes-stat-sub">handed over</span></>} />
+                <Stat className={`codes-stat is-gone${(ledger.counts.dead ?? 0) > 0 ? ' is-danger' : ''}`} value={(ledger.counts.dead ?? 0).toLocaleString()} label={<><span>Dead</span><span className="codes-stat-sub">worth nothing</span></>} />
+              </div>
+              <div className="codes-pile-bar">
+                <div className="codes-lanebar" role="img" aria-label={segments.map((s) => `${s.label} ${s.n}`).join(', ')}>
+                  {held === 0 ? (
+                    <span className="codes-lanebar-empty" />
+                  ) : (
+                    segments
+                      .filter((s) => s.n > 0)
+                      .map((s, i) => (
+                        <span
+                          key={s.key}
+                          className={`codes-lanebar-seg is-${s.key}`}
+                          style={{ flexGrow: s.n, animationDelay: `${120 + i * 90}ms` }}
+                          title={`${s.label} · ${s.n.toLocaleString()}`}
+                        />
+                      ))
+                  )}
+                </div>
+                <div className="codes-legend">
+                  {segments.map((s) => (
+                    <span key={s.key} className={`codes-legend-item is-${s.key}`}>
+                      <i className="codes-legend-dot" />
+                      {s.label}
+                      <span className="codes-legend-n">{held === 0 ? '0%' : `${Math.round((s.n / held) * 100)}%`}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {lotPlan === null ? null : (
-              <div className="codes-result">
-                <p>
-                  <strong>{lotPlan.count}</strong> code(s)
-                  {lotPlan.box === null ? '' : ` in box ${lotPlan.box}`}. {lotPlan.note}
-                </p>
-                {lotPlan.premium_in_lot > 0 ? (
-                  <p className="codes-warn">
-                    <strong>{lotPlan.premium_in_lot} PREMIUM code(s) are in this lot.</strong>{' '}
-                    A premium code lists at roughly 46x a booster. Selling one inside a bulk
-                    lot is the most expensive mistake on this track — check this was
-                    deliberate.
-                  </p>
-                ) : null}
-                <table className="codes-tiers">
-                  <tbody>
-                    {lotPlan.by_product.map((row) => (
-                      <tr key={row.product}>
-                        <td className={row.premium ? 'is-premium' : ''}>
-                          {row.premium ? 'premium' : 'bulk'}
-                        </td>
-                        <td>{row.display}</td>
-                        <td className="codes-num">{row.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="codes-row">
-                  <label className="codes-field">
-                    <span>Lot name</span>
-                    <input
-                      value={lotId}
-                      onChange={(e) => setLotId(e.target.value)}
-                      placeholder="ebay-2026-08-30-box12"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="codes-commit"
-                    onClick={() => void commitLot()}
-                    disabled={busy}
-                  >
-                    Reserve {lotPlan.count} code(s)
-                  </button>
-                </div>
-                <p className="codes-quiet">
-                  The name is how you find this sale again on a settlement statement weeks
-                  later, so pick something you will recognise. Leave it blank for a generated
-                  one.
-                </p>
+            <aside className="codes-products" aria-label="By product">
+              <div className="codes-products-head">
+                <span className="bn-section-title">
+                  <Icon name="tag" size={16} /> By product
+                </span>
+                <span className="bn-muted">{plural(ledger.by_product.length, 'kind')}</span>
               </div>
-            )}
-
-            {lotBuilt === null ? null : (
-              <div className="codes-result is-done">
-                <p>{lotBuilt.note}</p>
-                {lotBuilt.listing === undefined ? null : (
-                  <>
-                    <h3>Listing</h3>
-                    <pre className="codes-pre">{lotBuilt.listing}</pre>
-                  </>
-                )}
-                {lotBuilt.packing === undefined ? null : (
-                  <>
-                    <h3>Packing slip</h3>
-                    <pre className="codes-pre">{lotBuilt.packing}</pre>
-                  </>
-                )}
-                <p className="codes-quiet">
-                  {/* THE MANIFEST IS A PATH, NOT A BLOCK OF TEXT. It is the product, and a
-                      thousand live codes rendered into this page would also land in every
-                      devtools network tab and screenshot that ever caught it. */}
-                  The buyer&rsquo;s manifest is a file:{' '}
-                  <code>{lotBuilt.files?.['manifest.txt']}</code>
-                </p>
-              </div>
-            )}
-
-            {lots.length === 0 ? null : (
-              <table className="codes-table">
-                <thead>
-                  <tr>
-                    <th>Lot</th>
-                    <th>Codes</th>
-                    <th>Box</th>
-                    <th>Delivery</th>
-                    <th>Venue</th>
-                    <th>Built</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lots.map((l) => (
-                    <tr key={l.lot_id}>
-                      <td>{l.lot_id}</td>
-                      <td className="codes-num">{l.count}</td>
-                      <td>{l.box ?? '—'}</td>
-                      <td>{l.delivery}</td>
-                      <td>{l.venue}</td>
-                      <td>{(l.built_at ?? '').slice(0, 10)}</td>
-                    </tr>
+              {ledger.by_product.length === 0 ? (
+                <p className="codes-products-empty">No product claims yet.</p>
+              ) : (
+                <ul className="codes-product-list">
+                  {(allProducts || !productsFold ? ledger.by_product : ledger.by_product.slice(0, PRODUCT_FOLD)).map((row, i) => (
+                    <li key={row.product} className="codes-product" style={{ '--delay': `${80 + i * 30}ms` } as CSSProperties}>
+                      <span className="codes-product-name">{row.display}</span>
+                      <Pill tone={laneTone(row.lane)}>{laneLabel(row.lane)}</Pill>
+                      <span className="codes-product-n">{row.count.toLocaleString()}</span>
+                      <span className={`codes-product-bar is-${row.lane}`}>
+                        <span style={{ width: `${maxProduct === 0 ? 0 : Math.max(2, (row.count / maxProduct) * 100)}%` }} />
+                      </span>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            )}
+                </ul>
+              )}
+              {productsFold ? (
+                <div className="codes-products-foot">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconRight={allProducts ? 'chevronUp' : 'chevronDown'}
+                    aria-expanded={allProducts}
+                    onClick={() => setAllProducts((a) => !a)}
+                  >
+                    {allProducts ? 'Show fewer' : `Show all ${plural(ledger.by_product.length, 'kind')}`}
+                  </Button>
+                </div>
+              ) : null}
+            </aside>
           </section>
 
-          {/* ------------------------------------------------------------ the ledger */}
-          <section className="codes-panel">
-            <h2>The ledger ({ledger.total})</h2>
-            <label className="codes-field codes-filter">
-              <span>Find</span>
-              <input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="a code, a product, a set, an order"
-              />
-            </label>
-            <table className="codes-table">
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>State</th>
-                  <th>Product</th>
-                  <th>Set</th>
-                  <th>Photo</th>
-                  <th>Order</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((e: CodeEntry) => (
-                  <tr key={e.code} className={`is-${e.state}`}>
-                    <td>
-                      <code className={e.well_formed ? '' : 'is-odd'}>{e.code}</code>
-                    </td>
-                    <td>{e.state}</td>
-                    <td>
-                      {e.premium ? <span className="is-premium">premium </span> : null}
-                      {e.product_display ?? '—'}
-                    </td>
-                    <td>{e.set_hint ?? '—'}</td>
-                    <td>
-                      {e.box === null || e.index === null ? (
-                        '—'
-                      ) : (
-                        <a href={photoUrl(e.box, e.index)} target="_blank" rel="noreferrer">
-                          {e.box}/{e.index}
-                        </a>
-                      )}
-                    </td>
-                    <td>{e.order_id ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {rows.length === 0 ? (
-              <p className="codes-quiet">
-                {ledger.total === 0
-                  ? 'No codes yet. Capture code cards with the Game field set to Pokémon code cards, then read the box above.'
-                  : 'Nothing matches that.'}
-              </p>
-            ) : null}
+          {/* --------------------------------------------------------------- tasks */}
+          <section className="codes-tasks" aria-label="Tasks">
+            <TaskCard
+              icon="qr"
+              title="Read a box"
+              body="Decode every code-card photograph in one box into the ledger."
+              meta="Free — no model call, no network"
+              tone="accent"
+              delay={0}
+              onOpen={() => openSheet('scan')}
+            />
+            <TaskCard
+              icon="hand"
+              title="Hand codes to a buyer"
+              body="Reserve one lane's codes to a named order and copy them out."
+              meta={`Premium\u00a0${ledger.lanes.premium.toLocaleString()} · Bulk\u00a0${ledger.lanes.bulk.toLocaleString()}`}
+              tone="warn"
+              delay={50}
+              onOpen={() => openSheet('hand')}
+            />
+            <TaskCard
+              icon="package"
+              title="Build a lot"
+              body="A whole box, shipped, with its listing, packing slip and manifest."
+              meta={lots.length === 0 ? 'No lots built yet' : `${plural(lots.length, 'lot')} built`}
+              tone="ok"
+              delay={100}
+              onOpen={() => openSheet('lot')}
+            />
+          </section>
+
+          {/* -------------------------------------------------------------- ledger */}
+          <section className="bn-panel codes-ledger">
+            <div className="codes-ledger-head">
+              <div className="bn-tabs codes-tabs" role="tablist" aria-label="Ledger">
+                <button type="button" role="tab" className="bn-tab" aria-selected={tab === 'codes'} onClick={() => setTab('codes')}>
+                  Codes <Pill>{ledger.total.toLocaleString()}</Pill>
+                </button>
+                <button type="button" role="tab" className="bn-tab" aria-selected={tab === 'lots'} onClick={() => setTab('lots')}>
+                  Lots <Pill>{lots.length.toLocaleString()}</Pill>
+                </button>
+              </div>
+              {tab === 'codes' ? (
+                <div className="bn-input-wrap codes-search">
+                  <Icon name="search" size={15} />
+                  <input
+                    className="bn-input"
+                    type="search"
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    placeholder="Find a code, product, set or order"
+                    aria-label="Find in the ledger"
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            {tab === 'lots' ? (
+              lots.length === 0 ? (
+                <EmptyState
+                  icon="package"
+                  title="No lots built yet"
+                  body="A lot reserves a whole box of codes at once and writes its listing, packing slip and manifest."
+                  actions={
+                    <Button icon="package" onClick={() => openSheet('lot')}>
+                      Build a lot
+                    </Button>
+                  }
+                />
+              ) : (
+                <LotsTable lots={lots} />
+              )
+            ) : (
+              <>
+                <div className="codes-toolbar">
+                  <div className="codes-chips" role="group" aria-label="State">
+                    {STATES.map((s) => {
+                      const n = s.value === 'all' ? ledger.total : (ledger.counts[s.value] ?? 0)
+                      return (
+                        <button
+                          key={s.value}
+                          type="button"
+                          className="codes-chip"
+                          aria-pressed={stateFilter === s.value}
+                          onClick={() => setStateFilter(s.value)}
+                        >
+                          {s.label}
+                          <span className="codes-chip-n">{n.toLocaleString()}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <span className="codes-toolbar-sep" aria-hidden="true" />
+                  <div className="codes-chips" role="group" aria-label="Lane">
+                    {LANES.map((l) => (
+                      <button
+                        key={l.value}
+                        type="button"
+                        className={`codes-chip is-${l.value}`}
+                        aria-pressed={laneFilter === l.value}
+                        onClick={() => setLaneFilter((cur) => (cur === l.value ? 'all' : l.value))}
+                      >
+                        <i className="codes-chip-dot" />
+                        {l.label}
+                        <span className="codes-chip-n">{laneCounts[l.value].toLocaleString()}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <span className="bn-spacer" />
+                  <Button size="sm" variant="ghost" icon={revealAll ? 'lock' : 'eye'} aria-pressed={revealAll} onClick={() => setRevealAll((r) => !r)}>
+                    {revealAll ? 'Hide codes' : 'Reveal codes'}
+                  </Button>
+                </div>
+
+                {rows.length === 0 ? (
+                  <EmptyState
+                    icon="search"
+                    title="Nothing matches"
+                    body="No code in the ledger matches those filters."
+                    actions={
+                      <Button icon="x" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <>
+                    <div className="codes-table-wrap">
+                      <table className="bn-table codes-table codes-entries">
+                        <thead>
+                          <tr>
+                            <th>Code</th>
+                            <th>State</th>
+                            <th>Product</th>
+                            <th>Set</th>
+                            <th>Position</th>
+                            <th>Order</th>
+                            <th className="codes-th-photo">
+                              <span className="bn-sr">Photograph</span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody key={filterKey}>
+                          {visible.map((e: CodeEntry, i) => {
+                            const shown = revealAll || revealed.has(e.code)
+                            const lane = laneOf(e)
+                            return (
+                              <tr key={e.code} className={`codes-row is-${e.state}`} style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}>
+                                <td data-th="Code">
+                                  <button
+                                    type="button"
+                                    className="codes-code-btn"
+                                    onClick={() => toggleRow(e.code)}
+                                    aria-pressed={shown}
+                                    aria-label={shown ? 'Hide this code' : 'Reveal this code'}
+                                  >
+                                    <Code code={e.code} shown={shown} odd={!e.well_formed} />
+                                    <Icon name={shown ? 'lock' : 'eye'} size={13} />
+                                  </button>
+                                </td>
+                                <td data-th="State">
+                                  <Pill tone={stateTone(e.state)}>{stateLabel(e.state)}</Pill>
+                                </td>
+                                <td data-th="Product">
+                                  <span className="codes-product-cell">
+                                    {e.product_display ?? <span className="codes-unclaimed">No claim</span>}
+                                    {lane === 'premium' ? <Pill tone="accent">{laneLabel('premium')}</Pill> : null}
+                                  </span>
+                                </td>
+                                <td data-th="Set" className="codes-mono" data-empty={e.set_hint ? undefined : ''}>
+                                  {e.set_hint ?? <span className="bn-faint">—</span>}
+                                </td>
+                                <td data-th="Position">
+                                  {e.box === null || e.index === null ? (
+                                    <span className="bn-faint">—</span>
+                                  ) : (
+                                    <span className="codes-where">
+                                      Box {e.box} · index <span className="codes-index">{e.index}</span>
+                                      {e.duplicate_positions.length > 0 ? <Pill tone="danger">Read twice</Pill> : null}
+                                    </span>
+                                  )}
+                                </td>
+                                <td data-th="Order" className="codes-mono" data-empty={e.order_id ? undefined : ''}>
+                                  {e.order_id ?? <span className="bn-faint">—</span>}
+                                </td>
+                                <td data-th="Photo" className="codes-td-photo">
+                                  {e.box === null || e.index === null ? null : (
+                                    <a
+                                      href={photoUrl(e.box, e.index)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="codes-photo-link"
+                                      aria-label={`Open the photograph at box ${e.box}, index ${e.index}`}
+                                    >
+                                      <Icon name="image" size={15} />
+                                      <span className="codes-photo-word">Photograph</span>
+                                    </a>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="codes-ledger-foot">
+                      <span className="bn-muted">
+                        {rows.length > visible.length
+                          ? `Showing ${visible.length.toLocaleString()} of ${rows.length.toLocaleString()}`
+                          : filtered
+                            ? `${plural(rows.length, 'code')} match`
+                            : `${plural(rows.length, 'code')} on file`}
+                      </span>
+                      {rows.length > visible.length ? (
+                        <Button size="sm" variant="ghost" onClick={() => setShowAll(true)}>
+                          Show all {rows.length.toLocaleString()}
+                        </Button>
+                      ) : filtered ? (
+                        <Button size="sm" variant="ghost" icon="x" onClick={clearFilters}>
+                          Clear filters
+                        </Button>
+                      ) : null}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </section>
         </>
       )}
+
+      {/* ================================================================ sheets */}
+      {sheet === 'scan' ? (
+        <Sheet title="Read a box" icon="qr" onClose={closeSheet}>
+          {failureNode}
+          <p className="codes-sheet-lede">
+            Decodes every code-card photograph in the box into the ledger. Free — the QR is the code, so nothing is called and
+            nothing is spent.
+          </p>
+          <form
+            className="codes-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void runScan(false)
+            }}
+          >
+            {boxField(box, setBox, true)}
+            <div className="codes-form-actions">
+              <Button type="button" icon="eye" busy={pending === 'scan-preview'} disabled={busy} onClick={() => void runScan(true)}>
+                Preview
+              </Button>
+              <Button type="submit" variant="primary" icon="qr" busy={pending === 'scan'} disabled={busy}>
+                Read the box
+              </Button>
+            </div>
+          </form>
+
+          {scan === null ? null : (
+            <div className="codes-result bn-anim-in" key={`${scan.box}-${scan.preview ? 'p' : 'w'}-${scan.decoded}`}>
+              <div className="codes-result-head">
+                <Figure n={scan.decoded} of={scan.code_cards} label={<>code cards decoded in box {scan.box}</>} />
+                {scan.preview ? (
+                  <Pill tone="accent" icon="eye">
+                    Preview — nothing written
+                  </Pill>
+                ) : (
+                  <Pill tone="ok" icon="check">
+                    Written to the ledger
+                  </Pill>
+                )}
+              </div>
+              {scan.photographs !== scan.code_cards ? (
+                <p className="codes-result-note">
+                  {plural(scan.photographs - scan.code_cards, 'photograph')} of other games left alone.
+                </p>
+              ) : null}
+              {scan.unread.length === 0 ? null : (
+                <Notice tone="warn" title={`${plural(scan.unread.length, 'card')} did not read`}>
+                  None is lost — each keeps its photograph and its position. The next reader is the paid vision transcription, then a
+                  human.
+                  <ul className="codes-mono-list">
+                    {scan.unread.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </Notice>
+              )}
+              {scan.malformed.length === 0 ? null : (
+                <Notice tone="info" title={`${plural(scan.malformed.length, 'code')} decoded but not in the printed 3-4-3-3 shape`}>
+                  Kept and marked, never refused: a payload that survived the QR's own error correction is likelier to be an
+                  unfamiliar print run than a misread.
+                  <ul className="codes-mono-list">
+                    {scan.malformed.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </Notice>
+              )}
+            </div>
+          )}
+        </Sheet>
+      ) : null}
+
+      {sheet === 'hand' && ledger !== null ? (
+        <Sheet title="Hand codes to a buyer" icon="hand" onClose={closeSheet}>
+          {failureNode}
+          <p className="codes-sheet-lede">
+            Confirming reserves every code it returns, permanently. A reserved code is never offered again — that is what stands
+            between this pile and selling one code twice.
+          </p>
+          <div className="bn-field">
+            <span className="bn-field-label">Lane</span>
+            <Segmented<Lane>
+              className="codes-seg"
+              label="Lane"
+              value={lane}
+              options={[
+                { value: 'premium', label: `Premium · ${ledger.lanes.premium.toLocaleString()}` },
+                { value: 'bulk', label: `Bulk · ${ledger.lanes.bulk.toLocaleString()}` },
+              ]}
+              onChange={(next) => {
+                setLane(next)
+                setPreview(null)
+                setCommitted(null)
+              }}
+            />
+          </div>
+          <div className="codes-form-actions">
+            <Button icon="eye" busy={pending === 'hand-preview'} disabled={busy} onClick={() => void runPreview()}>
+              Preview the {lane} lane
+            </Button>
+          </div>
+
+          {preview === null ? null : (
+            <div className="codes-result bn-anim-in">
+              <div className="codes-result-head">
+                <Figure n={preview.available} label={<>{preview.available === 1 ? 'code' : 'codes'} available in the {preview.lane} lane</>} />
+              </div>
+              <p className="codes-result-note">{preview.note}</p>
+              {preview.sample && preview.sample.length > 0 ? (
+                <div className="codes-sample">
+                  <span className="bn-label">Sample</span>
+                  {preview.sample.map((code) => (
+                    <Code key={code} code={code} shown={false} />
+                  ))}
+                </div>
+              ) : null}
+              {preview.available === 0 ? null : (
+                <div className="codes-confirm">
+                  <label className="bn-field codes-field">
+                    <span className="bn-field-label">Order name</span>
+                    <input
+                      className="bn-input"
+                      value={orderId}
+                      onChange={(e) => setOrderId(e.target.value)}
+                      placeholder="wholesale-2026-09-02"
+                      autoFocus
+                    />
+                    <span className="bn-field-hint">How you will find this sale on a settlement statement weeks from now.</span>
+                  </label>
+                  <Button
+                    variant="danger-solid"
+                    size="lg"
+                    icon="lock"
+                    block
+                    busy={pending === 'hand-commit'}
+                    disabled={busy || !orderId.trim()}
+                    onClick={() => void runCommit()}
+                  >
+                    Reserve {plural(preview.available, 'code')} — cannot be undone
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {committed === null ? null : (
+            <div className="codes-result is-done bn-anim-in">
+              <Notice tone="ok" title={`${plural(committed.count, 'code')} reserved${committed.order_id ? ` to ${committed.order_id}` : ''}`}>
+                {committed.note}
+              </Notice>
+              <CodeBlock codes={committed.codes ?? []} name={committed.order_id ?? 'codes'} />
+              <p className="codes-result-note">
+                Copy these to the buyer. Nothing here sends anything anywhere — there is no channel integration, on purpose.
+              </p>
+            </div>
+          )}
+        </Sheet>
+      ) : null}
+
+      {sheet === 'lot' ? (
+        <Sheet title="Build a lot" icon="package" onClose={closeSheet}>
+          {failureNode}
+          <p className="codes-sheet-lede">
+            A physical lot is <strong>the whole box, or nothing</strong> — anything left in the box would go in the parcel anyway.
+            Move the strays out first; the refusal names them by index.
+          </p>
+          <form
+            className="codes-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void planLot()
+            }}
+          >
+            <div className="codes-form-row">
+              <div className="bn-field">
+                <span className="bn-field-label">Delivery</span>
+                <Segmented<Delivery>
+                  className="codes-seg"
+                  label="Delivery"
+                  value={lotDelivery}
+                  options={[
+                    { value: 'physical', label: 'Physical', icon: 'package' },
+                    { value: 'digital', label: 'Digital', icon: 'send' },
+                  ]}
+                  onChange={(next) => {
+                    setLotDelivery(next)
+                    setLotPlan(null)
+                    setLotBuilt(null)
+                  }}
+                />
+              </div>
+              <div className="bn-field">
+                <span className="bn-field-label">Venue</span>
+                <Segmented<Venue> className="codes-seg" label="Venue" value={lotVenue} options={VENUES} onChange={setLotVenue} />
+              </div>
+            </div>
+            {lotDelivery === 'physical' ? (
+              boxField(lotBox, setLotBox, true)
+            ) : (
+              <label className="bn-field codes-field">
+                <span className="bn-field-label">How many codes</span>
+                <input
+                  className="bn-input"
+                  inputMode="numeric"
+                  value={lotBox}
+                  onChange={(e) => setLotBox(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="1000"
+                  autoFocus
+                />
+              </label>
+            )}
+            <div className="codes-form-actions">
+              <Button type="submit" variant="primary" icon="ruler" busy={pending === 'lot-plan'} disabled={busy}>
+                Plan the lot
+              </Button>
+            </div>
+          </form>
+
+          {lotPlan === null ? null : (
+            <div className="codes-result bn-anim-in">
+              <div className="codes-result-head">
+                <Figure n={lotPlan.count} label={<>{lotPlan.count === 1 ? 'code' : 'codes'}{lotPlan.box === null ? '' : ` in box ${lotPlan.box}`} · {venueLabel(lotPlan.venue)} · {deliveryLabel(lotPlan.delivery)}</>} />
+              </div>
+              <p className="codes-result-note">{lotPlan.note}</p>
+              {lotPlan.premium_in_lot > 0 ? (
+                <Notice tone="danger" title={`${plural(lotPlan.premium_in_lot, 'premium code')} in this lot`}>
+                  A premium code lists at roughly 46× a booster. Selling one inside a bulk lot is the most expensive mistake on this
+                  track — make sure this is deliberate.
+                </Notice>
+              ) : null}
+              {lotPlan.by_product.length === 0 ? null : <ProductTable rows={lotPlan.by_product} />}
+              {lotPlan.sets.length === 0 ? null : (
+                <div className="codes-sets">
+                  {lotPlan.sets.map((s) => (
+                    <Pill key={s.set} mono>
+                      {s.set} · {s.count}
+                    </Pill>
+                  ))}
+                </div>
+              )}
+              <div className="codes-confirm">
+                <label className="bn-field codes-field">
+                  <span className="bn-field-label">Lot name</span>
+                  <input
+                    className="bn-input"
+                    value={lotId}
+                    onChange={(e) => setLotId(e.target.value)}
+                    placeholder={`${lotVenue}-${new Date().toISOString().slice(0, 10)}${lotPlan.box === null ? '' : `-box${lotPlan.box}`}`}
+                  />
+                  <span className="bn-field-hint">
+                    How you will find this sale on a settlement statement weeks later. Leave it blank for a generated one.
+                  </span>
+                </label>
+                <Button
+                  variant="danger-solid"
+                  size="lg"
+                  icon="lock"
+                  block
+                  busy={pending === 'lot-commit'}
+                  disabled={busy}
+                  onClick={() => void commitLot()}
+                >
+                  Reserve {plural(lotPlan.count, 'code')} — cannot be undone
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {lotBuilt === null ? null : (
+            <div className="codes-result is-done bn-anim-in">
+              <Notice tone="ok" title={`Lot ${lotBuilt.lot_id ?? ''} built — ${plural(lotBuilt.count, 'code')} reserved`}>
+                {lotBuilt.note}
+              </Notice>
+              <div className="bn-tabs codes-tabs" role="tablist" aria-label="Lot files">
+                {lotBuilt.listing === undefined ? null : (
+                  <button type="button" role="tab" className="bn-tab" aria-selected={lotTab === 'listing'} onClick={() => setLotTab('listing')}>
+                    Listing
+                  </button>
+                )}
+                {lotBuilt.packing === undefined ? null : (
+                  <button type="button" role="tab" className="bn-tab" aria-selected={lotTab === 'packing'} onClick={() => setLotTab('packing')}>
+                    Packing slip
+                  </button>
+                )}
+                <button type="button" role="tab" className="bn-tab" aria-selected={lotTab === 'manifest'} onClick={() => setLotTab('manifest')}>
+                  Manifest
+                </button>
+              </div>
+              {lotTab === 'listing' && lotBuilt.listing !== undefined ? (
+                <pre className="codes-pre is-prose">{lotBuilt.listing}</pre>
+              ) : lotTab === 'packing' && lotBuilt.packing !== undefined ? (
+                <pre className="codes-pre">{lotBuilt.packing}</pre>
+              ) : (
+                <div className="codes-manifest">
+                  <p className="codes-result-note">
+                    The buyer&rsquo;s manifest is a file on the capture server, kept out of this page on purpose — a thousand live
+                    codes drawn here would land in every screenshot that ever caught it.
+                  </p>
+                  {lotBuilt.files?.['manifest.txt'] ? (
+                    <ManifestPath path={lotBuilt.files['manifest.txt']} />
+                  ) : (
+                    <p className="bn-faint">No manifest path came back.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Sheet>
+      ) : null}
     </main>
+  )
+}
+
+/* ---- task card ---------------------------------------------------------------------------------- */
+
+function TaskCard({
+  icon,
+  title,
+  body,
+  meta,
+  tone,
+  delay,
+  onOpen,
+}: {
+  readonly icon: IconName
+  readonly title: string
+  readonly body: string
+  readonly meta: string
+  readonly tone: 'accent' | 'warn' | 'ok'
+  readonly delay: number
+  readonly onOpen: () => void
+}) {
+  return (
+    <button type="button" className={`codes-task is-${tone}`} onClick={onOpen} style={{ animationDelay: `${delay}ms` }}>
+      <span className="codes-task-icon">
+        <Icon name={icon} size={20} />
+      </span>
+      <span className="codes-task-text">
+        <span className="codes-task-title">{title}</span>
+        <span className="codes-task-body">{body}</span>
+      </span>
+      <span className="codes-task-foot">
+        <span className="codes-task-meta">{meta}</span>
+        <span className="codes-task-go">
+          Open <Icon name="arrowRight" size={14} />
+        </span>
+      </span>
+    </button>
+  )
+}
+
+/* ---- lots table --------------------------------------------------------------------------------- */
+
+function LotsTable({ lots }: { readonly lots: readonly LotReceipt[] }) {
+  return (
+    <div className="codes-table-wrap">
+      <table className="bn-table codes-table codes-lots">
+        <thead>
+          <tr>
+            <th>Lot</th>
+            <th className="num">Codes</th>
+            <th>Box</th>
+            <th>Delivery</th>
+            <th>Venue</th>
+            <th>Products</th>
+            <th>Built</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lots.map((l, i) => (
+            <tr key={l.lot_id} className="codes-row" style={{ animationDelay: `${Math.min(i, 24) * 16}ms` }}>
+              <td data-th="Lot" className="codes-mono">
+                {l.lot_id}
+              </td>
+              <td data-th="Codes" className="num">
+                {l.count.toLocaleString()}
+              </td>
+              <td data-th="Box">{l.box === null ? <span className="bn-faint">—</span> : `Box ${l.box}`}</td>
+              <td data-th="Delivery">
+                <Pill icon={l.delivery === 'physical' ? 'package' : 'send'}>{deliveryLabel(l.delivery)}</Pill>
+              </td>
+              <td data-th="Venue">{venueLabel(l.venue)}</td>
+              <td data-th="Products">
+                <span className="codes-lot-products">
+                  {l.by_product.map((p) => (
+                    <span key={p.product} className={`codes-lot-product${p.premium ? ' is-premium' : ''}`}>
+                      {p.display} <span className="codes-lot-product-n">{p.count}</span>
+                    </span>
+                  ))}
+                </span>
+              </td>
+              <td data-th="Built">{when(l.built_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }

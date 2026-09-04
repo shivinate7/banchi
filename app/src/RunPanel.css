@@ -1,1093 +1,517 @@
-/* The run panel, in the detail column of #/inventory.
- *
- * OWNER DENSITY THROUGHOUT — the 4-16 end of the spacing scale, per docs/DESIGN.md's page
- * chrome rules. None of the Fulfillment floors apply here and none is drawn: this is the
- * densest screen in the product and a run panel with 20px minimums on it would push the box
- * walk beside it off the fold.
- *
- * MONO CARRIES EVERY NUMBER, which is that file's rule and matters more here than anywhere
- * else in the app: a cost estimate, a card count and a token total sit next to each other,
- * and a proportional face would let them change width between polls.
- *
- * ONE SOLID ACCENT FILL ON THE WHOLE PANEL, and it is the spend button. docs/DESIGN.md
- * reserves the fill for "there is exactly one thing to do" — and at the moment it is drawn
- * that is literally true: the preflight has answered, the numbers are on screen, and the only
- * remaining action is to spend or not to. Every other control here is an outline, including
- * the three free steps, because a free re-runnable step is never the only thing to do. */
+/* ============================================================================
+   RUN PANEL — the master list of runs and the detail stepper the free commands act on.
+   The page frame and the composer are in Runs.css.
+   ========================================================================== */
 
-.run-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  padding: var(--s4);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+/* ---- master / detail frame ------------------------------------------------ */
+.runs-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--bn-5);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .runs-body { grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); }
+  .runs-back { display: none; }
+}
+/* Under the two-column width the list is the screen; a run opens as a pushed page. With no
+   run open the "pick a run" panel is not drawn — it would only repeat, under the list, the
+   list the thumb just scrolled past, and the list's own empty state carries Identify. */
+@media (max-width: 1023px) {
+  .runs-body[data-open='true'] .runs-master { display: none; }
+  .runs-body:not([data-open='true']) .runs-detail { display: none; }
+}
+/* Thumb sizes on phones. The kit's phone bump for `.bn-seg-item` is dead — kit.css sets 36px
+   inside its phone block and then the base rule's 28px comes later in the same file at equal
+   specificity and wins — so every screen carrying a Segmented lifts it locally (Runs.css:30,
+   Pricing.css, Codes.css, Orders.css). This screen's is the scope picker in the Options well.
+   The figures strip's two links are the other case: their pressable area was the digit alone,
+   13x30px, which is the smallest target on the screen and routes off to the review queue. */
+@media (max-width: 767px) {
+  .runs-back { --btn-h: 40px; }
+  .runs-stepper-btn { min-height: 40px; }
+  .run-scope-choices .bn-seg-item { min-height: 40px; }
+  /* Expanded by a pseudo-element rather than by min-height, so the digit keeps its place in
+     the figures grid: growing the link's own box pushes its label down and the two rows of
+     stats stop agreeing about where a label sits under a figure. */
+  .run-figure-link { position: relative; }
+  .run-figure-link::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
 }
 
-/* THE PANEL HAS NO HEAD, AND FOUR RULES DIED WITH IT ON 2026-08-29 — `.run-head`,
- * `.run-title`, `.run-scope` and `.run-hint`. Recorded rather than deleted silently, because
- * their comments carried two measurements worth keeping and one argument that has moved.
- *
- * WHY THEY WENT. The panel moved to a route of its own (`Runs.tsx`), where the PAGE draws the
- * title, the scope and the four command names. A panel titled `Runs` sitting under a page
- * titled `Runs` is one of them saying nothing, and a title block stacked over a control bar is
- * the exact shape docs/DESIGN.md's page-chrome rule measures at 240px on this product's worst
- * screen. What was a panel heading is now page chrome, which is where that rule wanted it.
- *
- * WHAT THE OLD COMMENTS MEASURED, kept because both are about wrapping in a narrow column and
- * both will be needed again by whatever next has to fit in one. In the 370px track this panel
- * used to live in, `.run-scope` at `flex: 0 0 auto` held ~176px it never gave back and the hint
- * absorbed the whole squeeze — four command names shredded over three lines, a 50px head, all
- * of it illegible. Wrapping alone made it worse before it made it better: with the hint ordered
- * between the other two, `flex-wrap` put all three on lines of their own at 81px. The hint needs
- * ~323px, so it can share a line with nothing; ordering it LAST gave a 55px head that read.
- * On its own route the panel has the page's full measure and none of that binds.
- *
- * `.run-title`'s 20px WAS THE DISPLAY FACE'S PUBLISHED FLOOR, and that argument did not die
- * with the rule — it moved to `.runs-title` in Runs.css, where it is now a page title rather
- * than a panel heading and the floor means what docs/DESIGN.md wrote it to mean.
- *
- * THE DISCLOSURE IS STILL GONE (owner, 2026-08-24), same instruction as BoxOps': the
- * pipeline's controls are on the screen, not one press behind it. Nothing here folds, and
- * `app/tests/run-panel.spec.ts` asserts that as an absence — `<details>` and `<summary>` at
- * zero inside the panel — which is the one form of the ruling no relocation can falsify. */
-
-/* THE RUN LIST'S CAPTION, which is where the live count went when the head went. It is a
-   caption for the rows directly beneath it rather than a heading of its own: no display face,
-   no rank, the same utility face and 11px every other count in this panel is drawn in. */
+/* ---- the master ------------------------------------------------------------ */
+.runs-master {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .runs-master {
+    position: sticky;
+    top: var(--bn-6);
+    max-height: calc(100vh - var(--bn-6) * 2);
+  }
+}
+/* A section head is 16/20 (the kit's .bn-panel-head); the detail's hero head is 20/20/16. */
+.runs-master-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-2);
+  padding: var(--bn-4) var(--bn-5);
+  border-bottom: 1px solid var(--bn-line);
+  flex: none;
+}
 .run-list-head {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  margin-bottom: calc(var(--s3) * -1 + var(--s1));
-}
-
-/* --------------------------------------------------------------------------- refusals */
-
-.run-note {
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--bg);
-}
-
-.run-note-text {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-}
-
-/* The greppable token, small, beneath the sentence. Never the sentence again. */
-.run-machine {
-  margin: var(--s1) 0 0;
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* ------------------------------------------------------------------------------ steps */
-
-/* s2 vertical, s3 horizontal. The horizontal padding is what keeps a step's text off its own
-   border and is unchanged; the vertical was buying air above a heading that already has a gap
-   under it, four times over in an open run. */
-/* A STEP IS A ROW IN A LIST, NOT A CARD IN A PANEL (owner, 2026-08-26). It was a bordered
-   rounded box with its own padding, four of them stacked inside `.run-panel`, which is itself a
-   bordered rounded box — four boxes in a box, and the enclosure said "these four are separate
-   objects" when the only true statement about them is that they run in order.
-
-   THE SAME PASS THE BOX'S OPERATIONS TOOK, ONE COLUMN LEFT, and the owner asked for it in those
-   terms once they had seen that one. `--line` separates and does not enclose, which is
-   BoxOps.css's header rule and this file's own everywhere else; the hairline over each step is
-   the separator and the panel's border is the only enclosure left.
-
-   IT ALSO GIVES BACK 26px OF MEASURE PER STEP. The step's own 12px of side padding sat inside
-   the panel's 16px, so a 13px note was being read at 310px inside a 370px column. Flush with the
-   panel, the notes and the console below them take the full measure — which is the width this
-   column was narrowed to 370 for. */
-.run-step {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding-top: var(--s2);
-  border-top: 1px solid var(--line);
-}
-
-.run-step-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-/* NOT THE TITLE'S SIZE, as of 2026-08-25. This was 20px display 700 — identical to the panel's
-   own heading — so an open run stacked FOUR headings at that weight and the hierarchy said the
-   steps and the panel were the same rank. (The heading it matched was `.run-title`, deleted
-   2026-08-29 when the panel got a route and the page took over the title; the rank argument is
-   unchanged and now runs against `.runs-title` in Runs.css.)
-
-   13px BODY 700, WHICH IS `.boxops-op-label`'s, AND THE NUMBER MOVED ONCE MORE ON 2026-08-26.
-   It was 14, matching `.boxops-plain` — the chip the box's operations used to be. Those became
-   13px rows the same day, so 14 here would have left the two columns disagreeing by a pixel
-   about what a control's label is, which is the drift this comment was written to close in the
-   first place. (The class it used to name, `.boxops-more-label`, no longer exists; D38's
-   rebuild deleted it and this reference outlived it.)
-
-   The face changes with the size because it has to: docs/DESIGN.md draws the display face at
-   >= 20px only, and 20px is that face's published floor. That floor is an argument about the
-   PAGE title, which keeps it — it makes no claim about a heading nested three levels inside
-   the panel that page draws. */
-.run-step-title {
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-/* WHETHER A STEP SPENDS IS THE FIRST THING ABOUT IT, so it is drawn on the heading line
- * rather than buried in the note. The money variant is accent at TEXT weight, which
- * docs/DESIGN.md assigns to "the system is unsure" and to emphasis — never the fill, which
- * on this panel belongs to the button that actually spends. */
-.run-step-cost {
-  font-family: var(--util);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-/* INK AND WEIGHT, NOT ACCENT. docs/DESIGN.md gives accent two jobs — "the system is unsure"
-   and "there is exactly one thing to do" — and a label reading COSTS MONEY is neither; the
-   thing that IS the second job is the button below it, and a label sharing its colour dilutes
-   the only signal on this panel that has to be unmissable. Emphasis by ink against muted plus
-   weight is how the walk beside this panel marks everything it marks (BoxBrowse.css argues it
-   out at length), so this is the house grammar rather than a new one. */
-.run-step-money {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.run-step-note {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* WHAT THE THREE FREE STEPS ARE WAITING FOR, said once above them rather than three times
-   inside them. Same values as `.run-step-note` because it is the same register — a quiet
-   sentence about a control — and reusing them is what keeps a fourth text size off this panel. */
-.run-needs {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* The one caption in the run list, over the runs that are NOT about the box being walked. Drawn
-   as a row of the list rather than as a bar across it: docs/DESIGN.md built a tinted panel-header
-   strip, looked at it and rejected it by name, and this is the shape that idea comes back in. So
-   it is the metadata register with the same hairline every other row carries. */
-.run-group {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border-bottom: 1px solid var(--line);
-}
-
-.run-step-fine {
-  font-size: 12px;
-}
-
-/* ---------------------------------------------------------------------------- controls */
-
-.run-controls,
-.run-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-}
-
-.run-toggle,
-.run-field {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
+  gap: var(--bn-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-
-.run-field input[type='number'] {
-  width: 5.5em;
-  padding: var(--s1) var(--s2);
-  font-family: var(--util);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--bg);
-  /* --field: a boundary you type inside. See tokens.css. */
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-}
-
-/* The edge darkens under the pointer (D50). `border-color` only — never width, which
-   would reflow the box and move a target under a finger already travelling toward it.
-   Focus is an outline drawn
-   outside this border, so the two compose rather than compete. */
-.run-field input[type='number']:hover:not(:disabled) {
-  border-color: var(--field-hover);
-}
-
-/* 32px, WHICH IS `.boxops-plain`'s HEIGHT. These two panels are stacked in one column now and
-   disagreed about how tall a control is by 17% — this one was padding-driven at 37.5px with no
-   min-height, that one is 32px with one. A min-height rather than padding alone, so a label that
-   wraps to two lines grows the button instead of being clipped by it. Owner-side: the 44px
-   Fulfillment floor governs a different view and none of it is asserted here. */
-.run-button {
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
-}
-
-.run-button:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.run-button:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-/* ---------------------------------------------------------------------------- the cart
-
-   ONE BLOCK PER BOX IN THE SEND, and it is a block rather than a row because each carries a
-   four-chip reading picker and a sentence about what that reading costs. A row would have to
-   choose between wrapping those onto three lines anyway and hiding the sentence, and the
-   sentence is the thing D32 spent an amendment putting there.
-
-   NO FILL AND NO ACCENT. Every box in the cart is equally in it; the one solid fill on this
-   panel is still the button that spends, and a highlighted cart row would be a second thing
-   competing for that meaning. Separated by the hairline every other block on the owner's
-   screens uses, per docs/DESIGN.md. */
-.run-leg {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* The box and what of it is going, on one line. It cannot wrap to two at this column's width
-   — `Box 100` and `544 ticked cards` is the worst realistic pair — and if it ever does, the
-   scope is the half that should drop below rather than the box number. */
-.run-leg-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-  margin: 0;
-}
-
-/* Mono, because it carries a number: docs/DESIGN.md's mono-carries-all-metadata rule, which
-   is the one that keeps this panel from reading as prose with numbers in it. */
-.run-leg-box {
-  font-family: var(--util);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.run-leg-scope {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-/* THE PER-BOX LINES INSIDE THE QUOTE, and they are drawn only above one box — see the render.
-   Deliberately NOT `.run-figures`: those are four large figures because they are the numbers
-   the confirm is gated on, and repeating that treatment per box would make five boxes read as
-   five confirms. One line each, in the metadata register, is what a person actually checks
-   here — that the boxes are the ones they meant, and that no single one is wildly dearer than
-   they expected. */
-.run-legs {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  margin: 0;
-  padding-top: var(--s2);
-  border-top: 1px solid var(--line);
-}
-
-.run-legs div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-.run-legs dt {
-  font-family: var(--util);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.run-legs dd {
-  margin: 0;
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* ------------------------------------------------------------------------- the reading
-
-   FOUR CHIPS IN A COLUMN THAT IS 340px AT ITS NARROWEST. `.run-controls` already wraps, so
-   this adds no layout of its own — what it adds is a chip that carries two lines, its name
-   over the max edge it sets, so the pair is legible without a sentence per row.
-
-   `grid` rather than the parent's `flex`, and the reason is the 340px end: four chips of
-   different natural widths wrap into a ragged two-and-two under flex, and the second row
-   inherits none of the first's column edges. Two equal tracks put `Custom` under `Whole
-   frame` and keep every chip the same width, which is what makes the pressed one readable as
-   a selection rather than as a wider button. */
-.run-readings {
-  display: grid;
-  /* CAPPED, AND THE CAP IS WHAT THE ROUTE MOVE COST. `1fr 1fr` was measured for the 340-400px
-     third column D38 gave this panel, where two equal tracks put `Custom` under `Whole frame`
-     and kept every chip the same width. That column no longer exists: on `#/runs` the panel
-     has the full page, so two `1fr` tracks drew a 12-word label inside a 370px button and the
-     four chips spanned the screen — a control that reads as a banner rather than as a choice.
-     Observed at 1440x900 with two boxes in the cart, which is what made it visible: the same
-     four chips once per box, each half a screen wide.
-
-     `auto-fit` with a MAXIMUM rather than `1fr`, so the chips stay chip-sized at any width and
-     the row simply holds more of them. The 9rem floor is the widest of the four labels
-     (`Measured best`) plus its edge figure; the 13rem ceiling is where a two-line chip stops
-     needing two lines, so nothing wraps that did not wrap before. In the 340px column the
-     floor still forces two per row, which is D38's measured layout unchanged. */
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 13rem));
-  /* STRETCH, OVERRIDING `.run-controls`' `center`. Three of these chips carry two lines and
-     `Custom` carries one, so centred items left it 32px against the others' 41px and the
-     second row read as ragged — a chip that looks like a different KIND of control rather
-     than the fourth answer to the same question. */
-  align-items: stretch;
-}
-
-/* Two lines inside one 32px-floored control, so the button grows rather than clipping — the
-   same reason `.run-button` carries a min-height instead of padding alone. */
-.run-reading {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 2px;
-  padding: var(--s1) var(--s2);
-  text-align: left;
-}
-
-/* The number the chip sets, in the utility face because it is a measurement — docs/DESIGN.md's
-   mono-carries-all-metadata rule, which is the one that keeps this panel from reading as prose
-   with numbers in it. */
-.run-reading-edge {
-  font-family: var(--util);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-/* THE SELECTED CHIP IS AN OUTLINE, NOT A FILL, AND THAT IS A RULE RATHER THAN A PREFERENCE.
-   docs/DESIGN.md reserves the solid accent for "exactly one thing to do", and this panel
-   already spends its one fill on the button that starts a paid run. A reading is one of four
-   answers to a question with no wrong-looking option, so it gets accent at OUTLINE weight —
-   the register that file assigns to a system that is unsure, which is exactly what a chosen
-   default is until the operator confirms it. */
-.run-reading[aria-pressed='true'] {
-  color: var(--accent);
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.run-reading[aria-pressed='true'] .run-reading-edge {
-  color: var(--accent);
-}
-
-/* THE PANEL'S ONE SOLID FILL. Drawn only after the preflight has answered, which is what
- * makes docs/DESIGN.md's "exactly one thing to do" true of it rather than merely claimed:
- * the count and the estimate are on screen directly above it, and the alternative is to
- * not press it. */
-.run-button-money {
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.run-button-money:hover:not(:disabled) {
-  background: var(--pressed);
-  border-color: var(--pressed);
-}
-
-.run-plain {
-  padding: var(--s2);
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-/* COLOUR, BECAUSE THE UNDERLINE IS ALREADY SPENT. `.browse-quiet` is the same idea one screen
-   over — a borderless text button — and it hovers by ADDING an underline, which this control
-   cannot do because it wears one at rest. So the channel left is the one `.app-nav-link` uses
-   for the same reason: `--muted` to `--ink`, no ground, nothing that reflows.
-
-   Not `--hover` behind it: this is a run of underlined text and not a row, and painting a
-   background swatch behind an inline label would be the first use of that token outside the
-   case tokens.css derived it for. */
-.run-plain:hover:not(:disabled) {
-  color: var(--ink);
-}
-
-/* The file inputs are hidden and their labels are the control — a native file input cannot
- * be styled to sit beside these buttons, and a label IS the accessible name of the input it
- * wraps, so this costs nothing in reachability. */
-.run-upload input[type='file'] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* THE FILE PICKERS ARE BUTTONS AND MUST MEASURE LIKE ONE. This rule and `.run-button` were
-   written identical, and tightening `.run-button` to 32px on 2026-08-25 left this at 38px — two
-   controls that sit in the SAME `.run-actions` row disagreeing by 6px. `inline-flex` rather than
-   `inline-block` because `min-height` on an inline-block leaves the label at the top of the
-   enlarged box, where a <button> centres its own content: same two declarations, same result. */
-.run-upload span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
-}
-
-.run-upload span:hover {
-  background: var(--hover);
-}
-
-/* THE FOCUS OVERRIDE IS DELETED, AND IT WAS CONTRADICTED IN WRITING TWICE BEFORE IT WAS
- * WRITTEN. It drew `3px solid var(--accent)`. base.css sets the app-wide ring to
- * `2px solid var(--ink)` and says why in its own comment — "the conventional accent ring is
- * not available here, because docs/DESIGN.md gives accent exactly two jobs and neither of
- * them is this" — and App.css repeats the argument for the nav.
- *
- * What it cost: a keyboard user crossing THIS ONE SCREEN met four different focus rings —
- * 2px ink at offset +2 (nav, buttons), 2px ink at offset -2 (the walk's list), 3px ink
- * (the search field), and 3px ACCENT inside this panel. base.css already covers every
- * control here; the override bought nothing and spent the one colour the rest of the screen
- * is scrupulously not spending.
- *
- * The `.run-upload input + span` case is the only one base.css cannot reach on its own —
- * the real input is visually hidden and the span is what is seen — so it keeps a rule, in
- * the house ink. */
-.run-upload input[type='file']:focus-visible + span {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-
-/* ------------------------------------------------------------------------- the estimate */
-
-.run-quote {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s3);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* 7rem, AND A NARROWER MINIMUM WAS TRIED AND MEASURED WORSE. The reasoning that briefly put
-   6rem here counted TRACKS and forgot to count ROWS: at the 364px inside `.run-quote` in this
-   panel's 400px column, 7rem packs two 166px tracks and 6rem packs three 108px ones — but there
-   are FOUR preflight figures, so both are two rows. Measured: 6rem is 123px and ragged 3+1 with
-   the labels in narrower cells; 7rem is 96px and a balanced 2x2. The narrower minimum cost 27px
-   to fit a column nothing needed. */
-.run-figures {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
-  gap: var(--s2);
-  margin: 0;
-}
-
-.run-figures div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.run-figures dt {
-  font-family: var(--util);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.run-figures dd {
-  margin: 0;
-  font-family: var(--util);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/* The estimate. Ink and weight, per `.run-step-money` above — the number is the thing the
-   confirm below is quoting, not a second copy of the confirm. */
-.run-figure-money dd {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.run-blocked {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-}
-
-/* --------------------------------------------------------------------------- the console
- *
- * The command's own stdout, verbatim. Bounded in height and scrolled to the bottom on every
- * change, because a 544-card join prints hundreds of lines and the interesting part is
- * always the end — the same reason the server serves the tail of the log rather than its
- * head. `tabIndex` on the element makes it keyboard-scrollable, which a scroll container
- * with no focusable child otherwise is not. */
-.run-console {
-  max-height: 260px;
-  overflow: auto;
-  margin: 0;
-  padding: var(--s2);
-  font-family: var(--util);
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  white-space: pre;
-}
-
-/* ------------------------------------------------------------------------- the run list */
-
-/* THE TWO QUEUE FIGURES ARE LINKS, and they are drawn as the numbers they are rather than as
-   buttons — the figure grid's rhythm is four numbers in a 2x2 and a control in one cell would
-   break it. What marks them is an underline the ink already carries, which is the web's own
-   convention for "this goes somewhere" and needs no colour of its own: the accent is reserved
-   for a screen with exactly one thing to do (docs/DESIGN.md), and a run with a queue has at
-   least two.
-
-   `inherit`, SO A COUNT NEVER CHANGES SIZE BY BECOMING REACHABLE. `.run-figures dd` sets the
-   face and the size for all four cells; two of them being anchors must not make those two read
-   differently from `Cards in` and `SKUs` beside them. */
-.run-figure-link {
-  font: inherit;
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.run-figure-link:hover {
-  text-decoration-thickness: 2px;
-}
-
 .run-list {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
 }
+.run-list-group { display: flex; flex-direction: column; }
+.run-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  margin: 0;
+  padding: var(--bn-2) var(--bn-4) var(--bn-1);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+  background: var(--bn-surface);
+}
+.run-group-count { letter-spacing: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
+.runs-skel-row { height: 64px; margin: var(--bn-2) var(--bn-3); }
+.run-empty { padding: var(--bn-7) var(--bn-4); }
 
 .run-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: baseline;
-  gap: var(--s2);
-  padding: var(--s2) var(--s3);
-  font-family: var(--util);
-  font-size: 12px;
-  color: var(--ink);
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'main side'
+    'bar bar';
+  gap: var(--bn-2) var(--bn-3);
+  width: 100%;
+  padding: var(--bn-3) var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
   text-align: left;
-  background: var(--surface);
-  border: none;
-  border-bottom: 1px solid var(--line);
-  cursor: pointer;
+  color: var(--bn-ink);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-
-.run-row:last-child {
-  border-bottom: none;
+.run-list-group:last-child .run-row:last-child { border-bottom: 0; }
+.run-row:hover { background: var(--bn-surface-3); }
+.run-row[aria-current='true'] { background: var(--bn-accent-tint); }
+.run-row[aria-current='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--bn-accent);
 }
-
-.run-row:hover {
-  background: var(--hover);
-}
-
-.run-row-open {
-  background: var(--hover);
+.run-row-main { grid-area: main; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.run-row-scope {
   font-weight: 600;
-}
-
-.run-row-name {
+  font-size: var(--bn-fs-base);
+  color: var(--bn-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.run-row-scope,
-.run-phase {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* A live run is the one thing on this list worth the eye. It was drawn in accent on a
- * "system is working" reading of the outline weight — but docs/DESIGN.md's outline job is
- * "the system is UNSURE", which a running batch is not, and there is nothing to do about one
- * either way. Ink and weight, same as every other "this row matters" on this screen. */
-.run-phase-identifying {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.run-empty {
-  margin: 0;
-  padding: var(--s3);
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* -------------------------------------------------------------------------- the open run */
-
-.run-open {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--bg);
-}
-
-.run-open-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-  font-family: var(--util);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/* NOTHING LEFT TO PAINT. This repainted `--surface` onto a bordered card that already sat on
-   `--surface`; with the border gone a step is a row on the panel's own ground and a fill here
-   would be the one thing that made the four look enclosed again. */
-
-.run-result {
-  padding: var(--s2);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--surface);
-}
-
-/* A refusal is not an "unsure" and not an "only action" — it is a thing that already
-   happened. Ink border, the same one step of emphasis `.boxops-plain-danger` uses. */
-.run-result-refused {
-  border-color: var(--ink);
-}
-
-/* D64's fetch receipt. `.run-note`'s box rather than a treatment of its own: it is the same
- * kind of thing — a bounded block of prose and figures the panel puts under a control — and a
- * second container idiom in one panel is one more thing to keep in step for no gain.
- *
- * NO ACCENT AND NO FILL. `docs/DESIGN.md` reserves the solid fill for a screen with exactly
- * one thing to do, and this panel already spends its single fill on the control that starts a
- * paid run. A receipt reporting a free download may not compete with it. */
-.run-fetched {
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: var(--bg);
-}
-
-.run-result-head {
-  margin: 0 0 var(--s2);
-  font-family: var(--util);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-/* ------------------------------------------------------------------------------- files */
-
-/* `.run-files`, `.run-files-head`, `.run-file`, `.run-file-name`, `.run-file-import` and
- * `.run-file-size` MOVED TO `app/src/RunFiles.css` on 2026-08-30 (D54), with the component
- * that draws them. Tombstoned rather than deleted silently, the way this file already
- * tombstones `.run-head` and its neighbours above: the obvious repair when somebody finds a
- * `.run-file` rule missing is to write a new one here, and a second copy is what the
- * extraction exists to prevent. `#/runs` still draws the list — everything except the import
- * CSVs, which went to the screen that presses emit. */
-
-/* ---- the crop preview (D32, amended) ----
- *
- * WHAT THE READING SENDS, DRAWN, BESIDE THE CONTROL THAT SETS IT. The chips carry three
- * measured pairs and a sentence each because the owner could not read the crop off a checkbox
- * and a number; this column is the same answer as a picture.
- *
- * ON THE SIDE, AND ONE CARD (the owner, 2026-08-29). It was three cards abreast in a row under
- * the chips, sampled across the box because cards move on the tray — right about sampling, and
- * wrong about the only thing that decides whether a picture works: at a third of the panel's
- * width each frame drew 112px wide, and the operator could not see what they were being shown.
- * One card in a column of its own is ~2.5x the linear size for the same block of screen, and
- * the spread is reached by walking rather than by being sampled for. */
-.run-identify {
-  display: grid;
-  /* THE CONTROLS KEEP THE WIDTH THEY WERE TUNED IN and the preview takes a fixed column, so
-     the reading chips do not reflow as the picture appears. `minmax` rather than a bare 340:
-     the panel is full-width on `#/runs` but this file is not entitled to assume it, and a
-     column that cannot shrink would push the chips into a two-line wrap on a narrow window. */
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
-  gap: var(--s5);
-  align-items: start;
-}
-
-/* Below the width where the pair fits side by side, the picture goes back under the controls
-   rather than squeezing them. Nothing is hidden and nothing folds — the column is a layout,
-   not a disclosure. */
-@media (max-width: 900px) {
-  .run-identify {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.run-identify-controls {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.run-preview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.run-preview-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  flex-wrap: wrap;
-}
-
-.run-preview-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-/* The utility face, because it is a count and a position — docs/DESIGN.md's mono-carries-all
-   metadata rule, the same one `.run-reading-edge` follows one block up. */
-.run-preview-count {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.run-preview-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-/* While a new card is in flight the previous one stays up, dimmed rather than blanked:
-   removing it would collapse the tallest block in this column and move everything under it,
-   in a panel whose other column holds the button that spends. */
-.run-preview-card[aria-busy='true'] {
-  opacity: 0.55;
-}
-
-/* SIZED BY WIDTH NOW, NOT BY A FIXED HEIGHT. With one card in a column of its own the rig's
-   9:16 frame at 340px draws ~604px tall, which is the size that makes the cut legible — the
-   three-abreast version had to pin the height to 200px to stop the row becoming the largest
-   thing on the screen, and that was the whole reason it was too small to read.
-
-   `aspect-ratio` rather than letting the image set it: the box has to hold its shape before
-   the photograph decodes, because the rectangle is positioned against the BOX. A frame that
-   resized on load would draw the cut in the wrong place for one paint — D28's moving-photograph
-   defect, on a picture whose entire content is a rectangle's position. */
-.run-preview-frame {
-  position: relative;
-  box-sizing: border-box;
-  display: block;
-  /* The pointer aims the 1:1 window below, so say so on the thing being aimed at. `zoom-in`
-     rather than `crosshair`, the same choice `ReviewQueue.css` makes for its loupe: the
-     gesture reveals magnification, it does not select a point. */
-  cursor: zoom-in;
-  /* CAPPED BY HEIGHT, AND THE CAP IS WHAT KEEPS THE OTHER COLUMN HONEST. At the column's full
-     360px a 9:16 frame draws 640px tall, and the controls beside it are ~330px — so the step
-     opened with ~600px of white under `Check cost`, which is the dead space D40 spends its
-     first paragraph on. `min()` rather than a bare vh so a tall display cannot push the frame
-     wider than its own column.
-
-     THE BOX MUST STAY EXACTLY 9:16 AND THAT IS NOT A PREFERENCE. The cut is positioned as a
-     percentage of THIS BOX, so a box whose aspect drifts from the frame's draws the rectangle
-     in the wrong place — silently, and most wrongly at the edges, which is exactly where the
-     collector number is. So the height is the specified dimension and the width follows it;
-     `width: 100%` with a `max-height` would have let the box go wide and letterbox the image
-     inside it, which is the same defect wearing a different property. */
-  height: min(48vh, 460px);
-  aspect-ratio: 9 / 16;
-  margin: 0 auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+/* Two lines before the cut: the box name inside the run name is how two runs are told apart. */
+.run-row-name {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  line-height: 1.4;
+  color: var(--bn-ink-3);
   overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
-
-/* WHAT IS THROWN AWAY. The stored photograph, underneath everything, at an opacity that says
-   so: the margin outside the cut is context rather than content, and drawing it at full
-   strength made the frame read as one picture with a box on it instead of as two things — the
-   bytes, and what was left behind. */
-.run-preview-ghost {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  /* CONTAIN, NOT COVER, AND THIS IS THE ONE PLACE IN THE PRODUCT WHERE THAT IS RIGHT.
-     `BoxBrowse.css` and the Fulfiller's views both use `cover` deliberately: they are showing
-     a CARD and the desk is waste. This block is showing the FRAME, because the question it
-     answers is what falls outside the cut — and a cover crop would silently trim the very
-     margin the whole composition is drawn to describe. */
-  object-fit: contain;
-  opacity: 0.35;
-}
-
-/* THE PAYLOAD, at the cut's own position, at full strength. It is a different FILE from the
-   ghost behind it — the prepared bytes rather than what is on disk — which is what makes the
-   picture change when the reading does. Its box is set inline as percentages of the frame. */
-.run-preview-sent {
-  position: absolute;
-  display: block;
-  object-fit: fill;
-}
-
-/* THE CUT. An outline rather than a mask, because both sides have to stay visible: what is
-   inside is what gets sent, and what is outside is what the run will never see. Accent at
-   outline weight is docs/DESIGN.md's register for a system that is unsure, which is the honest
-   register here — the detector answers per photograph and can refuse. */
-.run-preview-cut {
-  position: absolute;
-  border: 2px solid var(--accent);
-  border-radius: 2px;
-  /* A WHITE RING ON BOTH SIDES OF THE LINE, because the thing it is drawn over is a card and
-     cards have borders of their own. Box 1's Riftbound cards are bordered in blue and purple,
-     and against those the accent line alone read as part of the artwork — the one element on
-     this screen that must not be mistaken for the photograph it sits on. */
-  box-shadow:
-    0 0 0 2px var(--on-accent),
-    inset 0 0 0 1px var(--on-accent);
-  pointer-events: none;
-}
-
-/* THE 1:1 WINDOW, AND IT IS THE ONLY PLACE THE READING IS ACTUALLY LEGIBLE.
- *
- * The frame draws the payload now, which makes it honest — but it draws it at ~28% of the
- * sent pixels, and no two downscales are distinguishable at that size. This window paints the
- * same file at its natural size: `background-size: auto` plus a `background-position` in
- * pixels IS 1:1, with no scaling arithmetic to get wrong and no second request, because the
- * frame above has already loaded the bytes.
- *
- * It is the review queue's loupe aimed at the PAYLOAD rather than at the stored photograph,
- * and the argument is that screen's: FADGI and Metamorfoze both require this class of
- * judgement at 100%, and here a downscale is precisely what is being judged.
- *
- * TALL ENOUGH TO HOLD THE NUMBER WHEREVER IT SITS, which took two corrections. `bottom` was
- * the first resting aim and the band is not the card's foot — the number prints at roughly
- * 90-95% of card height. Centred was the second, and measured on box 2 the number line lands
- * at about 75% of the band. 140px is three quarters of a band and holds it on any card the
- * rig produces without being tuned to one of them. */
-.run-preview-detail {
-  box-sizing: border-box;
-  width: 100%;
-  height: 140px;
-  background-repeat: no-repeat;
-  background-size: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background-color: var(--surface);
-}
-
-.run-preview-fact {
+.run-row-side {
+  grid-area: side;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--s1);
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.run-row-when { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
+.run-row-bar { grid-area: bar; margin-top: 2px; }
+.run-row[aria-current='true'] .runs-stagebar { --runs-track: var(--bn-surface); }
+
+/* ---- the detail ------------------------------------------------------------- */
+.runs-detail { min-width: 0; container-type: inline-size; }
+.runs-detail-empty { min-height: 360px; display: grid; place-items: center; }
+.runs-detail-panel {
+  display: flex;
+  flex-direction: column;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.runs-detail-loading { gap: var(--bn-3); padding: var(--bn-5); }
+.runs-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-4);
+  padding: var(--bn-5) var(--bn-5) var(--bn-4);
+}
+.runs-back { flex: none; margin-top: 2px; }
+.runs-detail-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.runs-detail-h {
   margin: 0;
-  font-family: var(--util);
-  font-size: 10px;
-  line-height: 1.5;
-  color: var(--muted);
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
+.runs-detail-name { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.runs-detail-side { flex: none; display: flex; align-items: center; gap: var(--bn-2); margin-top: 4px; }
 
-.run-preview-key {
+/* the stepper */
+.runs-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--bn-2);
+  margin: 0;
+  padding: 0 var(--bn-5) var(--bn-4);
+  list-style: none;
+}
+.runs-stepper-btn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  width: 100%;
+  padding: var(--bn-1) 0;
+  border-radius: var(--bn-r-sm);
+  text-align: left;
+}
+.runs-stepper {
+  --runs-track: var(--bn-surface-2);
+}
+:root[data-theme='dark'] .runs-stepper { --runs-track: var(--bn-line-strong); }
+.runs-stepper-track {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--runs-track);
+  transition: background-color var(--bn-t-slow) var(--bn-ease);
+}
+/* Done is accent, as in the list's stage bar; green is reserved for a run that is reconciled. */
+.runs-stepper-done .runs-stepper-track { background: var(--bn-accent); }
+.runs-detail-panel[data-reconciled] .runs-stepper-done .runs-stepper-track { background: var(--bn-ok); }
+.runs-stepper-current .runs-stepper-track { background: var(--bn-accent); }
+.runs-stepper-live .runs-stepper-track { background: var(--bn-live); animation: runs-breathe var(--bn-t-pulse) ease-out infinite; }
+.runs-stepper-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--bn-fs-sm);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+  transition: color var(--bn-t-fast) var(--bn-ease);
+}
+.runs-stepper-btn:hover .runs-stepper-label { color: var(--bn-ink); }
+.runs-stepper-done .runs-stepper-label { color: var(--bn-ink-2); }
+.runs-stepper-current .runs-stepper-label,
+.runs-stepper-live .runs-stepper-label { color: var(--bn-ink); }
+.runs-stepper-n {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+}
+.runs-stepper-done .runs-stepper-n { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.runs-detail-panel[data-reconciled] .runs-stepper-done .runs-stepper-n { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.runs-stepper-current .runs-stepper-n { background: var(--bn-accent); color: var(--bn-on-accent); }
+.runs-stepper-live .runs-stepper-n { background: var(--bn-live-tint); }
+@container (max-width: 520px) {
+  .runs-stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* THE WALK. The arrow keys are the control the owner asked for; these buttons exist because a
-   key with no visible affordance is a key nobody finds, and the hint between them is what says
-   the keys are there at all. */
-.run-preview-walk {
+/* a refusal, dismissable */
+.runs-trouble {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  margin: 0 var(--bn-5) var(--bn-4);
+}
+.runs-trouble > .bn-notice { flex: 1 1 auto; min-width: 0; }
+.runs-steps .runs-trouble,
+.runs-master .runs-trouble { margin: 0; }
+.runs-master .runs-trouble { padding: var(--bn-3) var(--bn-3) 0; }
+
+/* the figures */
+.runs-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, auto)) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--bn-4) var(--bn-6);
+  padding: var(--bn-4) var(--bn-5);
+  border-top: 1px solid var(--bn-line);
+  border-bottom: 1px solid var(--bn-line);
+  background: var(--bn-surface-3);
+}
+:root[data-theme='dark'] .runs-figures { background: var(--bn-surface-2); }
+.runs-figures .bn-stat-value { font-size: var(--bn-fs-2xl); }
+.run-figure-link {
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--bn-line-strong);
+  text-underline-offset: 4px;
+  transition: text-decoration-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.run-figure-link:hover { color: var(--bn-accent); text-decoration-color: var(--bn-accent); }
+.runs-price-btn { justify-self: end; }
+@container (max-width: 640px) {
+  .runs-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .runs-price-btn { grid-column: 1 / -1; justify-self: stretch; }
+}
+
+/* ---- the step cards ------------------------------------------------------------- */
+.runs-steps { display: flex; flex-direction: column; }
+.runs-step { border-top: 1px solid var(--bn-line); }
+.runs-step:first-child { border-top: 0; }
+.runs-step-head {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  padding: var(--bn-3) var(--bn-5);
+  text-align: left;
+  color: var(--bn-ink);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.runs-step-head:hover { background: var(--bn-surface-3); }
+.runs-step[data-open='true'] > .runs-step-head { background: transparent; }
+.runs-step-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: var(--bn-fs-sm);
+  font-weight: 700;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+  transition: background-color var(--bn-t) var(--bn-ease), color var(--bn-t) var(--bn-ease);
+}
+.runs-step-done .runs-step-mark { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.runs-detail-panel[data-reconciled] .runs-step-done .runs-step-mark { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.runs-step-current .runs-step-mark { background: var(--bn-accent); color: var(--bn-on-accent); box-shadow: var(--bn-shadow-accent); }
+.runs-step-live .runs-step-mark { background: var(--bn-live-tint); }
+.runs-step-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.run-step-title { font-weight: 600; font-size: var(--bn-fs-base); }
+.runs-step-todo .run-step-title { color: var(--bn-ink-2); }
+.runs-step-summary {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runs-step-cost { display: flex; }
+.runs-step-chev { color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
+.runs-step-head[aria-expanded='true'] .runs-step-chev { transform: rotate(180deg); }
+.runs-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: 0 var(--bn-5) var(--bn-5) calc(var(--bn-5) + 30px + var(--bn-3));
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+.runs-step-lede {
   display: flex;
   align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s1);
-}
-
-.run-preview-step {
-  min-height: 32px;
-  min-width: 44px;
-  padding: 0 var(--s2);
-  font-size: 14px;
-}
-
-.run-preview-hint {
-  flex: 1 1 auto;
-  text-align: center;
-  font-family: var(--util);
-  font-size: 10px;
-  color: var(--muted);
-}
-
-/* ------------------------------------------------ D76: the fetch's scope, drawn as a lever
- *
- * ONE BLOCK, INSIDE THE JOIN STEP, ABOVE ITS BUTTONS. The scope is a decision about the
- * press below it, so it sits between the note that explains the step and the row that runs
- * it — the placement the finish-claim toggle had until D3 retired it, for the same reason: a
- * control separated from the button it governs reads as unrelated configuration.
- *
- * NO COLOUR OF ITS OWN. Every value here is a token (the `raw colour` audit row blocks
- * otherwise), and the panel is separated by a rule and a background step rather than by an
- * accent — the accent stays reserved for the one thing on this screen that spends money. */
-.run-scope {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  margin-top: var(--s2);
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.run-scope-head {
+  gap: var(--bn-2);
   margin: 0;
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-2);
+  max-width: 72ch;
 }
-
-/* The three answers to one question, so they read as one control rather than three
-   toggles. Wrapping, because the third label is the longest and a narrow column is the
-   normal case on this screen. */
-.run-scope-choices {
+.runs-kv-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
+  align-items: center;
+  gap: var(--bn-2) var(--bn-4);
+  font-size: var(--bn-fs-sm);
+}
+.runs-batch { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow-wrap: anywhere; }
+.run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2);
+}
+.run-scope-says {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  margin: 0;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-2);
+}
+.run-scope-says .bn-icon { flex: none; margin-top: 3px; color: var(--bn-ink-3); }
+.run-scope-says strong { color: var(--bn-ink); font-weight: 600; }
+@container (max-width: 640px) {
+  .runs-step-head { grid-template-columns: 30px minmax(0, 1fr) auto; padding-left: var(--bn-4); padding-right: var(--bn-4); }
+  .runs-step-cost { display: none; }
+  /* Narrow enough that one line cuts the sentence mid-word; two lines say the whole thing. */
+  .runs-step-summary {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .runs-step-body { padding: 0 var(--bn-4) var(--bn-5); }
+  .runs-detail-head { padding: var(--bn-4) var(--bn-4) var(--bn-3); flex-wrap: wrap; }
+  .runs-stepper, .runs-figures { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+  .runs-trouble { margin-left: var(--bn-4); margin-right: var(--bn-4); }
 }
 
-/* A SCROLLING LIST, BECAUSE 220 SETS IS A REAL LENGTH. Pokemon's category answers with the
-   whole published vocabulary, and a list that pushed the fetch button off the screen would
-   make the control unreachable at exactly the moment it is being used. */
+/* ---- options, receipts, results --------------------------------------------------- */
+.runs-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-4);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+.runs-option { display: flex; flex-direction: column; gap: 4px; }
+.runs-option-row { flex-direction: row; align-items: center; flex-wrap: wrap; gap: var(--bn-3); }
+.runs-option .bn-field-hint { padding-left: 24px; }
+.run-select { width: auto; min-width: 220px; }
+.runs-optgroup { display: flex; flex-direction: column; gap: var(--bn-3); }
+.run-scope { display: flex; flex-direction: column; gap: var(--bn-3); padding-top: var(--bn-3); border-top: 1px solid var(--bn-line); }
+.run-scope-head { margin: 0; font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
+.run-scope-choices.bn-seg { flex-wrap: wrap; align-self: flex-start; background: var(--bn-surface); box-shadow: var(--bn-shadow-1); }
+:root[data-theme='dark'] .run-scope-choices.bn-seg { background: var(--bn-surface-3); }
+.run-scope-choices .bn-seg-item[aria-pressed='true'] { background: var(--bn-accent-tint); color: var(--bn-accent); box-shadow: none; }
 .run-scope-sets {
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: var(--bn-2);
   max-height: 220px;
   overflow-y: auto;
-  padding: var(--s2);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
 }
 
-/* WHAT THE PRESS WILL ASK FOR, IN A SENTENCE. Body rather than the fine print the notes
-   around it use: this is the answer the panel exists to give, and it is what an operator
-   reads before deciding whether to press or to change something. */
-.run-scope-says {
-  margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-}
-
-/* A label and its control on one line — the shape a `select` wants. (`.run-field-wide`, the
-   column-stacked form this contrasted with, went with the `decisions.json` textarea that was
-   its only user — D86, amended 2026-09-02.) */
-.run-field-inline {
-  flex-direction: row;
+.run-result-head {
+  display: flex;
   align-items: center;
-  gap: var(--s2);
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--bn-2);
+  margin: 0;
 }
-
-.run-select {
-  padding: var(--s1) var(--s2);
-  font-family: var(--util);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--bg);
-  /* --field: a boundary you type inside, as the number inputs above use. */
-  border: 1px solid var(--field);
-  border-radius: var(--r);
+/* ---- the fetch receipt -------------------------------------------------------------
+   A slip, not a verdict: a green rule down the side, the figure that matters set in the
+   display face, the last export beneath it, and the machine detail below a perforation.
+   Nothing here is pressable, because there is nothing left to answer. */
+.run-receipt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  border-left: 3px solid var(--bn-ok);
+  background: var(--bn-surface-3);
+  box-shadow: var(--bn-shadow-1);
+  animation: bn-receipt-slip var(--bn-t-slow) var(--bn-ease-spring) backwards;
 }
+:root[data-theme='dark'] .run-receipt { background: var(--bn-surface-2); }
+@keyframes bn-receipt-slip {
+  from { opacity: 0; transform: translateY(-6px); clip-path: inset(0 0 100% 0); }
+  to { opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
+}
+.run-receipt-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+}
+.run-receipt-said { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
+.run-receipt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--bn-2);
+  margin: 0;
+  font-size: var(--bn-fs-base);
+  color: var(--bn-ink-2);
+}
+/* The mid-dots are drawn, and drawn TRAILING: a wrap then leaves the dot at the end of the
+   line it belongs to, rather than starting the next line with what reads as a bullet. */
+.run-receipt-head > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-2); color: var(--bn-ink-4); }
+.run-receipt-what { font-weight: 650; color: var(--bn-ink); }
+.run-receipt-rows {
+  font-family: var(--bn-font-display);
+  font-weight: 700;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+}
+.run-receipt-was { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.run-receipt-tear { height: 0; margin: var(--bn-2) 0 var(--bn-1); border-top: 1px dashed var(--bn-line-strong); }
+.run-receipt-fine { margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); max-width: 68ch; }
+.run-receipt-file { margin: 0; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow-wrap: anywhere; }
 
-.run-select:hover:not(:disabled) {
-  border-color: var(--field-hover);
+.run-note { display: flex; flex-direction: column; gap: var(--bn-2); }
+.run-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-ok-tint);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
+}
+.run-result-refused { background: var(--bn-danger-tint); }
+.run-fine-link { color: var(--bn-accent); text-decoration: underline; text-underline-offset: 3px; }
+.run-fine-link:hover { color: var(--bn-accent-hover); }
+.runs-detail-files { padding: var(--bn-4) var(--bn-5) var(--bn-5); border-top: 1px solid var(--bn-line); }
+@container (max-width: 640px) {
+  .runs-detail-files { padding-left: var(--bn-4); padding-right: var(--bn-4); }
 }

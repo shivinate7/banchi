@@ -185,12 +185,23 @@ async function open(page: Page, options: { refuseDeleteFrom?: number } = {}): Pr
     }),
   )
 
-  await page.goto('/#/')
+  await page.goto('/#/capture')
   await expect(page.locator('.capture-row').filter({ hasText: /Finish/ })).toBeVisible()
 
-  // The box, by name, then the camera, by its row. Both keyboard: this screen's own path.
-  await page.keyboard.press('b')
-  await expect(page.locator('.capture-opt').filter({ hasText: /S key/ })).toBeVisible()
+  /* The box, by name, then the camera, by its row. Both keyboard: this screen's own path.
+
+     PRESSED UNTIL IT LANDS. A visible row is not a subscribed handler: `CaptureScreen.tsx`
+     registers its key listener in an effect whose dependencies include `gameEntry`, React runs
+     passive effects after paint, and Playwright sees the paint — so the first press of a run
+     can reach a document nobody is listening to and simply vanish. The retry is over this
+     file's timing and not over the screen's behaviour: `B` still has to open the box field and
+     offer the fixture's box, or this never returns. */
+  await expect(async () => {
+    await page.keyboard.press('b')
+    await expect(page.locator('.capture-opt').filter({ hasText: /S key/ })).toBeVisible({
+      timeout: 1_000,
+    })
+  }).toPass({ timeout: 15_000 })
   await page.keyboard.type('3')
   await page.keyboard.press('Enter')
   /* The camera opens on an explicit press and not on load — the screen says so in the field
@@ -198,11 +209,27 @@ async function open(page: Page, options: { refuseDeleteFrom?: number } = {}): Pr
      no permission prompt"), so a test that skipped the button would be skipping the design.
      The device list only exists after it. */
   await page.keyboard.press('v')
-  await page.getByRole('button', { name: 'Open the camera' }).click()
+  /* SCOPED TO THE RIG, because the sentence is on the screen three times now: the stage draws
+     it over the dead viewfinder, the blocked-capture list draws it as a shortcut, and the
+     Camera field draws it where `V` just put the operator. All three call `camera.retry`, so
+     the choice is about which control this file drives rather than about which one works —
+     and the field is the one the keypress above opened. */
+  await page.getByLabel('Rig').getByRole('button', { name: 'Open the camera' }).click()
   await page.locator('.capture-opt').filter({ hasText: /Canvas Cam Link/ }).click()
   await page.keyboard.press('Escape')
-  await expect(page.locator('.pull-confirm')).toBeEnabled()
+  /* THE SHUTTER, BY ITS NAME. It was `.pull-confirm` — a class borrowed from another screen's
+     confirm button — and the rebuild gave it the kit `Button`. The class is gone; the claim it
+     stood for is not, and it is the precondition every case below rests on: with a box picked
+     and a camera ready, the shutter is LIVE. Asserted by role and name rather than by class,
+     so the next restyle cannot take it out again. */
+  await expect(shutter(page)).toBeEnabled()
   return wire
+}
+
+/** The capture button. `Capture card` is its whole accessible name — the `C` keycap is
+ *  `aria-hidden`, and in motion mode there is no keycap at all. */
+function shutter(page: Page) {
+  return page.getByRole('button', { name: 'Capture card', exact: true })
 }
 
 /** N captures, awaited one at a time. The shutter is held while a capture is in flight, so

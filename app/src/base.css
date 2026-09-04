@@ -1,11 +1,4 @@
-/* Reset and the page ground. Kept out of tokens.css so that file stays nothing but
- * custom properties — it is the file docs/DEBTS.md names as the target of a future
- * token-drift check, and a parser is owed a file with one kind of thing in it.
- *
- * Light only, everywhere. docs/DESIGN.md: there is no dark theme and no theme switcher,
- * and that is a decision rather than a deferral. No prefers-color-scheme block belongs
- * in this file.
- */
+/* BANCHI — reset and page ground. Tokens live in tokens.css; nothing here names a colour. */
 
 *,
 *::before,
@@ -15,151 +8,131 @@
   padding: 0;
 }
 
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
 body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--body);
-  font-size: 16px;
+  min-height: 100%;
+  background: var(--bn-bg);
+  color: var(--bn-ink);
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-base);
   line-height: 1.5;
+  font-feature-settings: 'cv11', 'ss01', 'ss03', 'calt';
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* THE FOCUS RING EVERY SCREEN WAS ASSUMED TO HAVE.
- *
- * Seven of the app's stylesheets style focus on their own controls and are unaffected by this
- * rule — a class selector outranks a bare pseudo-class, so every one of them still wins,
- * including SearchField.css, whose `.search-field-input:focus { outline: none }` deliberately
- * suppresses a second ring inside the one its box already draws.
- *
- * What this covers is the other six, and one of them is the case that makes the rule worth
- * having: PullConfirm, the component docs/DESIGN.md's step 6 section specifies down to three
- * states and 44px, has no focus rule at all — and nothing in the repo could have told anyone.
- * The design-check measures its fill, its label and its height; the harness never opens a
- * browser; and the app manages focus nowhere, so a keyboard user landing on it saw whatever
- * the user agent happened to draw over a 4px radius.
- *
- * A DEFAULT IN THE RESET RATHER THAN A NOTE ASKING EACH SCREEN TO REMEMBER. The failure mode
- * of the note is silent and invisible to every check this repo has, which is the same
- * argument eslint.config.js makes for turning a bug into a rule: "a paragraph in one file
- * guards one file". A focusable element with no visible focus state is unusable by keyboard
- * and there is no screen in this app where that is the intended design, so the safe value is
- * the one you get by doing nothing.
- *
- * :focus-visible AND NOT :focus, which is the whole reason this is safe to make global. The
- * ring appears for a keyboard or an assistive device and not for a mouse press, so it costs
- * the owner's mouse-driven hours nothing and adds nothing to a screenshot of a resting screen.
- *
- * --ink, matching the nav and every screen that styles its own: the conventional accent ring
- * is not available here, because docs/DESIGN.md gives accent exactly two jobs and neither of
- * them is "you are here". Outline rather than a border or a shadow because it is drawn outside
- * the box and takes part in no layout — a ring that moved the thing it was ringing would
- * reflow a queue row under the reading eye. --ink on --bg is 19.4:1, and on --surface 19.9:1.
- * `outline-offset` is positive so the ring clears the 4px radius instead of clipping the
- * corners of the control it is announcing.
- */
+/* The theme flips in one frame. A cross-fade on <body> ALONE was a two-speed flip — dark
+   panels on a light ground for a third of a second — so the fade is one mechanism for every
+   surface: the toggle stamps `data-theme-switching` on <html> for --bn-t-slow and every
+   colour on the page eases together, then the attribute comes off and components keep their
+   own transitions. */
+html[data-theme-switching],
+html[data-theme-switching] *,
+html[data-theme-switching] *::before,
+html[data-theme-switching] *::after {
+  transition:
+    background-color var(--bn-t-slow) var(--bn-ease),
+    color var(--bn-t-slow) var(--bn-ease),
+    border-color var(--bn-t-slow) var(--bn-ease),
+    box-shadow var(--bn-t-slow) var(--bn-ease),
+    fill var(--bn-t-slow) var(--bn-ease),
+    stroke var(--bn-t-slow) var(--bn-ease);
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--bn-font-display);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-tight);
+  line-height: 1.15;
+  color: var(--bn-ink);
+}
+
+p { color: inherit; }
+a { color: var(--bn-accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 0.15em; }
+strong, b { font-weight: 600; }
+small { font-size: var(--bn-fs-sm); }
+
+code, kbd, samp, pre {
+  font-family: var(--bn-font-mono);
+  font-size: 0.92em;
+  font-feature-settings: 'tnum', 'zero';
+}
+
+img, video, canvas, svg { display: block; max-width: 100%; }
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button { background: none; border: 0; }
+
+/* Numbers align in tables and key/value rows everywhere. */
+table, .tnum, output, time { font-variant-numeric: tabular-nums; }
+
+/* Focus: one ring, product-wide. Keyboard only. */
+:focus { outline: none; }
 :focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--bn-accent);
   outline-offset: 2px;
+  border-radius: var(--bn-r-xs);
 }
 
-/* THE CURSOR EVERY CONTROL WAS ASSUMED TO HAVE, AND IT IS THE SAME ARGUMENT AS THE RING ABOVE.
- *
- * The owner's report, 2026-08-29: "I hate how my mouse doesn't change correctly upon what I'm
- * hovering". Measured across the 17 component files, 142 natively-interactive elements are
- * rendered and 39 of them had no `cursor` rule any selector could reach — because a cursor was
- * something each stylesheet had to REMEMBER to declare on each control it drew, and the six
- * files that declare none at all (`base.css`, `App.css`, `Gallery.css`, `SearchField.css`,
- * `PositionBar.css`, `PositionLabel.css`) are not badly written, they are the ones whose author
- * had no reason to think about it.
- *
- * A DEFAULT IN THE RESET RATHER THAN A NOTE ASKING EACH SCREEN TO REMEMBER, for the reason the
- * focus block above already gives at length: the failure mode of the note is silent, and there
- * is no screen in this app where a button that does not say it is a button is the intended
- * design. Same shape as `eslint.config.js` turning a bug into a rule — "a paragraph in one file
- * guards one file".
- *
- * ELEMENT SELECTORS, WHICH IS WHAT MAKES THIS A FLOOR AND NOT AN OVERRIDE — and the guarantee
- * is the CASCADE ORDER, not the specificity alone. `main.tsx` imports this file before any
- * component sheet, so where the two tie the component wins by coming later. That is the property
- * to preserve: moving this import below a component stylesheet would silently invert it.
- *
- * The specificities are not uniform and it is worth being exact, because the tempting one-line
- * version of this paragraph is wrong. `button` and `select` are (0,0,1) and lose to any class.
- * `input[type='checkbox' | 'radio' | 'file']` is (0,1,1) and `[role='button']` is (0,1,0) — both
- * could outrank a bare class, and neither does today: no component sheet sets a cursor on a
- * toggle input, and nothing in the app renders `role='button'` at all. Measured, not assumed.
- *
- * THE DISABLED ARM OUTRANKS A REST-STATE CLASS ON PURPOSE. `button:disabled` is (0,1,1) against
- * a bare `.foo { cursor: pointer }` at (0,1,0), so off beats on — which is the whole point, and
- * is why 30 controls stopped saying "click me" while refusing the click. A screen that wants a
- * different disabled cursor still wins with a class of its own at (0,2,0), which is exactly what
- * `Runs.css` and `ReviewQueue.css` now do.
- *
- * So every deliberate per-screen choice already written survives untouched — `ReviewQueue.css`'s
- * `zoom-in` loupes, `RunPanel.css`'s crop preview, and all 18 controls that already say
- * `not-allowed` when they are off. Nothing here takes a cursor AWAY from a screen that chose
- * one. What it does is answer for the ones that never said.
- *
- * IT REACHES THE FULFILLER'S BUTTONS AND THAT IS CORRECT. docs/DESIGN.md makes his screens
- * touch — they show no keyboard hints — but touch is what they are DESIGNED for, not the only
- * device that can reach them, and a mouse over his pull-confirm should say the same thing a
- * mouse over the owner's says. Nothing here is a floor from his constraints table and nothing
- * here can weaken one: a cursor is not a text size, a tap target, a contrast ratio or a route.
- *
- * IT DOES NOT REACH `PositionLabel`. That component renders `<span role="group">`, and its
- * walk-to control (D45) is a `<button>` in `CardLocations` that WRAPS it — so `button` below
- * hits the wrapper and the five sites offering no walk-to stay exactly as plain as D41 and D45
- * require. The firewall those entries describe is a component-graph fact, and no selector here
- * is aimed at a `.position-*` class.
- */
+::selection { background: var(--bn-accent-tint-2); color: var(--bn-ink); }
 
-/* Everything the user agent already draws as text keeps the cursor it earns natively:
-   `<input type="text">` is `text`, `<a href>` is `pointer`, and neither needs restating. What
-   the user agent gets WRONG for this product is the list below. */
-button,
-select,
-input[type='checkbox'],
-input[type='radio'],
-input[type='file'],
-/* Zero of these today, and that is why it is here rather than after the first one. A div
-   promoted to a control by hand is the case that cannot be caught by looking at a tag name
-   later. `<summary>` is deliberately absent: `app/tests/run-panel.spec.ts` asserts `<details>`
-   and `<summary>` at zero inside the run panel, so a rule for one would be styling something
-   this repo has committed to not drawing. */
-[role='button'] {
-  cursor: pointer;
+/* Scrollbars that belong to the theme. */
+* { scrollbar-width: thin; scrollbar-color: var(--bn-line-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--bn-line-strong);
+  border: 3px solid transparent;
+  border-radius: var(--bn-r-full);
+  background-clip: padding-box;
 }
+*::-webkit-scrollbar-track { background: transparent; }
 
-/* A LABEL THAT OWNS A TOGGLE IS THE TOGGLE. Clicking `Crop to the card` in the run panel checks
-   the box beside it, and the words are most of the target — so the words have to say so.
-
-   ONLY THE THREE INPUT KINDS WHERE A CLICK CHANGES SOMETHING. A `<label>` bound to a text or
-   number field also does something — it moves the caret — but that is what `text` already means
-   and `pointer` over a caption above a field you are about to type in is the wrong promise.
-   `RunPanel.css`'s `.run-field` (Max edge) and `Pricing.css`'s `.pricing-field` are exactly that
-   case and are deliberately left alone. */
+/* Cursor floor: anything that acts says so. */
+button, select, summary,
+input[type='checkbox'], input[type='radio'], input[type='file'], input[type='range'],
+[role='button'], [role='tab'], [role='option'], [role='menuitem'] { cursor: pointer; }
 label:has(> input[type='checkbox']),
 label:has(> input[type='radio']),
-label:has(> input[type='file']) {
-  cursor: pointer;
-}
+label:has(> input[type='file']) { cursor: pointer; }
+button:disabled, select:disabled, textarea:disabled, input:disabled,
+[aria-disabled='true'] { cursor: not-allowed; }
 
-/* OFF MEANS OFF, AND TWO SCREENS DISAGREED ABOUT HOW TO SAY IT. Of the 20 disabled controls in
-   the product 18 read `not-allowed` and two read `default` — `.runs-plain` and
-   `.review-close-choice`, neither with a comment claiming it meant to. Both are corrected in
-   their own files rather than here, because a class rule outranks this one; this is what
-   answers for the disabled controls that said nothing at all, of which `.review-catalog-input`
-   was one — a text field that went on reading `text` while refusing to take a character.
+/* Details/summary — no default marker. */
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
 
-   `[aria-disabled]` BESIDE `:disabled` BECAUSE THIS APP USES BOTH, and for good reasons it
-   records: `CaptureScreen.css`'s track cell stays rendered and refuses the click so the option
-   does not vanish mid-feed, and `BoxRuns.css`'s link is an anchor that cannot be `disabled` at
-   all. The anchor draws no cursor from this rule — it carries `pointer-events: none`, so the
-   pointer never lands on it — and that is left as it is rather than engineered around. */
-button:disabled,
-select:disabled,
-textarea:disabled,
-input:disabled,
-[aria-disabled='true'] {
-  cursor: not-allowed;
+/* Motion floor. Anyone who asked for less gets less. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* …except the loops that CARRY MEANING. A busy ring frozen at a partial arc is a disabled
+     button; a stopped shimmer is broken content. These keep turning, slowly. */
+  .bn-btn[data-busy='true']::after,
+  .bn-skeleton::after,
+  .bn-dot-live,
+  .capture-frame-spinner,
+  .review-spinner {
+    animation-duration: 1.4s !important;
+    animation-iteration-count: infinite !important;
+  }
 }

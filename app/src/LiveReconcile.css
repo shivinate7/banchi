@@ -1,105 +1,129 @@
-/* THE STORE-WIDE RECONCILE (D87). Drawn as its own section under the run panel, and visually
-   quieter than it: everything above is about a run, and this deliberately is not. The rule is
-   `docs/DESIGN.md`'s — a panel that shouted would read as a fifth pipeline step rather than
-   the unscoped form of the fourth. */
+/* The store-wide reconcile (D87), as a right-hand sheet off the Runs header. */
+
 .livecheck {
-  margin-top: var(--s5);
-  padding-top: var(--s4);
-  border-top: 1px solid var(--line);
+  width: min(520px, 100vw);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.livecheck[hidden] {
+  display: none;
+}
+
+.livecheck:focus {
+  outline: none;
+}
+
+.livecheck-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-5) var(--bn-4) var(--bn-4) var(--bn-6);
+  padding-top: calc(var(--bn-5) + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--bn-line);
+  flex: none;
+}
+
+.livecheck-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .livecheck-head {
   margin: 0;
-  font-family: var(--util);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink);
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.livecheck-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-5) var(--bn-6);
 }
 
 .livecheck-says {
-  max-width: 62ch;
-  margin: var(--s2) 0 0;
-  font-family: var(--body);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.livecheck-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s3);
-  margin-top: var(--s3);
-}
-
-.livecheck-pick input {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* NO SOLID ACCENT FILL, which `app/tests/pricing.spec.ts` floors for the screen next door and
-   `docs/DESIGN.md` states once for all of them: the product spends hue on two states and this
-   is not one of them. A border and the ink weight carry it. */
-.livecheck-settle {
-  padding: var(--s2) var(--s3);
-  font-family: var(--util);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--ink);
-  border-radius: var(--r);
-  cursor: pointer;
-}
-
-.livecheck-settle:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.livecheck-settle:disabled {
-  color: var(--muted);
-  border-color: var(--line);
-  cursor: default;
-}
-
-/* THE COMMAND'S STDOUT, MONOSPACED AND SCROLLED RATHER THAN WRAPPED. It draws fixed-width
-   columns — copies, sku, push, live, sold, hand — and a wrap would break the alignment those
-   columns exist for. `overflow-x` on the block itself keeps the page from scrolling sideways,
-   which is the rule every wide element in this app follows. */
-.livecheck-console {
-  max-height: 60vh;
-  margin: var(--s3) 0 0;
-  padding: var(--s3);
-  overflow: auto;
-  font-family: var(--util);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  white-space: pre;
-}
-
-.livecheck-note {
-  margin-top: var(--s3);
-}
-
-.livecheck-note-text {
   margin: 0;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
+  font-size: var(--bn-fs-base);
+  line-height: 1.55;
+  color: var(--bn-ink-2);
 }
 
-.livecheck-machine {
-  margin: var(--s1) 0 0;
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+.livecheck-says strong {
+  color: var(--bn-ink);
+}
+
+/* The age of the store's `live` reading, stated where the reading is taken. Quiet: it is a
+   caveat on a number, never a refusal. */
+.livecheck-age {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  margin: calc(var(--bn-3) * -1) 0 0;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-md);
+  line-height: 1.5;
+  color: var(--bn-ink-3);
+}
+
+.livecheck-age .bn-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--bn-ink-4);
+}
+
+.livecheck-age strong {
+  color: var(--bn-live);
+  font-weight: 650;
+  letter-spacing: var(--bn-tracking-caps);
+  font-size: var(--bn-fs-sm);
+  text-transform: uppercase;
+}
+
+.livecheck-status {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  margin: 0;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-3);
+}
+
+.livecheck-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--bn-2);
+  padding: var(--bn-3) var(--bn-6);
+  padding-bottom: calc(var(--bn-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--bn-line);
+  background: var(--bn-surface);
+  flex: none;
+}
+
+@media (max-width: 767px) {
+  .livecheck-top {
+    padding-left: var(--bn-4);
+  }
+  .livecheck-top .bn-btn-icon,
+  .livecheck-foot .bn-btn {
+    --btn-h: 40px;
+  }
+  .livecheck-body,
+  .livecheck-foot {
+    padding-left: var(--bn-4);
+    padding-right: var(--bn-4);
+  }
 }

@@ -142,6 +142,27 @@ function hud(page: Page) {
   return page.locator('.capture-motion-hud')
 }
 
+/* THE INSTRUMENTS MOVED INTO A DISCLOSURE THAT STAYS SHUT (owner's ruling, 2026-09-03). The
+ * HUD, Re-baseline and Save trace are inside `details.capture-tuning` in the stage foot, and
+ * the ruling is about where a tuning instrument BELONGS rather than about whether it works —
+ * so this file opens it once and asserts the same numbers it always did. What it does NOT do
+ * is assert that a readout is visible with nothing pressed: that was a fact about the old
+ * layout, and the behaviour underneath it — the screen says the machine is armed, and says how
+ * many fires and drops it has reached — is asserted against the SUMMARY, which is the part
+ * that is on screen shut. */
+function tuning(page: Page) {
+  return page.locator('details.capture-tuning')
+}
+
+function tuningSummary(page: Page) {
+  return tuning(page).locator('summary')
+}
+
+async function openTuning(page: Page): Promise<void> {
+  await tuningSummary(page).click()
+  await expect(tuning(page)).toHaveAttribute('open', '')
+}
+
 type Hud = {
   phase: string
   d: number
@@ -223,7 +244,7 @@ async function feed(page: Page, base: number): Promise<void> {
 }
 
 test('arming motion is visible, and the machine fires on a settled card', async ({ page }) => {
-  await page.goto('/#/')
+  await page.goto('/#/capture')
 
   // Before anything: manual mode, machine string says so, no HUD anywhere.
   await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
@@ -238,6 +259,13 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await page.getByRole('button', { name: /Trigger/ }).click()
   await page.getByRole('button', { name: 'motion', exact: true }).click()
   await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  /* ARMED, AND THE SCREEN SAYS SO WITH NOTHING OPENED. The disclosure's summary is the
+     readout's public face now, and it carries the machine's state: no camera is open, so it
+     reads `armed · no frames yet` rather than zeros that would look like a working machine
+     seeing nothing. That is the claim the old `toBeVisible` on the placeholder was making. */
+  await expect(tuningSummary(page)).toContainText('armed · no frames yet')
+  /* Open it once; everything below reads instruments. */
+  await openTuning(page)
   await expect(page.getByText('Motion is armed but no frame has reached it yet')).toBeVisible()
   // The C-key chip leaves the capture button: the key is genuinely disarmed in this mode.
   await expect(page.locator('.capture-controls kbd', { hasText: 'C' })).toHaveCount(0)
@@ -288,6 +316,13 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await expect
     .poll(() => settledAt(page, CARD_B), { timeout: 5_000 })
     .toMatchObject({ phase: 'watching', atBase: true, fires: 2, same: 1, dropped: 2, stall: 0 })
+
+  /* AND THE DROP IS ON SCREEN WITH THE DISCLOSURE SHUT, which is this file's whole reason for
+     counting drops rather than writing a card: the seam fired, the screen declined for a
+     stated reason, and the number is legible. With the readout behind a disclosure that claim
+     needed a reader of its own — the summary is where it now has to hold. */
+  await expect(tuningSummary(page)).toContainText('2 fires')
+  await expect(tuningSummary(page)).toContainText('2 dropped')
 
   // The trace: one press hands over the whole session as a self-describing file. This
   // is D19's Tier-1 instrument and the rig's tuning data, so the assertion is not "a

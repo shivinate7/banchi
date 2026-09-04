@@ -1,0 +1,115 @@
+import { Icon, Pill, type PillTone } from './kit'
+import type { RunSummary } from './types'
+import './Runs.css'
+
+/* WHERE A RUN IS, in one vocabulary for the list, the detail and the home screen. Labels are
+ * sentence case — every pill on the product is, and Home's own label rule restyles them.
+ *
+ * The server's `phase` says which of the four commands a run is WAITING FOR (`ready`,
+ * `identifying`, `identify`, `join`, `emit`, `reconcile`, `done`). The screen draws that as
+ * six stages — identify · join · review · price · emit · reconcile — because review and
+ * pricing are the two things a run waits on between join and emit, and a bar that skipped
+ * them would jump from a third to five sixths. */
+
+/** How long a live run has been going, from its own `created_at`. Live only — on a finished
+ *  run the same arithmetic is age, which is a different fact. Used by `BoxRuns` too. */
+export function runningFor(row: { created_at?: string | null }): string {
+  const at = row.created_at == null ? NaN : Date.parse(row.created_at)
+  const mins = Number.isNaN(at) ? 0 : Math.max(0, Math.floor((Date.now() - at) / 60000))
+  if (mins < 1) return 'Running'
+  return mins < 60 ? `Running ${mins}m` : `Running ${Math.floor(mins / 60)}h ${mins % 60}m`
+}
+
+export const STAGES = ['Identify', 'Join', 'Review', 'Price', 'Emit', 'Reconcile'] as const
+
+/** The four commands this screen drives, in order. */
+export const COMMANDS = ['identify', 'join', 'emit', 'reconcile'] as const
+export type Command = (typeof COMMANDS)[number]
+
+export type Stage = {
+  readonly label: string
+  readonly tone: PillTone
+  /** Segments of the six-stage bar that are done. */
+  readonly filled: number
+  readonly live: boolean
+  /** Index of the command the run is waiting for; 4 when it is done. */
+  readonly step: 0 | 1 | 2 | 3 | 4
+}
+
+export function stageOf(row: RunSummary): Stage {
+  if (row.live || row.phase === 'identifying') {
+    return { label: runningFor(row), tone: 'live', filled: 0, live: true, step: 0 }
+  }
+  switch (row.phase) {
+    case 'ready':
+      return { label: 'Not started', tone: 'default', filled: 0, live: false, step: 0 }
+    case 'identify':
+      return { label: 'Not collected', tone: 'warn', filled: 0, live: false, step: 0 }
+    case 'join':
+      return { label: 'Needs join', tone: 'warn', filled: 1, live: false, step: 1 }
+    case 'emit': {
+      const review = row.counts.queued_main ?? 0
+      if (review > 0) {
+        return { label: `${review} to review`, tone: 'warn', filled: 2, live: false, step: 2 }
+      }
+      return { label: 'Needs pricing', tone: 'accent', filled: 3, live: false, step: 2 }
+    }
+    case 'reconcile':
+      return { label: 'Emitted', tone: 'ok', filled: 5, live: false, step: 3 }
+    case 'done':
+      return { label: 'Reconciled', tone: 'ok', filled: 6, live: false, step: 4 }
+    default:
+      return { label: 'Unknown', tone: 'default', filled: 0, live: false, step: 0 }
+  }
+}
+
+/** The six, in the order the bar draws them — the bar's one tooltip teaches them. */
+const STAGE_WORDS = STAGES.map((name) => name.toLowerCase()).join(' · ')
+
+/** When something happened, in the words a person uses for it. */
+export function whenLabel(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const at = new Date(iso)
+  const t = at.getTime()
+  if (Number.isNaN(t)) return ''
+  const mins = Math.floor((Date.now() - t) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+/** The six-segment stage bar. */
+export function StageBar({ stage, className }: { readonly stage: Stage; readonly className?: string }) {
+  const done = stage.filled >= STAGES.length
+  const says = `${Math.min(stage.filled, STAGES.length)} of ${STAGES.length} stages done · ${stage.label}`
+  return (
+    <span
+      className={['runs-stagebar', done ? 'runs-stagebar-done' : '', className ?? ''].filter(Boolean).join(' ')}
+      role="img"
+      aria-label={says}
+      title={`${says} (${STAGE_WORDS})`}
+    >
+      {STAGES.map((name, i) => (
+        <span
+          key={name}
+          data-state={i < stage.filled ? 'done' : i === stage.filled ? (stage.live ? 'live' : 'current') : 'todo'}
+        />
+      ))}
+    </span>
+  )
+}
+
+/** The stage as a pill: a pulsing dot while live, a check once it is through. */
+export function StagePill({ stage }: { readonly stage: Stage }) {
+  return (
+    <Pill tone={stage.tone} className={stage.live ? 'runs-pill-live' : ''}>
+      {stage.live ? <span className="bn-dot bn-dot-live" /> : stage.tone === 'ok' ? <Icon name="check" size={12} /> : null}
+      {stage.label}
+    </Pill>
+  )
+}

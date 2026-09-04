@@ -1,222 +1,686 @@
-/* THE RUNS SCREEN — page chrome, and a box picker. Everything below the picker is
- * `RunPanel.css`, which is unchanged by the move: this file draws the two things a route of its
- * own has to draw for itself and nothing else.
- *
- * DOCS/DESIGN.MD'S PAGE-CHROME NUMBERS, LITERALLY. 16px of outer padding on all four sides; the
- * title in the display face at 20px, which is that face's own published floor rather than a size
- * picked to be small, sharing its line with the scope and the controls; a lede of ONE line at
- * the metadata size; and the first row of real content — the box strip — inside 150px of the top
- * of the viewport with the nav included. Measured in a browser at 1440x900 against the owner's
- * store: the head is one line, the lede is one line at 20px, and the strip's first chip sits
- * at **y=142**.
- *
- * AND `Check cost` SITS AT y=431, which is the number the move was actually for. On
- * `#/inventory` this panel was the last row of the content column, so the pipeline's first
- * press was a page-scroll below the card — D33 as amended records that cost, and D39 is what
- * spent it.
- *
- * THE SHAPE IS `ReviewQueue.css`'s HEAD, DELIBERATELY REUSED RATHER THAN REDERIVED. That file
- * worked out `display: contents` on the control group with `margin-left: auto` on its first
- * child, and the wrap behaviour that keeps a long control from squeezing its neighbours instead
- * of moving to a second line. Two owner screens with the same header problem should not have two
- * answers to it; where this file differs from that one, it is because the content differs and
- * not because the rule does.
- */
+/* ============================================================================
+   RUNS — the page frame, the identify composer (a staged dialog with the money
+   moment inside it), and the shared pieces the route's parts draw: the six-segment
+   stage bar, the log well, the file controls, the crop preview.
+   ========================================================================== */
 
+/* ---- page ---------------------------------------------------------------- */
 .runs {
-  padding: var(--s4);
-
-  /* NO `max-width` AND NO CENTRING, matching `.inventory`. docs/DESIGN.md requires the nav to
-     share the page's reading edge — App.css pads the strip to this same 16px so the first route
-     name sits directly above this screen's heading — and centring the page breaks that
-     alignment at every width except the one where the two happen to agree. The panel below
-     wants the measure as well: `RunPanel.css` records that at 1024px the head stops wrapping
-     four command names and the free steps unwrap with it. */
-}
-
-/* ---- the head ---- */
-
-.runs-head {
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-/* `wrap`, and the worst case is what makes it safe: if the scope, the handoff escape and the
-   Reload cannot fit beside the title they wrap onto a second line, nothing is clipped, and the
-   header is still one block rather than the title-block-over-toolbar stack docs/DESIGN.md
-   measured at 240px on the inventory screen. */
-.runs-head-top {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-}
-
-.runs-title {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-/* `contents`, so the children are flex items of `.runs-head-top` and the wrap happens BETWEEN
-   controls rather than inside this group. `margin-left: auto` on the first child collects the
-   line's slack between the heading and the controls, which is App.css's own
-   `.app-nav-group-aside` mechanism. */
-.runs-controls {
-  display: contents;
-}
-
-.runs-controls > :first-child {
-  margin-left: auto;
-}
-
-/* Each of these is one indivisible thing — a scope sentence, a button — so the row wraps at the
-   gaps and never inside one. Without it the controls squeeze and a two-word button breaks over
-   three lines, which is the defect ReviewQueue.css records having rendered and fixed. */
-.runs-controls > * {
-  flex: none;
-}
-
-/* THE SCOPE IS A NUMBER AND A COUNT, so the utility face — docs/DESIGN.md gives every position,
-   count and price in the product to Martian Mono, and this line is two of the three. It is also
-   the one thing on this screen that decides what the money button below will spend against,
-   which is why it sits on the title's line rather than inside the panel. */
-.runs-scope {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-/* `BoxOps`' control, to the pixel. Two owner panels on two screens disagreeing about how tall a
-   button is was a real finding on 2026-08-26 — the run panel's were 17% taller than the box
-   operations' one panel down — and the answer then was to make them agree. This screen is new
-   ground and inherits the settled value rather than picking a third. */
-.runs-plain {
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  cursor: pointer;
-}
-
-.runs-plain:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-/* `not-allowed`, NOT `default`, and the change is about the product rather than this button.
-   Twenty controls in this app can be disabled and eighteen of them said `not-allowed`; this one
-   and `.review-close-choice` said `default`, neither with a comment claiming to have meant it.
-   Two answers to one question is the "attention to detail" complaint in its purest form — the
-   same control shape, one screen apart, telling the pointer two different things. */
-.runs-plain:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-.runs-lede {
-  color: var(--muted);
-  margin-top: var(--s1);
-  font-size: 13px;
-}
-
-/* ---- a refusal from `GET /boxes` ---- */
-
-.runs-note {
-  max-width: 560px;
-  margin-top: var(--s3);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.runs-note-text {
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-  max-width: 76ch;
-}
-
-/* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, so that
-   what you saw on screen is greppable against the server's own log. */
-.runs-machine {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: var(--s2);
-  word-break: break-all;
-}
-
-/* ---- the box picker ---- */
-
-/* A WRAPPING STRIP OF CHIPS, WHICH IS `#/inventory`'s OWN IDIOM ONE SCREEN OVER. The walk picks
-   a shelf from a strip; this picks a box from one. A `<select>` was the other candidate and
-   loses on the fact the chips carry for free: the card count sits on every chip at once, so the
-   box worth running is visible without opening anything. Thirteen boxes fit one line at 1440
-   and wrap without a breakpoint below it. */
-.runs-boxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin-top: var(--s3);
-}
-
-/* NO FILL ON THE SELECTED CHIP, and this is docs/DESIGN.md's rule rather than a preference: the
-   solid accent means "there is exactly one thing to do", and this screen's one fill is the spend
-   button inside the panel below. A picker with thirteen choices is the definition of a screen
-   with more than one answer, so the selected state is carried by the ground and the border —
-   `--hover` is a declared text ground and every token on it clears 7:1. */
-.runs-box {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  cursor: pointer;
+  gap: var(--bn-5);
+}
+/* Header → first content is 24px on every owner screen: the kit's 24 is zeroed by the page
+   stack's 20, and 4 restores it. */
+.runs > .bn-head { margin-bottom: var(--bn-1); }
+.runs-scope { max-width: 360px; overflow: hidden; }
+@media (max-width: 639px) {
+  .runs-hide-sm { display: none; }
+}
+@media (min-width: 640px) {
+  .runs-only-sm { display: none; }
+}
+
+/* ---- thumb sizes on phones ---------------------------------------------------
+   The kit's md control is 34px and sm is 28px — mouse sizes. Anything a thumb presses on
+   this screen is lifted to 36–40px here, by descendant, because PageHeader, Segmented and
+   Button are kit. (Kit gap: phone sizes for `.bn-btn-sm` and `.bn-seg-item`.) */
+@media (max-width: 767px) {
+  .runs .bn-head-actions .bn-btn { --btn-h: 40px; }
+  .run-readings .bn-seg-item { min-height: 40px; }
+  .runslog-toggle,
+  .runs-disclose { height: 36px; }
+  .runslog-head .bn-btn-sm { --btn-h: 36px; }
+  .run-preview-walk .bn-btn-sm { --btn-h: 40px; }
+  .runs-composer-head .bn-btn-icon { --btn-h: 40px; }
+  /* The presses that matter most — the step actions, Check cost, the file pickers. */
+  .runs-step-body .bn-btn,
+  .runs-filebtn,
+  .runs-composer-foot .bn-btn { --btn-h: 40px; }
+}
+
+/* ---- stage bar (six segments) --------------------------------------------- */
+.runs-stagebar {
+  --runs-track: var(--bn-surface-2);
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  height: 4px;
+  width: 100%;
+}
+:root[data-theme='dark'] .runs-stagebar { --runs-track: var(--bn-line-strong); }
+.runs-stagebar > span {
+  display: block;
+  border-radius: 2px;
+  background: var(--runs-track);
+  transition: background-color var(--bn-t-slow) var(--bn-ease);
+}
+.runs-stagebar > span[data-state='done'] { background: var(--bn-accent); }
+.runs-stagebar > span[data-state='current'] { background: var(--bn-accent-tint-2); }
+/* The live segment breathes on the kit dot's own period, so the pill beside it never drifts out of phase. */
+.runs-stagebar > span[data-state='live'] { background: var(--bn-live); animation: runs-breathe var(--bn-t-pulse) ease-out infinite; }
+.runs-stagebar-done > span[data-state='done'] { background: var(--bn-ok); }
+@keyframes runs-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.runs-pill-live .bn-dot { width: 6px; height: 6px; }
+
+/* ---- log well ------------------------------------------------------------- */
+.runslog {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  overflow: hidden;
+}
+.runslog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  padding: 2px var(--bn-2);
+}
+.runslog-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--bn-1);
+  border-radius: var(--bn-r-sm);
+  color: var(--bn-ink-3);
   text-align: left;
+  transition: color var(--bn-t-fast) var(--bn-ease);
+}
+.runslog-toggle:hover { color: var(--bn-ink); }
+.runslog-chev { flex: none; transition: transform var(--bn-t) var(--bn-ease); }
+.runslog-closed .runslog-chev { transform: rotate(-90deg); }
+.runslog-label {
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runslog-lines {
+  font-size: var(--bn-fs-2xs);
+  color: var(--bn-ink-4);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.run-console {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--bn-3) var(--bn-4);
+  border-top: 1px solid var(--bn-line);
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-sm);
+  line-height: 1.55;
+  color: var(--bn-ink-2);
+  white-space: pre;
+  tab-size: 4;
 }
 
-.runs-box:hover {
-  background: var(--hover);
+/* ---- file controls --------------------------------------------------------- */
+.runs-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
+.runs-filebtn { position: relative; cursor: pointer; }
+.runs-filebtn[data-over='true'] { background: var(--bn-accent-tint); box-shadow: 0 0 0 1px var(--bn-accent); }
+.runs-filebtn:has(input:focus-visible) { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+.runs-filebtn[aria-disabled='true'] { opacity: 0.45; pointer-events: none; }
 
-.runs-box-on {
-  background: var(--hover);
-  border-color: var(--ink);
+.runs-drop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+  border: 1.5px dashed var(--bn-line-strong);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  cursor: pointer;
+  transition: border-color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
 }
+.runs-drop:hover,
+.runs-drop-over { border-color: var(--bn-accent); background: var(--bn-accent-tint); }
+.runs-drop-filled { border-style: solid; border-color: var(--bn-ok); }
+.runs-drop:has(input:focus-visible) { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+.runs-drop-art {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+}
+.runs-drop-filled .runs-drop-art { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.runs-drop-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.runs-drop-title {
+  font-weight: 600;
+  font-size: var(--bn-fs-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runs-drop-hint { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
-.runs-box-name {
-  font-family: var(--body);
-  font-size: 14px;
+/* ---- the composer dialog ------------------------------------------------------ */
+.runs-composer {
+  width: min(940px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.runs-composer:focus { outline: none; }
+.runs-composer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-4);
+  padding: var(--bn-4) var(--bn-4) var(--bn-4) var(--bn-5);
+  border-bottom: 1px solid var(--bn-line);
+  flex: none;
+}
+.runs-composer-heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.runs-composer-title {
+  margin: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.runs-stages {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  list-style: none;
+}
+.runs-stages li { display: flex; align-items: center; }
+.runs-stages li + li::before {
+  content: '';
+  width: 14px;
+  height: 1px;
+  margin: 0 var(--bn-1);
+  background: var(--bn-line-strong);
+}
+.runs-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--bn-2) 0 4px;
+  border-radius: var(--bn-r-full);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-4);
+  white-space: nowrap;
+}
+.runs-stage-n {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: var(--bn-fs-2xs);
   font-weight: 700;
-  color: var(--ink);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+  transition: background-color var(--bn-t) var(--bn-ease), color var(--bn-t) var(--bn-ease);
+}
+.runs-stage[data-state='current'] { color: var(--bn-ink); }
+.runs-stage[data-state='current'] .runs-stage-n { background: var(--bn-accent); color: var(--bn-on-accent); }
+.runs-stage[data-state='done'] { color: var(--bn-ink-2); }
+.runs-stage[data-state='done'] .runs-stage-n { background: var(--bn-ok-tint); color: var(--bn-ok); }
+button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink); }
+
+.runs-composer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-5);
+}
+.runs-composer-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+}
+.runs-composer-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  padding: var(--bn-3) var(--bn-5);
+  padding-bottom: calc(var(--bn-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--bn-line);
+  background: var(--bn-surface);
+  flex: none;
+}
+.runs-composer-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 767px) {
+  .runs-composer {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    width: auto;
+    max-height: 92vh;
+    max-height: 92dvh;
+    border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0;
+    animation-name: bn-sheet-up;
+  }
+  .runs-composer-head { padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); gap: var(--bn-2); }
+  .runs-composer-title { font-size: var(--bn-fs-lg); white-space: normal; }
+  .runs-stage-label { display: none; }
+  .runs-stage { height: 36px; min-width: 36px; padding: 0 2px; justify-content: center; }
+  /* Shorter connectors, so the 36px chips leave the eyebrow its one line. */
+  .runs-stages li + li::before { width: 8px; margin: 0 2px; }
+  .runs-composer-body { padding: var(--bn-4); }
+  .runs-composer-foot { flex-wrap: wrap; padding-left: var(--bn-4); padding-right: var(--bn-4); }
+  .runs-composer-note { flex-basis: 100%; white-space: normal; order: -1; }
 }
 
-.runs-box-cards {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+/* the handoff line inside its notice */
+.runs-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2) var(--bn-3);
 }
 
-.runs-empty {
-  color: var(--muted);
-  font-size: 13px;
+/* ---- 1 · the box tiles --------------------------------------------------------- */
+.runs-boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--bn-3);
+}
+/* Two across on a tablet and one on a phone, so the name being chosen is not the thing cut. */
+@media (max-width: 900px) {
+  .runs-boxes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 559px) {
+  .runs-boxes { grid-template-columns: minmax(0, 1fr); }
+}
+.runs-boxes > .bn-empty { grid-column: 1 / -1; padding: var(--bn-7) var(--bn-4); }
+.runs-box-skel { height: 66px; border-radius: var(--bn-r-lg); }
+.runs-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  min-height: 66px;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  text-align: left;
+  /* `backwards`, never `both`: a filled `transform: none` would pin the hover lift. */
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  transition:
+    transform var(--bn-t-fast) var(--bn-ease),
+    box-shadow var(--bn-t-fast) var(--bn-ease),
+    background-color var(--bn-t-fast) var(--bn-ease);
+}
+.runs-box:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+.runs-box:active { transform: none; }
+.runs-box[aria-pressed='true'] {
+  background: var(--bn-accent-tint);
+  box-shadow: inset 0 0 0 1.5px var(--bn-accent);
+}
+.runs-box-num {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-family: var(--bn-font-display);
+  font-weight: 800;
+  font-size: var(--bn-fs-base);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.runs-box[aria-pressed='true'] .runs-box-num { background: var(--bn-accent); color: var(--bn-on-accent); }
+.runs-box-text { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.runs-box-name {
+  font-weight: 600;
+  font-size: var(--bn-fs-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.runs-box-cards { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+/* A square mark: this is a multi-select, and the kit's checkbox is square. Circles are for one choice. */
+.runs-box-check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--bn-line-strong);
+  display: grid;
+  place-items: center;
+  color: transparent;
+  transition: background-color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.runs-box[aria-pressed='true'] .runs-box-check {
+  background: var(--bn-accent);
+  border-color: var(--bn-accent);
+  color: var(--bn-on-accent);
 }
 
-/* The panel keeps its own margins internally; this is the gap between the picker and it. */
-.runs .run-panel {
-  margin-top: var(--s4);
+/* ---- 2 · the reading ------------------------------------------------------------ */
+.runs-composer-read {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--bn-5);
+  align-items: start;
 }
+@media (max-width: 767px) {
+  .runs-composer-read { grid-template-columns: minmax(0, 1fr); }
+}
+.runs-legs { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
+.run-leg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.run-leg-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--bn-2) var(--bn-3);
+}
+.run-leg-box { font-weight: 700; font-size: var(--bn-fs-base); }
+.run-leg-scope { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.run-leg-head .bn-pill { margin-left: auto; }
+.run-readings.bn-seg {
+  flex-wrap: wrap;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+.run-readings .bn-seg-item { flex: 1 1 auto; }
+.run-readings .bn-seg-item[aria-pressed='true'] {
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  box-shadow: none;
+}
+.run-reading-edge {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 500;
+  color: var(--bn-ink-4);
+}
+.run-readings .bn-seg-item[aria-pressed='true'] .run-reading-edge { color: inherit; opacity: 0.8; }
+.run-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-3) var(--bn-4);
+}
+.runs-field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-2);
+}
+.runs-edge { width: 6.5em; }
+.run-step-fine {
+  margin: 0;
+  font-size: var(--bn-fs-sm);
+  line-height: 1.5;
+  color: var(--bn-ink-3);
+  max-width: 72ch;
+}
+
+/* ---- the crop preview ---------------------------------------------------------- */
+.run-preview { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; }
+/* The head carries the walk — ←, "card N of M", → — so the stage's main control sits above
+   the frame and is on screen at every height. */
+.run-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-2);
+  min-height: 28px;
+}
+.run-preview-walk {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
+}
+.run-preview-count {
+  min-width: 8ch;
+  text-align: center;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.run-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  min-width: 0;
+  transition: opacity var(--bn-t) var(--bn-ease);
+}
+.run-preview-card[aria-busy='true'] { opacity: 0.55; }
+/* The frame stays exactly 9:16: the cut is positioned in percentages of this box. */
+.run-preview-frame,
+.runs-preview-skel {
+  position: relative;
+  display: block;
+  height: min(34vh, 360px);
+  aspect-ratio: 9 / 16;
+  margin: 0 auto;
+  border-radius: var(--bn-r-lg);
+  overflow: hidden;
+  background: var(--bn-surface-2);
+  box-shadow: var(--bn-shadow-1);
+}
+.run-preview-frame { cursor: zoom-in; }
+.run-preview-ghost {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.35;
+}
+.run-preview-sent { position: absolute; display: block; object-fit: fill; }
+.run-preview-cut {
+  position: absolute;
+  border: 2px solid var(--bn-accent);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px var(--bn-on-accent), inset 0 0 0 1px var(--bn-on-accent);
+  pointer-events: none;
+}
+.run-preview-detail {
+  width: 100%;
+  height: 140px;
+  border-radius: var(--bn-r);
+  background-repeat: no-repeat;
+  background-size: auto;
+  background-color: var(--bn-surface-2);
+  box-shadow: var(--bn-shadow-1);
+}
+.run-preview-fact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--bn-2);
+  margin: 0;
+  font-size: var(--bn-fs-xs);
+  line-height: 1.5;
+  color: var(--bn-ink-3);
+}
+.run-preview-slot { font-weight: 600; color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+.run-preview-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-4);
+}
+
+/* ---- 3 · the money moment ------------------------------------------------------ */
+.runs-quote { gap: var(--bn-4); }
+.runs-quote-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--bn-2);
+  padding: var(--bn-4) 0 0;
+}
+.runs-quote-money {
+  font-family: var(--bn-font-display);
+  font-size: clamp(44px, 7vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-money);
+  animation: runs-money-in 420ms var(--bn-ease-spring) backwards;
+}
+@keyframes runs-money-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.runs-quote-line { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.runs-quote-line strong { color: var(--bn-ink); font-weight: 600; }
+.run-legs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 auto;
+  width: min(100%, 520px);
+  padding: var(--bn-2);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.run-legs > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+}
+.run-legs dt { font-weight: 600; font-size: var(--bn-fs-md); }
+.run-legs dd {
+  margin: 0;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.runs-quote-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--bn-2);
+  padding: var(--bn-2) 0;
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  animation-delay: 160ms;
+}
+.run-button-money {
+  min-width: min(100%, 320px);
+  box-shadow: var(--bn-shadow-accent);
+}
+.runs-quote-fine { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); text-align: center; }
+.runs-quote-cache { align-self: center; text-align: center; }
+.runs-disclose {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
+}
+.runs-disclose:hover { color: var(--bn-ink); background: var(--bn-surface-3); }
+.runs-disclose .bn-icon { transition: transform var(--bn-t) var(--bn-ease); }
+.runs-disclose[aria-expanded='true'] .bn-icon { transform: rotate(180deg); }
+.runs-quote-consoles { display: flex; flex-direction: column; gap: var(--bn-2); }
+
+/* ---- 4 · the receipt ----------------------------------------------------------- */
+.runs-receipt {
+  align-items: center;
+  text-align: center;
+  gap: var(--bn-3);
+  padding: var(--bn-5) 0 var(--bn-3);
+}
+.runs-receipt-art {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--bn-ok-tint);
+  color: var(--bn-ok);
+  animation: bn-pop var(--bn-t-slow) var(--bn-ease-spring) backwards;
+}
+.runs-receipt-title {
+  margin: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-3xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.runs-receipt-line { margin: 0; font-size: var(--bn-fs-base); color: var(--bn-ink-3); }
+.runs-receipt-line strong { color: var(--bn-ink); font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-xl); }
+.runs-receipt-runs {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-1);
+  width: min(100%, 460px);
+}
+.runs-receipt-runs li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-md);
+}
+.runs-receipt-box { font-weight: 600; text-align: left; }
+.runs-receipt-run { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
+.runs-receipt-fine { text-align: center; }

@@ -177,6 +177,8 @@ Pricing rules: match / undercut % / markup %.
 
 **Sub-threshold disposition is a per-run choice, never a constant in the code.** The owner picks one default for the run — flat at the floor, or a flat price set for that run — and can name individual SKUs to override it. Output is suppressed until that choice is made: a card under the threshold is not quietly listed and not quietly dropped.
 
+**Amended 2026-09-03: the floor stops being a sub-threshold answer anybody may choose.** The paragraph above offers *flat at the floor* as one of two dispositions and the store-policy amendment of 2026-09-02 carries that pair forward; the floor half is retired. Typing the floor's own figure states it, and an answer already stored as `"floor"` becomes a flat price on its first edit — so no sub-threshold price silently tracks a figure that moves for a different reason. The floor itself is untouched and still clamps the pricing rule's output, which is the job this entry derives it for. D98 carries the argument and the control that replaced the choice.
+
 **A row with a blank or $0.00 market price is `no_market_data`, and is not sub-threshold.** A missing price is an unknown price, not a low one, so it gets no disposition at all — not the flat price, not the floor, not the bulk lot. It is priced by hand in `decisions.json` or explicitly left unlisted, and `emit` refuses to write while one is unanswered. Recorded because the tempting fix is to sweep these into the sub-threshold bucket, whose whole point is describing cards whose value is *known* to be small. The failure that prevents: handing away a $40 chase card at the $0.40 floor because its market cell happened to be empty.
 
 The join preserves the sub-threshold price distribution in bands rather than lumping it, because *everything under $0.40* hides the difference between a $0.38 rare and a $0.01 code card, and that difference decides later which of them are worth a bulk lot. Bands are cut as fractions of the threshold, so they follow it if it moves.
@@ -3534,7 +3536,7 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 
 `X-Pkmnscan-Boot` answers **did the code change under you**. `server/capture_server.py:302` computes `BOOT_ID` at import, `:308` names the header, `:7986` exposes it across origins, and `:2258` repeats it in `GET /status`. `app/src/server.ts:444` reads it off every response inside `request()` and `:437` hands it to listeners. Two screens consume it. It is a good mechanism and this entry changes none of it.
 
-It cannot answer **did the data change under you**, and the gap is not a missing feature — it is the same fact from the other side. A restart happens *while the operator is working*, so there is traffic in flight for the header to ride. A screen goes stale for exactly the opposite reason: nobody has touched it. There is no traffic to ride, and the only way to manufacture some is the timer `app/src/ServerReloaded.tsx` records building, proving and throwing out. **A data-generation header is not a smaller version of the boot header. It is the thing the boot header's own design note explains you cannot have.**
+It cannot answer **did the data change under you**, and the gap is not a missing feature — it is the same fact from the other side. A restart happens *while the operator is working*, so there is traffic in flight for the header to ride. A screen goes stale for exactly the opposite reason: nobody has touched it. There is no traffic to ride, and the only way to manufacture some is the timer the reload notice recorded building, proving and throwing out. **A data-generation header is not a smaller version of the boot header. It is the thing the boot header's own design note explains you cannot have.**
 
 ### The sentence that is true of a process and false of a store
 
@@ -3574,9 +3576,9 @@ It is the drain. Every verb funnels through `_dispatch`, which counts requests i
 
 `ServerReloaded.tsx` opens by citing D53 for the boot id. **D53 does not contain the words `onServerBoot`, `X-Pkmnscan-Boot`, `boot_id`, `BOOT_ID` or `ServerReloaded` — not once.** Checked three ways: a case-insensitive search of this file for "boot" returns five hits, every one `launchctl bootout`, "imported at boot", "will not boot" or "fails to boot"; the identifiers appear in `app/src/`, `server/capture_server.py` and `docs/DEBTS.md` and in no ref's `docs/DECISIONS.md`; and D53 is byte-identical between this worktree and main.
 
-**Seven sites cite D53 for the header or the notice and now point here**: `app/src/ServerReloaded.tsx:1` and `:18`, `app/src/ServerReloaded.css:1`, `app/src/server.ts:416` and `:446`, `app/src/types.ts:235`, `app/src/Shipping.tsx:147`. **Five are correct and are left alone** — `app/src/types.ts:230`, `app/src/App.tsx:787`, `server/capture_server.py:8002`, `server/order_transport.py:542` and `server/tcg_export.py:102` all cite D53 for the watcher, the supervisor or the restart, which are genuinely D53's.
+**Seven sites cited D53 for the header or the notice and were re-pointed here**: the reload notice's component and stylesheet (twice in the component), `app/src/server.ts:416` and `:446`, `app/src/types.ts:235`, and the shipping screen. **Four of those seven are gone**: the Banchi rebuild deleted the notice's own two files and the behaviour moved into the shell — `app/src/App.tsx`'s server subscription raises a kit toast instead of a component of its own (D94, D95). The rules below survived the deletion intact, which is why this paragraph records the move rather than the entry being rewritten. **Five are correct and are left alone** — `app/src/types.ts:230`, `app/src/App.tsx:787`, `server/capture_server.py:8002`, `server/order_transport.py:542` and `server/tcg_export.py:102` all cite D53 for the watcher, the supervisor or the restart, which are genuinely D53's.
 
-The mechanism is adopted rather than re-argued. Every rule in `ServerReloaded.tsx`'s header stands unchanged: no poll, silence on absence, never on first sight, `role="status"`, expires on its own, hung off `hasChrome` so it never draws on the Fulfiller's view. What changes is which entry it stands on.
+The mechanism is adopted rather than re-argued. Every rule the notice's own header set out stands unchanged: no poll, silence on absence, never on first sight, `role="status"`, expires on its own, hung off `hasChrome` so it never draws on the Fulfiller's view. What changes is which entry it stands on.
 
 ### What it costs
 
@@ -4728,6 +4730,91 @@ D59 fixed per-**box** capping inside one join and this survived per-**run** acro
 - **The hash was read in an effect, so mount fired two loads.** Whichever landed last won `docs`, but `savedDocs` is a ref written outside React's batching, so a render could see the first load's documents against the second's saved marker: `dirty` went true with nothing typed and the screen PUT a document the operator never touched — **the one write D49 calls the load-bearing absence of the whole screen**. The hash is now read in the `useState` initialiser and a generation guard drops a stale response.
 - **`unsaved` must not be memoised.** `savedDocs` is a ref, so a `useMemo` keyed on `[loaded, docs]` never recomputes when a write *lands*; the save loop oscillated unsaved → saving… → unsaved forever.
 
+### Three: the threshold and the cheap-card price are ONE figure
+
+**The owner, on being shown the two defaults side by side:** *"I told you that threshold and
+cheap card are the same variable and should be the same."* Built 2026-09-03. The cut-off is now
+one number doing two jobs — it is the line a card is above or below, and it is what everything below
+it lists at — and `#/pricing` has no way to write one without the other.
+
+**The inversion is what forced it, and it is arithmetic rather than taste.** A threshold of $0.40
+beside a cheap-card answer of $0.49 prices a card worth $0.38 at $0.49 and a card worth $0.42 at
+$0.42: the card that FAILED the bar goes out dearer than the card that cleared it, at every point
+in the 9-cent window between them. The window is not hypothetical — it is where bulk lives, and
+D9's own derivation puts the threshold exactly where the density of cards is highest. Two figures
+free to cross each other cannot be held apart by care; the only fix that survives an operator
+typing is to make crossing unrepresentable.
+
+**So one press writes both keys.** `policy.threshold` is what `pipeline/join.py` partitions by and
+`policy.sub_threshold` is what it prices the lower half at, and the screen writes them together at
+the store and at the run. Nothing in the pipeline changed: `Corpus.policy_for` still folds the two
+keys independently, and a document written by hand may still hold two figures — this is a
+constraint the SCREEN maintains, not one the schema enforces, and that is deliberate. The
+command-line operator who genuinely wants a gap can still write one, and the file will still be
+read.
+
+**A store already holding two figures is REPORTED, never resolved on the operator's behalf.** This
+machine's own said `threshold: "0.40"` beside `sub_threshold: {flat: "0.24"}`, and neither is
+wrong. Drawing the cut-off alone would claim the cheap cards go out at $0.40 while `emit` wrote
+$0.24 — the screen lying about money, which is the one thing `#/pricing` may never do. So the
+panel names the stranded figure, says `emit` uses it until something is written over it, and
+offers one press that makes them agree. Which of the two the operator meant is not a thing this
+screen can know.
+
+**And the list re-partitions under the figure as it is typed.** `bucketAt` is
+`pipeline/pricing.py:is_listable` in the client's terms — market at or above the cut-off is
+listable, market below it is cheap, no market data is unpriced and never either — so a cut-off
+equal to the stored one re-derives exactly the buckets the server sent, and a changed one moves
+the rows immediately instead of after a reload. **This does not weaken D28.** What D28 stops is
+the list reflowing under a COMMIT, so an answer typed on a row cannot move the row out from under
+the hand that typed it; that is unchanged and a typed price still moves nothing. The cut-off is a
+policy figure, and a policy change is precisely the moment the partition is supposed to move.
+Readiness reads the partition as drawn rather than as fetched, so a cut-off raised over rows that
+were listable says `emit` will refuse before it does.
+
+**Re-partitioning on the client is the ACCURATE reading, and that was not why it was built.**
+`GET /pipeline/pricing`'s `bucket` cell is the run
+table's, frozen by the join that wrote `pricing.json`; `emit` does not read it — `cli/resolve.py:
+load` takes the STORED threshold and re-runs `join_batch` with it, so the file is partitioned at
+the figure standing when the press happens. Measured on this machine's own box 6: with the stored
+cut-off moved to $1.25, the payload still reported 3 listable and 8 sub-threshold — the split at
+$0.40 — while the screen drew 1 and 10, and 1 and 10 is what `emit` would have written. A screen
+reading the payload's bucket would have been wrong in the direction that matters, showing a card
+in the listed section that the file puts in the cheap one.
+
+**The panel is drawn whether or not any card is under the line.** It was conditional on there
+being cheap cards, which was right while the figure was only an answer ABOUT those cards; now that
+the figure IS the line, a cut-off typed low enough to empty the lower section would have taken its
+own control off the screen with it.
+
+### The default is one figure too, and that cost the invisibility promise
+
+**The merge with main took away this entry's own promise.** Its first build said a store which
+had never set a threshold would partition exactly as it did yesterday. D9's amendment of
+2026-09-02 gave `sub_threshold` a default of flat $0.49, so a fresh store's first `emit` is not
+refused for want of an answer the owner had already given once. That is right on its own. Beside a
+`threshold` still falling back to `pricing.THRESHOLD` at $0.40 it is the inversion this entry
+exists to end, arriving through the back door: a store that has chosen NEITHER figure partitions
+at $0.40 and prices the half below it at $0.49, so a card worth $0.38 lists above one worth $0.42.
+
+**So `pipeline/corpus.py` has ONE fallback and both keys read it — `DEFAULT_CUTOFF`, $0.49.** The
+figure is the owner's, stated twice: as the cheap-card default they asked to be inserted, and then
+as the ruling that the two settings are one variable. The pair cannot invert now unless somebody
+writes them apart on purpose, which the command line still permits and no screen does.
+
+**What it costs, said plainly.** An existing store that never set a threshold partitions at $0.49
+where it used to partition at $0.40, and every SKU whose market sits between the two moves from the
+listed half to the cheap half on its next join. **That moves cards and not money**: those SKUs go
+out at $0.49 either way, because $0.49 is what the cheap half has been priced at since the
+amendment. The owner's own store is unaffected — it has $0.40 written — and `harness/tests/
+t7_store_and_seams.py` asserts the shared fallback with the trade written beside it, where the
+assertion that used to promise the opposite stood.
+
+**What would reopen it**: an operator who wants the bar for LISTING to sit below the price cheap
+cards go out at, which is a coherent thing to want — list everything over $0.40, sell the bulk at
+$0.49 — and is the one case the one-variable rule refuses to express. Nobody has asked for it, and
+the screen would need a way to say it that could not be mistaken for the pair drifting apart.
+
 ### What is NOT built, named rather than left to be discovered
 
 **The merged emit is not built.** The owner asked for one CSV — across runs, across the listed/sub-threshold split, and across games, with a checkbox to peel off just the above-threshold rows. It is a real change to `pipeline/join.py`, `cli/resolve.py` and `cli/cmd_emit.py`, because **a merged file cannot be a concatenation of the CSVs already on disk**: the cap has to be recomputed across the union or it writes the over-push above into a file. Until it lands, `emit` stays per run and the press is **absent** on a worklist of more than one — absent rather than disabled, which is D33's rule for the control that spends applied to the one that writes files.
@@ -4741,6 +4828,34 @@ D59 fixed per-**box** capping inside one join and this survived per-**run** acro
 *A worklist that is never used with more than one run.* The remaining cost of the merge is the union and the cap arithmetic; if every sitting is one box forever, the honest simplification is the single-select again. The measurement is whether any `GET /pipeline/pricing` is answered with more than one run in it.
 
 *A lot that genuinely wants its own policy.* `Corpus.overrides` keeps a per-run `rule`/`basis`/`sub_threshold` for exactly that, and **nothing writes one today** — no screen offers it and the migration never produces one. If the field is still empty after several sittings it is speculative generality and should go, taking `_agree_policy` and its refusal with it. If it fills up, D48's per-lot argument is stronger than this entry credits and the policy belongs back in the run.
+
+**Amended 2026-09-03: `Corpus.overrides` has a writer, so the count above can be taken rather than argued.** `#/pricing` draws a per-run sub-threshold override beside the store's answer, written to `policy.per_run[<run>].sub_threshold` and drawn so it cannot be read as the store's. Neither branch of the condition is settled by building it; what changes is that a sitting now produces evidence. D98.
+
+**Amended 2026-09-04: ONE FILE MEANS TWO WRITERS, AND THE SECOND ONE WAS SILENTLY REVERTING THE FIRST.**
+`PUT /pricing` replaces the document wholesale — deliberately, so a key this screen has never
+heard of survives it — and `#/pricing` autosaves the corpus object it took at mount. Put together,
+any write that landed underneath an open pricing tab was undone by that tab's next keystroke, with
+no error anywhere, on the one file in this product that holds money. Two tabs reach it; so does
+`pkmnscan prices adopt --write` while one is open.
+
+**The guard is a revision in the ENVELOPE and never in the document**, which is the part worth
+reading twice. This screen decides "unsaved" by comparing the corpus it holds against the one it
+last sent, BY IDENTITY. A revision inside the document would be rebuilt on every landed write and
+would re-dirty the screen each time — unsaved to saving to unsaved, without end. So `GET /pricing`
+answers a sibling `revision` (a short digest of the file), `PUT /pricing` compares it and refuses
+`corpus_moved` / 409, and the write's receipt carries the new one so the operator's own second
+keystroke is never stale against the file they just wrote.
+
+**An ABSENT revision is allowed, and that is not a hole.** It means "did not read one", which is
+the terminal user editing `inventory/prices.json` and PUTting it back. The guard exists for a
+client that DID read one and is now behind — the only case that can destroy a write nobody saw
+happen. Verified on the live server in all three states: stale refuses 409, current writes, absent
+writes.
+
+**Found by another branch rather than by this one**, on `claude/great-nightingale-37cf84`, where a
+markdown re-prices every stale SKU at once and made the hazard acute — a stale PUT would have
+undone the whole sweep. The bug is D86's own, not that feature's: it exists the moment the answer
+became one file with one wholesale write.
 
 **What is still NOT built.** The reconcile is per run: `cli/cmd_reconcile.py` scopes its diff to one run's `emitted_skus`, while the thing it diffs against — `store/master.py`'s `Listing` — is already per SKU across every box and run. The owner named the consequence: a full live TCGplayer export should reconcile across every emit, box and date at once, and report **both directions**, which is that command's own rule. It would be the first thing able to see the two SKUs this entry measured at `pushed: 6` against a cap of 4. Not built here.
 
@@ -4903,6 +5018,8 @@ There is no undo — the bytes are gone and the card is not in your hand — so 
 **No store-wide reclaim.** The plan's own shape is per batch — reclaim as each 5,000-card lot sells through, so the peak stays near 9 GB rather than climbing to 176 — and a box is the batch this product has. A whole-store press is one loop over `GET /boxes` away if the per-box gesture turns out to be resented, and the history of the box delete says what a resented gate becomes.
 
 **No probe of the pile.** Neither this entry nor D88 measures whether the 100,000 cards are worth scanning; the 2,000-card probe that decides it is work at the rig, and it needs none of this — at 2,000 cards the JSON store was 25 ms. This is the second half of the plan built ahead of the first, on the owner's instruction to execute the plan end to end, and it is recorded that way rather than as the probe having been done.
+
+---
 
 ## D90 — The envelope is the unit of the write, and an order drives the walk as a mode of the inventory screen
 
@@ -5156,3 +5273,200 @@ All 104 of those sales went through `#/inventory`'s plain sale — the write thi
 **And it is still built over an ingest no real order has been through.** D90's table is unchanged: 0 orders in the ledger, 0 copies ever recorded as pulled for one. Every guarantee here is proven by `app/tests/order-walk.spec.ts` and by nothing that has held a buyer's money.
 
 **What would reopen this.** *A second pair of hands*, exactly as D90 has it — two people walking one wave each hold a `chosen` the other has already spent. *A line the resolver answered short while a copy sat takeable in the panel*, which would mean the queue's membership test and the picker disagree about what is fillable. *A tap that costs a card* — the refusal above is a bet that a change the finger did not make is worse than a second press, and the measurement that settles it is an operator swapping copies at a real drawer.
+
+---
+
+## D94 — Banchi is the product's name, and `--bn-*` is the vocabulary every screen speaks
+
+**The front end was rebuilt end to end and renamed Banchi — 番地, a lot number, the address of a thing — and nothing behind it moved.** Built 2026-09-02 to 2026-09-03 on `claude/banchi-ui-ux-overhaul`, on the owner's instruction that the product read as a branded, external-facing thing rather than a spreadsheet with buttons, and on their explicit lifting of every rule in this file, in `CLAUDE.md` and in `docs/DESIGN.md` for the duration of the job. 69 tracked files under `app/` changed, +28,718 and -29,709 lines, with fourteen new ones. The name is the argument the product is built on: every card in this store has an address — box, then section, then card (D58) — and this is the thing that knows it.
+
+**The rename is the product's and not the repo's, and the boundary is greppable.** `Banchi` appears in `app/index.html`'s `<title>`, `app/src/App.tsx`, `app/src/kit/Icon.tsx`'s brand mark and `app/src/Gallery.tsx`, and in no file under `server/`, `cli/`, `pipeline/`, `store/`, `identify/`, `geometry/` or `codes/`. The executable is still `./pkmnscan`, the store is still `inventory/store.sqlite` (D88), the checkout is still `pkmnscan`. A name a person reads on a screen and a name a program is invoked by are different facts; only the first one moved. A rename that had reached the CLI would have invalidated every command in `CLAUDE.md` and every path in `docs/map.py` to nobody's benefit.
+
+**The plumbing was frozen, and the diff is what says so.** `app/src/server.ts` moved 11 lines and `app/src/types.ts` moved 6 across the whole rebuild, against 1,693 in `App.tsx` alone. Every server call, state machine, keyboard binding and handler was held still while markup, CSS, information architecture and interaction were replaced; the screen agents were denied the wire files outright and told that where a field does not exist on this branch they draw the correct shape against what does, leaving a one-line comment naming the field a merge brings. That freeze is why every settled plumbing decision in this file survives a rebuild this size: the thing that changed is the only thing that was allowed to.
+
+### The tokens are the system, and dark is not a skin
+
+**`app/src/tokens.css` declares 152 `--bn-*` names in three registers** — ink for what you read, line for what separates, brand for where to look, indigo for action and vermilion for what is live — over type, spacing, radius, motion and elevation scales. No component sheet may name a color. Light is bare `:root`; dark is `:root[data-theme="dark"]` and redefines the same names rather than adding new ones, so a screen written against the tokens is right in both themes without knowing either exists. The choice is the person's and lives in `localStorage` under `banchi.theme`, which is D27's device-local rule applied to the one fact here that is genuinely about the device in front of you: it is not inventory, and two people at two screens may want different answers.
+
+**The legacy aliases at the foot of that file are a migration seam, and this entry records what they were for because they are already spent.** `--ink`, `--muted`, `--line`, `--accent`, `--field`, `--display`, `--util`, `--s1` through `--s8` and `--r` resolve to their `--bn-*` equivalents. Keeping them live is what let every screen re-skin the moment the token file landed, and then be rebuilt one at a time by agents working in parallel, instead of all at once or not at all. **The migration finished inside the same job**: of the 30 stylesheets under `app/src`, not one reads a legacy name today, against 255 uses of `var(--bn-ink)` alone. They are deliberately not deleted in the change that emptied them — a token file and thirty stylesheets moving in one commit is a revert nobody can take apart — and they cost nothing while they wait. This is not the shape D10's `CARDS_PER_SECTION` deletion took: that constant was deleted because it asserted something false about the operator's boxes, and an alias asserts nothing.
+
+### The kit is the vocabulary, not a folder of helpers
+
+**`app/src/kit/` and `app/src/kit.css` hold the primitives new screen work is written in**: `Button` in seven variants and four sizes, `Kbd`, `Pill`, `Chip`, `PageHeader`, `EmptyState`, `Notice`, `Segmented`, `Stat`, `Logo`, a 70-name `Icon` set, and a global `toast` stack, over `.bn-*` classes for pages, panels, wells, fields, tables, lists, sheets, modals, menus and receipts. `#/gallery` renders all of it as 22 live sections and is a registered route (D95), so the kit cannot rot unseen the way an undocumented set of helpers does.
+
+**Uniformity is the point, and D50 is the entry this discharges.** That ruling says an interactive element's feedback belongs to the product rather than to each stylesheet; before this there was no product-level place to put it, so every sheet answered the question again. There is one now, and a screen that needs a primitive the kit lacks builds it under a screen-prefixed class and reports it for promotion rather than inventing a second `Button`.
+
+### What is given up, and what would reopen this
+
+**Nothing mechanical checks that a component sheet names no color, and nothing checks that a new screen imports the kit.** `docs/DESIGN.md`'s token table is checked and its Fulfillment floors are asserted in a browser by `make design-check`; the `--bn-*` discipline is a rule someone reads, which `CLAUDE.md` already records as the weakest kind of guard this repo has. A `--bn-*`-aware version of the existing raw-color row is the obvious reader and is not built here.
+
+**What would reopen this: a third theme, or a second product on these tokens.** Both are reasons to promote `[data-theme]` from two named sheets to a generated palette, and neither has been asked for. The aliases are the one piece of housekeeping this entry leaves owed: the grep is already empty, so they are dead code, and the commit that deletes them takes the paragraph above with it.
+
+---
+
+## D95 — The shell is a rail, a palette and a reference sheet, and the Fulfiller's crash has no door out
+
+**The owner's nav became a collapsible sidebar with a command palette over it, the phone got a tab bar and a drawer, and the Fulfiller got a crash page that offers no way out of his view.** Built 2026-09-03 with D94. `App.tsx`'s `ROUTES` table is still the one roster and every route is still registered in it; what changed is how a person reaches one.
+
+**The table holds eleven routes and `#/` changed meaning.** `#/` is a new Home screen, Capture moved to `#/capture`, and `#/gallery` is labelled "Kit". Main's table held ten with Capture at the root. Routes carry a `group` — `home`, `work`, `sell`, `library` — and the nav draws them in that order under those headings, which is the workflow (capture, runs, review, pricing, then orders and shipping, then inventory and codes) made visible instead of a flat list a newcomer has to infer an order from. `OFF_NAV` names the one group the nav deliberately omits, `aside`, holding the Fulfiller's screen and the kit; it is a constant because `scripts/docs-audit.py`'s `route rosters` row reads it, and without it that row can only conclude two routes have gone unreachable.
+
+**Recounting is owed, and this entry is not the place it lands.** Moving Capture off the root and adding Home changes every published route count and every spec that pins `#/` as the capture screen. `CLAUDE.md`, `README.md` and `docs/map.py` carry the counts the `route census` row reconciles, and `app/tests/nav.spec.ts` and `app/tests/cursor.spec.ts` carry the pinned rosters; all of them are owed a recount from the table, never an increment, which is the instruction that entry already gives.
+
+### Three shells for three widths, and one of them is nothing at all
+
+**A 236px sidebar at 1024px and up, collapsing to a 64px icon rail on `⌘.`**, remembered per device in `localStorage` under `banchi.rail` (D27). **A 52px top bar and a 64px bottom tab bar below 768px**, the tabs being the four routes that carry `tab: true` — Capture, Review, Orders, Inventory — with everything else behind a left drawer. **And nothing on the Fulfiller's route**, which is unchanged: `CHROME_FREE` holds his persona and the shell renders no nav at all for it, not-rendered rather than hidden, as it was before.
+
+### The palette and the sheet replace hunting for a binding
+
+**`⌘K` opens a command palette** over every route, every screen's own verbs as search keywords, the theme and rail toggles, the hand-off that opens the Fulfiller's screen in a new tab, and the kit. It is additive: the `,` leader chord is unchanged and every screen keeps the letter it had, with `h` added for Home, and `⌘←`/`⌘→` still step the nav strip in the order it is drawn, which is D51 and is untouched.
+
+**`?` opens one keyboard reference sheet listing every binding in the product**, in eleven sections — anywhere, jumping, the palette, and one for each screen that has keys of its own. The owner chose this over restoring the inline `⌘←`/`⌘→` key hints the rebuild had dropped, in those terms: a single place that is complete beats a hint on one screen that is not. The inline hints stay deleted. The failure this closes is the one the old hint had — a binding drawn beside the two controls it happened to sit near, and eight screens' worth of keys documented nowhere a person could look.
+
+### The Fulfiller's crash page, and why it is a separate page
+
+**A screen that throws is caught by an error boundary, and the boundary draws two different pages.** The owner's is the ordinary one: the logo, the error's own message, a reload and a link home. The Fulfiller's carries his floors — 20px body, 44px targets — a sentence saying nothing is lost, and exactly one control, which reopens the screen he is on.
+
+**It offers no route out, because `docs/DESIGN.md`'s constraints table forbids one and a crash is not an exemption from it.** That table's `Destructive actions` row reads *zero reachable from this view*, and the view is his whole product. A crash is the moment he is most likely to press whatever is offered, so it is the moment the rule matters most rather than least. Before this the shared boundary wrapped his screen too and drew a "Go home" link into the owner's side at 14px — a door into the pipeline, below his type floor, reachable only by the screen breaking. This is D5's two-personas rule and D31's *the Fulfiller does not get a vote* applied to the error path, which is the path neither of them had thought about.
+
+### What is not built
+
+**The crash pages are asserted by nothing.** `make design-check` walks the Fulfillment view's floors on a screen that renders, and no test throws inside it to see what the boundary draws. A spec that mounts a deliberately-throwing child on `#/fulfillment` and asserts the absence of any link is the reader this needs, and it is named here rather than claimed.
+
+---
+
+## D96 — The screens answer to the owner's interview, and main's history is not the authority
+
+**Main advanced 19 commits while this branch was open, and the owner was walked through every difference and ruled on each one.** Two sittings, 2026-09-03. The instruction that governs the whole exercise is theirs, verbatim: *"You will literally be breaking a bunch of stuff likely that was made and made stale on main. Your whole goal will be to make sure the new rules answer to what was built here, not you conforming to it."* This entry exists so that a later session reading main's history does not read a deviation as a regression and quietly restore it.
+
+### What was kept against main, and why
+
+**The order walk stays per copy on `#/orders`.** The owner: *"I for sure need the ability to see where every copy of the ordered card lies and I get to control picking which copy I reach for. I don't want the walk picking for me"*, and of the alternative, *"main's was haphazardly done"*. D90's envelope walk — the order taking over `#/inventory`, the arrows stepping the queue, and one press recording the whole envelope — is not adopted here. **This does not repeal D90's argument**, which is about the operator's own error point and is sound; it is the owner choosing a different shape after using both, and the per-copy walk with its per-copy undo is what they use. The rebuilt screen answers the same want one register up, in D97.
+
+**The consequence is named rather than discovered.** `POST /orders/fill` and `POST /orders/fill/undo` arrive with the merge and are reachable from no screen on this branch. By `CLAUDE.md`'s route-is-not-a-feature rule that is two server-only capabilities, which the rule says are not done — recorded here as a debt taken on the owner's instruction, not as a thing that landed. They are deleted, or they get the screen D90 built for them, and the decision is the owner's; nothing else should be built on them meanwhile.
+
+**The order fetch stays one press.** D91 made it two — a status preview, then the fetch. The owner ruled against the preview step and kept the single press, with the receipt carrying what the fetch checked, took and left.
+
+**The card-number sigil sweep is deferred wholesale.** D92 rules that a bare `#` is a count and a key carries a sigil, and this branch's labels were not swept to it. Every label stays as the rebuild drew it, including the capture undo rows, where the owner was shown the ambiguity against real data — box 2, section 2, card 3 is slot 86, and the row draws a bare number — and chose to leave it. The sweep is a later pass, and D92 is not weakened by its absence here: nothing on this branch contradicts it, the labels simply have not been brought to it yet.
+
+### What was adopted from main, screen half and all
+
+Three of main's rulings retired something the pipeline could no longer say, and each needed a screen to stop asking about it. All three landed here.
+
+**D3's amendment retired the finish cross-check**, so the review queue's *"Which finish is this?"* question over `metadata_detection_disagreement` is deleted, at four sites plus `reasons.ts`. The code survives in `RETIRED_REASON_LABELS`, so an entry queued under it still renders a name instead of a raw string; the other three finish reasons are untouched and still ask. **D64 and D65's amendment retired the export delta guard**, so both "Fetch anyway" buttons, the finish-claim bypass checkbox and the verified/unverified sentence are gone, replaced by a plain post-fetch receipt — rows, game, scope, and the previous export it can name — that reassures and refuses nothing.
+
+**D59's amendment dated every reading of `live`, and this branch draws the date.** A `live` count is now written with the age of the reading beside it, on `#/inventory`'s locations, on a box's browse rows and on a box's release plan. A live number with no age reads as a fact about the marketplace when it is a fact about the last time this store looked, and those are different claims about a figure that decides a cap. Where a panel shows several readings at once the oldest is drawn as a bound — *read within 3 hours* — because a mid-dot list of stamps invites arithmetic nobody wants to do.
+
+### What the owner ruled stays exactly as the rebuild made it
+
+Named because each is a place where main or an earlier rule says otherwise, and where a later session would otherwise "fix" it: human labels rather than raw enum strings on owner screens, with the machine value kept on hover and in the run log; receipts as expiring toasts rather than a persistent panel; disclosures collapsed by default, including the Runs scope options that can hold a refusal; the review header showing the card count with reason chips only where there is a choice; one position track until a box has dividers; and Pricing staying quiet about import filenames, which is the single-file emit default read forward.
+
+### What would reopen this
+
+**A second operator, or the owner using the envelope walk somewhere else.** The per-copy ruling is a measurement of one person's hands at one set of drawers. And an accumulating count of orders pulled with no record of which copies went — the doubt D90 exists to end — would say the envelope press was right and this screen has to grow one.
+
+---
+
+## D97 — The copy map ranks and never picks, and a line says what remains
+
+**An order line draws every box that holds the ordered card, ranked by how many free copies each holds, and it recommends without ever making the choice.** Built 2026-09-03 on `#/orders`, from the owner's own design: *"a map is good, with the highest option being basically the option that has the most of the unit in one box, and if within one box already then within one section"*, under the constraint quoted in D96 — the walk does not pick.
+
+**The rank is over free copies, not over copies held.** A box holding three of which two are already recorded against somebody is a worse stop than a box holding two nobody is counting on, and a recommendation that walked you to the first would be recommending a wasted trip. The held count is still drawn on the block, because it is a true thing about that drawer; it simply gets no vote. Ties break to the lower box number, and sections inside the leading box rank by the same rule one register down.
+
+**Nothing is preselected and nothing is hidden.** Every copy the store holds of that card is drawn beneath the map in the map's own order with its own control — copies in far boxes, a copy another open order was offered, and a copy the ledger has already recorded, which is drawn, marked, and not pressable. The map is the union of this line's resolver picks and the store's own on-hand copies of the same SKU, deduped on box and index with the resolver's row winning, because that row is the one carrying who holds it. A resolver that offered three copies and a store holding nine is a screen that must show nine: D93 made the copies panel the picker on the inventory side, and this is the same principle on the order side — the machine ranks, the person reaches.
+
+### The walk plan is the same rule one register up
+
+**Above an order's lines, the boxes are ranked by how much of the whole order each satisfies**, so a buyer wanting four different singles is walked in one pass rather than four. It is additive: no line's map changes, and no copy is chosen. Inside a stop the sections are listed ascending and deliberately not by density — at the plan's register the question is which parts of the drawer the walk passes through, and a hand goes front to back. Density decides what to reach for, and that decision belongs to the per-line map.
+
+### A partly-pulled line says what remains
+
+**The figure on a line is `N remaining`, with `2 already pulled` kept quiet beside it, and it is never `1 of 3 found`.** The owner: *"It should say 1 remaining why would it ever say 1 of 3 found."* The buyer's original quantity is not a progress denominator on this screen. A denominator invites the reading that the store failed to find two, when what happened is that two are in the envelope.
+
+**The pulled count is the ledger's and not the resolver's, and getting that wrong is the easy mistake here.** `ResolvedLine.fulfilled` is the number of copies the resolver can offer right now and `outstanding` is the same arithmetic over the same quantity, so neither can answer how many have already been taken; `OrderRow.progress` carries the ledger's own recorded count per SKU, which is that answer. The merge brings `ResolvedLine.recorded` and the lookup goes then.
+
+### What is not built, and what would reopen this
+
+**It is sized to the owner's own store and to nothing deeper.** The densest SKU there holds fourteen copies of one card, all fourteen in box 3 section 4, and fourteen identical pressable rows is a wall rather than a choice — so six copies are drawn and the rest fold, which is more candidates than any line needs (the largest `remaining` across his twenty open orders is four) and leaves 51 of his 59 lines drawing every copy with no fold at all. The map blocks themselves never fold, because the drawers a card sits in are the primary read. A store deeper than that one has never rendered this, and the fold is the first figure to re-measure against one. **And a copy another open order was offered is a mark rather than a lock** — pressable, because two orders wanting the same card is the operator's problem to solve with the fact in front of them, not the screen's to solve by hiding a row. If that produces a real double-take against the ledger, the mark becomes a refusal and D93's *a full line refuses the take* is the shape it takes.
+
+---
+
+## D98 — The cheap-card figure is the control, the floor choice is retired, and a run may still differ from the store
+
+**The store's answer for a cheap card is a figure you type into at display size, and the segmented row beneath it is deleted.** Built 2026-09-03 on `#/pricing`, on the owner's instruction. The panel used to draw the answer as a read-out with a two-choice strip under it offering *a flat price* or *the $0.40 floor* plus a second small field, so the biggest thing on the panel was the one thing you could not touch and the same number appeared twice. The figure is an input at every size, the `$` is drawn rather than typed, the alphabet is closed to money, Enter and blur commit and Escape restores — so there is no click-to-reveal state to discover, and the thing that looks like the answer is the thing you change.
+
+**The floor choice goes with the row, and that is a real retirement rather than a relocation.** Typing the floor's own figure states it; there is no longer a way to write an answer that silently tracks a moving floor. An answer already stored as `"floor"` opens showing that figure and becomes a flat price on its first edit. D9's floor itself is untouched — it still clamps the pricing rule's output — and what is gone is the ability to say *whatever the floor is* as a sub-threshold disposition. Two figures that move together because one is defined as the other is a coupling nobody asked for and nobody could see.
+
+**Every press is idempotent.** Pressing the answer twice states it twice; nothing toggles back to unset, because unset means *take the store default of $0.49* and that is a different statement from having chosen $0.49. The one press that does unset is the run's own, and it says so.
+
+### The run-level override gets its first writer, which D86 named as a reopening condition
+
+**A run may differ from the store, and the control that says so is drawn in an inset block with the box's name in it.** It writes `policy.per_run[<run>].sub_threshold`, which is `Corpus.overrides` — the field D86 kept for the lot that genuinely wants its own policy and recorded as having nothing that writes one. It has one now. D86's condition asked for the count after several sittings: if the field stayed empty it was speculative generality and should go; if it filled, D48's per-lot argument was stronger than that entry credited. This is the screen that lets the question be answered by use rather than by argument.
+
+**This is not a reversal of D9's amendment of 2026-09-02, and the distinction matters.** That amendment deleted the per-run *answer file* editor — the textarea over a run's own `decisions.json`, which answered 409 for every run created after D86 because nothing wrote the file it edited — and made the sub-threshold disposition a standing store policy defaulting to flat $0.49. Both halves stand. The store's answer is still one answer for the store, still defaulted, and still the figure every cheap row takes; what this adds is the exception that amendment's own last sentence says survives, given a control and drawn so it cannot be mistaken for the store's. The eyebrow reads *Store policy · overridden here* whenever one is set, because a panel that read as the store's while a run quietly overrode it would be the two-answers problem D86 exists to end, rebuilt on one screen.
+
+### A custom rule is a control, not a sentence about a file
+
+**A fourth option beside match, undercut and markup: `undercut` or `markup` by a percentage the operator types, against `market` or `low`.** The only on-screen documentation that a rule beyond the three presets existed was a sentence naming a file you edit by hand; the owner's ruling was to make it a control instead. It is written exactly as a preset is written — `policy.rule` and `policy.basis` on the corpus, a free string on the wire that survives the round trip — so it is a real answer rather than a second syntax, and the three presets keep working and keep their sentences. D49 is unchanged: the answer still lands in one file, and this screen is still the press that writes it.
+
+### Both halves landed the same day, and the figure they wrote turned out to be one figure
+
+**The threshold got its control, and the two figures collapsed into one.** This entry recorded the
+threshold as the server half of one job; the screen half was built hours later, and building it
+exposed the reason the pair had been drawn as two settings for as long as D9 has existed. The
+collapse, the inversion that forced it and what happens to a store holding both are in D99, which
+is where the cut-off's argument lives. What survives of this entry unchanged is everything about
+the FIGURE: it is an input at display size, the row beneath it is deleted, the floor choice is
+retired, and a run may still differ from the store.
+
+**The emit split got a control, behind the press.** `#/pricing` sends `split_threshold` from a
+quiet option beside the emit button, off by default and never remembered, so one press still
+writes one spreadsheet and the pair is one tick away for the send that wants them staged
+separately. `--split-games` remains the command line's alone; nothing has asked for it on a
+screen.
+
+**What would reopen this: a run override nobody writes, or one everybody writes.** Empty after several sittings and the control and `Corpus.overrides` go together. Set on most runs and the policy belongs back in the run, which is D48's argument winning and D86's losing.
+
+## D99 — The cut-off is a figure the operator sets, and one press writes one spreadsheet
+
+**Built 2026-09-03, from the owner's instruction, verbatim: *"emit by default only should now emit only one spreadsheet by default (with the ability to split if needed)"*.** Two changes, recorded together because they meet at one seam — the threshold decides which bucket a card is in, and the bucket used to decide which file it was written to. Change either alone and the other is left describing a shape that no longer exists.
+
+### One: the threshold stops being a module constant
+
+**`pipeline/corpus.py`'s `policy.threshold` is the D9 cut-off, and `pipeline/pricing.py:THRESHOLD` is what a store that has never set one reads.** D9 has said *"both configurable"* since it was written and nothing could configure it: the figure was a module literal no flag, env var, document or route could reach. That is the shape D10's `CARDS_PER_SECTION` was deleted for — a number the product asserts about the operator's business with no way for the operator to disagree — and the argument transfers whole. D9's derivation is untouched: $0.40 is still $60/hr against a ~20s marginal pull. What moved is who may say otherwise — **and, on the merge with main, what a store that has chosen nothing reads.** See *The default is one figure too* below.
+
+**It goes in the corpus and not in the run, which is D86 applied rather than reopened.** A run's `decisions.json` held two kinds of fact and the per-SKU half was a property of the CARD; the threshold is neither. It is a property of the OPERATOR'S HOUR — a labor bar, which is what D9 derives it from — so it is standing policy for the store, beside `rule` and `basis`, with the same per-run override shape D48 keeps for the lot that genuinely differs.
+
+**`SkuMatch.threshold` is a field beside `rule` and `basis`, and that is the whole of the threading.** `listable` reads it, `join_batch` sets it on every match and cuts `SubThresholdBucket`'s bands from the same figure, `cli/resolve.py:load` takes it and hands it to BOTH `join_batch` and `default_router` — a run whose queue was routed by one cut-off and whose file was partitioned by another is a run that disagrees with itself — and `pipeline/merge.py:_merged_match` carries the newest leg's, with `_agree_policy` refusing a send whose runs override it differently. A match therefore carries the policy it was built under, so a report cannot answer `listable` with a figure changed after it was computed.
+
+**Validated where it is read, as `check_basis` is.** `pricing.check_threshold` returns a `Decimal` or raises `InvalidThreshold` naming the value; `Corpus.parse` calls it and discards the result, exactly as it does `Rule.parse` and `check_basis`, so a document that cannot be priced refuses at the read rather than in the middle of an `emit` an hour later. It is a `ValueError` and NOT a `MalformedDecisions`, which is the third instance of the shape D49 already paid for twice — so every `except` that names those two names this one, and `pkmnscan prices show` widened to `ValueError` because it is the one command whose whole job is showing you this file. **It does not round**: `0.405` is a boundary somebody typed, and rounding it here would move a decision by a cent without saying so.
+
+**On the wire as `policy.threshold`**, round-tripped by `GET`/`PUT /pricing` like every other policy key, and written into the payload even when it is the default — a control cannot draw its own current value off a key that appears only once somebody has changed it. `GET /pipeline/pricing` reports the STORED figure where it used to report the newest run's `pricing.json` cell; those stopped being the same kind of fact the moment the cut-off became settable. A run's table says what the join that wrote it partitioned by, which is a record and a stale one the hour after the figure changes. **The floor is unchanged and is still the constant** — nobody has asked for that one, and D9's clamp argument is about a market collapsing rather than about an operator's bar.
+
+### Two: `emit` writes `import.csv`, and the splits are flags
+
+**One press writes one spreadsheet.** It wrote `import-listed.csv` and `import-subthreshold.csv` per game per run — two uploads for one errand, twelve for a send of three runs over two games. The merged path D86 built already wrote one file across runs; this is that shape made the default for one run as well, so `emit` has one answer to "how many files" regardless of how many runs are named.
+
+**Two flags split it on two axes, and `--listed-only` is deliberately neither.** `--split-threshold` puts the old pair back under the old names — an operator staging the valuable cards apart from the bulk gets the files they used to get, not a differently-named approximation. `--split-games` is unchanged and is the way back if Import to Staged turns a multi-`Product Line` file away, which is still unestablished: `fixtures/staged-import-accepted.csv` proves the format for one line only, the owner said they would test it, and a merged file whose games carry different export HEADERS is refused with a sentence naming the flag rather than written. `--listed-only` DROPS the sub-threshold rows instead of filing them elsewhere, and now says how many it left for a later press rather than letting them vanish.
+
+**What the old split was for is not repealed, and this is the part worth writing down.** Two files meant the valuable cards could be staged and moved live while the bulk waited, and a pricing mistake on the cheap file could not touch the valuable one. Both arguments survive; what changed is which is the DEFAULT. The owner's measurement is their own errand: they import one file.
+
+**THE MERGE IS NOT A CONCATENATION, AND INSIDE ONE RUN IT COULD NOT HAVE BEEN.** The two buckets are disjoint SKU sets of one report — `_game_only` partitions on `listable` — and `add_to_quantity` is per SKU, so a row's quantity is the same figure whichever file it lands in and the cap is spent once by construction. ACROSS runs it is `pipeline/merge.py`, unchanged: the union of positions deduped on `(box, index)`, the cap re-derived over it, and D86's measurement standing — three separate emits over three real runs wrote two SKUs past the cap of 4; one merged emit wrote none. **The no-duplicate-SKU rule likewise becomes a property rather than a discipline**: one `import_rows` call per game over the union of the two SKU sets, so a SKU is priced once and written once, and `join.write_import` still asserts it because a property nothing checks is a comment.
+
+**D54's empty guard is per file and was widened, not weakened.** `emit` still never opens an import file until it has at least one row for it, and merging gives that failure one more way to happen — a file can now be empty for every game at once, and under `--split-threshold` a send whose every row is above the cut-off would otherwise write a header-only `import-subthreshold.csv` over a good one. `_warn_stale` globs `import*.csv` now: it named the two bucket files and would have said nothing about the one the default press leaves behind, which is exactly the stale file it exists to name.
+
+**`_artefacts`' `is_import` was wrong from the day the merged file was added** — it tested `startswith("import-")` and `IMPORT_MERGED` is `import.csv` with no hyphen, so the run panel's import affordance never appeared over it. Fixed here because the default now lands on it.
+
+### What is NOT built, named rather than left to be discovered
+
+**Both halves landed the same day.** The threshold's control is on `#/pricing` and the emit split
+is a quiet option behind the press; the paragraphs that named them as owed are discharged below
+rather than deleted, because what the screen half found is worth more than the fact that it
+shipped.
+
+**`POST /pipeline/emit` and `POST /pipeline/runs/<name>/emit` both accept `listed_only`, `split_games` and `split_threshold`** — the same three whichever route, because a screen that could ask for a split on a send of three and not on a send of one would be answering a question about how many runs are open. `app/src/server.ts` sends `split_threshold` from both presses and `split_games` from neither.
+
+**No `--threshold` flag.** D49 makes one file the place a pricing answer is written and `#/pricing` the press that writes it; a flag would be a second place to state it and therefore a second thing that can disagree, which is the argument that keeps `--rule` and `--basis` off that screen pointed the other way.
+
+**What would reopen this.** An operator who never uses `--split-threshold` — the two-file argument would then be dead rather than demoted, and the flag and the two name helpers should go. And an Import to Staged that refuses a multi-`Product Line` file, which would make `--split-games` the default rather than the way back.
+
+---

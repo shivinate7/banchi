@@ -1,103 +1,47 @@
-/* D30's neighbours as a ranked block. Every value here is a token or a step of
-   docs/DESIGN.md's 4 8 12 16 24 32 48 64 scale. No new colour, no fill, no radius, no hover.
-
-   TWO KNOBS AND NO OTHER PER-SITE RULE: `--nb-key` and `--nb-name`. That is `--pos-slot`'s
-   shape in PositionLabel.css and it is here for the reason that file gives — a site's
-   register belongs to the site, and the structure belongs to the component. The defaults are
-   the band's, because the band is the site with room. */
+/* D30's neighbours as a ranked ladder: a muted key column (`after` / `before`) and the names
+   starting at one x. Two knobs per site: `--nb-key` and `--nb-name`. */
 .nb {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
-/* THE HARD LEFT EDGE IS THE WHOLE TREATMENT. Both names begin at one x, so finding the second
-   after the first is a vertical saccade rather than a horizontal hunt for a connective — which
-   is what the deleted `and` used to cost, thirty characters downstream of a comma that is not
-   a boundary.
-
-   BASELINE AND NOT CENTRE. The key is 10-11px and the name 12-13px; centring would float the
-   key off the line it labels, and the whole point of the column is that it labels that line. */
 .nb-row {
   display: flex;
   align-items: baseline;
-  gap: var(--s2);
+  gap: var(--bn-2);
   margin: 0;
+  min-width: 0;
 }
 
-/* The direction, in the app's own key register — muted uppercase tracked mono, which is what
-   `.position-key` and `.card-locations-state` already are.
-
-   TRACKING IS LEGAL HERE AND IS NOT LEGAL ON THE NAME, and that line is the defect this
-   component fixes. An isolated two-word token has no word boundary to protect; an
-   eighty-eight-character sentence does, and at 10px a +0.08em track adds 0.8px to every gap —
-   which weakens the letter-to-word gap ratio by about a fifth, on the exact cue a reader
-   hunting for a name boundary is starving for.
-
-   THE COLUMN IS FIXED SO THE NAMES CANNOT DISAGREE ABOUT WHERE THEY START. 3.5rem clears
-   `BEFORE` — the longer of the two words — at both registers, and it is `flex: 0 0` rather
-   than a `minmax` track because a key that shrank under a long name would take the left edge
-   with it, which is the one thing the column exists to hold still. */
 .nb-key {
-  flex: 0 0 3.5rem;
-  font-family: var(--util);
+  flex: 0 0 3.4rem;
+  font-family: var(--bn-font-ui);
   font-size: var(--nb-key, 11px);
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--bn-ink-4);
   line-height: 1.45;
 }
 
-/* BODY FACE, LOWERCASE, UNTRACKED — docs/DESIGN.md cuts on exactly this line: "Mono carries
-   all metadata… the body face is reserved for sentences a human reads." A card name is a
-   thing a human reads. `.browse-between` had already argued that and won; the copies row
-   borrowed `.card-locations-boxname` instead and said so in its own render comment — "this
-   file's stylesheet is not this change's to grow" — which is the borrow this replaces.
-
-   LOWERCASE IS THE HALF THAT MATTERS MOST. `Galio` has an ascender / x-height / ascender
-   silhouette and `GALIO` is a rectangle, and word-shape is the fast route to a name you last
-   saw on a piece of cardboard. Uppercasing the only two words in the block that could be read
-   whole forced letter-by-letter decoding on precisely the payload. */
 .nb-name {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--body);
+  font-family: var(--bn-font-ui);
   font-size: var(--nb-name, 13px);
   line-height: 1.35;
-  color: var(--ink);
-  overflow-wrap: break-word;
+  color: var(--bn-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* THE RANK, one level below D41's. `.position-path b` keeps its value at ink while its key
-   stays muted; here the champion is the recognition token and the epithet is the
-   disambiguator, so the epithet demotes rather than disappears — 61 of 99 champions carry
-   more than one. The comma rides the epithet, so the only comma left in the block separates
-   ink from muted instead of hiding a name boundary: it now reinforces the split it used to
-   fake. */
-.nb-name b {
-  font-weight: 700;
-}
+.nb-name b { font-weight: 600; }
+.nb-rest { color: var(--bn-ink-3); }
 
-.nb-rest {
-  color: var(--muted);
-}
-
-/* THE STACK: the same rank on one axis instead of two. A key column costs ~72px of width,
-   which a narrow place cell cannot spend without breaking a name whose median is thirty
-   characters; a key LINE costs ~15px of height and nothing horizontal. Same choice
-   `PositionLabel` makes between its stacked and run forms, made here between column and line.
-
-   Nothing passes `stack` today — see the component, which records why it exists unused. */
-.nb[data-flow='stack'] .nb-row {
-  display: block;
-}
-
-.nb[data-flow='stack'] .nb-key {
-  display: block;
-  margin-bottom: 1px;
-}
-
-.nb[data-flow='stack'] .nb-row + .nb-row {
-  margin-top: var(--s1);
-}
+/* The stack: the same rank on one axis. */
+.nb[data-flow='stack'] .nb-row { display: block; }
+.nb[data-flow='stack'] .nb-key { display: block; margin-bottom: 1px; }
+.nb[data-flow='stack'] .nb-row + .nb-row { margin-top: var(--bn-1); }

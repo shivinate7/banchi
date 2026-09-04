@@ -4,7 +4,11 @@ Both derived from the $60/hr labor bar: a marginal pull is ~20s, and 0.8675 x $0
 clears it. Both configurable; neither is a magic number to be nudged by feel.
 
   threshold  market >= $0.40 earns a listing. Below it the card exits through
-             TCGplayer's native Bulk Lots category, not this pipeline.
+             TCGplayer's native Bulk Lots category, not this pipeline. THE CONSTANT
+             BELOW IS THE DEFAULT AND NOT THE ANSWER: the figure in force is
+             `pipeline/corpus.py`'s `policy.threshold`, set by the operator on
+             `#/pricing`, validated by `check_threshold` and threaded to every partition
+             through `SkuMatch.threshold`. A store that has never set one reads this.
   floor      listed price = max(pricing-rule output, $0.40) — clamps undercut rules in a
              collapsing market.
 
@@ -37,7 +41,7 @@ contract the CLI does.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Optional
 
 from pipeline import tcgcsv
@@ -62,6 +66,17 @@ class UnknownRule(ValueError):
 
 class UnknownBasis(ValueError):
     """A basis outside `market` | `low`."""
+
+
+class InvalidThreshold(ValueError):
+    """A stored threshold that is not money.
+
+    A `ValueError` and NOT a `MalformedDecisions`, exactly as `UnknownRule` and
+    `UnknownBasis` are, because it is raised from the same place for the same reason:
+    `pipeline/corpus.py:parse` validates the policy at READ time so the refusal lands where
+    a command is already catching it, rather than in the middle of an `emit` an hour later.
+    The message names the value, because a threshold nobody can see is a threshold nobody
+    can correct."""
 
 
 @dataclass(frozen=True)
@@ -164,6 +179,38 @@ def has_market_data(price: Optional[Decimal]) -> bool:
     collapsing them is what sweeps a chase card into the $0.40 flat bucket.
     """
     return price is not None and price > 0
+
+
+def check_threshold(value) -> Decimal:
+    """A stored threshold as a `Decimal`, or a refusal naming what was written.
+
+    `check_basis`'s shape, for `check_basis`'s reason: the policy is validated where it is
+    read, and the caller gets back the parsed value rather than the string it was stored as.
+
+    THE CONSTANT IS THE DEFAULT AND NOT THE ONLY ANSWER (D9: *"both configurable"*). What is
+    validated is that the figure is MONEY and is positive: a threshold of zero lists a $0.00
+    card, and a negative one is not a number anybody meant. `None` is the store that has
+    never set one, which is every store written before this — it reads the constant, so the
+    partition it produces is byte-identical to the one it produced yesterday.
+
+    IT DOES NOT ROUND. A threshold of `0.405` is a boundary the operator typed and is
+    compared against Market as written; rounding it here would move a decision by a cent
+    without saying so, which is the failure `list_price` orders its own operations to avoid.
+    """
+    if value is None:
+        return THRESHOLD
+    text = str(value).strip()
+    try:
+        parsed = Decimal(text)
+    except (ArithmeticError, InvalidOperation, ValueError) as exc:
+        raise InvalidThreshold(
+            "threshold {0!r} is not a price".format(text)
+        ) from exc
+    if not parsed.is_finite() or parsed <= 0:
+        raise InvalidThreshold(
+            "threshold {0!r} must be above zero".format(text)
+        )
+    return parsed
 
 
 def is_listable(market_price: Optional[Decimal], threshold: Decimal = THRESHOLD) -> bool:

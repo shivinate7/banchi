@@ -1,56 +1,318 @@
 # Design
 
+**Banchi.** 番地 — a lot number, the address of a thing. Every card in this store has one:
+box → section → card. The product is named after the idea it is built on, and the system
+below is built around the three registers that idea needs: **ink**, what you read; **line**,
+what separates; **brand**, where to look.
+
 Two audiences, two standards. The owner's screens are a tool — dense is fine. The
 Fulfiller's screens are the entire product for a retired, non-technical user, and "if a
 flow needs explaining twice, redesign the flow" is a real requirement with no way to check
 itself. So it is written below as numbers.
 
-## Tokens — locked 2026-08-12
+**This file was rewritten on 2026-09-03 for the Banchi front end, and it describes what is
+in the tree rather than what was locked in 2026-08-12.** The palette that interview chose —
+`#FCFCFD`, Cabinet Grotesk, Atkinson Hyperlegible, Martian Mono, one radius, light only — no
+longer renders anywhere in `app/`. It is not marked historical here; it is gone, because a
+token block a reader might mistake for the current one is worse than no block at all. The
+two arguments that outlived it are kept and re-stated where they now apply: a palette is
+chosen against a rendered card rather than described in prose, and a token nobody can argue
+with is a token the next session will quietly replace.
 
-Locked by interview, not by inference. Every value below was chosen by the owner from
-rendered alternatives on a real card photo, not described in prose and agreed to. Where a
-value was picked over a specific rejected one, the rejected one is named — a token nobody
-can argue with is a token the next session will quietly replace.
+## Tokens
 
-**Both sheets are in `docs/design-refs/`.** `docs/design-refs/locked.html` draws this token
-block; `docs/design-refs/rejected.html` draws what lost and why. Open them before changing
-anything here. They are a view of this file and never a second source of truth — see
-`docs/design-refs/README.md` for what that costs, since nothing audits the hex values
-inside them.
+`app/src/tokens.css` is the only file in `app/` allowed to write a color, and **D94 is the
+decision entry behind everything in this section.** Everything else paints from these names.
+They are grouped by the JOB rather than by the value, they all carry the `--bn-` prefix, and
+every one of them has a light value and a dark value under one name.
 
 ```
-Color      #FCFCFD  bg        the page. Everything sits on this.
-           #FFFFFF  surface   raised: choice rows, queue rows, panels
-           #08090A  ink       all body text, all headings, all money      19.4:1 on bg
-           #4E5157  muted     metadata, secondary labels, disabled         7.76:1 on bg
-                              7.96:1 on surface, 7.30:1 on hover — its darkest ground
-           #E6E7EA  line      the 1px hairline. Every separation, no exceptions.
-           #1E40AF  accent    unsure, and the only-action fill             8.5:1 on bg
-           — plus two interaction states derived from the above —
-           #F4F5F7  hover     row hover only. bg and surface are 1.5% apart, so
-                              neither can serve as a hover state for the other.
-                              A GROUND THAT CARRIES TEXT: check text tokens against it.
-           #17348F  pressed   accent, pressed. White on it: 10.9:1.
-           — and one boundary the hairline was too quiet to draw —
-           #8C8C8C  field     the border of something you TYPE INTO. Nowhere else.
-                              3.36:1 on surface, 3.28:1 on bg, 3.08:1 on hover.
-           — and that boundary's one state, granted against the lock (D50) —
-           #6B6E73  field-hover  the same border, under the pointer. Nowhere else.
-                              5.12:1 on surface, 4.99:1 on bg, 4.69:1 on hover.
-                              3.89:1 against ink, which is the number that chose it:
-                              focus is an ink OUTLINE, so a hover border has to stay
-                              tellable from focus. muted is 2.50:1 there and reads as
-                              focus, which is why the free reuse was refused.
-           — and one token that names a value already in use —
-           #FFFFFF  on-accent label on an accent or pressed fill. Never a ground.
+NEUTRALS                        light        dark
+--bn-bg                         #f4f5f8      #0c0e12     the page
+--bn-surface                    #ffffff      #14171c     raised: panels, rows, cards
+--bn-surface-2                  #eceef2      #090b0e     sunken: wells, code, inactive tracks
+--bn-surface-3                  #f7f8fa      #1b1f26     hover ground on a surface
+--bn-surface-glass              white .72    #14171c .72 the sticky bars, over blur
 
-Display    Cabinet Grotesk  (Fontshare)   700/800 only, and only at >= 20px
-Body       Atkinson Hyperlegible (Google) 400/700
-Utility    Martian Mono     (Google)      400/500/600, tabular by construction
+INK
+--bn-ink                        #0f1217      #eef0f4     body text, headings, money
+--bn-ink-2                      #3b414b      #b9bfc9     secondary text, a value in a key/value row
+--bn-ink-3                      #6b7280      #838b98     metadata, captions, placeholders
+--bn-ink-4                      #7f8791      #707886     icons, separators, disabled — 3.6:1 light,
+                                                         4.0:1 dark. THE FLOOR A WORD MAY SIT AT,
+                                                         never a caption; data-bearing text is ink-3
 
-Spacing    4 8 12 16 24 32 48 64        one scale, no other values
-Radius     4px                          one value, everywhere
+LINE                            (all three are ink at an alpha, so they ride the ground)
+--bn-line                       ink 8%       white 8%    the hairline. Every separation.
+--bn-line-strong                ink 16%      white 16%   the boundary of a control you type into
+--bn-line-focus                 accent 55%   accent 60%  a field that has focus
+
+BRAND
+--bn-accent                     #3d5af1      #7f90ff     action: buttons, links, selection, focus
+--bn-accent-hover               #2f4bd9      #93a2ff
+--bn-accent-press               #2540c2      #6b7dfa
+--bn-accent-tint                accent 10%   accent 14%  a lit row, a ghost button's hover
+--bn-accent-tint-2              accent 18%   accent 24%  selection, a focused field's halo
+--bn-on-accent                  #ffffff      #0c0e12     label on an accent fill. Never a ground.
+--bn-live                       #d63d2b      #ff6a58     vermilion: the logo dot, a live camera,
+                                                         a capture. 4.6:1 as text on the light page
+--bn-live-tint                  live 12%     live 16%
+
+SEMANTIC                        (the kit paints these as TEXT — pills, buttons — over their tint)
+--bn-ok / --bn-ok-tint          #15803d 5.0:1             #3ddc84
+--bn-warn / --bn-warn-tint      #b45309 5.0:1             #f5a524
+--bn-danger / --bn-danger-tint  #b91c1c 6.5:1             #ff5c5c
+--bn-money                      = ink in both themes: money is not a color, it is a weight
+
+ELEVATION                       (three steps, each a hairline ring plus a shadow, so a panel
+                                 is separated in dark where a 1px line alone disappears)
+--bn-shadow-1                   a resting panel, a button
+--bn-shadow-2                   a menu, a photo frame, a raised card
+--bn-shadow-3                   a dialog, a sheet
+--bn-shadow-accent              the one glow: a primary button under the pointer
+--bn-btn-bg / -hover / -shadow  the default button's ground, a token rather than a rule so dark
+                                can lift a button off a panel of its own color
+
+TYPE                            Manrope 500-800 · Inter 400-700 · JetBrains Mono 400-600
+--bn-font-display               Manrope        headings, figures, the page title
+--bn-font-ui                    Inter          every sentence, every label, every control
+--bn-font-mono                  JetBrains Mono EVERY NUMBER AND EVERY MACHINE STRING
+--bn-fs-2xs … --bn-fs-5xl       10 11 12 13 14 16 18 22 28 36 48   (base is 14)
+--bn-tracking-caps  0.06em      the one tracking a word may take: uppercase metadata
+--bn-tracking-tight -0.015em    display sizes only. A FIGURE IS NEVER TRACKED.
+
+SPACING                         --bn-1 … --bn-10 = 4 8 12 16 20 24 32 40 48 64
+RADIUS                          --bn-r-xs 4 · -sm 6 · --bn-r 8 · -lg 12 · -xl 16 · -2xl 22 · -full
+
+MOTION                          --bn-t-fast 120ms · --bn-t 200ms · --bn-t-slow 320ms
+--bn-ease                       cubic-bezier(.2,0,0,1)     the default
+--bn-ease-out                   cubic-bezier(0,0,.2,1)     something arriving
+--bn-ease-spring                cubic-bezier(.34,1.4,.44,1) a chevron, a check, a dialog
+--bn-stagger 30ms · --bn-stagger-cap 12   one cadence for every list
+--bn-t-draw 480ms · --bn-t-emphasis 600ms · --bn-t-pulse 1.8s · --bn-t-spin 0.7s
+--bn-disabled 0.45              the one opacity a disabled pressable wears
+
+NOT PAINT                       (two colours the reader never sees as colour, named so they
+                                 are not hex literals in a stylesheet)
+--bn-mask                       #000000      the opaque end of a `mask-image` gradient. A mask
+                                             carries ALPHA and no colour, so this is black in
+                                             both themes by definition rather than by choice
+--bn-flash                      #ffffff      the capture flash overlay. White in both themes
+                                             for the reason a shutter is: it reads as light
+                                             rather than as a surface, and a dark flash is not
+                                             a flash
+
+STAGE — DARK IN BOTH THEMES     the viewfinder and the photo heroes
+--bn-stage-bg #0c0e12 · -bg-2 #171b25 · -surface #1b2029 · -ink #eef0f4
+--bn-stage-accent #7f90ff · -hover #93a2ff · -press #6b7dfa · -on-accent #0c0e12
+--bn-stage-ok #3ddc84 · -warn #f5a524 · -danger #ff5c5c · -live #ff6a58
+
+SHELL                           --bn-sidebar-w 236 · --bn-rail-w 64 · --bn-topbar-h 52
+--bn-control-h 34 · -lg 40 · -sm 28      → 42 · 46 · 40 under a coarse pointer
 ```
+
+**Three registers, and the third one is two colors rather than one.** `--bn-accent` is
+indigo and means *press this*; `--bn-live` is vermilion and means *this is happening now* —
+a camera that is open, a capture landing, a run going. Nothing else may use vermilion, and
+the reason is the one thing the old palette got right about a single accent: a color that
+means two things means neither.
+
+**A tint is the color at an alpha, never a second hex**, so every tint rides its own theme's
+ground and there is no second value to keep in step. The same is true of all three line
+weights: they are ink at 8% and 16% in light, white at 8% and 16% in dark.
+
+**`--bn-stage-*` is dark in BOTH themes, and that is a deliberate exception to everything
+above.** A viewfinder and a photograph of a card are looked at, not read; a light chrome
+around a dark frame is glare in the one place the operator is judging an image. Those tokens
+therefore do not flip, and a screen drawing on the stage uses the stage's own accent and ink
+rather than the page's.
+
+**The legacy aliases at the foot of the file are a migration seam that is already spent**
+(D94). The old sheet exported `--ink`, `--muted`, `--line`, `--accent`, `--field`, `--display`,
+`--util`, `--s1`…`--s8` and `--radius`; keeping them live is what let every screen re-skin the
+day the token file landed and then be rebuilt one at a time. **Measured 2026-09-03: not one
+file under `app/src` reads a legacy name, against 255 uses of `var(--bn-ink)` alone.**
+They are dead code kept for one commit, deliberately not deleted in the change that emptied
+them — a token file and thirty stylesheets moving together is a revert nobody can take apart —
+and a new rule may not read one.
+
+**`--bn-control-h*` is raised by the POINTER, not by the width.** The media query is
+`(max-width: 767px), (hover: none) and (pointer: coarse)`, because an iPad in portrait is
+820px wide and all thumb, and a thumb needs 40px whatever the viewport says.
+
+**`scripts/docs-audit.py`'s `design tokens` row reads the block above, and what it locks is
+stated here rather than left to be inferred.** It was a stale READER for a day — it parsed
+hex-and-name rows, three typeface rows, one spacing row and one radius row, a format that
+stopped existing when this system landed, and it read zero tokens and failed. Worse than empty,
+it merged every `:root` in `tokens.css` into one dictionary, so a dark value silently overwrote
+its light one; under a system where every colour has both, that is a check that could not have
+been right even with a working parser.
+
+It now keeps the two themes apart and compares them separately. **It locks every `--bn-` name**:
+a token declared in the stylesheet that this block does not name fails the commit, and so does a
+name here that nothing renders. **It compares a value only where this block states a hex** —
+31 of them, across both themes. An alpha (`ink 8%`), an alias (`= ink in both themes`), a
+duration, an easing curve and a shadow are named and checked for existence, and their values are
+locked nowhere a script can read; `docs/DEBTS.md` carries that gap rather than this row implying
+a coverage it does not have. **The row is still not to be satisfied by respelling the palette —
+that is D16's forbidden direction.** What changed is which side was wrong.
+
+## Light and dark are both first class
+
+**The theme is `data-theme` on `<html>`, and nothing else.** `app/src/kit/index.tsx` holds
+`readTheme`/`applyTheme`; `app/src/App.tsx` follows the system until a choice is stored and
+remembers the choice in `localStorage` under `banchi.theme`. That key is device-local by
+nature, like the camera's `deviceId`, and is not inventory — the rule it must not break is
+that nothing about a card or the store lives in browser storage.
+
+**Dark redefines the surfaces, the inks, the three lines, the brand, the semantics, the
+shadows and the button ground. It redefines nothing else**, so no component sheet ever learns
+which theme it is in. A rule that needs to know has got the token wrong.
+
+**The flip is one mechanism for the whole page.** The toggle stamps
+`html[data-theme-switching]` for `--bn-t-slow` and `app/src/base.css` eases background,
+color, border, shadow, fill and stroke together, then the attribute comes off and components
+keep their own transitions. A cross-fade on `<body>` alone was measured as a two-speed flip —
+dark panels on a light ground for a third of a second.
+
+**Dark is not a filter over light, and three families are drawn rather than derived.** The
+accent lightens (`#3d5af1` → `#7f90ff`) because an indigo that carries white text on paper
+cannot carry dark text on a near-black ground; `--bn-on-accent` inverts with it; and the
+elevation set stops being a shadow and becomes a shadow plus a white ring, because a drop
+shadow separates nothing on a black page.
+
+**The contrast rule is stated per role now, and it is weaker than the one it replaces.** The
+2026-08-12 palette's rule was "every token that carries text clears 7:1 on every ground it
+sits on", and this palette does not: `--bn-ink-4` is 3.6:1 in light and is the floor a
+*word* may sit at rather than a caption, and `--bn-ok`/`--bn-warn` are 5.0:1 as text on
+their own tint. What the rule became:
+
+- **Data-bearing text is `--bn-ink-3` or darker.** A price, a count, a position, a name, a
+  reason code. `--bn-ink-4` is for icons, separators, disabled controls and a word that is
+  decoration.
+- **The Fulfiller's 7:1 floor is unchanged and is the one that is asserted.**
+  `app/tests/fulfillment.spec.ts` computes every ratio from the *rendered* colors, so a
+  token edited without being argued here breaks a test rather than a promise.
+- **Nothing measures the owner's screens, in either theme, and nothing measures dark at
+  all.** No Playwright spec sets `data-theme`. That is the honest state of it: dark is
+  first-class in the tokens and unasserted in the suite, and a session that adds a
+  dark-theme assertion is closing a real gap rather than gilding one.
+
+## The kit
+
+`app/src/kit.css` and `app/src/kit/` hold the primitives every screen is built from (D94).
+The class prefix is `bn-`. Load order is fixed in `app/src/main.tsx` — tokens, then base, then
+the kit — so a screen sheet outranks the kit by arriving after it: **a screen may refine a
+button and never has to redraw one.**
+
+| Primitive | Use it for | Not for |
+|---|---|---|
+| `Button` | anything that acts. `primary` is the one solid accent fill on a screen; `ghost` for a control beside content; `quiet` for a sunken control; `danger` for a destructive verb, `danger-solid` only where the destruction is the screen's whole purpose; `ok` for a confirming verb | a link that navigates and writes nothing |
+| `Chip` | choose one of a set, or filter a list. Pressed is ink-on-page, not accent | a button with a rounded corner |
+| `Pill` | a state, a count, a lane — something the row IS | anything pressable |
+| `Kbd` | the key that does this thing, owner-side only | the Fulfiller's screens, which are touch |
+| `PageHeader` | every owner screen's first element: eyebrow, title, lede, actions | a panel heading — that is `.bn-section-title` |
+| `EmptyState` | a list with nothing in it, saying what would put something there | an error |
+| `Notice` | a refusal, a warning, a standing condition, with the server's own code under it | a receipt of something that worked — that is a toast |
+| `Segmented` | two to four exclusive views of the same thing | navigation between screens |
+| `Stat` | one figure with its label, on a dashboard row | a value in a key/value list (`.bn-kv`) |
+| `Logo` | the mark, in the shell and on the crash page | decoration inside a screen |
+| `.bn-code` | a machine string under its human label — a reason code, a SKU, a key | a number a person reads, which is `.bn-mono` |
+| `.bn-panel` / `.bn-well` | a raised group / a sunken one (a log, a paste box) | nesting one in itself |
+| `.bn-scrim` + `.bn-dialog` / `.bn-sheet` | something over the page | anything that could be a section of the page |
+| `.bn-photo` / `.bn-crop` | a photograph of a card. `.bn-crop` is the other half of `cropStyle` | a decorative image |
+| `useLeave` | keeping an overlay mounted one beat so it can animate out | delaying a write |
+| `cropStyle` | turning `POST /pipeline/crop-preview`'s rectangle into a picture of the card rather than of the stand | deciding WHEN to ask for one — that is a screen's policy |
+
+**The icon set is 70 paths in `app/src/kit/Icon.tsx`**, on a 24-unit grid at 1.75 stroke with
+round caps and joins, drawn in one idiom so the whole product speaks a single line weight.
+They inherit `currentColor` and are `aria-hidden`, so an icon is never the accessible name of
+anything. **Add an icon by adding a path**; a screen that draws its own `<svg>` inline is the
+drift the file exists to prevent, and `ICON_NAMES` is what draws the whole set on
+`#/gallery`.
+
+**Every primitive is on one page, at `#/gallery`.** It is the kit rather than a component
+sheet now, it is reachable from the command palette (never the nav), `make screenshot`
+renders it, and `app/tests/pull-confirm.spec.ts` measures three of the Fulfillment floors on
+its pull-confirm specimens.
+
+## Motion, and what a control owes the person pressing it
+
+**The motion rule is in `kit.css`'s own header because it is a correctness rule, not a
+taste.** An enter animation ends at the element's OWN resting style and is always
+`backwards` — never `both`, never `forwards`. A finished `both` holds its last frame
+applied over every author rule, so a `:hover` transform on that element is dead and the
+element becomes a containing block for `position: fixed` descendants. `forwards` is right in
+exactly one place: `[data-leaving]`, where the node is about to unmount and should hold its
+vanished state until it does.
+
+- **One cadence for every list.** `.bn-stagger` reads `--i` off each child and waits
+  `min(i, 12) × 30ms`, so the arithmetic leaves the JSX and no two lists disagree.
+- **120 / 200 / 320ms.** A hover or a color is `--bn-t-fast`; something that moves is
+  `--bn-t`; something that arrives over the page is `--bn-t-slow`.
+- **`prefers-reduced-motion` is honoured, with four exemptions that are named.** The busy
+  ring, the skeleton shimmer, the live dot and the capture spinners keep turning at 1.4s
+  rather than freezing: a ring stopped at a partial arc reads as a disabled button, and a
+  frozen shimmer reads as broken content.
+- **One focus ring, product-wide** — a 2px accent outline at 2px offset, keyboard only, set
+  once in `base.css`. A field takes its own: accent border plus a 3px tint halo.
+- **The cursor floor is in `base.css` and is one specificity**, so every per-screen choice
+  outranks it and nothing global can take a cursor away from a stylesheet that named one.
+- **A receipt is a toast; a refusal is a toast that does not leave.** `kit/toast.tsx` has
+  four kinds: `receipt` carries the way back and expires with its undo window, `status` and
+  `ok` expire, and `refusal` stays until it is dismissed, because the server's own message is
+  the one thing a person may need to read twice. **Nothing demands an acknowledgement to
+  dismiss** — that ban is in "What this is not" below and it survives the rebuild.
+- **An overlay owes the keyboard three things**: focus lands inside it, Tab stays inside it,
+  and focus returns to the control that opened it. `InventoryOverlay.tsx` does this for the
+  inventory screen's four kinds and `runsOverlay.ts` for the two runs overlays. That there
+  are two of them is a debt, written down in `docs/map.py`: it wants to be one kit `Dialog`.
+
+## Layout, density, and the widths this was drawn at
+
+**One system, two densities.** Owner screens use the small end of the spacing scale; the
+Fulfillment view uses 24-64 and the floors in the constraints table below. Same tokens, same
+three faces, same kit. The alternative — two deliberately different visual worlds — was
+considered and rejected: it doubles the token surface and gives two components to keep in
+sync, and the Fulfillment constraints are already expressible as a floor applied to a subset
+of routes.
+
+**Page chrome is the kit's now, and the four numbers this file used to publish are retired.**
+They read: 16px of padding on all four sides, a 20px display title sharing its line with the
+controls, a one-line lede, and the first row of real content within 150px of the top. What is
+in the tree instead is `.bn-page` (24px top, 32px sides, 64px foot; 16px sides on a phone)
+and `PageHeader` — an eyebrow, a `--bn-fs-3xl` title, a one-line lede at the body size, and
+the actions pinned to the TITLE row by a 19px offset so the primary button lands at the same
+y whether the lede is zero, one or two lines. The half of the old rule that survives is the
+half that paid: **the title, the counts and the controls share one line**, and a screen that
+stacks a title block above a control bar has invented 45px of chrome nobody argued for.
+
+**Retiring those numbers is a real loss and it is recorded rather than argued away.** They
+were written after the Inventory screen was measured spending 240px — 27% of a 1440x900
+viewport — on chrome before its first card. Nothing mechanical enforced them then and nothing
+does now; `scripts/docs-audit.py` cannot see a padding, and the Playwright specs measure the
+Fulfillment view, which this section does not govern. A screen that drifts back to a 32px
+page header will do it silently.
+
+**The shell is three shells, one per width (D95), and one of them is nothing at all.** A
+236px sidebar at 1024px and up, collapsing to a 64px icon rail on `⌘.` and remembered per
+device under `banchi.rail`; a 52px top bar and a 64px bottom tab bar below 768px, the tabs
+being the four routes that carry `tab: true` and everything else behind a left drawer; and no
+chrome at all on the Fulfiller's route — not-rendered rather than hidden. `⌘K` opens the
+command palette over any of them and `?` opens the one keyboard reference sheet, which is
+where a binding is documented now that the inline key hints are gone.
+
+**The widths this build was walked at are 390, 820 and 1440.** A phone, an iPad in portrait,
+and the owner's Mac. The breakpoints that do the work are `767px` and its `min-width: 768px`
+partner — 54 media blocks under `app/src` hang on the first and six on the second — with
+`480`, `640` and `1023` refining below them and `1279` above. **820 is the width that catches the mistake**: it is above every
+phone breakpoint and all thumb, which is why the control heights follow the pointer instead.
+
+**None of this reaches `#/fulfillment`.** That view keeps the 24-64 end of the scale and
+every floor in the constraints table, and those floors win wherever the two could be read as
+disagreeing.
+
+## The address is drawn, not printed
 
 **The position bar carries TWO SCALES, and they must be distinguishable at a glance.**
 Added 2026-08-23 on the owner's ask — *"not only its location at the box level but section
@@ -70,229 +332,48 @@ for the growing last section of an open box. That rule is D20's, argued there; i
 in the caption because the number is small and the operator is already at the right box, which
 is exactly when a silently switching denominator is easiest to miss.
 
-**In an UNDECLARED box the two scales now say the same thing, and that is the truth rather
-than a redundancy to design away** (2026-08-29, D10 amended). Such a box has one section — the
-box — so both tracks draw the same marker over the same denominator and both say `so far`.
-What they said before was worse: the section scale was measured against a divider at every
-25th card that nobody had put in, so `Card 6 of 25 slots` was drawn under a box holding 133
-cards and no dividers at all. Two tracks agreeing is a box nobody has divided yet; the second
-track earns its 8px the moment somebody presses `S`.
+**In an UNDECLARED box the two scales say the same thing, and that is the truth rather than a
+redundancy to design away** (2026-08-29, D10 amended). Such a box has one section — the box —
+so both tracks draw the same marker over the same denominator and both say `so far`. What
+they said before was worse: the section scale was measured against a divider at every 25th
+card that nobody had put in, so `Card 6 of 25 slots` was drawn under a box holding 133 cards
+and no dividers at all. Two tracks agreeing is a box nobody has divided yet; the second track
+earns its 8px the moment somebody presses `S`.
 
-**One system, two densities.** Owner screens use the 4–16 end of the scale; the Fulfillment
-view uses 24–64 and the minimums in the table below. Same palette, same three faces, same
-radius. The alternative — two deliberately different visual worlds — was considered and
-rejected: it doubles the token surface and gives two components to keep in sync, and the
-Fulfillment constraints are already expressible as a floor applied to a subset of routes.
+**`pipeline/join.py:Position.label` is the record; HOW A SCREEN DRAWS IT IS A VIEW (D41).**
+The owner: *"i didn't ever like the dot theme to separate"*. The interpuncts are deleted
+rather than restyled — the box and section become a tracked muted stack and the card number
+a figure beside them — and the server still emits the identical string, which travels
+verbatim on `aria-label`.
 
-**That rule reached the insides of components and never reached the page, which is where all
-the waste turned out to be.** "Owner screens use the 4–16 end of the scale" has always been
-read as a statement about the gaps inside a panel; nothing in this file said anything about
-the chrome a screen stacks above its first row of content, so every screen invented its own
-and each one looked reasonable alone. Measured at 1440x900 on 2026-08-23, with the owner
-looking at the result and calling it what it was: the Inventory screen spent **240px — 27% of
-the viewport** on a 32px page title, a three-line lede and two control bars before the first
-card. The review queue — the screen whose own stylesheet argues that every pixel of chrome
-pushes the candidate rows further below the fold — spent **215px**, on **32px of outer
-padding**, which is the Fulfiller's end of the scale drawn on the owner's densest screen.
+- **A tracked key is a word, never a figure.** `--bn-tracking-caps` on `BOX` / `SECTION` /
+  `CARD`. Every NUMBER keeps `letter-spacing: 0`, because the mono face is fixed-advance and
+  tracking a figure is what the mono rule exists to prevent.
+- **Every owner site sets ONE number, `--pos-slot`, and the path and the key derive from
+  it.** Six sites set it today, and the figures moved with the rebuild: the `#/inventory`
+  band at 40px (36 when the column narrows), the retire dialog at 28, the capture stage at
+  28, the copies list at 22, an order's pick row at 22, and `#/review`'s caption at 15. The
+  warning this list used to carry is still the reason it is per-site: 44px down a seven-copy
+  list cost +86px and dropped a copy below the fold.
+- **A label with no figure is still ranked, and it is the FIGURE that goes (D71).** A
+  departed card's label ends on a state where a slot number would be (`Box 3 · departed`).
+  The state and the store key ride the path as one more key/value pair, the number column is
+  drawn empty, and the reserve holds the whole slot column so a figure-less row's path starts
+  at the same x as every other. As a singleton the path re-ranks to
+  `clamp(11px, 0.45em, 20px)`, because with no figure the path is the payload. What renders
+  whole is a label naming no position at all — the pooled row, where there is no coordinate
+  to rank.
+- **The Fulfiller's sites are not owner sites and never take it.** His labels stay plain text
+  under `app/tests/fulfillment.spec.ts`'s 32px tabular floor, and the guard is that his
+  components do not import `PositionLabel` — not a selector prefix, which is the thing a
+  refactor drops. Every selector in `PositionLabel.css` is `.position-*`, which exists in the
+  DOM only where that component rendered it.
 
-**So page chrome gets numbers, and they are these.** They govern every owner route and
-nothing else:
-
-- **Outer page padding is 16px, the same on all four sides.** `--s4`, the top of the owner
-  range. Not 24, not 32.
-- **The page title is the display face at 20px** — that face's own published floor, so this
-  is as small as it is allowed to be drawn rather than a size picked to be small — **and it
-  shares a line with the screen's controls and counts.** It is never a block of its own.
-- **A lede is one line at the metadata size**, beneath that row. If it runs to two lines it
-  is not a lede, and the second line is the thing to cut.
-- **The first row of real content sits within 150px of the top of the viewport**, nav
-  included. A screen that cannot reach that is carrying chrome nobody argued for.
-
-**The shared line is the half that pays, and the arithmetic is the whole argument.** A title
-block and a control bar are each about 45px tall; stacked they cost 99px with the gap, and
-side by side they cost 45. Nothing is given up, because a page title is one word and a
-control bar is short. On the review queue that one change moved the photograph's frame from
-y=215 to y=146 — which is one more candidate row on screen beside the photograph the operator
-is judging it against, and that is the entire job of that screen.
-
-**Rejected: deleting the ledes.** It is the cheapest 20px available on any screen and it is
-the wrong 20px. On an owner screen the lede is the only writing that is not a value or a
-label, and the screens that carry one are exactly the screens with a keyboard vocabulary that
-nothing else explains. Demote it; do not cut it.
-
-**Rejected: a second scale for page chrome.** The paragraph above already refuses two visual
-worlds because they double the token surface, and that argument does not weaken when the
-subject is a page header instead of a panel. Every number above is a step of the one spacing
-scale.
-
-**None of this reaches `#/fulfillment`.** That view keeps the 24–64 end of the scale and every
-floor in the constraints table below, and those floors win wherever the two could be read as
-disagreeing — a 20px title cap is an owner rule, and his view has a 20px *minimum* on every
-text node for the opposite reason. The one page in the app that is drawn to his floors on the
-owner's ground is the unresolved-hash panel, which argues for itself in `app/src/App.css`.
-
-**The nav shares the page's reading edge**, which is what "in line" means here and is the
-thing that is most visible when it is wrong. `app/src/App.css` pads the shell to the same
-16px, so the first route name in the strip sits directly above a screen's heading. It was
-32px — putting the one element that appears on every screen out of line with all of them at
-once.
-
-**Nothing mechanical enforces any of this.** The same standing limit the paragraphs above
-record for contrast: `scripts/docs-audit.py` compares hex values between this file and
-`app/src/tokens.css` and cannot see a padding, and the Playwright specs measure the
-Fulfillment view, which is the one route this section does not govern. A screen that drifts
-back to a 32px page header will do it silently.
-
-**`field` is a SECOND line color, and it exists because one number was checked and the other
-was not** (added 2026-08-26, on the owner's instruction to decide it). Every token that carries
-text clears 7:1 here and always has. Nothing ever asked what `line` measures, and the answer is
-**1.24:1 on surface** — so every border, separator and input outline in the product sits far
-under WCAG 1.4.11's 3:1 for the boundary of a control. All of the text passed; none of the
-edges did.
-
-**The whole-palette fix was built, rendered and refused.** `line` at a true 3:1 is about
-`#8C8C8C`, and the render answers the question on its own: the walk's five section rows become a
-spreadsheet grid, which is the failure the section below names by name and by product; and
-`app/src/BoxOps.css`'s box track is *painted* with `line` rather than bordered by it, so its
-segments go from the quietest visible mark in the palette to something that reads as ink. A
-criterion aimed at people who cannot find a border is not worth the one thing this design says
-it must not become.
-
-**So the split is by JOB, and the job is narrow enough to be checkable.** `line` separates and
-fills, and stays exactly as quiet as it was. `field` draws the boundary of a control you type
-into — `app/src/SearchField.css`'s box, `app/src/BoxOps.css`'s fields, the run panel's number
-input — and nowhere else. That is the case where the low
-contrast genuinely bites: an empty text input is a rectangle and nothing else, so a border at
-1.24:1 leaves it findable only by its placeholder, while a button at the same contrast is
-findable by the ink label inside it at 19.9:1.
-
-**It is deliberately not `edge`, `border` or `control`.** A token named for a general job grows
-one, and the first thing that would have taken it is a button border — which is the weight this
-product spent a whole session removing from the box operations. Named for the one thing it is
-for, it cannot creep without someone renaming it.
-
-**It reaches the Fulfiller's search field too, through the shared `SearchField`, and that is
-right rather than an accident.** His view's floors are about making things findable at reading
-distance with reading glasses, and a field he can actually see the edge of is on that side of
-the argument. No assertion in `app/tests/fulfillment.spec.ts` measures a border; every one of
-them measures text, which is untouched.
-
-**Light only, everywhere. There is no dark theme and no theme switcher.** Not a deferral:
-building one means defining every token twice and running every contrast assertion twice,
-for a surface with one user who works under a desk lamp. Reopening this is a change to this
-section.
-
-**Every token that carries text clears 7:1 on every ground it sits on.** There is no
-exception and no token that is legal in one view and not another. That is a deliberate
-property of the set rather than a happy accident: `muted` was first drawn at `#55585E`,
-which measures 6.96:1 — a miss of four hundredths, small enough to be worth documenting as
-an exception and reasoned around. It was replaced rather than annotated. A palette
-described as "legal except one" hands the next near-miss a precedent, and the argument for
-accepting a 6.9 is identical to the argument for accepting a 6.5. The swatch difference is
-invisible; the difference between the two sentences is not.
-
-**`hover` is a ground that carries text, and this file did not say so until 2026-08-23.**
-The paragraph above was written while the answer to "every ground it sits on" was being read
-off the first two rows of the block — `bg` and `surface`, the two things a screen is
-obviously made of. `hover` was derived afterwards, as an interaction state, and interaction
-states are the row you skip when you are asking which colors a word can land on. But a
-hovered row does not empty itself. Every word stays exactly where it was, the row under the
-pointer is by definition the row somebody is reading, and `hover` is the darkest of the
-three grounds — so it is the one that decides, not the one that is safe to omit.
-
-**What that omission cost, stated because the number is the argument.** `muted` at `#52555B`
-measured 7.29:1 on `bg` and **6.86:1 on `hover`** — the same four-hundredths-shaped miss the
-paragraph above refused to annotate, hiding behind the ground nobody had checked. It was
-rendering: `app/src/ReviewQueue.css` puts `.review-candidate-meta` on `.review-candidate`,
-and that row takes `--hover` under the pointer. `muted` is now `#4E5157`, which clears on all
-three (7.76 / 7.96 / 7.30), and the same replace-rather-than-annotate rule was applied for
-the same reason.
-
-**Read the two paragraphs together as one rule with its blind spot named**: a token's floor
-is checked against every ground it can land on, and "ground" means any token a `background`
-is ever painted with — `bg`, `surface` and `hover` today, and anything added to that list
-tomorrow. `on-accent` is the only token in the block exempt by construction, and its row
-says why in three words: never a ground. Nothing mechanical enforces this. The `design
-tokens` row of `scripts/docs-audit.py` proves this file and `app/src/tokens.css` agree about
-a hex and cannot know what the hex means; the Playwright specs measure rendered pairs, and
-they measure the pairs the Fulfillment view actually draws, which is not all of them. Adding
-a ground token means recomputing every text token against it by hand.
-
-**Cabinet Grotesk comes from Fontshare, not Google Fonts.** That is a second font host and
-a second license to read before step 7 ships — do it then, and self-host all three faces if
-the answer is at all unclear. **Step 7 shipped on 2026-08-13 with the license unread**, and
-`app/index.html` loads all three faces from their hosts and says so in its own comment. The
-condition on this paragraph has gone by; it is written down rather than quietly re-dated,
-which is the same rule `docs/DEBTS.md` applies to a fix trigger that fires and is passed.
-
-It was picked over Bricolage Grotesque, Archivo Expanded and a single-family Geist system;
-the last of those was rejected specifically because it has no characterful face at all, and
-would have satisfied the token block by deleting one of its requirements.
-
-**Atkinson Hyperlegible is a Fulfillment decision wearing a typeface.** It was drawn by the
-Braille Institute for low vision — disambiguated `0`/`O` and `1`/`l`/`I`, exaggerated
-apertures. Every other line about the Fulfiller is an assertion in a test; this one is in
-the letterforms, and it is why the same body face is used on both sides rather than the
-owner getting something sharper.
-
-**Martian Mono carries every number in the product.** Position labels, prices, collector
-numbers, counts, ages. `Box 3 · Section 2 · Card 17` is built by
-`pipeline/join.py:Position.label` against the box's own dividers — at 25 cards per section
-until 2026-08-29, when D10's amendment deleted that default — and it must not shift width
-between cards, which a mono gives for free rather than by remembering to set `tnum`.
-
-**That string is the record; HOW A SCREEN DRAWS IT IS A VIEW (D41, 2026-08-29).** The owner:
-*"i didn't ever like the dot theme to separate"*. On `#/inventory` the interpuncts are now
-deleted rather than restyled — the box and section become an 11px muted stack and the card
-number a 44px figure beside them — and `pipeline/join.py` still emits the identical string,
-which travels verbatim on `aria-label`. Two consequences worth stating as rules:
-
-- **A tracked key is a word, never a figure.** The 0.08em on `BOX` / `SECTION` / `CARD` is this
-  file's own "utility face, uppercase, tracked" rule for metadata. Every NUMBER keeps
-  `letter-spacing: 0`, because Martian Mono is fixed-advance and tracking a figure is what the
-  paragraph above exists to prevent.
-- **It reaches every OWNER site as of 2026-08-30 (D41, amended; D71), and the size is per site.**
-  Eight of them: the `#/inventory` band at 44px, `#/review`'s head at 32, the copies list at 28
-  and slot-first, the capture stage at 32, its undo sidebar at 20, the lone-copy panel at 20, the
-  retire dialog at 20, and three in-sentence mentions in a `run` form that keeps the rank and drops
-  the geometry. **The structure is shared and the figure never is** — the warning this paragraph
-  used to carry is measured now: 44px down a seven-copy list costs +86px and drops a copy below the
-  fold.
-- **This line said "every OWNER site" and "six" from 2026-08-29 and was wrong on both counts until
-  D71.** The two it missed are both in `Inventory.tsx`, and the first of them is the one most of
-  the store is drawn by: the lone-copy panel is what a card with no name and no SKU renders
-  through, which on the owner's Mac is 629 of 682 records. It went on printing the raw label in the
-  utility face, and the way that surfaced was a sold card — `Box 1 · departed · B1 #1` as a run of
-  words and interpuncts, which is what the owner reported. **Nothing checked either.** The lone
-  panel has a spec; that spec asserts its two position bars and never looked at the label beside
-  them. Both were found by pressing `Mark sold` in a browser over a real store, which is the same
-  instrument `docs/GATES.md` step 7 records as the only thing that could tell.
-- **A sixth site needs two rules, and they are the whole of the scale.** The gap is `--s5` at a
-  figure of 40px or more and `--s3` below, so it always lands on the spacing scale above. And a
-  promoted slot is a slot NUMBER, never a word — without that guard D24's pooled label draws the
-  lowercase word `pooled` as a 300px figure.
-- **A label with no figure is still ranked, and it is the FIGURE that goes (D71).** A departed
-  card's label ends on a state where a slot number would be (`Box 3 · departed · B3 #36`). Refusing
-  the whole treatment over that was the shipped behavior and it drew the pre-D41 plain string at
-  the site's payload size — 44px and wrapped in the `#/inventory` band, the loudest row in the
-  copies list. The state and the store key ride the path as one more key/value pair, the number
-  column is drawn empty, and two site-free derivations carry it: **in a list** the reserve holds
-  the whole slot column, key included, so a figure-less row's path starts at the same x as every
-  other (it hung 38.3px left before); **as a singleton** the path re-ranks to
-  `clamp(11px, 0.45em, 20px)`, because with no figure the path is the payload. What still renders
-  whole is a label naming no position at all — the pooled row, where the part in front of the
-  state is a game's display name and there is no coordinate to rank.
-- **The Fulfiller's two sites are not owner sites and never take it.** His labels stay plain text
-  under `app/tests/fulfillment.spec.ts`'s 32px tabular floor, and the guard is that his components
-  do not import the shared one — not a selector prefix, which is the thing a refactor drops.
-- **What is deliberately NOT treated**: `.review-row-position` (11px) and `.review-group-pos`
-  (10px). The mechanism is rank, and a 10px caption has no rank to spend. So `#/review` renders
-  the address two ways, which is a ruling rather than drift.
-
-**And the same deletion reached `.boxops-meta`**, where four label/value pairs and three
-interpuncts were wrapping a 299px column. Horizontal is scarce there and vertical is not, so it
-flows down instead of across — and `fill` finally says `so far` or `sealed`, which is D20's
-denominator rule discharged on the one line that had never honoured it.
+**Mono carries every number and every machine string.** Positions, prices, collector numbers,
+counts, ages, SKUs, reason codes — `--bn-font-mono`, with `tnum` and `zero` set in `base.css`
+so a figure never changes width between cards. The body face is reserved for sentences a
+human reads. This one rule does more than any other to keep the thing from reading as a
+newspaper.
 
 ## What this is not
 
@@ -384,16 +465,25 @@ with its own row in the table below.
 
 **Deliberately not banned, so that no later session reinstates these as rules from an
 earlier draft of this file:** card-grid layouts, drop shadows and gradients were each
-offered as blanket negative constraints and each declined. Shadows do not appear today
-because the separation mechanism is a 1px `line` hairline and nothing else — that is a
-positive spec, and a positive spec is what a later session should argue with. The same goes
-for the panel header strip: a tinted bar carrying each panel's name and queue depth was
-built, looked at, and rejected. Do not add one, and do not write a rule about them either.
+offered as blanket negative constraints and each declined — and the first two are now in
+the product on purpose. Separation is `--bn-line` where a hairline is enough and
+`--bn-shadow-1` to `-3` where a thing sits over another thing, which is a positive spec and
+what a later session should argue with; the elevation set exists because a 1px hairline
+separates nothing on a dark page. What is still refused is the panel header strip: a tinted
+bar carrying each panel's name and queue depth was built, looked at, and rejected. Do not
+add one, and do not write a rule about it either.
 
 ## The review queue — BUILT 2026-08-13. Description, except where marked.
 
 **This section specified a screen that now exists, and reads as a description of it.**
-`app/src/ReviewQueue.tsx` and `app/src/ReviewQueue.css` render it at `#/review`. Read every
+`app/src/ReviewQueue.tsx` and `app/src/ReviewQueue.css` render it at `#/review`.
+
+**WHAT WAS RE-CHECKED AGAINST THE TREE ON 2026-09-03, WHEN THE FRONT END WAS REBUILT, AND WHAT
+WAS NOT.** Re-checked and repaired: the token names this section used to quote, the reason-code
+vocabulary, the price-band citations, and the photograph's cap variable. Read as still true and
+NOT re-measured: every pixel figure below, all of which were taken at 1440x900 against a
+populated queue before the rebuild, on a screen this checkout's empty store cannot draw (D43).
+A session that opens this screen over a real queue should re-measure them and say so here. Read every
 statement below as *does* and hold it against the screen — one card at a time, photo first,
 photo beside the choices above 900px; the sentence; the candidate rows with their keys; the human label over the
 machine string; a type scale that steps down with the price and a parked row dimmed rather
@@ -446,9 +536,9 @@ third is **cut off by the fold**; the pending worklist starts 234px below it; on
 **2,356px of scroll**; and **752px — 52% of the width — is empty** beside all of it.
 
 **The empty column is not waste sitting next to a small photograph. It is the CAUSE of it.**
-`--photo-cap` exists precisely because everything stacks in one column and the sentence plus
-the first candidate must stay in view. Put the choices beside the photograph and the cap stops
-having anything to buy.
+The photograph's height cap exists precisely because everything stacks in one column and the
+sentence plus the first candidate must stay in view. Put the choices beside the photograph and
+the cap stops having anything to buy.
 
 **The phone keeps the single column, byte for byte.** The split is a desktop layout and
 nothing below 900px is re-tuned — which is what preserves the half of the old rule that was
@@ -456,10 +546,13 @@ actually about the phone. What the old sentence got wrong was treating one layou
 free; it was being paid for by the laptop, in the currency this screen exists to spend.
 
 **The height cap is REBASED, not retired.** Retiring it was the instruction and it is refused:
-`--photo-cap` has exactly two readers, `.review-photo`'s `max-height` and `.review-frame`'s
-`min-height`, and *their being the same expression is what makes D28's reservation exact*.
-Deleting the variable deletes the reservation. Its value moves from `48vh` to the height that
-is actually left, and both readers are untouched.
+the cap is ONE variable that the photograph's `max-height` and the frame that reserves its
+space both read, and *their being the same expression is what makes D28's reservation exact*.
+Deleting the variable deletes the reservation. Its value moved from `48vh` to the height that
+is actually left. **It is `--rv-photo-h` in `app/src/ReviewQueue.css` since the 2026-09
+rebuild** — renamed with the sheet, still one variable, and re-based per breakpoint: the stage
+width is derived FROM it (`* 0.5625`, a card's aspect) rather than beside it, which is the
+same argument one register further on.
 
 **"As large as the viewport allows" replaced "full width at the top" on 2026-08-13, after
 building it.** Full column width is right on a phone and wrong on a laptop: a card is 63×88,
@@ -484,9 +577,11 @@ first, because an unpriced `no_catalog_row` has no market and sorted last *perma
 tier, so the five type-size bands render a sort the queue no longer has.
 
 **The bands were not retired, and this paragraph said they were.** Corrected 2026-08-25 after
-reading the screen rather than this file: `bandOf` is live at `app/src/ReviewQueue.tsx:469`,
-applied as `data-band` on every rail row at `:3073`, and all five sizes are the only
-`font-size` those spans have (`app/src/ReviewQueue.css:1089-1112`). The worklist was not
+reading the screen rather than this file, and re-derived on 2026-09-03 after the rebuild moved
+every line: `bandOf` is live at `app/src/ReviewQueue.tsx:340`, applied as `data-band` on every
+rail row at `:2239`, and the sizes are the only `font-size` those spans have
+(`app/src/ReviewQueue.css:740-746`) — FOUR of the five bands, since `mid` deliberately sets
+nothing and renders at the row's own size. The worklist was not
 retired either — it BECAME the rail. So what is true is narrower and worse than a retirement:
 **the five bands still render, and they render a sort the queue only partly has.** That is an
 unrepaired mismatch, open as of today, not a completed removal. What DOES discharge "the
@@ -609,14 +704,17 @@ eleven-copy one. In the header it is at y=62 on every card, and the never-two-ro
 being a promise and becomes structural: on a shared line it cannot wrap without moving the whole
 page, so `BoxRuns.css` sets `flex-wrap: nowrap` there and says why.
 
-**One rule of this section moved with it and one did not.** The page-chrome numbers now govern
-`#/runs` as a route of its own — 16px of padding, a 20px display title sharing its line with the
-scope, a one-line lede, first content inside 150px — and `app/src/Runs.css` draws them literally.
-The density paragraph below is unchanged and still describes the panel.
+**One rule of this section moved with it and one did not.** `#/runs` is a route of its own and
+takes the kit's page chrome like every other owner screen — `.bn-page` and `PageHeader`, with the
+scope and the controls on the title row — which is where the four published numbers this file
+used to carry (16px, a 20px title, a one-line lede, first content inside 150px) went; see
+"Layout, density, and the widths this was drawn at" above for what replaced them and what that
+cost. The density paragraph below is unchanged and still describes the panel.
 
-**The density this section describes is kept and is no longer forced.** 14px step titles rather
-than a second rank of 20px display, 32px controls matching what `BoxOps` gives the same job — all
-of it was right on its own terms, and none of it was only a consequence of a 370px track.
+**The density this section describes is kept and is no longer forced.** Step titles at the
+section rank rather than a second page title, and controls at the kit's own `--bn-control-h`
+rather than a height this screen invents — all of it was right on its own terms, and none of it
+was only a consequence of a 370px track.
 
 **Nothing folds, which is the half the owner ruled on.** No disclosure, no cap, no internal
 scroller; every step head and note draws in every state and the spend button is still absent
@@ -625,13 +723,11 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-thirteen strings — six from the variant ladder in `pipeline/variant.py`
-(`no_catalog_row`, `metadata_not_stocked`, `detected_finish_not_stocked`,
-`ambiguous_no_signal`, `duplicate_condition`, and D23's `rarity_claim_mismatch`, the stack
-claim contradicting every candidate row) — a seventh, `metadata_detection_disagreement`, was
-retired 2026-09-02 when D3 stopped letting the photograph contradict a finish claim, and the
-screen keeps a label for it under `RETIRED_REASON_LABELS` because the owner's store still
-holds 16 answered events that carry it — and seven from
+fourteen strings and the screen labels THIRTEEN of them — six from the variant ladder in
+`pipeline/variant.py`
+(`no_catalog_row`, `metadata_not_stocked`,
+`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
+`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and seven from
 routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
 `set_ambiguous`, `card_not_detected`, `no_market_data`, and D35's
 `number_unread_name_matched` — the only reason the JOIN writes over a successful ladder
@@ -646,15 +742,26 @@ Showing only the raw string is honest and unreadable. Both, at two sizes, costs 
 chrome and keeps the string greppable across the screen, the run report and `review.json`.
 **Owner-side only**: the Fulfillment banned-word list forbids this register entirely.
 
-**Thirteen of the fourteen can reach this screen. `no_market_data` cannot, and this paragraph
-used to say otherwise.** It is not a queue reason: `pipeline/routing.py` makes it the fourth
+**The seventh ladder reason is retired, and its label is kept (owner, 2026-09-03).**
+`metadata_detection_disagreement` — the finish toggle and the photograph reading each other's
+opposite — was the most-fired reason this queue has ever seen, 16 of 53 at Gate B, and the
+answer was the same catalog row either way. The owner dropped the question rather than the
+data: `pipeline/variant.py` still defines the string, nothing on any screen asks about it, and
+`app/src/reasons.ts` keeps the label in `RETIRED_REASON_LABELS`, read after the live map, so a
+QUEUE ENTRY WRITTEN BEFORE THE RETIREMENT still renders a name rather than its machine string.
+A code that ever comes back is live again by being moved back into the live map, not by
+somebody remembering that list exists. The list above is the live vocabulary and this file's
+half of the reconciliation `scripts/docs-audit.py`'s `reason codes` row performs.
+
+**Twelve of the thirteen labelled reasons can reach this screen. `no_market_data` cannot, and
+this paragraph used to say otherwise.** It is not a queue reason: `pipeline/routing.py` makes it the fourth
 destination beside listed, main and parked, and `pipeline/join.py` writes a queue entry only
 for `routing.MAIN` and `routing.PARKED` — so a card with a blank or $0.00 market cell is
 priced by hand on `#/pricing` (`inventory/prices.json`, D9/D86) and never appears here. The screen carries a label
 for it all the same, which is right: one line of a lookup table is cheaper than a bare
 machine string rendered the first time routing ever queues one. The claim to keep out of
-this file is the count — fourteen are defined, thirteen are reachable, and the two numbers
-answer different questions.
+this file is the count — fourteen are defined, thirteen are labelled, twelve are reachable,
+and the three numbers answer three different questions.
 
 **Every choice shows its key, and the built screen draws nine of them.** Owner-side, an hour
 in the queue is a keyboard and not a mouse, and the keyboard hint is what the
@@ -727,8 +834,10 @@ number or SKU.
 beneath them: nothing may come between the sentence and the rows, and these ARE the rows — found
 by a lookup rather than by the join. One vocabulary, because whether the pipeline or the catalog
 found a row is not something the finger needs to know. The search field is the one control on
-this screen that takes typing, so it carries `field` rather than `line` per the token block
-above, and `isEditableTarget` is what stops a typed digit from answering the card.
+this screen that takes typing, so it carries the kit's field boundary — `--bn-line-strong`, the
+weight the token block reserves for something you type into, rather than the `--bn-line`
+hairline that separates — and `isEditableTarget` is what stops a typed digit from answering the
+card.
 
 **Skip survives, narrowed and no longer load-bearing.** It is still the only move that writes
 nothing, which is right for a card the owner intends to come back to this session; what it is
@@ -775,12 +884,13 @@ reading as a newspaper.
 
 The agent cannot see its own output, so these are Playwright assertions, not prose.
 
-**All nine rows now run, against the view itself.** `app/tests/fulfillment.spec.ts` asserts
-every row of the table below on the Fulfillment view; `app/tests/pull-confirm.spec.ts` keeps
-three of them on step 6's component. `make design-check` runs both. Every contrast ratio is
-computed from the *rendered* colors rather than compared against a number published here, so
-a token edited in `app/src/tokens.css` without being re-argued in this file has to break
-something.
+**All ten rows run, against the view itself, and every one was re-checked against the tree
+on 2026-09-03.** `app/tests/fulfillment.spec.ts` asserts every row of the table below on the
+Fulfillment view; `app/tests/pull-confirm.spec.ts` keeps three of them on the kit's
+pull-confirm. `make design-check` runs both. Every contrast ratio is computed from the
+*rendered* colors rather than compared against a number published here, so a token edited in
+`app/src/tokens.css` without being re-argued in this file has to break something — which is
+the only reason the Banchi palette could be swapped underneath this view at all.
 
 **The assertion count was published here and is not any more.** It read "30 assertions,
 observed passing 2026-08-13" and was still saying 30 when the suite had grown to 64 — restated
@@ -799,19 +909,48 @@ not recognize.
 Two things this does not cover. The requirement under the table rather than in it — D5's "if
 a flow needs explaining twice, redesign the flow" — has no instrument but the Fulfiller
 filling a real order, and no order has been pulled. And none of this is a harness test: the
-contract in `docs/GATES.md` is seven Python tests run at turn end, and this runs a browser.
+contract in `docs/GATES.md` is nine Python tests run at turn end, and this runs a browser.
 
 | Constraint | Assertion |
 |---|---|
 | Body text | `font-size >= 20px` on every text node in the view |
-| Body color | any text token on any ground token — every pair clears 7:1, so this is a floor the palette cannot violate |
+| Body color | every text run, against its OWN rendered ground — this is measured per run now and is no longer a property the palette guarantees globally (see "Light and dark are both first class") |
 | Position label | `font-size >= 32px`, tabular figures |
-| Card photo in pull modal | `>= 320px` on the short edge |
+| Card photograph | `>= 320px` on the short edge, at desktop and at phone width |
 | Tap targets | `>= 44 x 44 px`, `>= 12px` apart |
 | Contrast | `>= 7:1` for body text (WCAG AAA — assume reading glasses and a bright room) |
 | Destructive actions | zero reachable from this view; assert no route to settings or import |
 | Undo | present on every mark-sold, `>= 10s` window |
+| Two-step pull | the sale control may occupy no part of the pull control's footprint, and begins below where it ended |
 | Jargon | copy passes a banned-word list: SKU, CSV, import, sync, batch, queue, staged |
+
+**The numbers in that table are the spec's own constants** — `BODY_FLOOR` 20, `PLACE_FLOOR`
+32, `PHOTO_FLOOR` 320, `TARGET_FLOOR` 44, `GAP_FLOOR` 12, `CONTRAST_FLOOR` 7,
+`UNDO_FLOOR_MS` 10_000 — and the spec runs the photograph and the floors at two viewports,
+1280x900 and 375x812. The built undo window is 20 seconds, twice the floor, and it is the
+same number `#/inventory` and `#/orders` use.
+
+**Two of those floors were broken by the rebuild and fixed in the same session, and both
+failures were geometry rather than color.**
+
+- **The photograph's column is 320px, NOT 300.** `app/src/Fulfillment.css` had it at
+  `minmax(0, 300px)` above 768px, chosen so the text column would end near the photograph's
+  foot. It bought that tidiness by painting the one thing he checks before pulling 20px under
+  the floor in the table above. The tidiness is not a trade this view is allowed to make.
+- **The action block reserves 152px — 64 + 24 + 64 — from the start, and grows downward.**
+  It holds one 64px control before the pull and two after it, the acknowledgement and the
+  sale, `--bn-6` apart. Left to size itself it grew by 88px on the press, the grid re-laid
+  out around the taller block, and the whole block travelled UP the page: measured at 768px
+  and above, `Pull` at {624, 920, 356x64} and `Mark it sold` at {624, 926, 356x64} — six
+  pixels apart with identical heights, so the second control landed on the first one's
+  rectangle. A finger that pressed twice, which is the ordinary response to a button that
+  did not seem to react, SOLD THE CARD. Anchoring alone does not fix it, because the movement
+  came from the block changing size: reserving both steps means the block is the same size
+  before and after, nothing reflows, and the sale can only ever appear below the
+  acknowledgement. `align-self: start` is the other half — the wide-screen rule sets the
+  block's row and must never set `end`. This is the displacement guard the two-step exists to
+  be, defeated by geometry rather than by logic, and the table's "Two-step pull" row is what
+  now catches it.
 
 Default view on the Fulfiller's device. Sorted in box-walk order. Photo-confirm before each
 pull. One-tap mark-sold.
@@ -824,47 +963,42 @@ one tap is the SECOND step, after `Pull`, and the two are measured apart in
 `app/tests/fulfillment.spec.ts` because a double-tap once sold a card whose photo he never saw.
 That two-step is not the confirm dialog the rule bans; it is a displacement guard, and it stays.
 
-## Step 6 — done 2026-08-12
+## The pull-confirm — the one control that is purely his
 
-Tokens locked, and the pull-confirm built against them in all three states. The spec it was
-built to, because it is what `app/tests/pull-confirm.spec.ts` asserts:
+Step 6 locked a palette on 2026-08-12 and built one component against it, on the argument
+that catching a gap on one component is far cheaper than after ten screens. The palette is
+gone and the component is not: `app/src/PullConfirm.tsx` and `app/src/PullConfirm.css` are
+still the Fulfiller's pull button, still the only solid fill he ever sees, and still the
+thing `app/tests/pull-confirm.spec.ts` measures on `#/gallery`. What it is built against
+now:
 
 ```
-default    fill #1E40AF, label #FFFFFF, radius 4px, >= 44px tall     8.7:1
-pressed    fill #17348F, label #FFFFFF                             10.9:1
-disabled   fill #FFFFFF, 1px #E6E7EA border, label #4E5157
-           — never appears in the Fulfillment view
+fill        --bn-accent-press in light, --bn-accent-hover in dark
+            — the one accent step that clears 7:1 under --bn-on-accent in each theme (8.1:1)
+label       --bn-on-accent, 22px, weight 700, the UI face
+box         min-height 64px, min-width 44px, radius 16px, --bn-shadow-2 + --bn-shadow-accent
+hover       lift 1px, shadow to --bn-shadow-3. The color does not move.
+pressed     translateY(1px) scale(.985), brightness .92 in light / 1.08 in dark
+disabled    owner-side only; this view has no disabled state at all
 ```
 
-**One value in that block has moved since step 6, and the word "unchanged" that used to
-introduce it has gone with it.** The disabled label is `muted`, and `muted` was redrawn on
-2026-08-23 for the hover-ground reason argued at the top of this file; it read `#52555B`
-here. Restated rather than rewritten silently, because nothing parses this second block —
-`scripts/docs-audit.py` reads the fence under `## Tokens` and stops there, so this is the
-one place in this file where a stale hex can sit unnoticed indefinitely. The ratio it is
-quoted at went up (7.48:1 to 7.96:1 on `surface`), so the assertion this block describes
-passes by more than it did; the spec computes it from the rendered color either way.
+**Hover and press change the shadow, the lift and the brightness — never the color.** That
+is what makes the measured ratio the ratio on screen in every state, which is the property
+the spec depends on: it computes the contrast from the rendered fill of each specimen rather
+than from a number published here. `--pc-on` is the only ink in the file, so the key hint's
+border is drawn from it and follows it through both themes.
 
-`app/src/PullConfirm.tsx` and its stylesheet, rendered on a gallery route at `app/src/Gallery.tsx`.
-`make screenshot` draws it into `captures/ui/`; `make design-check` measures it.
+**Both findings from building it before any screen still hold, and both are now enforced
+rather than remembered.** The label had to be 20px or more because the constraints table puts
+that floor on every text node in his view and a button label is a text node — it is 22px, and
+the spec asserts the floor. And the key chip does not belong on this control: "every choice
+shows its key" is an owner-side rule, `keyHint` renders nothing when omitted, and the spec
+asserts its absence by default.
 
-**Two props are worth knowing before step 7 reuses this.** `keyHint` is optional and renders
-nothing when omitted, which is the Fulfillment case — those screens are touch and show no
-keys. `disabled` exists for owner-side screens only; this view has no disabled state at all.
-
-**"Catching a gap on one component is far cheaper than after ten screens" was the argument
-for doing this before any screen, and the component paid for itself immediately.** Two of
-them, both invisible in prose and both only findable by building the thing:
-
-- **The button label had to be 20px, not the 18px `docs/design-refs/locked.html` draws.**
-  The table below puts a 20px floor on every text node in the Fulfillment view, and a button
-  label is a text node. The sheet violates the constraint printed a few inches above it.
-- **The key chip does not belong on this control.** The sheet draws `↵` on all three
-  pull-confirm states; "Every choice shows its key" is an owner-side rule, and this is the
-  Fulfiller's button. It is the one control that is purely his.
-
-Both are the doc's to win — `docs/design-refs/README.md` says so — and both are recorded
-there so the sheets are not read as current.
+**`docs/design-refs/locked.html` and `rejected.html` draw the 2026-08-12 palette and no
+longer draw this product.** They are a record of that interview — the two findings above were
+found by disagreeing with them — and they are not a reference for anything built today. The
+reference is `#/gallery`.
 
 ## The screenshot loop is mandatory
 
@@ -878,11 +1012,18 @@ average of everything the model has seen. A screenshot produces something specif
 is why the tokens above are hex values and typeface names rather than words like "warm" or
 "technical", and why they were chosen against a rendered card rather than described.
 
-**The reference is `docs/design-refs/locked.html`, and it is in the repo for this reason.**
-The sheets were built in a scratchpad while the tokens were being chosen and would have
-died with that session, which would have left this paragraph asserting something the file's
-own state contradicted. Hex values substitute for color; they do not substitute for layout
-or density, and those are most of what a reference carries.
+**The reference is `#/gallery`, and it is in the build for this reason.** A component sheet
+that the app renders is a component sheet that cannot go stale — which is exactly what
+happened to `docs/design-refs/locked.html`, a static drawing of a palette this product no
+longer has. Hex values substitute for color; they do not substitute for layout or density,
+and those are most of what a reference carries, which is why the kit page draws every
+primitive in every state rather than listing their names.
+
+**The gallery is not a substitute for looking at a real screen over a real store.** The
+rebuild was walked at 390, 820 and 1440 in both themes, and this checkout's store is empty
+(D43) — so a disabled control, a long box name and a seven-copy card are states no worktree
+can render for you. That is how the two Fulfillment floors above were broken and found: by
+pressing the buttons at 1280 with a card on screen.
 
 ## Copy rules
 

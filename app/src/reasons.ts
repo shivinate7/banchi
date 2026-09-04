@@ -83,11 +83,22 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
  * carries 16 `answered` events under `metadata_detection_disagreement`, and the history they
  * belong to renders the reason; the raw-string fallback would draw those as drift when they
  * are a record. So the label says "retired", with the date, and the audit does not read
- * this map. */
+ * this map.
+ *
+ * Read AFTER the live map and never before it, so a code that ever comes back is live again
+ * by being put back above rather than by anybody remembering this list exists. */
 export const RETIRED_REASON_LABELS: Readonly<Record<string, string>> = {
   /* D3, amended 2026-09-02: the photograph may no longer contradict a finish claim. Every one
-   * of the 16 Gate B rulings under this code went to the toggle. */
+   * of the 16 Gate B rulings under this code went to the toggle, which is what made it a
+   * question not worth a person's attention rather than a question with no data. */
   metadata_detection_disagreement: 'Toggle and photo disagreed (retired 2026-09-02)',
+}
+
+/* Whether a reason is one the product has stopped asking about. `#/review` asks this before
+ * it draws a question: a card queued before the retirement is still in the queue and still
+ * has to be answered, but the sentence over it is the retirement rather than the question. */
+export function isRetiredReason(reason: string): boolean {
+  return RETIRED_REASON_LABELS[reason] !== undefined
 }
 
 export function reasonLabel(reason: string): string {

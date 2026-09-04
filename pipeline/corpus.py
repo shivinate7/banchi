@@ -41,9 +41,11 @@ NOTHING HERE READS THE STORE OR THE CATALOG. It holds answers, produces a
 `pipeline/decisions.py:Decisions` for a run, and is otherwise inert — which is what lets
 `join`, `emit` and every test written before it stay exactly as they are.
 
-THE POLICY HAS A DEFAULT FOR ONE KEY: a `sub_threshold` the file leaves absent or null reads
-as `DEFAULT_SUB_THRESHOLD`, flat $0.49 (D9, amended 2026-09-02), so a fresh store's first
-emit is not refused for want of an answer the owner has already given once.
+THE POLICY HAS ONE DEFAULT AND TWO KEYS READ IT. A `sub_threshold` the file leaves absent or
+null reads as `DEFAULT_SUB_THRESHOLD` (D9, amended 2026-09-02), so a fresh store's first emit
+is not refused for want of an answer the owner has already given once; a `threshold` the file
+leaves out reads the SAME figure, because they are one variable (D99) and a store that has
+chosen neither must not partition at one price and sell at another.
 """
 
 from __future__ import annotations
@@ -62,12 +64,29 @@ FILENAME = "prices.json"
 #: optional key is not a version change, because `parse` round-trips what it does not know.
 VERSION = 1
 
-#: The standing sub-threshold disposition when the policy is silent (D9, amended 2026-09-02):
-#: flat $0.49, in the corpus's own `{"flat": "<price>"}` shape. Applied where the key is
-#: ABSENT OR NULL and nowhere else — a file that says `"floor"` says floor. Applied on READ,
-#: never written on read: `Corpus.read` serves GET routes, and the default reaches the file on
-#: the next ordinary write (every join's `book.write()`, every `#/pricing` save).
-DEFAULT_SUB_THRESHOLD: dict = {decisions_mod.FLAT_KEY: "0.49"}
+#: THE STORE'S STANDING CUT-OFF WHEN THE POLICY IS SILENT — ONE FIGURE FOR BOTH KEYS (D99,
+#: on the owner's ruling of 2026-09-03: *"threshold and cheap card are the same variable and
+#: should be the same"*).
+#:
+#: THIS CONSTANT EXISTS BECAUSE THE MERGE PUT THE INVERSION BACK AT THE DEFAULT. D9's amendment
+#: of 2026-09-02 gave `sub_threshold` a default of flat $0.49 so a fresh store's first emit is
+#: not refused for want of an answer the owner has already given once; `threshold` separately
+#: read `pricing.THRESHOLD`, $0.40. Both are reasonable alone and together they are the defect
+#: D99 was written to end: a store that has set neither partitions at $0.40 and prices the half
+#: below it at $0.49, so a card worth $0.38 lists ABOVE one worth $0.42 — the card that failed
+#: the bar going out dearer than the one that cleared it, which is the whole of the argument.
+#:
+#: SO THE DEFAULT IS ONE VALUE READ BY BOTH KEYS, and the two cannot disagree unless somebody
+#: writes them apart deliberately. D9's $0.40 derivation is not repealed — it is a labor bar
+#: and it is still the argument for having a cut-off at all — but the figure a store that has
+#: chosen nothing reads is the owner's, and they set it at $0.49 twice.
+DEFAULT_CUTOFF: str = "0.49"
+
+#: The same figure in the sub-threshold key's own `{"flat": "<price>"}` shape. Applied where
+#: that key is ABSENT OR NULL and nowhere else — a file that says `"floor"` says floor. Applied
+#: on READ, never written on read: `Corpus.read` serves GET routes, and the default reaches the
+#: file on the next ordinary write (every join's `book.write()`, every `#/pricing` save).
+DEFAULT_SUB_THRESHOLD: dict = {decisions_mod.FLAT_KEY: DEFAULT_CUTOFF}
 
 
 @dataclass
@@ -117,6 +136,21 @@ class Corpus:
     rule: str = "match"
     basis: str = "market"
     sub_threshold: object = field(default_factory=lambda: dict(DEFAULT_SUB_THRESHOLD))
+    #: The D9 cut-off, as the string it was typed as. `DEFAULT_CUTOFF` is the default, and it
+    #: is the SAME figure `sub_threshold` falls back to — see that constant for why they may
+    #: not differ.
+    #:
+    #: IT IS POLICY AND NOT AN ANSWER, which is why it sits here beside `rule` and `basis`
+    #: rather than in `skus`. D9 calls the threshold *"configurable"* and derives $0.40 from a
+    #: labor bar; a labor bar is a fact about the operator's hour, not about any one card, and
+    #: a per-SKU cut-off is just a per-SKU price with extra steps. Stored as a STRING for the
+    #: reason every price in this file is: `Decimal` is not JSON, and the figure the operator
+    #: typed is the figure that comes back.
+    #:
+    #: IT SHARES `sub_threshold`'s DEFAULT AND THE SYMMETRY IS THE POINT. The two were
+    #: asymmetric for a day — a defaulted cheap price beside a constant threshold — and the
+    #: pair inverted. One figure, one fallback.
+    threshold: object = DEFAULT_CUTOFF
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the
     #: standing policy, which is expected to be almost all of them.
@@ -163,7 +197,11 @@ class Corpus:
         # raising matters.
         pricing.Rule.parse(policy.get("rule", "match"))
         pricing.check_basis(policy.get("basis", "market"))
-        # THE ONE KEY WITH A DEFAULT, AND ONLY WHERE THE FILE IS SILENT. Absent or `null`
+        # VALIDATED HERE FOR THE SAME REASON AND WITH ONE DIFFERENCE: the parsed value is
+        # discarded like the two above, but a MISSING key is the store that has never set one
+        # and reads `DEFAULT_CUTOFF`, where a present-and-unusable one is refused by name.
+        pricing.check_threshold(policy.get("threshold"))
+        # THE ONE KEY WITH A DEFAULT VALUE, AND ONLY WHERE THE FILE IS SILENT. Absent or `null`
         # reads as `DEFAULT_SUB_THRESHOLD`; `"floor"` and a written flat price are what they
         # say. Validated ONCE here, by the parser `Decisions.parse` uses, for the argument the
         # comment above makes for `rule`: a malformed policy refuses at read time, where
@@ -176,6 +214,11 @@ class Corpus:
             rule=str(policy.get("rule", "match")),
             basis=str(policy.get("basis", "market")),
             sub_threshold=sub_threshold,
+            threshold=(
+                DEFAULT_CUTOFF
+                if policy.get("threshold") is None
+                else str(policy["threshold"]).strip()
+            ),
             answers=answers,
             overrides={
                 str(name): dict(over)
@@ -211,6 +254,10 @@ class Corpus:
             "rule": self.rule,
             "basis": self.basis,
             "sub_threshold": self.sub_threshold,
+            # WRITTEN EVEN WHEN IT IS THE DEFAULT, unlike `per_run` below. `#/pricing` reads
+            # `policy.threshold` to draw the control, and a key that appears only once
+            # somebody has changed it is a control that cannot draw its own current value.
+            "threshold": self.threshold,
         }
         if self.overrides:
             policy["per_run"] = self.overrides
@@ -301,7 +348,16 @@ class Corpus:
         # AN EXPLICIT `null` IN AN OVERRIDE MEANS "TAKE THE STANDING POLICY", not "unset": the
         # standing key can no longer be null after `parse`, and an override that could put a
         # null back would reopen the refusal the default exists to end.
-        standing = {"rule": self.rule, "basis": self.basis, "sub_threshold": self.sub_threshold}
+        # `threshold` RIDES THE SAME RULE AS THE OTHER THREE. NOTHING HERE IS PARSED:
+        # `check_basis` and `check_threshold` are called by the CALLER for the same reason —
+        # this method answers what the policy SAYS, and the commands that price from it
+        # already catch the refusal a bad value raises.
+        standing = {
+            "rule": self.rule,
+            "basis": self.basis,
+            "sub_threshold": self.sub_threshold,
+            "threshold": self.threshold,
+        }
         return {
             key: (over[key] if over.get(key) is not None else value)
             for key, value in standing.items()

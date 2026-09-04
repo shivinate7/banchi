@@ -294,7 +294,9 @@ test('the route resolves, and the nav offers it under its own chord', async ({ p
      this repo can tell — harness, lint, typecheck and docs-audit all stay green over it. */
   await expect(page.locator(VIEW)).toBeVisible()
 
-  await expect(page.locator('a.app-nav-link[href="#/orders"] kbd.app-nav-key')).toHaveText(',O')
+  /* The chord is still `,O`, and it is still printed on the nav link — the keycap's own class
+     went with the rebuild, so this reads the `kbd` inside the link for this route. */
+  await expect(page.locator('a.app-nav-link[href="#/orders"] kbd')).toHaveText(',O')
 })
 
 /* -------------------------------------------------------------------------------------- 2 */
@@ -435,14 +437,17 @@ test('the receipt names where the card just was, never the departed label the sa
 
   await page.locator('button.orders-pull').first().click()
 
-  const receipt = page.locator('.orders-receipt-text')
+  /* THE RECEIPT IS A TOAST NOW, which is the owner's ruling and changes nothing this case is
+     about: it is still composed at the moment of the press, it still has to name the place the
+     operator just walked to, and the way back still has to be on it. */
+  const receipt = page.locator('.bn-toast-receipt')
   await expect(receipt).toContainText('Box 3 · Section 2 · Card 17')
   await expect(receipt).not.toContainText('departed')
 
   /* THE WAY BACK IS ON THE RECEIPT AND NOT IN THE ROW, and that is forced rather than chosen: a
      successful pull marks the copy sold, the resolver stops offering it, and an Undo drawn
      inside the row would unmount with it. */
-  await expect(page.locator('.orders-receipt button.orders-plain')).toHaveText('Undo')
+  await expect(receipt.locator('button.bn-toast-action')).toHaveText('Undo')
 })
 
 /* -------------------------------------------------------------------------------------- 6 */
@@ -492,14 +497,15 @@ test('a paste is projected before it is sent, and what was dropped is named', as
      WAY. A paste box drawn above the counts costs about 180px on every arrival for an errand
      that happens once a batch; the control never moves, only the panel. */
   await expect(page.locator('.orders-paste')).toHaveCount(0)
-  await page.locator('.orders-controls button.orders-plain').click()
+  const openWell = page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' })
+  await expect(openWell).toHaveAttribute('aria-expanded', 'false')
+  await openWell.click()
   await expect(page.locator('.orders-paste')).toHaveCount(1)
 
   /* AND THE FETCH IS INSIDE IT, not in the page header. It is the same errand with the copying
      done for you — `POST /orders/fetch` answers exactly the body the ingest accepts — so the
-     screen has one way in and two sources rather than two ways in. Two presses since D91, and
-     the first is the one drawn before anything is checked. */
-  await expect(page.locator('.orders-paste button.orders-plain', { hasText: 'Check TCGplayer' })).toHaveCount(1)
+     screen has one way in and two sources rather than two ways in. */
+  await expect(page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' })).toHaveCount(1)
 
   /* A BUYER, A STREET AND AN EMAIL AT THE TOP LEVEL — the shape a real console copy has. None
      of the three may reach the wire, and the screen has to SAY it dropped them: a silent strip
@@ -515,7 +521,7 @@ test('a paste is projected before it is sent, and what was dropped is named', as
       lines: [{ sku: SKU, quantity: 1, name: 'Volcanion' }],
     }),
   )
-  await page.locator('.orders-paste button.orders-plain', { hasText: 'Read this paste' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Read this paste' }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length)
@@ -539,61 +545,22 @@ test('a paste is projected before it is sent, and what was dropped is named', as
 
 /* -------------------------------------------------------------------------------------- 8 */
 
-test('the fetch is two presses: the window by status, then only the ticked statuses (D91)', async ({
-  page,
-}) => {
-  const wire = await open(page)
-  const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
-  const mounted = reads()
-  await page.locator('.orders-controls button.orders-plain').click()
-  await page.locator('.orders-paste button.orders-plain', { hasText: 'Check TCGplayer' }).click()
+/* THREE OF MAIN'S CASES ARE DELETED HERE, WITH THE FEATURES THEY COVERED (D96).
 
-  /* THE FIRST PRESS DETAILS NOTHING AND DRAWS THE WINDOW AS THE WIRE SPELLED IT. 370 orders in
-     three months was the measurement that made this two presses: the one-press fetch was refused
-     on that account every time it was pressed. Every status is a verbatim string with its count
-     and the ledger's count beside it, and NOTHING is pre-ticked — which strings mean "needs
-     picking" is the one thing about this feed nobody has enumerated. */
-  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(1)
-  expect(wire.find((one) => one.path.endsWith('/orders/fetch'))?.body).toEqual({ preview: true })
-  const rows = page.locator('.orders-status')
-  await expect(rows).toHaveCount(3)
-  await expect(rows.nth(0)).toContainText('Shipped')
-  await expect(rows.nth(0)).toContainText('280')
-  await expect(rows.nth(2)).toContainText('Ready to Ship')
-  await expect(page.locator('.orders-status input:checked')).toHaveCount(0)
-  await expect(page.locator('button.orders-fetch')).toBeDisabled()
-  expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
+   `the fetch is two presses: the window by status, then only the ticked statuses (D91)` — the
+   owner ruled the two-press flow out: the press asks and takes in the same gesture. D91's real
+   requirement, that somebody NAME the statuses rather than the server guess them, is kept: the
+   single press reads them off the preview and sends back exactly what came out. The case that
+   survives is the one below, over the cap and what a press leaves behind.
 
-  /* THE SECOND PRESS DETAILS ONLY WHAT WAS TICKED, SKIPPING WHAT THE LEDGER HOLDS, and the
-     result enters through the one door the paste uses: the fetched `orders` array, sent on
-     unaltered. The button says how many the ticks add up to before it is pressed. */
-  await rows.nth(2).locator('input').check()
-  const fetch = page.locator('button.orders-fetch')
-  await expect(fetch).toHaveText('Fetch 2 orders')
-  await fetch.click()
-  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
-  expect(wire.filter((one) => one.path.endsWith('/orders/fetch'))[1]?.body).toEqual({
-    statuses: ['Ready to Ship'],
-    skip_known: true,
-  })
-  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/ingest')).length).toBe(1)
-  expect(wire.find((one) => one.path.endsWith('/orders/ingest'))?.body).toEqual({
-    orders: [
-      {
-        source: 'TCGplayer',
-        number: ORDER_NUMBER,
-        placed_at: '2026-08-30',
-        status: 'Ready to Ship',
-        lines: [{ sku: SKU, quantity: 1, name: 'Volcanion', unit_price: '11.88' }],
-      },
-    ],
-  })
-  /* AND THE LEDGER IS RE-READ AFTER THE INGEST — one more read than the mount made. Counted
-     relative to the mount rather than as an absolute, because React's StrictMode runs the
-     mount effect twice in development and this spec runs against the dev server. */
-  await expect.poll(reads).toBe(mounted + 1)
-  await expect(page.locator('.orders-paste-note')).toContainText('2 of 2 matching orders detailed')
-})
+   `every open order offers the walk, and the header offers all of them at once` and `a ledger
+   with nothing open offers no walk at all` — both assert the entry points into D90's envelope
+   walk on `#/inventory?order=`, a screen mode this product does not draw. They went with
+   `order-walk.spec.ts` and for its reason: a spec that can never pass is not coverage.
+
+   All three are in main's history and come back whole if the walk is ever built here. */
+
+
 
 /* -------------------------------------------------------------------------------------- 9 */
 
@@ -605,17 +572,33 @@ test('a fetch the cap cut short says how many it left, and an empty one still re
   })
   const reads = () => wire.filter((one) => one.path.endsWith('/orders') && one.method === 'GET').length
   const mounted = reads()
-  await page.locator('.orders-controls button.orders-plain').click()
-  await page.locator('.orders-paste button.orders-plain', { hasText: 'Check TCGplayer' }).click()
-  await expect(page.locator('.orders-status')).toHaveCount(3)
-  await page.locator('.orders-status').nth(0).locator('input').check()
-  await page.locator('button.orders-fetch').click()
+  /* The way in is the header's control, as every other case on this screen opens it. */
+  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  /* ONE PRESS, DRIVEN AS ONE. Main reached this state through a status step — check, tick, fetch
+     — and the owner ruled that step out. What the press does underneath is still two calls, and
+     the assertion below is what keeps the second one honest: the statuses it sends are the ones
+     the preview answered, never a list this screen composed. */
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length)
+    .toBe(2)
+  const asked = wire.filter((one) => one.path.endsWith('/orders/fetch'))
+  expect((asked[0]?.body as { preview?: boolean }).preview).toBe(true)
+  expect((asked[1]?.body as { statuses?: string[] }).statuses).toEqual([
+    'Shipped',
+    'Cancelled',
+    'Ready to Ship',
+  ])
 
   /* NOTHING TO INGEST IS NOT NOTHING TO SAY. The note names the cap's leftover as a number and
      tells the operator the next press picks it up; and the screen re-reads the ledger anyway,
      because "nothing new for me" and "nothing moved" are different facts. */
-  await expect(page.locator('.orders-paste-note')).toContainText('100 remaining')
-  await expect(page.locator('.orders-paste-note')).toContainText('30 already in the ledger')
+  /* THE COUNTS MOVED OUT OF THE PASTE NOTE AND INTO A RECEIPT OF THEIR OWN. Same figures, same
+     rule about absence — a clause is drawn only where its number is real, because a rendered
+     `0 remaining` is a claim this wire cannot always make. */
+  await expect(page.locator('.orders-receipt')).toContainText('100 remaining')
+  await expect(page.locator('.orders-receipt')).toContainText('30 already in the ledger')
   expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
   await expect.poll(reads).toBe(mounted + 1)
 })
@@ -632,40 +615,6 @@ test('a fetch the cap cut short says how many it left, and an empty one still re
  * the string IS asserting the mechanism. The key is percent-encoded because `source:number`
  * carries a colon. */
 
-test('every open order offers the walk, and the header offers all of them at once', async ({ page }) => {
-  await open(page)
-
-  const perOrder = page.locator('.orders-order a.orders-walk')
-  await expect(perOrder).toHaveCount(1)
-  await expect(perOrder).toHaveText('Walk this order')
-  /* THE WIRE'S KEY VERBATIM, ENCODED — never a key this screen composed. `store/orders.py`
-     folds case to COMPARE and stores what it was given, so the client has no business folding
-     anything: it forwards the string the server answered with, and the walk validates it back
-     against the same payload. Asserting the composition here is asserting the handoff. */
-  await expect(perOrder).toHaveAttribute(
-    'href',
-    `#/inventory?order=${encodeURIComponent(`TCGplayer:${ORDER_NUMBER}`)}`,
-  )
-
-  const wave = page.locator('.orders-controls a.orders-walk')
-  await expect(wave).toHaveText('Walk every open order')
-  await expect(wave).toHaveAttribute('href', '#/inventory?orders=open')
-})
 
 /* -------------------------------------------------------------------------------------- 11 */
 
-test('a ledger with nothing open offers no walk at all', async ({ page }) => {
-  /* A WALK OVER NOTHING IS A BANNER AND NO STOP. The header link is drawn only while something is
-     open, and a fulfilled order draws no link of its own — `OrderCard` renders it on `order.open`,
-     which is the LEDGER's answer and never the feed's `status` string. */
-  const done = oneOpenOrder()
-  const shut = {
-    ...done,
-    orders: done.orders.map((order) => ({ ...order, open: false, recorded: order.wanted })),
-    resolution: { ...done.resolution, orders: [] },
-  }
-  await open(page, { orders: shut })
-  await page.locator('.orders-plain', { hasText: 'Show' }).click()
-
-  await expect(page.locator('a.orders-walk')).toHaveCount(0)
-})

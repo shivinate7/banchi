@@ -139,8 +139,29 @@ async function open(
     }, session)
   }
 
-  await page.goto('/#/')
+  await page.goto('/#/capture')
   await expect(finishRow(page)).toBeVisible()
+
+  /* AND THE SCREEN IS PROVABLY LISTENING BEFORE THIS RETURNS. Every case below presses a
+     letter the moment this helper hands back, and a visible row is not the same fact as a
+     subscribed handler: `CaptureScreen.tsx`'s key listener is registered in an effect whose
+     dependencies include `gameEntry`, React runs passive effects AFTER paint, and Playwright
+     sees the paint. A press dispatched inside that window reaches a document with nobody
+     listening and is gone — there is no queue for it to sit in. Measured on this tree: 1
+     whole-file run in 4 lost the very first press of the first case to start, always in
+     `openFinish`, and it read as the Finish track never existing.
+
+     SO IT PRESSES UNTIL ONE LANDS, and the retry is over the TEST's timing rather than the
+     screen's behaviour. `F` opens the Finish field, `Escape` puts the screen back exactly as
+     it was, and no case reaches its own first press without a listener behind it. It weakens
+     nothing: `F` still has to open that field for this to return at all, and the case that is
+     ABOUT the field letters presses once and asserts once, with no retry of its own. */
+  await expect(async () => {
+    await page.keyboard.press('f')
+    await expect(finishCells(page).first()).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+  await page.keyboard.press('Escape')
+  await expect(finishCells(page)).toHaveCount(0)
 }
 
 /** The Finish row, open or collapsed. `capture-trackline` is the open track's wrapper, so
@@ -151,6 +172,28 @@ function finishRow(page: Page) {
 
 function finishCells(page: Page) {
   return page.locator('.capture-track[aria-label="Finish"] .capture-cell')
+}
+
+/* THE CELLS ARE NAMED BY THEIR LABEL NOW, AND THE ENUM IS ASSERTED ONE LAYER DOWN.
+ * `CaptureScreen.tsx:finishLabel` draws `reverse_holo` as `Reverse holo`, and the owner
+ * ruled for the label (2026-09-03) — the raw member is no longer text on the cell and is
+ * not on its accessible name either, so a text selector for `reverse_holo` can only be a
+ * selector for a string the product deliberately stopped drawing.
+ *
+ * WHAT THAT WOULD COST IF IT WERE ALL THAT MOVED: the label is a rendering and the MEMBER is
+ * what the wire carries, so pointing a click at a label and asserting nothing else would
+ * leave `Reverse holo` free to store `holo`. It is not all that moved, and the join is
+ * asserted in BOTH directions rather than assumed — the cases that claim a member read
+ * `pkmnscan.session.finish` back and name it, and the legacy-session case seeds the MEMBER
+ * and asserts the labelled cell it presses. */
+const FINISH = {
+  normal: /^Normal$/,
+  holo: /^Holo$/,
+  reverse_holo: /^Reverse holo$/,
+} as const
+
+function finishCell(page: Page, member: keyof typeof FINISH) {
+  return finishCells(page).filter({ hasText: FINISH[member] })
 }
 
 async function openFinish(page: Page): Promise<void> {
@@ -166,19 +209,19 @@ test('the finish claim is a SET: two cells read as pressed at once', async ({ pa
      finishes could either name one and be wrong about half the cards, or claim nothing and
      throw away the half of the truth the operator did know. Both are worse than saying what
      is true, and a single-select track is what made them the only options. */
-  await finishCells(page).filter({ hasText: /^normal$/ }).click()
-  await finishCells(page).filter({ hasText: 'reverse_holo' }).click()
+  await finishCell(page, 'normal').click()
+  await finishCell(page, 'reverse_holo').click()
 
-  await expect(finishCells(page).filter({ hasText: /^normal$/ })).toHaveAttribute(
+  await expect(finishCell(page, 'normal')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
-  await expect(finishCells(page).filter({ hasText: 'reverse_holo' })).toHaveAttribute(
+  await expect(finishCell(page, 'reverse_holo')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
   /* And an unclaimed member is not pressed — a multi-select, not a track that latches on. */
-  await expect(finishCells(page).filter({ hasText: /^holo$/ })).toHaveAttribute(
+  await expect(finishCell(page, 'holo')).toHaveAttribute(
     'aria-pressed',
     'false',
   )
@@ -195,8 +238,8 @@ test('the claim is stored in the game’s enum order, never the order it was tap
      game's own order so that two identical claims are ONE value; the screen doing it too is
      what makes the value the wire carries already canonical, so a restated correction diffs
      as no change instead of churning a sidecar and a history line. */
-  await finishCells(page).filter({ hasText: 'reverse_holo' }).click()
-  await finishCells(page).filter({ hasText: /^normal$/ }).click()
+  await finishCell(page, 'reverse_holo').click()
+  await finishCell(page, 'normal').click()
 
   const stored = await page.evaluate(() =>
     window.sessionStorage.getItem('pkmnscan.session.finish'),
@@ -210,10 +253,10 @@ test('re-tapping the last claimed cell clears the claim, and stores nothing', as
   await open(page)
   await openFinish(page)
 
-  await finishCells(page).filter({ hasText: /^holo$/ }).click()
-  await finishCells(page).filter({ hasText: /^holo$/ }).click()
+  await finishCell(page, 'holo').click()
+  await finishCell(page, 'holo').click()
 
-  await expect(finishCells(page).filter({ hasText: /^holo$/ })).toHaveAttribute(
+  await expect(finishCell(page, 'holo')).toHaveAttribute(
     'aria-pressed',
     'false',
   )
@@ -226,9 +269,12 @@ test('re-tapping the last claimed cell clears the claim, and stores nothing', as
   ).toBeNull()
 
   /* And the collapsed row says so IN WORDS, at full contrast. The removed "no claim" cell
-     handed that job to this row; a bitfield would say it only in an aria-label. */
+     handed that job to this row; a bitfield would say it only in an aria-label.
+     `No claim` rather than `no claim`: `CaptureScreen.tsx:NO_CLAIM_LABEL` is a sentence-case
+     label now, which is the same words in the register the rest of the screen was rebuilt in.
+     What is asserted is unchanged — the row says it, rather than leaving the row blank. */
   await page.keyboard.press('Escape')
-  await expect(finishRow(page)).toContainText('no claim')
+  await expect(finishRow(page)).toContainText('No claim')
 })
 
 test('a session written before the claim was a set reads back as ONE member, not as nothing', async ({
@@ -244,9 +290,13 @@ test('a session written before the claim was a set reads back as ONE member, not
      and the salvage has to be in the `catch` rather than only in the array branch. */
   await open(page, { 'pkmnscan.session.finish': 'reverse_holo' })
 
-  await expect(finishRow(page)).toContainText('reverse_holo')
+  /* The ROW draws the label and the STORE held the member, which is the whole of the
+     backfill: the seeded string is `reverse_holo` and the cell it presses below is the one
+     labelled `Reverse holo`. Read the two lines together and the salvage is asserted end to
+     end — a `catch` that dropped the value would leave the row saying `No claim`. */
+  await expect(finishRow(page)).toContainText('Reverse holo')
   await openFinish(page)
-  await expect(finishCells(page).filter({ hasText: 'reverse_holo' })).toHaveAttribute(
+  await expect(finishCell(page, 'reverse_holo')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
@@ -257,8 +307,8 @@ test('narrowing a two-member claim down to one CLEARS it rather than promoting i
 }) => {
   await open(page)
   await openFinish(page)
-  await finishCells(page).filter({ hasText: /^normal$/ }).click()
-  await finishCells(page).filter({ hasText: 'reverse_holo' }).click()
+  await finishCell(page, 'normal').click()
+  await finishCell(page, 'reverse_holo').click()
   await page.keyboard.press('Escape')
 
   /* `Common` stocks `normal` alone in this registry, so claiming it excludes `reverse_holo`
@@ -268,10 +318,14 @@ test('narrowing a two-member claim down to one CLEARS it rather than promoting i
      turn that into "the operator said normal". D23 refuses auto-selection in words for this
      exact reason, and keeping a manufactured survivor is auto-selection by the back door. */
   await page.keyboard.press('r')
-  await page.getByRole('button', { name: '1 Common' }).click()
+  /* BY NAME ALONE, because the keycap left the accessible name: `kit/Kbd` renders
+     `aria-hidden`, so the option that read as `1 Common` to a screen reader now reads as
+     `Common`. `exact` is what keeps it off `Uncommon`, which is the row directly under it.
+     The key itself is still asserted — off `.capture-k`, by the option-alphabet cases. */
+  await page.getByRole('button', { name: 'Common', exact: true }).click()
   await page.keyboard.press('Escape')
 
-  await expect(finishRow(page)).toContainText('no claim')
+  await expect(finishRow(page)).toContainText('No claim')
   expect(
     await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.finish')),
   ).toBeNull()
@@ -456,6 +510,12 @@ async function openWithBox(page: Page): Promise<string[]> {
   await open(page)
 
   await page.keyboard.press('b')
+  /* WAIT FOR THE BOX TO BE OFFERED BEFORE TYPING AT IT. Under `fullyParallel` this raced:
+     `GET /boxes` had not landed, the field read `0 boxes`, and Enter took `3` as the name of
+     a NEW box — a `POST /boxes` no route in this file answers, which is the one request that
+     could reach a real store from a spec whose header promises it never does. Waiting on the
+     offered row is what makes the press land on the box the fixture describes. */
+  await expect(page.locator('.capture-opt').filter({ hasText: /S key/ })).toBeVisible()
   await page.keyboard.type('3')
   await page.keyboard.press('Enter')
   await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('3')
@@ -482,7 +542,11 @@ test('S is the divider and H is the set hint: the remap, both halves', async ({ 
      same rule the option alphabet above is asserted by. */
   await expect(page.locator('.capture-open').locator('.capture-k').first()).toHaveText('H')
   await page.keyboard.press('Escape')
-  await expect(sectionButton(page).locator('.capture-key')).toHaveText('S')
+  /* The keycap is the kit `Button`'s own `kbd` now rather than a hand-rolled `.capture-key`
+     span, so the assertion follows the control to the element that carries the letter. The
+     claim is unchanged and is still the one that matters: the divider act ADVERTISES `S`, so
+     the operator reads the key off the button instead of computing it. */
+  await expect(sectionButton(page).locator('kbd')).toHaveText('S')
 })
 
 test('with no box the divider is disabled — not absent, and it writes nothing', async ({
@@ -629,8 +693,14 @@ test('an expired session says so where the suggestions would have been', async (
      with no sets produce the identical empty list, and the operator has no way to tell them
      apart from silence — so the reason is drawn where the suggestions would have been. It
      names the file to fix, because that is the one case they can act on. */
-  await expect(page.locator('.capture-open')).toContainText('TCGplayer session expired')
-  await expect(page.locator('.capture-open')).toContainText('.env')
+  /* REPOINTED, AND ONE CLAIM IS GENUINELY GONE. The reason is still drawn where the
+     suggestions would have been and still names THIS cause rather than emptiness, which is
+     the behaviour. What it no longer does is name `.env`: `CaptureScreen.tsx:hintReason`
+     draws sentences and argues the file is a fact for whoever sets the rig up rather than for
+     the operator at the lens, and the owner ruled for sentences over machine strings
+     (2026-09-03). That is a deliberate product change, so the assertion over it is dropped
+     rather than re-pointed at a string nothing prints. */
+  await expect(page.locator('.capture-open')).toContainText('TCGplayer session has expired')
 
   /* And it is still only a note: the field takes text exactly as before. */
   const hint = page.getByLabel('Set hint')

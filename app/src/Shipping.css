@@ -1,447 +1,307 @@
-/* THE SHIPPING SCREEN — the rules for `app/src/Shipping.tsx`.
- *
- * PAINTED FROM `var(--token)` AND FROM NOTHING ELSE. There is not one hex literal in this file
- * and there may never be: `scripts/docs-audit.py`'s `raw colour` row is a BLOCKING check over
- * every stylesheet in this directory, so a literal here stops the commit rather than shipping a
- * colour docs/DESIGN.md never locked.
- *
- * THE PAGE CHROME IS `Runs.css`'s, DELIBERATELY REUSED RATHER THAN REDERIVED — 16px of outer
- * padding on all four sides, the title in the display face at 20px sharing its line with the
- * scope and the controls, a one-line lede at the metadata size, and the first row of real
- * content inside 150px of the top of the viewport. Those are docs/DESIGN.md's numbers, and two
- * owner screens with the same header problem should not have two answers to it.
- *
- * NO SOLID ACCENT GROUND ANYWHERE ON THIS SCREEN, and the reason is in the token's own
- * definition: `--accent` is "unsure, and the only-action fill". This screen has no single
- * action — it reads a file, it forgets one, it hides a lane, and it offers a download — so
- * there is no control here entitled to the fill, and painting one would claim a primacy no
- * control has. The list is a list of facts, not a list of buttons.
- *
- * NO `:focus-visible` RULE AND NO `cursor` RULE. base.css owns both, as floors, and it argues
- * at length why: a per-screen focus ring is how one screen came to draw four different ones,
- * and a per-screen cursor is how 39 controls came to have none. Every control here is a
- * `<button>`, an `<a href>`, a `<label>` around a file input or the file input itself — all
- * four are named in that file, so all four are already answered.
- *
- * NOT THREE-COLUMN. D40's three columns are the inventory screen's answer to a card, its box
- * and its copies. This screen has one thing per row and it reads left to right and top to
- * bottom, so it is one column at every width and needs no breakpoint.
- */
+/* ============================================================================
+   SHIPPING — the Ship stage of the Orders hub. Tokens only; both themes free.
+   ========================================================================== */
 
-.shipping {
-  padding: var(--s4);
+.shipping-stage { display: flex; flex-direction: column; gap: var(--bn-5); }
 
-  /* No `max-width` and no centring, matching `.runs` and `.inventory`. App.css pads the nav
-     strip to this same 16px, so the first route name sits directly above this screen's
-     heading; centring the page breaks that alignment at every width except one. */
-}
+/* ---- notices --------------------------------------------------------------- */
+/* The notices are the kit's `Notice` — tone, title and the reason code in its own slot — so a
+   refusal here is drawn exactly as a refusal on Runs or Pricing is. This rule only bounds the
+   measure. */
+.shipping-note { max-width: 720px; }
+/* In the empty branch the notice shares the hero's column rather than sitting beside it. */
+.shipping-empty > .shipping-note { max-width: none; }
 
-/* --------------------------------------------------------------------------------- the head */
+/* ---- the file picker, wherever it is drawn ----------------------------------- */
+.shipping-pick { position: relative; }
+.shipping-pick:has(> input:focus-visible) { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
+.shipping-pick:has(> input:disabled) { opacity: 0.45; pointer-events: none; }
 
-.shipping-head {
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-/* `wrap`, and the worst case is what makes it safe: if the scope, the file picker and the
-   Forget button cannot fit beside the title they wrap onto a second line, nothing is clipped,
-   and the header is still one block rather than the title-block-over-toolbar stack
-   docs/DESIGN.md measured at 240px on the inventory screen. */
-.shipping-head-top {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s3);
-}
-
-.shipping-title {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-}
-
-/* `contents`, so the children are flex items of `.shipping-head-top` and the wrap happens
-   BETWEEN controls rather than inside this group. `margin-left: auto` on the first child
-   collects the line's slack between the heading and the controls — App.css's own
-   `.app-nav-group-aside` mechanism, and the shape `Runs.css` and `ReviewQueue.css` settled. */
-.shipping-controls {
-  display: contents;
-}
-
-.shipping-controls > :first-child {
-  margin-left: auto;
-}
-
-/* Each of these is one indivisible thing — a scope sentence, a control — so the row wraps at
-   the gaps and never inside one. Without it a two-word button breaks over three lines, which
-   is the defect ReviewQueue.css records having rendered and fixed. */
-.shipping-controls > * {
-  flex: none;
-}
-
-/* THE SCOPE IS A FILENAME AND A COUNT, so the utility face: docs/DESIGN.md gives every count in
-   the product to Martian Mono, and the filename beside it is the one fact that says WHICH
-   export every row below came out of. */
-.shipping-scope {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-/* `.runs-plain`'s measurements to the pixel, and that is settled ground rather than a fresh
-   choice: two owner panels disagreeing about how tall a button is was a real finding on
-   2026-08-26, and the answer then was to make them agree. This class dresses BOTH the file
-   picker's `<label>` and the Forget button, so the two controls on this line measure alike. */
-.shipping-plain {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* THE FILE INPUT IS RENDERED RATHER THAN HIDDEN BEHIND ITS LABEL, which is the opposite of what
-   `RunPanel.css` does and is a consequence of this file owning no focus rule. Hiding the input
-   means the label has to draw the focus ring the input earns — `.run-upload input:focus-visible
-   + span` is exactly that — and a `:focus-visible` rule is the thing this screen is not allowed
-   to write. Left visible, base.css's global ring lands on the real control and costs this file
-   nothing. What it is given here is the house type, so the native widget does not arrive in the
-   user agent's own face. */
-.shipping-plain input[type='file'] {
-  max-width: 180px;
-  font-family: var(--body);
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--muted);
-}
-
-/* A HOVER THAT DARKENS THE EDGE AND MOVES NOTHING. Not `--hover`: that token is row hover, and
-   the rows on this screen are below. Not `--field-hover` either, whose own row in
-   docs/DESIGN.md reads "the same border, under the pointer. Nowhere else" — it is the boundary
-   of something you TYPE INTO and this is a button. `--ink` on the border changes no width, no
-   padding, no size and no weight, so nothing reflows under the pointer. */
-.shipping-plain:hover:not(:disabled) {
-  border-color: var(--ink);
-}
-
-/* OFF MEANS OFF ON BOTH SHAPES OF THIS CONTROL. `:disabled` answers for the Forget button; a
-   `<label>` cannot be disabled at all, so `:has()` reaches the one whose input is — the same
-   selector base.css already uses to give a label-wrapped file input its cursor. */
-.shipping-plain:disabled,
-.shipping-plain:has(> input:disabled) {
-  color: var(--muted);
-  border-color: var(--line);
-}
-
-.shipping-lede {
-  color: var(--muted);
-  margin-top: var(--s1);
-  font-size: 13px;
-}
-
-/* ------------------------------------------------------------------- a refusal, and a notice */
-
-/* One shape for both, because they are one kind of thing: a sentence about why the screen is
-   not showing what you asked for. The restart notice carries no code because there is no
-   refusal underneath it — the server did not say no, it went away and came back. */
-.shipping-note {
-  max-width: 560px;
-  margin-top: var(--s3);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.shipping-note-text {
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-  max-width: 76ch;
-}
-
-/* The machine string beneath the human sentence — docs/DESIGN.md's reason-code rule, so what
-   you saw on screen is greppable against the server's own log. */
-.shipping-machine {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: var(--s2);
-  word-break: break-all;
-}
-
-.shipping-empty {
-  margin-top: var(--s3);
-  color: var(--muted);
-  font-size: 13px;
-  max-width: 76ch;
-}
-
-/* ------------------------------------------------------------- the tally strip, and the filter */
-
-.shipping-lanes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin-top: var(--s3);
-}
-
-/* NO FILL ON THE PRESSED CHIP, for the reason the header block above gives: the solid accent
-   means "there is exactly one thing to do", and a three-way filter is the definition of a
-   control with more than one answer. The pressed state is carried by the border going to ink
-   and the label going from `--muted` to `--ink` — both of which clear 7:1 on `--surface`, and
-   neither of which changes the box. */
-.shipping-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--s2);
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.shipping-chip:hover {
-  color: var(--ink);
-}
-
-.shipping-chip-on {
-  color: var(--ink);
-  border-color: var(--ink);
-}
-
-/* THE DASH IS THE ABSTENTION'S MARK AND IT IS CARRIED ON THE CHIP TOO, so the strip and the
-   badges below say the same thing with the same treatment. It changes `border-style` only:
-   same 1px, same colour as its two neighbours in the same state, so the unjudged chip is never
-   the quiet one. */
-.shipping-chip-unjudged {
-  border-style: dashed;
-}
-
-.shipping-chip-label {
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: inherit;
-}
-
-.shipping-chip-count {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: inherit;
-}
-
-/* --------------------------------------------------------------- the file Pirate Ship imports */
-
-.shipping-ship {
+/* ---- before a file: the drop zone -------------------------------------------- */
+.shipping-empty { display: flex; flex-direction: column; gap: var(--bn-5); max-width: 880px; width: 100%; margin: 0 auto; }
+.shipping-drop {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  max-width: 560px;
-  margin-top: var(--s4);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--bn-2);
+  padding: var(--bn-9) var(--bn-6) var(--bn-9);
+  border-radius: var(--bn-r-xl);
+  /* 1.5px dashed, the weight `.runs-drop` uses — the hero keeps its own scale and radius, but
+     the dash itself is the product's one dash. */
+  border: 1.5px dashed var(--bn-line-strong);
+  background: var(--bn-surface);
+  cursor: pointer;
+  transition:
+    border-color var(--bn-t) var(--bn-ease),
+    background-color var(--bn-t) var(--bn-ease),
+    transform var(--bn-t) var(--bn-ease),
+    box-shadow var(--bn-t) var(--bn-ease);
 }
-
-.shipping-ship-head {
-  font-family: var(--util);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-/* `.run-file`'s treatment, because it is the same object: a file, named on the left and
-   measured on the right, bordered rather than filled. It is NOT given `.run-file-import`'s
-   accent border — that border marks the one file an errand begins with on `#/pricing`, and
-   this screen already argues it has no only-action. */
-.shipping-file {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-  padding: var(--s2);
-  font-family: var(--util);
-  font-size: 12px;
-  color: var(--ink);
-  text-decoration: none;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* A ROW, AND `--hover` IS THE ROW GROUND. This anchor and the order rows below are the only two
-   things on this screen that take it. */
-.shipping-file:hover {
-  background: var(--hover);
-}
-
-/* The name truncates and the size never does — `RunFiles.css` records why `min-width: 0` is the
-   part that is not obvious: a flex item will not shrink below its content's intrinsic width
-   without it, so `text-overflow` alone does nothing. A TCGplayer filename is long enough for
-   this to be a rendered defect rather than a hypothetical one. */
-.shipping-file-name {
-  flex: 1 1 auto;
-  min-width: 0;
+.shipping-drop:hover { border-color: var(--bn-accent); box-shadow: var(--bn-shadow-2); }
+.shipping-drop-over { border-color: var(--bn-accent); background: var(--bn-accent-tint); transform: scale(1.005); border-style: solid; }
+.shipping-drop:has(> input:focus-visible) { outline: 2px solid var(--bn-accent); outline-offset: 3px; }
+.shipping-drop[data-busy='true'] { cursor: progress; }
+.shipping-drop > input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-
-.shipping-file-size {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 11px;
+.shipping-drop-art {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--bn-r-xl);
+  display: grid;
+  place-items: center;
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  margin-bottom: var(--bn-2);
+  transition: transform var(--bn-t) var(--bn-ease-spring);
 }
-
-.shipping-ship-note {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
-  max-width: 76ch;
+.shipping-drop:hover .shipping-drop-art, .shipping-drop-over .shipping-drop-art { transform: translateY(-3px); }
+.shipping-drop-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 700; color: var(--bn-ink); }
+.shipping-drop-body { font-size: var(--bn-fs-base); color: var(--bn-ink-3); max-width: 46ch; }
+.shipping-drop-link { color: var(--bn-accent); font-weight: 600; text-decoration: underline; text-underline-offset: 0.15em; }
+.shipping-drop-progress { position: absolute; left: var(--bn-6); right: var(--bn-6); bottom: var(--bn-4); }
+.shipping-drop-progress > span { width: 40%; animation: shipping-indeterminate 1.2s linear infinite; }
+@keyframes shipping-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
 }
+.shipping-empty-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); text-align: center; max-width: 64ch; margin: 0 auto; line-height: 1.5; }
 
-/* -------------------------------------------------------------------------------- the orders */
-
-.shipping-list {
+.shipping-lane-guide { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--bn-3); }
+.shipping-guide {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
-  margin-top: var(--s4);
-  list-style: none;
+  gap: var(--bn-1);
+  padding: var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
+.shipping-guide:nth-child(2) { animation-delay: 60ms; }
+.shipping-guide:nth-child(3) { animation-delay: 120ms; }
+.shipping-guide-unjudged { box-shadow: var(--bn-shadow-1); outline: 1.5px dashed var(--bn-warn); outline-offset: -1.5px; }
+.shipping-guide-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-2);
+  margin-bottom: var(--bn-2);
+}
+/* ACCENT IS NOT A LANE COLOUR. Accent means action, selection and current everywhere else in
+   the product, so a Parcel tile painted in it read as the recommended lane. Envelope and
+   Needs-a-look keep ok/warn because those say certain and uncertain; Parcel is neutral. */
+.shipping-guide-envelope .shipping-guide-icon { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.shipping-guide-unjudged .shipping-guide-icon { background: var(--bn-warn-tint); color: var(--bn-warn); }
+.shipping-guide-label { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; letter-spacing: var(--bn-tracking-tight); color: var(--bn-ink); }
+.shipping-guide-says { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); line-height: 1.4; }
 
-/* ONE ROW CHROME FOR ALL THREE LANES, and that is the point rather than an economy. The lane is
-   said by the badge, in words; painting the row itself per lane would make one of the three
-   the loud one and another the quiet one, and there is no lane here that deserves either.
-   Nothing on this screen renders a row at reduced opacity — there is no `opacity` declaration
-   in this file at all. */
+/* ---- the two file cards ------------------------------------------------------- */
+.shipping-files { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--bn-4); align-items: start; }
+.shipping-file-card,
+.shipping-ship {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: var(--bn-4);
+  row-gap: var(--bn-3);
+  padding: var(--bn-5);
+  overflow: visible;
+}
+.shipping-file-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-2);
+}
+.shipping-file-icon-accent { background: var(--bn-accent-tint); color: var(--bn-accent); }
+.shipping-file-text { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
+/* Truncated like the stage bar's pill for the same name; the full name is in `title`. */
+.shipping-file-title { font-family: var(--bn-font-mono); font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shipping-file-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); line-height: 1.45; }
+.shipping-file-actions { grid-column: 2; display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+.shipping-file-row { display: flex; align-items: baseline; gap: var(--bn-2); flex-wrap: wrap; }
+.shipping-file-name { font-family: var(--bn-font-mono); font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shipping-file-size { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.shipping-ship-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); line-height: 1.45; max-width: 60ch; }
+.shipping-ship-none { color: var(--bn-ink-3); }
+.shipping-download:hover { text-decoration: none; }
+.shipping-caveats summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-2);
+  cursor: pointer;
+  transition: color var(--bn-t-fast) var(--bn-ease);
+}
+.shipping-caveats summary:hover { color: var(--bn-accent); }
+.shipping-caveats summary .bn-icon { color: var(--bn-ink-4); }
+.shipping-caveats p { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); margin-top: var(--bn-2); line-height: 1.5; max-width: 60ch; animation: bn-pop var(--bn-t) var(--bn-ease-spring) backwards; }
+
+/* ---- the three lanes ---------------------------------------------------------- */
+.shipping-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--bn-4); align-items: start; }
+.shipping-lane-col { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; }
+
+/* The column head is the lane's stat tile and its collapse control. The unjudged lane is drawn
+   dashed and in the warning tone: it is a third ANSWER (D61), never a failed one, and the pile
+   that most needs reading must not be the quiet one. */
+.shipping-chip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  color: var(--bn-ink);
+  text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  transition: box-shadow var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
+}
+.shipping-chip:hover { box-shadow: var(--bn-shadow-2); }
+.shipping-chip:active { transform: scale(0.995); }
+.shipping-chip-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--bn-r);
+  display: grid;
+  place-items: center;
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-2);
+}
+.shipping-chip-envelope .shipping-chip-icon { background: var(--bn-ok-tint); color: var(--bn-ok); }
+.shipping-chip-unjudged .shipping-chip-icon { background: var(--bn-warn-tint); color: var(--bn-warn); }
+.shipping-chip-unjudged { outline: 1.5px dashed var(--bn-warn); outline-offset: -1.5px; }
+.shipping-chip-text { display: flex; flex-direction: column; min-width: 0; }
+.shipping-chip-label { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; letter-spacing: var(--bn-tracking-tight); }
+/* Two lines at most, never a mid-word ellipsis: the head's strings are short by design
+   (`LANE_HEAD`), and the clamp is the floor under a narrow column. */
+.shipping-chip-says {
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.shipping-chip-count {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--bn-ink);
+  transition: color var(--bn-t-fast) var(--bn-ease);
+}
+/* A COLLAPSED LANE IS RECESSED, NEVER FADED. The count is the figure this screen exists to
+   show; dropping it to the lightest ink took it to 2.4:1 in light. The fold is carried by the
+   chevron, the "folded away" line and the ground — not by making the number hard to read. */
+.shipping-chip[aria-pressed='false'] { background: var(--bn-surface-2); box-shadow: none; }
+.shipping-chip[aria-pressed='false'] .shipping-chip-count { color: var(--bn-ink-2); }
+.shipping-chip[aria-pressed='false']:hover { background: var(--bn-surface); }
+.shipping-chip-chev { color: var(--bn-ink-3); }
+
+.shipping-list { list-style: none; display: flex; flex-direction: column; gap: var(--bn-2); }
 .shipping-row {
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  gap: 6px;
+  padding: var(--bn-3) var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
+  transition: box-shadow var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
 }
-
-.shipping-row:hover {
-  background: var(--hover);
-}
-
-.shipping-row-top {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--s2);
-}
-
-/* The order number is an identifier the operator types into TCGplayer, so the utility face and
-   `break-all`: a `A2FFC195-0000F4-006AC` that wrapped mid-group would be read back wrong. */
-.shipping-order {
-  font-family: var(--util);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink);
-  word-break: break-all;
-}
-
-/* THE LANE BADGE, AND ALL THREE ARE DRAWN AT FULL STRENGTH.
- *
- * 1px of `--ink` on `--surface` for every lane, envelope and parcel and unjudged alike. The
- * unjudged badge differs in TREATMENT — a dashed edge rather than a solid one — and never in
- * PROMINENCE, which is the rule this whole screen turns on. An abstention is a third ANSWER
- * (D61, `pipeline/shipping.py`): the router refuses to default it into a lane because
- * defaulting it to the envelope ships a playmat in a stamped mailer and defaulting it to the
- * parcel spends money nobody asked for. A screen that greyed it out would tell the operator it
- * was a failed judgement rather than a question addressed to them, and they would stop reading
- * the pile that most needs reading.
- *
- * The dash is the right treatment because it says provisional without saying weak: same
- * colour, same width, same size, same weight, same box.
- */
-.shipping-lane {
-  flex: none;
-  padding: 0 var(--s2);
-  font-family: var(--util);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--ink);
-  border-radius: var(--r);
-}
-
-.shipping-lane-envelope,
-.shipping-lane-parcel {
-  border-style: solid;
-}
-
-.shipping-lane-unjudged {
-  border-style: dashed;
-  border-color: var(--ink);
-}
-
-/* Certain or Inferred, and only ever on a judged row. Metadata rather than a badge: it
-   qualifies the sentence beside it rather than naming a thing, so it takes no border. */
+.shipping-row:hover { box-shadow: var(--bn-shadow-2); transform: translateY(-1px); }
+.shipping-row-unjudged { box-shadow: inset 3px 0 0 var(--bn-warn), var(--bn-shadow-1); }
+.shipping-row-unjudged:hover { box-shadow: inset 3px 0 0 var(--bn-warn), var(--bn-shadow-2); }
+.shipping-row-top { display: flex; align-items: center; justify-content: space-between; gap: 4px var(--bn-2); flex-wrap: wrap; }
+.shipping-order { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink); overflow-wrap: anywhere; }
 .shipping-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
-  font-family: var(--util);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  color: var(--bn-ink-3);
+  white-space: nowrap;
+}
+.shipping-quality-certain { color: var(--bn-ok); }
+.shipping-quality-inferred { color: var(--bn-ink-3); }
+.shipping-says { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.4; }
+.shipping-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.shipping-figures { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.shipping-figure {
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+  padding: 3px 7px;
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-surface-2);
+  white-space: nowrap;
+}
+/* The machine string: demoted, not erased — 11px on ink-3, the register `.orders-tag` uses. */
+.shipping-reason { margin-left: auto; font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
+.shipping-row-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--bn-2); padding-top: 4px; border-top: 1px solid var(--bn-line); margin-top: 2px; }
+.shipping-stamp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink); }
+.shipping-stamp .bn-icon { color: var(--bn-accent); }
+.shipping-pull { display: inline-flex; align-items: center; gap: 5px; font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-accent); white-space: nowrap; }
+.shipping-pull-done { color: var(--bn-ok); }
+.shipping-lane-empty,
+.shipping-lane-hidden {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  padding: var(--bn-4);
+  text-align: center;
+  border-radius: var(--bn-r-lg);
+  border: 1px dashed var(--bn-line-strong);
 }
 
-/* The sentence is the largest thing in the row, because it is what is read. */
-.shipping-says {
-  font-family: var(--body);
-  font-size: 14px;
-  color: var(--ink);
-  max-width: 76ch;
+/* ---- responsive ---------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .shipping-files { grid-template-columns: 1fr; }
 }
-
-/* The machine reason, small beneath the sentence — the same human-label-large,
-   machine-string-small rule the refusal panel above obeys, so `non_card_signal` greps from a
-   screenshot to `pipeline/shipping.py`'s own constant. */
-.shipping-reason {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
+/* TWO LANES ABREAST, AND THE PILE THAT NEEDS A PERSON FULL-WIDTH UNDER THEM. Three columns
+   below 1280 are ~210–250px each, and at that width every row wrapped three ways: the figures
+   onto two lines, the reason code onto a third, and “Inferred” off the line entirely. Two
+   columns give a lane ~340px, which is what the 1440 layout gives it. The file's order inside
+   each lane is untouched — this moves columns, never rows. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .shipping-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-4); }
+  .shipping-lane-col-unjudged { grid-column: 1 / -1; }
+  .shipping-chip { padding: var(--bn-3) var(--bn-4); }
+  .shipping-chip-count { font-size: var(--bn-fs-xl); }
+  .shipping-order { white-space: nowrap; }
 }
-
-/* Money, a weight and a count — every number in the product is Martian Mono, tabular by
-   construction, so a column of them lines up without a table. */
-.shipping-figures {
-  font-family: var(--util);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink);
-}
-
-/* Where to walk to, when the order ledger knows. Body face rather than utility because it is a
-   position LABEL — `pipeline/join.py:Position` composes it as words — and the rest of the app
-   draws that label as words too. */
-.shipping-stamp {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--muted);
+@media (max-width: 767px) {
+  .shipping-lanes { grid-template-columns: 1fr; gap: var(--bn-5); }
+  .shipping-lane-guide { grid-template-columns: 1fr; }
+  .shipping-chip { position: static; }
+  .shipping-drop { padding: var(--bn-7) var(--bn-4); }
+  .shipping-file-card, .shipping-ship { padding: var(--bn-4); }
+  .shipping-file-actions { grid-column: 1 / -1; }
 }

@@ -1,791 +1,336 @@
-/* The box operations — D20's object, drawn onto the header of that box's own walk.
- *
- * THIS WAS A SCREEN'S STYLESHEET AND IS NOW A COMPONENT'S (D31, 2026-08-23). What went with
- * the route: the page padding, the 900px measure, the title, the lede, the controls row and
- * the vertical list of box panels — every rule that positioned this content ON A PAGE. What
- * stayed is every rule that draws a BOX, unchanged, because nothing about what a box is
- * moved. `BoxBrowse.css` owns the space these now sit in.
- *
- * NO ACCENT ANYWHERE IN THIS FILE, and unlike Inventory.css there is no exception. This
- * component is sure about everything it shows, and it never has exactly one thing to do: every
- * box carries SEVERAL controls, so a fill would have to pick one of them and would then mean
- * "important" — the third meaning docs/DESIGN.md's two-jobs rule exists to prevent. That
- * includes the seal, which is the most consequential control in the app and is still just one
- * of them. Its weight comes from the sentence on it — the number it will freeze — rather than
- * from colour, which is the honest way to make a control loud: say what it does.
- *
- * "SEVERAL" RATHER THAN A FIGURE, DELIBERATELY. This paragraph said "four controls" and "still
- * one of four" while five were drawn (D83's `Move to box`, 2026-09-01), and there is no number
- * that would have stayed true: the two controls acting on cards are each conditional on what
- * the box holds, so the row list runs three to five. What the no-accent argument actually rests
- * on is that the seal is never alone, and that is structural.
- *
- * SEPARATION IS THE 1px --line HAIRLINE AND NOTHING ELSE. No shadow, no tint, no header strip
- * — docs/DESIGN.md built a tinted panel bar carrying a name and a count, looked at it, and
- * rejected it by name, and a box panel sitting at the top of a list is exactly where one
- * creeps back in.
- *
- * Owner-side: the 4-16 end of the spacing scale. The Fulfillment floors (20px body, 32px
- * position labels, 44px tap targets) govern a different view and none is asserted here.
- *
- * Mono carries every number — box numbers, fills, capacities, spans, counts and the store's
- * own field names. The body face carries the sentences a person reads, which are the hints
- * under the fields and the relabel warning. That split is the one rule doing the most work in
- * this file.
- *
- * THE CONTROLS WERE REVIEWED AS A BLOCK ON 2026-08-26 AND REBUILT, and the two halves of that
- * day are worth keeping in order because the second overturned the first.
- *
- * The morning's pass read this cluster against docs/DESIGN.md through four lenses and refused
- * every structural change, on rules already written down: full-measure controls were called the
- * Fulfiller's silhouette, and `.browse-list`'s own comment refuses a bordered surface padding
- * itself with empty white. Both objections are about a BORDERED, FILLED, CENTRED button — which
- * is what Fulfillment.css draws and what a full-bleed `.boxops-plain` would have been. Neither
- * is about a row.
- *
- * The owner then overruled the premise outright — "i'm totally unopposed to going against our
- * docs for something that looks better ... its fucking ugly right now" — and the answer that
- * came out of taking that seriously turns out to break no rule in the file at all:
- *
- *   the ragged edge   Gone, and not by stretching the chips. The four settings are ROWS in
- *                     `.browse-row`'s grammar — the walk's own card row, one element up in this
- *                     same column: full measure, no border, hairline under, `--hover` on hover,
- *                     13px. A row has nowhere ragged to end. The column stopped speaking two
- *                     languages, which is the actual defect the six widths were a symptom of.
- *   the sentences     `Set claims on all 543 cards in box 2` was a 267px paragraph in a box and
- *                     `Seal box — freezes capacity at 543` was 260. The label and the number are
- *                     two registers now — body left, mono right — so D20's number-on-the-control
- *                     rule is kept in the face docs/DESIGN.md gives every number in the product,
- *                     instead of being kept in bold Atkinson an inch under `.boxops-meta` doing
- *                     the same job properly.
- *   the geometry      A label that grew ~150px with the ticked selection used to rewrap the row
- *                     and move the delete under the cursor. Rows are the full measure whatever
- *                     they say, so `.boxops-actions-lone`'s `flex-wrap: nowrap` retired: the
- *                     target is stationary by construction rather than by a guard.
- *   the weight        14px/700 chips with borders were the heaviest thing in a column whose real
- *                     content is the cards. Borderless 13px rows are not.
- *
- * WHAT IT DID NOT DO IS SPEND A RULE. No colour, no tint, no shadow, no accent, no new radius,
- * no off-scale value; separation is still the hairline and nothing else; the Fulfillment floors
- * are still his. The one thing it moved is a habit — that an owner-side control is a chip —
- * which was never written down anywhere as a rule.
- *
- * NO PRESSED STATE IS AVAILABLE IN THIS PALETTE, recorded because it looks like an omission.
- * The three legal moves are a no-op (`:active { background: var(--hover) }` — hover already
- * painted that ground), the ink border (which would make a momentary press identical to the
- * permanent danger treatment on the bar below), and `--muted` as a third border weight in a
- * system that has two. The last is a change to docs/DESIGN.md's separator rule argued on its
- * own terms, and it is an app-wide question — `.run-button` one column right has the identical
- * state set.
- */
+/* The box: its reading at the top of the walk, and the "Manage box" sheet. */
 
-/* ---- the quiet control, which is every control on this screen ---- */
-
-.boxops-plain {
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  min-height: 32px;
-  padding: var(--s1) var(--s3);
-  cursor: pointer;
-  /* NOT DEAD, THOUGH IT LOOKS IT. These are shrink-to-fit flex items, so the equal horizontal
-     padding centres every label and this declaration cannot move a pixel while each one fits —
-     which is exactly how a useful rule gets tidied away. It is what keeps a WRAPPED label on
-     the column's reading edge: `.boxops-actions` items keep the default `flex-shrink: 1`, and
-     the long ones left in this class — `Release the listing hold on 45 cards…`, `Apply to all
-     543 cards in box 2` — wrap rather than overflow once `.browse-map`'s track approaches its
-     300px minimum. The claim and seal labels that used to be the widest of them are rows now
-     and no longer test it; these two still do. */
-  text-align: left;
-}
-
-.boxops-plain:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.boxops-plain:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-/* NO :focus-visible RULE HERE, DELIBERATELY. `base.css` draws one ring for the whole app —
-   2px ink, offset +2px so it clears the 4px radius instead of clipping it — and this file used
-   to override it with `outline-offset: -2px`, which draws the ring INSIDE the button's own
-   border and reads as a second border rather than as focus. The owner called the inset rings
-   ugly and they were removed repo-wide, and that is still the answer here.
-
-   THE SENTENCE THAT USED TO CARRY THIS SAID "nothing here clips its own overflow", AND IT WAS
-   FALSE FROM 2026-08-25 (corrected the next day). D38 moved these controls into `.browse-map`,
-   which is `overflow-y: auto` and therefore a scroll container on both axes, and every control
-   in this component sits flush at its content edge — so the outset ring lost its inline-start
-   stroke on Rename, Set claims, Delete box N… and every field in the editors. The remedy is in
-   `BoxBrowse.css` on the column that clips, where it costs this file nothing and moves no
-   control: 4px of inline padding cancelled by a negative margin. Fixing it HERE would have
-   meant the inset ring, on a bordered 32px button, which is the look that was removed.
-
-   The other exception that survives is `BoxBrowse.css`'s list, which clips tightly enough that
-   the inset ring is the right answer for its rows. */
-
-.boxops-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s3);
-}
-
-/* ---- the box's operations, as rows ---- */
-
-/* THE COLUMN STOPS SPEAKING TWO LANGUAGES (owner, 2026-08-26). These four were a wrapping row
-   of shrink-to-fit bordered chips at 79 / 110 / 109 / 267px inside a 360px track, under a list,
-   a meta line and two hairlines that all run the full measure. Six widths against one hard
-   edge, and the heaviest type in the column spent on the controls rather than on the cards.
-
-   THE MEASUREMENTS ARE `.browse-row`'s, ONE ELEMENT UP IN THIS SAME COLUMN, and that is the
-   whole argument: the walk's card row is a full-measure borderless button with a hairline
-   under it, transparent ground, `--s1 --s2` of padding and `--hover` on hover. So is this. A
-   row cannot end raggedly, so the raggedness is not styled away — it has nowhere to happen.
-
-   WHAT THIS DOES NOT DO IS BORROW THE FULFILLER'S SILHOUETTE, which is the objection a full
-   measure invites and which is about a different object. Fulfillment.css's controls are
-   `width: 100%` FILLED buttons, centred, 24px type, 44px tall. These are 13px hairline-
-   separated rows with no border and no fill, at the 4-16 end of the scale — the owner's
-   density, in the idiom the column beside them already uses.
-
-   NO PER-ROW BORDER AND NO RADIUS. A row is not a chip: `--line` separates, it does not
-   enclose, which is this file's header rule. The rounded 4px box comes back one element down
-   on `.boxops-bar`, where being enclosed is the point. */
-/* NO `border-top` HERE. `.boxops-more` already opens this block with one and
-   `.boxops-more > :first-child` zeroes the margin, so the block's own rule IS this list's top
-   edge — adding a second would draw the two-parallel-hairlines-12px-apart that this file
-   already names as reading like a rendering bug rather than a separation. The margin survives
-   for the degraded case, where the unvalidatable-layout warning renders above the list. */
-.boxops-ops {
-  margin-top: var(--s3);
-}
-
-.boxops-op {
-  /* `max-content` on the detail, so a row with none costs nothing and the label takes the
-     whole measure — Rename has no detail on purpose, see `Op` in the .tsx. */
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  gap: var(--s2);
-  align-items: baseline;
-  width: 100%;
-  text-align: left;
-  /* `--s3` HORIZONTAL, WHICH IS THE BORDERED CONTROLS' AND NOT THE WALK'S. Measured: a row at
-     `--s2` put its label at x=24 while `.boxops-bar` (12 + a 1px border) and `.boxops-plain`
-     put theirs at 29, so this block had three left edges five pixels apart in a column 360px
-     wide. At `--s3` the rows land at 28 and the difference is 1px. The walk's own rows sit at
-     25 for the same reason in reverse — they are inside a bordered list that spends the extra
-     pixel — and aligning this block to itself matters more than aligning it through a border
-     it does not share. */
-  padding: var(--s1) var(--s3);
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  cursor: pointer;
-}
-
-/* Row hover, which is the only thing --hover is for. */
-.boxops-op:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-/* The whole row recedes, detail included — the rule below hands the detail its own muted value
-   back, so a disabled row does not read as one live half and one dead one. Only the seal can
-   reach this state, and only when the fill will not read. */
-.boxops-op:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-
-.boxops-op:disabled .boxops-op-label {
-  color: var(--muted);
-}
-
-/* What the press does. Body face because it is language, and the same 13px/700 the box's own
-   name takes two rows up — these are the two things in this column a person reads rather than
-   scans. */
-.boxops-op-label {
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-/* The value or the quantity the row is about: `5 sections`, `freezes at 543`, `543 cards`,
-   `no undo`. Mono and muted, which is `.boxops-meta`'s register two rows up and every other
-   number in the product — and it is where the counts that used to sit in bold body type inside
-   a sentence went. Right-aligned by the grid, so the details form their own column and the
-   labels form theirs. */
-.boxops-op-detail {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-/* THE ONE BORDERED CONTROL IN THE BOX'S OPERATIONS, which is what the ink is spent on now that
-   nothing beside it wears a border at all. Same row geometry as `.boxops-op` — the label left,
-   the detail right — so it reads as the end of the same list rather than as a different kind of
-   object, and the far-right `no undo` is what keeps a full-measure bordered control from being
-   a short label with 220px of white next to it. */
-.boxops-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  gap: var(--s2);
-  align-items: baseline;
-  width: 100%;
-  text-align: left;
-  /* The same `--s3` inline as the rows above, so the label column runs straight through the
-     list and out the other side of the bar — 28 against 29, the pixel being this control's own
-     border. Taller than a row on purpose: it is the one enclosed thing here. */
-  padding: var(--s2) var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--ink);
-  border-radius: var(--r);
-  cursor: pointer;
-}
-
-.boxops-bar:hover {
-  background: var(--hover);
-}
-
-/* ---- notes, and the machine register ---- */
-
-.boxops-note {
-  max-width: 560px;
-  margin-top: var(--s5);
-  padding: var(--s4);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.boxops-note-text {
-  font-family: var(--body);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--ink);
-  max-width: 76ch;
-  margin-top: var(--s3);
-}
-
-/* The machine string beneath the human sentence: the greppable token, and never the sentence
-   again. Owner-side only — the Fulfillment banned-word list forbids this register outright and
-   no Fulfillment route renders this class. */
-.boxops-machine {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: var(--s2);
-  overflow-wrap: anywhere;
-}
-
-/* A hint under a field. Prose, so the body face, and muted because it is read once and then
-   never again. */
-.boxops-hint {
-  font-family: var(--body);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
-  max-width: 68ch;
-  margin-top: var(--s2);
-}
-
-/* THE `register a box` BLOCK IS DELETED (owner, 2026-08-26). `.boxops-new`, `.boxops-new-open`,
-   `.boxops-new-head` and `.boxops-fields` went with `RegisterBox` — see BoxOps.tsx for where
-   creating a box lives now, and for the one step that move costs. The FIELD rules below stay:
-   the rename, dividers and claims editors all draw them. */
-
-/* ---- a field ---- */
-
-.boxops-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  min-width: 10rem;
-  flex: 1 1 12rem;
-}
-
-/* The field's name, in the utility face like every other field name in this app — from the
-   capture screen's labels to the pull preview's facts. */
-.boxops-field-label {
-  font-family: var(--util);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-/* Mono, because everything typed into one of these fields is either a number or a name that
-   sits beside numbers, and a divider list has to line up digit under digit to be read at all. */
-.boxops-field-input {
-  font-family: var(--util);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--surface);
-  /* --field, not --line: this is a boundary you type inside rather than a separation. An empty
-     Name or Dividers field is a rectangle and nothing else, so at the hairline's 1.24:1 it was
-     findable only by its placeholder. See tokens.css. */
-  border: 1px solid var(--field);
-  border-radius: var(--r);
-  min-height: 32px;
-  padding: var(--s1) var(--s2);
-  min-width: 0;
-}
-
-/* The edge darkens under the pointer (D50). `border-color` only — never width, which
-   would reflow the box and move a target under a finger already travelling toward it.
-   Focus is an outline drawn
-   outside this border, so the two compose rather than compete. */
-.boxops-field-input:hover:not(:disabled) {
-  border-color: var(--field-hover);
-}
-
-.boxops-field-input::placeholder {
-  color: var(--muted);
-}
-
-/* ---- one box ---- */
-
-/* NOT A PANEL ANY MORE, because it is not beside the box — it is IN the box's own column, under
-   the walk. A bordered card here would draw a second box around a column that is already one
-   subject, which is the "panel header strip" docs/DESIGN.md built, looked at and rejected, in a
-   different shape. The hairline on `.boxops-more` is the separator; the surface is the page. */
-.boxops-box {
-  min-width: 0;
-}
-
-/* WHAT THIS BOX IS, under the strip that names it. Two rows: a line of readings, then the track.
-   This replaces a 40px header, a 36px fill block and a 10px track — three stacked blocks saying
-   what fits on one line and a bar. */
+/* ---- the reading, in the rail ---- */
 .boxops-identity {
   display: flex;
   flex-direction: column;
-  gap: var(--s2);
+  gap: var(--bn-2);
   min-width: 0;
 }
-
+.boxops-identity-top {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  min-width: 0;
+}
+.boxops-identity-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.boxops-identity-num {
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bn-ink-4);
+}
+.boxops-identity-name {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--bn-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.boxops-state { flex: none; }
 .boxops-identity-line {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s2);
-  min-width: 0;
+  align-items: center;
+  gap: 4px var(--bn-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  font-variant-numeric: tabular-nums;
 }
+.boxops-identity-line .bn-pill { height: 20px; }
+.boxops-identity-fill { color: var(--bn-ink); font-weight: 600; }
+.boxops-identity-part::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
 
-/* The box's name, which is the one thing here a person chose. Body face because it is a label
-   for people (BoxOps' own rename hint says so) and the only non-utility string in the column. */
-.boxops-identity-name {
-  font-family: var(--body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-/* `544 sealed` or `543 so far` — D20's two denominators, still two different sentences. `so far`
-   is doing real work in that phrase and is not filler: an open box divides by how many cards are
-   in it TODAY, and the same card reads a different fraction next week without having moved. */
-.boxops-identity-fill {
-  font-family: var(--util);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* The lid. A reading rather than a control, so no border weight beyond the hairline and no
-   fill — see the file header for why the accent stays out of this. */
-.boxops-state {
-  font-family: var(--util);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 2px var(--s2);
-  margin-left: auto;
-}
-
-/* Sealed is the state that means something is final, so it is drawn at full ink against the
-   same hairline. The step from muted to ink is the same one that carries selection everywhere
-   else in this app. */
-.boxops-state-sealed {
-  color: var(--ink);
-}
-
-/* ---- the track ---- */
-
-/* The box as a run of sections, each as wide as the cards it holds. Same construction as
-   PositionBar.css's track and deliberately not the same class: that component draws one card's
-   place in a box and this draws the box, and sharing a selector would make one of them
-   impossible to restyle without the other. */
+/* The track: the box as a run of sections, each as wide as the cards it holds. */
 .boxops-track {
   position: relative;
   display: flex;
   gap: 2px;
   height: 10px;
-  margin-top: var(--s3);
+  margin-top: var(--bn-1);
 }
-
-/* WHERE THE SELECTED CARD IS. Byte-for-byte `.position-bar-owner .position-bar-marker`'s
-   treatment — 2px of ink, full height, centred on its own left edge — because it is the same
-   mark meaning the same thing, and the copy rows draw that one directly below this. Two marks on
-   one screen that disagreed by a pixel would read as two different conventions.
-
-   It overhangs the track by a pixel at either end and that is correct: `fraction` is
-   `(index - 1) / box_total`, so card 1 sits at hard left and the last card just short of hard
-   right, which is exactly what `PositionBar` documents for its own. */
+.boxops-span {
+  flex-basis: 0;
+  min-width: 3px;
+  border-radius: 3px;
+  background: var(--bn-surface-2);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+}
 .boxops-mark {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: -2px;
+  bottom: -2px;
   width: 2px;
-  background: var(--ink);
+  border-radius: 2px;
+  background: var(--bn-accent);
+  box-shadow: 0 0 0 2px var(--bn-surface);
+  transform: translateX(-50%);
+  transition: left var(--bn-t-slow) var(--bn-ease);
+}
+.boxops-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bn-accent);
+  box-shadow: 0 0 0 2px var(--bn-surface);
   transform: translateX(-50%);
 }
 
-/* --line, the same hairline that separates everything else, used here as a fill. It is the
-   quietest token that is still visible on --surface, and the alternative — a tint that is not
-   in the palette — is the literal docs/DESIGN.md's --on-accent lesson forbids painting here.
-   The 2px gap between segments is what draws the dividers: they are the absence of the bar. */
-.boxops-span {
-  background: var(--line);
-  border-radius: 2px;
-  min-width: 2px;
+/* ---- the sheet ---- */
+.boxops-body { gap: var(--bn-5); }
+.boxops-group { display: flex; flex-direction: column; gap: var(--bn-2); }
+.boxops-group > .bn-label { display: flex; align-items: center; gap: var(--bn-2); }
+.boxops-group-note { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-4); }
+.boxops-group-danger > .bn-label { color: var(--bn-danger); }
+
+/* the census */
+.boxops-census {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--bn-2);
 }
-
-/* The store's own field names, verbatim, so what is on screen greps to what is in
-   inventory.json. Metadata, so mono and muted. */
-/* `margin-top` gone: it is the last child of `.boxops-identity` now, which is a flex column with
-   its own `gap`, and a margin on top of that gap is a spacing value nobody chose. */
-/* THE LINE WRAPPED AND THE FIX IS A SHAPE, NOT A SIZE (owner, 2026-08-29). `cards 543 · sold 0 ·
-   fill 543 · next index 544` is 46 cells at Martian Mono's measured 0.70em advance = 354.2px, in
-   a track that is 299px at 1440 and 285px at 1280 since the three-column rebuild (D40). It is
-   not a digit-count problem: box 1's `cards 22 · sold 0 · fill 22 · next index 23` is four
-   characters shorter and wraps identically. It is four label words and three interpuncts —
-   measured, the chrome is 277.2px of the 354.2 (78.3%) and the ten digits are 77.0px.
-
-   SO IT FLOWS DOWN THE PAGE INSTEAD OF ACROSS IT, because the scarce axis here is the opposite
-   of the one in the card's column. Horizontal is 285px and fixed; vertical is ~290px of unused
-   height under this column in D31's resting state, measured. That is what makes a grouped
-   key/figure block affordable here and a single line the wrong shape.
-
-   `overflow-wrap: anywhere` IS GONE WITH IT. It was the mitigation for a line that had to break
-   somewhere, and it breaks WORDS — so `next index 544` could split mid-word. Nothing here needs
-   to wrap at all now, and leaving the declaration would let a future overflow fail ugly instead
-   of failing visibly.
-
-   BE HONEST ABOUT WHAT THE HEIGHT COSTS. Free in the resting state; NOT free once a section is
-   open, where `.browse-map` is at its viewport cap and `.browse-list` is the scroller — there
-   every pixel here comes out of the walk at 25.5px per card row. This block is 33px -> ~65px, so
-   about 1.2 rows. Chosen deliberately over the ledger variant, which was 81px and ~1.9 rows. */
-.boxops-meta {
-  font-family: var(--util);
+.boxops-census-cell {
   display: flex;
   flex-direction: column;
-  gap: var(--s3);
+  gap: 2px;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  min-width: 0;
 }
-
-.boxops-meta-row {
-  display: flex;
-  gap: var(--s5);
+.boxops-census-cell dt { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.boxops-census-cell dd {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
 }
+/* How old the figure above it is. Quieter than the figure, and it may wrap. */
+.boxops-census-note { margin-top: 1px; }
+.boxops-census-note .inv-readage { white-space: normal; font-size: var(--bn-fs-2xs); line-height: 1.3; }
+/* A BOUND, not a stamp — the oldest reading anywhere in the store, so it can only understate
+   freshness. Drawn a shade quieter than an exact per-SKU age for exactly that reason. */
+.boxops-census-note .boxops-readbound { color: var(--bn-ink-4); cursor: help; }
 
-.boxops-meta-cell {
+/* the operation rows */
+.boxops-ops {
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  overflow: hidden;
 }
-
-/* Uppercased at PAINT so the DOM keeps the store's field names verbatim — see the .tsx. */
-.boxops-meta-key {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  line-height: 1.3;
+.boxops-op {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--bn-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--bn-2) var(--bn-3);
+  text-align: left;
+  border-bottom: 1px solid var(--bn-line);
+  color: var(--bn-ink);
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
+.boxops-ops > .boxops-op:last-child,
+.boxops-ops > :last-child > .boxops-op:last-of-type { border-bottom: 0; }
+.boxops-op:hover:not(:disabled) { background: var(--bn-surface-3); }
+.boxops-op:disabled { opacity: 0.5; }
+.boxops-op-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-2);
+}
+.boxops-op-label { font-size: var(--bn-fs-md); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.boxops-op-detail { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.boxops-op-chev { color: var(--bn-ink-4); }
+/* A write in flight says so on the row that fired it, not by greying every row out. */
+.boxops-op[data-running='true'] { opacity: 1; }
+.boxops-op[data-running='true'] .boxops-op-detail { color: var(--bn-accent); }
+.boxops-op-spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--bn-line-strong);
+  border-top-color: var(--bn-accent);
+  animation: bn-spin var(--bn-t-spin) linear infinite;
+}
+.boxops-op-danger { color: var(--bn-danger); }
+.boxops-op-danger .boxops-op-icon { background: var(--bn-danger-tint); color: var(--bn-danger); }
+.boxops-op-danger:hover:not(:disabled) { background: var(--bn-danger-tint); }
+.boxops-op-danger .boxops-op-detail { color: var(--bn-danger); opacity: 0.8; }
 
-.boxops-meta-num {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink);
-  line-height: 1.2;
-  letter-spacing: 0;
+/* a confirm opened under a danger row */
+.boxops-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-4);
+  border-bottom: 1px solid var(--bn-line);
+  background: var(--bn-surface-3);
+  animation: bn-page-in var(--bn-t) var(--bn-ease-out) both;
+}
+.boxops-confirm-text { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.5; }
+.boxops-confirm-text strong { color: var(--bn-ink); }
+.boxops-lines { display: flex; flex-direction: column; gap: var(--bn-1); }
+/* One SKU's line: what it gives up, and how old the figures it is quoting are. */
+.boxops-line {
   display: flex;
   align-items: baseline;
-  gap: var(--s1);
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
 }
-
-/* D20's two words, beside the number they qualify rather than under it. Not italic by accident:
-   `font-style: normal` because this is an <i> chosen for its brevity in the markup, and the
-   register wanted here is the metadata one, not emphasis. */
-.boxops-meta-qual {
-  font-size: 10px;
-  font-weight: 500;
-  font-style: normal;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-/* THE FORECAST, DRAWN AS THE THING IT IS. Inline rather than stacked, and muted rather than ink,
-   so it cannot be read as a fourth census figure — which is the whole reason it left the row. */
-.boxops-meta-next {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-}
-
-.boxops-meta-next .boxops-meta-num {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-/* ---- the layout and the controls ---- */
-
-/* D31 put this panel on the header of the box's own walk, and its last sentence read "so the
-   reading stays open and the operations fold" for a day after the fold was deleted. Nothing here
-   folds; the owner ruled it out by name.
-
-   The density argument survives the fold that used to discharge it, and is discharged twice over
-   now: the sections list is capped above, and on 2026-08-25 the panel left the card's column
-   entirely for one of its own. Vertical space here is no longer rent charged against the cards —
-   which is exactly why the controls can be permanently on screen. */
-.boxops-more {
-  margin-top: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
-}
-
-/* ONE HAIRLINE, ONE INTERVAL. `.boxops-more` already spends `--s3` under its own rule, so a
-   first child bringing its own top margin spends it twice — 24px beneath the top hairline
-   against the 12px `.boxops-actions-lone` gives the delete's hairline a hundred pixels
-   further down. Same construction, two different gaps, and neither number is declared
-   anywhere: they are composed, which is how they drifted apart without anyone choosing it.
-
-   THE SECOND RULE IS THE ONE THAT FIXES A VISIBLE FAULT rather than a rhythm. An editor as
-   first child brings its OWN `border-top`, so opening the rename or the claims editor drew
-   two parallel hairlines 25px apart with nothing between them — which reads as a rendering
-   bug, not as a separation. */
-.boxops-more > :first-child {
-  margin-top: 0;
-}
-
-.boxops-more > .boxops-editor:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-
-/* THE DISCLOSURE IS GONE (owner, 2026-08-24): "i hate the click-in of the box settings in
-   inventory, the buttons should just be there for me to press". The triangle, its [open]
-   flip and the -webkit marker reset went with it — three rules that can no longer fire,
-   because nothing on this screen carries the classes any more. */
-
-/* ---- the editors ---- */
-
-.boxops-editor {
-  margin-top: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--line);
-}
-
-/* What an edit to the dividers will do, said before it is done. Set apart by the same hairline
-   as everything else — no tint and no warning colour, because there is no token for one and a
-   relabel is a correction rather than an alarm. What makes it read as consequential is that it
-   names the cards it reaches. */
-.boxops-relabel {
-  margin-top: var(--s3);
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-.boxops-relabel-head {
-  font-family: var(--util);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink);
+.boxops-line-text { min-width: 0; overflow-wrap: anywhere; }
+.boxops-machine {
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
   overflow-wrap: anywhere;
 }
 
-/* ---- retroactive claims, and the one destructive control in the app ---- */
-
-/* The scope sentence over the fields — what an apply will reach, said before the fields that
-   decide what it writes. Body face because it is a sentence a human reads. */
-.boxops-claim-scope {
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: var(--s2);
-}
-
-/* ONE TRI-STATE ROW: tick, label, control, and the sentence saying what the empty form of that
-   control means. Four columns on a wide panel, wrapping to two on a narrow one — the control
-   is the part that must not be squeezed, so it takes the fraction. */
-.boxops-claim-row {
-  display: grid;
-  grid-template-columns: auto minmax(5rem, max-content) minmax(0, 1fr);
-  gap: 2px var(--s2);
-  align-items: center;
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.boxops-claim-row:last-of-type {
-  border-bottom: 0;
-}
-
-/* The armed row steps from muted to ink, which is how selection is carried everywhere else in
-   this app — no ground change, because --bg and --surface are 1.5% apart and neither can mark
-   anything against the other. An unarmed row is not disabled: its control still takes a value,
-   and the tick decides only whether that value is SENT. */
-.boxops-claim-label {
-  font-family: var(--util);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.boxops-claim-armed .boxops-claim-label {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.boxops-claim-control {
-  display: flex;
-  min-width: 0;
-}
-
-.boxops-claim-control > .boxops-field-input {
-  flex: 1 1 auto;
-}
-
-/* What the empty form of this control means, in the metadata register: it is a rule about the
-   field, not a sentence about the card.
-
-   UNDER THE CONTROL, NOT BESIDE IT. As a fourth column it was the part that got clipped — the
-   rarity row is thirteen wrapping chips wide and there is no width left beside them, so the one
-   sentence explaining what an empty rarity claim DOES was the sentence nobody could read. */
-.boxops-claim-says {
-  grid-column: 3;
-  font-family: var(--body);
-  font-size: 12px;
-  color: var(--muted);
-}
-
-/* The arming tick. Sized to the row rather than to a finger — this is the owner's screen and
-   the 44px floor is the Fulfillment view's. `accent-color` is the one property that colours a
-   native checkbox without rebuilding it, and --ink is the right answer for the same reason the
-   selected row is ink: accent has exactly two jobs and "this one is ticked" is neither. */
-.boxops-check {
-  accent-color: var(--ink);
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  cursor: pointer;
-}
-
-/* The rarity chips — the game's exact Rarity cells, verbatim (D22). Same 10px bordered cell the
-   key chips and the box strip draw, with aria-pressed carrying the state as ink and weight. */
-.boxops-chips {
+/* Cancel first, the primary last and right-aligned — the same footer as every dialog. */
+.boxops-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s1);
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--bn-2);
 }
+.boxops-receipt { display: flex; flex-direction: column; gap: var(--bn-2); }
 
-.boxops-chip {
-  font-family: var(--util);
-  font-size: 10px;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: var(--s1) var(--s2);
-  cursor: pointer;
-}
-
-.boxops-chip:hover {
-  background: var(--hover);
-}
-
-.boxops-chip[aria-pressed='true'] {
-  color: var(--ink);
+/* ---- editors ---- */
+.boxops-editor { display: flex; flex-direction: column; gap: var(--bn-4); animation: bn-page-in var(--bn-t) var(--bn-ease-out) both; }
+.boxops-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2) 0 var(--bn-1);
+  margin-left: calc(-1 * var(--bn-1));
+  border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-sm);
   font-weight: 600;
-  border-color: var(--ink);
+  color: var(--bn-ink-3);
+}
+.boxops-back:hover { color: var(--bn-ink); background: var(--bn-surface-2); }
+.boxops-editor-title {
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--bn-ink);
+  margin-top: calc(-1 * var(--bn-2));
+}
+.boxops-relabel { display: flex; flex-direction: column; gap: var(--bn-3); }
+/* the sentence is a sentence; only the list of card numbers is a machine string */
+.boxops-relabel-head { font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink); overflow-wrap: anywhere; }
+.boxops-relabel-list { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- the claims editor ---- */
+.boxops-claims { display: flex; flex-direction: column; gap: var(--bn-3); }
+.boxops-claim-scope { font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); }
+.boxops-claim-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+.boxops-claim-armed { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2); }
+.boxops-claim-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); }
+.boxops-claim-words { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.boxops-claim-label { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); cursor: pointer; }
+.boxops-claim-says { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.boxops-claim-armed .boxops-claim-label { color: var(--bn-accent); }
+.boxops-claim-control { display: flex; min-width: 0; }
+.boxops-claim-control > .bn-input,
+.boxops-claim-control > .bn-select { flex: 1 1 auto; }
+.boxops-claim-row .bn-input,
+.boxops-claim-row .bn-select { background: var(--bn-surface); }
+
+/* the switch that arms a row */
+.boxops-check {
+  appearance: none;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--bn-line-strong);
+  position: relative;
+  cursor: pointer;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.boxops-check::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+  transition: transform var(--bn-t) var(--bn-ease-spring);
+}
+.boxops-check:checked { background: var(--bn-accent); }
+.boxops-check:checked::before { transform: translateX(16px); }
+/* The switch keeps its switch proportions and the THUMB TARGET grows around it: a 26px-tall
+   control is a mouse size, and the invisible pad takes the hit area past 40px without making
+   the toggle look like a button. */
+.boxops-check::after { content: ''; position: absolute; inset: -9px -4px; }
+
+/* the vocabulary chips */
+.boxops-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.boxops-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--bn-r-full);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  color: var(--bn-ink-2);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line-strong);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
+}
+.boxops-chip:hover { color: var(--bn-ink); box-shadow: inset 0 0 0 1px var(--bn-ink-4); }
+.boxops-chip:active { transform: scale(0.97); }
+.boxops-chip[aria-pressed='true'] {
+  color: var(--bn-on-accent);
+  background: var(--bn-accent);
+  box-shadow: none;
 }
 
-/* A receipt: what a write actually did, kept after its editor closed. Panelled like a note
-   because it is one — the difference is that a note says why nothing happened and this says
-   what did. */
-.boxops-receipt {
-  max-width: 560px;
-  margin-top: var(--s3);
-  padding: var(--s3);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-}
-
-/* The delete panel. NO RED, AND THAT IS NOT AN OVERSIGHT — docs/DESIGN.md's palette has no
-   destructive colour, and inventing one is a change to that file's token block rather than a
-   judgement call made while building a button. The weight comes from where this app always
-   takes it: a heavier hairline, ink instead of muted, and a sentence that says exactly what
-   will be destroyed. */
-.boxops-danger {
-  max-width: 560px;
-  margin-top: var(--s3);
-  padding: var(--s4);
-  background: var(--surface);
-  border: 1px solid var(--ink);
-  border-radius: var(--r);
-}
-
-/* The one button in this app whose press cannot be taken back. Ink border rather than the
-   hairline every other control wears — one step of emphasis inside the system, no new token.
-   Disabled until the box number has been typed, so its ordinary state is unpressable. */
-/* AIR, NOT A THIRD HAIRLINE. This carried `border-top` and `padding-top` while the delete was
-   a chip in a wrapping row and needed a rule to be lifted out of it. The row list above now
-   closes on its last row's own `border-bottom`, so a rule here would be the second of two 25px
-   apart — and the bar below wears a full ink border of its own, which is a stronger edge than
-   any hairline. What is left to say is "this is not one of the rows above", and `--s4` says
-   it. (It read "not one of the four" until 2026-09-01, when there were five and the figure was
-   the only wrong part of a rule that never depended on it.)
-
-   The `flex-wrap: nowrap` went with the flex: the target this component kept stationary by
-   forbidding a rewrap is now stationary because nothing shares its row and nothing above it
-   changes width. See `DeleteBox` for that argument in full. */
-.boxops-actions-lone {
-  margin-top: var(--s4);
-}
-
-/* THE INK BORDER IS THE WHOLE OF THE DANGER TREATMENT, and it is the one step this palette
-   allows. `font-weight: 700` was declared here too and could never fire: `.boxops-plain` is
-   already 700 and docs/DESIGN.md locks Atkinson to 400/700, so the rule claimed two steps of
-   emphasis and delivered one. Deleted rather than left — a declaration that cannot change a
-   pixel is a comment that lies about being code. */
-.boxops-plain-danger {
-  border-color: var(--ink);
-}
-
-.boxops-plain-danger:disabled {
-  border-color: var(--line);
+/* ---- the phone: thumb sizes ---- */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .boxops-op { min-height: 52px; }
+  .boxops-back { height: var(--bn-control-h-lg); padding: 0 var(--bn-3) 0 var(--bn-2); }
+  .boxops-chip { height: 40px; padding: 0 14px; }
+  .boxops-check { width: 44px; height: 26px; }
+  .boxops-check::before { width: 22px; height: 22px; }
+  .boxops-check:checked::before { transform: translateX(18px); }
 }
