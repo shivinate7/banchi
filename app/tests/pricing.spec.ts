@@ -257,7 +257,7 @@ async function open(
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1 }),
+        body: JSON.stringify({ ok: true, written: '/tmp/prices.json', answers: 1, revision: 'rev-2' }),
       })
     }
     const answers =
@@ -298,6 +298,7 @@ async function open(
           skus,
         },
         path: '/tmp/prices.json',
+        revision: 'rev-1',
       }),
     })
   })
@@ -2725,4 +2726,67 @@ test('a store still holding two figures says so, and one press makes them agree'
   expect(sentPolicy(wire).threshold).toBe('0.40')
   expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.40' })
   await expect(stranded).toHaveCount(0)
+})
+
+/* ---------------------------------------------------------------- the stale-write guard
+ *
+ * `PUT /pricing` REPLACES THE DOCUMENT WHOLESALE, and this screen autosaves from a snapshot it
+ * took at mount. A second writer — another tab, an edit on disk, `pkmnscan prices adopt --write`
+ * — was therefore silently reverted on the operator's next keystroke, with no error anywhere, on
+ * the one file in this product that holds money. Found on `claude/great-nightingale-37cf84`,
+ * whose markdown sweep made it acute: a stale PUT would undo a re-price of every stale SKU.
+ *
+ * THE REVISION TRAVELS BESIDE THE DOCUMENT AND NEVER INSIDE IT. Inside, it would land in the
+ * object this screen dirty-checks by identity, and every write that landed would re-dirty the
+ * screen — unsaved -> saving -> unsaved, forever. */
+
+test('the write carries the revision it read, and the refusal offers the way back', async ({
+  page,
+}) => {
+  const wire = await open(page)
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
+
+  /* WHAT THE SCREEN READ, SENT BACK. Absent would mean "did not read one", which the route
+     deliberately allows for a terminal user editing the file by hand — so an absent field here
+     would be a screen quietly opting out of the guard. */
+  const put = wire.filter((r) => r.method === 'PUT').pop()
+  expect((put?.body as { revision?: string }).revision).toBe('rev-1')
+})
+
+test('a corpus that moved under the screen refuses the write rather than reverting it', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  /* The file moved between this screen's read and its write — another tab saved, or a command
+     did. The route compares and refuses; nothing is written. */
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback()
+    wire.push({ method: 'PUT', path: '/pricing', body: route.request().postDataJSON() })
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'corpus_moved',
+          message: 'The pricing file changed since this screen read it — another tab, or an edit on disk.',
+        },
+      }),
+    })
+  })
+
+  await field(page).fill('19.99')
+  await field(page).press('Enter')
+
+  const notice = page.locator('.pricing-notice')
+  await expect(notice).toContainText('changed since this screen read it')
+  await expect(notice).toContainText('corpus_moved')
+
+  /* AND A CONFLICT IS THE ONE REFUSAL ON THIS SCREEN WITH SOMEWHERE TO GO. The button says what
+     it costs rather than presenting a re-read as free: whatever is typed and unsaved goes. */
+  await expect(
+    notice.getByRole('button', { name: /Re-read the pricing file, losing what is unsaved/ }),
+  ).toBeVisible()
 })

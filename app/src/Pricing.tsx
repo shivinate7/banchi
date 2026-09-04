@@ -855,6 +855,9 @@ export function Pricing() {
 
   const inputs = useRef(new Map<string, HTMLInputElement>())
   const loadWalk = useRef(0)
+  /** The digest of `inventory/prices.json` as this screen last saw it, sent with every write so
+   *  the route can refuse one that would revert somebody else's. Empty until the first read. */
+  const revision = useRef<string>('')
   const savedBook = useRef<PricingCorpus | null>(null)
   const inFlight = useRef(false)
   const failedBook = useRef<PricingCorpus | null>(null)
@@ -900,6 +903,10 @@ export function Pricing() {
       setWork(answer)
       setBook(held.corpus)
       setSunkHolds(heldOnArrival(answer.skus, corpusAsDoc(held.corpus)))
+      /* THE REVISION IS A REF AND NOT STATE, for the reason the whole guard is out of band: the
+         dirty check is an identity comparison on `book`, and anything that re-renders on every
+         landed write re-dirties the screen. */
+      revision.current = held.revision
       savedBook.current = held.corpus
       failedBook.current = null
       setFailure(null)
@@ -962,7 +969,11 @@ export function Pricing() {
     setSaving(true)
     void (async () => {
       try {
-        await putPricingCorpus(sent)
+        const receipt = await putPricingCorpus(sent, revision.current)
+        /* THE WRITE'S OWN REVISION BECOMES THE ONE WE HOLD. Without this every save after the
+           first is stale against the file this screen just wrote, and the guard refuses the
+           operator's own second keystroke. */
+        revision.current = receipt.revision
         savedBook.current = sent
         failedBook.current = null
         setFailure(null)
@@ -2062,7 +2073,17 @@ export function Pricing() {
         )}
 
         {failure === null ? null : (
-          <Notice tone="danger" title={failure.message} code={failure.code} className="pricing-notice" />
+          <Notice tone="danger" title={failure.message} code={failure.code} className="pricing-notice">
+            {/* A CONFLICT IS THE ONE REFUSAL HERE WITH SOMEWHERE TO GO. The file moved under this
+                screen — another tab, or an edit on disk — and the write was refused rather than
+                allowed to revert it. Re-reading is the way back, and it costs whatever is typed
+                and unsaved, so the button says that rather than presenting a reload as free. */}
+            {failure.code !== 'corpus_moved' ? null : (
+              <Button size="sm" variant="quiet" icon="refresh" onClick={() => void load(picked)}>
+                Re-read the pricing file, losing what is unsaved here
+              </Button>
+            )}
+          </Notice>
         )}
 
         {/* THE LANDING DECK — the two things a person needs before touching a row: what the

@@ -1787,8 +1787,16 @@ export async function reconcileLive(
  * of the operator, out of which runs, with which export rows — it changes as the selection
  * does. This answers what has been decided, and it is the same document either way.
  */
-export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path: string }> {
-  return (await request('/pricing', NO_CACHE)) as { corpus: PricingCorpus; path: string }
+export async function getPricingCorpus(): Promise<{
+  corpus: PricingCorpus
+  path: string
+  revision: string
+}> {
+  return (await request('/pricing', NO_CACHE)) as {
+    corpus: PricingCorpus
+    path: string
+    revision: string
+  }
 }
 
 /**
@@ -1799,12 +1807,23 @@ export async function getPricingCorpus(): Promise<{ corpus: PricingCorpus; path:
  */
 export async function putPricingCorpus(
   corpus: PricingCorpus,
-): Promise<{ ok: boolean; written: string; answers: number }> {
+  revision?: string,
+): Promise<{ ok: boolean; written: string; answers: number; revision: string }> {
+  /* `revision` IS THE STALE-WRITE GUARD AND IT TRAVELS BESIDE THE DOCUMENT, NEVER IN IT. This
+     route replaces `inventory/prices.json` wholesale, so a screen holding a snapshot from mount
+     silently reverts anything written underneath it on the next keystroke — no error anywhere,
+     on the one file in this product that holds money. Two tabs on `#/pricing` reach that today,
+     and so does `pkmnscan prices adopt --write` while one is open.
+
+     Sending it INSIDE the corpus would put it in the object `Pricing.tsx` dirty-checks by
+     identity, and every landed write would then rebuild that object and re-dirty the screen —
+     an endless unsaved -> saving -> unsaved oscillation. Omitted means "did not read one",
+     which the route allows for the terminal user editing the file by hand. */
   return (await request('/pricing', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ corpus }),
-  })) as { ok: boolean; written: string; answers: number }
+    body: JSON.stringify(revision === undefined ? { corpus } : { corpus, revision }),
+  })) as { ok: boolean; written: string; answers: number; revision: string }
 }
 
 /**

@@ -4831,6 +4831,32 @@ the screen would need a way to say it that could not be mistaken for the pair dr
 
 **Amended 2026-09-03: `Corpus.overrides` has a writer, so the count above can be taken rather than argued.** `#/pricing` draws a per-run sub-threshold override beside the store's answer, written to `policy.per_run[<run>].sub_threshold` and drawn so it cannot be read as the store's. Neither branch of the condition is settled by building it; what changes is that a sitting now produces evidence. D98.
 
+**Amended 2026-09-04: ONE FILE MEANS TWO WRITERS, AND THE SECOND ONE WAS SILENTLY REVERTING THE FIRST.**
+`PUT /pricing` replaces the document wholesale — deliberately, so a key this screen has never
+heard of survives it — and `#/pricing` autosaves the corpus object it took at mount. Put together,
+any write that landed underneath an open pricing tab was undone by that tab's next keystroke, with
+no error anywhere, on the one file in this product that holds money. Two tabs reach it; so does
+`pkmnscan prices adopt --write` while one is open.
+
+**The guard is a revision in the ENVELOPE and never in the document**, which is the part worth
+reading twice. This screen decides "unsaved" by comparing the corpus it holds against the one it
+last sent, BY IDENTITY. A revision inside the document would be rebuilt on every landed write and
+would re-dirty the screen each time — unsaved to saving to unsaved, without end. So `GET /pricing`
+answers a sibling `revision` (a short digest of the file), `PUT /pricing` compares it and refuses
+`corpus_moved` / 409, and the write's receipt carries the new one so the operator's own second
+keystroke is never stale against the file they just wrote.
+
+**An ABSENT revision is allowed, and that is not a hole.** It means "did not read one", which is
+the terminal user editing `inventory/prices.json` and PUTting it back. The guard exists for a
+client that DID read one and is now behind — the only case that can destroy a write nobody saw
+happen. Verified on the live server in all three states: stale refuses 409, current writes, absent
+writes.
+
+**Found by another branch rather than by this one**, on `claude/great-nightingale-37cf84`, where a
+markdown re-prices every stale SKU at once and made the hazard acute — a stale PUT would have
+undone the whole sweep. The bug is D86's own, not that feature's: it exists the moment the answer
+became one file with one wholesale write.
+
 **What is still NOT built.** The reconcile is per run: `cli/cmd_reconcile.py` scopes its diff to one run's `emitted_skus`, while the thing it diffs against — `store/master.py`'s `Listing` — is already per SKU across every box and run. The owner named the consequence: a full live TCGplayer export should reconcile across every emit, box and date at once, and report **both directions**, which is that command's own rule. It would be the first thing able to see the two SKUs this entry measured at `pushed: 6` against a cap of 4. Not built here.
 
 ---

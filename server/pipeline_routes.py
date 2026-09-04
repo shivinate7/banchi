@@ -1969,7 +1969,32 @@ def do_pricing_corpus() -> dict:
     one answers what has been decided, and it is the same document whatever is on screen. Two
     facts, two routes, and the screen holds them apart the same way.
     """
-    return {"corpus": corpus.Corpus.read().to_payload(), "path": str(files.prices_path())}
+    return {
+        "corpus": corpus.Corpus.read().to_payload(),
+        "path": str(files.prices_path()),
+        "revision": _corpus_revision(),
+    }
+
+
+def _corpus_revision() -> str:
+    """A short digest of `inventory/prices.json` as it stands on disk, or `""` if absent.
+
+    OUT OF BAND, IN THE ENVELOPE, AND NEVER INSIDE THE DOCUMENT — which is the whole design of
+    this guard. `#/pricing` decides "unsaved" by comparing the corpus object it holds against
+    the one it last sent, BY IDENTITY. Putting a revision inside the document would mean the
+    screen has to rebuild that object every time a write lands, which is exactly the endless
+    unsaved -> saving -> unsaved oscillation that screen was built to avoid. A sibling field is
+    compared by the route and never touched by the screen's dirty check.
+
+    WHY IT EXISTS AT ALL: `PUT /pricing` replaces the document wholesale, so a screen holding a
+    snapshot from mount silently reverts anything written underneath it on the next keystroke —
+    no error anywhere, on the one file in this product that holds money. Two tabs on `#/pricing`
+    reach it today, and so does `pkmnscan prices adopt --write` while one is open.
+    """
+    path = files.prices_path()
+    if not path.is_file():
+        return ""
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
 
 def do_pricing_corpus_write(payload: dict) -> dict:
@@ -1987,6 +2012,21 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     alone: `Decisions.parse` is the one parser for what an answer means and it runs at the
     moment one is used, where its refusal names the SKU.
     """
+    # THE STALE-WRITE REFUSAL. Absent means "did not read one", which is the terminal user
+    # editing the file and PUTting it back, and it is allowed — the guard is for a client that
+    # DID read a revision and is now behind, which is the only case that can silently destroy
+    # somebody else's write.
+    offered = payload.get("revision")
+    if isinstance(offered, str) and offered:
+        current = _corpus_revision()
+        if current and offered != current:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "corpus_moved",
+                "The pricing file changed since this screen read it — another tab, or an edit "
+                "on disk. Reload before saving, or this write would revert it.",
+            )
+
     document = payload.get("corpus")
     if not isinstance(document, dict):
         raise PipelineRefusal(
@@ -2001,7 +2041,12 @@ def do_pricing_corpus_write(payload: dict) -> dict:
             HTTPStatus.BAD_REQUEST, "corpus_invalid", str(exc)
         ) from None
     written = book.write()
-    return {"ok": True, "written": str(written), "answers": len(book.answers)}
+    return {
+        "ok": True,
+        "written": str(written),
+        "answers": len(book.answers),
+        "revision": _corpus_revision(),
+    }
 
 
 def do_pipeline_merged_emit(payload: dict) -> dict:
