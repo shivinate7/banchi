@@ -73,18 +73,24 @@
 .position-parts[data-lead='slot'] .position-slot { order: 1; }
 .position-parts[data-lead='slot'] .position-num,
 .position-parts[data-lead='slot'] .position-void { min-width: 3ch; }
-/* The reserve is the real word, drawn and hidden by `PositionLabel` in the void case — see the
-   comment there. No advance-width factor to keep in step with the typeface. */
-/* The reserve is an approximation of the key's advance width, and it is 2.1px short under the
-   current typeface: a departed copy's path hangs that much left of a live row's. Known and
-   left alone deliberately — three attempts to measure it exactly all regressed, because a live
-   row may or may not draw a key (`slot.key === ''` renders the number alone) and this
-   component cannot see what its siblings drew. Fixing it properly means giving the LIST a
-   shared column rather than each row a guess, which is a change to `CardLocations`, not here.
-   The owner has deferred the card-number work; this belongs with it. */
-.position-parts[data-lead='slot'] .position-slot {
-  min-width: calc(3ch + var(--bn-1) + 4 * 0.78 * clamp(var(--pos-path, 11px), 0.295em, 13px));
-}
+/* THE COLUMN BELONGS TO THE LIST, AND THAT IS THE WHOLE OF THE FIX. The rule above holds the
+   DIGITS in a column, which a row can do alone. What a row cannot hold is the KEY beside them:
+   it may or may not draw one — `slot.key === ''` renders the number alone, and a state terminal
+   renders a void where the figure would be (D58, D71) — and no row can see what its siblings
+   drew. So a list that reads these down a column declares `--pos-slot-col` once and every row
+   in it reserves the same width; a label standing on its own declares nothing and sizes to its
+   own content, which is what `auto` is.
+
+   WHAT WAS HERE was a hand-computed approximation of the key's advance width, and it was 2.109px
+   short — the deliberate red assertion in `app/tests/inventory.spec.ts`. Measured in
+   `#/inventory`'s copies list at `--pos-slot: 22px`: a live row's slot is 82.06px, being `CARD`
+   at 33.59 + the 4px gap + the figure's 3ch of MANROPE at 44.47, while the reserve computed
+   79.95, being 3ch of INTER at 41.63 + 4 + `4 × 0.78 × 11px` at 34.32. Two different fonts'
+   `ch` and a per-character factor for a four-letter word, neither of which a formula can know
+   it is wrong about — which is why a better factor was never the fix. A departed copy's path
+   hung 2.1px left of every live one's, so the hard column `lead='slot'` exists to draw was
+   ragged for exactly the cards a person had just sold. */
+.position-parts[data-lead='slot'] .position-slot { width: var(--pos-slot-col, auto); }
 
 /* ---- the number column of a card that is in no slot ---- */
 .position-void {

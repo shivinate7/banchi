@@ -28,6 +28,7 @@
 
 import type { ReactNode } from 'react'
 
+import { STORE_KEY } from './storeKey'
 import './PositionLabel.css'
 
 type Flow = 'stack' | 'run'
@@ -72,18 +73,13 @@ function seam(part: string): Part {
   return at < 1 ? { key: '', value: part } : { key: part.slice(0, at), value: part.slice(at + 1) }
 }
 
-/* THE STORE KEY A LABEL MAY END ON — the `/inventory/<box>/<index>` path (D68), in the two
-   spellings the two composers use. `B3 #96` is `join.departed_label`'s and `5/12` is
-   `join.place_text`'s pooled one; that entry's amendment has why they differ, and the short of it
-   is that a departed label is drawn beside printed card numbers and `3/96` was read as one.
-   Neither shape is `<word> <number>`, which is what every part of a position label is — `Box 3`,
-   `Section 1`, `Card 17` — and what the seam above is built on, so neither can be mistaken for a
-   part. Anchored both ends: unanchored, the slash form would match a collector number that
-   wandered in (`198/219`), which is why nothing composes one into a label and why this only ever
-   reads the LAST part of a string the server built. THE PYTHON IS THE AUTHORITY AND THIS IS THE
-   READER OF IT — a respelling there that does not land here draws the key as a position part
-   instead of failing, so the two move together. */
-const STORE_KEY = /^(?:B\d+ #\d+|\d+\/\d+)$/
+/* THE STORE KEY A LABEL MAY END ON — the `/inventory/<box>/<index>` path (D68) — IS DECLARED IN
+   `storeKey.ts`, with the composer that writes one. It lived here until D92's sweep, which found
+   two screens spelling a key by hand and wanted one place to send them; that place is not this
+   file, because this one imports a stylesheet and a screen reaching here for a string would take
+   an edge to CSS it does not otherwise want. Neither shape the regex matches is
+   `<word> <number>`, which is what every part of a position label is — `Box 3`, `Section 1`,
+   `Card 17` — and what the seam above is built on, so neither can be mistaken for a part. */
 
 /* A PART WHOSE VALUE IS A NUMBER — `Box 3`, `Section 1`, `Card 17`. Every part of a label this
    component composes has this shape, which is what makes the seam above safe to take. */
@@ -166,9 +162,10 @@ export function PositionLabel({
      lowercase word `pooled` as a 300.9px bold figure. Nothing breaks geometrically; the MEANING
      breaks, and no existing assertion sees it. A promoted slot is a slot number or it is nothing.
 
-     It also catches the capture screen's `positionText` fallback (`box 3, index 7`) for a second
-     reason, which is worth having: that string reaches here only if someone later adds ' · ' to
-     it, and the guard is cheaper than remembering. */
+     The capture screen's `positionText` fallback used to be a second customer — `box 3, index 7`,
+     which reached here only if someone later put a ' · ' in it. D92's sweep made that fallback a
+     store key, so it is now the `parts.length < 2` bail above instead, drawn whole. The guard
+     stands on the pooled case alone, which is enough on its own. */
   const numbered = NUMBER.test(terminal.value)
 
   /* A STATE TERMINAL IS RANKED RATHER THAN REFUSED, AND THE REFUSAL WAS A REGRESSION TO THE UI

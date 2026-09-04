@@ -2414,7 +2414,7 @@ COMPONENTS = [
                     "times, because D10 lets undo reach the newest capture in a box and "
                     "nothing else. The count is drawn on the row, the list is capped and "
                     "scrolled, and a walk stops at the first refusal and says how far it got.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81"]},
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81", "D92"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -2442,19 +2442,25 @@ COMPONENTS = [
                         "number column EMPTY, because what D58 refuses is the figure. Refusing "
                         "the whole treatment over it is what put the pre-D41 plain string back "
                         "on two screens for exactly the cards that had been sold.",
-                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71"]},
+                "governed_by": ["D10", "D20", "D24", "D30", "D31", "D41", "D58", "D68", "D71", "D92"]},
             "src/PositionLabel.css": {
                 "does": "the shape, and one knob per site. `--pos-slot` is the only number a site "
                         "chooses; the key is a single clamp and the gap is a token by rule "
                         "(--s5 at a figure >= 40px, --s3 below) so it never lands off "
                         "docs/DESIGN.md's spacing scale. Every selector is `.position-*` and those "
                         "classes exist only where the component rendered them. TWO DERIVATIONS "
-                        "CARRY A LABEL WITH NO FIGURE (D71): in a list the reserve holds the whole "
-                        "slot column, key included, so a figure-less row's path starts at the same "
-                        "x as every other (it hung 38.3px left); as a singleton the path re-ranks "
+                        "CARRY A LABEL WITH NO FIGURE (D71): in a list the whole slot column is "
+                        "reserved, key included, so a figure-less row's path starts at the same x "
+                        "as every other (it hung 38.3px left); as a singleton the path re-ranks "
                         "to clamp(11px, 0.45em, 20px), because with no figure the path is the "
-                        "payload. The dash in the empty column is `content`, so it never joins the "
-                        "label's textContent.",
+                        "payload. THAT COLUMN IS THE LIST'S SINCE 2026-09-04 and no longer a "
+                        "per-row guess: this file reads `--pos-slot-col`, which src/"
+                        "CardLocations.css declares once on the copies list, because a row cannot "
+                        "see whether its siblings drew a key. The width it replaced was computed "
+                        "from a per-character factor and 3ch of the WRONG font, and came out "
+                        "2.109px short — an assertion app/tests/inventory.spec.ts carried red from "
+                        "the merge until then. The dash in the empty column is `content`, so it "
+                        "never joins the label's textContent.",
                 "governed_by": ["D24", "D31", "D41", "D58", "D68", "D71"]},
             "src/PlaceNeighbors.tsx": {
                 "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
@@ -2914,7 +2920,7 @@ COMPONENTS = [
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
                                               "its affordance on hover and focus only (D45).",
-                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45"]},
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -3167,6 +3173,26 @@ COMPONENTS = [
                         "cautionary tale repeated. The server sends `number_display` and this "
                         "prefers it, composing the raw pair only when an older server omits it.",
                 "governed_by": ["D3", "D13", "D25", "D35", "D55", "D67"],
+            },
+            "src/storeKey.ts": {
+                "does": "ONE SPELLING OF A RECORD'S STORE KEY, AND THE ONE READER OF IT (D68, "
+                        "D92). `B3 #96` is what pipeline/join.py:departed_label ends on and "
+                        "`5/12` is place_text's pooled form; the regex here reads either off the "
+                        "tail of a label and src/PositionLabel.tsx peels it away before anything "
+                        "is promoted to the figure. D92's sweep found TWO screens composing the "
+                        "first form by hand — the walk's departed row and the capture screen's "
+                        "undo filmstrip — written independently from the same two fields, which "
+                        "is cardNumber.ts's lesson (D67) on the other number a card carries. Its "
+                        "own file rather than an export of PositionLabel.tsx, which imports a "
+                        "stylesheet: every vocabulary on this side of the wire is a pure-string "
+                        "module for the same reason (reasons.ts, holds.ts, orderReasons.ts, "
+                        "cardNumber.ts). Deliberately NOT folded into cardNumber.ts — "
+                        "departed_label's own docstring records the owner reading `3/96` as a "
+                        "collector number, which is what one module holding both would invite. "
+                        "The `#` it writes is the one key in the product wearing the count's "
+                        "sigil, and it carries scripts/sigil-check.py's `sigil-ok` marker with "
+                        "the reason: a record drawn through it is in no slot to count to.",
+                "governed_by": ["D41", "D58", "D67", "D68", "D71", "D92"],
             },
             "src/holds.ts": {"does": "the withhold vocabulary on this side of the wire — the three "
                                      "reasons, their human labels and their panel keys. Declared "

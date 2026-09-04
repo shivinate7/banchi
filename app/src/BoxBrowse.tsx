@@ -30,6 +30,7 @@ import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
 import { collectorNumber } from './cardNumber'
 import { ReadingAge, readingAgo, stateLabel, stateTone } from './CardLocations'
+import { storeKeyText } from './storeKey'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
 import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
@@ -154,13 +155,12 @@ function rowSlot(row: Row): string {
 
 /** `join.departed_label`'s store key, in the server's spelling (`B3 #96`, D68).
  *
- *  THE ONE PLACE A `#` IS A KEY AND NOT A COUNT, and it is deliberate. D92 gave the bare sigil
- *  to D58's count, and every other `#` in this product obeys that. This function exists to
- *  reproduce a string the SERVER composed — `join.departed_label`, for a card that has left its
- *  box — and a departed record is in no slot at all, so there is no count to draw instead. */
+ *  THE SPELLING ITSELF MOVED TO `storeKey.ts` IN D92's SWEEP, beside the regex that reads it back
+ *  off a label. It was composed here and, independently, on the capture screen — two ideas of
+ *  what a key looks like on screen, one respelling away from disagreeing. The argument for a key
+ *  wearing the bare sigil at all is in that module. */
 function departedKey(card: InventoryCard): string {
-  // sigil-ok: the server's own spelling of a departed record's key, and a departed card has no slot
-  return `B${card.box} #${card.index}`
+  return storeKeyText(card.box, card.index)
 }
 
 function hasDeparted(card: InventoryCard): boolean {
