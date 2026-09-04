@@ -1199,7 +1199,11 @@ COMPONENTS = [
                 # so a stale screen shows a number that now belongs to a different card. D18
                 # decides where it runs: node, like port-agreement.py, so `make check` and never
                 # the git hook. D14 is why it excludes the code-card track, by banner.
-                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D87", "D89"],
+                # The tail is the decisions whose client functions the RECORDED classification
+                # carries, which is what makes a landing a reason to update it: D96 took two
+                # names out when the envelope walk went, D100 put four in.
+                "governed_by": ["D13", "D14", "D18", "D58", "D76", "D79", "D83", "D86", "D87",
+                                "D89", "D96", "D100"],
             },
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "

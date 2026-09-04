@@ -170,13 +170,24 @@ const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates noth
  * before `getPricingWorklist` (D86) and none of them updated this record, so the ordinary run
  * had been printing "classification has moved since it was recorded" for days with nobody
  * acting on it. That is exactly the drift the comment above predicts and the reason the record
- * is not on the audit path — it is meant to be updated by a deliberate act, and this is one. */
+ * is not on the audit path — it is meant to be updated by a deliberate act, and this is one.
+ *
+ * AND IT HAPPENED AGAIN ACROSS TWO COMMITS OF ONE BRANCH, WHICH IS THE CASE THE PARAGRAPH ABOVE
+ * DOES NOT COVER: a deletion updated this record and an addition did not. `fillEnvelope` and
+ * `undoEnvelope` were struck from `writes` the hour the envelope walk they reached was deleted
+ * (D96, amended), so that half was the deliberate act; D100's four — `getMarkdowns`,
+ * `markdownListings`, `applyMarkdown` and `markdownFileUrl`, one per bucket but `writes` — landed
+ * two commits later against a record nobody re-read, and `--self-test` went from green to
+ * `3 FAILED` while every `make check` on the branch stayed green, because line 436 of the
+ * Makefile runs this script WITHOUT `--self-test`. A record that is only ever pruned drifts in
+ * one direction. The four are recorded here now, in the buckets the classifier already puts
+ * them in. */
 const RECORDED = {
   reads: [
     'getStatus', 'getInventory', 'getQueues', 'reviewCatalog', 'search', 'getGames', 'getBoxes',
     'getBoxListings', 'getPricing', 'getPriceHistory', 'getRuns', 'getRun', 'getTcgSets',
     'getOrders', 'getPriceTrends', 'getExportScope', 'getPricingWorklist', 'getPricingCorpus',
-    'getBoxPhotos',
+    'getBoxPhotos', 'getMarkdowns',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
@@ -185,11 +196,12 @@ const RECORDED = {
     'deleteBox', 'releaseBoxListings', 'startRun', 'fetchExport', 'runStep',
     'ingestOrders', 'pullCopy', 'undoPull', 'readShippingExport', 'forgetShippingExport',
     'moveCard', 'moveCards', 'putPricingCorpus', 'emitMerged', 'reconcileLive', 'reclaimBoxPhotos',
+    'markdownListings', 'applyMarkdown',
   ],
   nonMutating: ['preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders'],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',
-    'onServerBoot', 'newCaptureId', 'runFileUrl', 'shippingFileUrl',
+    'onServerBoot', 'newCaptureId', 'runFileUrl', 'shippingFileUrl', 'markdownFileUrl',
   ],
 }
 
