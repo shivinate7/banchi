@@ -605,15 +605,59 @@ test('a fetch the cap cut short says how many it left, and an empty one still re
 
 /* -------------------------------------------------------------------------------------- 10
  *
- * THE WAY INTO THE WALK, ASSERTED WHERE IT IS DRAWN. `app/tests/order-walk.spec.ts` enters every
- * one of its cases by navigating the URL, so until this case existed the two links on this screen
- * were rendered by the app and asserted by nothing — the exact shape of CLAUDE.md's route-is-not-
- * a-feature rule, one register down: the capability was reachable and nothing proved it.
+ * THE WALK'S SECOND FIGURE, OVER THE ONLY PAIR OF ARRAYS THAT CAN ANSWER IT.
  *
- * THEY ARE `<a href>` AND NOT BUTTONS, which is what makes middle-click, Cmd-click and the
- * keyboard work; the href is the whole handoff (D49's argument for `#/pricing?run=`), so asserting
- * the string IS asserting the mechanism. The key is percent-encoded because `source:number`
- * carries a colon. */
+ * This case exists because the figure was written the obvious way first and the obvious way is
+ * ALWAYS ZERO. `open` is the ledger's answer to "does this still owe copies"
+ * (`server/capture_server.py:_order_row`), so an order leaves `open` the instant its last copy is
+ * pulled — a count of finished orders taken over `open` can never be anything but 0, and the walk
+ * is where that is least visible, because the rows vanish along with it. It was caught by pulling
+ * a real copy on the owner's own store and watching the pill stay away, which is a measurement
+ * nothing on the commit path can repeat. This is that measurement, made repeatable.
+ *
+ * BOTH DIRECTIONS ARE ASSERTED. A store with one order finished draws `1 of 2`, and a store with
+ * none finished draws no pill at all rather than `0 of 1` — the walk starts in the none-finished
+ * state every single time, and a figure that reads zero on arrival is not one anybody acts on. */
+
+test('the walk counts finished orders over both halves, and draws none before one is', async ({
+  page,
+}) => {
+  const finished = order({
+    key: `TCGplayer:${OTHER_ORDER}`,
+    number: OTHER_ORDER,
+    wanted: 1,
+    recorded: 1,
+    open: false,
+    progress: [
+      { sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null },
+    ],
+  })
+  const resolved = [
+    { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+  ]
+
+  /* One still owing a copy, one already whole. The finished order carries no resolved entry,
+     which is what a finished order actually looks like on this wire — there is nothing left for
+     the resolver to offer. */
+  await open(page, { orders: payloadOf([order(), finished], resolved) })
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+
+  /* THE ASSERTION A REVERT WOULD FAIL. Counted over `open` this reads 0 and the pill is never
+     drawn, so the text below is the whole guard. The denominator is both halves — the same pair
+     the page header prints from the same two arrays, so the two can never disagree. */
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 of 2 orders fully pulled')
+})
+
+/* The other direction, and its own world rather than a second navigation inside the case above:
+   `open` registers this screen's routes on the page it is given, so a case that calls it twice is
+   asserting against whichever handler won, not against the payload it just named. */
+test('the walk draws no finished-order figure before one is finished', async ({ page }) => {
+  await open(page)
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+
+  await expect(page.locator('.orders-walk-figure')).toContainText('still to pull')
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
+})
 
 
 /* -------------------------------------------------------------------------------------- 11 */
