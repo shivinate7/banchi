@@ -197,7 +197,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import envfile  # noqa: E402
 from harness.tests import Checks, Result  # noqa: E402
 
-from cli import resolve, runs  # noqa: E402
+from cli import cmd_reprice, resolve, runs  # noqa: E402
 from identify import batch, prompt, sidecar  # noqa: E402
 from pipeline import (  # noqa: E402
     corpus,
@@ -207,6 +207,7 @@ from pipeline import (  # noqa: E402
     pirateship,
     pricehistory,
     pricing,
+    reprice,
     shipping,
     tcgcsv,
     variant,
@@ -9351,16 +9352,18 @@ def check_cli_refusals(checks: Checks) -> None:
 
     from cli import __main__ as entry
 
-    # SIX SINCE 2026-09-02, and `scan` is still the only one that is free AND writes to the
+    # SEVEN SINCE 2026-09-04, and `scan` is still the only one that is free AND writes to the
     # store. `prices` writes the CORPUS — `prices adopt` previews unless given `--write`, and
-    # `prices show` reads. Still an exact match rather than a superset check: the point of this
-    # line is that a command cannot appear in the dispatch without somebody editing this list,
-    # and a membership test would let one arrive unnoticed — which matters most for a command
-    # that touches the store, as `scan` does.
+    # `prices show` reads. `reprice` writes the corpus too, on `apply --write` and nowhere else
+    # (D100); both of its subcommands preview by default, and neither touches a card. Still an
+    # exact match rather than a superset check: the point of this line is that a command cannot
+    # appear in the dispatch without somebody editing this list, and a membership test would
+    # let one arrive unnoticed — which matters most for a command that touches the store, as
+    # `scan` does.
     checks.equal(
         sorted(entry.COMMANDS),
-        ["emit", "identify", "join", "prices", "reconcile", "scan"],
-        "six commands are registered, and only six",
+        ["emit", "identify", "join", "prices", "reconcile", "reprice", "scan"],
+        "seven commands are registered, and only seven",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -10407,6 +10410,310 @@ def check_live_reconcile(checks: Checks) -> None:
             ),
             "and the stranger SKU gained no listing record — reporting it is the whole of "
             "what this command may do about a listing it did not make",
+        )
+
+
+def check_markdown(checks: Checks) -> None:
+    """The live listings that are not selling, marked down and pushed back (D100).
+
+    THE ONE INVARIANT THAT CARRIES MONEY IS ASSERTED FOUR TIMES, in four different ways,
+    because the defect it prevents has already happened once on the owner's real store.
+    `Add to Quantity` is a DELTA against the quantity TCGplayer already holds — measured:
+    72,701 real export rows carry "0", including all 649 on which TCGplayer simultaneously
+    reported live copies — and one import file uploaded twice left nine SKUs at exactly
+    `2 x pushed - sold`. So: the worklist carries 0, the upload carries 0, a worklist handed
+    back carrying 4 still produces an upload carrying 0, and the whole file refuses rather
+    than write a row that does not.
+
+    THE UPLOAD IS BUILT FROM THE MANIFEST'S BYTES AND NOT FROM THE FILE THE OPERATOR HANDS
+    BACK, which is the structural half of the same argument: only `TCGplayer Id` and
+    `TCG Marketplace Price` are read out of the worklist, so a spreadsheet's reformatting —
+    a stripped leading zero in `Number`, a trailing zero gone from a price, a re-rendered
+    empty cell — cannot reach TCGplayer through this path. The case below mangles all three
+    and asserts the output is byte-identical to the unmangled one.
+
+    AND A PRICE IS COMPARED AS `Decimal`, NEVER AS TEXT. A live export writes four decimal
+    places ("0.6600") where this pipeline writes two ("0.66"); those are equal as money and
+    different as bytes, and a string comparison would read every untouched row as an edit and
+    mark down the whole store on a rounding artefact.
+
+    THE AGE TERM IS A PROXY AND THE REPORT SAYS SO. The store cannot measure how long a
+    listing has been live — `Listing` has no first-listed stamp, and `live_as_of` is absent
+    from all 443 stored payloads on the owner's store — so what is measured is the oldest
+    capture of any card that ever carried the SKU. The sentence is asserted here because it
+    is the one thing in the report that is not what it looks like.
+    """
+    checks.note("")
+    checks.note("MARKDOWN — the live listings that are not selling")
+
+    # THE REVERSE-HOLO COPY IS HERE TO BE PRICED AT THE FLOOR. Without a card carrying it the
+    # SKU would be refused as `not_this_store` before the floor was ever consulted, and the
+    # case below would pass for the wrong reason.
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "normal"),
+        (3, 3, "Articuno", "161", None),
+        (3, 4, "Dunsparce", "120", "reverse_holo"),
+    ]
+
+    def live_export(path, *, live, asking, sold_out=()):
+        """A My Pricing export: the seam rows, live, with an asking price on each.
+
+        `TCG Marketplace Price` is BLANK on every row of the Filtered Export fixture, and
+        populated on 441 of 441 live rows of the owner's real My Pricing download. That
+        difference is the whole reason `reprice.BASIS_ASKING` is local to that module rather
+        than added to `pricing.BASES`: a basis reading this column would leave the price
+        untouched on an ordinary listing run with nothing anywhere raising.
+        """
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        by_sku = source.by_sku()
+        rows = []
+        for sku in SEAM_SKUS:
+            row = dict(by_sku[sku])
+            row[tcgcsv.LIVE_QUANTITY_COLUMN] = "0" if sku in sold_out else str(live.get(sku, 1))
+            # FOUR DECIMAL PLACES, THE WAY THE REAL EXPORT WRITES THEM. Two decimals here
+            # would let a string comparison pass every case below.
+            row[tcgcsv.PRICE_COLUMN] = f"{Decimal(asking[sku]):.4f}"
+            rows.append(row)
+        tcgcsv.write_csv(path, source.header, rows)
+        return Path(path)
+
+    def rows_of(path):
+        return list(tcgcsv.read_export(path).rows)
+
+    with isolated_home() as home:
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        # OWNED THIRTY DAYS, WRITTEN INTO THE STORE RATHER THAN WAITED FOR. The window's third
+        # term reads `Card.captured_at` over every card that ever carried the SKU, and a
+        # capture taken a moment ago is `too_young` for every window a person would ask for.
+        old = "2026-08-01T00:00:00.000+00:00"
+        with Store().write() as writable:
+            for box, index, *_ in cards:
+                writable.inventory.cards[master.position_key(box, index)].captured_at = old
+
+        export = live_export(
+            home / "live.csv",
+            live={DUNSPARCE_SKU: 2, DUNSPARCE_REVERSE_SKU: 1, ARTICUNO_SKU: 1},
+            asking={DUNSPARCE_SKU: "2.00", DUNSPARCE_REVERSE_SKU: "0.40", ARTICUNO_SKU: "20.00"},
+        )
+
+        said = command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10")
+        checks.ok("DRY RUN" in said, "IT PREVIEWS BY DEFAULT — nothing is written without --write")
+        checks.ok(
+            not (files.inventory_dir() / cmd_reprice.DIRNAME).exists(),
+            "and the preview created no directory at all, not an empty one",
+        )
+        checks.ok(
+            "age is OWNERSHIP, not listing age" in said,
+            "THE PROXY IS ON THE REPORT'S OWN HEADER. The store cannot say how long a listing "
+            "has been live, and a substitution the operator is not told about is a lie",
+        )
+        checks.ok(
+            f"[{reprice.AT_FLOOR}]" in said,
+            f"the $0.40 listing is refused as `{reprice.AT_FLOOR}` rather than written as a "
+            f"no-op row — there is nowhere down to go, and D9's floor is what says so",
+        )
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        made = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())
+        checks.equal(len(made), 1, "--write made exactly one markdown directory")
+        directory = made[0]
+        worklist = rows_of(directory / cmd_reprice.WORKLIST)
+        checks.equal(
+            sorted(row[tcgcsv.SKU_COLUMN] for row in worklist),
+            sorted([DUNSPARCE_SKU, ARTICUNO_SKU]),
+            "the worklist holds the two listings above the floor and not the one at it",
+        )
+        checks.equal(
+            sorted({row[tcgcsv.QUANTITY_COLUMN] for row in worklist}),
+            ["0"],
+            "EVERY WORKLIST ROW CARRIES `Add to Quantity` 0. The worklist is export-shaped and "
+            "therefore uploadable by accident; this is what makes that harmless",
+        )
+        original = tcgcsv.read_export(export).by_sku()
+        for row in worklist:
+            try:
+                tcgcsv.check_only_writable_changed(original[row[tcgcsv.SKU_COLUMN]], row)
+                clean = True
+            except tcgcsv.ReadOnlyColumn:
+                clean = False
+            checks.ok(
+                clean,
+                f"and {row[tcgcsv.SKU_COLUMN]}'s worklist row differs from the export in the "
+                f"two writable columns and nowhere else",
+            )
+
+        # ---------------------------------------------------------------- reading it back
+        said = command(checks, "reprice", "apply", str(directory / cmd_reprice.WORKLIST))
+        checks.ok("DRY RUN" in said, "apply previews by default too")
+        checks.ok(
+            not (directory / cmd_reprice.IMPORT).exists(),
+            "and wrote no import file — the last press before bytes leave for a marketplace",
+        )
+
+        command(checks, "reprice", "apply", str(directory / cmd_reprice.WORKLIST), "--write")
+        upload = rows_of(directory / cmd_reprice.IMPORT)
+        checks.equal(
+            sorted({row[tcgcsv.QUANTITY_COLUMN] for row in upload}),
+            ["0"],
+            "EVERY UPLOADED ROW CARRIES `Add to Quantity` 0, so the file lowers prices and "
+            "cannot add, remove or delete a copy — uploading it twice is a no-op the second "
+            "time, which is not true of an import from `emit`",
+        )
+        checks.equal(
+            {row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN] for row in upload},
+            {DUNSPARCE_SKU: "1.80", ARTICUNO_SKU: "18.00"},
+            "and the prices are the rule's, rounded then floored, off the ASKING price",
+        )
+        answered = corpus.Corpus.read().answers
+        checks.equal(
+            {sku: answered[sku].value for sku in (DUNSPARCE_SKU, ARTICUNO_SKU)},
+            {DUNSPARCE_SKU: "1.80", ARTICUNO_SKU: "18.00"},
+            "THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without it the next `emit` "
+            "over another copy re-lists at the rule price and quietly undoes the markdown",
+        )
+
+        # ------------------------------------------------------------------- the ratchet
+        said = command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10")
+        checks.ok(
+            f"[{reprice.PRICED_RECENTLY}]" in said,
+            f"THE RATCHET. A SKU this store answered inside the window is refused as "
+            f"`{reprice.PRICED_RECENTLY}` — `undercut:10` run daily compounds to -52% in a "
+            f"week, with every single run justified because the card still has not sold",
+        )
+        said = command(
+            checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--again"
+        )
+        checks.ok(
+            f"[{reprice.PRICED_RECENTLY}]" not in said,
+            "and `--again` lifts it, which is the only way past it",
+        )
+
+        # --------------------------------------------------- what the operator hands back
+        def hand_back(name, mutate):
+            """Write an edited worklist into its own directory, beside the same manifest."""
+            target = files.inventory_dir() / cmd_reprice.DIRNAME / name
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.copy(directory / cmd_reprice.MANIFEST, target / cmd_reprice.MANIFEST)
+            edited = [dict(row) for row in rows_of(directory / cmd_reprice.WORKLIST)]
+            edited = mutate(edited)
+            tcgcsv.write_csv(
+                target / cmd_reprice.WORKLIST, tcgcsv.CANONICAL_HEADER, edited
+            )
+            return target
+
+        def apply_edited(target):
+            from cli import __main__ as entry
+
+            with quiet() as said:
+                code = entry.main(
+                    ["reprice", "apply", str(target / cmd_reprice.WORKLIST), "--write"]
+                )
+            return code, said.getvalue()
+
+        def raised(rows):
+            rows[0][tcgcsv.PRICE_COLUMN] = "99.99"
+            return rows
+
+        code, said = apply_edited(hand_back("20200101-000001", raised))
+        checks.ok(
+            code == 1 and f"[{reprice.RAISED}]" in said,
+            "A RAISED PRICE REFUSES THE WHOLE FILE, not the row. This path only lowers, and a "
+            "file that quietly dropped the one row that would have raised a price would be a "
+            "press that did something other than what the operator read",
+        )
+        checks.ok(
+            not (files.inventory_dir() / cmd_reprice.DIRNAME / "20200101-000001"
+                 / cmd_reprice.IMPORT).exists(),
+            "and it wrote nothing",
+        )
+
+        def duplicated(rows):
+            return rows + [dict(rows[0])]
+
+        code, said = apply_edited(hand_back("20200101-000002", duplicated))
+        checks.ok(
+            code == 1 and f"[{reprice.DUPLICATE}]" in said,
+            "A DUPLICATED SKU REFUSES THE WHOLE FILE (D7). Two rows with one `TCGplayer Id` "
+            "in one import is undefined behaviour at TCGplayer, not a row to skip past",
+        )
+
+        def carrying_quantity(rows):
+            for row in rows:
+                row[tcgcsv.QUANTITY_COLUMN] = "4"
+            return rows
+
+        target = hand_back("20200101-000003", carrying_quantity)
+        code, _ = apply_edited(target)
+        checks.equal(
+            sorted({row[tcgcsv.QUANTITY_COLUMN] for row in rows_of(target / cmd_reprice.IMPORT)}),
+            ["0"],
+            "A WORKLIST HANDED BACK CARRYING A QUANTITY STILL PRODUCES AN UPLOAD CARRYING 0. "
+            "The quantity is not a variable on this path: the upload is built from the "
+            "manifest's bytes, and the operator's file supplies only the SKU and the price",
+        )
+
+        def like_a_spreadsheet(rows):
+            """What Excel does to a CSV it opens and saves."""
+            for row in rows:
+                row[tcgcsv.NUMBER_COLUMN] = row[tcgcsv.NUMBER_COLUMN].lstrip("0")
+                row[tcgcsv.LOW_PRICE_COLUMN] = "0.01"
+                row["Photo URL"] = "0"
+            return rows
+
+        target = hand_back("20200101-000004", like_a_spreadsheet)
+        apply_edited(target)
+        checks.equal(
+            (target / cmd_reprice.IMPORT).read_bytes(),
+            (directory / cmd_reprice.IMPORT).read_bytes(),
+            "AND A MANGLED WORKLIST PRODUCES A BYTE-IDENTICAL UPLOAD. A spreadsheet strips a "
+            "leading zero from `Number` and a trailing one from a price; none of it can reach "
+            "TCGplayer, because the edited file is an instruction sheet and never a source of "
+            "bytes",
+        )
+
+        def four_decimals(rows):
+            """The export's own rendering of the price already in the file."""
+            for row in rows:
+                row[tcgcsv.PRICE_COLUMN] = f"{Decimal(row[tcgcsv.PRICE_COLUMN]):.4f}"
+            return rows
+
+        target = hand_back("20200101-000005", four_decimals)
+        code, said = apply_edited(target)
+        checks.ok(
+            f"[{reprice.UNCHANGED}]" not in said and (target / cmd_reprice.IMPORT).exists(),
+            "A PRICE IS COMPARED AS `Decimal`, NEVER AS TEXT. The export writes four decimal "
+            "places and this writer emits two; equal as money, different as bytes, and a "
+            "string comparison would mark down the whole store on a rounding artefact",
+        )
+
+        # ------------------------------------------------------- what the window refuses
+        stranger = live_export(
+            home / "stranger.csv",
+            live={DUNSPARCE_SKU: 2, DUNSPARCE_REVERSE_SKU: 1, ARTICUNO_SKU: 1},
+            asking={DUNSPARCE_SKU: "2.00", DUNSPARCE_REVERSE_SKU: "5.00", ARTICUNO_SKU: "20.00"},
+            sold_out=(ARTICUNO_SKU,),
+        )
+        said = command(checks, "reprice", "list", str(stranger), "--days", "7", "--again")
+        checks.ok(
+            f"[{reprice.SOLD_OUT}]" in said,
+            f"a row TCGplayer holds no copies of is `{reprice.SOLD_OUT}` — the export keeps "
+            f"the row and there is no listing to re-price",
+        )
+
+        with Store().write() as writable:
+            writable.inventory.set_state(master.position_key(3, 1), master.SOLD)
+        said = command(checks, "reprice", "list", str(export), "--days", "7", "--again")
+        checks.ok(
+            f"[{reprice.SOLD_RECENTLY}]" in said,
+            f"A COPY THAT SOLD INSIDE THE WINDOW IS `{reprice.SOLD_RECENTLY}`, read off the "
+            f"CARD RECORDS and never the event log: one of the 193 `sold` events on the "
+            f"owner's store carries no `sku` key, and a query over the log loses it silently",
         )
 
 
@@ -17820,6 +18127,7 @@ def run() -> Result:
     check_merged_emit_cap(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
+    check_markdown(checks)
     check_withholding(checks)
     check_pricing_route(checks)
     check_pricing_labels(checks)

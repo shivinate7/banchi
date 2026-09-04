@@ -319,7 +319,7 @@ COMPONENTS = [
         "note": "NO INTERACTIVE PROMPTS, ever — the pipeline runs unattended, so a command "
                 "that cannot proceed refuses and says what to edit.",
         "modules": {
-            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87"], "tested_by": ["T7"]},
+            "__main__.py": {"does": "parser, COMMANDS dispatch, exit codes", "governed_by": ["D1", "D3", "D9", "D25", "D86", "D87", "D100"], "tested_by": ["T7"]},
             "cmd_scan.py": {"does": "read the QR codes off a directory of code-card photos into "
                                     "the ledger. FREE — no model call, no network, no money gate "
                                     "(C9). Presentation only; the core is `codes/scan.py`, shared "
@@ -356,6 +356,25 @@ COMPONENTS = [
                                       "named as missing and D62 repeated.",
                               "governed_by": ["D9", "D49", "D62", "D86"],
                               "tested_by": ["T7"]},
+            "cmd_reprice.py": {"does": "`pkmnscan reprice list` reports which live listings are "
+                                        "not selling and writes a WORKLIST with a price already "
+                                        "proposed on every row; `reprice apply` reads the "
+                                        "operator's edited worklist back and writes the "
+                                        "price-only import CSV (D100). Both preview unless given "
+                                        "--write. EVERY ROW OF EVERY FILE IT WRITES CARRIES `Add "
+                                        "to Quantity` 0, and the upload is built from the "
+                                        "manifest's copy of the export row rather than from the "
+                                        "file handed back — only TCGplayer Id and TCG "
+                                        "Marketplace Price are read out of that, so a "
+                                        "spreadsheet's reformatting cannot reach TCGplayer. "
+                                        "Writes into inventory/markdowns/<stamp>/ and never "
+                                        "under runs/: a run directory is one box's disposable "
+                                        "input and a markdown is store-wide state. The new "
+                                        "prices go into the corpus keyed by SKU (D86), without "
+                                        "which the next emit re-lists at the rule price and "
+                                        "undoes the markdown.",
+                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86", "D100"],
+                               "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
                                     "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
                                     "across runs, across games and across the "
@@ -633,6 +652,27 @@ COMPONENTS = [
                                      "from seeing 93 live copies to 1,079.",
                              "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87"],
                              "tested_by": ["T7"]},
+            "reprice.py": {"does": "which live listings are not selling, and what each would be "
+                                   "re-priced to (D100). Pure — no I/O, no store import, no "
+                                   "network — the way livecheck.py is. THE QUANTITY IS NOT A "
+                                   "VARIABLE HERE: ADD_TO_QUANTITY is a module constant, not a "
+                                   "parameter and not reachable from a flag, because "
+                                   "`Add to Quantity` is a DELTA and a markdown that carried a "
+                                   "copy count would double a live listing. Measured: 72,701 "
+                                   "real export rows carry \"0\", 649 of them on rows TCGplayer "
+                                   "reported live; and nine SKUs on the owner's store sit at "
+                                   "2 x pushed - sold because one import file was uploaded "
+                                   "twice. The staleness predicate is live + no sale here in the "
+                                   "window + owned longer than the window, and the third term is "
+                                   "a PROXY for listing age that every report names as one — "
+                                   "Listing has no first_listed_at and live_as_of is absent from "
+                                   "all 443 stored payloads. BASIS_ASKING is local and "
+                                   "deliberately not in pricing.BASES: the column is populated "
+                                   "on 441 of 441 live My Pricing rows and blank on 7,787 of "
+                                   "7,802 wide-export rows, so a listing run reading it would "
+                                   "write no price with nothing raising.",
+                           "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D87", "D100"],
+                           "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and the live cap spent ONCE over that union. "
                                  "D59's defect one register up — add_to_quantity spends "
@@ -1714,7 +1754,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D96"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D96", "D100"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1802,7 +1842,7 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88", "D100"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

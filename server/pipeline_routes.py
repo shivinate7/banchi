@@ -101,6 +101,7 @@ import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
@@ -108,9 +109,10 @@ from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from cli import cmd_reprice  # noqa: E402
 from cli import resolve as run_resolve  # noqa: E402
 from cli import runs as run_files  # noqa: E402
-from pipeline import corpus, decisions, games as game_registry, join, tcgcsv  # noqa: E402
+from pipeline import corpus, decisions, games as game_registry, join, reprice, tcgcsv  # noqa: E402
 # ALIASED, BECAUSE `pricing` IS A LOCAL IN THIS MODULE. Two handlers bind the name to a
 # run's parsed `pricing.json`; importing the module under it would make which one you
 # got a matter of where in the function you were standing.
@@ -1952,6 +1954,254 @@ def do_reconcile_live(payload: dict) -> dict:
         "wrote": bool(payload.get("write")) and code == 0,
         "console": console,
     }
+
+
+# ------------------------------------------------------------- the stale-listing markdown
+
+
+MARKDOWNS = "markdowns"
+_STAMP = re.compile(r"^[0-9]{8}-[0-9]{6}$")
+
+
+def _markdowns_dir() -> Path:
+    return files.inventory_dir() / MARKDOWNS
+
+
+def _stamps() -> List[str]:
+    root = _markdowns_dir()
+    if not root.is_dir():
+        return []
+    return sorted(
+        (entry.name for entry in root.iterdir()
+         if entry.is_dir() and _STAMP.match(entry.name)),
+        reverse=True,
+    )
+
+
+def _open_markdown(stamp: str) -> Path:
+    """One markdown directory, by stamp. Matched by SHAPE and then by MEMBERSHIP.
+
+    `do_pipeline_file`'s rule, one directory over: the pattern refuses a path segment, and
+    the membership check refuses a well-shaped name that is not actually a markdown this
+    store made. Nothing built out of a request is joined onto a path until both have passed.
+    """
+    if not _STAMP.match(stamp or ""):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "stamp_invalid",
+            f"{stamp!r} is not a markdown stamp.",
+        )
+    if stamp not in _stamps():
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "no_such_markdown",
+            f"No markdown called {stamp}. `reprice list --write` is what makes one.",
+        )
+    return _markdowns_dir() / stamp
+
+
+def _markdown_summary(stamp: str) -> dict:
+    """One markdown, as the screen needs it: what it asked, and which files exist.
+
+    The manifest is read for `asked` and the SKU count and for nothing else. Whether the
+    upload has been written is answered by the FILE being there rather than by a flag in the
+    manifest, because the flag could be true of a file somebody deleted.
+    """
+    directory = _markdowns_dir() / stamp
+    payload = files.read_json(directory / cmd_reprice.MANIFEST, {}) or {}
+    return {
+        "stamp": stamp,
+        "at": payload.get("at"),
+        "asked": payload.get("asked") or {},
+        "source": (payload.get("source") or {}).get("path"),
+        "skus": len(payload.get("skus") or {}),
+        "files": [
+            row["name"] for row in _artefacts(directory)
+        ],
+    }
+
+
+def do_markdowns() -> dict:
+    """`GET /pipeline/markdowns` — every markdown this store has written. Free, reads only."""
+    return {"markdowns": [_markdown_summary(stamp) for stamp in _stamps()]}
+
+
+def do_markdown_list(payload: dict) -> dict:
+    """`POST /pipeline/markdowns` — which live listings are stale, and what they would become.
+
+    FREE, RE-RUNNABLE, AND IT WRITES ONLY WITH `write`, which is `do_reconcile_live`'s shape
+    and for a related reason: the preview is the whole point of the press. What it reports is
+    a proposal about money, over the whole store at once, and the operator has to be able to
+    look at it before a file exists.
+
+    IT SPENDS NOTHING AND DELETES NOTHING AT TCGPLAYER. The file `write` produces is a
+    worklist — it is not uploaded anywhere by this process, and every row of it carries
+    `Add to Quantity` 0, so it cannot change a quantity even if it were.
+
+    THE STAMP IS DISCOVERED BY DIFFING THE DIRECTORY, not parsed out of the command's stdout.
+    `reprice list` names the directory it made in a sentence meant for a person, and a route
+    that scraped that sentence would break the moment the sentence was reworded.
+    """
+    upload = payload.get("export")
+    if not isinstance(upload, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "export_required",
+            "Send `export` as {name, content} — TCGplayer's My Pricing export, all printings.",
+        )
+    target = files.inventory_dir() / ".reprice"
+    target.mkdir(parents=True, exist_ok=True)
+    path = _store_upload(target, upload, "live-")
+
+    argv = [str(PKMNSCAN), "reprice", "list", str(path)]
+    argv += _markdown_flags(payload)
+    write = bool(payload.get("write"))
+    if write:
+        argv.append("--write")
+
+    before = set(_stamps())
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+    fresh = sorted(set(_stamps()) - before, reverse=True)
+    return {
+        "ok": code == 0,
+        "exit_code": code,
+        "wrote": write and code == 0,
+        "console": console,
+        "stamp": fresh[0] if fresh else None,
+    }
+
+
+def _markdown_flags(payload: dict) -> List[str]:
+    """The allowlisted flags, one at a time, each validated here.
+
+    AN ALLOWLIST AND NEVER A PASSTHROUGH, which is this module's standing rule: a request
+    that could append arbitrary argv to `./pkmnscan` would be a shell. Every value is either
+    coerced to a number here or matched against a set the CLI also knows.
+    """
+    argv: List[str] = []
+    days = payload.get("days")
+    if days is not None:
+        argv += ["--days", str(_positive(days, "days"))]
+    rule = payload.get("rule")
+    percent = payload.get("percent")
+    if rule is not None:
+        text = str(rule)
+        if not re.match(r"^(match|undercut:[0-9]+(\.[0-9]+)?|markup:[0-9]+(\.[0-9]+)?)$", text):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "rule_invalid",
+                f"{text!r} is not a pricing rule. match | undercut:PCT | markup:PCT.",
+            )
+        argv += ["--rule", text]
+    elif percent is not None:
+        argv += ["--percent", str(_number(percent, "percent"))]
+    basis = payload.get("basis")
+    if basis is not None:
+        if basis not in reprice.BASES:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "basis_invalid",
+                f"{basis!r} is not a basis. One of: {', '.join(reprice.BASES)}.",
+            )
+        argv += ["--basis", str(basis)]
+    above = payload.get("above_market")
+    if above is not None:
+        argv += ["--above-market", str(_number(above, "above_market"))]
+    limit = payload.get("limit")
+    if limit is not None:
+        argv += ["--limit", str(_positive(limit, "limit"))]
+    if payload.get("again"):
+        argv.append("--again")
+    return argv
+
+
+def _number(value, field: str) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (ArithmeticError, ValueError):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "number_invalid",
+            f"`{field}` is {value!r}, which is not a number.",
+        ) from None
+
+
+def _positive(value, field: str) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = -1
+    if number < 0:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "number_invalid",
+            f"`{field}` is {value!r}, which is not a whole number of 0 or more.",
+        )
+    return number
+
+
+def do_markdown_apply(stamp: str, payload: dict) -> dict:
+    """`POST /pipeline/markdowns/<stamp>/apply` — the edited worklist back, as an upload file.
+
+    THE WORKLIST COMES BACK AS AN UPLOAD, because it left the machine. The operator downloads
+    it, opens it in a spreadsheet, and hands back a file the server has never seen — so this
+    writes those bytes into the markdown's own directory and runs `reprice apply` against
+    them, with the manifest that is already there.
+
+    SENDING NO WORKLIST MEANS "the one you wrote", which is the flow for an operator who did
+    not want to edit anything: `reprice list` already put a proposed price on every row.
+
+    PREVIEWS BY DEFAULT, and the write half is the last press before bytes leave for a
+    marketplace. What it writes is `import.csv`, whose every row carries `Add to Quantity` 0.
+    """
+    directory = _open_markdown(stamp)
+    worklist = directory / cmd_reprice.WORKLIST
+    upload = payload.get("worklist")
+    if isinstance(upload, dict):
+        worklist = _store_upload(directory, upload, "edited-")
+    if not worklist.is_file():
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "no_worklist",
+            f"Markdown {stamp} has no worklist to apply. Send one as `worklist`.",
+        )
+    argv = [str(PKMNSCAN), "reprice", "apply", str(worklist)]
+    if payload.get("write"):
+        argv.append("--write")
+    code, console = _run_sync(argv, STEP_TIMEOUT_S)
+    return {
+        "ok": code == 0,
+        "exit_code": code,
+        "wrote": bool(payload.get("write")) and code == 0,
+        "console": console,
+        "stamp": stamp,
+    }
+
+
+def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
+    """`GET /pipeline/markdowns/<stamp>/file?name=<f>` — the worklist and the upload.
+
+    `do_pipeline_file`'s two gates, unchanged: the shape pattern, then membership in what the
+    directory actually holds. The import CSV is the file the operator uploads to TCGplayer,
+    so it has to be reachable from the browser that asked for it.
+    """
+    directory = _open_markdown(stamp)
+    if not _DOWNLOADABLE.match(filename or ""):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "file_name_invalid",
+            f"{filename!r} is not a downloadable markdown artefact.",
+        )
+    if filename not in {row["name"] for row in _artefacts(directory)}:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "no_such_file",
+            f"Markdown {stamp} has no file called {filename}. `reprice apply --write` is "
+            f"what writes {cmd_reprice.IMPORT}.",
+        )
+    target = directory / filename
+    kind = "text/csv" if target.suffix == ".csv" else "text/plain; charset=utf-8"
+    return target.read_bytes(), kind
 
 
 # ------------------------------------------------------------------ the pricing corpus
