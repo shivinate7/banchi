@@ -1,8 +1,9 @@
 # The Banchi mark
 
-**Status: DIRECTION SETTLED, PARAMETERS MOSTLY BOUNDED, ASSETS STALE. THE GROUND IS DERIVED.** This file is the state
-of record. The SVGs beside it in `logo/` do **not** match section 3 and must be regenerated
-before anyone uses them.
+**Status: SIX MARKS LOCKED AT THE DISPLAY CUT (section 9). THE GROUND IS DERIVED. THE SMALL CUT
+AND THE LOCKUP ARE STILL UNDRAWN, AND THE COMMITTED SVG IS STALE AGAINST ALL OF IT.** This file
+is the state of record. `logo/banchi-icon.svg` matches neither section 3 nor section 9 and must be
+regenerated before anyone uses it.
 
 Nothing under `app/` or `server/` has been touched. `app/src/kit/index.tsx:258` (`Logo`) and
 `app/public/favicon.svg` still hold the placeholder: a geometric **B** in a rounded square.
@@ -219,6 +220,7 @@ Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 | `logo/pass-gray-prisms.png` | the seven asserted grounds each for `warmer` and `quieter` |
 | `logo/pass-black-and-gold.png` | **section 8** — nine golds, five blacks, five brackets |
 | `logo/pass-white-and-rose-gold.png` | white gold and rose gold on the locked black, one pass each |
+| `logo/pass-locked-set.png` | **section 9 — the six locked marks**, at 200px and at 48/28px |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
 
 **Every PNG here went in past the pre-commit image guard, on the owner's word each time.** That
@@ -412,9 +414,12 @@ near-white foil as a stain.
 | white gold | `warm` `#FFFBF2 #EFE6D2 #DCD0B8 #FFFFFF #C9BCA2`, or `champagne` | `#D8D2C4` HELD | pale gold holds; **`gold` gives the most separation** |
 | rose gold | `classic` `#FFD9C8 #F0B49A #DE9070 #FFE9DF #C87A5C`, or `blush` | `#D99878` HELD | pale gold is the most elegant; chrome the most separated |
 
-**The locked pale-gold bracket survived both**, which is worth more than it looks: it was chosen
-against yellow gold on a lightness measurement, and it did not have to be replaced for either of
-the other two metals. One bracket across three metals is a family rather than three marks.
+**The pale-gold bracket carried two of the three metals, not all three.** I reported "one bracket
+across three metals" on 2026-09-05 and it was wrong — read off the bracket *sweeps* in sections 2
+and 4 rather than off the comparison row that was actually locked, where rose gold carries `rose`
+brackets. The true result is narrower and still worth having: **pale gold was chosen against
+yellow gold on a lightness measurement at the taper tip, and white gold did not need it
+replaced.** Rose gold does.
 
 **Two findings, and both are about the limits of the idea rather than about a value.**
 
@@ -435,16 +440,65 @@ surface for that one variant, and that is a bigger change than a color.
 
 Sheet: `logo/pass-white-and-rose-gold.png`. Generator: `logo/sheets/white-and-rose-gold.html`.
 
-## 9. Still open
+## 9. The locked set
+
+**Six marks, locked 2026-09-05 on the owner's instruction — *"lock all on #5; we'll have the
+bluesteel one be the default"*.** Row 5 of `logo/pass-white-and-rose-gold.png` is the definition,
+and this table is that row written out. Geometry, sheen and the L pair are section 3's and do not
+vary across the set.
+
+| mark | prism | ground | bracket | card base |
+| --- | --- | --- | --- | --- |
+| **bluesteel — DEFAULT** | `#E4EEF8 #B0C8E0 #7F9FC0 #F2F8FF #6086AC` | `#182430` → `#060B12` | chrome | `#5A6E80` |
+| lilacish | `#EFEAFA #BCB4E0 #8E86C0 #F6F2FF #6E68A8` | `#231F34` → `#0B0914` | chrome | `#5A6E80` |
+| mint | `#E6F6F0 #A8D4C4 #78AC9C #F2FCF8 #589084` | `#162722` → `#050D0A` | chrome | `#5A6E80` |
+| yellow gold | `#FFD97A #F0A82E #C9821E #FFEFC0 #B36F18` | `#141619` → `#000000` | pale gold | `#C98A2E` |
+| white gold | `#FFFBF2 #EFE6D2 #DCD0B8 #FFFFFF #C9BCA2` | `#141619` → `#000000` | pale gold | `#D8D2C4` |
+| rose gold | `#FFD9C8 #F0B49A #DE9070 #FFE9DF #C87A5C` | `#141619` → `#000000` | **rose** | `#D99878` |
+
+Sheen **0.15** on all six. The bracket gradients:
+
+| bracket | stops |
+| --- | --- |
+| chrome | `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` |
+| pale gold | `#FFFBEE #E8CE8A #FFFDF6 #C0A254` |
+| rose | `#FFF0E8 #E8B49C #FFF8F4 #C88A6C` |
+
+**`bluesteel` is the default** — the one `app/src/kit/index.tsx`'s `Logo` and `app/public/favicon.svg`
+take when nothing else is specified. The other five are the set, not alternates to it.
+
+**Locking row 5 also resolved the chroma ratio: the three cool marks are family B, 0.39.** That
+was left as a genuine two-way tie on the owner's *"1 or 3 both work"*, and row 5 happened to draw
+B. **Family A is not thereby rejected** — it is the same kind of unchosen-not-eliminated option as
+section 8's, and its values are in the section 3 table above. A session that wants the quieter
+ratio has it.
+
+**One naming hazard, recorded before it bites.** `rose` names two different palettes in
+`logo/sheets/`: a four-stop **bracket** gradient and a five-stop **prism**. They are not the same
+colors and neither is derived from the other. In the generators they live in separate objects
+(`BRK` and `PRISMS`) so nothing breaks, but a sentence that says "rose" without saying which is
+ambiguous, and this table is the place that disambiguates.
+
+Sheet: `logo/pass-locked-set.png` — the six at 200px, and again at 48px and 28px.
+
+**At 28px the brackets are essentially gone.** That row is not a decision, it is the evidence for
+section 3's *small* optical cut (stroke 3.4, no taper), which has still never been drawn. **Six
+marks are locked at the display cut and none is locked at the small cut**, and a favicon is 28px.
+
+## 10. Still open
 
 - The four **HELD** parameters in section 3. **The ground sweep took a bite out of one of them**:
   the card base fill `#5A6E80` and the prism gradient sit under a ground that is now derived, so
   the base fill is the next thing worth sweeping — it is the only remaining color in the mark
   that nothing else constrains.
-- **Which prism.** Five are RANGED and two of them (`warmer`, `quieter`) now resolve to the
-  *same ground in both families* and differ from each other only in the top of the gradient. Put
-  side by side on the family sheet they are very nearly one tile. **That is a question about
-  whether five options are really four**, and it is the next thing worth an owner's eye.
+- **The small optical cut, which is now the biggest gap in this file.** Six marks are locked at
+  the display cut and **none at the small cut**. A favicon is 28px and a nav rail is 48px; at
+  those sizes the locked brackets are essentially gone, which section 9's second row shows. Every
+  color decision on this page was made at 104 – 268px.
+- **`warmer` and `quieter`**, parked in section 3, are outside the locked six. They differ from
+  each other only in the top of the gradient and take the same ground in both families — **five
+  candidate prisms may really have been four**, and the locked set answers that by taking three.
+  Nothing is owed here unless they are wanted back.
 - Regenerating the four assets, and generating the lockup.
 - A drawn wordmark. `Banchi` is set in Manrope today.
 - Which of tile / bare mark the sidebar takes. Decide by looking at the rail.
