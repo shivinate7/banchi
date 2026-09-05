@@ -462,3 +462,14 @@ boolean
 [Ll]ockup
 [Hh]olo
 [Ss]uperellipse
+[Ss]VGs
+viewBox
+[Bb]luesteel
+[Ll]ilacish
+[Hh]iragino
+[Ff]avicon
+[Ww]ordmark
+[Ll]ockup
+[Ss]uperellipse
+[Hh]olo
+[Kk]eyline

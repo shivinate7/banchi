@@ -916,18 +916,23 @@ was open** — the rule is renumber your own, never another's.
   **`inventory/orders.json` has still never held a real one**, so "pulls a real order out of the
   ledger", which this pointer claimed until 2026-08-31, was a screen's capability read as a
   history. All forty-two sales in the store went through `#/inventory` instead, and §1 measures
-  that. One piece INSIDE step 12 is also unbuilt — `POST /shipping/batches/<batch>/stamps`, the
-  Rubber Stamp fill, §3's T2b. **Steps 13 and 14 — the shipped status and the tracking write-back — are
-  NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
+  that. One piece INSIDE step 12 is unbuilt too: §3's T2b — the Rubber Stamp fill,
+  `POST /shipping/batches/<batch>/stamps` — is NOT BUILT. **Steps 13 and 14 — the shipped status
+  and the tracking write-back — are NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
-  order was discharged. **Its T6 — an order DRIVING the inventory walk, so the screen advances
-  from card to card as each copy is pulled — is BUILT as of 2026-09-02 (D90), and the UNIT OF
-  THE WRITE is the envelope rather than the card.** One press per order records every copy in
-  it as pulled and sold; the walk itself writes nothing per card, and in order mode the next
-  order is not offered until that press has landed. It is a second form of step 11 rather than
-  a fifteenth step and gets no build-order row; §3 carries the three determinations, of which
-  the one that bites is that the walk's control has to post the pull and not the sale. Its own
-  open question — whether the queue survives a reload — is answered by the route parameter.
+  order was discharged. **§3's T6 — an order DRIVING the inventory walk, with the envelope as the
+  unit of the write — is SUPERSEDED** (D96 amended 2026-09-04), and its code is deleted:
+  `POST /orders/fill`, `do_order_fill`, `app/src/orderWalk.ts`,
+  `app/src/OrderWalkBanner.tsx`/`.css` and harness T7's `check_order_fill` are all gone, 1,484
+  lines that were main's build and were reachable from no screen here. That section is kept as
+  the record of what main made, not as a description of this tree. **The want it served is still
+  met, in the shape the owner ruled for** — *"I don't want the walk picking for me"*: the per-copy
+  press, from an order's own panel or from the cross-order pass through the drawers (`#/orders`,
+  "Walk the boxes"), which sorts by the same `(box, index)` and leaves the choice of copy to the
+  operator (D93, D97). It is a second form of step 11 rather than a fifteenth step and gets no
+  build-order row. **This pointer said T6 was BUILT with the envelope as the unit of the write
+  until 2026-09-05**, three days after that code was deleted — the drift the `work item standing`
+  audit row now catches.
   Not `docs/specs/order-flow.md`, the sell path.
 - `docs/specs/code-cards.md` — the code-card track end to end: the QR decode (BUILT, and
   measured at 140/140 physically-possible frames with zero mis-reads), the ledger (BUILT),
