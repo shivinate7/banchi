@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 
 import type { SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
@@ -247,6 +247,25 @@ function OwnerRows({
   renderAction,
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
+
+  /* HOW MANY DIGITS THIS LIST'S SLOT COLUMN HAS TO HOLD, which is the one term of that column
+     that is DATA rather than typography (`CardLocations.css`'s `--pos-slot-key` is the other).
+     A row cannot compute it — it cannot see what its siblings drew — so the list does, over the
+     copies it is about to render, and every row reserves the same width from it.
+
+     `place.card` AND NOT THE LABEL. It is the same field `pipeline/join.py:Position.label`
+     composes its last part from, it is already on the wire, and it is null exactly for the rows
+     that draw no figure (D58, D71) — so reading it needs no second copy of `PositionLabel`'s
+     seam here, which is the duplication D67 and D92 both record.
+
+     Floored at three so no list renders narrower than every store, fixture and screenshot did
+     before this existed. */
+  const slotDigits = Math.max(
+    3,
+    ...group.copies.map((copy) =>
+      copy.place.card === null ? 0 : String(copy.place.card).length,
+    ),
+  )
   /* The machine strings — SKU, set code, number — in mono; the condition is a phrase and is
      drawn beside them in the UI face. */
   const meta =
@@ -298,7 +317,10 @@ function OwnerRows({
         </p>
       </header>
 
-      <ul className="card-locations-rows bn-stagger">
+      <ul
+        className="card-locations-rows bn-stagger"
+        style={{ ['--pos-slot-digits']: slotDigits } as CSSProperties}
+      >
         {group.copies.map((copy, i) => {
           const sold = isSold(copy, soldKeys)
           const pooled = isPooled(copy)

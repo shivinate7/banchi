@@ -650,7 +650,7 @@ does mean the nominal type this entry calls *the real answer* now has a shipped 
 rather than a hypothetical, and D92's rejection of it on blast radius was made without one. That
 is the owner's call and nobody else's; recording it is what this file is for.
 
-**The cheap partial was taken first, on the owner's ruling (2026-09-05).** Asked whether the
+**The cheap partial was taken first, on the owner's ruling (2026-09-04).** Asked whether the
 nominal type should be argued now or the guard shipped first, the owner chose the guard. So the
 check reads a second pattern: the word form, `Card {…index}`, which is the same claim as `#{…index}`
 in the register a screen reader speaks. **It was measured before it was written rather than adopted

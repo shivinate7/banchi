@@ -3986,8 +3986,11 @@ test('two departed copies of one card draw two different rows', async ({ page })
   /* AND THE COLUMN HOLDS ACROSS A ROW THAT HAS NO FIGURE, which is the assertion the reserve in
      `PositionLabel.css` promises and cannot make about itself. `lead='slot'` exists so every
      row's path starts at one x; the shipped reserve held the DIGITS only, so these two rows —
-     which have a key-less void where `CARD 1` sits — hung 38.3px to the left of every live one.
-     The reserve is the whole column now, and 38.3px is `CARD` plus the gap exactly. It is read
+     which have a key-less void where `CARD 1` sits — hung to the left of every live one by the
+     width of the key they do not draw. That reservation is `--pos-slot-key`, declared by the
+     list in `CardLocations.css` and spent as padding here, and it is 37.594px — `CARD` at
+     33.594 plus the 4px slot gap, MEASURED on the real screen rather than derived. This said
+     38.3px until 2026-09-05 and no two sites in the tree agreed on it. It is read
      as a coordinate rather than as a width because a width can be right while the row it is on
      is not: what matters is that a person's eye finds one edge down the list. */
   const livePath = await page.locator('.card-locations-row .position-path').first().boundingBox()
@@ -4003,4 +4006,111 @@ test('two departed copies of one card draw two different rows', async ({ page })
 
   /* The live copies keep theirs, so the case cannot pass by the bar disappearing everywhere. */
   await expect(page.locator('.card-locations-row .position-bar').first()).toBeVisible()
+})
+
+/** A box past 999 cards. The owner's largest holds 723 and he says a thousand is imminent, so
+ *  this is not a synthetic worst case — it is the box that is coming, at the size he named. The
+ *  section is declared to 1400 because an undeclared box is ONE section (D10, amended) and the
+ *  walk has to file index 1345 somewhere real. */
+const BIG_BOX = {
+  boxes: [
+    {
+      ...BOXES.boxes[0],
+      fill: 1345,
+      next_index: 1346,
+      cards: 3,
+      on_hand: 2,
+      sold: 1,
+      retired: 0,
+      sections: [1],
+      sections_detail: [{ section: 1, start: 1, end: 1400, count: 2 }],
+    },
+  ],
+}
+
+/** Three copies of one SKU in that box: a three-digit live row, a FOUR-digit live row, and a
+ *  departed one, which is the row that draws no figure and therefore reserves the key rather
+ *  than drawing it. */
+const BIG_CARDS: Cards = {
+  ...CARDS,
+  '2/998': card({ index: 998, at: 998, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 1400, boxTotal: 1400 }),
+  '2/1345': card({ index: 1345, at: 1345, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 1400, boxTotal: 1400 }),
+  '2/1200': card({ index: 1200, at: 1200, state: 'sold', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 1400, boxTotal: 1400 }),
+}
+
+/* THE SLOT COLUMN HOLDS A FOUR-DIGIT CARD NUMBER, which nothing in this file had ever drawn.
+ *
+ * MEASURE THE INK, NOT THE BOX — and this is the whole reason the case is written the way it is.
+ * `.position-num` is `flex: 0 1 auto` inside the slot, so when its text outgrows the space it is
+ * SHRUNK to fit and its glyphs paint outside it (`overflow` is visible). Measured on the real
+ * screen against the shipped 84px column: the element's own `getBoundingClientRect()` is byte for
+ * byte identical at three, four AND five digits, while the ink runs 6.4px past the slot at four
+ * and 19.6px past at five. An assertion built on the element box — which is what this case was
+ * first drafted as — is GREEN against the defect it is written for. So the two things read here
+ * are `scrollWidth` against `clientWidth`, and a Range over the text node.
+ *
+ * THE GAP IS THE ASSERTION, NOT THE COLLISION. At four digits the ink does not yet reach the path:
+ * it eats `--pos-gap`, 18.8px of clearance down to 5.6px. Overlap only starts at five digits. A
+ * case asserting "the figure does not cross the path" would therefore pass at four and this whole
+ * class would ship again one digit later.
+ *
+ * FIXTURE AND NOT A DOM POKE, unlike the hero label's case above. `--pos-slot-digits` is computed
+ * in `CardLocations.tsx` from `place.card`, so a `textContent` written after render would leave the
+ * reservation at three and this case would go red against a CORRECT implementation. The four digits
+ * have to arrive the way the server sends them. */
+test('the slot column holds a four-digit card number, and the gap beside it survives', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, BIG_BOX, { cards: BIG_CARDS, search: (query) => searchAnswer(query, BIG_CARDS) })
+  await settleFonts(page)
+  await expandAll(page)
+  await page.locator('.browse-row').nth(0).click()
+  await expect(page.locator('.card-locations-rows .position-parts').first()).toBeVisible()
+
+  const read = () =>
+    page.evaluate(() => {
+      const ink = (el: Element) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return range.getBoundingClientRect()
+      }
+      return [...document.querySelectorAll('.card-locations-rows .position-parts')].map((parts) => {
+        const slot = parts.querySelector('.position-slot') as HTMLElement
+        const path = parts.querySelector('.position-path') as HTMLElement
+        const figure = parts.querySelector('.position-num, .position-void') as HTMLElement
+        return {
+          figure: parts.querySelector('.position-num')?.textContent ?? null,
+          overflow: slot.scrollWidth - slot.clientWidth,
+          inkToPath: +(path.getBoundingClientRect().left - ink(figure).right).toFixed(2),
+          pathX: +path.getBoundingClientRect().x.toFixed(2),
+          height: +parts.getBoundingClientRect().height.toFixed(2),
+        }
+      })
+    })
+
+  const rows = await read()
+
+  /* The fixture reached the screen. Without this every assertion below is vacuously true of a
+     list that happens to hold no long number. */
+  expect(rows.map((row) => row.figure)).toContain('1345')
+
+  /* NOTHING OVERFLOWS ITS SLOT. 6px on the shipped column, at this exact row. */
+  for (const row of rows) expect(row.overflow).toBeLessThanOrEqual(0)
+
+  /* AND THE GAP SURVIVES. 5.6px on the shipped column against 18.8px for a three-digit row;
+     `--pos-gap` is 12px, and the floor is set below it because the column reserves in `ch`,
+     which over-reserves against real digits by design — the figure-less row has no glyphs to
+     measure, so `ch` is the only unit both rows can share. */
+  for (const row of rows) expect(row.inkToPath).toBeGreaterThanOrEqual(11)
+
+  /* THE COLUMN IS STILL ONE COLUMN, across a four-digit row and a row with no figure at all.
+     This is `two departed copies` one digit-count further out: that case proves the reserve
+     holds at three digits, and only this one proves it holds when the count MOVES. */
+  const xs = rows.map((row) => row.pathX)
+  for (const x of xs) expect(x).toBeCloseTo(xs[0] ?? -1, 0)
+
+  /* AND NOTHING WRAPPED. The widened column takes 12.9px out of the path's track; this carries
+     `a narrow copies column shortens the bar, never the position label` into the widened case. */
+  for (const row of rows) expect(row.height).toBeLessThanOrEqual(36)
 })

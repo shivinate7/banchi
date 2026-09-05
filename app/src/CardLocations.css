@@ -130,12 +130,20 @@
      draw, ragged for exactly the cards a person had just sold — and it is the assertion
      `app/tests/inventory.spec.ts` has been carrying red since the merge.
 
-     84px is measured, not chosen: at this list's `--pos-slot: 22px` the widest content is a live
-     row's 82.06px (`CARD` 33.59 + the 4px gap + the figure's 3ch, 44.47), and the two px on top
-     are slack so the column holds it rather than overflowing it. A `width` rather than a
-     `min-width` deliberately — a floor lets a row grow past its neighbours again, which is the
-     failure being fixed, and a column that is a little wide is a column. */
-  --pos-slot-col: 5.25rem;
+     WHAT THE LIST DECLARES IS THE KEY'S ADVANCE AND THE DIGIT COUNT, and only the first is a
+     constant. `--pos-slot-key` is `CARD` at this list's key size plus the 4px slot gap, MEASURED on
+     the real screen at 1440 with fonts settled: 33.594 + 4. It is `px` and not `rem` because
+     everything it measures is `px` — `--pos-slot: 22px`, and `.position-key`'s clamp sitting on its
+     11px floor — and the `5.25rem` it replaces would overflow at THREE digits for a reader on a
+     12px root font, which nothing had noticed. A four-letter word's advance in a second font is the
+     one term no CSS unit gives you; the figure's is `ch` in `PositionLabel.css`, where the browser
+     measures it, off the count `CardLocations.tsx` reads from the rows it is drawing.
+
+     THE 84px THIS REPLACES was measured too, and that was the problem: it was one number covering
+     both terms, so it was right about the fonts and could never be right about the digit count. A
+     box past 999 cards overflowed it silently — the figure is flex-shrunk and its glyphs paint
+     outside their own box, so every element-box measurement said nothing had changed. */
+  --pos-slot-key: 37.594px;
 }
 
 /* One copy: where it is (label + neighbours), the lens, the state, the action. The lens takes
