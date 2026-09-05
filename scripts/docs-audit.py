@@ -1665,7 +1665,7 @@ def code_haystack() -> str:
 # every consumer, not only the commit that wrote it.
 #
 # ENTRY_BUDGET is twice the median entry rather than a picked round number. An entry at twice the
-# median is one that should have cited a neighbour instead of re-arguing it, which is that entry's
+# median is one that should have cited a neighbor instead of re-arguing it, which is that entry's
 # own rule.
 #
 # IT TRACKS THE CORPUS DELIBERATELY, AND IT HAS BEEN RE-DERIVED ONCE. Set at 12,000 against a median
@@ -2554,7 +2554,7 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
 MAP = ROOT / "docs" / "map.py"
 
 # What the orphan scan counts as source when an entry says nothing. Every entry written
-# before the key below existed keeps exactly the behaviour it had: `.py`, one level deep.
+# before the key below existed keeps exactly the behavior it had: `.py`, one level deep.
 DEFAULT_SOURCE_SUFFIXES: Tuple[str, ...] = (".py",)
 
 # The optional per-entry key that widens it. A single repo-wide suffix set was the obvious
@@ -5086,7 +5086,7 @@ def check_status_sources(report: Report) -> None:
 DESIGN = ROOT / "docs" / "DESIGN.md"
 TOKENS_CSS = ROOT / "app" / "src" / "tokens.css"
 
-COLOUR = "colour"
+COLOUR = "color"
 TYPEFACE = "typeface"
 LENGTH = "length"
 
@@ -5137,7 +5137,7 @@ def token_value(kind: str, text: str) -> str:
     finding nobody can fix — or worse, a permanent pass. Every difference this collapses is
     a difference CSS itself does not see:
 
-      colour     `#FFF` and `#ffffff` are one colour. A check that called them a
+      color     `#FFF` and `#ffffff` are one color. A check that called them a
                  disagreement would be reporting a spelling, and would be worked around by
                  respelling the doc, which is D16's forbidden direction.
       typeface   the stylesheet names the locked face plus a generic fallback. The interview
@@ -5267,7 +5267,7 @@ def design_token_claims(block: str) -> Claims:
         # A hex claim, in the two shapes the block writes. `·` separates several name/value
         # pairs on one line (the stage palette); without it the leading name owns the row's
         # hexes, and a row naming two tokens with `/` gives them to the first — the second is
-        # that colour's tint, which the block's own paragraph says is an alpha.
+        # that color's tint, which the block's own paragraph says is an alpha.
         if "·" in line:
             for name, value in _BN_PAIR_RE.findall(line):
                 if name.startswith("--bn-"):
@@ -5317,7 +5317,7 @@ def css_token_scopes(text: str) -> Tuple[Dict[str, str], Dict[str, str], Set[str
     THE SCOPES ARE KEPT APART, AND THE OLD READER'S MERGING THEM WAS LOSSY RATHER THAN MERELY
     EMPTY. It folded every `:root` in the file into one dictionary, so `--bn-bg`'s dark value
     silently overwrote its light one and the check compared the doc's light column against a
-    dark hex. Under a token system where every colour has both, that is a check that cannot be
+    dark hex. Under a token system where every color has both, that is a check that cannot be
     right — the shape had to change before the parsing did.
 
     A `:root` inside an at-rule contributes NAMES ONLY. The phone/coarse-pointer query raises
@@ -5622,6 +5622,114 @@ def check_raw_color(report: Report) -> None:
 
     report.add("raw color", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
                if findings else "every color comes from a token")
+
+
+
+# ------------------------------------------------------------------ the mark (D102)
+
+LOGO_SPEC = ROOT / "docs" / "specs" / "logo.md"
+MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
+
+# Section 9's rows, as they are written: | mark | prism | ground | bracket | card base |
+_S9_ROW = re.compile(
+    r"^\|\s*\*{0,2}([a-z ]+?)\*{0,2}(?:\s*—\s*DEFAULT)?\*{0,2}\s*\|"      # the mark's name
+    r"\s*`([^`]+)`\s*\|"                                                       # prism stops
+    r"\s*`([^`]+)`\s*→\s*`([^`]+)`\s*\|"                                     # ground, two stops
+    r"\s*\*{0,2}([a-z ]+?)\*{0,2}\s*\|"                                      # bracket name
+    r"\s*`([^`]+)`\s*\|",                                                      # card base
+    re.M,
+)
+
+
+def check_logo_parity(report: Report) -> None:
+    """`app/src/kit/markPalettes.ts` and docs/specs/logo.md section 9 name the same colors.
+
+    THIS ROW IS WHY THE MARK IS ALLOWED TO NAME COLORS AT ALL. CLAUDE.md's rule is that
+    `app/src/tokens.css` is the only file in `app/` that may name one, and D102 takes a
+    deliberate exception for the mark: those hexes are an illustration's, locked by another
+    document, and must not be theme-overridable — which is exactly what moving them into
+    `tokens.css` would invite.
+
+    **`raw color` cannot see the file.** Its scope is `app/src/*.css`, non-recursive, and it
+    never opens a `.ts` or `.tsx`, so sixty hexes in `markPalettes.ts` pass it in silence. An
+    exception with no reader is how a rule stops being one, so this row stands in its place.
+
+    Both directions, because the two failures are different: a palette here that section 9 does
+    not publish is a color nobody approved, and a mark in section 9 that is missing here is a
+    locked mark the product cannot draw.
+
+    Provably wrong when it fires and no judgement to defer — both sides are literals.
+    """
+    if not exists(LOGO_SPEC) or not exists(MARK_PALETTES):
+        return
+
+    published: Dict[str, Dict[str, object]] = {}
+    for name, prism, hi, lo, bracket, base in _S9_ROW.findall(read(LOGO_SPEC)):
+        published[name.strip()] = {
+            "prism": prism.split(),
+            "ground": [hi, lo],
+            "bracket": bracket.strip(),
+            "base": base,
+        }
+
+    if not published:
+        report.add("logo parity", MECHANICAL, [Finding(
+            rel(LOGO_SPEC),
+            "section 9's locked-set table did not parse, so this row is not comparing "
+            "anything. Say so here rather than passing — a check that silently stops "
+            "checking is worse than no check.",
+        )], "")
+        return
+
+    source = read(MARK_PALETTES)
+    generated: Dict[str, Dict[str, object]] = {}
+    for block in re.finditer(
+        r"^  (\w+): \{\n"
+        r"\s*label: '([^']+)',\n"
+        r"\s*prism: \[([^\]]+)\],\n"
+        r"\s*bracket: \[([^\]]+)\],\n"
+        r"\s*ground: \['([^']+)', '([^']+)'\],\n"
+        r"\s*base: '([^']+)',",
+        source,
+        re.M,
+    ):
+        _key, label, prism, bracket, hi, lo, base = block.groups()
+        generated[label] = {
+            "prism": re.findall(r"'(#[0-9A-Fa-f]{6})'", prism),
+            "ground": [hi, lo],
+            "bracket": re.findall(r"'(#[0-9A-Fa-f]{6})'", bracket),
+            "base": base,
+        }
+
+    findings: List[Finding] = []
+    for label in sorted(set(published) - set(generated)):
+        findings.append(Finding(
+            rel(MARK_PALETTES),
+            f"section 9 locks `{label}` and no palette here draws it. The product cannot "
+            f"render a mark the spec has locked. Re-run `node scripts/build-mark.mjs`.",
+        ))
+    for label in sorted(set(generated) - set(published)):
+        findings.append(Finding(
+            rel(MARK_PALETTES),
+            f"`{label}` is a palette section 9 does not publish. Every color the mark names "
+            f"is approved in docs/specs/logo.md section 9 (D102) — a hex that reaches the app "
+            f"without going through that table is one nobody chose.",
+        ))
+
+    for label in sorted(set(published) & set(generated)):
+        want, got = published[label], generated[label]
+        for field in ("prism", "ground", "base"):
+            if want[field] != got[field]:
+                findings.append(Finding(
+                    f"{rel(MARK_PALETTES)} -> {label}",
+                    f"{field} is {got[field]!r} here and {want[field]!r} in "
+                    f"docs/specs/logo.md section 9. Section 9 is the store of record; "
+                    f"re-run `node scripts/build-mark.mjs`, or move section 9 first.",
+                ))
+
+    report.add("logo parity", MECHANICAL, findings,
+               f"{len(published)} locked marks, every prism, ground and base against section 9"
+               if not findings else f"{len(findings)} disagreements with section 9")
 
 
 # ------------------------------------------------------------------ views opsec (D24)
@@ -7063,7 +7171,7 @@ def check_dispatch(report: Report, source: Path = SELF) -> None:
     describes.
 
     `source` is which file to reconcile: this one in every real run, a fixture under
-    `--self-test`. The reader's behaviour on a shape it cannot read has to be provable
+    `--self-test`. The reader's behavior on a shape it cannot read has to be provable
     without restructuring the live script to find out.
     """
     try:
@@ -7319,7 +7427,7 @@ def self_test() -> int:
     ok(not gone, "an entry that DISAPPEARS is not a renumber — nothing to chase", str(gone))
 
     one = moves_across([{ORDER: "D67", LINK: "D53"}, {ORDER: "D69", LINK: "D53"}])
-    ok(one == [("D67", "D69", ORDER)], "only the entry that moved is reported, not its neighbours", str(one))
+    ok(one == [("D67", "D69", ORDER)], "only the entry that moved is reported, not its neighbors", str(one))
 
     # EVERY PATTERN THAT READS A DECISION ID, AT THE DIGIT THAT USED TO END THEM (D16).
     # docs/DEBTS.md recorded this as a TRIGGERED debt: seven patterns in this file and four
@@ -8365,6 +8473,7 @@ def audit(staged_only: bool) -> Report:
     check_reason_codes(report)
     check_supervisor_self_watch(report)
     check_motion_params(report)
+    check_logo_parity(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)

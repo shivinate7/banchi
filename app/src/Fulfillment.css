@@ -100,7 +100,11 @@
   gap: var(--bn-4);
   padding-top: var(--bn-2);
 }
-.ff-mark { flex: none; border-radius: 12px; box-shadow: var(--bn-shadow-2); }
+/* No border-radius: the mark's tile is a quintic superellipse (docs/specs/logo.md section 3),
+   which has no straight edge near its corner, so a CSS radius clips the silhouette twice and
+   flattens exactly the curve the shape is chosen for. The shadow follows the real outline via
+   drop-shadow rather than the element box, for the same reason. */
+.ff-mark { flex: none; filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.28)); }
 .ff-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ff-greeting {
   font-size: 20px;
@@ -728,7 +732,7 @@
 .ff-where-bar { margin: var(--bn-2) 0; }
 
 /* PositionBar, fulfiller skin, re-drawn in this register: a rounded track with the section he
-   is in tinted, a solid pin in the fill colour, and the caption under the track. */
+   is in tinted, a solid pin in the fill color, and the caption under the track. */
 .ff .position-bar-fulfiller {
   --pb-track: 26px;
   --pb-marker: 8px;
@@ -1277,6 +1281,6 @@
 }
 .ff-zoom-hint { color: var(--bn-bg); font-weight: 600; }
 /* A lightbox sits on a dark ground in BOTH themes. In light that is `--bn-ink`; in dark
-   `--bn-ink` is the light colour, so the page's own ground and ink take over. */
+   `--bn-ink` is the light color, so the page's own ground and ink take over. */
 :root[data-theme='dark'] .ff-zoom { background: var(--bn-bg); color: var(--bn-ink); }
 :root[data-theme='dark'] .ff-zoom-hint { color: var(--bn-ink); }

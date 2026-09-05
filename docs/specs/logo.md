@@ -9,8 +9,14 @@ section 9 and must be regenerated before anyone uses it.
 **A light-theme ground was derived on 2026-09-05 and lost to the mark it would have replaced
 (section 12).** The mark is fixed dark in both themes.
 
-Nothing under `app/` or `server/` has been touched. `app/src/kit/index.tsx:258` (`Logo`) and
-`app/public/favicon.svg` still hold the placeholder: a geometric **B** in a rounded square.
+**THE MARK IS WIRED INTO THE APP AS OF 2026-09-05 (D102).** `app/src/kit/index.tsx`'s `Logo`
+renders §9's six marks at both optical cuts, and `app/public/favicon.svg` is the small cut in
+bluesteel. Neither is hand-drawn: `scripts/build-mark.mjs` reads `sheets/small-cut.html` and
+generates `app/src/kit/markGeometry.ts`, `app/src/kit/markPalettes.ts` and the favicon, so this
+file stays the store of record and the app cannot drift from it by being edited. `make
+docs-audit`'s `logo parity` row reconciles the palettes against §9 in both directions.
+Nothing under `server/` has been touched. The placeholder — a geometric **B** in a rounded
+square — is gone.
 
 ## 1. What the mark is
 
@@ -257,7 +263,7 @@ the taper both survived; two things the table above does not mention did not.
 | `logo/pass-black-and-gold.png` | **section 8** — nine golds, five blacks, five brackets |
 | `logo/pass-white-and-rose-gold.png` | white gold and rose gold on the locked black, one pass each |
 | `logo/pass-locked-set.png` | **section 9 — the six locked marks**, at 200px and at 48/28px |
-| `logo/pass-small-cut.png` | **§11 — the small cut swept**, rasterised at the sizes the app draws |
+| `logo/pass-small-cut.png` | **§11 — the small cut swept**, rasterized at the sizes the app draws |
 | `logo/pass-light-ground.png` | **§12 — the light ground**, derived and rejected |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
 | `logo/sheets/grounds.py` | **the ground rule, and the only implementation of it.** Self-checks against every published stop |
@@ -539,7 +545,9 @@ marks are locked at the display cut and none is locked at the small cut**, and a
   Nothing is owed here unless they are wanted back.
 - Regenerating the four assets, and generating the lockup.
 - A drawn wordmark. `Banchi` is set in Manrope today.
-- Which of tile / bare mark the sidebar takes. Decide by looking at the rail.
+- Which of tile / bare mark the sidebar takes. The rail takes the TILE today (D102) and it was
+  looked at; the bare mark is still undrawn, and it is a real code change rather than a layer
+  toggle, because the card is drawn OVER the brackets.
 - How the icon ships: the display cut uses `feTurbulence`, which browsers render but a favicon
   pipeline may drop. **§11 narrows this**: at the sizes a favicon and a rail use, the marbling is
   not merely invisible, it loses to a flat prism gradient — so the small cut may carry no filter
@@ -555,8 +563,8 @@ pre-commit image guard on the owner's word, the way every PNG in this directory 
 node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/small-cut.html /tmp/small.png 1240 1000
 ```
 
-**Every mark on that sheet is rasterised at its true pixel size and then magnified with
-nearest-neighbour**, so what is on screen is the pixel grid a display actually gets. This is not
+**Every mark on that sheet is rasterized at its true pixel size and then magnified with
+nearest-neighbor**, so what is on screen is the pixel grid a display actually gets. This is not
 a presentation detail. Section 9's small row scaled the *vector* down and was shot at
 deviceScaleFactor 2, so its "28px" tiles carry 56 real pixels — it flattered itself by a factor
 of two, in the one row whose whole job was to show a failure.
@@ -678,7 +686,7 @@ narrowly.**
 **§6 of that sheet drew three of the six dark marks with a ground this file had already
 eliminated.** It derived all six grounds from the tonal rule, and for `rich`, `wg_warm` and
 `rg_classic` the tonal rule produces the espresso — `#331E00`, `#26221B`, `#341C12` — that
-**section 8 rejected in favour of true black.** Section 9's locked grounds for those three are
+**section 8 rejected in favor of true black.** Section 9's locked grounds for those three are
 `#141619` → `#000000`. So the comparison that was put up showed light against a dark row that
 was one-half a set of drawings this file says are wrong, and it flattered light by exactly the
 amount section 8 had already measured.
@@ -697,7 +705,7 @@ The corrected §6 is a fair fight and the light row is genuinely attractive at 1
 tiles, each with its card glowing. **That is not the question the app asks.** Drawn at 44 / 32 /
 28 / 16px on the app's own light page, the light tiles **lose their silhouette**: a near-white
 tile on a near-white page has no edge, so the mark stops being an object and becomes a smudge.
-The dark tile keeps a hard silhouette at every size, on both page colours.
+The dark tile keeps a hard silhouette at every size, on both page colors.
 
 **So the answer is not "light is worse."** It is that light is a display-size idea and every
 surface in this app is below 64px — the same boundary section 3 draws for the two optical cuts,
@@ -705,9 +713,9 @@ arriving from a completely different direction.
 
 ### The recommendation, and what would reopen it
 
-**The mark stays fixed dark in both themes**, and the reason is the size rather than the taste. It is an object, not an ink colour: an app icon on
+**The mark stays fixed dark in both themes**, and the reason is the size rather than the taste. It is an object, not an ink color: an app icon on
 a phone home screen does not invert when the phone does, and this is the same kind of thing.
-What changes is the placeholder's behaviour — `Logo` today is drawn in `--bn-ink` on `--bn-bg`
+What changes is the placeholder's behavior — `Logo` today is drawn in `--bn-ink` on `--bn-bg`
 and so inverts — and the change is deliberate rather than a regression.
 
 **What is NOT eliminated**, in section 8's sense of the word: the dark-bracket, dark-card mark on

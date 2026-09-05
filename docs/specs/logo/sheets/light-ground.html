@@ -183,7 +183,7 @@ function icon(px,o){o=o||{}
     return c[2]>0.02?'<circle cx="'+c[0].toFixed(3)+'" cy="'+c[1].toFixed(3)+'" r="'+c[2].toFixed(3)+'" fill="url(#'+id+'c)"/>':''}).join('')
  }
  const card='<rect x="'+cx.toFixed(3)+'" y="'+cy.toFixed(3)+'" width="'+cw.toFixed(3)+'" height="'+ch.toFixed(3)+'" rx="'+rc+'"'
- /* holo:false draws the prism gradient flat — the marbling removed, the colour kept */
+ /* holo:false draws the prism gradient flat — the marbling removed, the color kept */
  const face = holo
   ? '<g clip-path="url(#'+id+'k)" opacity="1" filter="url(#'+id+'f)"><rect x="'+(cx-18).toFixed(2)+'" y="'+(cy-18).toFixed(2)+'" width="'+(cw+36).toFixed(2)+'" height="'+(ch+36).toFixed(2)+'" fill="url(#'+id+'p)"/></g>'
   : (o.flatBase ? '' : card+' fill="url(#'+id+'p)"/>')
@@ -223,7 +223,7 @@ const DK=['#182430','#060B12']
 
 /* ---- 0. the control ------------------------------------------------------------------------ */
 head('0 \u00b7 the control \u2014 the locked dark mark, on both app grounds',
- 'The mark as it stands, drawn on the light theme\u2019s own page colour and then on the dark theme\u2019s. '+
+ 'The mark as it stands, drawn on the light theme\u2019s own page color and then on the dark theme\u2019s. '+
  '<b>This is what a light variant has to beat</b>, and it has to beat it on the LEFT strip \u2014 the dark tile '+
  'on a light page is not obviously wrong, which is the whole reason this is a question and not a defect.')
 ;[false,true].forEach(function(d){const s=strip(d)
@@ -243,7 +243,7 @@ head('1 \u00b7 the lightness pair, at chroma ratio 0.31',
 /* ---- 2. the chroma ratio ------------------------------------------------------------------- */
 head('2 \u00b7 the chroma ratio, at L 0.94 \u2192 0.87',
  'The dark side\u2019s band is 0.23\u20130.39, walled where the tile stops reading as near-black. The light side '+
- 'has a different wall and it is a hard one: above 0.39 the colour leaves sRGB, so the last two are clips.')
+ 'has a different wall and it is a hard one: above 0.39 the color leaves sRGB, so the last two are clips.')
 ;(function(){const s=strip(false)
  Object.keys(GROUND.byRatio).forEach(function(k){const g=GROUND.byRatio[k]
   const clip=(k==='0.48'||k==='0.7')
@@ -271,7 +271,7 @@ head('4 \u00b7 the bracket \u2014 section 8\u2019s measurement, in reverse',
 
 /* ---- 5. the card base ---------------------------------------------------------------------- */
 head('5 \u00b7 the card base \u2014 the last of section 3\u2019s four HELD values',
- 'Section 10 already names <code>#5A6E80</code> the next thing worth sweeping: it is the only colour left in '+
+ 'Section 10 already names <code>#5A6E80</code> the next thing worth sweeping: it is the only color left in '+
  'the mark that nothing else constrains. It is swept here because a light ground changes what the card has to '+
  'separate from \u2014 the prism is a LIGHT gradient, so on a light ground the card is light-on-light.')
 ;(function(){const s=strip(false), g=GROUND.p94.bluesteel

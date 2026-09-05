@@ -67,7 +67,7 @@ PUBLISHED = {
 
 
 def in_gamut(lightness, chroma, hue):
-    """False where sRGB cannot hold this colour, so the hex is a CLIP and not the hue asked
+    """False where sRGB cannot hold this color, so the hex is a CLIP and not the hue asked
     for. It bites on the light side and never on the dark: near white, sRGB runs out of blue
     long before the eye runs out of tolerance."""
     a = chroma * math.cos(math.radians(hue))

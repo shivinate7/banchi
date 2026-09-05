@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode, Ref } from 'react'
 import { Icon, type IconName } from './Icon'
 import { rememberTheme, storedTheme, type Theme } from '../deviceMemory'
+import {
+  CARD, DISPLAY_BRACKET, DISPLAY_CAPS, HOLO, HOLO_RECT,
+  SHEEN_HEIGHT, SMALL_BRACKET, SMALL_STROKE, TILE,
+} from './markGeometry'
+import { DEFAULT_VARIANT, MARKS, SHEEN, type LogoVariant } from './markPalettes'
 
 export { Icon }
 export type { IconName }
@@ -255,15 +260,129 @@ export function Stat({ value, label, className }: { readonly value: ReactNode; r
 }
 
 /* ---- Logo --------------------------------------------------------------------------------------- */
-export function Logo({ size = 28, className }: { readonly size?: number; readonly className?: string }) {
+export type { LogoVariant }
+export { VARIANTS } from './markPalettes'
+
+/** The Banchi mark. `docs/specs/logo.md` is the state of record and `scripts/build-mark.mjs`
+ *  generates the geometry and the palettes out of that spec's own generator — neither is
+ *  hand-written here, and `make docs-audit`'s `logo parity` row reconciles the palettes against
+ *  section 9 in both directions.
+ *
+ *  TWO OPTICAL CUTS, PICKED BY SIZE (section 3, swept in section 11). Below 64px the taper is
+ *  removed and the stroke thickens, because a 1.7 stroke is a scratch at 32px and absent at 16px;
+ *  the marbling goes too, because at these sizes it loses to a flat prism gradient. Every call
+ *  site in this app is below 64px, so the small cut is what ships and `DISPLAY` is what
+ *  `#/gallery` shows.
+ *
+ *  FIXED DARK IN BOTH THEMES, ON PURPOSE (section 12). The placeholder this replaced was drawn in
+ *  `--bn-ink` on `--bn-bg` and so inverted with the theme. The mark is an object rather than an
+ *  ink color — an app icon does not invert when the phone does — and a light ground was derived
+ *  and lost: a near-white tile on a near-white page has no silhouette at any size this app draws.
+ *
+ *  `aria-hidden`, always. Every call site names itself on the wrapper. */
+export function Logo({
+  size = 28,
+  variant = DEFAULT_VARIANT,
+  className,
+}: {
+  readonly size?: number
+  readonly variant?: LogoVariant
+  readonly className?: string
+}) {
+  // Per instance, because the sidebar, the mobile drawer and a crash page can all be mounted at
+  // once and each mark's gradients are referenced by id. The sheet gets away with a module
+  // counter; a component cannot, and two marks sharing `url(#bk)` is silent — both references
+  // resolve, to the first one's gradient.
+  const id = useId().replace(/:/g, '')
+  const mark = MARKS[variant]
+  const small = size < 64
+
+  const bracket = small ? (
+    <path
+      d={SMALL_BRACKET}
+      fill="none"
+      stroke={`url(#${id}b)`}
+      strokeWidth={SMALL_STROKE}
+      strokeLinecap="round"
+    />
+  ) : (
+    <>
+      <path d={DISPLAY_BRACKET} fill={`url(#${id}b)`} />
+      {DISPLAY_CAPS.map(([cx, cy, r]) => (
+        <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={r} fill={`url(#${id}b)`} />
+      ))}
+    </>
+  )
+
   return (
-    <svg className={className} width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <rect width="64" height="64" rx="16" fill="var(--bn-ink)" />
-      <path
-        d="M20 16h13.5c7 0 11.5 3.6 11.5 9.4 0 3.9-2.2 6.7-5.4 7.9 4.3 1 7.4 4.3 7.4 9 0 6.4-5 10.7-12.7 10.7H20V16zm12.6 13.6c3.5 0 5.6-1.8 5.6-4.6s-2.1-4.5-5.6-4.5h-5.8v9.1h5.8zm1.1 18.9c3.9 0 6.2-2 6.2-5.2s-2.3-5.1-6.2-5.1h-6.9v10.3h6.9z"
-        fill="var(--bn-bg)"
-      />
-      <circle cx="47" cy="17" r="5" fill="var(--bn-live)" />
+    <svg className={className} width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id={`${id}g`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={mark.ground[0]} />
+          <stop offset="1" stopColor={mark.ground[1]} />
+        </linearGradient>
+        <linearGradient id={`${id}b`} x1=".75" y1=".067" x2=".25" y2=".933">
+          {mark.bracket.map((c, i) => (
+            <stop key={c + i} offset={[0, 0.33, 0.67, 1][i]} stopColor={c} />
+          ))}
+        </linearGradient>
+        <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#FFFFFF" stopOpacity={SHEEN} />
+          <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={`${id}p`} x1=".671" y1=".030" x2=".329" y2=".970">
+          {mark.prism.map((c, i) => (
+            <stop key={c + i} offset={i / 4} stopColor={c} />
+          ))}
+        </linearGradient>
+        <clipPath id={`${id}t`}>
+          <path d={TILE} />
+        </clipPath>
+        {!small && (
+          <>
+            <filter id={`${id}f`} x="-30%" y="-30%" width="160%" height="160%">
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency={HOLO.baseFrequency}
+                numOctaves={HOLO.octaves}
+                seed={HOLO.seed}
+                result="t"
+              />
+              <feDisplacementMap
+                in="SourceGraphic"
+                in2="t"
+                scale={HOLO.displacement}
+                xChannelSelector="R"
+                yChannelSelector="G"
+              />
+            </filter>
+            <clipPath id={`${id}c`}>
+              <rect x={CARD.x} y={CARD.y} width={CARD.w} height={CARD.h} rx={CARD.r} />
+            </clipPath>
+          </>
+        )}
+      </defs>
+
+      <path d={TILE} fill={`url(#${id}g)`} />
+      <g clipPath={`url(#${id}t)`}>
+        <rect width="100" height={SHEEN_HEIGHT} fill={`url(#${id}s)`} />
+      </g>
+      {bracket}
+      <g transform="rotate(180 50 50)">{bracket}</g>
+      <rect x={CARD.x} y={CARD.y} width={CARD.w} height={CARD.h} rx={CARD.r} fill={mark.base} />
+      {small ? (
+        <rect x={CARD.x} y={CARD.y} width={CARD.w} height={CARD.h} rx={CARD.r} fill={`url(#${id}p)`} />
+      ) : (
+        <g clipPath={`url(#${id}c)`} filter={`url(#${id}f)`}>
+          <rect
+            x={HOLO_RECT.x}
+            y={HOLO_RECT.y}
+            width={HOLO_RECT.w}
+            height={HOLO_RECT.h}
+            fill={`url(#${id}p)`}
+          />
+        </g>
+      )}
     </svg>
   )
 }

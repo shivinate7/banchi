@@ -34,8 +34,8 @@ both ends are wrong, so the stroke sweep runs 2.4 to 5.0 and is expected to fail
 Every mark is the locked <b>bluesteel</b> — ground <code>#182430 → #060B12</code>, sheen 0.15, prism bluesteel,
 chrome brackets, base <code>#5A6E80</code> — so the only thing moving in each sweep is the one named parameter.
 <br><br>
-<b>The magnified views are rasterised, not re-drawn.</b> Each mark is rendered to a canvas at its true pixel
-size and then blown up with nearest-neighbour, so what you are looking at is the actual pixel grid a 1x
+<b>The magnified views are rasterized, not re-drawn.</b> Each mark is rendered to a canvas at its true pixel
+size and then blown up with nearest-neighbor, so what you are looking at is the actual pixel grid a 1x
 display gets. Scaling the vector instead would have shown a drawing nobody's screen ever renders — which is
 how section 9's small row flattered itself: shot at deviceScaleFactor 2, its "28px" tiles carry 56 real pixels.
 </div>
@@ -48,7 +48,7 @@ window.__sheetReady = false
    committed sheets. What changed here is that the parameters are OPTIONS rather than consts,
    because a sweep cannot move a const — and the defaults are section 9's LOCKED values
    (#182430 -> #060B12, sheen .15) rather than icon()'s own older defaults (#1E232B, .14), so a
-   cell that names no colour is drawing the mark of record.                                   */
+   cell that names no color is drawing the mark of record.                                   */
 const CW=31.782, CH=44.495
 const SQ=(function(){const a=50,N=220,p=[]
  for(let i=0;i<=N;i++){const t=i/N*2*Math.PI,ct=Math.cos(t),st=Math.sin(t)
@@ -107,7 +107,7 @@ function icon(px,o){o=o||{}
     return c[2]>0.02?'<circle cx="'+c[0].toFixed(3)+'" cy="'+c[1].toFixed(3)+'" r="'+c[2].toFixed(3)+'" fill="url(#'+id+'c)"/>':''}).join('')
  }
  const card='<rect x="'+cx.toFixed(3)+'" y="'+cy.toFixed(3)+'" width="'+cw.toFixed(3)+'" height="'+ch.toFixed(3)+'" rx="'+rc+'"'
- /* holo:false draws the prism gradient flat — the marbling removed, the colour kept */
+ /* holo:false draws the prism gradient flat — the marbling removed, the color kept */
  const face = holo
   ? '<g clip-path="url(#'+id+'k)" opacity="1" filter="url(#'+id+'f)"><rect x="'+(cx-18).toFixed(2)+'" y="'+(cy-18).toFixed(2)+'" width="'+(cw+36).toFixed(2)+'" height="'+(ch+36).toFixed(2)+'" fill="url(#'+id+'p)"/></g>'
   : (o.flatBase ? '' : card+' fill="url(#'+id+'p)"/>')
@@ -125,7 +125,7 @@ function icon(px,o){o=o||{}
  one+'<g transform="rotate(180 50 50)">'+one+'</g>'+
  card+' fill="'+(o.base||'#5A6E80')+'"/>'+face+'</svg>'}
 
-/* ---- rasterise at true size, then magnify the PIXELS ---------------------------------------- */
+/* ---- rasterize at true size, then magnify the PIXELS ---------------------------------------- */
 const jobs=[]
 function raster(px,zoom,o){
  const c=document.createElement('canvas')
@@ -149,7 +149,7 @@ function head(t,note){out.appendChild(el('h2',null,t));if(note)out.appendChild(e
 const SIZES=[16,28,32,44]
 const Z={16:7,28:5,32:4,44:3}   /* magnifications that land every column at ~112-132px wide */
 
-/* a sweep table: one row per value, one column per size, rasterised at that size */
+/* a sweep table: one row per value, one column per size, rasterized at that size */
 function sweep(values,label,mk,zoomOnly){
  const t=document.createElement('table')
  const hr=document.createElement('tr'); hr.appendChild(el('th','rowhead',label))
@@ -214,7 +214,7 @@ head('3 · the holographic foil',
  'The 28px row of section 9 shows the marbling already gone — the displacement map moves pixels that are no '+
  'longer resolvable. The question is whether it is <b>costing</b> anything: a feTurbulence the eye cannot '+
  'resolve is a filter a favicon pipeline may refuse, for a texture nobody sees. The last column keeps the card '+
- 'flat in its base colour, no prism at all.')
+ 'flat in its base color, no prism at all.')
 sweep([
  {label:'displacement 60',value:'full'},{label:'displacement 30',value:'half'},
  {label:'no marbling',value:'flat'},{label:'flat base only',value:'base'}],
@@ -238,7 +238,7 @@ sweep([
 head('5 · the gap, and the size of the card',
  'Two ways to buy the mark back at small sizes that are not the stroke. <b>Gap</b> moves the brackets in toward '+
  'the card; <b>card scale</b> grows the card inside a fixed tile. Both change what the mark IS, so both need '+
- 'the same scrutiny as a colour.')
+ 'the same scrutiny as a color.')
 sweep([
  {label:'8.0',value:8},{label:'9.75',value:9.75},
  {label:'11.5 — locked',value:11.5,pick:true},{label:'13.0',value:13}],
@@ -272,7 +272,7 @@ head('7 · the forced choice',
  'Section 7 rule 1: people are unreliable at absolute judgement and reliable at comparison, so the sweeps '+
  'above end in a choice between three and not in a score. All three drop the taper, which section 2 settles. '+
  'They differ in the two things the sweeps left genuinely open — <b>whether the marbling survives</b>, and '+
- '<b>whether 3.4 is enough bracket at 16px</b>. Shown rasterised, then at true size on the app\'s own two '+
+ '<b>whether 3.4 is enough bracket at 16px</b>. Shown rasterized, then at true size on the app\'s own two '+
  'grounds, which are the only surfaces this mark is ever seen on.')
 ;(function(){
  const CAND=[
