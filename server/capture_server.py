@@ -852,9 +852,14 @@ UNDOABLE_STATES = (master.CAPTURED,)
 # that the file they change is overwritten in place.
 #
 # NONE OF THESE IS A STATE, AND WHAT ENFORCES THAT IS THEIR ABSENCE FROM `master.STATES`.
-# `_state_before_sale` — the only reader of `history.jsonl` in this repo — scans backwards
-# for the last event naming a state and filters against that tuple, so a name added here is
-# inert to it by construction. A name that collided would restore a reversed sale to
+# `_state_before_sale` — one of the TWO scanners of the history, the other being
+# `_state_before_retirement` — scans backwards for the last event naming a state and filters
+# against that tuple, so a name added here is inert to BOTH by construction. This said "the
+# only reader of `history.jsonl` in this repo" until 2026-09-05, and it was wrong twice over:
+# the twin scanner arrived with D26 and `_state_before_sale` does not read the history at all,
+# it is handed a sequence. The readers are `_answer_origin`, `_origin` and
+# `_reverse_stand_down`. The invariant is unchanged; what was wrong was the count a later
+# session would have reasoned from. A name that collided would restore a reversed sale to
 # `corrected`. T7 asserts the two sets are disjoint rather than leaving that to whoever adds
 # the next event — WHICH IS WHY THE ROSTER IS NOT COUNTED IN PROSE ANY MORE. The ordinals
 # below number the route-written names in the order they arrived, and the tuple at the foot of
@@ -973,9 +978,10 @@ BOX_REOPENED = "box_reopened"
 # ASSERTION, stated here and worth a T7 case: NOT ONE OF THESE NAMES IS A MEMBER OF
 # `master.STATES`, which is `(captured, identified, sold)`. Nothing enforces that at import
 # time and nothing should — the check that matters is a test, because the failure is silent.
-# `_state_before_sale` is the only reader of `history.jsonl` in this repo and it scans
-# backwards for the last event naming a state; it filters against `master.STATES` precisely
-# so that a name in this tuple is inert to it. A collision would restore a reversed sale to
+# `_state_before_sale` and its twin `_state_before_retirement` scan backwards for the last
+# event naming a state; both filter against `master.STATES` precisely so that a name in this
+# tuple is inert to them. (This claimed a single reader until 2026-09-05 — see the correction
+# at the sibling comment above.) A collision would restore a reversed sale to
 # `resectioned`.
 #
 # The five D20 names are a MIRROR of literals that live inside `store/master.py:_log` calls

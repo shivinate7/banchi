@@ -667,6 +667,13 @@ what keeps D58's count and the store key from being spelled the same way on one 
 SOURCE TEXT. `const n = side.index` on one line and `#{n}` on the next is a violation it cannot
 see, and so is any indirection through a helper, a destructure or a prop rename.
 
+**Its bypass is `PKMNSCAN_SIGIL=off`**, spelled the way `PKMNSCAN_DOCS=off`, `PKMNSCAN_GATE=off`
+and `PKMNSCAN_MAIN=off` already are, and printed in every refusal for D42's reason: a guard with no
+visible way past it gets disarmed at the config instead, and a disarmed `core.hooksPath` takes the
+three opsec rules with it. The per-line form is `sigil-ok: <why>`, which is the better escape
+because it argues the exception in the file next to the code rather than turning the whole check
+off for a commit.
+
 **The fix that could not be evaded was considered and rejected on blast radius.** A nominal type
 over the two numbers — branding `slot` and `index` so the compiler refuses the swap — is the real
 answer, and `slot` and `index` are plain numbers across the whole wire contract and forty call
@@ -891,6 +898,15 @@ all. Measured on the owner's store at 150 concurrent connections, against the se
 Identical within noise on both throughput and responsiveness, and the thread count is the whole
 difference. The cost is a TCP handshake per request: microseconds on localhost, a millisecond or two
 to a phone, against a capture cadence of ~600 ms per card.
+
+**Where the header is sent from is part of the guarantee, and it moved on 2026-09-05.** It was
+sent from `_send`, which is not every response: `_photo`'s 304 branch answers a conditional GET by
+hand — `send_response`, the ETag headers, `end_headers` — and never touches `_send`. With
+`Cache-Control: no-cache` making 304 the normal answer on a revisit, four concurrent revalidations
+held all four workers until the 15s reap. It is sent from **`end_headers`** now, which every
+response reaches by construction, so a new route cannot answer without it. That is the difference
+between an invariant and a convention, and the convention had already been broken once by the route
+that needed it most.
 
 **The starvation this section warned about is real, and removing `Connection: close` demonstrates
 it.** With keep-alive restored and the pool kept, four idle connections hold all four workers and
