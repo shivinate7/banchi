@@ -1,95 +1,176 @@
 # The Banchi mark
 
-**Status: DIRECTION LOCKED, NOT BUILT.** `docs/specs/logo/banchi-icon.svg` is the chosen icon.
-Nothing under `app/` has been touched: `app/src/kit/index.tsx:258` (`Logo`) and
-`app/public/favicon.svg` still hold the placeholder, a geometric **B** in a rounded square with a
-vermilion dot.
+**Status: DIRECTION SETTLED, PARAMETERS MOSTLY BOUNDED, ASSETS STALE.** This file is the state
+of record. The SVGs beside it in `logo/` do **not** match section 3 and must be regenerated
+before anyone uses them.
 
-## 1. What is locked
+Nothing under `app/` or `server/` has been touched. `app/src/kit/index.tsx:258` (`Logo`) and
+`app/public/favicon.svg` still hold the placeholder: a geometric **B** in a rounded square.
 
-**Silver chrome.** A quintic-superellipse tile in cool near-black, two chrome brackets holding a
-slate card with a blue-steel holographic surface.
+## 1. What the mark is
 
-| | |
+A quintic-superellipse tile in cool near-black. Two diagonal chrome brackets — top-left and
+bottom-right — holding a slate card whose surface is a procedural holographic foil. The
+brackets taper toward their free ends.
+
+The idea: **番地 is a lot number, an address.** The brackets are the address; the card is what
+is at it. With the card removed the same brackets become an empty slot, which is the in-product
+mark.
+
+## 2. Reading this file
+
+Every parameter is tagged. The tags matter more than the numbers.
+
+- **LOCKED** — an explicit instruction, or bounded by an observed failure on both sides.
+- **RANGED** — bounded on both sides; any value inside is acceptable.
+- **HELD** — chosen once and never tested. **These are the risk.** Four of them survived twenty
+  rounds of refinement unexamined, and when finally swept, three turned out to be wrong.
+- **DRIFTED** — the value in the file disagrees with the value decided.
+
+## 3. The parameters
+
+Units are the 100 x 100 icon viewBox.
+
+| what | value | tag | evidence |
+| --- | --- | --- | --- |
+| Tile shape | superellipse n = 5 | LOCKED | explicit; n 4 to n 9 are near-identical at icon size |
+| Card aspect | 5 : 7 | LOCKED | a 63 x 88 mm trading card |
+| Card size | 31.782 x 44.495 | LOCKED | falls out of the mark box |
+| Card radius | **1.9** | LOCKED | 1.6 reads as a rectangle; 4.0 too soft |
+| Bracket corner radius | **8** | LOCKED | chosen over the derived 9.945 — see section 5 |
+| Arm reach | **0.38** | LOCKED | 0.34 and below go stubby; 0.43+ tested and this preferred |
+| Bracket stroke | 1.5 – 2.0 | RANGED | 2.2 eliminated; 1.2 and 0.9 lose the gradient |
+| Taper tip | 0 – 0.20 | RANGED | — |
+| Taper length | 0.12 – 1.5 | RANGED | below 0.12 the profile is a step, not a taper; 2.0 eats the corner |
+| Card-to-bracket gap | 10 – 13 | RANGED | 6.7 crowds the card; 15 lets it float |
+| Holo displacement | 40 – 68 | RANGED | 14 goes flat; 76 dropped; 90 too much |
+| Holo opacity | 1.0 | LOCKED | — |
+| Seed | 5, 7, 11, 13, 23, 41 | RANGED | **the seed is part of the design** — a different roll is a different drawing |
+| Sheen over the tile top | **0.22** | DRIFTED | the file says 0.08; see section 6 |
+| Ground gradient | `#252B35` → `#03050A` | RANGED | or warm `#241F1E` → `#0B0806`; flat is visibly deader |
+| Prism | bluesteel, warmer, quieter, lilacish, mint | RANGED | colder and richer rejected |
+| Chrome gradient angle | free | RANGED | 90 to 200 degrees all read as metal |
+| Chrome gradient colors | `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` | **HELD** | never swept |
+| Turbulence base frequency | `0.035 0.09` | **HELD** | never swept — this sets the scale of the marbling |
+| Turbulence octaves | 4 | **HELD** | never swept |
+| Card base fill | `#5A6E80` | **HELD** | never swept |
+
+### The lockup
+
+`番地` over `BANCHI`, both inside the same diagonal brackets. No tagline.
+
+| what | value | tag |
+| --- | --- | --- |
+| Kanji | Hiragino Sans, tracking 0.07em | LOCKED |
+| Roman | Manrope 700 at 0.36x the kanji, **tracked until it is exactly as wide as 番地** | LOCKED |
+| Case | all caps | LOCKED |
+| Padding | 0.22 – 0.28 of the kanji size | RANGED |
+| Line gap | free, 0.09 to −0.03 | RANGED |
+| Bracket stroke | 0.11 of the kanji size | LOCKED |
+| Bracket arm | 0.32 | LOCKED |
+| Dark-mode stroke | x 0.93 | LOCKED — light strokes optically thicken |
+
+**Padding is four times the lever the gap is.** Measured: gap across its whole range moves the
+block 4px; padding moves it 16px. Three rounds were spent tuning the wrong parameter.
+
+### Two optical cuts
+
+| cut | use |
 | --- | --- |
-| Tile | `#1E232B` → `#080B0F`, plus a white sheen at 8% over the top third |
-| Brackets | chrome gradient `#FFFFFF` → `#B8C8D8` → `#F2F8FF` → `#8FA4B8` at 120° |
-| Card | `#5A6E80` under a blue-steel prism `#E4EEF8 #B0C8E0 #7F9FC0 #F2F8FF #6086AC` at 110° |
-| Holo | `feTurbulence` fractal noise, base frequency `0.035 0.09`, four octaves, **seed 29**, displaced by 26, at 72% |
+| display — the values above | 64px and up |
+| small — stroke 3.4, no taper | below 64px |
 
-**The seed is part of the design.** The holo is procedural, so a different seed is a different
-drawing. 29 is the roll that was chosen.
+Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 
-## 2. The geometry is derived, not drawn
+## 4. Where the assets stand
 
-Every number falls out of a published rule. Nothing here was nudged by eye.
+| file | state |
+| --- | --- |
+| `logo/banchi-icon.svg` | committed, and **stale** against section 3 |
+| `logo/pass-gold-silver-on-black.png` | committed, still accurate as a record |
+| `logo/pass-brackets.png` | committed, still accurate as a record |
 
-| step | value | source |
-| --- | --- | --- |
-| Tile corner radius | 22.37% of width, quintic superellipse | Apple's icon shape |
-| Largest inscribed square | 100 · 2^(−1/5) = 87.055 | the biggest square inside that superellipse |
-| Mark box | 87.055 × 20/24 × 0.92 = **66.742** | Material live area, at 92% for air |
-| Unit *u* | B / 12 = **5.562** | Material's 2-of-24 stroke — sets stroke **and** gap |
-| Card | **31.78 × 44.49**, ratio 5:7 | a 63 × 88 mm trading card |
-| Card radius | 1.602 (5.04% of width) | 3.175 mm on 63 mm |
-| Bracket radius | card + e = **9.945** | the concentric rule, r = R − p |
-| Arms | one third of the expanded rect | — |
+**No asset matches section 3.** The committed icon predates the corrections in sections 5 and 6
+and carries the old stroke, arm, card radius, gap, sheen, displacement and seed. It is kept
+because it is what was reviewed, not because it is right.
 
-**Optical centering needs no fudge**: brackets on opposite corners plus a centred card give the
-mark 180° rotational symmetry, so its centroid is already the tile's centre.
+**Nothing exists for**: the small optical cut, the bare brackets in either cut, or the lockup.
+All four are generated from the parameters above rather than drawn, so producing them is
+mechanical once the RANGED values are chosen.
 
-## 3. What was tried and rejected
 
-Recorded so none of it is re-proposed. Two whole directions and roughly a hundred and eighty
-drawings.
+## 5. Decisions that broke a rule on purpose
 
-**Flat monochrome maker's marks.** A tray read as a bar chart; a segmented ring read as a life
-preserver; a chamfered slab with knockouts read as a floppy disk. Only a framed plate had usable
-bones.
+**The bracket corner radius left the derivation.** It was `card radius + offset = 9.945`, the
+concentric rule (`r = R − p`), which makes two nested curves look parallel. At a 1.7 stroke the
+bracket is a thin wire far from the card and nobody reads the gap as parallel curves, so the
+rule bought nothing while the wide corner ate the straight arm. **8** gives the arms visible
+length. The rule was right at a 5.5 stroke and stopped applying at 1.7.
 
-**Rendered graphite objects.** Rejected by the owner as *too formal, too monotone, too
-AI-generated* — each defect traceable to a line of the brief that produced it. **The cause: the
-register was taken from the codebase and imposed on the brand.** CLAUDE.md is dense and rigorous,
-so the mark was made dense and rigorous. The product sells trading cards, which is a hobby.
+**The card radius left the derivation too.** 1.602 is 3.175 mm on 63 mm, a real card. At icon
+size it reads as a rectangle. **1.9** is the floor where it reads as a card.
 
-**Pastel pixel art.** Five passes. Killed by two facts: nine cells cannot work at 32px, and a
-pastel tile under pastel content has no figure-ground separation at any size.
+## 6. Two errors worth not repeating
 
-**Method note.** Every interview question in this file's history was written with its own options,
-so the answer space belonged to whoever wrote them. Both real turning points — *pastel bit style* and
-*make it shiny* — came from the owner typing past the options. **Offer renders to react to, not
-menus to pick from.**
+**The taper clamp.** Taper length was clamped at half the path, which binds at about 0.82, so
+every value above that rendered identically while being presented as a sweep. Three images
+approved as different were the same image.
 
-## 4. What the sheets in `logo/` show
+**The sheen.** It was 0.22 in the first modernist icons and 0.08 in the generated file. The
+change was mine and was never flagged; it was found by the owner noticing the tile had gone
+flat. The value of record is **0.22**.
 
-- `pass-gold-silver-on-black.png` — nine gold prisms, then patterns, card bases, seeds, brackets
-  and ground depths; then seven silvers with the same sweeps. **Gold is the stronger family**
-  because it has a hue for the turbulence to modulate; silver is a lightness ramp and flattens.
-  Silver was chosen anyway, on the owner's call.
-- `pass-brackets.png` — seven sweeps on the bracket alone. The findings that bind: chroma has a
-  ceiling around .09 before the bracket competes with the card; below L .80 on a dark ground the
-  bracket stops framing; **a dark bracket cannot work on this tile at all**; and a bracket with
-  its own gradient reads as metal catching the same light as the card, which is why chrome won.
+Both were drift about earlier settings rather than mistakes in the moment, and both surfaced
+only because a render was questioned. That is the argument for this file existing.
 
-## 5. Two artifacts, and only one exists
+## 7. Method — refract it like an optometrist
 
-| | the tile | the bare mark |
-| --- | --- | --- |
-| Where | favicon, home screen, dock, avatar | sidebar, print, one color, on a page |
-| What | this SVG | the same geometry cropped to its own bounding box, **54.04 × 66.74** |
-| Status | **locked** | **not made** |
+The owner named this after a dozen rounds had already gone wrong without it. It is the most
+transferable thing in this file.
 
-The bare mark needs one value swapped for dark grounds — the bracket goes light — and it loses
-the holo entirely in one flat ink. That is normal for a logo system, and it means the thing
-stamped on a packing slip is a flatter object than the thing in the dock.
+An optometrist does not ask "how good is this lens." They do seven things:
 
-## 6. Still open
+1. **Forced choice between two.** *Better with one, or two?* People are unreliable at absolute
+   judgement and reliable at comparison.
+2. **Bracket before bisecting.** Open wide enough that **both ends are wrong**. If nobody ever
+   says "worse", the edges have not been found — only the limits of what was offered.
+3. **Deliberately cross the optimum.** Go one step past the best value to hear "worse". That
+   confirmation is the point. Without it there is no way to tell a peak from a wall.
+4. **Halve the interval, then halve again.** Coarse steps first, fine steps near the end.
+5. **Never let the answer define the range.** Somebody who keeps choosing the strongest lens
+   gets a stronger one fetched. **A pick on the edge of an offered range is not an answer, it is
+   evidence the range was wrong.**
+6. **One variable at a time.** Sphere, then cylinder, then axis. Two at once and neither result
+   means anything — except where two genuinely interact, and then cross them in a matrix and say
+   so.
+7. **"About the same" is a result.** It means the just-noticeable difference has been reached.
+   Stop. Further sweeping is noise dressed as diligence.
 
-- **The bare mark**, per section 5.
-- **A drawn wordmark.** "Banchi" is set in Manrope today. It should follow the icon, not run
-  beside it.
-- **Lockup rules** — clear space, minimum size.
-- **Whether the sidebar takes the tile or the bare mark.** Decide by looking at the rail.
-- **How the SVG ships.** It uses `feTurbulence`, which renders in browsers but can be dropped by
-  a favicon pipeline that rasterizes oddly. The shipped icon may need to be exported bitmaps per
-  size rather than a live SVG.
+**What that produced here.** Stroke went 5.56 → 1.7 only because rule 5 was eventually applied;
+every earlier range had its floor at whatever seemed reasonable to the person drawing. The arm
+found a real floor at 0.38 because 0.34 and 0.30 were finally shown and failed — rule 3. The
+card radius left its derived value because 1.6 was put beside 1.9 and lost.
+
+**What it cost to learn.** Ten rounds where a pick landed on a minimum or a maximum and the
+next sheet stayed inside the same walls. Each of those rounds looked like progress and was a
+survey of one person's prior.
+
+**Two rules that are specific to doing this by eye rather than by lens.**
+
+**Print the measurement.** The finding that padding moves the lockup four times as much as the
+line gap was invisible until block height was rendered as a number under each specimen. A sweep
+whose effect cannot be seen must be quantified or it is not a sweep.
+
+**Re-show what was rejected.** An optometrist re-presents an earlier lens to check the answer is
+stable. That never happened here — no rejected value was ever shown again to confirm the
+rejection held. Every rejection in section 3 rests on a single look.
+
+
+## 8. Still open
+
+- The four **HELD** parameters in section 3.
+- Regenerating the four assets, and generating the lockup.
+- A drawn wordmark. `Banchi` is set in Manrope today.
+- Which of tile / bare mark the sidebar takes. Decide by looking at the rail.
+- How the icon ships: it uses `feTurbulence`, which browsers render but a favicon pipeline may
+  drop. Exported bitmaps per size may be needed rather than a live SVG.
