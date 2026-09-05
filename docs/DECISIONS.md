@@ -5400,6 +5400,26 @@ Named because each is a place where main or an earlier rule says otherwise, and 
 
 ---
 
+### Amended 2026-09-04 — the walk's figure is a count over the pass, and the denominator is deleted rather than fixed
+
+**The figure above is kept and its denominator is not.** *"3 of 5 orders fully pulled"* becomes *"3 orders complete in this pass"*. It is still counted over `done` and not over `open`, for exactly the reason the amendment above gives — over `open` it is zero by construction — and that half is untouched.
+
+**What is deleted is the pair, and the entry's own words for it are what fail.** The denominator was *"the pair that header already prints from the same two arrays — so the walk's figure and the page's headline cannot disagree"*, and `done` there is every order the ledger has ever completed, with no window and nothing pruned. The agreement was real; the figure was not. A store with 200 completed orders and 3 open drew **`200 of 203` on a three-order walk** — a lifetime statistic wearing a progress figure's clothes, correct on the day it was measured at 20 open and 0 done and wrong on every day after that has a sale in it.
+
+**Freezing the denominator to the pass was tried first, and it buys a worse state than it sells.** With the set frozen at entry, a pass over two orders with both pulled draws `2 of 2` beside a head reading `3 still to pull across 1 open order` — because orders arrive while you walk, and this screen re-reads after every pull. **A fraction that has reached its own denominator says FINISHED**, over a screen with work on it, and no wording rescues it. A count cannot make that claim, because it never had a total to reach. That is the whole argument for deleting the denominator instead of fixing it.
+
+**`in this pass` is what the frozen set is still for.** `walkKeys` in `OrdersHubStore` is the orders the walk was started over; the count is its members that have left `open`, which starts at 0 — where every walk starts — and only rises.
+
+**A toggle is not the end of a pass, and freezing on every entry made it one.** Because the set is drawn from `open` and an order leaves `open` the instant its last copy is recorded, a fresh freeze can never contain an order the pass has already finished. Measured: after one pull the figure read one, and after `By order` → `Walk the boxes` it was **gone** — zero by construction, the same shape as the defect this entry rejects. The pass is held across the toggle instead, and `onFetch` ends it: orders arriving off TCGplayer are a new sitting, and that is the only boundary the operator actually draws.
+
+**`complete` and not `fully pulled`, which is what it said.** An order reaches `done` by routes this screen never sees — a sale marked on `#/inventory`, an ingest, another device. The old verb claimed presses the figure cannot account for.
+
+**What is given up is the property the old denominator was bought for.** The walk's figure and the page's headline can now disagree, and on a store with history they will. That is the right trade because they answer different questions: the headline is about the ledger, the pill is about the sitting you are in. A `null` set draws nothing rather than falling back to the lifetime figure — a fallback that silently restores it is how it would come back.
+
+**What would reopen this.** Mid-pass arrivals becoming frequent enough that the operator wants them counted, which is a different figure and not this one. A pass long enough that losing it on a reload is felt, which would put the set in the hash after all — declined here because `mirrorOrderParam` overwrites the whole query string and D90's own reasoning makes the ledger the one source of truth for order identity. And a tab left open past the sitting it describes: `HubState` lives as long as the tab, so `walkKeys` does too, and nothing on screen says the pass is stale. `docs/DEBTS.md` carries that one.
+
+**Observed failing, four mutations.** The ledger's lifetime figure restored: the pill appears **on arrival**, before anything is pulled, which the case forbids. Counted over `open`: no figure ever. The set never frozen: no figure ever. The set refrozen on every entry: the figure survives the pull and vanishes on the round trip through `By order`. **The fixture carries a third order the ledger finished before the walk began** — without it the pass figure and the lifetime figure agree, and the case would have passed against the figure it replaces.
+
 ## D97 — The copy map ranks and never picks, and a line says what remains
 
 **An order line draws every box that holds the ordered card, ranked by how many free copies each holds, and it recommends without ever making the choice.** Built 2026-09-03 on `#/orders`, from the owner's own design: *"a map is good, with the highest option being basically the option that has the most of the unit in one box, and if within one box already then within one section"*, under the constraint quoted in D96 — the walk does not pick.

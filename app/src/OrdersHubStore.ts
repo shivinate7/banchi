@@ -33,6 +33,18 @@ export type HubState = {
   readonly paste: string
   readonly filter: PullFilter
   readonly mode: PullMode
+  /** THE ORDERS THIS WALK WAS STARTED OVER — `OrderRow.key`s, frozen when the walk is entered
+   *  and cleared when it is left. `null` outside a walk.
+   *
+   *  It exists so the walk's "N of M orders fully pulled" counts progress through the work in
+   *  front of you rather than the ledger's lifetime. Counted over `done` against `open + done`
+   *  the figure was correct on the day it was measured (20 open, 0 done) and inflates for ever:
+   *  a store with 200 completed orders and 3 open reads `200 of 203` on a three-order walk.
+   *
+   *  IT IS HERE AND NOT IN THE URL, on the owner's ruling of 2026-09-04. This store's whole
+   *  argument is a lifetime as long as the tab, and a walk is a sitting at the boxes. A reload
+   *  mid-walk resets the figure, which is honest — you are starting the walk again. */
+  readonly walkKeys: ReadonlySet<string> | null
   /** The order the Pull stage has open — an `OrderRow.key`. `null` means the first one shown.
    *  Mirrored into the hash as `#/orders?order=<key>` so a selection is linkable. */
   readonly selected: string | null
@@ -54,6 +66,7 @@ let state: HubState = {
   paste: '',
   filter: 'all',
   mode: 'orders',
+  walkKeys: null,
   selected: null,
   batch: null,
   lanes: new Set(SHIP_LANES),
