@@ -464,8 +464,18 @@ def cut_branch(root: str, branch: str, confirm: bool) -> None:
     rule("the branch afterwards")
 
     gone = run(["git", "push", "origin", "--delete", branch], cwd=root)
-    say("  origin/{0}: {1}".format(branch, "deleted" if gone.ok else "not deleted — " + (
-        (gone.err or gone.out or "git said nothing").strip().splitlines()[-1])))
+    if gone.ok:
+        say("  origin/{0}: deleted.".format(branch))
+    elif "remote ref does not exist" in (gone.err or "") + (gone.out or ""):
+        # NOT A FAILURE, AND SAYING SO MATTERS. `delete_branch_on_merge` on the repository
+        # deletes the head branch server-side the moment `gh pr merge` returns, so this push
+        # finds nothing left to delete — on EVERY merge, once that setting is on. Reported as
+        # an error it would read as a broken wrapper; the branch being gone is the outcome
+        # this function wanted. Also covers a branch that was never pushed at all.
+        say("  origin/{0}: already gone — nothing to delete.".format(branch))
+    else:
+        say("  origin/{0}: not deleted — {1}".format(branch, (
+            (gone.err or gone.out or "git said nothing").strip().splitlines()[-1])))
 
     if not head_of(root, "refs/heads/" + branch):
         say("  {0}: not in this clone.".format(branch))

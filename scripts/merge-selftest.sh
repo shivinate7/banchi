@@ -254,6 +254,22 @@ else
   ok "AND DELETED ON ORIGIN"
 fi
 
+# A branch GitHub already deleted server-side. Once `delete_branch_on_merge` is on — set
+# 2026-09-05 — this is EVERY merge, so the wrapper must not report the outcome it wanted as an
+# error. `feature` is gone from origin by now: the case above deleted it.
+if git -C "$tmp/origin.git" rev-parse --verify -q refs/heads/feature >/dev/null; then
+  bad "the fixture is wrong — origin still has feature, so 'already gone' cannot be exercised"
+else
+  ok "the fixture arms the case: origin no longer carries feature"
+fi
+git update-ref refs/heads/feature "$MERGED"
+already_out="$(python3 "$MERGE_PR" --cut feature --confirm 2>&1)"
+case "$already_out" in
+  *"already gone — nothing to delete"*) ok "a branch origin already dropped is not an error" ;;
+  *) bad "reported a server-side deletion as a failure"
+     printf '%s\n' "$already_out" | sed 's/^/         /' ;;
+esac
+
 echo "  -- no pull request named --"
 expect refuse "a bare invocation" python3 "$MERGE_PR"
 
