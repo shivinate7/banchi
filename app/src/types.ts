@@ -1188,7 +1188,7 @@ export type SearchCopy = {
 
   /** THE ID EVERY WRITE AIMS BY, and the reason a copy can be picked off this list at all (D93).
    *
-   *  `POST /orders/fill` checks it against the card actually at the slot and refuses
+   *  `POST /orders/pull` checks it against the card actually at the slot and refuses
    *  `capture_id_mismatch` rather than selling whatever slid into the index after a mid-box
    *  delete (D10 ruling 1, D58) — so an id, and not a `(box, index)`, is what a copy is chosen
    *  BY. Null for a record written before ids were kept and for one `emit` created rather than

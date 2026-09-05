@@ -75,7 +75,10 @@ const BOX = {
  *  this is a list and never a set. */
 type Wire = { deletes: string[]; captures: number }
 
-async function open(page: Page, options: { refuseDeleteFrom?: number } = {}): Promise<Wire> {
+async function open(
+  page: Page,
+  options: { refuseDeleteFrom?: number; nextIndex?: Record<string, number> } = {},
+): Promise<Wire> {
   const wire: Wire = { deletes: [], captures: 0 }
 
   /* A canvas camera, installed before the app script runs. `useCamera` reads
@@ -109,7 +112,7 @@ async function open(page: Page, options: { refuseDeleteFrom?: number } = {}): Pr
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ cards: 0, next_index: {} }),
+      body: JSON.stringify({ cards: 0, next_index: options.nextIndex ?? {} }),
     }),
   )
   await page.route(/\/boxes$/, (route) =>
@@ -340,4 +343,38 @@ test('a walk that is refused partway says how far it got, in the server’s own 
   // The server's sentence, verbatim, and its machine string beside it (docs/DESIGN.md).
   await expect(page.locator('.capture-refused')).toContainText('is the newest card in box 3')
   await expect(page.locator('.capture-halt-code')).toHaveText('undo_not_newest')
+})
+
+/* THE ONE UNDO TARGET THIS SESSION NEVER SAW A CAPTURE RESPONSE FOR, which is the only row in
+ * this screen that can carry no label at all — and, until 2026-09-04, the only one that drew the
+ * store key wearing the count's sigil.
+ *
+ * `undoStack` composes it from `GET /status`'s `next_index` rather than from a capture it made:
+ * `serverNewest = next_index[box] - 1`, taken whenever the server's high-water mark is ahead of
+ * anything this session shot (`CaptureScreen.tsx`). That is every reload mid-run — the operator
+ * refreshes, the session's own list is empty, and the newest card in the drawer is still undoable.
+ * The record has a box and an index and NOTHING ELSE, so `positionText` and `undoFigure` both fall
+ * through to `storeKey.ts`'s `storeKeyText`.
+ *
+ * WHAT IT GUARDS. `undoFigure` used to draw `#{slotNumber(target)}` here, and `slotNumber` returned
+ * the raw index — D58's countable number spelled over the store key, three functions away from the
+ * `#`, which is why `make sigil-check` was green over that line from the day it was written
+ * (docs/DEBTS.md §9). Nothing in this suite reached the branch: the fix shipped in `42e6b96` with
+ * no test file touched at all, and its only evidence was a render somebody looked at once.
+ *
+ * `toHaveText` and an anchored `aria-label` rather than a `contains`: `B3 #7` contains `#7`, so a
+ * loose assertion here passes against the exact defect it is written for. */
+test('an undo target the session never captured draws the store key, not a card number', async ({
+  page,
+}) => {
+  /* Shoot nothing. The server says box 3 is at index 8, so the newest card in it is 7 — a card
+     this session has no capture response for and therefore no label. */
+  await open(page, { nextIndex: { '3': 8 } })
+
+  await expect(rows(page)).toHaveCount(1)
+  await expect(rows(page).first().locator('.capture-undo-pos')).toHaveText('B3 #7')
+  await expect(rows(page).first()).toHaveAttribute(
+    'aria-label',
+    'Undo the newest capture, B3 #7',
+  )
 })

@@ -216,7 +216,7 @@ fi
 #
 # THE SELF-TEST RUNS HERE TOO, WHICH `audit-self-test` DELIBERATELY DOES NOT, and the
 # difference is the one D18 actually draws. That target is off the commit path because it
-# WRITES — it builds a temporary directory of fixtures. This one writes nothing: sixteen
+# WRITES — it builds a temporary directory of fixtures. This one writes nothing: twenty-seven
 # cases over string literals, no filesystem, microseconds. D18 forbids a commit gate that
 # writes, not one that checks itself, and a checker whose extractors have silently stopped
 # matching is exactly the failure this repo has paid for most.

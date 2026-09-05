@@ -8,6 +8,7 @@ import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
 import { boxLabel } from './runScope'
+import { storeKeyText } from './storeKey'
 import './Runs.css'
 
 /* THE IDENTIFY COMPOSER — the one press on this product that spends money, as a staged
@@ -673,7 +674,14 @@ export function RunsComposer({
                   <div className="bn-skeleton runs-preview-skel" aria-busy="true" />
                 ) : preview.sample.unreadable !== undefined || preview.sample.frame === undefined ? (
                   <p className="run-preview-fact">
-                    <span className="run-preview-slot">Card {preview.sample.index}</span>
+                    {/* THE STORE KEY AND NOT A CARD NUMBER, on all four of this panel's figures.
+                        `/pipeline/runs/<name>/crop` sends `{box, index}` and no slot, because what
+                        it is describing is a PHOTOGRAPH — the same `(box, index)` `photoUrl` names
+                        it by (D52) — and D58's countable number moves under that key every time a
+                        card in front of this one leaves the box. Drawn as `Card 17` this panel
+                        would name a different card than the one a hand counting into the drawer
+                        reaches, so it draws what it actually has. */}
+                    <span className="run-preview-slot">{storeKeyText(preview.sample.box, preview.sample.index)}</span>
                     <span>this photograph cannot be decoded, so nothing is sent for it.</span>
                   </p>
                 ) : (
@@ -690,7 +698,7 @@ export function RunsComposer({
                         <img
                           className="run-preview-sent"
                           src={preview.sample.sent_image}
-                          alt={`Box ${preview.sample.box}, card ${preview.sample.index}, as this reading sends it`}
+                          alt={`${storeKeyText(preview.sample.box, preview.sample.index)}, as this reading sends it`}
                           draggable={false}
                           style={
                             preview.sample.rect != null && preview.sample.frame != null
@@ -726,7 +734,7 @@ export function RunsComposer({
                         backgroundPosition: detailPosition,
                       }}
                       role="img"
-                      aria-label={`Card ${preview.sample.index} at full size, as this reading sends it`}
+                      aria-label={`${storeKeyText(preview.sample.box, preview.sample.index)} at full size, as this reading sends it`}
                     />
                     <p className="run-preview-fact">
                       <span>{aim === null ? 'Resting on the collector number' : 'Where you are pointing'} · 1:1</span>
@@ -745,7 +753,7 @@ export function RunsComposer({
                     )}
 
                     <p className="run-preview-fact">
-                      <span className="run-preview-slot">Card {preview.sample.index}</span>
+                      <span className="run-preview-slot">{storeKeyText(preview.sample.box, preview.sample.index)}</span>
                       {preview.sample.sent != null && (
                         <span>
                           sent at {preview.sample.sent[0]}×{preview.sample.sent[1]}, shown smaller here
