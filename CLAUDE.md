@@ -913,11 +913,20 @@ was open** — the rule is renumber your own, never another's.
   that fill it and pulls them, `#/shipping` routes a real export into three lanes, both reachable
   from the nav, and `server/order_transport.py` fetches this account's own orders over the cookie
   session D69 measured — `search` has run authenticated and returned three real orders.
-  **`inventory/orders.json` has still never held a real one**, so "pulls a real order out of the
-  ledger", which this pointer claimed until 2026-08-31, was a screen's capability read as a
-  history. All forty-two sales in the store went through `#/inventory` instead, and §1 measures
-  that. One piece INSIDE step 12 is unbuilt too: §3's T2b — the Rubber Stamp fill,
-  `POST /shipping/batches/<batch>/stamps` — is NOT BUILT. **Steps 13 and 14 — the shipped status
+  **THE LEDGER HOLDS 20 REAL ORDERS as of 2026-09-02**, and the store of record is
+  `inventory/store.sqlite`'s `orders` table (D88) rather than `inventory/orders.json`. This
+  pointer said that file "has still never held a real one" until 2026-09-05, which was true when
+  written and wrong on both counts by the time it was read — the ledger filled, and the file it
+  named had already stopped being the store. What it was right about stands: "pulls a real order
+  out of the ledger" was a screen's capability read as a history, and all forty-two sales in §1's
+  measurement went through `#/inventory` instead. **§3's T2b — the Rubber Stamp fill,
+  `POST /shipping/batches/<batch>/stamps` — is BUILT as of 2026-09-05**, route, client and a
+  control beside the download on `#/shipping`; the label in the operator's hand is the pick
+  instruction. It fills all three corners or none and stamps what is still OWED rather than what
+  has been pulled, which matters because D58 closes a box up behind a departed card, so an index
+  stamped after the sale names a different card. Eight of those 20 orders hold more than three
+  copies and so get no stamps at all; the spec's §T2b carries that measurement and names the
+  register change it argues for. **Steps 13 and 14 — the shipped status
   and the tracking write-back — are NEITHER.** Their two endpoints were seen on the wire and deliberately not built. It said
   "Recorded, not built" and named three unreachable modules under `pipeline/` until D66's build
   order was discharged. **§3's T6 — an order DRIVING the inventory walk, with the envelope as the
