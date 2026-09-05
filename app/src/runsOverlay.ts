@@ -11,7 +11,7 @@ import { useEffect, type RefObject } from 'react'
  * reopened — the cost of an accidental Escape is a reopen, not work. What does not survive is a
  * `fetch` nobody can see: nothing aborts it, and its receipt toasts for a sheet that is gone.
  * So the guard is exactly that case and NOT unfinished work, on the owner's ruling of
- * 2026-09-05. A sheet with nothing in flight closes on Escape as it always has.
+ * 2026-09-04. A sheet with nothing in flight closes on Escape as it always has.
  *
  * IT DELIBERATELY DOES NOT YIELD TO TYPING, and that was tried first. `keys.ts` is the question
  * every unmodified-key handler in this app asks, because those keys would otherwise be swallowed

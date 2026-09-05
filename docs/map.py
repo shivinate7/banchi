@@ -1495,7 +1495,7 @@ COMPONENTS = [
                         "D58's COUNT of the cards in a box and never the store key, and a key "
                         "is drawn only with D68's `B<box>` sigil (D92). Refuses a FIGURE composed "
                         "from an expression naming `index`, in either spelling this product "
-                        "uses \u2014 a bare `#`, and the word `Card` (D92 amended 2026-09-05, after "
+                        "uses \u2014 a bare `#`, and the word `Card` (D92 amended 2026-09-04, after "
                         "four of the word form shipped past a green run of the first, measured "
                         "at four true positives and zero false ones over app/src) \u2014 with a per-line "
                         "`sigil-ok: <reason>` escape that demands the reason. ON THE COMMIT "
