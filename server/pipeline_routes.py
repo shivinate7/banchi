@@ -1613,9 +1613,11 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
     by nothing; they are the DENOMINATOR, and what a person wants is what is left.
 
     IT ASKS THE PYTHON THAT ACTUALLY REFUSES. `Decisions.blocking` is the one authority on
-    what stops an `emit`; `app/src/readiness.ts` already mirrors it for the open screen and is
-    audited against it, and a third implementation here to answer the same question would be
-    the drift that audit exists to catch.
+    what stops an `emit`, and a third implementation here to answer the same question would be
+    exactly the drift this arrangement avoids. `app/src/readiness.ts` mirrors the same
+    vocabulary for the open screen — BY HAND, and checked by nobody. This docstring said it was
+    "audited against it" until 2026-09-05 and `scripts/docs-audit.py` has never read that file;
+    the mirror is a convention two comments asserted and no row enforced.
     """
     if not manifest.get("joined"):
         return []

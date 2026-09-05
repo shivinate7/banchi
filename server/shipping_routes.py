@@ -26,14 +26,22 @@ TWO COSTS, RECORDED RATHER THAN DISCOVERED:
   here, which is why the prohibition is written down beside the code rather than only in the
   entry.
 
-SPECIFIED AND NOT BUILT — `POST /shipping/batches/<batch>/stamps`. It would fill Pirate
-Ship's three Rubber Stamp columns from the order ledger, so the label in the operator's hand
-IS the pick instruction. NO CODE FOR IT EXISTS HERE, deliberately, and for two reasons:
-both of D63's maps are empty today, so the control could only ever answer "nothing"; and it
-needs a `store.orders.OrderRecord -> pipeline.orders.Order` adapter that the order branch
-also needs, which is exactly the two-branches-one-file collision D66 told us to avoid. The
-wire already carries `stamp` on every row and `stamps` on the batch as nulls, so the later
-route changes no type and no component.
+BUILT 2026-09-05 — `POST /shipping/batches/<batch>/stamps` (T2b). It fills Pirate Ship's
+three Rubber Stamp columns from the order ledger, so the label in the operator's hand IS the
+pick instruction. Both of the reasons this header gave for there being no code here are
+spent: the `store.orders.OrderRecord -> pipeline.orders.Order` adapter the order branch also
+needed is `server/capture_server.py:_engine_order`, whose own docstring calls itself THE ONLY
+ADAPTER, so the two-branches-one-file collision D66 warned of cannot happen any more; and
+D63's maps stopped being empty on 2026-09-02, when twenty real orders with real SKUs were
+fetched into the owner's ledger, so the control has something to answer.
+
+  **THIS MODULE STILL HOLDS NO STORE AND COMPOSES NO LABEL, and both halves are the seam.**
+  `do_shipping_stamps` takes a `locate` callable and hands it ORDER NUMBERS — which it
+  already has, and which are not a buyer's anything — and gets back strings. It never sees a
+  `Snapshot`, an `Inventory` or a `Ledger`, so the file an operator reads to answer "where
+  does the PII go" did not grow a second subject. The strings come from
+  `pipeline/join.py:Position` by way of `_Places`, which is the one label formula in this
+  repo; the closing note below says why a second one here would be a defect.
 """
 
 from __future__ import annotations
@@ -44,12 +52,12 @@ import sys
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -118,9 +126,19 @@ class _Batch:
     an order number, a lane, a reason and two numbers, and no name, street, city or postcode
     at all.
 
-    `parcels` IS KEPT RATHER THAN RE-DERIVED because the future stamps route named in the
-    module docstring re-renders this same set with three columns filled. Re-parsing would
-    mean holding the export text, which is the thing this record refuses to hold.
+    `parcels` IS KEPT RATHER THAN RE-DERIVED because the stamps route named in the module
+    docstring re-renders this same set with three columns filled. Re-parsing would mean
+    holding the export text, which is the thing this record refuses to hold.
+
+    `parcels` IS THE UNSTAMPED SET AND STAYS THAT WAY. `do_shipping_stamps` renders its own
+    stamped copies with `dataclasses.replace` and hands those over without keeping them, so
+    what a later press starts from is the export's own reading. That is belt to the braces
+    rather than the braces: what actually makes the press idempotent is that every parcel's
+    `stamps` is SET on every press — `()` where the order earned none — and never added to.
+
+    `stamps` IS THE TALLY AND NOT THE STRINGS. What each parcel carries is on the parcel and
+    what each row carries is in `rows`; this is the four counts the screen draws, and `None`
+    until the stamps route has run against this batch.
     """
 
     name: str
@@ -132,6 +150,7 @@ class _Batch:
     shipments: int
     blob: bytes
     parcels: Tuple[pirateship.Parcel, ...] = field(default=())
+    stamps: Optional[Dict[str, int]] = None
 
 
 # A `ThreadingHTTPServer` serves each request on its own thread, so every read and write of
@@ -189,6 +208,21 @@ def _recall(batch: str) -> _Batch:
     return held
 
 
+def _restore(key: str, batch: _Batch) -> None:
+    """Put an updated batch back under the id it already has.
+
+    NEVER RE-INSERTS ONE THAT IS GONE. Between the `_recall` that read it and this call the
+    operator may have pressed Forget, or the TTL may have passed; writing it back then would
+    re-hold buyer addresses the operator had already dropped, which is the one thing
+    `do_shipping_forget` exists to prevent. A vanished batch simply keeps the answer it was
+    already about to give.
+    """
+    with _LOCK:
+        _expire_locked(time.monotonic())
+        if key in _BATCHES:
+            _BATCHES[key] = batch
+
+
 def _forget(batch: str) -> None:
     with _LOCK:
         _expire_locked(time.monotonic())
@@ -211,8 +245,10 @@ def _only(payload: dict, allowed: Tuple[str, ...]) -> None:
         raise ShippingRefusal(
             HTTPStatus.BAD_REQUEST,
             "field_not_settable",
+            # `or "nothing"` for the route that takes a body and sets none of it —
+            # "Settable: ." is a sentence with a hole in it where the answer should be.
             "Cannot set {} here. Settable: {}.".format(
-                ", ".join(unknown), ", ".join(allowed)
+                ", ".join(unknown), ", ".join(allowed) or "nothing"
             ),
         )
 
@@ -244,15 +280,37 @@ def _ratio(ratio: Optional[Fraction]) -> Optional[str]:
     return str((Decimal(ratio.numerator) / Decimal(ratio.denominator)).quantize(_RATIO_PLACES))
 
 
-def _row(shipment: shipping.Shipment, routing: shipping.Routing) -> Dict[str, Any]:
+def _stamp_text(stamps: Sequence[str]) -> Optional[str]:
+    """The row's ONE `stamp` string, out of the up-to-three the label's corners hold.
+
+    THE WIRE FIELD IS SINGULAR AND THE FORMAT IS NOT, so this is the join and it lives on
+    this side of it. `app/src/types.ts` has declared `stamp: string | null` since the seam
+    was cut and `OrdersShipStage.tsx` already draws it as one pinned line; a screen taking
+    an array instead would be the type change this route was shaped not to need.
+
+    THE SEPARATOR IS ` / ` AND MAY NOT BE ` · `. The label's own parts are joined by ` · `
+    (`Box 3 · Section 1 · Card 31`), so joining labels with it would produce a string in
+    which the boundary between two different cards is spelled exactly like the boundary
+    between a section and a card number — one address to a reader, and the wrong shelf to
+    a hand. Nothing parses this back; the CSV takes the strings one per column.
+    """
+    kept = [str(stamp) for stamp in stamps if str(stamp).strip()]
+    return " / ".join(kept) or None
+
+
+def _row(
+    shipment: shipping.Shipment,
+    routing: shipping.Routing,
+    stamps: Sequence[str] = (),
+) -> Dict[str, Any]:
     """One order as the screen draws it: which lane, on what grounds, and how sure.
 
     `certain` is carried rather than inferred from `reason` at the far end, because
     `Routing.certain` is the module that owns the distinction and a second copy of the rule
     in TypeScript is the second-renderer failure this repo has already recorded.
 
-    `stamp` IS ALWAYS `None` TODAY — the null the future stamps route will fill. See the
-    module docstring for why it is a null and not an absent key.
+    `stamp` IS `None` UNTIL THE STAMPS ROUTE HAS RUN, and null rather than absent: the key
+    is on the wire from the first read so that filling it changes no type and no component.
     """
     return {
         "order": routing.order,
@@ -265,13 +323,54 @@ def _row(shipment: shipping.Shipment, routing: shipping.Routing) -> Dict[str, An
         # distinguishable from small all the way to the screen, which is the whole of
         # `pipeline/shipping.py`'s abstention.
         "item_count": shipment.item_count,
-        "stamp": None,
+        "stamp": _stamp_text(stamps),
+    }
+
+
+def _payload(key: str, batch: _Batch) -> Dict[str, Any]:
+    """One held batch as the wire's `ShippingBatch`. ONE RENDERER FOR BOTH HANDLERS.
+
+    `do_shipping_batches` and `do_shipping_stamps` answer the same object and the second one
+    exists to change two of its fields, so a second literal here is a payload that drifts by
+    a key the first press has and the second does not — the shape of bug a screen shows as a
+    field that empties itself when you press a button.
+
+    `file.bytes` IS READ OFF THE BLOB rather than remembered, because stamping re-renders it
+    and a stale length is a download size that disagrees with the download.
+    """
+    return {
+        "batch": key,
+        "name": batch.name,
+        "expires_in": BATCH_TTL_SECONDS,
+        "shipments": batch.shipments,
+        "rows": list(batch.rows),
+        # STRAIGHT FROM `shipping.lane_counts` / `shipping.reason_counts`, WHICH SEED EVERY
+        # KEY INCLUDING THE ZEROS — do not filter them. "Nothing was unjudged" and "nothing
+        # was checked" must not be the same payload.
+        "lane_counts": batch.lane_counts,
+        "reason_counts": batch.reason_counts,
+        "parcel_count": batch.parcel_count,
+        "file": {"name": IMPORT_FILENAME, "bytes": len(batch.blob)},
+        # `None` UNTIL THE STAMPS ROUTE HAS RUN AGAINST THIS BATCH, and that is not the same
+        # fact as every count being zero: the first says nobody has asked the ledger, the
+        # second says it was asked and had nothing to say. The screen draws two different
+        # sentences off exactly this distinction.
+        "stamps": dict(batch.stamps) if batch.stamps is not None else None,
     }
 
 
 # ----------------------------------------------------------------------------- handlers
 
 _BATCH_FIELDS: Tuple[str, ...] = ("name", "content")
+
+# The stamps route takes a body and sets nothing out of it. `_body()` refuses an empty
+# request by this server's own uniform rule, so the client sends `{}` — and an empty
+# allowlist means any key at all refuses by name rather than being ignored.
+_STAMPS_FIELDS: Tuple[str, ...] = ()
+
+# `store.orders` order number -> the position labels of the copies that fill it, plus how
+# many orders the ledger holds at all. The caller supplies it; see `do_shipping_stamps`.
+StampSource = Callable[[Sequence[str]], Tuple[int, Dict[str, Tuple[str, ...]]]]
 
 
 def do_shipping_batches(payload: dict) -> dict:
@@ -356,21 +455,94 @@ def do_shipping_batches(payload: dict) -> dict:
     )
     key = _remember(batch)
 
-    return {
-        "batch": key,
-        "name": batch.name,
-        "expires_in": BATCH_TTL_SECONDS,
-        "shipments": batch.shipments,
-        "rows": list(rows),
-        # STRAIGHT FROM `shipping.lane_counts` / `shipping.reason_counts`, WHICH SEED EVERY
-        # KEY INCLUDING THE ZEROS — do not filter them. "Nothing was unjudged" and "nothing
-        # was checked" must not be the same payload.
-        "lane_counts": lane_tally,
-        "reason_counts": reason_tally,
-        "parcel_count": batch.parcel_count,
-        "file": {"name": IMPORT_FILENAME, "bytes": len(blob)},
-        "stamps": None,
+    return _payload(key, batch)
+
+
+def do_shipping_stamps(batch: str, payload: dict, locate: StampSource) -> dict:
+    """`POST /shipping/batches/<batch>/stamps` — fill the three Rubber Stamp corners (T2b).
+
+    Free, re-runnable and idempotent: it spends nothing, opens no socket, writes no file, and
+    re-asks the store every time rather than adding to what the last press wrote. What it
+    changes is the held batch — the same id, a re-rendered blob, `stamp` on the rows and the
+    four counts on `stamps`.
+
+    `locate` IS THE WHOLE SEAM, AND WHAT CROSSES IT IS ORDER NUMBERS AND STRINGS. This module
+    may not import `server/capture_server.py` (that file imports THIS one — the cycle
+    `ShippingRefusal` exists for), and it must not learn to open the store in any case: it is
+    the one file that holds a buyer's name and street, and the answer to "where does the PII
+    go" gets harder to give with every second subject in it. So the caller passes a function,
+    it is handed the batch's own order numbers, and it hands back labels. An order number is
+    the marketplace's identifier for a sale and is not a buyer's anything.
+
+    ALL THREE CORNERS OR NONE, AND THAT IS THE ONE RULE WORTH ARGUING. `pirateship.Parcel`
+    enforces no length on a stamp because nobody has measured what Pirate Ship prints, and
+    its header says why: truncating at an invented number turns `Box 3 · Card 31` into a
+    wrong shelf rather than an obviously broken one. Dropping the fourth position of a
+    four-position order is the same failure one register up — the label is the thing in the
+    operator's hand, there is no fourth corner to say "and two more", and a short pick list
+    that looks complete is worse than an empty one. So an order needing more positions than
+    the label has corners gets NONE and is counted as unstamped, which the screen can say and
+    a label cannot. **Measured on the owner's own ledger, 2026-09-05: 12 of 20 orders hold
+    three copies or fewer and 8 hold between five and thirteen.** If that ratio holds as the
+    store deepens, the register is what changes — a stop per BOX, in the vocabulary the order
+    screen's own walk plan already speaks, rather than a card per corner — and never this
+    rule. `docs/specs/order-pipeline.md`'s T2b carries the argument and cites the entry.
+
+    AN ORDER THE LEDGER DOES NOT HOLD LEAVES ITS CORNERS EMPTY. It is not looked up by name,
+    by buyer or by value, and nothing is inferred from the row: the export and the ledger
+    agree about an order number or they do not.
+    """
+    _only(payload, _STAMPS_FIELDS)
+    held = _recall(batch)
+
+    # DEDUPED, AND IN THE EXPORT'S OWN ORDER. `dict.fromkeys` rather than a set, because the
+    # numbers are handed to somebody else's function and a set would make what it is asked
+    # depend on a hash seed.
+    numbers = tuple(dict.fromkeys(str(row["order"]) for row in held.rows if row["order"]))
+    ledger_orders, found = locate(numbers)
+
+    stamps_for: Dict[str, Tuple[str, ...]] = {}
+    for number, labels in found.items():
+        kept = tuple(str(label).strip() for label in labels if str(label).strip())
+        # OVER THE LIMIT IS EMPTY AND IS NEVER A SLICE — see the docstring. Under it, a
+        # `Parcel` built with these cannot raise `MalformedParcel`, which is the format's
+        # own guard and stays where it is.
+        stamps_for[str(number)] = () if len(kept) > pirateship.STAMP_LIMIT else kept
+
+    parcels = tuple(
+        replace(parcel, stamps=stamps_for.get(str(parcel.order_id), ()))
+        for parcel in held.parcels
+    )
+    rows = tuple(
+        dict(row, stamp=_stamp_text(stamps_for.get(str(row["order"]), ())))
+        for row in held.rows
+    )
+    # RENDERED BEFORE ANYTHING IS STORED, so a parcel the format refuses takes the press down
+    # with the old batch still intact rather than leaving a half-stamped one behind.
+    blob = pirateship.render(parcels)
+
+    tally = {
+        # How many orders the ledger holds AT ALL. The screen's honest sentence for an empty
+        # ledger is "no order has been read in yet", and it cannot be told apart from "none
+        # of these twenty is in it" without this number.
+        "ledger_orders": int(ledger_orders),
+        # Shipments, not parcels: an order in the ledger is matched whichever lane it landed
+        # in, and the envelope lane is most of a real export.
+        "matched": sum(1 for row in held.rows if str(row["order"]) in found),
+        # PARCELS, because these two are the FILE's figures and the file is the parcel lane
+        # and nothing else — `stamped of parcel_count` is the sentence the screen draws.
+        "stamped": sum(1 for parcel in parcels if parcel.stamps),
+        "unstamped": sum(1 for parcel in parcels if not parcel.stamps),
     }
+
+    updated = replace(held, rows=rows, parcels=held.parcels, blob=blob, stamps=tally)
+    # IDEMPOTENT BECAUSE EVERY PARCEL'S `stamps` IS SET AND NEVER ADDED TO — `()` above where
+    # the order earned none, so a second press re-asks the ledger rather than compounding
+    # what the first wrote. The held set is left unstamped besides, so what a later press
+    # starts from is the export's own reading; that is the belt, and the line above is the
+    # braces.
+    _restore(str(batch), updated)
+    return _payload(str(batch), updated)
 
 
 def do_shipping_file(batch: str, filename: str) -> Tuple[bytes, str]:
@@ -428,3 +600,11 @@ def do_shipping_forget(batch: str) -> dict:
 # NEVER COMPOSE A POSITION LABEL. `pipeline/join.py:Position` is the only label formula in
 # this repo — a second one here would be the second-renderer failure it has already recorded
 # three times, and since D58 a card's number needs the box's whole occupancy to draw at all.
+# `do_shipping_stamps` therefore takes strings from `locate` and writes them out unchanged;
+# the only thing it composes is `_stamp_text`'s join, which is a list of labels and not a
+# label.
+#
+# NEVER SLICE AN ORDER'S STAMPS TO FIT. Three corners is the format's whole answer, and an
+# order needing four positions gets none — see `do_shipping_stamps`. A truncated pick list
+# reads as a complete one, which is a wrong shelf rather than an obviously broken label, and
+# it is the same failure `pirateship.Parcel` refuses to enforce a stamp LENGTH over.

@@ -4,7 +4,7 @@ import { readUpload } from './csvUpload'
 import { Button, EmptyState, Icon, Notice, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
-import { describeFailure, forgetShippingExport, readShippingExport, shippingFileUrl } from './server'
+import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl } from './server'
 import type { Failure } from './server'
 import type { OrderRow, OrdersPayload, ShippingLane, ShippingReason, ShippingRow } from './types'
 import './Shipping.css'
@@ -155,6 +155,45 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
         await forgetShippingExport(batch.batch)
         setHub({ batch: null, gone: null })
         toast({ kind: 'status', icon: 'trash', title: 'Export forgotten', body: batch.name })
+      } catch (err) {
+        setFailure(describeFailure(err))
+      } finally {
+        setBusy(null)
+      }
+    })()
+  }
+
+  /* THE PRESS THAT FILLS THE LABEL'S THREE CORNERS (T2b). Free, re-runnable and idempotent —
+     the server re-asks the store every time and SETS the stamps rather than adding to them —
+     so this needs no confirmation and no money gate, and pressing it twice is a no-op rather
+     than a refusal.
+
+     IT REPLACES THE BATCH WHOLESALE. The route answers the same object `readShippingExport`
+     does, counts and rows together, so merging fields into the batch already held would be a
+     second assembly of a payload the server has already assembled. */
+  const onStamps = () => {
+    void (async () => {
+      if (batch === null) return
+      setBusy('stamps')
+      setFailure(null)
+      try {
+        const filled = await fillShippingStamps(batch.batch)
+        setHub({ batch: filled, gone: null })
+        const counts = filled.stamps
+        toast({
+          kind: 'status',
+          icon: 'check',
+          title: 'Pick locations filled',
+          /* THE UNSTAMPED COUNT IS SAID OUT LOUD RATHER THAN INFERRED FROM THE DIFFERENCE. An
+             order gets all three corners or none, so "8 of 20" leaves the operator to work out
+             both how many were missed and why — and the why is the part that matters, because
+             an order over three copies is a different problem from an order the ledger has
+             never seen. */
+          body:
+            counts === null
+              ? batch.name
+              : `${counts.stamped} of ${filled.parcel_count} rows carry one; ${counts.unstamped} do not.`,
+        })
       } catch (err) {
         setFailure(describeFailure(err))
       } finally {
@@ -358,8 +397,8 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 {batch.parcel_count} order{batch.parcel_count === 1 ? '' : 's'} in the parcel lane, and only those, are in this
                 file.{' '}
                 {stamps === null
-                  ? 'The three Rubber Stamp columns are blank: a pick location comes from the order ledger, and no order has been read into it yet.'
-                  : `${stamps.stamped} of ${batch.parcel_count} carry a pick location.`}
+                  ? 'The three Rubber Stamp columns are blank until you fill them from the order ledger — the button below does it, and changes nothing else about the file.'
+                  : `${stamps.stamped} of ${batch.parcel_count} carry a pick location, and ${stamps.unstamped} do not: an order gets all three corners or none, because there is no fourth corner to say "and two more".`}
               </p>
               <details className="shipping-caveats">
                 <summary>
@@ -373,6 +412,18 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
               </details>
             </div>
             <div className="shipping-file-actions">
+              {/* BEFORE THE DOWNLOAD, BECAUSE IT CHANGES WHAT THE DOWNLOAD CONTAINS. The file is
+                  re-rendered server-side on this press, so an operator who grabs the CSV first
+                  gets blank corners — reading order is the only thing that says so here. */}
+              <Button
+                variant="default"
+                icon="pin"
+                onClick={onStamps}
+                busy={busy === 'stamps'}
+                disabled={busy !== null}
+              >
+                {stamps === null ? 'Fill pick locations' : 'Refill pick locations'}
+              </Button>
               <a
                 className="bn-btn bn-btn-primary shipping-file shipping-download"
                 href={shippingFileUrl(batch.batch, batch.file.name)}

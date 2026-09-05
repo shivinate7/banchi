@@ -1,0 +1,367 @@
+{
+  "boxes_scanned": [
+    "box1",
+    "box2",
+    "box3",
+    "box4",
+    "box5",
+    "box6"
+  ],
+  "constants": {
+    "CARD_ASPECT": 0.7159090909090909,
+    "CROP_PAD": 0.08,
+    "DETAIL_EDGE": 256,
+    "MIN_CROP_DETAIL": 0.5,
+    "SMALL_CROP_AREA": 0.3
+  },
+  "detector_files": [
+    "geometry/detect.py",
+    "geometry/crop.py",
+    "identify/images.py"
+  ],
+  "detector_fingerprint": "11eabe6f2024",
+  "generated_at": "2026-09-05T21:22:52+00:00",
+  "image_count": 1625,
+  "not_measured": "NO WRONGNESS RATE IS IN THIS FILE. Every count here is about what the detector returned and what images.crop_refusal did with it. Whether a returned box is the card or a rectangle inside it was settled by eye over 867 photographs on 2026-08-31 and has been settled no other way since; nothing here has an answer key. A refusal rate that departs from a neighbouring box's, or from this file's last value at the same detector_fingerprint, is a reason to go and look.",
+  "overall": {
+    "area": {
+      "max": 0.9878,
+      "median": 0.6802,
+      "min": 0.0678,
+      "n": 1625,
+      "p05": 0.3265,
+      "p25": 0.4947,
+      "p75": 0.8008,
+      "p95": 0.9107
+    },
+    "asked_nothing": 1566,
+    "crop_refusal_rate": 0.0363,
+    "crop_refused": 59,
+    "declined": 59,
+    "detail": {
+      "max": 0.9948,
+      "median": 0.8298,
+      "min": 0.121,
+      "n": 1625,
+      "p05": 0.4835,
+      "p25": 0.6654,
+      "p75": 0.9262,
+      "p95": 0.964
+    },
+    "detail_of_small_crops": {
+      "max": 0.4692,
+      "median": 0.2663,
+      "min": 0.121,
+      "n": 59,
+      "p05": 0.1517,
+      "p25": 0.2159,
+      "p75": 0.3698,
+      "p95": 0.4379
+    },
+    "found": 1625,
+    "games": {
+      "pokemon": 543,
+      "riftbound": 1082
+    },
+    "guard_errors": 0,
+    "justified": 0,
+    "kept_by_area_leg": 37,
+    "method": {
+      "edges": 1548,
+      "mask": 77
+    },
+    "near_area_line": 89,
+    "near_detail_line": 3,
+    "no_shape": 0,
+    "not_found": 0,
+    "photographs": 1625,
+    "rule_mismatches": 0,
+    "unreadable": 0
+  },
+  "per_box": {
+    "box1": {
+      "area": {
+        "max": 0.8232,
+        "median": 0.3723,
+        "min": 0.3002,
+        "n": 133,
+        "p05": 0.3113,
+        "p25": 0.3345,
+        "p75": 0.4176,
+        "p95": 0.7395
+      },
+      "asked_nothing": 133,
+      "crop_refusal_rate": 0.0,
+      "crop_refused": 0,
+      "declined": 0,
+      "detail": {
+        "max": 0.9533,
+        "median": 0.5508,
+        "min": 0.4376,
+        "n": 133,
+        "p05": 0.4549,
+        "p25": 0.5048,
+        "p75": 0.6154,
+        "p95": 0.8746
+      },
+      "detail_of_small_crops": null,
+      "found": 133,
+      "games": {
+        "riftbound": 133
+      },
+      "guard_errors": 0,
+      "justified": 0,
+      "kept_by_area_leg": 27,
+      "method": {
+        "edges": 133
+      },
+      "near_area_line": 52,
+      "near_detail_line": 0,
+      "no_shape": 0,
+      "not_found": 0,
+      "photographs": 133,
+      "rule_mismatches": 0,
+      "unreadable": 0
+    },
+    "box2": {
+      "area": {
+        "max": 0.9878,
+        "median": 0.8036,
+        "min": 0.538,
+        "n": 543,
+        "p05": 0.6469,
+        "p25": 0.7379,
+        "p75": 0.8354,
+        "p95": 0.8893
+      },
+      "asked_nothing": 543,
+      "crop_refusal_rate": 0.0,
+      "crop_refused": 0,
+      "declined": 0,
+      "detail": {
+        "max": 0.9948,
+        "median": 0.9464,
+        "min": 0.6946,
+        "n": 543,
+        "p05": 0.818,
+        "p25": 0.8996,
+        "p75": 0.954,
+        "p95": 0.9728
+      },
+      "detail_of_small_crops": null,
+      "found": 543,
+      "games": {
+        "pokemon": 543
+      },
+      "guard_errors": 0,
+      "justified": 0,
+      "kept_by_area_leg": 0,
+      "method": {
+        "edges": 466,
+        "mask": 77
+      },
+      "near_area_line": 0,
+      "near_detail_line": 0,
+      "no_shape": 0,
+      "not_found": 0,
+      "photographs": 543,
+      "rule_mismatches": 0,
+      "unreadable": 0
+    },
+    "box3": {
+      "area": {
+        "max": 0.9854,
+        "median": 0.6508,
+        "min": 0.0678,
+        "n": 723,
+        "p05": 0.2607,
+        "p25": 0.4847,
+        "p75": 0.7315,
+        "p95": 0.9336
+      },
+      "asked_nothing": 681,
+      "crop_refusal_rate": 0.0581,
+      "crop_refused": 42,
+      "declined": 42,
+      "detail": {
+        "max": 0.9928,
+        "median": 0.7973,
+        "min": 0.121,
+        "n": 723,
+        "p05": 0.3865,
+        "p25": 0.6482,
+        "p75": 0.8705,
+        "p95": 0.9455
+      },
+      "detail_of_small_crops": {
+        "max": 0.4524,
+        "median": 0.2598,
+        "min": 0.121,
+        "n": 42,
+        "p05": 0.1535,
+        "p25": 0.2159,
+        "p75": 0.3395,
+        "p95": 0.4158
+      },
+      "found": 723,
+      "games": {
+        "riftbound": 723
+      },
+      "guard_errors": 0,
+      "justified": 0,
+      "kept_by_area_leg": 3,
+      "method": {
+        "edges": 723
+      },
+      "near_area_line": 26,
+      "near_detail_line": 1,
+      "no_shape": 0,
+      "not_found": 0,
+      "photographs": 723,
+      "rule_mismatches": 0,
+      "unreadable": 0
+    },
+    "box4": {
+      "area": {
+        "max": 0.813,
+        "median": 0.662,
+        "min": 0.0829,
+        "n": 56,
+        "p05": 0.1007,
+        "p25": 0.2642,
+        "p75": 0.7114,
+        "p95": 0.7492
+      },
+      "asked_nothing": 39,
+      "crop_refusal_rate": 0.3036,
+      "crop_refused": 17,
+      "declined": 17,
+      "detail": {
+        "max": 0.9115,
+        "median": 0.8129,
+        "min": 0.1495,
+        "n": 56,
+        "p05": 0.1676,
+        "p25": 0.4082,
+        "p75": 0.8569,
+        "p95": 0.8816
+      },
+      "detail_of_small_crops": {
+        "max": 0.4692,
+        "median": 0.279,
+        "min": 0.1495,
+        "n": 17,
+        "p05": 0.1495,
+        "p25": 0.2225,
+        "p75": 0.3902,
+        "p95": 0.4596
+      },
+      "found": 56,
+      "games": {
+        "riftbound": 56
+      },
+      "guard_errors": 0,
+      "justified": 0,
+      "kept_by_area_leg": 0,
+      "method": {
+        "edges": 56
+      },
+      "near_area_line": 6,
+      "near_detail_line": 2,
+      "no_shape": 0,
+      "not_found": 0,
+      "photographs": 56,
+      "rule_mismatches": 0,
+      "unreadable": 0
+    },
+    "box5": {
+      "area": {
+        "max": 0.7665,
+        "median": 0.4995,
+        "min": 0.3622,
+        "n": 105,
+        "p05": 0.4152,
+        "p25": 0.4551,
+        "p75": 0.584,
+        "p95": 0.6706
+      },
+      "asked_nothing": 105,
+      "crop_refusal_rate": 0.0,
+      "crop_refused": 0,
+      "declined": 0,
+      "detail": {
+        "max": 0.872,
+        "median": 0.6684,
+        "min": 0.4803,
+        "n": 105,
+        "p05": 0.5773,
+        "p25": 0.6226,
+        "p75": 0.7774,
+        "p95": 0.8363
+      },
+      "detail_of_small_crops": null,
+      "found": 105,
+      "games": {
+        "riftbound": 105
+      },
+      "guard_errors": 0,
+      "justified": 0,
+      "kept_by_area_leg": 1,
+      "method": {
+        "edges": 105
+      },
+      "near_area_line": 0,
+      "near_detail_line": 0,
+      "no_shape": 0,
+      "not_found": 0,
+      "photographs": 105,
+      "rule_mismatches": 0,
+      "unreadable": 0
+    },
+    "box6": {
+      "area": {
+        "max": 0.7224,
+        "median": 0.4411,
+        "min": 0.3343,
+        "n": 65,
+        "p05": 0.3429,
+        "p25": 0.3856,
+        "p75": 0.6027,
+        "p95": 0.6637
+      },
+      "asked_nothing": 65,
+      "crop_refusal_rate": 0.0,
+      "crop_refused": 0,
+      "declined": 0,
+      "detail": {
+        "max": 0.854,
+        "median": 0.614,
+        "min": 0.4754,
+        "n": 65,
+        "p05": 0.4871,
+        "p25": 0.5372,
+        "p75": 0.7436,
+        "p95": 0.8052
+      },
+      "detail_of_small_crops": null,
+      "found": 65,
+      "games": {
+        "riftbound": 65
+      },
+      "guard_errors": 0,
+      "justified": 0,
+      "kept_by_area_leg": 6,
+      "method": {
+        "edges": 65
+      },
+      "near_area_line": 5,
+      "near_detail_line": 0,
+      "no_shape": 0,
+      "not_found": 0,
+      "photographs": 65,
+      "rule_mismatches": 0,
+      "unreadable": 0
+    }
+  },
+  "source": "/Users/shivinate/Developer/pkmnscan/captures"
+}

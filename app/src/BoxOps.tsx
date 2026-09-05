@@ -13,6 +13,7 @@ import type {
   MoveCardsResult,
   PhotoReclaimResult,
   Place,
+  ProductEntry,
   SectionDetail,
 } from './types'
 import type { Failure } from './server'
@@ -920,10 +921,18 @@ function Field({
 /* THE CLAIM EDITOR — one body, two scopes: every card in a box (or a selection of it), and one
  * card on the detail panel. Every field is tri-state: off (the field is omitted), on and filled
  * (set it), on and empty (send `null`, clear the claim). `game` has no cleared form. The game
- * select drives the finish and rarity vocabularies whether or not it is sent. Nothing is
- * pre-armed. */
+ * select drives the finish, rarity and product vocabularies whether or not it is sent. Nothing
+ * is pre-armed.
+ *
+ * PRODUCT IS THE ONE ROW THAT CAN BE ABSENT ENTIRELY, and the registry decides it rather than
+ * this file: `GET /games` serves `product_game` — `codes/products.py:GAME` on the wire — and the
+ * row is drawn only while the selected game IS that game. Hardcoding `pokemon_code` here would
+ * be the registry mirror `CaptureScreen.tsx` refuses for exactly the same control, and a
+ * Product picker over a box of Pokemon singles offers a claim nothing downstream would ever
+ * read. Switching the game away from it disarms the row rather than leaving an invisible field
+ * armed. */
 
-type ClaimField = 'game' | 'setHint' | 'variant' | 'rarityClaim' | 'note'
+type ClaimField = 'game' | 'setHint' | 'variant' | 'rarityClaim' | 'product' | 'note'
 
 export type ClaimPatch = {
   setHint?: string | null
@@ -932,6 +941,10 @@ export type ClaimPatch = {
   variant?: readonly string[] | null
   game?: string
   rarityClaim?: string[] | null
+  /** C10/D70's product claim, a SCALAR where the two above are sets: a stack came out of one
+   *  sealed product, so "two products at once" is not a state. `null` clears it back to no
+   *  claim, which is what `#/codes` counts as unclaimed and what both channel lanes refuse. */
+  product?: string | null
   note?: string | null
 }
 
@@ -953,15 +966,19 @@ export function ClaimEditor({
 }) {
   const [entries, setEntries] = useState<readonly GameEntry[] | null>(null)
   const [fallback, setFallback] = useState<string | null>(null)
+  const [productList, setProductList] = useState<readonly ProductEntry[]>([])
+  const [productGame, setProductGame] = useState<string | null>(null)
   const [armed, setArmed] = useState<readonly ClaimField[]>([])
   const [pickedGame, setPickedGame] = useState<string | null>(game)
   const [setHint, setSetHint] = useState('')
   const [variant, setVariant] = useState<readonly string[]>([])
   const [rarity, setRarity] = useState<readonly string[]>([])
+  const [product, setProduct] = useState('')
   const [note, setNote] = useState('')
   const [refused, setRefused] = useState<string | null>(null)
 
-  /* The registry, once. If the read fails the two chip rows say they have no vocabulary. */
+  /* The registry, once. If the read fails the two chip rows say they have no vocabulary, and
+     the product row is not drawn at all — `productGame` stays null, so nothing equals it. */
   useEffect(() => {
     let live = true
     getGames()
@@ -969,6 +986,8 @@ export function ClaimEditor({
         if (!live) return
         setEntries(registry.games)
         setFallback(registry.default)
+        setProductList(registry.products)
+        setProductGame(registry.product_game)
       })
       .catch(() => {
         if (!live) return
@@ -981,11 +1000,25 @@ export function ClaimEditor({
 
   const key = pickedGame ?? fallback
   const entry = entries?.find((candidate) => candidate.key === key) ?? null
+  /* The product claim belongs to one game and the registry says which (`codes/products.py:GAME`
+     over the wire). A registry that answered no products is the same "not drawn" as a game that
+     does not claim them. */
+  const showsProduct = productGame !== null && key === productGame && productList.length > 0
+  const picked = productList.find((candidate) => candidate.key === product) ?? null
   const isArmed = (field: ClaimField) => armed.includes(field)
   const arm = (field: ClaimField, on: boolean) =>
     setArmed((held) =>
       on ? [...held.filter((f) => f !== field), field] : held.filter((f) => f !== field),
     )
+
+  /* A ROW THAT IS NOT DRAWN IS NOT ARMED. Arm Product against the code-card game, change the
+     game select to Pokemon, and without this the row is gone from the screen while its claim
+     is still in the patch — a write nobody can see they asked for. Same reference back when
+     there is nothing to disarm, so this settles in one pass. */
+  useEffect(() => {
+    if (showsProduct) return
+    setArmed((held) => (held.includes('product') ? held.filter((f) => f !== 'product') : held))
+  }, [showsProduct])
 
   const submit = () => {
     if (armed.length === 0) {
@@ -999,6 +1032,7 @@ export function ClaimEditor({
     if (isArmed('setHint')) patch.setHint = setHint.trim() === '' ? null : setHint.trim()
     if (isArmed('variant')) patch.variant = variant.length === 0 ? null : [...variant]
     if (isArmed('rarityClaim')) patch.rarityClaim = rarity.length === 0 ? null : [...rarity]
+    if (isArmed('product')) patch.product = product === '' ? null : product
     if (isArmed('note')) patch.note = note.trim() === '' ? null : note.trim()
     onApply(patch)
   }
@@ -1100,6 +1134,39 @@ export function ClaimEditor({
         )}
       </ClaimRow>
 
+      {!showsProduct ? null : (
+        <ClaimRow
+          field="product"
+          label="Product"
+          armed={isArmed('product')}
+          onArm={arm}
+          says="which sealed product the stack came out of — none chosen clears it"
+        >
+          <div className="boxops-product">
+            <select
+              className="bn-select"
+              value={product}
+              onChange={(event) => setProduct(event.target.value)}
+              aria-label="Product"
+            >
+              <option value="">No claim</option>
+              {productList.map((candidate) => (
+                <option key={candidate.key} value={candidate.key}>
+                  {candidate.display}
+                </option>
+              ))}
+            </select>
+            {/* Outlined off the premium lane: a default pill's fill is `--bn-surface-2`, which
+                is this row's own ground, so Bulk would read as bare text. */}
+            {picked === null ? null : (
+              <Pill tone={picked.premium ? 'accent' : 'default'} outline={!picked.premium}>
+                {picked.premium ? 'Premium' : 'Bulk'}
+              </Pill>
+            )}
+          </div>
+        </ClaimRow>
+      )}
+
       <ClaimRow field="note" label="Note" armed={isArmed('note')} onArm={arm} says="free text — the only handle an unidentified card has">
         <PlainInput value={note} onChange={setNote} placeholder="blue-eyes, japanese" label="Note" />
       </ClaimRow>
@@ -1108,6 +1175,9 @@ export function ClaimEditor({
         Finish and rarity are per game, so the choices above come from the game selected here.
         The server checks every card against its own game and refuses the whole apply, naming
         the cards, rather than writing some of them.
+        {!showsProduct
+          ? null
+          : ' A code card with no product claim is refused by both channel lanes, so clearing this one takes the code out of every lot until it is claimed again.'}
       </p>
       {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
 

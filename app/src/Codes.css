@@ -34,10 +34,75 @@
 .codes-banner-text { flex: 1 1 auto; min-width: 0; }
 .codes-banner-text strong { font-weight: 700; }
 .codes-banner .bn-btn { flex: none; }
+/* two controls on one banner: the inline fix and the route out. They travel together, so the
+   pair is what indents under the icon on a phone rather than each button separately. */
+.codes-banner-acts { display: flex; align-items: center; gap: var(--bn-2); flex: none; }
 @media (max-width: 640px) {
   .codes-banner { flex-wrap: wrap; }
   .codes-banner-text { flex-basis: calc(100% - 30px); }
   .codes-banner .bn-btn { margin-left: 30px; }
+  .codes-banner-acts { flex-wrap: wrap; margin-left: 30px; }
+  .codes-banner-acts .bn-btn { margin-left: 0; }
+}
+
+/* ---- the inline product fix ---------------------------------------------- */
+/* D70's claim, corrected where the problem is stated. One row per box, because a stack came
+   out of one sealed product and the box is the unit the operator is holding. */
+.codes-fix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding: var(--bn-3) var(--bn-4) var(--bn-4);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: var(--bn-shadow-1);
+}
+.codes-fix-lede { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.5; max-width: 76ch; }
+.codes-fix-list { display: flex; flex-direction: column; gap: var(--bn-2); }
+/* A GRID AND NOT A WRAPPING FLEX ROW. Left-to-right the row reads "which box, then what to do
+   about it", and free wrapping broke that twice: the press wrapped away from the picker it
+   answers, and once they were grouped the group wrapped INSIDE itself at 820 and left the box
+   name bottom-aligned against two lines of controls. Two declared columns that collapse to one
+   at a named width behave the same everywhere. */
+.codes-fix-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--bn-2) var(--bn-4);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+}
+.codes-fix-where { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.codes-fix-box { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); }
+.codes-fix-n { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
+.codes-fix-company { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.codes-fix-do { display: flex; align-items: flex-end; gap: var(--bn-3); }
+.codes-fix-field { flex: 0 1 240px; min-width: 170px; gap: 4px; }
+/* `background-color`, NEVER the `background` shorthand: the shorthand resets `background-image`,
+   `background-repeat` and `background-position`, and `.bn-select`'s chevron is all three. In
+   light nothing shows, because this rule's specificity also drops the image; in dark
+   `:root[data-theme='dark'] .bn-select` wins the image back and gets `repeat` with it, and the
+   row draws a whole line of tiled chevrons across the control. */
+.codes-fix-field .bn-select { background-color: var(--bn-surface); }
+/* a column and not a shrink-wrap: the lane pill is held to one width so the pickers above and
+   below it line up whether the pick reads Premium, Bulk or nothing at all */
+.codes-fix-lane { display: flex; align-items: center; flex: none; width: 88px; min-height: var(--bn-control-h-sm); }
+.codes-fix-adrift { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.5; max-width: 76ch; }
+/* One column below the tablet: the box says which stack, and the controls answer it underneath,
+   still on one line of their own until the phone breakpoint takes them apart. */
+@media (max-width: 900px) {
+  .codes-fix-row { grid-template-columns: minmax(0, 1fr); }
+  /* The picker starts at the box name's own left edge and the press holds the right edge — a
+     group merely pushed right leaves the "Product" label floating in the middle of the row. */
+  .codes-fix-do > .bn-btn { margin-left: auto; }
+}
+@media (max-width: 640px) {
+  .codes-fix-do { flex-wrap: wrap; align-items: stretch; }
+  .codes-fix-field { flex: 1 1 100%; }
+  /* the lane pill takes its own line under the picker rather than a fixed column */
+  .codes-fix-lane { width: auto; min-height: 0; }
+  .codes-fix-do > .bn-btn { flex: 1 1 100%; }
 }
 
 .codes-dups {

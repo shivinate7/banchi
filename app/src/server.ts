@@ -690,6 +690,20 @@ export async function updateCard(
      *  `rarity_claim` since the claim shipped, so the one claim a correction is most likely
      *  to be ABOUT was the one no screen could correct. */
     rarityClaim?: string[] | null
+    /** C10/D70's product claim: which sealed product this code card came out of. A key out of
+     *  `GET /games`'s `products`, and `null` CLEARS it back to no claim.
+     *
+     *  IT WAS SETTABLE AT CAPTURE AND CORRECTABLE NOWHERE, which is `rarityClaim`'s note one
+     *  claim later and with more riding on it: the route has accepted `product` since D70,
+     *  `#/codes` draws a banner counting the codes that carry none, and neither lane will
+     *  take one — so the claim the product most needs corrected was the one no screen could
+     *  write.
+     *
+     *  A KEY OUTSIDE THE VOCABULARY IS THE SERVER'S REFUSAL TO MAKE (`product_invalid`, 400),
+     *  not this function's. Checking it here would give the vocabulary a second home that has
+     *  to agree with `codes/products.py`, and every screen that offers the picker is served
+     *  the real one by `GET /games`. */
+    product?: string | null
     note?: string | null
   },
 ): Promise<CardSummary> {
@@ -698,6 +712,7 @@ export async function updateCard(
   if ('variant' in fields) payload.variant = fields.variant ?? null
   if ('game' in fields && fields.game !== undefined) payload.game = fields.game
   if ('rarityClaim' in fields) payload.rarity_claim = fields.rarityClaim ?? null
+  if ('product' in fields) payload.product = fields.product ?? null
   if ('note' in fields) payload.note = fields.note ?? null
 
   return (await request(`/inventory/${box}/${index}`, {
@@ -1421,6 +1436,11 @@ export async function applyBoxClaims(
     variant?: readonly Finish[] | null
     game?: string
     rarityClaim?: string[] | null
+    /** C10/D70's product claim at box scope — `updateCard`'s rule over many positions. A
+     *  code-card stack came out of ONE sealed product (that premise is the whole of why this
+     *  track has no OCR), so the box, or a selection inside it, is the natural unit to
+     *  correct: the claim is per card and the mistake is per stack. */
+    product?: string | null
     note?: string | null
   },
   indices?: number[],
@@ -1430,6 +1450,7 @@ export async function applyBoxClaims(
   if ('variant' in fields) payload.variant = fields.variant ?? null
   if ('game' in fields && fields.game !== undefined) payload.game = fields.game
   if ('rarityClaim' in fields) payload.rarity_claim = fields.rarityClaim ?? null
+  if ('product' in fields) payload.product = fields.product ?? null
   if ('note' in fields) payload.note = fields.note ?? null
   if (indices !== undefined) payload.indices = indices
 
@@ -2498,6 +2519,32 @@ export async function readShippingExport(upload: CsvUpload): Promise<ShippingBat
  */
 export function shippingFileUrl(batch: string, file: string): string {
   return `${base}/shipping/batches/${encodeURIComponent(batch)}/file?name=${encodeURIComponent(file)}`
+}
+
+/**
+ * Fill the three Rubber Stamp corners on a batch's rows, out of the order ledger (T2b).
+ *
+ * FREE, RE-RUNNABLE AND IDEMPOTENT, so it needs no gate and no confirmation: it spends
+ * nothing, opens no socket and writes no file. The server re-asks the store on every press
+ * and SETS the stamps rather than adding to them, which is what makes a second press a
+ * no-op rather than a four-stamp refusal — the property `do_shipping_stamps`'s own check
+ * had to be corrected once before it was true.
+ *
+ * IT ANSWERS THE SAME OBJECT `readShippingExport` DOES, so the caller replaces its batch
+ * wholesale rather than merging counts into one it already holds. `stamp` on every row and
+ * `stamps` on the batch have been on the wire as nulls since the seam was cut, so filling
+ * them changes no type and no component — `OrdersShipStage.tsx` already draws both.
+ *
+ * WHAT IT DOES NOT DO IS RE-UPLOAD ANYTHING. The batch is held in the server's memory for
+ * its TTL and the operator downloads the file again; nothing about this reaches Pirate Ship
+ * or TCGplayer, and an order the ledger does not hold simply keeps its corners empty.
+ */
+export async function fillShippingStamps(batch: string): Promise<ShippingBatch> {
+  return (await request(`/shipping/batches/${encodeURIComponent(batch)}/stamps`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })) as ShippingBatch
 }
 
 /**

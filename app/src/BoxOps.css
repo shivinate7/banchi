@@ -267,8 +267,18 @@
 .boxops-claim-control { display: flex; min-width: 0; }
 .boxops-claim-control > .bn-input,
 .boxops-claim-control > .bn-select { flex: 1 1 auto; }
+/* `background-color` rather than the `background` shorthand, which resets `background-image`,
+   `background-repeat` and `background-position` — and `.bn-select`'s chevron is all three. The
+   shorthand was here from the start and the fault was invisible in light, where this rule's
+   specificity also drops the chevron: in dark `:root[data-theme='dark'] .bn-select` wins the
+   image back, inherits `repeat` with it, and tiles chevrons across every select in this editor. */
 .boxops-claim-row .bn-input,
-.boxops-claim-row .bn-select { background: var(--bn-surface); }
+.boxops-claim-row .bn-select { background-color: var(--bn-surface); }
+/* the product row: the picker, and the lane the pick lands in beside it. The pill is the one
+   thing on this row that answers "so what" — a premium code lists at roughly 46x a bulk one. */
+.boxops-product { display: flex; align-items: center; gap: var(--bn-2); flex: 1 1 auto; min-width: 0; }
+.boxops-product > .bn-select { flex: 1 1 auto; min-width: 0; }
+.boxops-product > .bn-pill { flex: none; }
 
 /* the switch that arms a row */
 .boxops-check {

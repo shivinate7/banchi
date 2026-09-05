@@ -44,9 +44,12 @@ export const FLAT_KEY = 'flat'
 
 /** Every reason `emit` can refuse a run for that this screen can see.
  *
- *  EXACTLY TWO, and the count is the auditable fact: `pipeline/decisions.py:blocking` has two
- *  `reasons.append(...)` calls and the audit row asserts the two vocabularies match in both
- *  directions. A third here without a third there is a refusal Python does not make. */
+ *  EXACTLY TWO, and it agrees with `pipeline/decisions.py:blocking`'s two `reasons.append(...)`
+ *  calls today. NOTHING CHECKS THAT, and this comment said it did: it called the count "the
+ *  auditable fact" and claimed "the audit row asserts the two vocabularies match in both
+ *  directions" until 2026-09-05, while `scripts/docs-audit.py` had never mentioned this file
+ *  or this constant at all. A third reason in Python without a third here is a refusal this
+ *  screen cannot show, and today only a person reading both files would find it. */
 export const OWED_REASONS = ['sub_threshold_unset', 'no_market_data_unanswered'] as const
 
 export type OwedReason = (typeof OWED_REASONS)[number]

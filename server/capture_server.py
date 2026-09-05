@@ -573,6 +573,10 @@ _MARKDOWN_APPLY_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/apply
 # the item pattern is anchored and admits no slash, so it could never swallow the longer
 # one in any case.
 _SHIPPING_FILE_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/file$")
+# T2b's fill. Declared beside the download for the reader's sake and matched under POST,
+# where the item pattern below is never consulted — it is a DELETE — so the two cannot
+# collide however they are ordered.
+_SHIPPING_STAMPS_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})/stamps$")
 _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
 
 # ------------------------------------------------------- the capture claims, on the wire
@@ -2789,6 +2793,15 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
         incoming["game"] = _optional_game(payload)
     variant_shape = _variant_shape(payload) if "variant" in payload else None
     claim_shape = _rarity_claim_shape(payload) if "rarity_claim" in payload else None
+    # `product` WAS MISSING FROM THIS TABLE FROM D70 UNTIL 2026-09-05, and the comment above
+    # said the two tables matched the whole time. `BOX_CLAIM_FIELDS` is DERIVED from
+    # `PUT_FIELDS`, so `_reject_unknown` accepted the key, the `any(field in payload ...)`
+    # guard passed, `incoming` never got it and the apply loop moved nothing: the route
+    # answered 200 with `"applied": 0, "unchanged": N` — a silent no-op that reads exactly
+    # like "the box already said that". `make docs-audit`'s `claim decode` row now reconciles
+    # both tables against `PUT_FIELDS` so a derived tuple can never outrun its decoder again.
+    if "product" in payload:
+        incoming["product"] = _optional_product(payload)
     if "note" in payload:
         incoming["note"] = _optional_text(payload, "note")
 
@@ -7814,6 +7827,114 @@ def _engine_order(
     )
 
 
+def _order_stamps(numbers: Sequence[str]) -> Tuple[int, Dict[str, Tuple[str, ...]]]:
+    """T2b's `locate`: order number -> the labels of the copies that still have to be picked.
+
+    `server/shipping_routes.py:do_shipping_stamps` hands this the order numbers off one
+    uploaded Export Shipping file and writes what comes back into Pirate Ship's three Rubber
+    Stamp corners. It lives HERE and not there for the reason `_engine_order` lives here:
+    that module holds a buyer's name and street address and must not also learn to open the
+    store, and it cannot import this file in any case.
+
+    A KEY OF THE MAP MEANS "THE LEDGER HOLDS THIS ORDER" AND ITS VALUE MEANS "AND HERE IS
+    WHERE ITS COPIES ARE". The two are separate answers and the caller counts them
+    separately: an absent key is an order nobody has read in, and an empty tuple is an order
+    that is in the ledger with nothing left to pick. Collapsing them would make "we have
+    never heard of this sale" and "this sale is already packed" the same figure on screen.
+
+    IT STAMPS WHAT IS STILL OWED AND NEVER WHAT HAS ALREADY BEEN PULLED, and that is the one
+    determination in here worth arguing. The obvious alternative is to stamp every copy of
+    the order at the position it was recorded from, which fills more corners on a real store
+    — 17 of the owner's 20 orders are fully pulled — and is actively harmful: D90 sells a
+    copy as it is pulled, a sold card renders `join.departed_label` (`B3 #96`), and the box
+    closes up behind it (D58), so that index now holds a DIFFERENT card. A stamp is a pick
+    instruction, and one naming a slot whose occupant has changed sends a hand to the wrong
+    shelf. An order with nothing outstanding has nothing to pick, and empty corners are the
+    true answer for it.
+
+    THE RESOLUTION IS THE WHOLE STORE'S IN ONE PASS, exactly as `do_orders` runs it, and this
+    is not an efficiency choice. `pipeline/orders.py` refuses to offer a `resolve_one` because
+    a per-order resolver cannot see what another order has already been promised and hands two
+    buyers the same physical card; asking it only about the orders in this export would be
+    that defect wearing a shipping label. The batch's numbers filter the ANSWER, never the
+    question.
+
+    A NUMBER TWO RECORDS SPELL IS NOT MATCHED AT ALL. `Ledger` keys on `source:number`
+    precisely because a number is unique to a marketplace and not across two, and a shipping
+    export carries the number alone — so where two sources spell one number there is no way
+    to tell which sale this row is, and a guess would stamp one buyer's envelope with another
+    buyer's shelf. It leaves the corners empty and is counted as unmatched.
+
+    NOTHING IS LOGGED AND NOTHING IS WRITTEN. One snapshot read, `_Places` built and dropped
+    inside this call, strings out.
+    """
+    wanted: Dict[str, str] = {}
+    for raw in numbers:
+        text = str(raw or "").strip()
+        if text:
+            wanted.setdefault(text.casefold(), text)
+
+    snapshot = Store().read()
+    ledger = snapshot.ledger
+    if not wanted:
+        return len(ledger.orders), {}
+
+    # `None` PARKED IN THE SLOT for a number two records spell, so the second sighting is
+    # what disqualifies it rather than the last one silently winning.
+    seen: Dict[str, Optional[order_store.OrderRecord]] = {}
+    for record in ledger.orders.values():
+        folded = str(record.number or "").strip().casefold()
+        if folded not in wanted:
+            continue
+        seen[folded] = None if folded in seen else record
+    found = {folded: record for folded, record in seen.items() if record is not None}
+    if not found:
+        return len(ledger.orders), {}
+
+    # THE SAME SEQUENCE `do_orders` RESOLVES IN, and the same reason: `Ledger.unfulfilled`
+    # and `pipeline/orders.py:order_sequence` sort oldest-placed first with a missing stamp
+    # LAST, so the screen deciding who gets the last copy and the label naming where it is
+    # cannot disagree about which order comes first.
+    sequence = sorted(
+        ledger.orders.values(),
+        key=lambda record: (record.placed_at is None, record.placed_at or "", record.key),
+    )
+    open_keys = {record.key for record in ledger.unfulfilled()}
+    open_records = [record for record in sequence if record.key in open_keys]
+    asked = [_engine_order(record, ledger) for record in open_records]
+    behind = {id(order): record for order, record in zip(asked, open_records)}
+    resolution = order_engine.resolve_all(snapshot.inventory, asked)
+
+    places = _Places(snapshot.inventory)
+    by_key = {record.key: folded for folded, record in found.items()}
+    stamps: Dict[str, Tuple[str, ...]] = {wanted[folded]: () for folded in found}
+
+    for answer in resolution.orders:
+        folded = by_key.get(behind[id(answer.order)].key)
+        if folded is None:
+            continue
+        labels: Optional[List[str]] = []
+        for line in answer.lines:
+            for pick in line.picks:
+                try:
+                    label = places.of(pick.box, pick.index).get("label")
+                except (master.BadPosition, master.BadSections, TypeError, ValueError):
+                    label = None
+                if not label:
+                    # ONE UNLABELLABLE COPY COSTS THIS ORDER EVERY CORNER, and it is the
+                    # same call `_Places` makes for its own decoration: a degraded walk, a
+                    # hand-edited divider layout or a pooled copy means the numbers on the
+                    # label cannot be counted to, and a partial pick list looks complete.
+                    labels = None
+                    break
+                labels.append(str(label))
+            if labels is None:
+                break
+        stamps[wanted[folded]] = () if labels is None else tuple(labels)
+
+    return len(ledger.orders), stamps
+
+
 def _pulled_positions(inventory: master.Inventory, copies) -> List[dict]:
     """Where each pulled copy sits RIGHT NOW: `{capture_id, box, index}`, composed per answer.
 
@@ -8840,6 +8961,32 @@ class CaptureHandler(BaseHTTPRequestHandler):
             ("Vary", "Origin"),
         )
 
+    def end_headers(self) -> None:
+        """`Connection: close` ON EVERY RESPONSE, INCLUDING THE ONES `_send` NEVER SEES.
+
+        THE HANDLER HAS TO SEND THIS OR NOTHING DOES, and `close_connection = True` on the class
+        looks like it would work and does not: `BaseHTTPRequestHandler.parse_request` resets it
+        from the request's own `Connection` header every time, and CPython flips it back only
+        when the HANDLER sends `Connection: close` — `send_header` watches for this keyword by
+        name. So `CaptureServer`'s whole premise, one pooled worker per REQUEST rather than per
+        connection, rests on this line.
+
+        IT SITS HERE RATHER THAN IN `_send` BECAUSE `_send` IS NOT EVERY RESPONSE, AND THAT WAS
+        NOT A HYPOTHETICAL. `_photo`'s 304 branch answers a conditional GET by hand —
+        `send_response`, the ETag headers, `end_headers` — and never touches `_send`. From the
+        pool landing on 2026-09-04 until this override, the app's most-requested route sent no
+        `Connection: close` at all, and `do_photo` sets `Cache-Control: no-cache`, so a 304 is
+        the NORMAL answer on any revisit rather than an edge: four concurrent revalidations held
+        all four workers until `timeout = 15` reaped them, which is the starvation
+        `CaptureServer`'s own comment calls a deadlock.
+
+        Every response path ends in `end_headers` — `_send`, the 304 branch, and
+        `BaseHTTPRequestHandler.send_error` — so stating the invariant once, here, is what stops
+        the next hand-rolled branch from repeating it silently.
+        """
+        self.send_header("Connection", "close")
+        super().end_headers()
+
     def _send(
         self,
         status: HTTPStatus,
@@ -8862,13 +9009,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # a stale server harms nothing until the next request, and the next request is exactly
         # what carries this.
         self.send_header(BOOT_HEADER, BOOT_ID)
-        # THE HANDLER HAS TO SEND THIS OR NOTHING DOES, and `close_connection = True` on the class
-        # looks like it would work and does not: `BaseHTTPRequestHandler.parse_request` resets it
-        # from the request's own `Connection` header every time, and CPython flips it back only
-        # when the HANDLER sends `Connection: close` — `send_header` watches for this keyword by
-        # name. So `CaptureServer`'s whole premise, one pooled worker per REQUEST rather than per
-        # connection, rests on this line.
-        self.send_header("Connection", "close")
+        # `Connection: close` IS NOT SENT HERE. It rides `end_headers`, which every response
+        # path reaches and `_send` is only one of — see that override for why.
         for header, value in self._cors_headers():
             self.send_header(header, value)
         for header, value in extra:
@@ -9529,6 +9671,20 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/shipping/batches":
                 return self._json(
                     HTTPStatus.OK, shipping_routes.do_shipping_batches(self._body())
+                )
+            # T2b — the Rubber Stamp fill. Free, re-runnable and idempotent: it re-asks the
+            # ledger and re-renders the held import, spending nothing and writing nothing.
+            # `_order_stamps` is passed IN rather than reached FOR, because the shipping
+            # module cannot import this file (this file imports it) and must not learn to
+            # open the store: it is the one module that holds a buyer's address, and what
+            # crosses the seam is order numbers one way and position labels the other.
+            match = _SHIPPING_STAMPS_RE.match(path)
+            if match:
+                return self._json(
+                    HTTPStatus.OK,
+                    shipping_routes.do_shipping_stamps(
+                        match.group(1), self._body(), _order_stamps
+                    ),
                 )
             raise BadRequest(HTTPStatus.NOT_FOUND, "no_such_route", f"No POST route {path}.")
 
