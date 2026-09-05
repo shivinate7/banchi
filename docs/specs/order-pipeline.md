@@ -669,10 +669,15 @@ credential serves both hosts; `PKMNSCAN_TCG_SELLER_KEY` was accepted; the plain-
 accepted, so D65's form encoding is the wrong shape here rather than merely a different one; and
 the response parsed and projected without raising.
 
-**`detail` and `fetch_open_orders` remain unexercised against the live host**, which is the half
-that carries a buyer's name and address. `products[].skuId` was read in the BROWSER and never
-through this module, so the PII projection is proven against fixtures and against nothing that
-came off the wire.
+**`detail` remains unexercised against the live host**, and it is the half that carries a buyer's
+name and address. `products[].skuId` was read in the BROWSER and never through this module, so the
+PII projection is proven against fixtures and against nothing that came off the wire.
+
+**`fetch_open_orders` was named here as unexercised until 2026-09-05 and it had run on 2026-09-02**
+— the owner pressed Fetch, the search pages walked far enough to count 370 orders in
+`LastThreeMonths`, and it was refused `order_too_many`. The paging is proven live and that refusal
+is the one D91 answers. This sentence disagreed with the module it points at as the primary record,
+which is the drift the `transport standing` audit row now catches.
 
 `server/order_transport.py`'s own STATUS block is the primary record and says this at greater length.
 
