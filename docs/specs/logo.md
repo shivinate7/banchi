@@ -75,9 +75,13 @@ peak chroma 0.0721 — the formula reproduces both grounds that were already on 
 | 0.23 | `#1D242B` → `#080B0F` | `held`, `#1E232B` → `#080B0F` |
 | 0.39 | `#182430` → `#060B12` | `cooler`, `#182430` → `#050A12` |
 
-**The wall is an absolute chroma, not a ratio, and it is per-prism.** Swept at 0.23 / 0.31 /
-0.39 / 0.48 / 0.57 / 0.70, each row deliberately crossing the point where the tile stops reading
-as near-black and starts reading as a colored tile:
+**The wall is a RATIO of about 0.47, and this file said "an absolute chroma, not a ratio" until
+2026-09-05.** That was wrong on its own numbers: as absolute chroma the three walls spread
+.027 – .043, a factor of 1.6, while as a ratio of each prism's peak they spread 0.43 – 0.53, a
+factor of 1.2 — and the 0.53 is only high because bluesteel was bracketed at the coarse
+0.48 / 0.57 step. The claim was made from three points, read off whichever column was in front of
+me. Swept at 0.23 / 0.31 / 0.39 / 0.48 / 0.57 / 0.70, each row deliberately crossing the point
+where the tile stops reading as near-black and starts reading as a colored tile:
 
 | prism | hue | peak chroma | last good | first too much | wall at C ≈ |
 | --- | --- | --- | --- | --- | --- |
@@ -88,6 +92,14 @@ as near-black and starts reading as a colored tile:
 Mint turns color soonest — its ground competes with the card for the same green before the
 others do. **0.23 – 0.39 is the band all three share**, and it is the band `held` and `cooler`
 already occupied.
+
+**The correction is not cosmetic; it decided the other two prisms.** At a ratio of 0.47 the
+tonal rule's own ceiling is C .014 for `warmer` and C .012 for `quieter` — both invisible. Read
+as an absolute wall of ~.035, the rule looked as though it merely *returned* a neutral for those
+two, which is what this file said. Read correctly it can never produce a usable ground for them
+at any setting: a neutral was not the rule's answer, it was the rule having no answer. The owner
+reached the same place by looking, and first — *"warmer and quieter need different backgrounds
+for them to look nice."*
 
 **The ratio was settled by the owner at ratio, not per prism.** `held` (0.23) and `cooler`
 (0.39) were called *"both work"* — §7 rule 7, the just-noticeable difference. **Both families are
