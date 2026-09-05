@@ -10950,13 +10950,33 @@ def check_corpus_revision(checks: Checks) -> None:
     `server/pipeline_routes.py`. A stub that answers 409 is green whether or not the server
     would ever send one.
 
+    THE SECOND WRITER GOES AROUND THE ROUTE, AND THAT IS THE POINT OF THIS CASE. As first
+    merged, every "another writer moved the file" step here went through
+    `do_pricing_corpus_write` — the same route the guard lives in. But the writer the guard
+    exists for never touches that route: D86's amendment names it as a NON-ROUTE writer moving
+    `inventory/prices.json` under an open `#/pricing` tab, and that writer is
+    `pkmnscan prices adopt --write` (`cli/cmd_prices.py`'s `folded.write()` ->
+    `pipeline/corpus.py:Corpus.write()` -> `store/files.py:write_json()`). A reprice sweep is
+    the same call. Neither imports `server/pipeline_routes.py`.
+
+    WHY THE DISTINCTION HAS TEETH RATHER THAN BEING TIDINESS. `_corpus_revision` re-reads and
+    re-hashes the file on every call. The obvious future optimisation is to cache the digest
+    the route last wrote, so a growing file is not re-hashed on every GET — and under that
+    cache a route-only version of this case stays GREEN while the real case silently stops
+    refusing: the route writes, the route updates its own cache, a tab's stale revision still
+    differs, the refusal fires. The CLI writes, the cache does not move, `current` equals what
+    the tab offers, and the tab's wholesale write reverts the entire sweep. That is exactly
+    the defect the guard exists to prevent. Measured before this was changed: with that cache
+    added to `_corpus_revision`, the route-only case passed 6 of 6.
+
     THE ASSERTIONS ARE MUTUALLY REINFORCING ON PURPOSE, because most of them are individually
-    vacuous. Against a `_corpus_revision` that returned a CONSTANT, the first three still pass
-    — a constant is truthy, is not a key of the document, and is trivially equal to itself —
-    and only the fourth and fifth fail. Against one that returned a COUNTER, the fourth and
-    fifth pass and only the third fails. Neither mutation is caught by the assertion that
-    looks like it is about revisions; each is caught by one that looks like it is about
-    something else.
+    vacuous, and no mutation here is caught by the assertion that looks like it is about
+    revisions. Against a `_corpus_revision` that returned a CONSTANT, the first three still
+    pass — a constant is truthy, is not a key of the document, and is trivially equal to
+    itself — and what fails is the operator's own save (it answers with the revision it was
+    given) and the refusal. Against one that returned a COUNTER, the refusal still fires and
+    what fails is the idempotent re-save and the step after it. Against the digest cache
+    above, only the refusal fails, and only because the writer before it is the CLI's.
 
     AN ABSENT REVISION IS ALLOWED, AND THAT IS NOT A HOLE. It means "did not read one", which
     is the terminal user editing the file and putting it back. The guard is for a client that
@@ -11007,16 +11027,25 @@ def check_corpus_revision(checks: Checks) -> None:
         else:
             checks.equal(same["revision"], first["revision"], idempotent)
 
-        # NOW A SECOND WRITER MOVES IT, which is what a reprice does to every stale SKU.
+        # THE OPERATOR'S OWN SAVE, which is the step that used to double as the second writer
+        # and no longer does. It is kept for two reasons. It is the only place the RESPONSE to
+        # a legitimate write is looked at, which is what tells a working digest apart from a
+        # constant. And it is what leaves the tab holding a revision the ROUTE issued —
+        # `app/src/Pricing.tsx` assigns `revision.current = receipt.revision` off every write
+        # receipt — so the stale press below quotes that, not the one from mount, which is the
+        # value a cached digest would still agree with.
         moved = dict(first["corpus"])
         moved["skus"] = {DUNSPARCE_SKU: {"value": "4.50"}}
         advances = (
             "a write that CHANGES the document answers with the new revision, so the next "
             "save is not refused for being the one that landed"
         )
-        # CAUGHT FOR THE SAME REASON AS THE ONE ABOVE. A revision that moves on its own refuses
-        # this write too — the read it quotes is one write old — and a legitimate change made
-        # from a fresh read being refused is a finding, not a crash.
+        # `held` IS WHAT THE TAB IS HOLDING, and it defaults to the revision from mount so the
+        # steps below still run and report when this one is refused. CAUGHT FOR THE SAME
+        # REASON AS THE ONE ABOVE: a revision that moves on its own refuses this write too —
+        # the read it quotes is one write old — and a legitimate change made from a fresh read
+        # being refused is a finding, not a crash.
+        held = first["revision"]
         try:
             landed = pipeline_routes.do_pricing_corpus_write(
                 {"corpus": moved, "revision": first["revision"]}
@@ -11030,18 +11059,41 @@ def check_corpus_revision(checks: Checks) -> None:
             )
         else:
             checks.ok(landed["revision"] != first["revision"], advances)
+            held = landed["revision"]
+
+        # NOW THE SECOND WRITER MOVES THE FILE, AND IT DOES NOT GO THROUGH THE ROUTE. This is
+        # `cli/cmd_prices.py`'s `folded.write()` and `cmd_reprice`'s sweep — `Corpus.write()`
+        # onto `store/files.py:write_json`, the same three calls, neither of which imports
+        # `server/pipeline_routes.py`. See this case's own header for why the distinction is
+        # the whole point.
+        swept = dict(first["corpus"])
+        swept["skus"] = {DUNSPARCE_SKU: {"value": "4.05"}}
+        corpus.Corpus.parse(swept).write()
+        checks.equal(
+            corpus.Corpus.read().answers[DUNSPARCE_SKU].value,
+            "4.05",
+            "a NON-ROUTE writer moved the file — `prices adopt --write`'s own call, made "
+            "here the way that command makes it. Asserted before the refusal below so that a "
+            "failure there names the guard rather than a fixture that quietly wrote nothing",
+        )
 
         # THE INLINE FORM, because `refusal` catches `capture_server.BadRequest` and the
         # pipeline routes raise their own class — the seam its own header argues for.
+        #
+        # THE DOCUMENT SENT IS `moved`, WHICH IS WHAT THE TAB ALREADY SAVED, so this press is
+        # not an unusual one: it is the screen writing back the document it holds. Landing it
+        # would put the file back at `moved`'s exact bytes — `write_json` serialises with
+        # `indent=2, sort_keys=True`, so a revert is byte-identical and the digest returns to
+        # `held`. The sweep would be gone with nothing anywhere reading differently afterwards,
+        # which is why the refusal has to happen BEFORE the write rather than be detectable
+        # after it.
         label = (
             "and the write that would REVERT it is refused. This is the exact press a "
             "`#/pricing` tab makes on its next keystroke after a reprice has run — wholesale, "
-            "from a mount-time snapshot, with no error anywhere before this guard"
+            "against a revision the ROUTE issued, over a file only the CLI has touched since"
         )
         try:
-            pipeline_routes.do_pricing_corpus_write(
-                {"corpus": first["corpus"], "revision": first["revision"]}
-            )
+            pipeline_routes.do_pricing_corpus_write({"corpus": moved, "revision": held})
             checks.ok(False, label, "it accepted the stale write")
         except pipeline_routes.PipelineRefusal as refused:
             checks.equal(refused.code, "corpus_moved", label)
