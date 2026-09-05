@@ -1935,15 +1935,23 @@ COMPONENTS = [
                 # the entry. D34 and D53 are cited in its own text.
                 "governed_by": ["D34", "D53", "D63", "D64", "D65", "D66", "D69", "D91"],
                 "tested_by": ["T7"],
-                "note": "THE AUTHENTICATED SUCCESS PATH IS UNEXERCISED. The wire shapes were "
-                        "captured off the owner's own logged-in browser and every refusal is "
-                        "reachable with no network — the body builder and the projections are "
-                        "pure and public for exactly that, and PKMNSCAN_TCG_ORDERS_URL aims it "
-                        "at a loopback socket the way T7 already aims the export. What no test "
-                        "here can answer is whether the cookie string in .env authenticates "
-                        "THIS host; the mechanism is proven and the stored value has never "
-                        "been sent. First real fetch answers it. PKMNSCAN_TCG_SELLER_KEY must "
-                        "be in .env before that fetch or it answers 403.",
+                "note": "`search` AND `fetch_open_orders` HAVE RUN AUTHENTICATED; `detail` HAS "
+                        "NOT. This entry said the authenticated success path was unexercised "
+                        "and the stored value had never been sent until 2026-09-05, while the "
+                        "module's own STATUS block — which docs/specs/order-pipeline.md calls "
+                        "the primary record — had said otherwise since 2026-08-30. `search` "
+                        "returned three real orders, so TCGPLAYER_STORE_COOKIE does "
+                        "authenticate this host and one credential serves both; "
+                        "`fetch_open_orders` ran 2026-09-02 and was refused `order_too_many` "
+                        "after paging far enough to count 370 orders, which is the paging "
+                        "proven live and the refusal D91 answers. What remains unexercised is "
+                        "`detail`, the half carrying a buyer's name and address, so the PII "
+                        "projection is proven against T7's fixtures and against nothing off "
+                        "the wire. Every refusal stays reachable with no network — the body "
+                        "builder and the projections are pure and public for that, and "
+                        "PKMNSCAN_TCG_ORDERS_URL aims it at a loopback socket the way T7 "
+                        "already aims the export. PKMNSCAN_TCG_SELLER_KEY must be in .env or "
+                        "a live fetch answers 403.",
             },
         },
     },

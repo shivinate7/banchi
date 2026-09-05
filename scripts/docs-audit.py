@@ -2052,6 +2052,115 @@ def check_shipping_columns(report: Report) -> None:
     )
 
 
+_TRANSPORT_PROVEN_RE = re.compile(r"\*\*`(\w+)` HAS (?:NOW )?RUN\b")
+_TRANSPORT_UNPROVEN_RE = re.compile(r"\*\*`(\w+)` IS STILL UNEXERCISED\b")
+_TRANSPORT_READERS = (
+    Path("docs") / "map.py",
+    Path("docs") / "specs" / "order-pipeline.md",
+    Path("CLAUDE.md"),
+)
+_TRANSPORT_SUCCESS_CLAIM = "THE AUTHENTICATED SUCCESS PATH IS UNEXERCISED"
+
+
+def check_transport_standing(report: Report) -> None:
+    """Which order-transport calls have run live is decided by the module, not by its readers.
+
+    WHY THIS ROW EXISTS. `server/order_transport.py`'s STATUS block is what
+    `docs/specs/order-pipeline.md` itself calls "the primary record" — and then, on the line
+    below, contradicted it. Until 2026-09-05 the spec said "`detail` and `fetch_open_orders`
+    remain unexercised against the live host" while the module had recorded since 2026-09-02
+    that `fetch_open_orders` HAD run and was refused `order_too_many` after paging far enough
+    to count 370 orders. `docs/map.py` was worse: "THE AUTHENTICATED SUCCESS PATH IS
+    UNEXERCISED ... the stored value has never been sent", against a module recording that
+    `search` returned three real orders on 2026-08-30, which `CLAUDE.md` also said.
+
+    THREE DOCUMENTS, TWO OF THEM WRONG, ABOUT A FACT ONE FILE OWNS. It is `shipping columns`
+    one register up: there the disagreement was a number a module computes, here it is a
+    standing a module declares. Neither could be settled by reading, because being wrong looks
+    exactly like being right.
+
+    WHAT IT DOES NOT DO. It does not check that a doc MENTIONS every proven call — a document
+    is allowed to be silent. It fires only on a positive claim that a call is still unexercised
+    when the module says it has run, which is the direction that misleads: a session reading
+    "unexercised" plans a live test that has already happened, and a session reading nothing
+    goes and looks.
+
+    HISTORICAL PROSE IS DELIBERATELY NOT CAUGHT. "was named here as unexercised until
+    2026-09-05 and it had run" is the correction, not the claim, and this repo's habit is to
+    strike and annotate rather than delete. Only the present-tense forms — remains, is still,
+    are still — are read as claims.
+    """
+    source = read(ROOT / "server" / "order_transport.py")
+    proven = set(_TRANSPORT_PROVEN_RE.findall(source))
+    unproven = set(_TRANSPORT_UNPROVEN_RE.findall(source))
+    findings: List[Finding] = []
+
+    if not proven and not unproven:
+        report.add(
+            "transport standing",
+            MECHANICAL,
+            [
+                Finding(
+                    "server/order_transport.py",
+                    "its STATUS block no longer declares which calls have run live in a shape "
+                    "this row can read (`**`name` HAS RUN...`, `**`name` IS STILL "
+                    "UNEXERCISED...`). Re-point the patterns, or drop this row — a check whose "
+                    "subject has left is the vacuous green docs/DEBTS.md opens by warning "
+                    "about.",
+                )
+            ],
+            "",
+        )
+        return
+
+    both = proven & unproven
+    for name in sorted(both):
+        findings.append(
+            Finding(
+                "server/order_transport.py",
+                f"the STATUS block says `{name}` has run live AND that it is still "
+                f"unexercised. The module is the authority and it is contradicting itself.",
+            )
+        )
+
+    for path in _TRANSPORT_READERS:
+        text = read(ROOT / path)
+        for name in sorted(proven):
+            claim = re.compile(
+                rf"`{re.escape(name)}`(?:[^`\n]|`[^`\n]*`){{0,90}}?"
+                rf"(?:remains?|is still|are still) unexercised"
+            )
+            if claim.search(text):
+                findings.append(
+                    Finding(
+                        str(path),
+                        f"claims `{name}` is still unexercised against the live host. "
+                        f"`server/order_transport.py`'s STATUS block — which "
+                        f"docs/specs/order-pipeline.md calls the primary record — says it has "
+                        f"run. The module is the authority; this sentence sends the next "
+                        f"session to prove something already proven.",
+                    )
+                )
+        if proven and _TRANSPORT_SUCCESS_CLAIM in text:
+            findings.append(
+                Finding(
+                    str(path),
+                    f"still carries `{_TRANSPORT_SUCCESS_CLAIM}` while "
+                    f"`server/order_transport.py` records "
+                    f"{', '.join('`%s`' % n for n in sorted(proven))} as having run "
+                    f"authenticated.",
+                )
+            )
+
+    report.add(
+        "transport standing",
+        MECHANICAL,
+        findings,
+        f"{len(proven)} proven and {len(unproven)} unexercised calls against "
+        f"{len(_TRANSPORT_READERS)} readers",
+    )
+
+
 def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
     haystack = code_haystack()
     findings: List[Finding] = []
@@ -7896,6 +8005,7 @@ def audit(staged_only: bool) -> Report:
     check_env_vars(report, docs, allowed)
     check_server_concurrency(report)
     check_shipping_columns(report)
+    check_transport_standing(report)
     check_map(report, allowed)
     check_map_sections(report)
     check_build_order_mirror(report)
