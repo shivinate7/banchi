@@ -357,6 +357,25 @@ A screen is not finished because it compiles.
 
 ## Things you will get wrong without being told
 
+- **The capture server is ALREADY THREADED, nothing bounds it, and it is NOT YOURS TO RESTART.**
+  `server/capture_server.py` serves on `class CaptureServer(ThreadingHTTPServer)` — one thread per
+  keep-alive CONNECTION, unbounded. `request_queue_size = 128` bounds the accept backlog and not the
+  thread count, and `CaptureHandler.timeout = 15` reaps only IDLE connections. So **a burst of
+  concurrent clients is what kills it**, and `make design-check` is the burst: measured at 80
+  Playwright browsers, 969 threads in ten minutes, 338% CPU, answering nothing.
+
+  **`ThreadingHTTPServer` is therefore not the fix — it is the cause.** A session on 2026-09-04
+  diagnosed a wedge from `.serve/*.log` without opening the file, told the owner the server was
+  single-threaded, and proposed the class it has been built on since the beginning. The real fix is
+  a bounded worker pool and it is not a swap; `docs/DEBTS.md` §11 has the whole argument, the three
+  measurements, and why a pool over keep-alive starves.
+
+  **`make launch-agent` keeps that process alive at login over the owner's real store**, so the
+  thing on `:8000` in the main checkout is theirs. Run the full suite ONCE at the end rather than
+  after every edit, and **never `make restart` / `make down` / `make up` to fix a wedge** — ask. The
+  drain is 40s and a kill past it cuts a write in flight; that same session did exactly that and
+  crashed Python out from under the owner mid-use.
+
 - **The join key is PER-GAME, and matching is normalized on both sides.** Pokemon composes
   `zfill(3)(number) + "/" + printedTotal` — the shape is pokemontcg.io's schema (`printedTotal`
   is their field name), but at runtime both values come from the identification and match

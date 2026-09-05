@@ -704,3 +704,62 @@ the screen rather than wrong about what it counts. A green walk means *"this man
 pass began with are complete"*, which is less than *"this many of the orders in front of you"*, and
 that difference is the whole of this section.
 
+## 11 — The capture server has no bound on concurrency, and a Playwright fleet is what finds out
+
+`server/capture_server.py` serves on `class CaptureServer(ThreadingHTTPServer)` with
+`request_queue_size = 128`. **`request_queue_size` bounds the ACCEPT BACKLOG, not the thread count**:
+once a connection is accepted it gets a thread of its own, `daemon_threads` is true so `socketserver`
+does not even record it, and `protocol_version` is HTTP/1.1 — so that thread lives for the whole
+keep-alive CONNECTION rather than for one request. Nothing anywhere bounds how many of those exist.
+
+**`CaptureHandler.timeout = 15` is not that bound and does not claim to be.** It is a socket timeout,
+so it reaps a thread parked on `readline` for a request that is never coming — every connection a
+closed tab leaves behind. Its own comment states what it does not fix, and it is right: an ACTIVE
+connection performs socket operations, so no idle timeout touches it.
+
+**Measured three times on this machine, and the third was avoidable.**
+
+1. **1,178 handler threads alive at 1,318% CPU**, twice in one working day, every one blocked in
+   `PyEval_AcquireThread` — waiting for the interpreter lock, not for the store — with the process
+   holding its port and answering nothing. This is what bought `timeout = 15`.
+2. **80 Playwright browsers under `make design-check`: 969 threads inside ten minutes at 338% CPU**,
+   measured immediately after that landed, which is how we know the idle timeout does not cover it.
+3. **2026-09-04, a session's own doing.** It ran `make design-check` about eight times against the
+   owner's live server while also driving it from hand-rolled Playwright scripts, then ran
+   `make restart`. The supervisor's drain — `DRAIN_GRACE_SECONDS`, which is
+   `store/files.py:LOCK_TIMEOUT_SECONDS` (30) plus ten — expired with requests still in flight, and
+   it killed the server outright: *"capture server did not stop within 40s — killing it. a request in
+   flight was cut."* That crashed Python out from under the owner mid-use. No data was lost.
+
+**`make design-check` is therefore a known trigger, not a surprise.** The suite is not the thing to
+give up — it is the verification this repo runs on. What follows from this section is narrower and
+sharper: **do not restart the owner's capture server to fix it.** `make launch-agent` keeps that
+process alive at login over a real store; a wedge is survivable and a kill with a write in flight
+is the thing that is not. Run the full suite once at the end rather than after every edit, prefer the
+Browser pane over hand-rolled scripts against the live app, and when a browser page must be closed,
+navigate it to `about:blank` first — a page closed mid-response leaves the handler writing to a dead
+socket, which is why `.serve/capture.log` holds thousands of `BrokenPipeError` traces.
+
+**The fix is a bounded worker pool, and the reason it is not a swap is written down rather than
+left to be rediscovered.** A pool of N converts unbounded degradation into back pressure: connection
+N+1 waits in the accept queue instead of taking a thread. But over HTTP/1.1 keep-alive **a worker
+held by an idle connection is a worker serving nobody**, so N idle browser tabs starve a pool of N
+completely, and closing that needs one of: `Connection: close`, which throws away the thing
+keep-alive is for; an idle timeout tight enough to free workers faster than tabs accumulate, which
+is a constant with no safe value on a rig this repo already argues about elsewhere; or an event loop
+where a connection is not a worker, which is a rewrite of the handler. **And refusing connections
+rather than queueing them is already known to be dangerous here** — `CaptureServer`'s own docstring
+records 20 simultaneous captures with 8 served and 12 reset by the OS. A dropped capture is one the
+operator sees fail and retries; a pool must not make that the normal case.
+
+**Why this section exists at all, which is the part worth keeping.** Every fact above was already in
+the tree, in two comments inside `server/capture_server.py`. On 2026-09-04 a session diagnosed this
+failure from `.serve/supervisor.log` and `.serve/capture.log` without opening that file, told the
+owner the server was single-threaded, and then proposed `ThreadingHTTPServer` as the fix — the class
+it has been built on all along. **Nothing that session did read would have corrected it**: `CLAUDE.md`
+said nothing about concurrency, and `docs/map.py`'s entry for the file describes route shapes by
+deliberate choice. Knowledge reachable only from inside the file it is about is knowledge a session
+diagnosing from the outside will not have. `make docs-audit`'s `server concurrency` row now pins the
+class, the timeout and the backlog in this section against the code, so a future worker pool cannot
+land while this section still describes threads.
+

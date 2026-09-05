@@ -1740,7 +1740,15 @@ COMPONENTS = [
                         "still its own two phases, so the capture_id_mismatch aim check, the SKU "
                         "check and the duplicate guard sit in one body each rather than inline. "
                         "Both docstrings say the second door is gone rather than naming a route "
-                        "that answers 404.",
+                        "that answers 404. ITS CONCURRENCY IS A KNOWN DEBT AND NOT A "
+                        "PROPERTY OF THIS ENTRY: it serves on ThreadingHTTPServer, one "
+                        "thread per keep-alive CONNECTION with nothing bounding the "
+                        "count, and a burst of clients — make design-check is the "
+                        "measured one — takes it to hundreds of threads answering "
+                        "nothing. docs/DEBTS.md section 11 has the argument, the three "
+                        "measurements and why a worker pool is not a swap. Named here "
+                        "because a session diagnosing a wedge from .serve/*.log reads "
+                        "this entry and not the two comments inside the file.",
                 # THE EVENT NAMES ARE NOT ENUMERATED HERE, and that is the fix rather than a
                 # thinning. This line named five of them — `corrected`, `removed`, `answered`,
                 # `unanswered`, `reshot` — and said "none of the five", while the tuple had

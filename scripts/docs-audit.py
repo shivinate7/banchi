@@ -1808,6 +1808,108 @@ def check_entry_budget(report: Report) -> None:
                f"{total:,} bytes of entries, {len(findings)} over {ENTRY_BUDGET:,}")
 
 
+def _debts_section(number: int) -> Optional[str]:
+    """The body of one `## <n> — ...` section of `docs/DEBTS.md`, or None if it is not there.
+
+    Matched on the heading's NUMBER rather than its wording: the titles in that file are
+    sentences and get edited, and a check keyed to a sentence would fail on a rewrite that
+    changed nothing it cares about.
+    """
+    text = read(ROOT / "docs" / "DEBTS.md")
+    start = re.search(rf"^## {number} — ", text, re.M)
+    if start is None:
+        return None
+    rest = text[start.end() :]
+    nxt = re.search(r"^## \d+ — ", rest, re.M)
+    return rest[: nxt.start()] if nxt else rest
+
+
+_SERVER_CLASS_RE = re.compile(r"^class CaptureServer\((\w+)\):", re.M)
+_HANDLER_TIMEOUT_RE = re.compile(r"^    timeout = (\d+)$", re.M)
+_BACKLOG_RE = re.compile(r"^    request_queue_size = (\d+)$", re.M)
+
+
+def check_server_concurrency(report: Report) -> None:
+    """`docs/DEBTS.md` section 11 names the capture server's concurrency; the code decides it.
+
+    WHY THIS ROW EXISTS, which is the same argument the section it guards makes about itself.
+    Every fact in section 11 was already in the tree, inside two comments in
+    `server/capture_server.py`. On 2026-09-04 a session diagnosed a wedge from `.serve/*.log`
+    without opening that file, told the owner the server was single-threaded, and proposed
+    `ThreadingHTTPServer` as the fix — the class it has been built on all along. Moving the
+    argument into a document a session actually reads is only half the repair: a document
+    nothing reconciles goes stale exactly the way those comments did, and this file spends a
+    section on that difference.
+
+    So the three literals the section publishes are read out of the code and compared. A worker
+    pool — which is what section 11 says the fix is — changes the base class, and this row then
+    FAILS until the section that describes threads is rewritten. That is the point: the row is
+    built to go red on the change it is documenting.
+
+    Nothing here judges whether the concurrency is right. It judges whether the document and the
+    code agree about what it IS, which is the only half a checker can hold honestly (D16).
+    """
+    source = read(ROOT / "server" / "capture_server.py")
+    section = _debts_section(11)
+    findings: List[Finding] = []
+
+    if section is None:
+        report.add(
+            "server concurrency",
+            MECHANICAL,
+            [
+                Finding(
+                    "docs/DEBTS.md",
+                    "section 11 is gone, and it is what publishes the capture server's "
+                    "concurrency. Restore it, or delete this row with it — a check whose "
+                    "subject has left is the vacuous green this file is about.",
+                )
+            ],
+            "",
+        )
+        return
+
+    for what, pattern, shape in (
+        ("the base class", _SERVER_CLASS_RE, "class CaptureServer(<base>)"),
+        ("the handler's socket timeout", _HANDLER_TIMEOUT_RE, "timeout = <seconds>"),
+        ("the accept backlog", _BACKLOG_RE, "request_queue_size = <n>"),
+    ):
+        found = pattern.search(source)
+        if found is None:
+            findings.append(
+                Finding(
+                    "server/capture_server.py",
+                    f"{what} no longer matches `{shape}`, so this row cannot read what "
+                    f"`docs/DEBTS.md` section 11 claims. Re-point the pattern, and check the "
+                    f"section still describes the server that exists.",
+                )
+            )
+            continue
+        value = found.group(1)
+        # WORD-BOUNDARIED, and the mutation that earned it is worth the line. A plain
+        # `value in section` is a SUBSTRING test: retuning the handler timeout from 15 to 5
+        # left this row green, because `5` occurs inside `15`, `128` and `338%` further up the
+        # same section. A check that cannot fail on the change it exists for is the vacuous
+        # green `docs/DEBTS.md` opens by warning about.
+        if re.search(rf"\b{re.escape(value)}\b", section) is None:
+            findings.append(
+                Finding(
+                    "docs/DEBTS.md",
+                    f"section 11 does not name `{value}` — {what} in "
+                    f"`server/capture_server.py`. The section is the published account of this "
+                    f"server's concurrency and the code is the authority; if the server changed, "
+                    f"the section is now describing one that is gone.",
+                )
+            )
+
+    report.add(
+        "server concurrency",
+        MECHANICAL,
+        findings,
+        "3 published facts against server/capture_server.py",
+    )
+
+
 def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
     haystack = code_haystack()
     findings: List[Finding] = []
@@ -7650,6 +7752,7 @@ def audit(staged_only: bool) -> Report:
     check_renumbered_decisions(report)
     check_entry_budget(report)
     check_env_vars(report, docs, allowed)
+    check_server_concurrency(report)
     check_map(report, allowed)
     check_map_sections(report)
     check_build_order_mirror(report)
