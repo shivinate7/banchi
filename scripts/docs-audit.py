@@ -1924,6 +1924,134 @@ def check_server_concurrency(report: Report) -> None:
     )
 
 
+_SHIPPING_COLUMN_CLAIMS = (
+    (Path("docs") / "specs" / "order-pipeline.md",
+     re.compile(r"import file — \*\*([A-Za-z]+) columns\*\*")),
+    (Path("harness") / "tests" / "t7_store_and_seams.py",
+     re.compile(r"the header is the ([a-z]+) columns")),
+)
+
+
+def _pirateship_column_count() -> Optional[int]:
+    """How many columns `pipeline/pirateship.py` actually writes, read out of the source.
+
+    Parsed rather than imported: this checker runs from a bare `python3` on the commit path
+    (D18) and importing the pipeline drags its dependencies in. Parsed rather than grepped
+    because the count is a SUM — a tuple of named columns plus `STAMP_COLUMNS` — and a regex
+    over either half alone answers the wrong question, which is the mistake the document made.
+
+    Returns None when the shape is no longer `COLUMNS = (...) + STAMP_COLUMNS`, and the caller
+    reports that rather than guessing: a checker that silently falls back to one half of a sum
+    is the vacuous green this file exists to refuse.
+    """
+    try:
+        tree = ast.parse(read(ROOT / "pipeline" / "pirateship.py"))
+    except SyntaxError:
+        return None
+
+    tuples: Dict[str, int] = {}
+    total: Optional[int] = None
+
+    def target_name(node: ast.stmt) -> Optional[str]:
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            return node.target.id
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            return node.targets[0].id
+        return None
+
+    for node in tree.body:
+        name = target_name(node)
+        if name is None:
+            continue
+        value = getattr(node, "value", None)
+        if isinstance(value, ast.Tuple):
+            tuples[name] = len(value.elts)
+        elif (name == "COLUMNS" and isinstance(value, ast.BinOp)
+              and isinstance(value.op, ast.Add)
+              and isinstance(value.left, ast.Tuple)
+              and isinstance(value.right, ast.Name)):
+            named = len(value.left.elts)
+            stamps = tuples.get(value.right.id)
+            if stamps is not None:
+                total = named + stamps
+
+    return total
+
+
+def check_shipping_columns(report: Report) -> None:
+    """The Pirate Ship import's column count, published in two files, decided by one.
+
+    WHY THIS ROW EXISTS. `docs/specs/order-pipeline.md` said the renderer produced a file of
+    TEN columns from 2026-08-30 until 2026-09-05. It produces twelve — nine named plus three
+    rubber stamps — and `harness/tests/t7_store_and_seams.py` said twelve the whole time. Two
+    documents in this repository disagreed about a number the code settles in one line, and
+    nothing compared either to the code or to each other.
+
+    It is `route census`'s argument in another lane: a published count with no reader is a
+    claim that can only be contradicted by somebody happening to look. Note which way the
+    error ran — the TEST was right and the SPEC was wrong, so "the tests would have caught it"
+    is exactly the reasoning that let it stand for a week.
+
+    A REWORD CANNOT SILENCE IT. A file that no longer carries a sentence this row can find is
+    reported as unwatched rather than passing quietly, which is the failure mode a pattern-
+    matched checker has and the one `route census` had to grow its own answer to.
+    """
+    total = _pirateship_column_count()
+    findings: List[Finding] = []
+
+    if total is None:
+        report.add(
+            "shipping columns",
+            MECHANICAL,
+            [
+                Finding(
+                    "pipeline/pirateship.py",
+                    "`COLUMNS` is no longer `(<named>, ...) + STAMP_COLUMNS`, so this row "
+                    "cannot count what the documents claim. Re-point it, and check both "
+                    "sentences still describe the file the renderer writes.",
+                )
+            ],
+            "",
+        )
+        return
+
+    for path, pattern in _SHIPPING_COLUMN_CLAIMS:
+        text = read(ROOT / path)
+        found = pattern.search(text)
+        if found is None:
+            findings.append(
+                Finding(
+                    str(path),
+                    "no sentence here matches the pattern watching this file's column count. "
+                    "It was reworded past its own check, or the claim was removed — either "
+                    "way the count is unwatched now. Re-point the pattern or drop the entry.",
+                )
+            )
+            continue
+        word = found.group(1).lower()
+        said = _NUMBER_WORDS.get(word)
+        if said is None:
+            findings.append(
+                Finding(str(path), f"`{found.group(1)} columns` is not a number this row knows.")
+            )
+        elif said != total:
+            findings.append(
+                Finding(
+                    str(path),
+                    f"says `{found.group(1)} columns` and `pipeline/pirateship.py` writes "
+                    f"{total}. The code is the authority; the sentence is describing a file "
+                    f"the renderer does not produce.",
+                )
+            )
+
+    report.add(
+        "shipping columns",
+        MECHANICAL,
+        findings,
+        f"{len(_SHIPPING_COLUMN_CLAIMS)} published counts against pipeline/pirateship.py ({total})",
+    )
+
+
 def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
     haystack = code_haystack()
     findings: List[Finding] = []
@@ -7767,6 +7895,7 @@ def audit(staged_only: bool) -> Report:
     check_entry_budget(report)
     check_env_vars(report, docs, allowed)
     check_server_concurrency(report)
+    check_shipping_columns(report)
     check_map(report, allowed)
     check_map_sections(report)
     check_build_order_mirror(report)
