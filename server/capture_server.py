@@ -10005,10 +10005,16 @@ def serve(host: str = HOST, port: int = PORT) -> None:
         if waiting and drain(DRAIN_SECONDS):
             print(f"stopped — {waiting} request(s) finished first.")
         elif waiting:
-            # LOUD, because this is the one path that can still tear the store: `Store.write()`
-            # replaces four JSON files in sequence and a kill between them leaves a torn set.
+            # LOUD, and D88 CHANGED WHAT IS AT RISK HERE rather than removing the risk.
+            # `Store.write()` is one SQLite transaction over every table now, so a kill can no
+            # longer leave the torn set of four JSON files this comment used to describe — the
+            # tables commit or they do not. What a kill still cuts is everything that was never
+            # in the transaction and still is not: the photograph, its sidecar, and
+            # `codes.jsonl`, all written inside the flock but outside the commit. So the thing
+            # to look at is no longer `history.jsonl`, which is a table now and not a file.
             print(f"STOPPED WITHOUT DRAINING — {inflight()} request(s) were cut after "
-                  f"{DRAIN_SECONDS:.0f}s. If the store looks wrong, check history.jsonl.")
+                  f"{DRAIN_SECONDS:.0f}s. The store's tables commit atomically; what a cut "
+                  f"write can leave half-done is a photograph, its sidecar, or codes.jsonl.")
         else:
             print("stopped.")
 

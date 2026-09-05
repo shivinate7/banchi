@@ -904,11 +904,14 @@ COMPONENTS = [
                                   "Fulfilment is a COUNT, never a list of positions (D36); where "
                                   "an identity is unavoidable it is a `capture_id`, which survives "
                                   "a renumber by construction. No order state reaches "
-                                  "`master.STATES` and nothing here logs to history.jsonl — both "
-                                  "would corrupt the sale and retirement reversals that scan that "
-                                  "log filtering on that tuple (D26). No I/O and no lock: "
-                                  "session.py writes it, fifth and last of five files whose set is "
-                                  "not atomic.",
+                                  "`master.STATES` and nothing here writes a history row — both "
+                                  "would corrupt the sale and retirement reversals, which scan "
+                                  "the history filtering positively on that tuple (D26). No I/O "
+                                  "and no lock: session.py writes it, and since D88 that is one "
+                                  "row set inside ONE SQLite transaction over every table — not "
+                                  "the fifth of five JSON files whose set was never atomic, which "
+                                  "is what this line said until 2026-09-05 while already citing "
+                                  "D88 three fields below.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
                                           "D29", "D36", "D53", "D63", "D88"], "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
@@ -1945,13 +1948,19 @@ COMPONENTS = [
                         "share a batch and a server restart drops every one — recorded rather "
                         "than discovered, because make up reloads on any Python edit here. "
                         "Nothing in it writes a file, opens a socket, reads a key, starts a "
-                        "child or takes the store lock. POST .../stamps is SPECIFIED AND NOT "
-                        "BUILT: the wire already carries `stamp` per row and `stamps` per "
-                        "batch as nulls, so the later route changes no type and no component.",
+                        "child or takes the store lock. POST .../stamps is BUILT as of "
+                        "2026-09-05 — `do_shipping_stamps`, a client function, and a control "
+                        "on #/shipping, because a route is not a feature. Its blocker was an "
+                        "empty order ledger and the 2026-09-03 pulls cleared it. The wire "
+                        "already carried `stamp` per row and `stamps` per batch as nulls, so "
+                        "it changed no type and no component, exactly as predicted. MEASURED "
+                        "on the 20 real orders: 12 fit the three label corners and 8 do not, "
+                        "so a stamp register that stops per box is the reopening condition.",
                 # D61 is the lanes, the abstention, the weight and the PII rule; D63 is the
-                # ledger the deferred stamps route would read; D66 is why the lane got a
-                # surface of its own rather than a badge on the order screen; D69 is the
-                # route. D58 is the stored index the stamps route will have to speak.
+                # ledger the stamps route reads; D66 is why the lane got a surface of its own
+                # rather than a badge on the order screen; D69 is the route. D58 is the stored
+                # index the stamps route speaks — its labels are `join.Position`'s, joined with
+                # " / " and never " · ", which would make a card boundary read as a section one.
                 "governed_by": ["D58", "D61", "D63", "D66", "D69"],
                 "tested_by": ["T7"],
                 "note": "T7 reaches it because that test imports the `server` package, and "

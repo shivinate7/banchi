@@ -1967,7 +1967,22 @@ def _close_header_owner() -> Optional[str]:
 # lists are the production tree only: the harness reads the history constantly and correctly,
 # and counting those would make the number meaningless.
 _HISTORY_READER_ROOTS = ("server", "store", "pipeline", "cli", "identify", "geometry", "codes")
-_SOLE_READER_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`[^.\n]{0,40}?the only reader")
+# BOTH WORD ORDERS. The name comes before the claim in `\`f\` — the only reader of X` and after
+# it in `the only reader of X is \`f\``, and the first pattern written here caught only the
+# first. Section 8 carried the second form for three weeks after the identical sentence was
+# corrected twice elsewhere, which is the whole argument for reading prose by shape rather than
+# fixing the instances somebody happened to grep for.
+# WHOLE-FILE AND NOT LINE BY LINE, which is the second thing this pattern got wrong. Every
+# markdown file in this repo wraps at 96 columns, so a claim of any length is USUALLY split
+# across two lines — section 8's instance sat on a wrap with "the" ending one line and "only
+# reader" starting the next, and a line-at-a-time reader cannot see it. A checker over prose
+# that reads lines is checking typography, not sentences. `.` is excluded so a match cannot
+# run past the end of its own sentence.
+_SOLE_READER_RE = re.compile(
+    r"`([A-Za-z_][A-Za-z0-9_]*)`[^.]{0,40}?the\s+only\s+reader"
+    r"|the\s+only\s+reader[^.]{0,60}?is\s+`([A-Za-z_][A-Za-z0-9_]*)`",
+    re.S,
+)
 
 
 def _history_readers() -> List[str]:
@@ -2336,11 +2351,10 @@ def check_sole_reader(report: Report) -> None:
         if exists(base):
             sources.extend(_walk(base, (".py",)))
     for path in sources:
-        for number, line in enumerate(read(path).splitlines(), start=1):
-            match = _SOLE_READER_RE.search(line)
-            if match is None:
-                continue
-            named = match.group(1)
+        text = read(path)
+        for match in _SOLE_READER_RE.finditer(text):
+            number = text.count("\n", 0, match.start()) + 1
+            named = match.group(1) or match.group(2)
             if named in functions and len(readers) == 1:
                 continue
             listed = "\n    ".join(readers) or "(none found)"
