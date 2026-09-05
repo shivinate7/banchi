@@ -28,9 +28,10 @@
 @media (max-width: 767px) {
   .runs .bn-head-actions .bn-btn { --btn-h: 40px; }
   .run-readings .bn-seg-item { min-height: 40px; }
-  .runslog-toggle,
-  .runs-disclose { height: 36px; }
-  .runslog-head .bn-btn-sm { --btn-h: 36px; }
+  /* `.runslog-toggle`, `.runs-disclose` and the log well's Copy are lifted BESIDE THEIR BASE
+     RULES further down this file, not here. At this position they lose: the base heights are
+     written later at the same specificity, so a lift up here is dead the moment the cascade
+     reaches them, which is what it was from the day it was written. */
   .run-preview-walk .bn-btn-sm { --btn-h: 40px; }
   .runs-composer-head .bn-btn-icon { --btn-h: 40px; }
   /* The presses that matter most — the step actions, Check cost, the file pickers. */
@@ -95,6 +96,16 @@
   transition: color var(--bn-t-fast) var(--bn-ease);
 }
 .runslog-toggle:hover { color: var(--bn-ink); }
+/* THE THUMB LIFT LIVES HERE BECAUSE IT HAS TO WIN. A `@media` block does not raise specificity,
+   so a phone height written before the 28px above at the same specificity loses to it — and one
+   was, at the top of this file, from the day it was written. Every `LogWell` in the product drew a
+   28px fold toggle on a phone against CLAUDE.md's 40, and the sheet-scoped `.runs-md` copy of this
+   rule was the only one that ever took effect. That copy is deleted; this is unscoped, so it
+   reaches the reconcile sheet, the composer and the run panel too. */
+@media (max-width: 767px) {
+  .runslog-toggle { height: 40px; }
+  .runslog-head .bn-btn-sm { --btn-h: 40px; }
+}
 .runslog-chev { flex: none; transition: transform var(--bn-t) var(--bn-ease); }
 .runslog-closed .runslog-chev { transform: rotate(-90deg); }
 .runslog-label {
@@ -353,6 +364,18 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
    Measured before this line: the survey's `LogWell` rendered 512px wide and 0px tall, with
    every line of stdout present in the DOM. Nothing that reads text could tell. */
 .runs-md-body > * { flex: none; }
+/* AND THE ONE THAT IS NOT A DIRECT CHILD. The rule above is `>`, so it reached the survey's
+   console — which sits in a fragment and is therefore a child of the body — and never reached the
+   apply's, which is one `<div>` deeper. Measured in the check state: the survey's well computed
+   `flex: 0 0 auto` and the apply's `0 1 auto`, shrinkable, which is the whole defect the line
+   above was written against.
+
+   ON `.runslog` AND NOT ON `.runs-md-console`, which is the class both call sites already pass and
+   which looks like the obvious hook. `LogWell` puts that class on the inner `<pre>`, not on the
+   well — so a rule on it sets `flex` on an element that is not a flex item of this column and
+   changes nothing. The well is what has to refuse to shrink, and it is what carries `overflow:
+   hidden` and therefore the automatic minimum size of zero. */
+.runs-md-body .runslog { flex: none; }
 .runs-md-says {
   margin: 0;
   font-size: var(--bn-fs-base);
@@ -432,15 +455,14 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
   .runs-md-step a.bn-btn { --btn-h: 40px; }
   .runs-md-body,
   .runs-md-foot { padding-left: var(--bn-4); padding-right: var(--bn-4); }
-  /* THREE THUMB TARGETS THIS SHEET INHERITS SHORT, lifted by descendant because all three are
-     somebody else's. Measured at 390: the log well's fold toggle 28px, its Copy 36px, and the
-     `.bn-check` label 19.5px — against `CLAUDE.md`'s 40. The toggle is a rule-order defect in
-     this very file (the phone lift at the top is written BEFORE the 28px base rule at the same
-     specificity, so the base wins, everywhere a `LogWell` is drawn); the check is a kit gap of
-     the kind already named beside `.bn-btn-sm` up there. Neither is fixed at its own site from
-     inside this workstream. */
-  .runs-md .runslog-toggle { height: 40px; }
-  .runs-md .runslog-head .bn-btn-sm { --btn-h: 40px; }
+  /* ONE THUMB TARGET THIS SHEET STILL INHERITS SHORT, and it is a kit gap of the kind named
+     beside `.bn-btn-sm` up there: `.bn-check`'s label measured 19.5px at 390 against CLAUDE.md's
+     40. The other two were the log well's fold toggle at 28px and its Copy at 36px, and they were
+     a rule-order defect in this very file rather than a kit gap — a phone lift written before the
+     base rules at the same specificity, dead on arrival. They are fixed at their own sites now
+     (see `.runslog-toggle`), so every `LogWell` in the product gets them and not only this one. */
+  /* The log well's toggle and its Copy are lifted at their own sites now, unscoped, so every
+     `LogWell` gets them rather than only this sheet's. The check is still somebody else's. */
   .runs-md .bn-check { min-height: 40px; }
   /* One column: two number fields side by side at 390 leave neither a readable label. */
   .runs-md-fields { grid-template-columns: minmax(0, 1fr); }
@@ -781,6 +803,10 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
 .runs-disclose:hover { color: var(--bn-ink); background: var(--bn-surface-3); }
 .runs-disclose .bn-icon { transition: transform var(--bn-t) var(--bn-ease); }
 .runs-disclose[aria-expanded='true'] .bn-icon { transform: rotate(180deg); }
+/* Beside its base rule, and for the reason written at `.runslog-toggle` above. */
+@media (max-width: 767px) {
+  .runs-disclose { height: 40px; }
+}
 .runs-quote-consoles { display: flex; flex-direction: column; gap: var(--bn-2); }
 
 /* ---- 4 · the receipt ----------------------------------------------------------- */

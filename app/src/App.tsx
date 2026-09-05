@@ -556,7 +556,7 @@ const SHORTCUTS: readonly KeyGroup[] = [
       { keys: ['⌘←', '⌘→'], does: 'Step to the screen before or after this one, in workflow order' },
       { keys: ['⌘↑', '⌘↓'], does: 'The same step, for a keyboard without arrow pairs' },
       { keys: ['⌘.'], does: 'Collapse the sidebar to its rail, or open it again' },
-      { keys: ['Esc'], does: 'Close whatever is over the screen — this sheet, the palette, the phone menu' },
+      { keys: ['Esc'], does: 'Close whatever is over the screen — this sheet, the palette, the phone menu', when: 'a sheet mid-request is the one thing that stays put; Runs says so below' },
     ],
   },
   {
@@ -622,7 +622,14 @@ const SHORTCUTS: readonly KeyGroup[] = [
     icon: 'play',
     at: '/runs',
     where: 'Only while Runs is open.',
-    rows: [{ keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a preview is on screen' }],
+    rows: [
+      { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a preview is on screen' },
+      {
+        keys: ['Esc'],
+        does: 'Close the identify composer, the store-wide reconcile or the markdown sheet',
+        when: 'unless that sheet has a request in flight — it stays put until the answer lands',
+      },
+    ],
   },
   {
     id: 'review',

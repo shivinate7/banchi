@@ -86,7 +86,16 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
       .catch(() => setHistory([]))
   }, [])
 
-  useEffect(refresh, [refresh])
+  /* GATED ON `open`, BECAUSE THIS SHEET IS ALWAYS MOUNTED. `Runs.tsx` renders it
+     unconditionally and hides it with `hidden={!open}`, so an ungated effect fired
+     `GET /pipeline/markdowns` on EVERY visit to `#/runs` — for a sheet most visits never open.
+     `LiveReconcile`, the sheet this file declares itself a clone of, makes no request until it
+     is asked to. Re-running when `open` flips is also what the history NEEDS: a worklist written
+     in this session has to appear in the list the next opening draws. */
+  useEffect(() => {
+    if (!open) return
+    refresh()
+  }, [open, refresh])
 
   const ask = useCallback(() => {
     const options: Record<string, unknown> = {}
@@ -202,14 +211,24 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
 
   /* Focus lands inside on open, stays inside under Tab, and returns to the opener on close;
      Escape closes. The same hook the composer and the store-wide reconcile use. */
-  useOverlayFocus(sheet, open, onClose)
+  /* `busy` is the hold: Escape does nothing while a survey, a worklist write, a check or an
+     import is in flight. Everything else in here survives a close — the sheet stays mounted. */
+  useOverlayFocus(sheet, open, onClose, busy)
 
   /* WHICH PRESS IS NEXT — the footer's whole content, and three absences rather than three
      disabled buttons (D33). Each is unreachable until the read before it has answered. */
   const nextPress =
     survey !== null && stamp === null
       ? 'worklist'
-      : stamp !== null && applied === null
+      : /* A REFUSED CHECK HAS NOT ANSWERED, so the next press is still the check. This read
+           `applied === null`, which is true of a check that has not run AND false of one that
+           came back refused — so a refusal moved the footer on to `import`, drew that button
+           DISABLED (`!applied.ok`), and left no way back. The only escape was re-picking the
+           export, and `takeExport` clears `stamp`: it would have thrown away the worklist the
+           refused check was about. Three absences rather than three disabled buttons is this
+           footer's whole rule (D33), and a disabled forward button with nothing beside it was
+           the one state it is meant not to have. */
+        stamp !== null && (applied === null || !applied.ok)
         ? 'check'
         : applied !== null && !wroteImport
           ? 'import'
@@ -360,6 +379,12 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
 
           {survey === null ? null : (
             <>
+              {/* `runs-md-console` IS A TEST SELECTOR AND NOT A STYLE HOOK, and the difference cost
+                  a session once. `LogWell` puts `className` on the inner `<pre>` rather than on the
+                  `.runslog` root, so a layout rule written against this class sets `flex` on
+                  something that is not a flex item of this column and changes nothing at all. The
+                  rule that keeps both consoles from being squeezed flat is on `.runslog` in
+                  `Runs.css`, and says so there. */}
               <LogWell
                 text={survey.console}
                 label={stamp === null ? 'What the survey printed' : 'What the worklist write printed'}

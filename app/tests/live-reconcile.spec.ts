@@ -180,3 +180,39 @@ test('the report is the command stdout, verbatim, and no row is summarised', asy
   await expect(console_).toContainText('9027215')
   await expect(console_).toHaveCSS('white-space', 'pre')
 })
+
+/* THE LOG WELL'S FOLD TOGGLE IS A THUMB TARGET, AND IT WAS 28px EVERYWHERE BUT ONE SHEET.
+ *
+ * `Runs.css` lifted it to 36px in a phone block near the top of the file and set its 28px base
+ * height further down at the SAME specificity — so the base won inside the media query too, and
+ * the lift was dead from the day it was written. The only rule that ever took effect was a
+ * `.runs-md`-scoped 40px copy, which reached the markdown sheet and nothing else: not this sheet,
+ * not the identify composer, not the run panel. `CLAUDE.md`'s floor is 40px on a coarse pointer.
+ *
+ * THIS SHEET IS THE ASSERTION BECAUSE IT IS NOT THAT SHEET. A case inside `.runs-md` would have
+ * passed against the defect for as long as the scoped copy existed, which is exactly how the
+ * defect survived — the one place anybody looked was the one place it did not apply. */
+test('the log well fold toggle is a thumb target on a phone, outside the markdown sheet too', async ({
+  page,
+}) => {
+  await open(page)
+  await pick(page)
+  await expect(page.locator('.livecheck .runslog')).toBeVisible()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await settleFonts(page)
+
+  const seen = await page.evaluate(() => {
+    const well = document.querySelector('.livecheck .runslog') as HTMLElement
+    const toggle = well.querySelector('.runslog-toggle') as HTMLElement
+    return {
+      insideMarkdownSheet: well.closest('.runs-md') !== null,
+      toggle: +toggle.getBoundingClientRect().height.toFixed(1),
+    }
+  })
+
+  /* If this ever reads true the case has stopped testing what it says it does. */
+  expect(seen.insideMarkdownSheet).toBe(false)
+  expect(seen.toggle).toBeGreaterThanOrEqual(40)
+})
+

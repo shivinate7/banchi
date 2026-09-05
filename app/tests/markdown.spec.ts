@@ -312,3 +312,144 @@ test('the report is the command stdout, verbatim, in a block that does not wrap'
   const box = await report.boundingBox()
   expect(box?.height ?? 0).toBeGreaterThan(60)
 })
+
+/* THE HISTORY IS FETCHED WHEN THE SHEET IS OPENED, NOT WHEN THE SCREEN IS.
+ *
+ * This sheet is always mounted — `Runs.tsx` renders it unconditionally and hides it with
+ * `hidden={!open}` — so an effect with no `open` guard fired `GET /pipeline/markdowns` on every
+ * visit to `#/runs`, for a sheet most visits never open. `LiveReconcile`, the sheet this file
+ * declares itself a clone of, makes no request until it is asked to.
+ *
+ * BOTH DIRECTIONS, because gating on `open` can be got wrong in the other one too: an effect that
+ * never re-runs leaves a worklist written this session missing from the list the next opening
+ * draws. */
+test('the history is not fetched until the sheet is opened, and is fetched when it is', async ({
+  page,
+}) => {
+  const gets: string[] = []
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && /\/pipeline\/markdowns$/.test(request.url())) {
+      gets.push(request.url())
+    }
+  })
+
+  await stub(page)
+  await expect(opener(page)).toBeVisible()
+  expect(gets).toHaveLength(0)
+
+  await opener(page).click()
+  await expect(sheet(page)).toBeVisible()
+  await expect.poll(() => gets.length).toBe(1)
+})
+
+/* ESCAPE HOLDS WHILE A REQUEST IS IN FLIGHT, and does not otherwise.
+ *
+ * Everything in this sheet survives a close — it stays mounted, so a typed field, a picked file
+ * and a written stamp are all there on the next opening, and the cost of an accidental Escape is
+ * a reopen. What does not survive is a request nobody can see: nothing aborts it, and its receipt
+ * toasts for a sheet that is gone. So the hold is exactly that case, and the second half of this
+ * asserts it is exactly that case — a sheet with the answer in hand closes as it always has. */
+test('Escape leaves a sheet alone while it is mid-request, and closes it once the answer lands', async ({
+  page,
+}) => {
+  await stub(page)
+
+  /* Registered after `stub`, so it wins: Playwright matches the most recent route first. The
+     survey hangs until this test lets it go. */
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(/\/pipeline\/markdowns$/, async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    await held
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, exit_code: 0, wrote: false, console: SURVEY, stamp: null }),
+    })
+  })
+
+  await opener(page).click()
+  await expect(sheet(page)).toBeVisible()
+  await pickExport(page)
+
+  /* IN FLIGHT, and said so by the thing the hold is keyed on rather than by a sleep: the press
+     that starts the survey is busy until the answer lands, so a disabled worklist-less footer with
+     a busy control in it IS the state under test. */
+  await expect(page.locator('.runs-md .bn-btn[disabled], .runs-md [aria-busy="true"]').first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet(page)).toBeVisible()
+
+  release()
+  await expect(worklistPress(page)).toBeVisible()
+
+  /* Answered: it closes, which is what says the hold was the request and not the sheet. */
+  await page.keyboard.press('Escape')
+  await expect(sheet(page)).toHaveCount(0)
+})
+
+/* A REFUSED CHECK LEAVES THE WAY BACK TO IT.
+ *
+ * `apply` sets its answer whether or not the answer is `ok`, so a refusal used to move the footer
+ * on to the import press — drawn DISABLED, because `!applied.ok` — with nothing beside it. The
+ * only escape was re-picking the export, and that clears the stamp: it would have thrown away the
+ * worklist the refused check was about. Three absences rather than three disabled buttons is this
+ * footer's rule (D33), and a disabled forward button alone is the state it exists to prevent. */
+test('a check that comes back refused keeps the press that runs it again', async ({ page }) => {
+  await stub(page)
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: false,
+        exit_code: 2,
+        wrote: false,
+        console: 'refused: two rows name a SKU this manifest does not hold',
+        stamp: STAMP,
+      }),
+    }),
+  )
+
+  await opener(page).click()
+  await pickExport(page)
+  await worklistPress(page).click()
+  await checkPress(page).click()
+
+  await expect(page.getByText('refused: two rows name a SKU this manifest does not hold')).toBeVisible()
+  await expect(checkPress(page)).toBeVisible()
+  await expect(importPress(page)).toHaveCount(0)
+})
+
+/* NEITHER CONSOLE MAY BE SQUEEZED FLAT, and one of the two was not covered.
+ *
+ * A flex item whose own `overflow` is not `visible` has an automatic minimum size of ZERO, and
+ * `.runslog` sets `overflow: hidden` — so in a column that overflows it is squeezed flat with
+ * every line of stdout still in the DOM, which nothing that reads text can tell. `Runs.css` had
+ * `.runs-md-body > *`, a DIRECT-CHILD selector: the survey's console sits in a fragment and is
+ * therefore a child of the body, and the apply's sits one `<div>` deeper. Measured in the check
+ * state before this: the survey's was `flex: 0 0 auto` and the apply's `0 1 auto`.
+ *
+ * IT ASSERTS THE COMPUTED `flex-shrink` RATHER THAN A HEIGHT, because a height is only zero once
+ * the column actually overflows — at this fixture's sizes both consoles render tall and a height
+ * assertion would pass against the defect. */
+test('both consoles refuse to shrink, not just the one that is a direct child', async ({ page }) => {
+  const wire = await open(page)
+  await pickExport(page)
+  await worklistPress(page).click()
+  await expect.poll(() => wire.length).toBe(2)
+  await checkPress(page).click()
+  await expect(page.getByText('What the check printed')).toBeVisible()
+
+  const wells = await page.evaluate(() =>
+    [...document.querySelectorAll('.runs-md-body .runslog')].map((node) => ({
+      label: node.querySelector('.runslog-label')?.textContent ?? '?',
+      shrink: getComputedStyle(node).flexShrink,
+    })),
+  )
+
+  expect(wells).toHaveLength(2)
+  for (const well of wells) expect(well.shrink).toBe('0')
+})
+
