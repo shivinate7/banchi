@@ -218,6 +218,7 @@ Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 | `logo/pass-family.png` | **both families, all five prisms, on the settled parameters** |
 | `logo/pass-gray-prisms.png` | the seven asserted grounds each for `warmer` and `quieter` |
 | `logo/pass-black-and-gold.png` | **section 8** — nine golds, five blacks, five brackets |
+| `logo/pass-white-and-rose-gold.png` | white gold and rose gold on the locked black, one pass each |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
 
 **Every PNG here went in past the pre-commit image guard, on the owner's word each time.** That
@@ -398,6 +399,41 @@ answer here: the owner's eye and the number agreed, rather than one overriding t
 **None of this has been rendered at 32px or 16px, where a weak taper tip would actually show.**
 Section 3's *small* optical cut removes the taper entirely, so the small cut is where this would
 be settled if it ever came under doubt.
+
+### White gold and rose gold, one pass each
+
+Asked for on 2026-09-05, on the locked true black at sheen 0.15. **Both are RANGED — one pass is
+one look, and section 7 rule 5 says that is not an answer yet.** The card base moves with the
+family and is HELD in both cases: amber is tuned for yellow gold and would show through a
+near-white foil as a stain.
+
+| | prism | card base | bracket |
+| --- | --- | --- | --- |
+| white gold | `warm` `#FFFBF2 #EFE6D2 #DCD0B8 #FFFFFF #C9BCA2`, or `champagne` | `#D8D2C4` HELD | pale gold holds; **`gold` gives the most separation** |
+| rose gold | `classic` `#FFD9C8 #F0B49A #DE9070 #FFE9DF #C87A5C`, or `blush` | `#D99878` HELD | pale gold is the most elegant; chrome the most separated |
+
+**The locked pale-gold bracket survived both**, which is worth more than it looks: it was chosen
+against yellow gold on a lightness measurement, and it did not have to be replaced for either of
+the other two metals. One bracket across three metals is a family rather than three marks.
+
+**Two findings, and both are about the limits of the idea rather than about a value.**
+
+**White gold's `cool` palette is not a white gold — it is bluesteel.** Driven cool enough to stop
+being warm, a near-white foil lands in exactly the hue the locked `bluesteel` prism occupies, and
+on the sheet the two are hard to tell apart. So white gold's range is bounded on one side by an
+existing member of the family, not by taste: **`neutral` is about as cool as it can go and stay
+its own mark.** The bracket sweep says the same thing from the other direction — `white gold`
+brackets on a white gold card is the one combination where the brackets and the card stop being
+separate objects.
+
+**Rose gold reads as salmon rather than as metal.** The holo is `feTurbulence` marbling, which
+sells a *mineral* — foil, stone, opal — and yellow gold survives that because a warm high-chroma
+marble still reads as gold leaf. Rose gold's appeal is specifically metallic sheen at low chroma,
+and marbling at that chroma reads as coral. **This is a limit of the holo treatment, not of the
+palette**, so sweeping more pinks will not fix it; the fix, if it is wanted, is a different
+surface for that one variant, and that is a bigger change than a color.
+
+Sheet: `logo/pass-white-and-rose-gold.png`. Generator: `logo/sheets/white-and-rose-gold.html`.
 
 ## 9. Still open
 
