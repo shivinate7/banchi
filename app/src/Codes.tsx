@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { createPortal } from 'react-dom'
 
 import {
+  applyBoxClaims,
   buildLot,
   describeFailure,
   exportCodes,
@@ -124,6 +125,14 @@ function laneOf(entry: CodeEntry): LaneFilter {
 function boxLabel(box: BoxRecord): string {
   const held = box.on_hand ?? box.cards
   return `Box ${box.box}${box.name ? ` · ${box.name}` : ''} · ${plural(held, 'card')}`
+}
+
+/** `Box 3 · RB Epics`, or `Box 3` alone where the box has no name (D20/D56). The registry read
+ *  can be absent or stale, and a box the ledger names is still a box: a missing row falls back
+ *  to the number rather than drawing a fault where there is none. */
+function boxTitle(box: number, boxes: BoxRecord[] | null): string {
+  const name = boxes?.find((b) => b.box === box)?.name
+  return name ? `Box ${box} · ${name}` : `Box ${box}`
 }
 
 function when(iso: string | null | undefined): string {
@@ -392,6 +401,12 @@ export function Codes() {
   const [dupOpen, setDupOpen] = useState(false)
   const [allProducts, setAllProducts] = useState(false)
 
+  /* D70's product claim, corrected where the problem is stated. `fixPick` is per box because
+     the panel offers one apply per box and each is a separate press; nothing here is kept
+     across a reload, and nothing about a card goes near `localStorage`. */
+  const [fixOpen, setFixOpen] = useState(false)
+  const [fixPick, setFixPick] = useState<Record<number, string>>({})
+
   /* THE LOT BUILDER. Box-scoped and physical by default, which is the shape the owner
      settled on 2026-08-30: 1,000-card lots, shipped, eBay or TCGplayer only. */
   const [lotBox, setLotBox] = useState('')
@@ -404,6 +419,17 @@ export function Codes() {
   const [lots, setLots] = useState<LotReceipt[]>([])
 
   const load = useCallback(async () => {
+    /* THE BOXES TRAVEL WITH THE LEDGER NOW, and until 2026-09-05 they were read once at mount
+       and never again — the shape `Fulfillment.tsx` records as its own stale-row defect, and
+       one this screen had a live stake in the moment the product fix started naming the box it
+       is about to write to (a rename, or a box created on the other device, was drawn wrong
+       here until a reload). Deliberately NOT inside the `Promise.all`: an unreadable box list
+       costs the box FIELD its names and nothing else, and folding it in would let that take the
+       whole ledger down with it. A failed re-read keeps the list it had rather than emptying
+       one that was good a second ago. */
+    const boxesRead = getBoxes()
+      .then((summary) => setBoxes([...summary.boxes].sort((a, b) => b.box - a.box)))
+      .catch(() => setBoxes((held) => held ?? []))
     try {
       const [ledgerNext, lotsNext] = await Promise.all([getCodes(), getLots()])
       setLedger(ledgerNext)
@@ -412,6 +438,7 @@ export function Codes() {
     } catch (err) {
       setLoadFailure(describeFailure(err))
     }
+    await boxesRead
   }, [])
 
   const retry = useCallback(async () => {
@@ -425,9 +452,6 @@ export function Codes() {
 
   useEffect(() => {
     void load()
-    getBoxes()
-      .then((summary) => setBoxes([...summary.boxes].sort((a, b) => b.box - a.box)))
-      .catch(() => setBoxes([]))
   }, [load])
 
   const closeSheet = useCallback(() => setSheet(null), [])
@@ -453,6 +477,57 @@ export function Codes() {
       }
     },
     [box, load],
+  )
+
+  /* THE SECOND DOOR ONTO D70's PRODUCT CLAIM, and it is two writes rather than one.
+   *
+   * The claim lives on the CARD — `codes/scan.py` reads `capture.product` off the sidecar and
+   * stamps it onto the ledger line — so correcting a code means writing the cards and then
+   * reading their photographs again. `applyBoxClaims` rewrites the sidecar of every card it
+   * changes and `scanCodes` merges the fresh read over the ledger, refreshing `product` on the
+   * lines whose code and position are unchanged. Skip the second call and the store is right
+   * while this screen, both lanes and every lot still say unclaimed.
+   *
+   * ONLY THE UNCLAIMED CODES' OWN POSITIONS ARE SENT, never the whole box: a box may hold two
+   * stacks, and a sweep over all of it would overwrite a claim somebody made deliberately.
+   * The server refuses the whole call if any of those positions has gone (`card_not_found`)
+   * and steps over sold and retired records, naming them — both land in the receipt below.
+   */
+  const fixProduct = useCallback(
+    async (box: number, indices: readonly number[], product: string, named: string) => {
+      if (product === '') return
+      setBusy(true)
+      setPending(`fix-${box}`)
+      try {
+        const claimed = await applyBoxClaims(box, { product }, [...indices])
+        const reread = await scanCodes({ box, preview: false })
+        setFailure(null)
+        const stepped =
+          claimed.skipped_terminal === 0
+            ? ''
+            : ` ${plural(claimed.skipped_terminal, 'sold or retired record')} left alone.`
+        toast(
+          claimed.applied === 0
+            ? {
+                kind: 'status',
+                title: 'Nothing moved',
+                body: `Every card reached in box ${box} already said ${named}.${stepped}`,
+              }
+            : {
+                kind: 'ok',
+                title: `${plural(claimed.applied, 'card')} now ${named}`,
+                body: `Box ${box} read again — ${plural(reread.decoded, 'code')} decoded.${stepped}`,
+              },
+        )
+        await load()
+      } catch (err) {
+        setFailure(describeFailure(err))
+      } finally {
+        setBusy(false)
+        setPending(null)
+      }
+    },
+    [load],
   )
 
   const runPreview = useCallback(async () => {
@@ -595,6 +670,64 @@ export function Codes() {
     }
     return counts
   }, [ledger, stateFilter])
+
+  /* WHICH BOXES HOLD THE UNCLAIMED CODES, and what the rest of each box already says.
+   *
+   * `lanes.unclaimed` is the figure the banner draws and it is a count of HELD codes with no
+   * product — the same three-way answer `codes_routes._pool` reaches — so this walks the same
+   * population rather than a wider one, and a reserved or delivered code is nobody's business
+   * here: it has left.
+   *
+   * `company` IS EVIDENCE AND NEVER A DEFAULT. The commonest claim among the box's OTHER held
+   * codes is drawn beside the picker, and nothing is preselected: a stack came out of one
+   * sealed product, so the neighbours are usually right — but D70 chose an unclaimed code
+   * refused by both lanes over a plausible wrong one, and a pre-filled picker is exactly the
+   * thoughtless press that ruling exists to prevent. */
+  const unclaimedFix = useMemo(() => {
+    const byBox = new Map<number, number[]>()
+    const claimedIn = new Map<number, Map<string, number>>()
+    let adrift = 0
+    for (const e of ledger?.entries ?? []) {
+      if (e.state !== 'held') continue
+      if (e.product !== null && e.product !== '') {
+        if (e.box === null) continue
+        const seen = claimedIn.get(e.box) ?? new Map<string, number>()
+        seen.set(e.product, (seen.get(e.product) ?? 0) + 1)
+        claimedIn.set(e.box, seen)
+        continue
+      }
+      if (e.box === null || e.index === null) {
+        adrift += 1
+        continue
+      }
+      const held = byBox.get(e.box)
+      if (held === undefined) byBox.set(e.box, [e.index])
+      else held.push(e.index)
+    }
+    const boxes = [...byBox.entries()]
+      .map(([box, indices]) => {
+        const ranked = [...(claimedIn.get(box) ?? new Map<string, number>()).entries()].sort(
+          (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+        )
+        const top = ranked[0]
+        const display = top === undefined ? null : ledger?.products.find((p) => p.key === top[0])?.display
+        return {
+          box,
+          indices: [...new Set(indices)].sort((a, b) => a - b),
+          company: top === undefined || !display ? null : { display, count: top[1] },
+        }
+      })
+      /* Biggest first: one press clears the most codes. Ties by box number, so the order is
+         stable across a reload rather than the map's insertion order. */
+      .sort((a, b) => b.indices.length - a.indices.length || a.box - b.box)
+    return { boxes, adrift }
+  }, [ledger])
+
+  /* The route button aims at the box when there is exactly one to aim at — `#/inventory?box=`
+     is the deep link the home screen and the review queue already use. Bare `#/inventory`
+     otherwise, because picking one of several boxes for the operator would be a guess. */
+  const lone = unclaimedFix.boxes.length === 1 ? unclaimedFix.boxes[0] : undefined
+  const fixHash = lone === undefined ? '#/inventory' : `#/inventory?box=${lone.box}`
 
   const filterKey = `${stateFilter}|${laneFilter}|${filter.trim().toLowerCase()}`
   const visible = showAll ? rows : rows.slice(0, ROW_CAP)
@@ -881,11 +1014,106 @@ export function Codes() {
                     {ledger.lanes.unclaimed === 1 ? 'it' : 'them'}. Treating one as a booster would be right most of the time — and
                     the time it is wrong, a premium code leaves in a penny lot.
                   </div>
-                  <Button size="sm" iconRight="arrowRight" onClick={() => (window.location.hash = '#/inventory')}>
-                    Fix on Inventory
-                  </Button>
+                  <div className="codes-banner-acts">
+                    {/* Solid on a tinted banner, as the duplicates banner beside it already is:
+                        a `default` button here is surface-on-tint and reads as disabled. The
+                        icon is the chevron alone — this is a disclosure, and a second glyph on
+                        a 32px control is noise. */}
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      iconRight={fixOpen ? 'chevronUp' : 'chevronDown'}
+                      aria-expanded={fixOpen}
+                      onClick={() => setFixOpen((o) => !o)}
+                    >
+                      Set the product
+                    </Button>
+                    <Button size="sm" variant="ghost" iconRight="arrowRight" onClick={() => (window.location.hash = fixHash)}>
+                      Fix on Inventory
+                    </Button>
+                  </div>
                 </div>
               )}
+              {fixOpen && ledger.lanes.unclaimed > 0 ? (
+                <div className="codes-fix bn-anim-in">
+                  <p className="codes-fix-lede">
+                    A stack came out of one sealed product, so the box is the unit. Applying writes the claim onto those
+                    cards and then reads the box again — the ledger takes the product from the photographs, so nothing here
+                    changes lane until it has.
+                  </p>
+                  {unclaimedFix.boxes.length === 0 ? null : (
+                    <ul className="codes-fix-list">
+                      {unclaimedFix.boxes.map((row) => {
+                        const chosen = fixPick[row.box] ?? ''
+                        const entry = ledger.products.find((p) => p.key === chosen)
+                        const working = pending === `fix-${row.box}`
+                        return (
+                          <li key={row.box} className="codes-fix-row">
+                            <div className="codes-fix-where">
+                              <span className="codes-fix-box">{boxTitle(row.box, boxes)}</span>
+                              <span className="codes-fix-n">{plural(row.indices.length, 'unclaimed code')}</span>
+                              {row.company === null ? null : (
+                                <span className="codes-fix-company">
+                                  the other {plural(row.company.count, 'code')} in this box say {row.company.display}
+                                </span>
+                              )}
+                            </div>
+                            {/* The picker, the lane it lands in and the press are ONE group: at
+                                820 the row wraps, and a button that wrapped on its own sat
+                                under the box name rather than under the picker it answers. */}
+                            <div className="codes-fix-do">
+                              <label className="bn-field codes-fix-field">
+                                <span className="bn-field-label">Product</span>
+                                <select
+                                  className="bn-select"
+                                  value={chosen}
+                                  disabled={busy}
+                                  onChange={(e) => setFixPick((held) => ({ ...held, [row.box]: e.target.value }))}
+                                >
+                                  <option value="">Choose a product…</option>
+                                  {ledger.products.map((p) => (
+                                    <option key={p.key} value={p.key}>
+                                      {p.display}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              {/* OUTLINED WHEN IT IS NOT PREMIUM. A default pill's fill is
+                                  `--bn-surface-2`, which is this row's own ground, so Bulk
+                                  drew as bare text beside a filled Premium chip and the two
+                                  lanes stopped looking like one control's two answers. */}
+                              <span className="codes-fix-lane">
+                                {entry === undefined ? null : (
+                                  <Pill tone={entry.premium ? 'accent' : 'default'} outline={!entry.premium}>
+                                    {entry.premium ? 'Premium' : 'Bulk'}
+                                  </Pill>
+                                )}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                icon="check"
+                                busy={working}
+                                disabled={busy || chosen === ''}
+                                onClick={() => void fixProduct(row.box, row.indices, chosen, entry?.display ?? chosen)}
+                              >
+                                Apply to {plural(row.indices.length, 'code')}
+                              </Button>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                  {unclaimedFix.adrift === 0 ? null : (
+                    <p className="codes-fix-adrift">
+                      {plural(unclaimedFix.adrift, 'code')} on the ledger {unclaimedFix.adrift === 1 ? 'carries' : 'carry'} no
+                      position, so there is no card record to write a claim onto. Read {unclaimedFix.adrift === 1 ? 'its' : 'their'}{' '}
+                      box again, or hand {unclaimedFix.adrift === 1 ? 'it' : 'them'} over by product from the ledger below.
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
           )}
 

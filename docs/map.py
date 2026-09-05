@@ -1477,6 +1477,45 @@ COMPONENTS = [
                         "commit path — the traces it reads live in the operator's Downloads "
                         "folder and are not in this tree.",
             },
+            "score-detect.py": {
+                "does": "`scripts/score-detect.py scan|sweep [<captures dir>]` — re-scores "
+                        "geometry.detect_card over real capture directories, which is D75's "
+                        "one-off measurement made repeatable. `scan` walks the `box*` "
+                        "directories under whatever it is pointed at and puts every "
+                        "photograph through the path cli/cmd_identify.py puts it through — "
+                        "the sidecar's game, the game's own `card_aspect` (D22), then "
+                        "identify.images.crop_refusal over the detected box — reporting per "
+                        "box and overall how many yielded a box, how many the detector "
+                        "refused, how many of the boxes it did return the crop guard then "
+                        "declines to cut, and the area and detail distributions the two "
+                        "constants sit between. `--write` commits harness/results/detect.json "
+                        "under that README's rules, and a scan of one box gets its own "
+                        "filename — read off what was scanned, never off the flag — so it can "
+                        "never stand in for the tree's score. `sweep` reports what other "
+                        "(area, detail) pairs would have declined, with no winner in the "
+                        "grid. ITS CONSTANTS ARE IMPORTED FROM identify/images.py AND NOT "
+                        "MIRRORED, which is the one place it parts company with "
+                        "score-trace.py: that script copies app/src/motion.ts's parameters "
+                        "because the machine it grades is TypeScript, and a copy here would "
+                        "be a number able to disagree with the one it grades.",
+                "governed_by": ["D18", "D21", "D22", "D43", "D75"],
+                "note": "IT MEASURES NO WRONGNESS RATE, AND THAT IS THE FIRST THING TO KNOW "
+                        "ABOUT IT, 2026-09-05. D75's nine wrong crops were confirmed by eye "
+                        "one photograph at a time; nothing here has an answer key, and a "
+                        "small crop that is the whole card shot from far back is "
+                        "indistinguishable from one that is the card's rules-text panel to "
+                        "every count this script produces. What it produces instead is a "
+                        "REFUSAL RATE comparable across boxes and across time, which is the "
+                        "cheap signal D75 could not leave behind: the two constants were "
+                        "fitted to 867 frames on one afternoon, the same boxes now hold "
+                        "1,625, and 226 of those were captured after the fitting. A rate that "
+                        "departs from a neighbouring box's, or from the last run at the same "
+                        "`detector_fingerprint`, is a reason to go and look — and looking is "
+                        "still what settles it. D18 governs it because what it writes gates "
+                        "nothing and is never on the commit path; D43 because the default "
+                        "directory is this checkout's own `captures/`, which in a worktree is "
+                        "correctly empty and says so rather than reporting a clean zero.",
+            },
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
                         "shape, one package, one module, everything a decision governs, and "
@@ -1778,7 +1817,7 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D96", "D100"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D96", "D100"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -2270,7 +2309,7 @@ COMPONENTS = [
                                       "(`codes_routes._pool`), which is where the money "
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
-                              "governed_by": ["D14", "D24", "D33", "D70"]},
+                              "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -2282,7 +2321,7 @@ COMPONENTS = [
                                       "roster did not list this route, and this checkout's "
                                       "store is empty (D43) so no disabled button renders for "
                                       "it to see even now that it does.",
-                              "governed_by": ["D14", "D32", "D43", "D50", "D58"]},
+                              "governed_by": ["D14", "D32", "D43", "D50", "D58", "D70"]},
             "src/App.css": {"does": "the shell's chrome: the sidebar and the rail it collapses "
                                     "to, the phone's top bar and its sheet, the bottom tab bar, "
                                     "the command palette, the which-key overlay, the "
@@ -2340,7 +2379,7 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D100"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D70", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D100"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
@@ -2811,7 +2850,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D83", "D89"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -2851,7 +2890,7 @@ COMPONENTS = [
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5"]},
             "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
-                                "governed_by": ["D5", "D50", "D67", "D93", "D94", "D95"]},
+                                "governed_by": ["D5", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95"]},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
                                 "governed_by": ["D5", "D94"]},
 
@@ -3619,6 +3658,24 @@ COMPONENTS = [
                         "unchecked by either — the #/codes defect was found by reading the "
                         "sheet, not by the sweep — and closing that needs fixtures for ten "
                         "screens.",
+            },
+            "tests/gallery.spec.ts": {
+                "does": "the four row shapes `CardLocations` draws that no other spec reaches "
+                        "— the departed shell (`is-gone is-nobar`), the pooled one, the "
+                        "current one, and the state cell's single pill — asserted against "
+                        "`#/gallery`'s own fixtures rather than a server. One count per shape, "
+                        "so a fixture that quietly stops producing one is caught.",
+                "governed_by": ["D24", "D58", "D68", "D71", "D93"],
+                "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
+                        "2026-09-05. `docs/DEBTS.md` section 5 recorded the departed row as "
+                        "absent from the kit; the sold fixture inherited a numeric `slot` from "
+                        "the base, so `isDeparted` was false and the shell was rendered "
+                        "NOWHERE on a page whose entire purpose is that every shape is looked "
+                        "at. A `scripts/docs-audit.py` row would be the wrong instrument: "
+                        "re-implementing `isDeparted` in Python goes green against a fixture "
+                        "that renders nothing, which is this repo's vacuous green. Only a "
+                        "browser can say the row was drawn. Not a harness test and not in "
+                        "harness/run.py:TESTS; it runs with the other Playwright specs.",
             },
             "tests/pull-confirm.spec.ts": {
                 "does": "three rows of the Fulfillment constraints table against step 6's one "

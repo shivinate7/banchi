@@ -21,6 +21,12 @@ const noop = () => {}
 
 // ---------------------------------------------------------------------------- fixtures
 
+/* EVERY OVERRIDE THAT MOVES `index` MUST MOVE `slot` TOO, and three of them did not until
+   2026-09-05. `slot` is the numerator of `#N of M` (D58) and `index` is the store key; the base
+   below is internally consistent (card 40 is the 15th card of a section starting at 26), so an
+   override setting `index: 12` and leaving `slot` alone drew `Box 7 · Section 1 · Card 12`
+   over the caption `#40 of 62` — an impossible card, on the one sheet whose entire purpose is
+   being looked at. Each fixture's `fraction` is what says which number is right. */
 function place(over: Partial<Place>): Place {
   return {
     label: 'Box 3 · Section 2 · Card 15',
@@ -40,9 +46,24 @@ function place(over: Partial<Place>): Place {
 }
 
 const CLOSED_BOX = place({})
-const OPEN_BOX = place({ label: 'Box 7 · Section 1 · Card 12', box: 7, index: 12, section: 1, card: 12, box_name: null, section_start: 1, section_end: null, box_total: 62, box_closed: false, fraction: 12 / 62 })
-const SINGLE_SECTION = place({ label: 'Box 9 · Section 1 · Card 4', box: 9, index: 4, section: 1, card: 4, box_name: 'Bulk, unsorted', section_start: 1, section_end: null, box_total: 80, box_closed: true, fraction: 0.05 })
-const NO_FRACTION = place({ label: 'Box 4 · Section 1 · Card 1', box: 4, index: 1, section: 1, card: 1, box_name: null, section_start: 1, section_end: null, box_total: 0, box_closed: false, fraction: null })
+const OPEN_BOX = place({ label: 'Box 7 · Section 1 · Card 12', box: 7, index: 12, slot: 12, section: 1, card: 12, box_name: null, section_start: 1, section_end: null, box_total: 62, box_closed: false, fraction: 12 / 62 })
+const SINGLE_SECTION = place({ label: 'Box 9 · Section 1 · Card 4', box: 9, index: 4, slot: 4, section: 1, card: 4, box_name: 'Bulk, unsorted', section_start: 1, section_end: null, box_total: 80, box_closed: true, fraction: 0.05 })
+const NO_FRACTION = place({ label: 'Box 4 · Section 1 · Card 1', box: 4, index: 1, slot: 1, section: 1, card: 1, box_name: null, section_start: 1, section_end: null, box_total: 0, box_closed: false, fraction: null })
+/* A COPY THAT HAS LEFT ITS BOX (D58, D68, D71), which is a ROW SHAPE and not a variation on a
+   located one: `slot`, `section` and `card` are all null, because a card that has left is in no
+   slot, and `join.departed_label` is what the server sends where a position label would be — the
+   box it belongs to, the word, and the store key, since two departed copies of one card in one
+   box were otherwise the identical string.
+   `server.ts:isDeparted` reads the NULL SLOT BESIDE A REAL LABEL, so handing this fixture a
+   numeric slot turns the departed row back into an ordinary one and the shell it draws
+   (`is-gone is-nobar`) stops being rendered anywhere on this sheet — which is exactly what
+   `app/tests/gallery.spec.ts` is here to refuse. */
+const DEPARTED = place({ label: 'Box 3 · departed · B3 #31', box: 3, index: 31, slot: null, section: null, card: null, fraction: null })
+/* A POOLED COPY (D24): a count, not a location. `located: false` is the whole of it — the block
+   carries no label at all, so the row draws the game's own name where a position would be and
+   `pooled · <key>` under it. A different game from every other fixture here on purpose: the
+   pooled shape only ever arrives on a game whose registry entry says it is unlocated. */
+const POOLED = place({ located: false, label: null, game: 'pokemon_code', game_display: 'Pokémon code cards', box: 12, index: 5, slot: null, section: null, card: null, box_name: null, section_start: 1, section_end: null, box_total: 0, box_closed: false, fraction: null })
 
 const GROUP: SearchGroup = {
   sku: '8421991',
@@ -53,9 +74,13 @@ const GROUP: SearchGroup = {
   set_hint: 'me01',
   condition: 'Near Mint',
   listed: { pushed: 0, staged: 1, live: 2 },
-  on_hand: 3,
+  /* Four of the six copies below have not left by either door, and `listable` is the server's
+     own `min(cap, on_hand)` — both move with the copies list rather than being typed beside it,
+     so the header's figures and the rows it sits over cannot disagree on a sheet whose whole
+     purpose is being looked at. */
+  on_hand: 4,
   cap: 4,
-  listable: 3,
+  listable: 4,
   /* `capture_id` ON EVERY ROW BUT ONE, and the null is the specimen (D93): a record written
      before ids were kept cannot be aimed at, so the order walk draws a reason where the take
      would be. A gallery whose every copy carried one would never show that row. */
@@ -64,6 +89,12 @@ const GROUP: SearchGroup = {
     { key: '7/12', state: 'identified', state_at: null, has_photo: true, capture_id: 'cap-7-12', place: OPEN_BOX },
     { key: '9/4', state: 'captured', state_at: null, has_photo: false, capture_id: null, place: SINGLE_SECTION },
     { key: '4/1', state: 'sold', state_at: null, has_photo: true, capture_id: 'cap-4-1', place: NO_FRACTION },
+    { key: '3/31', state: 'sold', state_at: null, has_photo: true, capture_id: 'cap-3-31', place: DEPARTED },
+    /* NO PHOTOGRAPH ON THE POOLED ROW, AND IT IS THE OPSEC RULE RATHER THAN A MISSING FIXTURE:
+       a pooled capture is a code card, its photograph is a live bearer instrument, and this
+       sheet is what `make screenshot` renders. The Fulfiller's skin draws its missing-photo
+       sentence instead, which is a real state and the only honest one here. */
+    { key: '12/5', state: 'identified', state_at: null, has_photo: false, capture_id: 'cap-12-5', place: POOLED },
   ],
 }
 
@@ -862,10 +893,14 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="locations" title="Card locations" lede="One card, four copies, one sold. Same group, same actions; the prop that differs is the persona.">
+          <Section id="locations" title="Card locations" lede="One card and every row shape it draws: six copies — four in a box, one of those sold; one departed, and so in no slot at all; one pooled, which is a count rather than a place. The owner's spec names a current copy too. Same group, same actions; the prop that differs is the persona.">
             <div className="kit-stack">
-              <Spec name="locations-owner" label="owner · a bar on every row">
-                <CardLocations group={GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} />
+              <Spec
+                name="locations-owner"
+                label="owner · a bar on every row that has one"
+                note="Three rows deliberately carry no bar, each for its own reason: the pooled copy has no coordinate to draw, the departed one is in no slot at all, and the copy the walk is standing on already has its lens drawn full size above the list."
+              >
+                <CardLocations group={GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} currentKey="7/12" />
               </Spec>
               <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="Photographs resolve against the capture server; without one each copy draws its missing-photo sentence, which is a real state.">
                 <CardLocations group={GROUP} persona="fulfiller" onSell={noop} busyKey={null} soldKeys={new Set()} />

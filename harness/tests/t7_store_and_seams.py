@@ -6864,6 +6864,80 @@ def check_place_neighbors(checks: Checks) -> None:
 # ---------------------------------------------------- D58: the numbers count the cards
 
 
+def check_box_claim_product(checks: Checks) -> None:
+    """`product` travels the box route too — the claim `BOX_CLAIM_FIELDS` accepted and dropped.
+
+    THE SHAPE OF THE DEFECT, because it is the one a receipt cannot show you. `PUT_FIELDS` is
+    derived from `master.CAPTURE_CLAIM_FIELDS` and `BOX_CLAIM_FIELDS` is derived from
+    `PUT_FIELDS`, so when D70 added `product` on 2026-08-30 both tuples grew on their own.
+    `_reject_unknown` therefore ACCEPTED the key, the `any(field in payload ...)` guard passed
+    it, and only the hand-written decode table — which had no `product` branch — decided
+    whether anything happened. Nothing did. The route answered 200 with `"applied": 0`, which
+    is the same sentence it says when the box already carries the claim.
+
+    NO CHECK COULD HAVE CAUGHT IT, because none sent the field: every `do_put_box_claims` call
+    in this file sent `set_hint`, `game` or `variant`. The card route's decode table has had
+    the branch since the day the claim landed, so the two tables disagreed for six days behind
+    a comment reading "the same decode table as `do_put_card`, phase for phase".
+
+    WHY IT MATTERS OFF THIS SCREEN: `#/codes` will not tier a held code without a product
+    claim, and D70 makes the product the difference between a premium code and a penny lot.
+
+    MUTATION IT IS KEPT FOR: delete the `if "product" in payload:` branch from
+    `do_put_box_claims`. `applied` drops to 0 and every record's `product` stays None — which
+    is precisely what the tree did before 2026-09-05.
+    """
+    checks.note("")
+    checks.note("BOX-LEVEL CLAIMS — the product claim (D70/C10)")
+
+    with isolated_home():
+        for _i in range(1, 4):
+            capture_server.do_capture(capture_payload(7))
+
+        body = capture_server.do_put_box_claims(7, {"product": "etb"})
+        checks.equal(
+            (body["eligible"], body["applied"]),
+            (3, 3),
+            "the box route APPLIES a product claim — it accepted the key and moved nothing "
+            "until 2026-09-05, answering 200 `applied: 0` like a box that already agreed",
+        )
+        after = Store().read().inventory
+        checks.ok(
+            all(after.cards[f"7/{i}"].product == "etb" for i in (1, 2, 3)),
+            "and every eligible card carries it on the record, which is what `#/codes` "
+            "reads to tier a held code",
+        )
+
+        # THE VOCABULARY IS STILL THE VOCABULARY. `_optional_product` is not scoped to a game
+        # (there is one game that carries products), but it is still a closed list, and the
+        # box route has to refuse outside it exactly as the card route does — otherwise the
+        # fix has bought a wider door rather than the same one.
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box_claims(7, {"product": "not_a_product"}),
+            "product_invalid",
+            "a product outside `codes/products.py` refuses the whole call",
+        )
+        checks.ok(
+            all(
+                Store().read().inventory.cards[f"7/{i}"].product == "etb"
+                for i in (1, 2, 3)
+            ),
+            "and the refusal changed nothing — D29's all-or-nothing shape holds for this "
+            "claim like every other",
+        )
+
+        # Absent means NO CLAIM, never a clear: the same rule the capture route states.
+        capture_server.do_put_box_claims(7, {"set_hint": "sv9"})
+        checks.ok(
+            all(
+                Store().read().inventory.cards[f"7/{i}"].product == "etb"
+                for i in (1, 2, 3)
+            ),
+            "a later call that does not mention `product` leaves it alone",
+        )
+
+
 def check_consolidated_numbering(checks: Checks) -> None:
     """A card's number is its place among the cards IN the box, not among the slots. D58.
 
@@ -11361,6 +11435,115 @@ def check_withholding(checks: Checks) -> None:
             "something — the no-op branch is the one that stays quiet",
             freed,
         )
+
+
+def check_connection_close(checks: Checks) -> None:
+    """Every response closes its connection, INCLUDING the 304 — the pool's whole premise.
+
+    `CaptureServer` submits one worker per CONNECTION and its own comment states the trap:
+    "a worker holding an idle connection serves nobody, so N idle browser tabs starve a pool
+    of N completely. Closing after every response is the answer, and it is why a pool is safe
+    here and would not have been before."
+
+    THE ANSWER HAD AN EXCEPTION AND NOTHING SAW IT. `_photo`'s 304 branch answers a conditional
+    GET by hand and never touches `_send`, which was the only place `Connection: close` was
+    sent. `do_photo` sets `Cache-Control: no-cache`, so a 304 is the NORMAL answer on any
+    revisit rather than an edge — `GET /photo` is the app's most-requested route — and four
+    concurrent revalidations held all four workers until `timeout = 15` reaped them.
+
+    WHY `request()` CANNOT ASK THIS QUESTION. That helper sends `Connection: close` from the
+    CLIENT, so the socket goes away whatever the server does and the starvation is invisible.
+    The second leg therefore drives raw `http.client` connections and DELIBERATELY DOES NOT
+    CLOSE THEM. Using the helper here would be the vacuous green this file keeps finding.
+
+    THE MUTATION IT IS KEPT FOR: delete the `send_header("Connection", "close")` from
+    `CaptureHandler.end_headers`. Before this check that mutation left T7 entirely green and
+    showed up only as `make harness` HANGING, with no sentence naming a cause.
+    """
+    import http.client
+
+    checks.note("")
+    checks.note("Connection: close — the invariant one worker per request rests on")
+
+    def blob(i: int) -> str:
+        return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
+
+    with isolated_home():
+        for i in (1, 2):
+            capture_server.do_capture(
+                {"box": 3, "capture_id": f"p{i}", "image": blob(i), "set_hint": "sv9"}
+            )
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        held: list = []
+        try:
+            # ------------------------------------------------ leg 1: the header, every path
+            status, _, headers = request(port, "GET", "/photo/3/1")
+            etag = headers.get("ETag")
+            checks.equal(status, 200, "a photo answers 200 with its bytes")
+            checks.equal(
+                headers.get("Connection"),
+                "close",
+                "and closes — the 200 photo path goes through `_send`, which always did",
+            )
+
+            status, _, headers = request(
+                port, "GET", "/photo/3/1", extra_headers={"If-None-Match": etag}
+            )
+            checks.equal(status, 304, "an unchanged photo revalidates to 304")
+            checks.equal(
+                headers.get("Connection"),
+                "close",
+                "AND THE 304 CLOSES TOO — the branch that answers by hand, which sent no "
+                "`Connection` header at all while the pool depended on it",
+            )
+
+            status, _, headers = request(port, "GET", "/status")
+            checks.equal(
+                headers.get("Connection"),
+                "close",
+                "and so does a JSON route, so the invariant is the handler's and not one "
+                "route's",
+            )
+
+            # -------------------------------------- leg 2: the starvation the header prevents
+            # RAW CONNECTIONS, HELD OPEN ON PURPOSE. Each one answers 304 and is not closed by
+            # this client, so if the server does not close it the worker that served it is
+            # still parked in `handle()` waiting for a second request that never comes.
+            for _ in range(capture_server.REQUEST_SLOTS):
+                conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+                conn.request("GET", "/photo/3/1", headers={"If-None-Match": etag})
+                conn.getresponse().read()
+                held.append(conn)
+
+            started = time.monotonic()
+            fresh = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            answered = True
+            try:
+                fresh.request("GET", "/status")
+                fresh.getresponse().read()
+            except Exception:
+                answered = False
+            finally:
+                with contextlib.suppress(Exception):
+                    fresh.close()
+            elapsed = time.monotonic() - started
+
+            checks.ok(
+                answered and elapsed < 2.0,
+                "REQUEST_SLOTS revalidations later, a fresh caller is still served at once "
+                f"({elapsed:.2f}s) — every worker went back to the pool when its response "
+                "closed. Without the close all of them are parked on an idle socket and this "
+                "waits out `CaptureHandler.timeout = 15`",
+            )
+        finally:
+            for conn in held:
+                with contextlib.suppress(Exception):
+                    conn.close()
+            httpd.shutdown()
+            httpd.server_close()
 
 
 def check_crop_preview(checks: Checks) -> None:
@@ -18359,6 +18542,342 @@ def check_order_fetch_route(checks: Checks) -> None:
         dotenv.unlink(missing_ok=True)
 
 
+# ------------------------------------------------------- T2b: the rubber stamps (D61, D63)
+
+
+def check_shipping_stamps(checks: Checks) -> None:
+    """`POST /shipping/batches/<batch>/stamps` — the Rubber Stamp fill, and its abstention.
+
+    `docs/specs/order-pipeline.md`'s T2b states the Done in one sentence and this section is
+    that sentence twice over: **a batch whose orders are in the ledger renders with its
+    Rubber Stamp columns filled, and one whose orders are not renders them empty rather than
+    guessing.** Both halves run against the SAME 331-order export in the SAME store, because
+    a filled corner and an empty one are only meaningfully different side by side — a build
+    that stamped everything and a build that stamped nothing each satisfy one of them alone.
+
+    WHAT IS ASSERTED BEYOND THE TWO HALVES, EACH ONE A THING A PLAUSIBLE BUILD GETS WRONG:
+
+      one label formula       what lands in `Rubber Stamp 1` is compared against
+                              `cli/resolve.py:box_views(...).at(...).label` — the REPORTER's
+                              walk, the other implementation of D58's counting space, and
+                              deliberately not the `_Places` the route composed it with. A
+                              second renderer here prints a card number nobody counting the
+                              box arrives at, on a label somebody carries to a shelf.
+      four corners is none    an order needing more positions than the label has corners gets
+                              NONE. Slicing it to three reads as a complete pick list, which
+                              is the wrong-shelf failure `pirateship.Parcel` refuses to
+                              enforce a stamp LENGTH over, said one register up.
+      pulled is not pending   an order already fully pulled is MATCHED and NOT STAMPED. D90
+                              sells a copy as it is pulled and the box closes up behind it
+                              (D58), so stamping where it was sends a hand to an index whose
+                              occupant has changed.
+      the press is idempotent two presses render byte-identical files, because a parcel's
+                              stamps are SET on every press and never added to. A route that
+                              appended would grow a fourth stamp on the second press and be
+                              refused by `Parcel` outright on the third.
+      matched is shipments    `matched` counts every shipment the ledger holds and
+                              `stamped`/`unstamped` count PARCELS, because the file is the
+                              parcel lane and nothing else. An envelope order in the ledger
+                              is what tells the two apart, and it gets its pick location on
+                              the SCREEN while appearing in no row of the CSV.
+      nothing is persisted    the store's file list is identical across all of it. D61's rule
+                              is what `pirateship.render` returning BYTES exists to make
+                              possible, and this is the route that gave that module a reason
+                              to open the store at all.
+
+    ITS OWN `isolated_home`, load-bearing rather than hygienic for the reason
+    `check_shipping_routes`' is: one of the assertions IS that the home did not change.
+    """
+    checks.note("")
+    checks.note(
+        "SHIPPING STAMPS — POST /shipping/batches/<batch>/stamps, the Rubber Stamp fill (T2b)"
+    )
+
+    fixture = SHIPPING_EXPORT.read_text("utf-8")
+    export_rows = list(csv.reader(io.StringIO(fixture)))[1:]
+    # Four parcel-lane orders off the committed export, picked by their own published value
+    # rather than by row number — the fixture is real and its ordering is not this file's to
+    # assume.
+    lane = [row[0] for row in export_rows if Decimal(row[13]) >= Decimal("50")]
+    # THE UNKNOWN ORDER IS THE FIRST PARCEL AND THE KNOWN ONE THE SECOND, DELIBERATELY. The
+    # ledger holds these three in ingest order and the export lists them in its own, so a
+    # build that zipped labels onto parcels positionally instead of looking each one up by
+    # order id would hand THIS row's corners to the order above it. With the two the other
+    # way round that misalignment lands empty-on-empty and passes; this ordering is what
+    # makes the abstention below load-bearing rather than lucky.
+    absent, known, packed, wide = lane[0], lane[1], lane[2], lane[3]
+    # AND ONE ORDER FROM THE OTHER LANE. The import file is the parcel lane and nothing else,
+    # but the SCREEN lists every shipment — so an envelope order the ledger holds is where
+    # `matched` (shipments) and `stamped` (parcels) are told apart, and where the row's own
+    # `stamp` is shown to reach an order that is in no file at all.
+    envelope = next(
+        routing.order
+        for routing in shipping.route_all(shipping.parse(fixture.encode("utf-8")).shipments)
+        if routing.lane == shipping.LANE_ENVELOPE
+    )
+
+    def stock(box: int, count: int, sku: str, prefix: str) -> None:
+        """`count` identified copies of one SKU in `box`, each with its own capture id."""
+        for at in range(1, count + 1):
+            capture_server.do_capture(
+                {
+                    "box": box,
+                    "capture_id": f"{prefix}{at}",
+                    "image": base64.b64encode(
+                        b"\xff\xd8\xff" + bytes([at]) * 64
+                    ).decode("ascii"),
+                }
+            )
+        with Store().write() as snapshot:
+            for at in range(1, count + 1):
+                snapshot.inventory.record_identification(
+                    f"{box}/{at}", name="Moonfall", number="198/219",
+                    printed_total="219", confidence="high",
+                )
+                snapshot.inventory.cards[f"{box}/{at}"].sku = sku
+
+    def sale(number: str, sku: str, quantity: int, placed: str) -> dict:
+        return {
+            "orders": [
+                {
+                    "source": "TCGplayer",
+                    "number": number,
+                    "placed_at": placed,
+                    "lines": [{"sku": sku, "quantity": quantity}],
+                }
+            ]
+        }
+
+    with isolated_home() as home:
+        # THREE SKUs so the three ledger orders cannot compete for one pool. `resolve_all`
+        # shares copies across orders by design (that is the whole of its no-`resolve_one`
+        # rule), and a shortfall engineered by this fixture would read here as a stamping bug.
+        stock(3, 2, "9191486", "k")
+        stock(4, 1, "9191487", "q")
+        stock(5, 4, "9191488", "w")
+        stock(6, 1, "9191489", "e")
+
+        capture_server.do_order_ingest(sale(known, "9191486", 2, "2026-08-27T10:00:00.000+00:00"))
+        capture_server.do_order_ingest(sale(packed, "9191487", 1, "2026-08-27T11:00:00.000+00:00"))
+        capture_server.do_order_ingest(sale(wide, "9191488", 4, "2026-08-27T12:00:00.000+00:00"))
+        capture_server.do_order_ingest(
+            sale(envelope, "9191489", 1, "2026-08-27T13:00:00.000+00:00")
+        )
+
+        # `packed` is pulled to the end — D90's press, which sells every copy it records.
+        capture_server.do_order_pull(
+            {
+                "source": "TCGplayer",
+                "number": packed,
+                "sku": "9191487",
+                "targets": [{"box": 4, "index": 1, "capture_id": "q1"}],
+            }
+        )
+
+        before = sorted(str(path.relative_to(home)) for path in home.rglob("*"))
+
+        batch = answers(
+            checks,
+            lambda: shipping_routes.do_shipping_batches(
+                {"name": "orders-shipping.csv", "content": fixture}
+            ),
+            "a batch is read out of the committed 331-order export",
+        )
+        if batch is None:
+            return
+        checks.ok(
+            batch["stamps"] is None and all(row["stamp"] is None for row in batch["rows"]),
+            "and it arrives UNSTAMPED — `stamps` null on the batch and `stamp` null on every "
+            "row, which is the seam this route fills rather than a state it invents",
+        )
+
+        answer = answers(
+            checks,
+            lambda: shipping_routes.do_shipping_stamps(
+                batch["batch"], {}, capture_server._order_stamps
+            ),
+            "POST /shipping/batches/<batch>/stamps answers over that batch",
+        )
+        if answer is None:
+            return
+
+        rows = {row["order"]: row for row in answer["rows"]}
+        blob, _ = shipping_routes.do_shipping_file(batch["batch"], "pirateship-import.csv")
+        written = {
+            row[8]: row[9:12]
+            for row in list(csv.reader(io.StringIO(blob.decode("utf-8"), newline="")))[1:]
+        }
+
+        # ------------------------------------------ half one: in the ledger, corners filled
+        views = resolve.box_views(Store().read().inventory)
+        expected = [views.get(3, join.BoxView()).at(3, at).label for at in (1, 2)]
+        checks.equal(
+            written.get(known),
+            [expected[0], expected[1], ""],
+            "HALF ONE OF T2b's DONE: an order the ledger holds renders with its Rubber Stamp "
+            "columns FILLED — one corner per copy, in pick order, and the third left blank "
+            "because this order wants two cards and not three. ONE LABEL FORMULA: the two "
+            "strings are what `cli/resolve.py:box_views` renders for the same positions, "
+            "which is the REPORTER's walk and the other implementation of D58's counting "
+            "space, not the `_Places` this route composed them with",
+        )
+        checks.ok(
+            all(part.startswith("Box 3 · Section ") and " · Card " in part for part in expected),
+            "and that formula really did produce a pick instruction rather than an empty "
+            "string both sides agreed on — a comparison of two nulls passes and stamps "
+            "nothing",
+            f"labels {expected!r}",
+        )
+        checks.equal(
+            rows[known]["stamp"],
+            " / ".join(expected),
+            "the row carries the same two as ONE string, joined by ` / ` and never by the "
+            "label's own ` · `. The screen field is singular and the format is not, and a "
+            "join on ` · ` spells the boundary between two CARDS exactly like the boundary "
+            "between a section and a card number — one address to a reader, and the wrong "
+            "shelf to a hand",
+        )
+
+        # ----------------------------------- half two: not in the ledger, empty not guessed
+        checks.equal(
+            written.get(absent),
+            ["", "", ""],
+            "HALF TWO OF T2b's DONE: an order the ledger does not hold renders its three "
+            "corners EMPTY rather than guessing. Nothing is inferred from the row — the "
+            "export and the ledger agree about an order number or they do not",
+        )
+        checks.equal(
+            rows[absent]["stamp"],
+            None,
+            "and its row's `stamp` is null, which is the same abstention on the wire",
+        )
+
+        # ------------------------------------------------- the three determinations, pinned
+        checks.equal(
+            written.get(packed),
+            ["", "", ""],
+            "AN ORDER ALREADY PULLED STAMPS NOTHING. D90 sells each copy as it is recorded "
+            "and the box closes up behind it (D58), so the index it came out of now holds a "
+            "DIFFERENT card — stamping where it WAS is a pick instruction to the wrong "
+            "shelf. There is nothing left to pick, and empty corners say so",
+        )
+        checks.equal(
+            written.get(wide),
+            ["", "", ""],
+            "AND AN ORDER WANTING FOUR COPIES STAMPS NOTHING EITHER: the label has three "
+            "corners, there is no fourth to say `and one more`, and a pick list sliced to "
+            "fit reads as a complete one. That is the wrong-shelf failure "
+            "`pirateship.Parcel` refuses to enforce a stamp LENGTH over, said one register "
+            "up — all three corners or none",
+        )
+        # ------------------------------------ the other lane: on the screen, in no file
+        envelope_label = views.get(6, join.BoxView()).at(6, 1).label
+        checks.equal(
+            rows[envelope]["stamp"],
+            envelope_label,
+            "AN ENVELOPE-LANE ORDER GETS ITS PICK LOCATION ON THE SCREEN. The import file is "
+            "the parcel lane and nothing else, but the operator still has to walk to that "
+            "card — so the row carries the stamp even though no row of the CSV ever will",
+        )
+        checks.ok(
+            envelope not in written,
+            "and that order is in NO ROW OF THE FILE, which is `shipping.parcel_lane`'s "
+            "abstention holding: the stamps route widened what the screen knows and moved "
+            "nothing between lanes",
+            f"{envelope!r} in the import",
+        )
+        checks.equal(
+            answer["stamps"],
+            {"ledger_orders": 4, "matched": 4, "stamped": 1, "unstamped": 125},
+            "THE FOUR COUNTS AS ONE ABSOLUTE DICT. `matched` is 4 and `stamped` is 1, so an "
+            "order that IS in the ledger and earned no corner stays distinguishable from one "
+            "nobody has read in — collapsing those would make `we have never heard of this "
+            "sale` and `this sale is already packed` the same figure on screen, and "
+            "`ledger_orders` is what lets an empty ledger say so in its own words. `matched` "
+            "counts SHIPMENTS and the other two count PARCELS, which is why 4 and 1 are not "
+            "the same kind of number: the fourth match is the envelope order above, matched "
+            "on the screen and in no file",
+        )
+        checks.equal(
+            answer["stamps"]["stamped"] + answer["stamps"]["unstamped"],
+            answer["parcel_count"],
+            "and those two partition the PARCEL lane, because the file is the parcel lane "
+            "and nothing else — which is what the screen's `N of parcel_count carry a pick "
+            "location` divides by",
+        )
+
+        # ------------------------------------------------------------------- the properties
+        second = answers(
+            checks,
+            lambda: shipping_routes.do_shipping_stamps(
+                batch["batch"], {}, capture_server._order_stamps
+            ),
+            "a second press answers rather than refusing",
+        )
+        again, _ = shipping_routes.do_shipping_file(batch["batch"], "pirateship-import.csv")
+        checks.equal(
+            again,
+            blob,
+            "AND IT IS BYTE-IDENTICAL. Every parcel's `stamps` is SET on every press — "
+            "empty where the order earned none — and never added to, so pressing twice "
+            "re-asks the ledger rather than compounding what the first press wrote. A route "
+            "that appended instead would grow a fourth stamp on the second press and be "
+            "refused by `Parcel` outright on the third",
+        )
+        if second is not None:
+            checks.equal(
+                second["stamps"], answer["stamps"], "and it reports the same four counts"
+            )
+            checks.equal(
+                second["file"]["bytes"],
+                len(blob),
+                "`file.bytes` is read off the re-rendered blob rather than remembered, so "
+                "the size the screen offers is the size of the file it hands over",
+            )
+
+        checks.equal(
+            sum(
+                1
+                for chunk in [c for c in blob.split(b"\r\n") if c.strip()][1:]
+                if chunk.endswith(b',"","",""')
+            ),
+            125,
+            "125 of the 126 parcel rows still end in three empty rubber stamps — present and "
+            "empty rather than absent, which is what makes a column Pirate Ship's wizard can "
+            "show the operator as blank",
+        )
+
+        shipping_refusal(
+            checks,
+            lambda: shipping_routes.do_shipping_stamps(
+                batch["batch"], {"stamps": ["Box 3"]}, capture_server._order_stamps
+            ),
+            "field_not_settable",
+            "A CALLER CANNOT HAND THE STAMPS IN. This route sets NOTHING out of its body — "
+            "the corners come from the ledger and the one label formula — and a body that "
+            "could carry a string would be a second way to write a pick location",
+        )
+        shipping_refusal(
+            checks,
+            lambda: shipping_routes.do_shipping_stamps(
+                "not-a-batch-id", {}, capture_server._order_stamps
+            ),
+            "no_such_batch",
+            "and an unknown batch refuses with the same sentence the download does, before "
+            "the ledger is opened at all",
+        )
+
+        after = sorted(str(path.relative_to(home)) for path in home.rglob("*"))
+        checks.equal(
+            after,
+            before,
+            "NOTHING WAS PERSISTED BY ANY OF IT. Stamping re-reads the store, re-renders the "
+            "import and hands it over without writing one file — D61's rule that buyer PII "
+            "passes through and is never kept, asserted over the one route that gave that "
+            "module a reason to reach the store at all",
+        )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -18399,6 +18918,7 @@ def run() -> Result:
     check_box_routes_and_search(checks)
     check_box_names(checks)
     check_box_claims(checks)
+    check_box_claim_product(checks)
     check_place_neighbors(checks)
     check_open_section(checks)
     check_consolidated_numbering(checks)
@@ -18419,12 +18939,14 @@ def run() -> Result:
     check_order_screen(checks)
     check_order_fetch_route(checks)
     check_request_slots(checks)
+    check_connection_close(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
     check_price_history(checks)
     check_history_route(checks)
     check_shipping_lane(checks)
     check_shipping_routes(checks)
+    check_shipping_stamps(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

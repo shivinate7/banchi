@@ -34,7 +34,7 @@ here (T2b), and a `T6` that collided with the harness's own.
 | 9 resolve | **built and reachable.** `pipeline/orders.py`, drawn by `GET /orders` out of one store snapshot. |
 | 10 route | **built and reachable at `#/shipping`.** `pipeline/shipping.py` (D61), on its own surface (T2 below). |
 | 11 pull | **built and reachable, in ONE form — the per-copy press.** `POST /orders/pull` writes the ledger and sells in one `Store.write()`, aimed by the row's own `capture_id`, with the undo on a twenty-second receipt. It is pressed a card at a time, from an order's own panel or from the cross-order pass through the drawers (`#/orders`, "Walk the boxes"). **T6's envelope form is deleted, not built** (D96 amended 2026-09-04): main's `POST /orders/fill` and the `#/inventory?order=` walk were reachable from no screen here and are gone, the want they served answered by the walk mode above. |
-| 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship, and its three Rubber Stamp columns render empty — `POST /shipping/batches/<batch>/stamps` is specified and not built (T2b). |
+| 12 ship | **the spreadsheet is reachable; the tcgtracking call still does not exist.** `pipeline/pirateship.py`'s file downloads from `#/shipping`. Nobody has fed it to Pirate Ship. `POST /shipping/batches/<batch>/stamps` fills the three Rubber Stamp columns from the ledger as of 2026-09-05, and NO SCREEN PRESSES IT YET (T2b) — so what an operator downloads today still has them empty. |
 | 13 track back | **missing.** |
 | 14 tell buyer | **missing.** Deferred behind 13. |
 
@@ -407,27 +407,64 @@ convention instead of a module. The screen is typed so it cannot draw a buyer �
 carries no name, no street, no city, no postcode — and those details cross the wire exactly
 once, as the CSV download.
 
-### T2b — the rubber stamps, which this file's work list did not carry until now. NOT BUILT
+### T2b — the rubber stamps. BUILT 2026-09-05, SERVER HALF ONLY
 
-`POST /shipping/batches/<batch>/stamps`, declared in `server/shipping_routes.py`'s own header as
-SPECIFIED AND NOT BUILT, and carried in no work item here until now. It fills Pirate Ship's three
-Rubber Stamp columns from the order ledger, so **the label in the operator's hand IS the pick
-instruction** — section 2's transcript already notes those three columns rendering empty and
-waiting for a location. The wire carries `stamp` on every row and `stamps` on the batch as nulls
-today, so the route changes no type and no component.
+`POST /shipping/batches/<batch>/stamps`. It fills Pirate Ship's three Rubber Stamp columns from
+the order ledger, so **the label in the operator's hand IS the pick instruction** — section 2's
+transcript notes those three columns rendering empty and waiting for a location, and this is what
+fills them. It changed no type and no component: the wire has carried `stamp` on every row and
+`stamps` on the batch since the seam was cut, and `app/src/OrdersShipStage.tsx` already draws
+both.
 
-**One of its two stated blockers has cleared and the other has not.** That header names them: both
-of D63's maps being empty, and needing a `store.orders.OrderRecord -> pipeline.orders.Order`
-adapter "that the order branch also needs, which is exactly the two-branches-one-file collision
-D66 told us to avoid." **The order branch landed, and the adapter is now
-`server/capture_server.py:_engine_order`, whose own docstring calls itself THE ONLY ADAPTER** — so
-the collision D66 was avoiding cannot happen any more and that half of the refusal is spent. The
-empty-ledger half stands: until a real order is pulled, this control can only ever answer
-"nothing", which makes it the one item here that is genuinely blocked on the ingest nobody has
-proved rather than on a session.
+**Both stated blockers are spent, and they were spent by other people's work rather than by this
+one.** `server/shipping_routes.py`'s header named them: both of D63's maps being empty, and
+needing a `store.orders.OrderRecord -> pipeline.orders.Order` adapter "that the order branch also
+needs, which is exactly the two-branches-one-file collision D66 told us to avoid." The order
+branch landed and the adapter is `server/capture_server.py:_engine_order`, whose own docstring
+calls itself THE ONLY ADAPTER, so that collision cannot happen. And the ledger stopped being empty
+on 2026-09-02: **twenty real TCGplayer orders with real SKUs, 17 of them since pulled to the end.**
 
 **Done:** a batch whose orders are in the ledger renders with its Rubber Stamp columns filled, and
-one whose orders are not renders them empty rather than guessing.
+one whose orders are not renders them empty rather than guessing. Both halves are asserted in
+`harness/tests/t7_store_and_seams.py:check_shipping_stamps`, over the same 331-order export in one
+store, and each was watched fail under a mutation before it was kept.
+
+**The seam is a callable, and what crosses it is order numbers and strings.** `do_shipping_stamps`
+takes a `locate` function and never sees a `Snapshot`, an `Inventory` or a `Ledger`;
+`server/capture_server.py:_order_stamps` is what is passed in. That keeps T2's own argument intact
+— the module an operator reads to answer "where does the PII go" did not grow a second subject —
+and it is forced besides, since `capture_server` imports `shipping_routes` and the reverse is the
+cycle `ShippingRefusal` exists for.
+
+#### Three determinations, and the second is the one that will get "fixed"
+
+**A stamp is one position label and it comes from `pipeline/join.py:Position` by way of
+`_Places`.** No second formula, per that property's own docstring and the closing prohibition
+`server/shipping_routes.py` already carried.
+
+**IT STAMPS WHAT IS STILL OWED, NEVER WHAT HAS ALREADY BEEN PULLED.** The obvious alternative —
+stamp every copy of the order at the position the ledger recorded it from — fills far more corners
+on the real store, where 17 of 20 orders are fully pulled, and is actively harmful: D90 sells a
+copy as it is pulled, a sold card renders `join.departed_label`, and the box closes up behind it
+(D58), so that index now holds a DIFFERENT card. Under that mutation the harness draws
+`Box 4 · departed · B4 #1` into `Rubber Stamp 1` — a pick instruction to a slot whose occupant has
+changed. An order with nothing outstanding has nothing to pick, and empty corners are the true
+answer for it.
+
+**ALL THREE CORNERS OR NONE.** An order needing more positions than the label has corners gets
+none and is counted unstamped. There is no fourth corner to say "and two more", and a pick list
+sliced to fit reads as a complete one — the wrong-shelf failure `pipeline/pirateship.py` refuses to
+enforce a stamp LENGTH over, one register up. **Measured on the owner's own ledger, 2026-09-05: 12
+of 20 orders hold three copies or fewer; the other 8 hold between 5 and 13.** So this rule leaves
+real orders unstamped today, and that is the reopening condition rather than a defect to patch: if
+the ratio holds as the store deepens, what changes is the REGISTER — a stop per box in D97's
+walk-plan vocabulary rather than a card per corner — and never the refusal to truncate.
+
+**What is NOT built: the client half.** `app/src/server.ts` has no function for this route and
+`#/shipping` has no control that presses it, so by CLAUDE.md's own hard rule this is the unfinished
+part of one task and not a follow-up. The rendering half already exists — `OrdersShipStage.tsx`
+draws `row.stamp` as a pinned line and `batch.stamps.stamped` in its file sentence — so what is
+owed is a `shippingStamps(batch)` call and a button beside the download.
 
 ### T3 — the transport. BUILT 2026-08-30 (D69)
 

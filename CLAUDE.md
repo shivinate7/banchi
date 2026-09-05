@@ -891,6 +891,7 @@ D97  The copy map ranks and never picks, and a line says what remains
 D98  The cheap-card figure is the control, the floor choice is retired, and a run may still differ from the store
 D99  The cut-off is a figure the operator sets, and one press writes one spreadsheet
 D100 Nothing is deleted to lower a price, the quantity is not a variable, and the age is a proxy that says so
+D101 A claim a screen names is a claim a screen can fix, and the derived tuple outran its decoder
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
