@@ -677,11 +677,13 @@ all, so no sigil rule reaches them and none should — naming the index *as* the
 thing that is never the confusion. They are here because they are the shape a future reader will
 check this file about.
 
-## 10 — The walk's pass outlives the sitting it describes, and an order arriving mid-pass is never in it
+## 10 — An order arriving mid-pass is walked but never counted, and a tab outlives its sitting
 
 `WalkView`'s figure counts the orders THIS PASS has completed — `OrdersHubStore.walkKeys`, frozen when
-the walk is entered and cleared by the next fetch (D96, amended 2026-09-04). Two things it cannot say,
-both deliberate and both reachable on the owner's store.
+the walk is entered and cleared by a fetch or by a capture-server restart (D96, amended 2026-09-04).
+Two things it still cannot say, both deliberate and both reachable on the owner's store. **A third —
+that a restarted server ends the pass — was one of them and is closed**; it is kept below because the
+three attempts it took are the useful part.
 
 **An order that arrives after the press is walked but never counted.** The screen re-reads after every
 pull, so a new order joins `walk.rows` and the operator pulls its copies like any other — and the pill
@@ -698,34 +700,41 @@ press it. **The fix that would close this is a clock, and this repo does not put
 (`store/orders.py` records the one deliberate exception and argues it at length), so the honest
 alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here.
 
-**And a capture-server restart does not end it either, which is the same gap one door along.**
-`OrdersHubStore`'s `onServerBoot` clears `batch` and raises a notice; `mode` and `walkKeys` survive
-it. So a pass frozen before a restart goes on describing a reading taken from a process that no
-longer exists. **Clearing it there is a one-line change and it was written and then reverted**, on
-2026-09-04, for a reason worth recording rather than repeating: it could not be given a test.
-`server.ts:noteBoot` deliberately ignores the FIRST boot id it sees — an absent header means a
-stubbed route or an older server, and inventing a reload from one would fire on every spec in the
-suite — so proving a restart needs two reads carrying two different ids, and the only unprompted
-read on that screen is a pull. Two pulls in one case did not produce two reads against the fixture,
-and shipping the clear without a case that had been observed failing is the thing this repo does not
-do. The behavior is therefore unchanged and the gap is here instead.
+**A capture-server restart DOES end it now, closed 2026-09-05.** `onServerBoot` clears `walkKeys`
+beside the shipping batch: a server that restarted may have taken orders since, so a figure counted
+against the old set describes a sitting that is over — and unlike a stale batch it is not visibly
+broken, it is a smaller number that looks fine.
 
-**And the obstacle is the harness, not the code — which is a hazard of its own.** Measured
-2026-09-04 while trying again: `app/tests/orders.spec.ts` stubs the four `/orders*` routes and
-nothing else, so `/status`, `/games` and `/boxes` reach the REAL capture server on this checkout's
-port, and it sends a real `X-Pkmnscan-Boot` of its own. **Two sources alternating is a value that
-changes on almost every read**, which fires `onServerBoot` continuously — the pass was cleared the
-instant it was frozen, and the case read as though the listener did not work. Rewriting the header on
-every capture-server response fixed that half (the app then saw `boot-one` and nothing else) and the
-fixture still would not reach the state under test. **`onServerBoot` also clears the shipping batch
-(D73)**, so any spec holding one can have it cleared by the real server's boot id; nothing has been
-observed failing that way, and nothing would say so if it did — the batch would simply be gone.
+**The reason this took three attempts is worth more than the fix, because it was never the code.**
+The first two blamed the boot header: `app/tests/orders.spec.ts` stubs only the four `/orders*`
+routes, so `/status`, `/games` and `/boxes` reach the real capture server with a boot id of their own,
+and that was recorded here as a hazard for every spec. **It is not one.** `server.ts:noteBoot`
+early-returns on an absent header and says why in its own comment — *"far more likely in a test — a
+stubbed route, and inventing a reload from a missing header would make every spec that stubs the wire
+report one"* — and the real server's id is CONSTANT while it runs. The listener fires only when two
+different non-empty ids alternate, which is what the investigation's own experimental stub
+introduced. The hazard was manufactured and then filed as the repo's.
 
-**Why none of these is fixed.** All three were surfaced by an adversarial review of the change that
-introduced the figure, before it shipped, rather than found afterwards — and all three are the
-figure being narrower than the screen rather than wrong about what it counts. A green walk means *"this many of the orders the
-pass began with are complete"*, which is less than *"this many of the orders in front of you"*, and
-that difference is the whole of this section.
+**What actually defeated it was a catch-all route that forwarded a write.** The stub rewriting the
+header matched by PORT and therefore also caught `POST /orders/pull`, which `route.fetch()` sent to
+the real capture server. It was refused there — a fixture's order does not exist in a real store — so
+`pullCopy` threw, `onPull` never reached its re-read, and the payload never moved. The case failed
+for a reason that had nothing to do with what it tested, **and a write came one refusal away from
+landing on a live store.** The rewrite is GET-only now and says so at the line.
+
+**The case that closed it carries its own vacuity guard.** A third order stays open through the
+restart, because with only two the second pull leaves nothing open, `buildWalk` returns no rows, and
+`WalkView` draws its EmptyState before the head — the figure would be absent because the whole head
+is. Proven by removing the third order AND the clear together: the case still passes. Observed
+failing with the clear removed, and with the boot id held constant, both at `Expected 0, Received 1`.
+
+**And `onServerBoot` is exercised on purpose at last.** No spec drove the boot header before this one,
+so the listener — including D73's shipping-batch clear, which throws away real state — had never been
+tested at all.
+
+**Why the remaining gap is not fixed.** The mid-pass arrival was surfaced by an adversarial review of
+the change that introduced the figure, before it shipped, rather than found afterwards — and it is the
+figure being narrower than the screen rather than wrong about what it counts.
 
 ## 11 — The capture server bounds concurrent requests, not threads, and a Playwright fleet is what finds out
 
@@ -882,4 +891,38 @@ deliberate choice. Knowledge reachable only from inside the file it is about is 
 diagnosing from the outside will not have. `make docs-audit`'s `server concurrency` row now pins the
 class, the timeout and the backlog in this section against the code, so a future worker pool cannot
 land while this section still describes threads.
+
+## 12 — Ten decision entries are over budget on purpose, and the budget was the thing that had drifted
+
+`scripts/docs-audit.py`'s `entry budget` row reports entries larger than `ENTRY_BUDGET`. It reported
+**21** until 2026-09-05 and reports **10** now, and the difference is not that anything was cut.
+
+**The constant had stopped tracking the thing it is derived from.** Its own comment defines it as
+twice the median entry, measured at 6,374 on the day it was set. Measured today with
+`prose-guard.entries()` — which counts CHARACTERS, so a byte count taken with `.encode()` reads three
+entries higher and is the wrong ruler — the median over 100 entries is **7,718**, so twice it is
+**15,437**. The corpus grew 21% and the ceiling did not, so the row was reporting against a rule it
+had stopped implementing. Re-derived, with both dates kept in the comment, because a ceiling that has
+moved with no record of it is one nobody can argue with.
+
+**The ten that remain were then classified rather than trimmed, and none of them is over for the
+reason the row exists to catch.** D32 16,391 · D38 20,441 · D42 20,296 · D43 16,530 · D49 18,705 ·
+D53 20,913 · D58 17,658 · D65 19,041 · D86 22,670 · D90 20,301.
+
+The row's stated theory is that *"an entry at twice the median is one that should have cited a
+neighbor instead of re-arguing it"*. That theory was right twice: D92 and D96 were brought under in
+exactly that way, by deleting passages that re-derived D58's slot/index split and the open/done rule
+and citing instead. **It does not hold for these ten.** Their largest paragraphs were read: most cite
+no other entry at all, and the two that cite heavily — D38's claim inventory and D58's
+consequence list — are doing precisely what D60 asks, naming a neighbor and saying what changes
+under it, wrapped around measurements (*"`rarity_claim` is set on 543 of 543 records"*). There is no
+re-derivation to remove. What is there is many measured findings in one entry, and CLAUDE.md rules
+those are evidence and are never rewritten to match a later tree.
+
+**So the honest state is that the row is now measuring length rather than diagnosing a defect**, for
+these ten. It stays as an `ask` and is not blocking, which is the right severity for a question. What
+would close this section is not a trim: it is either a second signal that separates "long because it
+re-derives" from "long because it measured a lot" — a citation-density heuristic was considered and is
+the kind of guess D16 keeps off a blocking row — or a ruling that some entries are allowed to be long
+and should say so in their own first line.
 

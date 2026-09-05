@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page, type Route } from '@playwright/test'
 
 import type {
   OrderRow,
@@ -190,7 +190,15 @@ function oneOpenOrder(): OrdersPayload {
  */
 async function open(
   page: Page,
-  options: { orders?: OrdersPayload; pull?: unknown; preview?: unknown; fetched?: unknown } = {},
+  options: {
+    orders?: OrdersPayload | (() => OrdersPayload)
+    pull?: unknown
+    preview?: unknown
+    fetched?: unknown
+    /* THE CAPTURE SERVER'S BOOT ID, for the one case that is about a restart. A function so a case
+       can change it between reads. See the route below for why it has to be every GET. */
+    boot?: () => string
+  } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
 
@@ -270,12 +278,57 @@ async function open(
     })
   })
 
+  /* ONE BOOT ID ACROSS EVERY READ, WITHOUT TOUCHING THE LIVE SERVER, and only for the case that
+   * asks for one.
+   *
+   * `noteBoot` fires `onServerBoot` when the header CHANGES between two non-empty values. An absent
+   * header is a no-op by design, so every other case here is unaffected. But a case stubbing
+   * `/orders` with an id of its own, while the routes it does NOT stub reach the real capture server
+   * with a different one, makes the value alternate and fires the listener on nearly every read.
+   *
+   * `/status` AND `/inventory` ARE THE ROUTES THIS FILE DOES NOT OTHERWISE CLAIM, and `/inventory`
+   * is not optional: `onPull` re-reads BOTH the ledger and the store
+   * (`Orders.tsx`: `await Promise.all([reread(), rereadStore()])`), so stubbing only `/orders` still
+   * lets the real server answer with its own id on the same press.
+   *
+   * STUBBED RATHER THAN FORWARDED, AND THE FIRST DRAFT FORWARDED. A catch-all matched by PORT that
+   * called `route.fetch()` also caught `POST /orders/pull` — Playwright matches the most recent
+   * route first, so it shadowed the stub `open()` had installed — and sent the write to the real
+   * capture server. It was refused there, a fixture's order not existing in a real store, so
+   * `pullCopy` threw; `onPull` re-reads only on its success path, so nothing re-read and the payload
+   * never moved. The case failed for a reason unrelated to what it tested, and a write came one
+   * refusal from a live store. These stubs reach nothing. */
+  if (options.boot !== undefined) {
+    const withBoot = (body: string) => async (route: Route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        /* Cross-origin, so the browser hides the id from JS without the second header. The real
+           server sends both; sending only the value reproduces a server that never announced its
+           restart. */
+        headers: {
+          'X-Pkmnscan-Boot': options.boot!(),
+          'Access-Control-Expose-Headers': 'X-Pkmnscan-Boot',
+        },
+        body,
+      })
+    }
+    await page.route(/\/status$/, withBoot(JSON.stringify({ cards: 0, next_index: {} })))
+    await page.route(/\/inventory$/, withBoot(JSON.stringify({ cards: {} })))
+  }
+
   await page.route(/\/orders$/, async (route) => {
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
+    const chosen = typeof options.orders === 'function' ? options.orders() : options.orders
+    const boot = options.boot?.()
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(options.orders ?? oneOpenOrder()),
+      headers:
+        boot === undefined
+          ? undefined
+          : { 'X-Pkmnscan-Boot': boot, 'Access-Control-Expose-Headers': 'X-Pkmnscan-Boot' },
+      body: JSON.stringify(chosen ?? oneOpenOrder()),
     })
   })
 
@@ -714,4 +767,127 @@ test('the walk draws no finished-order figure before one is finished', async ({ 
 
 
 /* -------------------------------------------------------------------------------------- 11 */
+
+/* A CAPTURE SERVER THAT RESTARTED ENDS THE WALK'S PASS, and this is the only case in the suite that
+ * drives the boot header at all.
+ *
+ * `server.ts:noteBoot` reads `X-Pkmnscan-Boot` off every response: the first non-empty value seeds
+ * `lastBoot` silently, and a DIFFERENT one fires every `onServerBoot` listener. Two reads with two
+ * ids is the whole mechanism, and no spec had ever served one — so the listener that clears the
+ * shipping batch (D73) had never been exercised on purpose either.
+ *
+ * WHY THE PASS MUST GO. `walkKeys` is the orders the walk was started over. A server that restarted
+ * may have taken orders since, so a figure counted against the old set describes a sitting that is
+ * over — and unlike a stale batch it is not visibly broken, it is a smaller number that looks fine.
+ *
+ * THE THIRD ORDER IS NOT DECORATION. With only two, pulling the second leaves nothing open,
+ * `buildWalk` returns no rows, and `WalkView` draws its EmptyState BEFORE the head — so the figure
+ * would be absent because the whole head is, and the assertion would pass with the clear reverted.
+ * Observed doing exactly that. */
+test('a capture server restart ends the walk pass, so the figure stops describing an old sitting', async ({
+  page,
+}) => {
+  const SECOND = 'B58DDD-24C44'
+  const secondKey = `TCGplayer:${SECOND}`
+  const secondLine = () => line({ order: SECOND, order_key: secondKey, picks: [pick({ index: 22, capture_id: 'cap-b' })] })
+  const THIRD = 'D71FFF-52B99'
+  const thirdKey = `TCGplayer:${THIRD}`
+  const thirdLine = () => line({ order: THIRD, order_key: thirdKey, picks: [pick({ index: 23, capture_id: 'cap-c' })] })
+  const thirdResolved = { key: thirdKey, number: THIRD, complete: false, outstanding: 1, lines: [thirdLine()] }
+  /* A FOURTH ORDER, so the walk survives the pull that happens AFTER the restart. `WalkView` returns
+     its EmptyState before the head when `walk.rows` is empty, so a pull leaving nothing open takes
+     `.orders-walk-figure` off the screen — and the new-pass assertion at the end would then be
+     asserting about a head that is not there. Three orders survive the restart; the fourth is what
+     gives the new pass something to be a pass over. */
+  const FOURTH = 'E82AAA-63C11'
+  const fourthKey = `TCGplayer:${FOURTH}`
+  const fourthLine = () => line({ order: FOURTH, order_key: fourthKey, picks: [pick({ index: 24, capture_id: 'cap-e' })] })
+  const fourthResolved = { key: fourthKey, number: FOURTH, complete: false, outstanding: 1, lines: [fourthLine()] }
+
+  const all = payloadOf(
+    [order(), order({ key: secondKey, number: SECOND }), order({ key: thirdKey, number: THIRD }), order({ key: fourthKey, number: FOURTH })],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] },
+      thirdResolved,
+      fourthResolved,
+    ],
+  )
+  const oneDone = payloadOf(
+    [order({ recorded: 1, open: false }), order({ key: secondKey, number: SECOND }), order({ key: thirdKey, number: THIRD }), order({ key: fourthKey, number: FOURTH })],
+    [{ key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] }, thirdResolved, fourthResolved],
+  )
+  const twoDone = payloadOf(
+    [
+      order({ recorded: 1, open: false }),
+      order({ key: secondKey, number: SECOND, recorded: 1, open: false }),
+      order({ key: thirdKey, number: THIRD }),
+      order({ key: fourthKey, number: FOURTH }),
+    ],
+    [thirdResolved, fourthResolved],
+  )
+  const threeDone = payloadOf(
+    [
+      order({ recorded: 1, open: false }),
+      order({ key: secondKey, number: SECOND, recorded: 1, open: false }),
+      order({ key: thirdKey, number: THIRD, recorded: 1, open: false }),
+      order({ key: fourthKey, number: FOURTH }),
+    ],
+    [fourthResolved],
+  )
+
+  let served = all
+  let boot = 'boot-one'
+  /* THE MOUNT READ CARRIES THE SEED, which is why the id goes through `open` rather than a route
+     registered after it: `noteBoot` says nothing about the first header it sees, so a seed attached
+     later would make the first press of this case the silent one. */
+  await open(page, { orders: () => served, boot: () => boot })
+
+  /* WAIT FOR THE ORDERS, NOT THE SHELL. The freeze reads `open` at the instant the mode flips, so a
+     toggle pressed before `GET /orders` has answered captures an EMPTY set — and every figure after
+     it is 0, which reads exactly like the clear working and made this case flap 1 run in 3. */
+  await expect(page.locator('main.orders')).toContainText('open orders')
+
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await expect(page.locator('.orders-walk button.orders-pull').first()).toBeVisible()
+  served = oneDone
+  await page.locator('.orders-walk button.orders-pull').first().click()
+
+  /* The pass survives a read carrying the SAME id — which is what makes the next assertion about the
+     restart rather than about re-reading at all. */
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
+
+  /* AND THE SECOND PULL IS WHERE THE RESTART LANDS. A mode toggle is client-side and costs no
+     request, so it can never carry a new id; the read after a PULL is the one that does, and it is
+     the realistic moment — the server went away while the operator was working. */
+  boot = 'boot-two'
+  served = twoDone
+  await page.locator('.orders-walk button.orders-pull').first().click()
+
+  /* THE FIGURE IS ABSENT, NOT ZERO. `walkKeys` is null and a null set draws nothing rather than
+     falling back to a lifetime count. Without the clear this reads `2 orders complete in this pass`:
+     a true count over a sitting that ended, against a server that is no longer the one it started
+     against. The head is still on screen — the third order keeps it there — so the absence is about
+     the pass and not about the walk. */
+  /* THE RESTART WAS NOTICED, asserted POSITIVELY and before anything about the figure. `App.tsx`
+     raises this toast from the same `onServerBoot` the clear hangs off, so it is independent
+     evidence that the listener ran. Without it every assertion below is about an ABSENCE, and an
+     absence has many causes — a case reading only "the pill is gone" passes when it is gone for a
+     reason nobody intended. */
+  await expect(page.getByText('Server restarted')).toBeVisible()
+
+  await expect(page.locator('.orders-walk-figure')).toContainText('still to pull')
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
+
+  /* AND A NEW PASS COUNTS FROM ZERO, which is the positive form of the same claim. The cleared pass
+     is not merely absent: the next walk freezes a fresh set over what is open NOW, and the first
+     order finished inside it reads one. Without this the case proves a figure can vanish and says
+     nothing about the operator getting a working one back. */
+  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await expect(page.locator('.orders-walk button.orders-pull').first()).toBeVisible()
+  served = threeDone
+  await page.locator('.orders-walk button.orders-pull').first().click()
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
+})
 
