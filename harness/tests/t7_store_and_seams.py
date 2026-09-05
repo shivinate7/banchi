@@ -10933,6 +10933,127 @@ def check_pricing_route(checks: Checks) -> None:
             thread.join(timeout=5)
 
 
+def check_corpus_revision(checks: Checks) -> None:
+    """`PUT /pricing` refuses a write that is behind the file on disk.
+
+    WHY THE GUARD EXISTS. That route replaces `inventory/prices.json` WHOLESALE, which is D86's
+    design and is right: the screen round-trips every key it does not understand. It had no
+    concurrency guard because the operator was the only writer, and `pkmnscan reprice` is a
+    second one — it re-prices every stale SKU at once, so a `#/pricing` tab holding a snapshot
+    from mount would revert an entire sweep on the next keystroke, with no error anywhere, on
+    the one file in this product that holds money.
+
+    WHY THIS CASE EXISTS, WHICH IS A DIFFERENT QUESTION. The guard shipped with no harness
+    coverage at all. The only test naming `corpus_moved` was `app/tests/pricing.spec.ts`, and
+    it is a `page.route()` mock fulfilling a hand-written 409 body — it asserts the SCREEN
+    reacts to a conflict and never executes `_corpus_revision` or the comparison in
+    `server/pipeline_routes.py`. A stub that answers 409 is green whether or not the server
+    would ever send one.
+
+    THE ASSERTIONS ARE MUTUALLY REINFORCING ON PURPOSE, because most of them are individually
+    vacuous. Against a `_corpus_revision` that returned a CONSTANT, the first three still pass
+    — a constant is truthy, is not a key of the document, and is trivially equal to itself —
+    and only the fourth and fifth fail. Against one that returned a COUNTER, the fourth and
+    fifth pass and only the third fails. Neither mutation is caught by the assertion that
+    looks like it is about revisions; each is caught by one that looks like it is about
+    something else.
+
+    AN ABSENT REVISION IS ALLOWED, AND THAT IS NOT A HOLE. It means "did not read one", which
+    is the terminal user editing the file and putting it back. The guard is for a client that
+    DID read one and is now behind — the only case that can silently destroy another writer's
+    work.
+    """
+    checks.note("")
+    checks.note("CORPUS REVISION — the stale-write refusal on PUT /pricing")
+
+    with isolated_home():
+        corpus.Corpus().write()
+        first = pipeline_routes.do_pricing_corpus()
+        checks.ok(
+            bool(first.get("revision")),
+            "`GET /pricing` carries a revision BESIDE the document. Inside it, the screen's "
+            "identity-compared `dirty` would see it — the oscillation `_corpus_revision`'s own "
+            "docstring records the design against",
+        )
+        checks.ok(
+            "revision" not in first["corpus"],
+            "and it is NOT a key of the corpus itself, so nothing round-trips it into the file",
+        )
+
+        # THE REVISION IS THE FILE'S OWN DIGEST, so an IDEMPOTENT write does not move it — and
+        # that is the better semantic than a counter: a client is stale only when the content
+        # it holds actually differs from what is on disk, not merely when somebody else wrote.
+        # THIS IS THE ONLY ASSERTION HERE THAT A COUNTER FAILS.
+        idempotent = (
+            "a write that changes nothing does not move the revision — it is a digest of the "
+            "file, not a counter, so re-saving an unchanged document is never a conflict"
+        )
+        # CAUGHT RATHER THAN LET FLY, because a counter does not fail the comparison below —
+        # it never reaches it. The revision moves between the read and the write, so the guard
+        # refuses the operator's own unchanged re-save and this case dies in a traceback that
+        # names a line rather than a claim. The refusal IS the finding, so it is reported as
+        # one.
+        try:
+            same = pipeline_routes.do_pricing_corpus_write(
+                {"corpus": first["corpus"], "revision": first["revision"]}
+            )
+        except pipeline_routes.PipelineRefusal as refused:
+            checks.ok(
+                False,
+                idempotent,
+                f"re-saving the unchanged document was refused `{refused.code}` — the "
+                f"revision moved without the file changing",
+            )
+        else:
+            checks.equal(same["revision"], first["revision"], idempotent)
+
+        # NOW A SECOND WRITER MOVES IT, which is what a reprice does to every stale SKU.
+        moved = dict(first["corpus"])
+        moved["skus"] = {DUNSPARCE_SKU: {"value": "4.50"}}
+        advances = (
+            "a write that CHANGES the document answers with the new revision, so the next "
+            "save is not refused for being the one that landed"
+        )
+        # CAUGHT FOR THE SAME REASON AS THE ONE ABOVE. A revision that moves on its own refuses
+        # this write too — the read it quotes is one write old — and a legitimate change made
+        # from a fresh read being refused is a finding, not a crash.
+        try:
+            landed = pipeline_routes.do_pricing_corpus_write(
+                {"corpus": moved, "revision": first["revision"]}
+            )
+        except pipeline_routes.PipelineRefusal as refused:
+            checks.ok(
+                False,
+                advances,
+                f"a change written against the revision just read was refused "
+                f"`{refused.code}` — nothing else had written",
+            )
+        else:
+            checks.ok(landed["revision"] != first["revision"], advances)
+
+        # THE INLINE FORM, because `refusal` catches `capture_server.BadRequest` and the
+        # pipeline routes raise their own class — the seam its own header argues for.
+        label = (
+            "and the write that would REVERT it is refused. This is the exact press a "
+            "`#/pricing` tab makes on its next keystroke after a reprice has run — wholesale, "
+            "from a mount-time snapshot, with no error anywhere before this guard"
+        )
+        try:
+            pipeline_routes.do_pricing_corpus_write(
+                {"corpus": first["corpus"], "revision": first["revision"]}
+            )
+            checks.ok(False, label, "it accepted the stale write")
+        except pipeline_routes.PipelineRefusal as refused:
+            checks.equal(refused.code, "corpus_moved", label)
+
+        after = pipeline_routes.do_pricing_corpus_write({"corpus": first["corpus"]})
+        checks.ok(
+            after["ok"],
+            "and a write carrying NO revision still lands: absent means 'did not read one', "
+            "which is a person editing the file by hand",
+        )
+
+
 def check_pricing_labels(checks: Checks) -> None:
     """`pricing.json`'s position labels are re-rendered on every read, and the file never moves.
 
@@ -18251,6 +18372,7 @@ def run() -> Result:
     check_markdown(checks)
     check_withholding(checks)
     check_pricing_route(checks)
+    check_corpus_revision(checks)
     check_pricing_labels(checks)
     check_allocator(checks)
     check_boxes_and_listings(checks)
