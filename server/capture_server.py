@@ -9670,7 +9670,7 @@ _inflight = 0
 # other wait in this process is derived from, including `serve.py`'s drain grace, which is that
 # plus ten — so a request queued for a slot either gets one and completes or refuses INSIDE the
 # drain window, which is exactly the guarantee the drain needs and did not have.
-REQUEST_SLOTS = 12
+REQUEST_SLOTS = 4
 _slots = threading.BoundedSemaphore(REQUEST_SLOTS)
 
 
