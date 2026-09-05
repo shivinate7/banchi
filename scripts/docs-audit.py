@@ -1827,6 +1827,7 @@ def _debts_section(number: int) -> Optional[str]:
 _SERVER_CLASS_RE = re.compile(r"^class CaptureServer\((\w+)\):", re.M)
 _HANDLER_TIMEOUT_RE = re.compile(r"^    timeout = (\d+)$", re.M)
 _BACKLOG_RE = re.compile(r"^    request_queue_size = (\d+)$", re.M)
+_SLOTS_RE = re.compile(r"^REQUEST_SLOTS = (\d+)$", re.M)
 
 
 def check_server_concurrency(report: Report) -> None:
@@ -1873,6 +1874,7 @@ def check_server_concurrency(report: Report) -> None:
         ("the base class", _SERVER_CLASS_RE, "class CaptureServer(<base>)"),
         ("the handler's socket timeout", _HANDLER_TIMEOUT_RE, "timeout = <seconds>"),
         ("the accept backlog", _BACKLOG_RE, "request_queue_size = <n>"),
+        ("the bound on executing requests", _SLOTS_RE, "REQUEST_SLOTS = <n>"),
     ):
         found = pattern.search(source)
         if found is None:
@@ -1906,7 +1908,7 @@ def check_server_concurrency(report: Report) -> None:
         "server concurrency",
         MECHANICAL,
         findings,
-        "3 published facts against server/capture_server.py",
+        "4 published facts against server/capture_server.py",
     )
 
 

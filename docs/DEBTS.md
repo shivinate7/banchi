@@ -729,7 +729,8 @@ so it reaps a thread parked on `readline` for a request that is never coming —
 closed tab leaves behind. Its own comment states what it does not fix, and it is right: an ACTIVE
 connection performs socket operations, so no idle timeout touches it.
 
-**Measured three times on this machine, and the third was avoidable.**
+**Measured three times on this machine, and the third was avoidable.** (A fourth attempt, the load
+sweep that was supposed to size the bound below, reproduced nothing — see what is still owed.)
 
 1. **1,178 handler threads alive at 1,318% CPU**, twice in one working day, every one blocked in
    `PyEval_AcquireThread` — waiting for the interpreter lock, not for the store — with the process
@@ -752,8 +753,71 @@ Browser pane over hand-rolled scripts against the live app, and when a browser p
 navigate it to `about:blank` first — a page closed mid-response leaves the handler writing to a dead
 socket, which is why `.serve/capture.log` holds thousands of `BrokenPipeError` traces.
 
-**The fix is a bounded worker pool, and the reason it is not a swap is written down rather than
-left to be rediscovered.** A pool of N converts unbounded degradation into back pressure: connection
+**A bound landed 2026-09-04, and it is narrower than this section's title.** `REQUEST_SLOTS` and a
+`threading.BoundedSemaphore` around `_dispatch` cap how many requests EXECUTE at once, which is the
+resource the measurements above say ran out — the interpreter, not sockets and not threads. A
+connection parked between keep-alive requests holds no slot, so the idle-worker question a real pool
+has to answer never arises here. The slot is taken *before* `_inflight_enter`, deliberately: a request
+queued for one has not started and cannot finish, and counting it would make the supervisor's drain
+wait out its grace on work that is not happening and then kill it — the incident above, one layer
+down. The wait is `files.LOCK_TIMEOUT_SECONDS` (30) and the refusal is `server_busy`, beside
+`store_busy`; 30 sits inside the 40s drain by construction, so a queued request always resolves one
+way or the other before the drain gives up.
+
+**Measured on the owner's own store, 2026-09-04, on their explicit word** — 1,625 cards, 20 orders,
+read-only routes throughout (`/orders`, `/boxes`, `/search`, `/status`; no captures, no writes), 150
+concurrent keep-alive connections, 20s per run. The first attempt at this used a scratch store and
+proved nothing, because every endpoint there answers in under ten milliseconds and nothing contends
+the interpreter. `/orders` on a real store resolves every open order against the whole inventory, and
+that is the load this failure needs.
+
+**The collapse reproduces, and the figure that shows it is not throughput.** A single probe request —
+one connection, one `GET /status`, the shape of a person pressing something while the fleet runs:
+
+| connections | served | errors | probe |
+|---|---|---|---|
+| 50 | 199 | 0 | **6.5s** |
+| 150 | 216 | 132 | **18.2s** |
+| 300 | 187 | 44,267 | **failed outright** |
+
+That is section 11's *"holding the port and answering nothing"*, reproduced on demand. Thread count
+peaked at 153 for 150 connections and fell back to 3 within twenty seconds of the load stopping —
+**so `CaptureHandler.timeout = 15` does exactly what it claims**, and what accumulates under load is
+active connections, which no idle timeout can touch.
+
+**The sweep, at 150 connections, and it has no plateau — it is monotonic.**
+
+| `REQUEST_SLOTS` | 1 | 2 | 3 | **4** | 6 | 8 | 12 | 24 | 48 | unbounded |
+|---|---|---|---|---|---|---|---|---|---|---|
+| requests/sec | 53.0 | 51.1 | 46.3 | **43.5** | 32.8 | 21.9 | 17.4 | 16.6 | 15.3 | 11.9 |
+| probe p50 | 3.3s | 3.4s | 3.6s | **4.2s** | 5.9s | 9.6s | 14.0s | 16.7s | 11.4s | 12.9s |
+| errors | 0 | 0 | 0 | **0** | 0 | 2 | 7 | 21 | 121 | 90 |
+
+**Less concurrency is strictly better here, which is what GIL-bound work looks like** and is the
+opposite of the intuition that sized the first guess at 12 — a value this table puts within noise of
+the unbounded server it was meant to improve on.
+
+**So the benchmark says 1 and the value is 4, and the difference is a hazard the benchmark cannot
+see.** A request that blocks on the store lock HOLDS ITS SLOT for up to `LOCK_TIMEOUT_SECONDS` — the
+30s a capture legitimately waits out behind a running `./pkmnscan identify`. At 1 slot a single such
+writer stalls every read on the server; at 2 it takes two. Four keeps 82% of the best throughput
+measured and leaves three slots when one is blocked. **That half is reasoned rather than measured**,
+because measuring it means firing real captures at the owner's store while its lock is held, and this
+section exists to say that is not something a session does on its own.
+
+**What is proven besides the numbers is the mechanism**, by
+`harness/tests/t7_store_and_seams.py:check_request_slots`: with more callers than slots, exactly
+`REQUEST_SLOTS` execute, the queue is not counted as in flight, and every slot is given back. It was
+observed failing twice — with the semaphore removed, and with the slot taken after the in-flight count
+rather than before it.
+
+**What the bound does NOT do is reduce thread count**, and the sweep says so in its own column: 153
+threads at every value, bounded or not. Threads park on the semaphore instead of thrashing the
+interpreter, which is the whole point, but they are still created.
+
+**So the real bound on thread COUNT is still open, and a worker pool is still what it needs.**
+
+**The reason a pool is not a swap is written down rather than left to be rediscovered.** A pool of N converts unbounded degradation into back pressure: connection
 N+1 waits in the accept queue instead of taking a thread. But over HTTP/1.1 keep-alive **a worker
 held by an idle connection is a worker serving nobody**, so N idle browser tabs starve a pool of N
 completely, and closing that needs one of: `Connection: close`, which throws away the thing

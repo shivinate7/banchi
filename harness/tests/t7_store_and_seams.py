@@ -17789,6 +17789,104 @@ def check_shipping_routes(checks: Checks) -> None:
                 os.environ[name] = value
 
 
+def check_request_slots(checks: Checks) -> None:
+    """The bound on concurrently-executing requests holds, and the drain does not see a queue.
+
+    WHAT THIS PROVES AND WHAT IT DOES NOT, because the difference is the whole honesty of this
+    check. It proves the MECHANISM: no more than `REQUEST_SLOTS` requests are inside `_dispatch`
+    at once, and a request waiting for a slot is not counted as in flight. It does NOT prove the
+    bound fixes the failure `docs/DEBTS.md` section 11 records — that took 80 real browsers
+    against a real store, and the reproduction was attempted and failed on an empty one, where
+    every endpoint answers in under ten milliseconds and nothing contends the interpreter.
+
+    THE `_inflight` HALF IS THE ONE WITH TEETH. `drain()` waits on that counter, and a request
+    parked on the semaphore has not started and cannot finish — so if the slot were taken after
+    the count rather than before it, the supervisor's drain would wait out its whole grace on
+    work that is not happening and then kill it. That is the exact shape of the incident this
+    bound came from, one layer down.
+    """
+    import http.client
+
+    checks.equal(
+        capture_server.slots_in_use(),
+        0,
+        "no request holds a slot before one is made — the counter starts where it says it does",
+    )
+
+    seen: list[int] = []
+    gate = threading.Event()
+
+    # PATCHED AT THE ROUTE AND NOT AT `do_GET`, AND THE FIRST DRAFT GOT THAT WRONG. The slot is
+    # acquired inside `_dispatch`, which `do_GET` calls — so a hold placed in `do_GET` parks the
+    # thread OUTSIDE the bound, every reading is 0, and all three assertions below pass while
+    # measuring nothing. `do_status` is invoked by the dispatcher after the slot is taken, so a
+    # hold here is a hold on a slot.
+    original = capture_server.do_status
+
+    def slow_status(*args, **kwargs):
+        """Hold a slot long enough for the others to pile up behind the bound."""
+        seen.append(capture_server.slots_in_use())
+        gate.wait(timeout=5.0)
+        return original(*args, **kwargs)
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    capture_server.do_status = slow_status
+    try:
+        callers = []
+        for _ in range(capture_server.REQUEST_SLOTS + 6):
+            def one() -> None:
+                with contextlib.suppress(Exception):
+                    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+                    conn.request("GET", "/status")
+                    conn.getresponse().read()
+                    conn.close()
+
+            caller = threading.Thread(target=one, daemon=True)
+            caller.start()
+            callers.append(caller)
+
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and len(seen) < capture_server.REQUEST_SLOTS:
+            time.sleep(0.02)
+
+        held = capture_server.slots_in_use()
+        inflight = capture_server.inflight()
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=10)
+
+        checks.ok(
+            held <= capture_server.REQUEST_SLOTS,
+            f"no more than REQUEST_SLOTS ({capture_server.REQUEST_SLOTS}) requests execute at "
+            f"once, with {capture_server.REQUEST_SLOTS + 6} asking — held {held}",
+        )
+        checks.ok(
+            max(seen, default=0) <= capture_server.REQUEST_SLOTS,
+            "and no handler ever observed the count above the bound from inside itself",
+        )
+        checks.ok(
+            inflight <= capture_server.REQUEST_SLOTS,
+            f"and the queue is NOT counted as in flight — {inflight} in flight against "
+            f"{capture_server.REQUEST_SLOTS + 6} callers, which is what keeps `drain()` from "
+            f"waiting out its grace on requests that have not started",
+        )
+    finally:
+        capture_server.do_status = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+
+    checks.equal(
+        capture_server.slots_in_use(),
+        0,
+        "and every slot is given back — a leak here would wedge the server after N requests, "
+        "which is worse than the unbounded server it replaces",
+    )
+
+
 def check_order_fetch_route(checks: Checks) -> None:
     """`POST /orders/fetch` in both of its bodies (D91), against canned pages and no socket.
 
@@ -18175,6 +18273,7 @@ def run() -> Result:
     check_order_ledger(checks)
     check_order_screen(checks)
     check_order_fetch_route(checks)
+    check_request_slots(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)
     check_price_history(checks)

@@ -370,11 +370,21 @@ A screen is not finished because it compiles.
   a bounded worker pool and it is not a swap; `docs/DEBTS.md` §11 has the whole argument, the three
   measurements, and why a pool over keep-alive starves.
 
+  **A bound landed 2026-09-04 and it is not the pool.** `REQUEST_SLOTS = 4` caps how many requests
+  EXECUTE at once — the interpreter, which is what ran out — and leaves thread count alone.
+  **Measured on the owner's store on their word**: the collapse reproduces at 150 connections (a
+  single probe request took 18s, and failed outright at 300), and the sweep is MONOTONIC — less
+  concurrency is strictly better, 53 rps at one slot against 11.9 unbounded. `4` is not the peak;
+  it keeps 82% of it and leaves three slots when one is blocked on the store lock for its 30s.
+  **Less is more here, which is the opposite of the intuition that first sized this at 12** — a
+  value the sweep puts within noise of no bound at all. §11 has the tables.
+
   **`make launch-agent` keeps that process alive at login over the owner's real store**, so the
   thing on `:8000` in the main checkout is theirs. Run the full suite ONCE at the end rather than
-  after every edit, and **never `make restart` / `make down` / `make up` to fix a wedge** — ask. The
-  drain is 40s and a kill past it cuts a write in flight; that same session did exactly that and
-  crashed Python out from under the owner mid-use.
+  after every edit, and **never `make restart` / `make down` / `make up` to fix a wedge** — `down`
+  and `restart` now refuse there without `--confirm`, and the refusal is the answer, not an
+  obstacle. The drain is 40s and a kill past it cuts a write in flight; that same session did
+  exactly that and crashed Python out from under the owner mid-use.
 
 - **The join key is PER-GAME, and matching is normalized on both sides.** Pokemon composes
   `zfill(3)(number) + "/" + printedTotal` — the shape is pokemontcg.io's schema (`printedTotal`
