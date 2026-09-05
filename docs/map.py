@@ -1074,8 +1074,19 @@ COMPONENTS = [
                 # on the shared rig handles bearer instruments.
                 "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D92"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
-                        "declare. Listed, so its absence would be a finding; unprotected, "
-                        "so a sibling hook's arrival would not be.",
+                        "declare. Listed, so its absence would be a finding; a sibling "
+                        "hook's arrival is caught by `hook roster` since 2026-09-05. "
+                        "IT ALSO CHECKS ITS OWN ARMED COPY, first, before any other rule: "
+                        "`make hooks` COPIES this file into .git/hooks-armed and nothing "
+                        "keeps the copy in step, so on 2026-09-01 the armed pre-commit fell "
+                        "four days behind a merged sigil check and every commit skipped it "
+                        "silently. Compared against MAIN rather than this working tree, "
+                        "deliberately — comparing to the tree fires on any branch editing a "
+                        "hook, and the one command that would silence it installs that "
+                        "branch's unmerged hooks as the gate for every worktree in the "
+                        "clone. It blocks only where armed is behind main AND this tree "
+                        "matches main, which is exactly where the `make hooks` it prints is "
+                        "safe to run; the other drift states warn. Bypass PKMNSCAN_HOOKS=off.",
             },
             "githooks/reference-transaction": {
                 "does": "D42's local half: refuses any move of refs/heads/main from any "

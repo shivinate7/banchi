@@ -148,7 +148,22 @@ staleness reminder, and neither was written into `docs/map.py`. So the sentence 
 description of what had happened, and it happened twice more before anyone counted.
 
 **That half is closed as of 2026-09-05.** `scripts/docs-audit.py:check_hook_roster` compares
-the directory against the `scripts/` entry's `modules` in both directions and blocks. It is
+the directory against the `scripts/` entry's `modules` in both directions and blocks.
+
+**A SECOND, WORSE HOLE IN THE SAME DIRECTORY WAS FOUND WHILE CLOSING THE FIRST.** `make hooks`
+COPIES these files into `.git/hooks-armed`, and nothing kept the copy in step — so the armed
+`pre-commit` sat **four days** behind a merged sigil check (D92) and every commit in this
+clone skipped it while reporting clean. Worse than an unlisted hook, because the reminder that
+was supposed to catch it already existed: `post-merge` and `post-checkout` print one, and it
+fires only on pull or branch switch and scrolls away. `pre-commit` now compares its own armed
+copy against **main** before any other rule, and **`PKMNSCAN_HOOKS=off`** is its bypass.
+
+**Why main and not the working tree**, since the tree is the obvious comparison: a branch
+legitimately editing a hook differs from its armed copy by definition, so a tree comparison
+fires constantly, and the one command that silences it — `make hooks` — installs that branch's
+UNMERGED hooks as the gate for every worktree in the clone. That is a worse outcome than the
+staleness. So it blocks only where the armed copy is behind main *and* this tree matches main,
+which is precisely where the fix it prints is safe. It is
 deliberately NOT the widening this section proposes below: the suffix rule is doing real work
 everywhere else — it is what keeps `views.txt` and a stray `README` from being conscripted into
 demanding entries — and repealing it repo-wide to repair one directory is the larger change.

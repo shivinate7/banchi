@@ -15,8 +15,17 @@
 # here. It needs the staged set to ask whether code and the docs describing it moved
 # together, and a PreToolUse hook watching one write at a time cannot see that.
 #
-# Wired via `git config core.hooksPath scripts/githooks`, so it is tracked and reviewable
-# rather than living unversioned in .git/hooks.
+# Wired by `make hooks`, which COPIES this file into `.git/hooks-armed` and points
+# core.hooksPath there. **The copy is the whole reason the block below exists.**
+#
+# This comment used to say core.hooksPath pointed at `scripts/githooks` directly, and that is
+# not how it works — believing it is why nobody expects the armed hook to go stale. It cannot
+# point here: core.hooksPath is one setting for the whole clone, so a worktree checking out a
+# branch that edits or deletes these files would silently change, or disarm, the gate for every
+# other tree. Copying is what makes the armed set independent of whatever branch anyone is
+# standing on. The cost of copying is that it does not follow the tree, and on 2026-09-01 it
+# stopped following it: D92's sigil check was merged and the armed copy kept the older
+# pre-commit for four days, so every commit in this clone skipped that check silently.
 #
 # Bypassing is `git commit --no-verify`, which is loud and on purpose.
 #
@@ -30,6 +39,76 @@ fail() {
   echo "COMMIT BLOCKED: $1" >&2
   exit 1
 }
+
+# ---------------------------------------------------------------------------------------
+# ZEROTH RULE: THE ARMED COPY IS THE ONE THAT RUNS, SO IT HAD BETTER BE THE ONE THAT MERGED.
+#
+# `make hooks` copies scripts/githooks/ into .git/hooks-armed and nothing keeps the copy in
+# step afterwards. post-merge and post-checkout print a reminder, and that reminder is not
+# enough: it fires only on pull or branch switch, it scrolls away, and it allowed the armed
+# pre-commit to sit four days behind a merged sigil check with every commit skipping it.
+# A gate that silently stops running is worse than no gate, because the green is believed.
+#
+# THE COMPARISON IS AGAINST `main`, NOT AGAINST THIS WORKING TREE, and that distinction is
+# the whole design. Comparing to the tree would fire on every branch that is legitimately
+# EDITING a hook, and the obvious way to silence it — run `make hooks` — would install that
+# branch's unmerged hooks as the gate for every other worktree in the clone. main is what
+# everyone has agreed to; the tree is what one person is proposing.
+#
+# So there are three states and only one of them blocks:
+#
+#   armed == main            current. Nothing printed.
+#   armed != main, tree != main    this branch is changing hooks. WARN and allow: re-arming
+#                                  here would arm unmerged work for every tree.
+#   armed != main, tree == main    the armed copy is simply behind. BLOCK: `make hooks` is
+#                                  safe, correct and one command, and it is printed.
+#
+# Fails OPEN on anything it cannot determine — no main ref, no armed dir, a missing file.
+# A freshness check that cannot answer is not evidence the commit is bad.
+#
+# Bypass:  PKMNSCAN_HOOKS=off git commit ...
+if [ "${PKMNSCAN_HOOKS:-}" != "off" ]; then
+  armed_dir="$(git config core.hooksPath 2>/dev/null || true)"
+  if [ -n "$armed_dir" ] && [ -d "$armed_dir" ] \
+     && ! [ "$(cd "$armed_dir" && pwd -P 2>/dev/null)" = "$(cd scripts/githooks && pwd -P 2>/dev/null)" ] \
+     && git rev-parse --verify --quiet main >/dev/null 2>&1; then
+    stale=""
+    proposing=""
+    for hook_path in scripts/githooks/*; do
+      hook_name="$(basename "$hook_path")"
+      main_blob="$(git rev-parse --verify --quiet "main:scripts/githooks/$hook_name" || true)"
+      [ -n "$main_blob" ] || continue          # a hook this branch added; nothing to compare
+      [ -f "$armed_dir/$hook_name" ] || { stale="$stale $hook_name"; continue; }
+      armed_blob="$(git hash-object "$armed_dir/$hook_name" 2>/dev/null || true)"
+      tree_blob="$(git hash-object "$hook_path" 2>/dev/null || true)"
+      [ -n "$armed_blob" ] && [ -n "$tree_blob" ] || continue
+      if [ "$armed_blob" != "$main_blob" ]; then
+        if [ "$tree_blob" = "$main_blob" ]; then
+          stale="$stale $hook_name"
+        else
+          proposing="$proposing $hook_name"
+        fi
+      fi
+    done
+    if [ -n "$proposing" ]; then
+      echo "NOTE: the armed copy of${proposing} matches neither main nor this branch," >&2
+      echo "      which is editing the same hook. NOT blocking, because the one command that" >&2
+      echo "      would fix it — \`make hooks\` — installs THIS tree's unmerged hooks as the" >&2
+      echo "      gate for every worktree in the clone. Land the change, then re-arm." >&2
+    fi
+    if [ -n "$stale" ]; then
+      fail "the armed hooks are behind main:${stale}
+  .git/hooks-armed holds a copy, and \`make hooks\` is what refreshes it. Until you run it,
+  the gate git actually runs is the older one — which is how a merged sigil check sat unarmed
+  for four days while every commit reported clean.
+
+      make hooks
+
+  This tree's scripts/githooks matches main, so that is safe to run here.
+  Bypass once with:  PKMNSCAN_HOOKS=off git commit ..."
+    fi
+  fi
+fi
 
 staged="$(git diff --cached --name-only --diff-filter=ACMR)"
 [ -z "$staged" ] && exit 0
