@@ -822,9 +822,42 @@ section exists to say that is not something a session does on its own.
 observed failing twice — with the semaphore removed, and with the slot taken after the in-flight count
 rather than before it.
 
-**What the bound does NOT do is reduce thread count**, and the sweep says so in its own column: 153
-threads at every value, bounded or not. Threads park on the semaphore instead of thrashing the
-interpreter, which is the whole point, but they are still created.
+**What the SEMAPHORE does not do is reduce thread count**, and the sweep says so in its own column:
+153 threads at every value. Threads park on it instead of thrashing the interpreter, which is the
+point, but they are still created.
+
+**So the pool landed too, and this section's title is finally wrong in the right direction.**
+`CaptureServer.process_request` submits to a `ThreadPoolExecutor(REQUEST_SLOTS)` instead of spawning
+a thread per connection, and **every response sends `Connection: close`** — which is what makes a
+worker's life one REQUEST rather than one connection, and therefore what makes a pool safe here at
+all. Measured on the owner's store at 150 concurrent connections, against the semaphore alone:
+
+| | requests/sec | probe p50 | peak threads |
+|---|---|---|---|
+| semaphore only | 45.6 | 3.84s | **153** |
+| pool + `Connection: close` | 45.5 | 3.94s | **5** |
+
+Identical within noise on both throughput and responsiveness, and the thread count is the whole
+difference. The cost is a TCP handshake per request: microseconds on localhost, a millisecond or two
+to a phone, against a capture cadence of ~600 ms per card.
+
+**The starvation this section warned about is real, and removing `Connection: close` demonstrates
+it.** With keep-alive restored and the pool kept, four idle connections hold all four workers and
+every other caller waits forever: `make harness` does not fail, it **HANGS**. That is worth stating
+precisely — the failure mode of a pool over keep-alive is a deadlock, not a slowdown, which is why
+the two changes are one change and neither ships without the other.
+
+**`CaptureHandler.timeout = 15` is now unreachable and is kept anyway.** It bounds a thread parked on
+`readline` for a request that is not coming, and no connection survives long enough to park.
+`protocol_version` is one edit from making it matter again, and a guard that costs nothing is cheaper
+than rediscovering why it was deleted.
+
+**The semaphore stays, and it is not a second mechanism for one job.** With one request per worker the
+pool size is also the bound on concurrent execution, so `REQUEST_SLOTS` never blocks today. It is the
+INVARIANT rather than the implementation: on the day keep-alive returns, the pool bounds threads and
+the semaphore is the only thing still bounding execution. T7 asserts both, and both were observed
+failing — the pool removed gives 10 threads for 10 callers, and the semaphore removed lets every
+caller execute at once.
 
 **So the real bound on thread COUNT is still open, and a worker pool is still what it needs.**
 

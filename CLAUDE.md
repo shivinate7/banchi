@@ -370,8 +370,14 @@ A screen is not finished because it compiles.
   a bounded worker pool and it is not a swap; `docs/DEBTS.md` §11 has the whole argument, the three
   measurements, and why a pool over keep-alive starves.
 
-  **A bound landed 2026-09-04 and it is not the pool.** `REQUEST_SLOTS = 4` caps how many requests
-  EXECUTE at once — the interpreter, which is what ran out — and leaves thread count alone.
+  **Both bounds landed 2026-09-04, and the second one is the pool.** `REQUEST_SLOTS = 4` caps how
+  many requests EXECUTE at once — the interpreter, which is what ran out — and
+  `CaptureServer.process_request` submits to a `ThreadPoolExecutor(REQUEST_SLOTS)` so THREADS are
+  capped too. **Every response sends `Connection: close`**, which is what makes a worker's life one
+  REQUEST rather than one connection and is the only reason a pool is safe over HTTP/1.1: remove it
+  and four idle connections hold all four workers, and `make harness` does not fail, it HANGS.
+  Measured at 150 connections: 45.5 requests/sec and 5 threads, against 45.6 and 153 with the
+  semaphore alone.
   **Measured on the owner's store on their word**: the collapse reproduces at 150 connections (a
   single probe request took 18s, and failed outright at 300), and the sweep is MONOTONIC — less
   concurrency is strictly better, 53 rps at one slot against 11.9 unbounded. `4` is not the peak;
