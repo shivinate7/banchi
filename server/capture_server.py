@@ -250,6 +250,7 @@ import os
 import re
 import signal
 import sys
+import concurrent.futures
 import threading
 import time
 import uuid
@@ -8861,6 +8862,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # a stale server harms nothing until the next request, and the next request is exactly
         # what carries this.
         self.send_header(BOOT_HEADER, BOOT_ID)
+        # THE HANDLER HAS TO SEND THIS OR NOTHING DOES, and `close_connection = True` on the class
+        # looks like it would work and does not: `BaseHTTPRequestHandler.parse_request` resets it
+        # from the request's own `Connection` header every time, and CPython flips it back only
+        # when the HANDLER sends `Connection: close` — `send_header` watches for this keyword by
+        # name. So `CaptureServer`'s whole premise, one pooled worker per REQUEST rather than per
+        # connection, rests on this line.
+        self.send_header("Connection", "close")
         for header, value in self._cors_headers():
             self.send_header(header, value)
         for header, value in extra:
@@ -9739,6 +9747,49 @@ class CaptureServer(ThreadingHTTPServer):
     """
 
     request_queue_size = 128
+
+    # ------------------------------------------------------------------ the worker pool
+    #
+    # ONE WORKER PER REQUEST, NOT PER CONNECTION, AND `Connection: close` IS WHAT MAKES THAT TRUE.
+    # `ThreadingMixIn.process_request` spawns a thread per CONNECTION and bounds nothing, which is
+    # the half `REQUEST_SLOTS` deliberately does not fix — a parked thread costs memory rather than
+    # the interpreter. A fixed pool bounds the count. But a pool over keep-alive is the trap this
+    # file already wrote down: a worker holding an idle connection serves nobody, so N idle browser
+    # tabs starve a pool of N completely. Closing after every response is the answer, and it is why
+    # a pool is safe here and would not have been before.
+    #
+    # MEASURED ON THE OWNER'S STORE, 150 concurrent connections, against the semaphore alone:
+    # 45.5 requests/sec against 45.6, probe p50 3.94s against 3.84s — identical within noise — and
+    # PEAK THREADS 5 AGAINST 153. The bound on threads is what this buys, and it costs nothing
+    # measurable.
+    #
+    # THE SEMAPHORE STAYS, AND IT IS NOT A SECOND MECHANISM FOR ONE JOB. With one request per
+    # worker the pool size is also the bound on concurrent execution, so `REQUEST_SLOTS` never
+    # blocks today. It is the INVARIANT rather than the implementation: `protocol_version` is one
+    # edit from restoring keep-alive, and on that day the pool bounds threads and the semaphore is
+    # the only thing still bounding execution. T7 asserts the invariant, not the transport.
+    _pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
+
+    def process_request(self, request, client_address) -> None:
+        if self._pool is None:
+            self._pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=REQUEST_SLOTS, thread_name_prefix="capture"
+            )
+        self._pool.submit(self._serve_one, request, client_address)
+
+    def _serve_one(self, request, client_address) -> None:
+        """`ThreadingMixIn.process_request_thread`'s body, run on a pooled worker instead."""
+        try:
+            self.finish_request(request, client_address)
+        except Exception:  # noqa: BLE001 — matches ThreadingMixIn's own contract
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
+
+    def server_close(self) -> None:
+        super().server_close()
+        if self._pool is not None:
+            self._pool.shutdown(wait=False)
 
 
 def serve(host: str = HOST, port: int = PORT) -> None:

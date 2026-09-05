@@ -17835,6 +17835,13 @@ def check_request_slots(checks: Checks) -> None:
     thread.start()
     capture_server.do_status = slow_status
     try:
+        # EVERY THREAD ALIVE BEFORE THE LOAD, so the ones the SERVER makes can be told from the
+        # ones this check makes. Naming the pool's workers and counting those was the first
+        # attempt and it was VACUOUS: with the pool removed the server's threads are named
+        # `Thread-N`, the filter matched none of them, and `0 <= REQUEST_SLOTS` passed while
+        # measuring nothing at all.
+        before = set(threading.enumerate())
+
         callers = []
         for _ in range(capture_server.REQUEST_SLOTS + 6):
             def one() -> None:
@@ -17844,7 +17851,7 @@ def check_request_slots(checks: Checks) -> None:
                     conn.getresponse().read()
                     conn.close()
 
-            caller = threading.Thread(target=one, daemon=True)
+            caller = threading.Thread(target=one, daemon=True, name="t7-caller")
             caller.start()
             callers.append(caller)
 
@@ -17854,6 +17861,10 @@ def check_request_slots(checks: Checks) -> None:
 
         held = capture_server.slots_in_use()
         inflight = capture_server.inflight()
+        # READ WHILE THE LOAD IS ON, beside the other two. Taken after `gate.set()` the callers
+        # have finished and the server's threads have gone with them, so the count is 0 whatever
+        # the transport does — which is how the first draft of this passed with the pool deleted.
+        serving = [t for t in threading.enumerate() if t not in before and t.name != "t7-caller"]
         gate.set()
         for caller in callers:
             caller.join(timeout=10)
@@ -17872,6 +17883,18 @@ def check_request_slots(checks: Checks) -> None:
             f"and the queue is NOT counted as in flight — {inflight} in flight against "
             f"{capture_server.REQUEST_SLOTS + 6} callers, which is what keeps `drain()` from "
             f"waiting out its grace on requests that have not started",
+        )
+
+        # AND THE THREADS ARE BOUNDED TOO, which is the half the semaphore deliberately does not
+        # do. `ThreadingMixIn` would have one per CONNECTION here — more callers, more threads,
+        # without limit. The pool plus `Connection: close` makes a worker's life one REQUEST, so
+        # the count cannot exceed the pool. Measured on the owner's store at 150 connections: 5
+        # threads against 153 without it, at identical throughput.
+        checks.ok(
+            len(serving) <= capture_server.REQUEST_SLOTS,
+            f"and the SERVER holds no more than REQUEST_SLOTS threads for "
+            f"{capture_server.REQUEST_SLOTS + 6} callers — {len(serving)}, where one per "
+            f"connection would be all of them",
         )
     finally:
         capture_server.do_status = original
