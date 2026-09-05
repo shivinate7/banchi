@@ -2106,6 +2106,207 @@ def check_claim_decode(report: Report) -> None:
     )
 
 
+# The client function that writes each server handler's claims. D101 opened the second door;
+# this is what keeps both of them speaking the same vocabulary as the route behind them.
+_CLAIM_CLIENTS = {"do_put_card": "updateCard", "do_put_box_claims": "applyBoxClaims"}
+
+# Keys a client sends that are SCOPE rather than a claim. `indices` says which positions in
+# the box the claim applies to; it is not something a card can carry, and the server reads it
+# outside the decode table this row compares against.
+_CLIENT_SCOPE_KEYS = {"indices"}
+
+_PAYLOAD_ASSIGN_RE = re.compile(r"payload\.([a-z_][a-z0-9_]*)\s*=")
+
+
+def _ts_function_body(source: str, name: str) -> Optional[str]:
+    """The text of one exported function, comments stripped.
+
+    Bounded by the next top-level `export` rather than by brace counting: a `{` inside a
+    template literal or a regex would defeat the counter, and this file has both. The overrun
+    a loose bound could cause is a key attributed to the wrong function, which the comparison
+    below would report as a finding — so the failure is loud rather than silent.
+    """
+    stripped = _strip_ts_comments(source)
+    start = stripped.find(f"function {name}")
+    if start < 0:
+        return None
+    following = stripped.find("\nexport ", start)
+    return stripped[start:following if following > 0 else len(stripped)]
+
+
+def check_claim_clients(report: Report) -> None:
+    """The client sends the keys the route decodes, on both doors.
+
+    D101 ruled that a claim a screen names is a claim a screen can fix, and answered it with
+    two doors: the inventory claim editor and an inline correction on `#/codes`. Two doors to
+    one claim is two chances for the vocabulary to drift, and the drift is silent in the
+    direction that matters — the server decodes what it knows and answers 200 for the rest.
+
+    So this reads the wire keys each client function actually assigns and compares them to the
+    handler's own decode table, across the language boundary. `app/src/server.ts` is the only
+    place a client call is written (CLAUDE.md), which is what makes one reader enough.
+
+    **A key the client sends and the server does not decode is the worse half**, and it is the
+    one a type checker cannot see: `tsc` proves the object is well-formed, never that anything
+    on the other end reads it. A key the server decodes and no client sends is the milder
+    failure — a capability with no door, which is a rule this repo already has words for.
+    """
+    client_source = ROOT / "app" / "src" / "server.ts"
+    if not exists(client_source):
+        report.add("claim clients", MECHANICAL, [
+            Finding("app/src/server.ts", "is gone, and it is the only place a client call is written.")
+        ], "")
+        return
+    try:
+        tree = ast.parse(read(ROOT / "server" / "capture_server.py"))
+    except (SyntaxError, OSError):
+        report.add("claim clients", MECHANICAL, [
+            Finding("server/capture_server.py", "does not parse; the decode tables cannot be read.")
+        ], "")
+        return
+
+    handlers = {
+        node.name: _payload_keys(node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in _CLAIM_CLIENTS
+    }
+    source = read(client_source)
+    findings: List[Finding] = []
+    checked = 0
+    for handler, client in _CLAIM_CLIENTS.items():
+        body = _ts_function_body(source, client)
+        if body is None:
+            findings.append(Finding("app/src/server.ts", f"no `{client}` to read."))
+            continue
+        if handler not in handlers:
+            findings.append(Finding("server/capture_server.py", f"no `{handler}` to read."))
+            continue
+        checked += 1
+        sent = set(_PAYLOAD_ASSIGN_RE.findall(body)) - _CLIENT_SCOPE_KEYS
+        decoded = handlers[handler]
+        for key in sorted(sent - decoded):
+            findings.append(Finding(
+                "app/src/server.ts",
+                f"`{client}` sends `{key}` and `{handler}` decodes no such key.\n"
+                f"  The route answers 200 and writes nothing. A type checker cannot see this: "
+                f"it proves the body is well-formed, never that anything reads it.",
+            ))
+        for key in sorted(decoded - sent):
+            findings.append(Finding(
+                "app/src/server.ts",
+                f"`{handler}` decodes `{key}` and `{client}` never sends it.\n"
+                f"  A capability no screen can reach is not built (CLAUDE.md's hard rule). "
+                f"Send it, or retire the branch.",
+            ))
+    report.add(
+        "claim clients",
+        MECHANICAL,
+        findings,
+        f"{checked} client writers send exactly what their route decodes",
+    )
+
+
+DETECT_RESULT = ROOT / "harness" / "results" / "detect.json"
+
+# What `docs/DEBTS.md` section 6 publishes about the current scan, and where the number lives
+# in `harness/results/detect.json`. Each is a (claim pattern, dotted path into the result).
+#
+# THE PHRASES ARE PART OF THE PIN. "photographs in the owner's six boxes" is THIS scan; D75's
+# "three real boxes" is a different corpus measured on a different day, and CLAUDE.md's rule
+# is that a measured number is evidence and is never rewritten to match a later tree. Matching
+# on a bare integer would drag the 867 into this reconciliation and demand it change, which is
+# precisely the corruption the rule forbids.
+_DETECT_CLAIMS = (
+    (re.compile(r"([\d,]+) photographs in the owner's six boxes"), "overall.photographs"),
+    (re.compile(r"the crop guard declined ([\d,]+)"), "overall.declined"),
+    (re.compile(r"\*\*The declines are entirely boxes 3 and 4\*\* \(([\d,]+) of ([\d,]+), and "
+                r"([\d,]+) of ([\d,]+)\)"),
+     ("per_box.box3.declined", "per_box.box3.photographs",
+      "per_box.box4.declined", "per_box.box4.photographs")),
+)
+
+
+def _dotted(data: object, path: str) -> Optional[int]:
+    for step in path.split("."):
+        if not isinstance(data, dict) or step not in data:
+            return None
+        data = data[step]
+    return data if isinstance(data, int) else None
+
+
+def check_detector_standing(report: Report) -> None:
+    """The detector figures section 6 publishes are the ones its scanner wrote.
+
+    `scripts/score-detect.py` walks the owner's real photographs and writes
+    `harness/results/detect.json`. Section 6 quotes that run in prose. Nothing reconciled the
+    two, and the prose is what a session reads before deciding whether the crop guard's two
+    constants still fit — a decision about whether 59 real cards get cropped or refused.
+
+    **The result file is the authority and the prose is the reader**, which is the same
+    direction `check_criteria_evidence` runs and for the same reason: one of them is written
+    by a measurement and the other by a person summarising it. A re-run that moves a count
+    should fail this row until the sentence moves with it.
+
+    **D75's 867-photograph corpus is deliberately out of scope.** It is a different scan of a
+    different set of boxes on a different day, it has no entry in this file, and CLAUDE.md
+    forbids rewriting a measured number to match a later tree. The patterns above pin the
+    six-box phrasing so the two corpora cannot be confused for each other — which is a real
+    risk here, because both are counts of the owner's photographs run through `detect_card`.
+    """
+    findings: List[Finding] = []
+    if not exists(DETECT_RESULT):
+        report.add("detector standing", MECHANICAL, [
+            Finding("harness/results/detect.json",
+                    "is absent, and docs/DEBTS.md section 6 quotes it. Re-run "
+                    "`scripts/score-detect.py`, or strike the figures it published.")
+        ], "")
+        return
+    try:
+        result = json.loads(read(DETECT_RESULT))
+    except ValueError:
+        report.add("detector standing", MECHANICAL, [
+            Finding("harness/results/detect.json", "is not readable JSON.")
+        ], "")
+        return
+
+    section = _debts_section(6) or ""
+    checked = 0
+    for pattern, target in _DETECT_CLAIMS:
+        match = pattern.search(section)
+        if match is None:
+            findings.append(Finding(
+                "docs/DEBTS.md",
+                f"section 6 no longer publishes the figure this row reads "
+                f"(`{pattern.pattern}`). Either the sentence was reworded past its own "
+                f"guard, or the claim is gone and this pin should go with it.",
+            ))
+            continue
+        targets = target if isinstance(target, tuple) else (target,)
+        for group, path in zip(match.groups(), targets):
+            checked += 1
+            published = int(group.replace(",", ""))
+            measured = _dotted(result, path)
+            if measured is None:
+                findings.append(Finding(
+                    "harness/results/detect.json",
+                    f"has no `{path}`, which section 6 publishes as {published}.",
+                ))
+            elif published != measured:
+                findings.append(Finding(
+                    "docs/DEBTS.md",
+                    f"section 6 says {published} where `{path}` in "
+                    f"harness/results/detect.json measured {measured}.\n"
+                    f"  The result file is what the scanner wrote; the prose is a person's "
+                    f"summary of it. Update the sentence.",
+                ))
+    report.add(
+        "detector standing",
+        MECHANICAL,
+        findings,
+        f"{checked} published figures against harness/results/detect.json",
+    )
+
+
 def check_sole_reader(report: Report) -> None:
     """"The only reader of the history" is a countable claim, and it is wrong.
 
@@ -7470,7 +7671,69 @@ def check_audit_invocation(report: Report) -> None:
                                 f"reading that as a finding would stop gating.",
                             )
                         )
-    report.add("audit invocation", MECHANICAL, findings, f"{len(INVOKERS)} callers, flags all declared")
+    # THE EXIT CODES THE ARGUMENT ABOVE RESTS ON, READ OUT OF `main()` RATHER THAN TRUSTED.
+    #
+    # The docstring's whole case for `_Parser` is a COLLISION: argparse's usage exit is 2, and
+    # 2 is this script's advisory code, so an undeclared flag would make the gate stop running
+    # while reporting the routine coupling question. That case is only true while `main()`
+    # still maps advisory to 2 and `EXIT_USAGE` is something else. Nothing read either, so the
+    # override could have outlived its reason with the comment still explaining it.
+    #
+    # A NOTE ON WHAT THIS IS NOT. The plan that scheduled this row expected it to land red on
+    # "exit 2 bound to coupling without `--staged`". That was wrong and is recorded rather
+    # than quietly dropped: `check_coupling` is not the only ADVISORY row — `entry budget`,
+    # `game coverage` and `views exposure` among others emit one on every plain run — so exit
+    # 2 is reachable without `--staged` and always was. The row below pins the collision,
+    # which is the fact that was actually unread.
+    advisory_code: Optional[int] = None
+    try:
+        for node in ast.walk(ast.parse(read(SELF))):
+            if not (isinstance(node, ast.FunctionDef) and node.name == "main"):
+                continue
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.IfExp):
+                    continue
+                orelse = inner.orelse
+                if isinstance(orelse, ast.IfExp) and isinstance(orelse.body, ast.Constant):
+                    advisory_code = orelse.body.value
+    except (SyntaxError, OSError):
+        advisory_code = None
+
+    if advisory_code is None:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py",
+                "`main()` no longer maps severities to exit codes in a shape this row can "
+                "read. `_Parser` exists because argparse's usage exit collides with the "
+                "advisory code; re-point this, or the override outlives its reason.",
+            )
+        )
+    elif advisory_code != 2:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py",
+                f"the advisory exit code is {advisory_code}, not 2, so argparse's default no "
+                f"longer collides with it — and `_Parser`'s docstring still says it does. "
+                f"Either the override is now unnecessary, or its argument needs rewriting.",
+            )
+        )
+    elif advisory_code == EXIT_USAGE:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py",
+                f"`EXIT_USAGE` is {EXIT_USAGE}, which IS the advisory code. A caller cannot "
+                f"tell a broken command line from a routine question, which is the exact "
+                f"failure `_Parser` was written to prevent.",
+            )
+        )
+
+    report.add(
+        "audit invocation",
+        MECHANICAL,
+        findings,
+        f"{len(INVOKERS)} callers, flags all declared, usage {EXIT_USAGE} clear of advisory "
+        f"{advisory_code}",
+    )
 
 
 # ------------------------------------------------- the checks defined here vs the ones run
@@ -7855,6 +8118,31 @@ def self_test() -> int:
     keys = _payload_keys(tree.body[0])
     ok(keys == {"game", "product"}, "every key branched on payload is found", f"got: {sorted(keys)}")
     ok("note" not in keys, "and a branch on a different dict is not one of them")
+
+    # The cross-language half of D101's two doors, and the reader that pins a published
+    # figure to the file a scanner wrote.
+    print("\nthe client's wire keys are read out of its payload assignments")
+    ts = (
+        "export async function updateCard(a, fields) {\n"
+        "  const payload = {}\n"
+        "  if ('product' in fields) payload.product = fields.product ?? null\n"
+        "  // payload.commented = 1\n"
+        "}\n"
+        "export async function other() { payload.elsewhere = 2 }\n"
+    )
+    body = _ts_function_body(ts, "updateCard")
+    keys = set(_PAYLOAD_ASSIGN_RE.findall(body or ""))
+    ok(keys == {"product"}, "one function's keys, and not the next function's",
+       f"got: {sorted(keys)}")
+    ok("commented" not in keys, "and a key that only appears in a comment is not sent")
+    ok(_ts_function_body(ts, "noSuchFunction") is None, "a missing function reads as None")
+
+    print("\na published figure is looked up in the result file by path")
+    measured = {"overall": {"declined": 59}, "per_box": {"box4": {"declined": 17}}}
+    ok(_dotted(measured, "per_box.box4.declined") == 17, "a nested count resolves")
+    ok(_dotted(measured, "per_box.box9.declined") is None, "a missing path is None, not zero",
+       "zero would read as agreement with a section publishing 0")
+    ok(_dotted(measured, "overall") is None, "and a path landing on a dict is not a count")
 
     print("\na renumbered entry is found by its title, not its id")
     # EVERY PAIR HERE IS REAL HISTORY, not invented ids. `D67 -> D69` is the order-screen
@@ -8910,6 +9198,8 @@ def audit(staged_only: bool) -> Report:
     check_env_vars(report, docs, allowed)
     check_env_names(report)
     check_claim_decode(report)
+    check_claim_clients(report)
+    check_detector_standing(report)
     check_sole_reader(report)
     check_server_concurrency(report)
     check_shipping_columns(report)
