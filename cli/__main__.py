@@ -14,9 +14,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli import cmd_emit, cmd_prices, cmd_identify, cmd_join, cmd_reconcile, cmd_scan, runs  # noqa: E402
+from cli import (  # noqa: E402
+    cmd_emit,
+    cmd_identify,
+    cmd_join,
+    cmd_prices,
+    cmd_reconcile,
+    cmd_reprice,
+    cmd_scan,
+    runs,
+)
 from identify import images  # noqa: E402
-from pipeline import pricing, routing, variant  # noqa: E402
+from pipeline import pricing, reprice as reprice_rules, routing, variant  # noqa: E402
 from store import files as store_files  # noqa: E402
 
 
@@ -223,6 +232,91 @@ def build_parser() -> argparse.ArgumentParser:
     show = prices_sub.add_parser("show", help="what the corpus holds")
     show.add_argument("--held", action="store_true", help="list every card held back")
 
+    # ------------------------------------------------------------------------- reprice
+    #
+    # THE LIVE LISTINGS THAT ARE NOT SELLING, MARKED DOWN AND PUSHED BACK (D100). Two
+    # subcommands rather than one press with a percentage, because the operator's own
+    # sentence has two halves — export the stale rows out, mass re-edit them down — and a
+    # spreadsheet is how a person does the second one. `list` writes the worklist with a
+    # price already proposed on every row, so handing it straight back is also the flow.
+    #
+    # BOTH PREVIEW BY DEFAULT. `apply --write` is the last press before bytes leave for a
+    # marketplace, and the file it writes cannot be un-uploaded.
+    reprice = sub.add_parser(
+        "reprice",
+        help="mark down live listings that are not selling. Free, re-runnable, previews.",
+    )
+    reprice_sub = reprice.add_subparsers(dest="reprice_command", required=True)
+
+    listing = reprice_sub.add_parser(
+        "list",
+        help="which live listings are stale, and what each would be re-priced to",
+    )
+    listing.add_argument("export", help="TCGplayer's My Pricing export, all printings")
+    listing.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="the window: no copy sold here inside it, and owned since before it "
+        "(default: 7). Ownership age is a PROXY for listing age — the report says so.",
+    )
+    markdown_size = listing.add_mutually_exclusive_group()
+    markdown_size.add_argument(
+        "--percent",
+        default="10",
+        help="cut this much off the asking price (default: 10). Validated by "
+        "`pricing.Rule.parse`, which is what refuses a negative or a 100.",
+    )
+    markdown_size.add_argument(
+        "--rule",
+        help="the power form: match | undercut:PCT | markup:PCT. `--percent` is this "
+        "flag's common case spelled the way the screen spells it.",
+    )
+    listing.add_argument(
+        "--basis",
+        default=reprice_rules.BASIS_ASKING,
+        choices=list(reprice_rules.BASES),
+        help="which column the rule is applied to (default: asking — the operator's own "
+        "live price, which is meaningful on a live row and blank almost everywhere else, "
+        "which is why it is NOT one of pricing.BASES)",
+    )
+    listing.add_argument(
+        "--above-market",
+        help="only listings asking more than this percentage above TCG Market Price. The "
+        "one term here that says WHY a card is not selling rather than only that it has not.",
+    )
+    listing.add_argument(
+        "--limit",
+        type=int,
+        help="take only the N rows carrying the most asking value. The rest are named.",
+    )
+    listing.add_argument(
+        "--again",
+        action="store_true",
+        help="mark down a SKU this store already answered inside the window. Without it "
+        "`undercut:10` run daily compounds to -52%% in a week, every run justified.",
+    )
+    listing.add_argument(
+        "--write",
+        action="store_true",
+        help=f"write the worklist into inventory/{cmd_reprice.DIRNAME}/. Previews without it.",
+    )
+
+    applying = reprice_sub.add_parser(
+        "apply",
+        help="read the edited worklist back and write the price-only import CSV",
+    )
+    applying.add_argument("worklist", help="the worklist, edited or not")
+    applying.add_argument(
+        "--manifest",
+        help=f"the {cmd_reprice.MANIFEST} to judge it against (default: beside the worklist)",
+    )
+    applying.add_argument(
+        "--write",
+        action="store_true",
+        help="write import.csv and record the prices. Previews without it.",
+    )
+
     return parser
 
 
@@ -233,6 +327,7 @@ COMMANDS = {
     "emit": cmd_emit.run,
     "reconcile": cmd_reconcile.run,
     "prices": cmd_prices.run,
+    "reprice": cmd_reprice.run,
 }
 
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
+import { storeKeyText } from './storeKey'
 import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry } from './types'
 import {
   getTcgSets,
@@ -111,20 +112,27 @@ type Halt = Note & { where: 'camera' | 'server' }
 
 /** What the next undo would delete. `label` is null for a card captured before this session
  *  loaded: `pipeline/join.py:Position.label` renders that string and the app never composes
- *  a second one, so with no capture response in hand there is nothing to show but the two
- *  numbers the server gave us. */
+ *  a second one, so with no capture response in hand there is nothing to show but the store
+ *  key the server addressed it by — drawn with its sigil, never as a bare `#` (D92). */
 type UndoTarget = { box: number; index: number; label: string | null }
 
-/** What to call a position on screen — the server's own rendered label, or the two raw
- *  numbers when there is no capture response holding one.
+/** What to call a position on screen — the server's own rendered label, or the record's own
+ *  store key when there is no capture response holding one.
  *
- *  Lower case and no separators in the fallback, so it can never be mistaken for the
- *  rendered label: `Box 3 · Section 1 · Card 7` is a string only `pipeline/join.py` writes,
- *  and a client-side imitation of it would be a second copy of D10's divider size that
- *  nothing keeps in step. Both forms go on screen in the utility face — a position is
- *  metadata, and docs/DESIGN.md gives every number in the product to Martian Mono. */
+ *  THE FALLBACK IS A KEY AND IT NOW SAYS SO (D92, swept 2026-09-04). It read `box 3, index 7`,
+ *  which names `Place.index` — the `/inventory/<box>/<index>` path, the `<index>.jpg` the
+ *  photograph is named after — in prose, on a screen whose every other number is D58's count.
+ *  The two spaces disagree the moment a card is removed from a box, and this string is the
+ *  accessible name of a control that removes cards. `B3 #7` is `storeKey.ts`'s own spelling of
+ *  a key, so what the row draws and what a screen reader is told are one idea said twice.
+ *
+ *  It still cannot be mistaken for the rendered label: `Box 3 · Section 1 · Card 7` is a string
+ *  only `pipeline/join.py` writes, and a client-side imitation of it would be a second copy of
+ *  D10's divider size that nothing keeps in step. `PositionLabel` — which this feeds through
+ *  `undoNote.position` — draws a bare key whole, because it peels one off a label only when
+ *  there are position parts in front of it. */
 function positionText(target: UndoTarget): string {
-  return target.label ?? `box ${target.box}, index ${target.index}`
+  return target.label ?? storeKeyText(target.box, target.index)
 }
 
 const BOX_DIGITS = /^[0-9]+$/
@@ -570,16 +578,35 @@ function Track({
   )
 }
 
-/** The slot number out of a rendered label — `Box 3 · Section 1 · Card 40` → `40` — for a
- *  thumbnail too narrow to carry the whole address. The raw index is the fallback, which is
- *  also what the label would say for an undeclared box. */
-function slotNumber(target: UndoTarget): string {
+/** WHAT AN UNDO THUMBNAIL DRAWS UNDER THE CARD — the whole figure, sigil and all, because the
+ *  two cases it covers are two different numbers and they may not wear one sigil (D92).
+ *
+ *  OUT OF A RENDERED LABEL IT IS A COUNT. `Box 3 · Section 1 · Card 40` ends on D58's countable
+ *  number — the fortieth card in the box, which is what a hand counts to — and a bare `#40` is
+ *  exactly what that sigil means on every other screen in the product.
+ *
+ *  WITH NO LABEL THERE IS NO COUNT TO DRAW, AND THIS DREW ONE ANYWAY. `undoStack` builds one
+ *  target from the server's high-water mark alone when this session never saw the capture
+ *  response — `{ box, index, label: null }` — and all it holds is `Place.index`, the store key.
+ *  That went out as `#7`: the key wearing the count's sigil, on the one screen where the two
+ *  spaces provably differ, which is the single confusion D92 exists to end. It draws `B3 #7`
+ *  now, through the one function that spells a key.
+ *
+ *  `scripts/sigil-check.py` never saw it and could not have: it matches the text inside a `#{…}`
+ *  and the text here was a call to this function, not the word `index`. That is the ceiling
+ *  `docs/DEBTS.md` §9 wrote down in advance, not a new hole.
+ *
+ *  THE TAIL MUST BE `<word> <number>` TO BE PROMOTED. `/(\d+)$/` alone would take the `31` off
+ *  a `… · departed · B3 #31` tail and print `#31` — a bare sigil over a key by the other door.
+ *  No undo target carries a departed label today, because a card captured this session has not
+ *  left the box; the guard costs a character class and does not depend on that staying true. */
+function undoFigure(target: UndoTarget): string {
   if (target.label !== null) {
     const tail = target.label.split(' · ').pop() ?? ''
-    const match = /(\d+)$/.exec(tail)
-    if (match !== null && match[1] !== undefined) return match[1]
+    const match = /^\D+ (\d+)$/.exec(tail)
+    if (match !== null && match[1] !== undefined) return `#${match[1]}`
   }
-  return String(target.index)
+  return storeKeyText(target.box, target.index)
 }
 
 /** `Radiant Rare` → `Radiant` + a de-emphasised ` Rare`. The bare `Rare` keeps its whole
@@ -2705,7 +2732,7 @@ export function CaptureScreen() {
                       src={photoSrc(target.box, target.index, revision)}
                       alt=""
                     />
-                    <span className="capture-undo-pos">#{slotNumber(target)}</span>
+                    <span className="capture-undo-pos">{undoFigure(target)}</span>
                     <span className={at === 0 ? 'capture-key is-newest' : 'capture-key'}>
                       {at === 0 ? UNDO_KEY_LABEL : at + 1}
                     </span>

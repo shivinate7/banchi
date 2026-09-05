@@ -304,6 +304,151 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
   .runs-composer-note { flex-basis: 100%; white-space: normal; order: -1; }
 }
 
+/* ---- the stale-listing markdown sheet (D100) ----------------------------------
+   THE KIT HAS THE SHEET AND NOT ITS CHROME. `.bn-sheet` is the fixed panel, the phone's
+   bottom-rise and the leave animation; a scrolling body between a fixed head and a fixed
+   foot is not a kit primitive, so this is the composer's own chrome above, re-stated for a
+   sheet — which is the second time and therefore the last before it is worth promoting.
+   Deliberately NOT a second stylesheet: this modal is a part of the runs screen, and the
+   composer, the log well and the file controls all style themselves here. */
+.runs-md {
+  width: min(560px, 100vw);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.runs-md[hidden] { display: none; }
+.runs-md:focus { outline: none; }
+.runs-md-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  padding: var(--bn-5) var(--bn-4) var(--bn-4) var(--bn-6);
+  padding-top: calc(var(--bn-5) + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--bn-line);
+  flex: none;
+}
+.runs-md-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.runs-md-head {
+  margin: 0;
+  font-family: var(--bn-font-display);
+  font-size: var(--bn-fs-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.runs-md-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-4);
+  padding: var(--bn-5) var(--bn-6);
+}
+/* THE SCROLLING COLUMN MUST NOT SHRINK WHAT IS IN IT. A flex item whose own `overflow` is not
+   `visible` has an automatic minimum size of ZERO, and `.runslog` sets `overflow: hidden` — so
+   in a column that overflows, the console is squeezed flat instead of the body scrolling.
+   Measured before this line: the survey's `LogWell` rendered 512px wide and 0px tall, with
+   every line of stdout present in the DOM. Nothing that reads text could tell. */
+.runs-md-body > * { flex: none; }
+.runs-md-says {
+  margin: 0;
+  font-size: var(--bn-fs-base);
+  line-height: 1.55;
+  color: var(--bn-ink-2);
+}
+.runs-md-says strong { color: var(--bn-ink); }
+
+/* THE PROXY, SAID WHERE IT IS ACTED ON. What is ranked is how long the card has been OWNED,
+   because `Listing` has no first-listed stamp. Quiet like the reconcile's own age line: it is
+   a caveat on a number, never a refusal. */
+.runs-md-caveat {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  margin: calc(var(--bn-3) * -1) 0 0;
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  font-size: var(--bn-fs-md);
+  line-height: 1.5;
+  color: var(--bn-ink-3);
+}
+.runs-md-caveat .bn-icon { flex: none; margin-top: 2px; color: var(--bn-ink-4); }
+.runs-md-caveat strong { color: var(--bn-ink); font-weight: 650; }
+
+/* One step of the three. The rule above each is the seam the eye needs on a column this
+   long; the first carries the head straight after the caveat and needs none. */
+.runs-md-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  padding-top: var(--bn-4);
+  border-top: 1px solid var(--bn-line);
+}
+.runs-md-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--bn-3);
+}
+.runs-md-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--bn-2) var(--bn-3); }
+.runs-md-hint { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+/* A machine string, so it never breaks mid-token: at 390 the row was splitting a stamp across
+   two lines, which reads as two stamps. */
+.runs-md-stamp { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
+.runs-md-status {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  margin: 0;
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-3);
+}
+.runs-md-history-row {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  font-size: var(--bn-fs-md);
+}
+.runs-md-history-files { margin-left: auto; display: flex; gap: var(--bn-1); flex-wrap: wrap; }
+.runs-md-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--bn-2);
+  padding: var(--bn-3) var(--bn-6);
+  padding-bottom: calc(var(--bn-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--bn-line);
+  background: var(--bn-surface);
+  flex: none;
+}
+@media (max-width: 767px) {
+  .runs-md-top { padding-left: var(--bn-4); }
+  .runs-md-top .bn-btn-icon,
+  .runs-md-foot .bn-btn,
+  .runs-md-step .bn-btn,
+  .runs-md-step a.bn-btn { --btn-h: 40px; }
+  .runs-md-body,
+  .runs-md-foot { padding-left: var(--bn-4); padding-right: var(--bn-4); }
+  /* THREE THUMB TARGETS THIS SHEET INHERITS SHORT, lifted by descendant because all three are
+     somebody else's. Measured at 390: the log well's fold toggle 28px, its Copy 36px, and the
+     `.bn-check` label 19.5px — against `CLAUDE.md`'s 40. The toggle is a rule-order defect in
+     this very file (the phone lift at the top is written BEFORE the 28px base rule at the same
+     specificity, so the base wins, everywhere a `LogWell` is drawn); the check is a kit gap of
+     the kind already named beside `.bn-btn-sm` up there. Neither is fixed at its own site from
+     inside this workstream. */
+  .runs-md .runslog-toggle { height: 40px; }
+  .runs-md .runslog-head .bn-btn-sm { --btn-h: 40px; }
+  .runs-md .bn-check { min-height: 40px; }
+  /* One column: two number fields side by side at 390 leave neither a readable label. */
+  .runs-md-fields { grid-template-columns: minmax(0, 1fr); }
+  /* The files drop to their own line rather than squeezing the stamp beside them. */
+  .runs-md-history-row { flex-wrap: wrap; }
+  .runs-md-history-files { margin-left: 0; flex-basis: 100%; }
+}
+
 /* the handoff line inside its notice */
 .runs-handoff {
   display: flex;

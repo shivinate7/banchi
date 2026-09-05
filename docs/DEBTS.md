@@ -631,13 +631,24 @@ answer, and `slot` and `index` are plain numbers across the whole wire contract 
 sites. That is a refactor much larger than the bug, and D92 took the cheap check that runs on
 every commit over the expensive one nobody would finish.
 
-**What makes the ceiling tolerable is where the mistake actually happens.** All four sites the
+**What made the ceiling tolerable was where the mistake usually happens.** All four sites the
 check found on its first run compose the `#` and the field on ONE line, at the point of render,
-because that is what drawing a number looks like. The evasion is available and has never been
-taken; if it is, this is the entry that says the check went quiet rather than the tree going
-clean.
+because that is what drawing a number looks like. The paragraph here used to end *"the evasion is
+available and has never been taken"*, and it was wrong on the day it was written.
 
-**Not blocking, and not a discharge condition.** The check is worth what it is worth. It would
-become worth fixing properly if a violation ever ships THROUGH the gap — that is the trigger,
-and until then a green run means "no `#` is drawn over a field named index", which is exactly
-what it says and no more.
+**THE TRIGGER HAS FIRED — one violation shipped through the gap, and was found by reading rather
+than by running anything (2026-09-04, D92 amended).** `CaptureScreen.tsx` drew
+`#{slotNumber(target)}` on every undo thumbnail, and `slotNumber` returned `String(target.index)`
+whenever the target carried no rendered label — which is the target `undoStack` composes from the
+server's high-water mark after any reload mid-run. The `#` and the field were three functions
+apart, so the check read `slotNumber(target)`, found no `index` in it, and passed. It was green
+over that line from the day it was written until the sweep D92 deferred was carried out.
+
+**What that changes and what it does not.** It does not change what the check is worth on the
+lines it can see: it read 61 files and the sweep found nothing it had missed except this one. It
+does mean the nominal type this entry calls *the real answer* now has a shipped defect behind it
+rather than a hypothetical, and D92's rejection of it on blast radius was made without one. That
+is the owner's call and nobody else's; recording it is what this file is for. **Until it is made,
+a green run means "no `#` is drawn over a field literally named index on that line", which is less
+than it sounds like, and the sweep that catches the rest is a person reading `app/src` for
+`#{…}` and asking of each one what number it is.**

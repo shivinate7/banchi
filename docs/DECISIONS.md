@@ -5216,6 +5216,16 @@ All 104 of those sales went through `#/inventory`'s plain sale — the write thi
 
 **What would reopen this: a neighbour row that becomes a click target, a screen that needs to draw a key inside a count column, or the frozen-count panel.** The first is why `index` is still on the wire. The second is what `sigil-ok:` is for. The third is the one piece of this entry that is a want rather than a build.
 
+### Amended 2026-09-04 — the sweep was carried out, it found one violation, and the check could not have found it
+
+**The sweep the Banchi merge deferred is done, over the rebuilt `app/src`, and it turned up exactly one real violation.** `CaptureScreen.tsx`'s undo filmstrip drew `#{slotNumber(target)}` — and `slotNumber` fell back to `String(target.index)` whenever `target.label` was null. That target is not hypothetical: `undoStack` composes `{ box, index, label: null }` from the server's own high-water mark when this session never saw the capture response for the box's newest card, which is every reload mid-run. So the one screen whose whole job is removing cards from boxes — the act that makes the two spaces disagree — drew the key wearing the count's sigil. The same file's `positionText()` named `index` in prose on the same null path, and it is the accessible name of the control that does the removing. Both now go through one composer and draw `B3 #7`.
+
+**`scripts/sigil-check.py` was green over that line the whole time, and this is not a hole in it.** It matches the text inside a `#{…}`, and the text there was `slotNumber(target)` — a helper call, not the word `index`. That is precisely the ceiling this entry named at the time and `docs/DEBTS.md` §9 wrote down: *a renamed local walks straight past it.* A helper is a renamed local with a longer name. Nothing has changed about what the check is worth; what changed is that the ceiling was reached by a real defect rather than by a hypothetical, which is the argument for the nominal type this entry rejected on blast radius. It is still rejected on the same grounds, and the reading has moved.
+
+**The spelling is `app/src/storeKey.ts` now, with `STORE_KEY` beside it.** Two screens composed `B<box> #<index>` by hand — the walk's departed cell and, once the capture screen was fixed, its undo row — from the same two fields, independently, which is `cardNumber.ts`'s lesson (D67) about the other number a card carries. The reader and the writer of one string live in one file so a respelling in `join.departed_label` lands on two adjacent lines. It is deliberately not folded into `cardNumber.ts`: the 2026-08-31 amendment above exists because the owner read `3/96` as a collector number, and one module holding both would invite exactly that reading of the code.
+
+**And the sweep closed the red test the merge left behind, which was a layout defect and not a sigil one.** `PositionLabel.css` reserved the slot column with a hand-computed approximation of the key's advance width, so a departed row — which draws a void where the figure goes — reserved less than a live row's real glyphs and its path started 2.109px left. Measured in `#/inventory`'s copies list at `--pos-slot: 22px`: a live slot is 82.06px (`CARD` at 33.59 + the 4px gap + the figure's 3ch of **Manrope**, 44.47) against a reserve computing 79.95 (3ch of **Inter**, 41.63 + 4 + `4 × 0.78 × 11px`, 34.32). Two fonts' `ch` and a per-character factor for a four-letter word — a formula cannot know which half it is wrong about, which is why no better factor was the fix. The column is the LIST's now: `CardLocations.css` declares `--pos-slot-col` once on the copies list and every row reserves it, because a row cannot see whether its siblings drew a key. `app/tests/inventory.spec.ts`'s `two departed copies of one card draw two different rows` is green.
+
 ## D93 — The copies panel is the picker, and a full line refuses the take
 
 **Which copies of a line go in the envelope is CHOSEN off the copies panel, one press per copy, in any box.** Built 2026-09-02 on the owner's complaint: *"When I have an order of 2 cards and I have inventory for 3, I basically should be able to pick which two I sell, instead currently it's like predetermined, and using the 'take this one instead' system is not intuitive it should be done differently."*
@@ -5364,6 +5374,16 @@ Named because each is a place where main or an earlier rule says otherwise, and 
 
 **A second operator, or the owner using the envelope walk somewhere else.** The per-copy ruling is a measurement of one person's hands at one set of drawers. And an accumulating count of orders pulled with no record of which copies went — the doubt D90 exists to end — would say the envelope press was right and this screen has to grow one.
 
+### Amended 2026-09-04 — the debt is discharged by deletion, and the one non-duplicate idea was kept
+
+**The two answers this entry left open were `deleted` and `they get the screen D90 built for them`, and the answer is deleted.** 1,484 lines: `app/src/orderWalk.ts`, `OrderWalkBanner.tsx` and `OrderWalkBanner.css` whole (1,000 of them), `fillEnvelope`/`undoEnvelope` and the `fill()` helper behind both in `server.ts`, `FillLine`/`FillResult` in `types.ts`, `do_order_fill` with its dispatcher line and its two constants in `server/capture_server.py`, and harness T7's `check_order_fill`. Nothing referenced any of it: the five greps came back with hits only inside the set being deleted, and `make harness` passes nine of nine without the check that covered the route.
+
+**Nothing was ported, because the one capability that sounded distinct had already been rebuilt here.** D90's wave mode — the cross-order pass that walks the drawers in box order rather than in the order the carts were composed — is `Orders.tsx`'s `buildWalk`/`WalkView`, the "Walk the boxes" mode, written independently on this branch before anyone compared the two. It does the same sort over the same landing, and it does it while keeping the copy the operator reaches for theirs to choose (D93, D97), which is the ruling above. The deletion cost this product no behavior.
+
+**What was NOT deleted is the pair of helpers, and the reason is in the code.** `_prepare_targets` and `_ledger_pull` were lifted out of `do_order_pull` for the envelope's sake and are still `POST /orders/pull`'s own two phases; both docstrings now say the second door is gone rather than naming a route that answers 404. A refactor folding them back inline is a separate change with its own argument, and this was not it.
+
+**One idea of D90's was kept and it is a figure, not a press.** `WalkView`'s head drew one number — cards still to pull — and cards are the unit the walk hands you, while the unit you PACK is an envelope. So the head now also says how many orders are whole: *"3 of 5 orders fully pulled"*, counted over `done` against `open + done` — the pair the page header already prints, from the same two `GET /orders` arrays and with no second read, so the walk's figure and the page's headline cannot disagree. **The derivation that reads right is the one that cannot work, and it was written first.** `recorded >= wanted` per order over `open` is the same comparison an order's own row draws *all pulled* by three functions away, and over `open` it is zero by construction: `open` is the ledger's own answer to *does this still owe copies* (`server/capture_server.py:_order_row`, which refuses to read the feed's `status` string for it), so an order leaves `open` the instant its last copy is pulled and can never be counted whole inside it. Measured on this tree's store by pulling the one copy of order A47CCC-13B33 through the screen's own button: the page header moved from *20 open orders* to *19 open orders and 1 done* and the pill stayed absent. The pull was reversed after; a typecheck could not have said any of it, and the browser did. The figure is drawn only once one order is finished, by the progress bar's own rule beside it — none finished is the state every walk starts in, and a figure that reads 0 on arrival is not one anybody acts on. This is deliberately a count and not the per-order list D90's banner drew: the reopening condition above asks for an accumulating count with no record of which copies went, and this answers the count half without standing a second pick list beside the one already on screen.
+
 ---
 
 ## D97 — The copy map ranks and never picks, and a line says what remains
@@ -5470,3 +5490,92 @@ shipped.
 **What would reopen this.** An operator who never uses `--split-threshold` — the two-file argument would then be dead rather than demoted, and the flag and the two name helpers should go. And an Import to Staged that refuses a multi-`Product Line` file, which would make `--split-games` the default rather than the way back.
 
 ---
+
+
+## D100 — Nothing is deleted to lower a price, the quantity is not a variable, and the age is a proxy that says so
+
+**A live listing's price is lowered by re-uploading the same row with a new `TCG Marketplace Price` and `Add to Quantity` of 0. Nothing is deleted at TCGplayer, and nothing has to be.** Built 2026-09-03 on the owner's request: *"I then wanted to build some relationship where I can export my live inventory back out (for cards I have listed and aren't selling) and be able to mass re-edit the prices down (and then reupload it back) <maybe deleting inventory in between from tcgplayer?>"*
+
+The parenthetical is the question this entry exists to answer, and the answer is measured rather than reasoned.
+
+### `Add to Quantity` is a delta, and TCGplayer's own export is the proof
+
+**72,701 real export rows carry `Add to Quantity` = `"0"`** — the four untouched fixtures (21,843 rows) and the twelve TCGplayer exports recorded into run directories (50,858 rows), which is the whole of it: 21,843 + 50,858 = 72,701. Not one row anywhere carries anything else. The owner's My Pricing download of 2026-09-01 is one of those twelve and is not a third source; an earlier draft of this paragraph counted it twice and put 40,858 against the run directories, which made the total right and the breakdown unreconcilable. Recounted 2026-09-04.
+
+**649 of those are rows on which TCGplayer simultaneously reported live copies**, `Total Quantity` between 1 and 10, and every one still carries `Add to Quantity` = 0. That settles it on its own: if the column meant *set the quantity to*, re-uploading an untouched export would delist the entire account, and nobody ships an export that destroys the account it came from. `Total Quantity` is not a writable column at all, so **there is no CSV route to lowering or setting a quantity even for a caller that wanted one.**
+
+**And the price column edits the live listing in place.** Of the 288 live SKUs in the 2026-09-02 export that this pipeline had pushed, **282 carry exactly the price the pipeline last wrote into an import CSV**; the other six sit a cent or two below. One listing per SKU, updated — not a second listing beside the first.
+
+### The dangerous case already happened here, which is why it is designed out rather than avoided
+
+**Ten live SKUs in that export held more copies than this pipeline ever pushed, and nine of them sit at exactly `2 x pushed - sold`.** Eight came from one file, `runs/2026-08-31-box3-01/import-subthreshold-riftbound.csv`. It was uploaded twice and every quantity on it was added twice: 2 became 4, 4 became 8, 3 became 6.
+
+So the failure mode is not exotic and is not hypothetical — **it is one extra press on a file sitting in this repo**, and a markdown push that carried the copy count again would do it to every row it touched.
+
+**The remedy is not a rule to remember. `pipeline/reprice.py:ADD_TO_QUANTITY` is a module constant — not a parameter, not a default, not reachable from a flag — so the quantity is not a variable anywhere on this path.** It is written explicitly on every row rather than left as the export found it, because a column left alone is a column nobody is asserting, and `tcgcsv.check_only_writable_changed` runs over every row on the way out. A worklist handed back carrying `Add to Quantity` 4 on every row still produces an upload carrying 0, and T7 asserts exactly that.
+
+### The upload is built from the manifest's bytes, and the operator's file is an instruction sheet
+
+**Only two cells are read out of whatever comes back — `TCGplayer Id` and `TCG Marketplace Price`.** Everything else comes from the export row the manifest kept verbatim.
+
+**Because a spreadsheet is how a person does "mass re-edit", and a spreadsheet reformats.** It strips the leading zero from `Number` (`001/132` becomes `1/132`), strips a trailing zero from a price (`0.0100` becomes `0.01`), and writes `0` into an empty cell. Measured: a worklist mangled all three ways produces an `import.csv` byte-identical to the unmangled one. **The byte contract cannot be broken by the operator's editor, because the operator's editor is not where the bytes come from.**
+
+**And prices are compared as `Decimal`, never as text.** A live export writes four decimal places and this writer emits two; equal as money, different as bytes, and a string comparison would read every untouched row as an edit and mark down the whole store on a rounding artifact.
+
+### Two commands, because the operator's sentence has two halves
+
+`reprice list` writes the worklist; `reprice apply` reads it back and writes the upload. Between them sits a spreadsheet, or nothing at all — **the worklist arrives with a price already proposed on every row**, so the common case is download, glance, hand it straight back.
+
+**The worklist is in full export shape and carries `Add to Quantity` 0, so uploading it by mistake is harmless.** That is the property the shape was chosen for: every file this feature writes is safe to upload, whichever one the operator grabs.
+
+**Both halves preview by default**, which is `pkmnscan prices adopt`'s rule and one more: `apply --write` is the last press before bytes leave for a marketplace, and the file it writes cannot be un-uploaded.
+
+### "Not selling" is three terms and one of them is a proxy, and the proxy says so on every report
+
+A SKU is stale when TCGplayer says it is **live now**, **no copy sold here inside the window**, and **this store has owned a copy for longer than the window**.
+
+**The third term measures how long the card has been OWNED, not how long the listing has been live, and this store cannot measure the second.** `Listing` has no `first_listed_at`. `live_as_of` is **absent from all 443 stored listing payloads**, so it is backfilled from `at` on every one — and `at` means "last touched", with **346 of the 443 carrying one identical timestamp**, the D87 store-wide settlement. There is no listing age here to read.
+
+**So the substitution is printed on the report's own header, on the screen in its own paragraph, and asserted in both the harness block and the browser spec.** A proxy nobody is told about is a lie, and this is the one figure in the report that is not what it looks like.
+
+**Two implementation traps, both measured.** The age is taken over every card that ever carried the SKU, departed ones included — a floor over on-hand copies moves *forward* as the oldest copy sells, so a listing would get younger the longer it sat. And the sale is read off the CARD RECORDS and never the event log: **one of the 193 `sold` events on the owner's store carries no `sku` key**, while all 186 cards in the `sold` state carry both, so a query over the log loses that copy silently — and a SKU whose only sale is invisible reads as never sold, which is the exact input this lowers a price on.
+
+### No sales velocity is invented, because none exists
+
+The export carries **no sales window, no sample size, no last-sold date, no view count, no watcher count and no competing-seller count**, and TCGplayer publishes none of them anywhere — the `tcgplayer-csv` skill states it and D8 rests on it. `TCG Market Price` is their aggregate over recent sales: one number, no window.
+
+**The one axis here that is not a proxy is `--above-market`**, which compares the asking price against `TCG Market Price` on the same row of the same file at the same instant. It is the only term that says anything about *why* a card is not selling. **It has to be read against D9's floor**: 115 of the owner's 441 live rows sit at or under `$0.40`, where a $0.03 card is correctly listed at the floor and is 1,233% above market as arithmetic rather than as overpricing.
+
+### `asking` is a basis and is deliberately not one of `pricing.BASES`
+
+The markdown is off the operator's own live price, which is `TCG Marketplace Price`. That column is populated on **441 of 441** live rows of a My Pricing export and **blank on 7,787 of 7,802 rows** of the wide Pokemon Filtered Export. Adding it to `pricing.BASES` would offer it on `join` and `emit` through `cli/__main__.py`'s `choices=`, where a blank basis cell leaves the price untouched with nothing anywhere raising. So `reprice.BASES` is local, and the argument lives beside it.
+
+### The ratchet, and what guards it
+
+`undercut:10` applied daily compounds to **-52% in a week**, floored only at `$0.40`, with every individual run justified because the card still has not sold and is still old.
+
+**The guard is `corpus.Answer.at`**: a SKU this store answered inside the window is refused as `priced_recently` unless `--again`. It reads the corpus rather than the receipt directories — a directory can be deleted and an answer cannot be without also giving the card its rule price back — and it has a second correct consequence: **a card the operator hand-priced on `#/pricing` yesterday is not stale**, which is true and which no separate mechanism had to be built to say.
+
+### The answer goes in the corpus, keyed by SKU
+
+`apply --write` writes each new price into `inventory/prices.json` (D86). **Without it the next `emit` over another copy of the same card re-lists at the rule price and quietly undoes the markdown.** The marked-down price is the store's price for that SKU from then on, not a property of one file. `pipeline/corpus.py` is untouched: `Answer` already carries a value and a time, and nothing here needed a field it did not have.
+
+### It wanted a route on D49's precedent, and it is a modal on `#/runs` instead
+
+**It is a worklist the operator sits in over three presses, with a file leaving the machine in the middle of it and coming back** — which is exactly what earned `#/pricing` a route, and is not what `#/runs`' own lede describes when it names the four pipeline commands. So `#/markdown` was built, and then measured out.
+
+**The measurement was taken against a shell that no longer exists, and it is recorded here rather than carried forward.** The horizontal nav strip needed 1,484.9px to draw eleven links on one row against a 1,440px desk: the aside group wrapped, the nav doubled from 45.5px to 90px, and `app/tests/review.spec.ts`'s between-cards floor — D28's, the one that says the photograph does not move as the operator answers — went red as the web font swapped in and tipped the wrap mid-screen. No label rescued it; the eleventh link would have had to be 68px wide and `Runs` was 72.6. **That strip is gone.** D95's shell is a sidebar collapsing to a rail with a command palette beside it, and a nav item there costs a row of vertical space rather than a share of one horizontal line — so the arithmetic that refused the route does not apply to the shell this lands on, and nothing here should be read as though it still does.
+
+**The placement did not change with the shell, and the reason for it is now a judgement rather than a measurement.** This is a second modal on `#/runs`, opened from its own header button beside the store-wide reconcile, built as a structural sibling of `LiveReconcile.tsx`. That neighbour was always the right one: both read the same live export, and the order there is the order of the work — settle what TCGplayer holds, then decide about the part of it that is not moving. What was a forced choice is a deliberate one.
+
+**What it costs is a hash of its own**, so the markdown cannot be linked to, bookmarked, or reached by a chord, and it opens over a screen whose first two thirds are about one run. `App.tsx`'s ROUTES table carries this reasoning where the row would have gone, so the next session to want the route finds the argument rather than rediscovering it — and the number above is now history, not a constraint to re-measure against.
+
+### What it costs
+
+**The worklist carries no reason column.** A seventeenth column would break the round-trip that makes the file safe to upload, so the reasoning is in `report.txt` beside it and a person editing in a spreadsheet cannot see why a row is there.
+
+**Nothing this feature writes has been uploaded to TCGplayer.** Every measurement above is from files TCGplayer produced, or from files this pipeline produced that TCGplayer then accepted — none of it is a measurement of *this* file being accepted by the My Pricing importer. `docs/specs/stale-listings.md` §6 names the three unmeasured questions in order of consequence and the press that settles them: `--limit 5`, upload, then `reconcile --live` against a fresh download.
+
+**And the whole thing is scoped to what one export says.** A listing on a SKU this store never held is reported and never touched, which is right, and means a person selling through two channels gets no help here with the other one.
+
+**What would reopen this.** *The first upload*, whose answers belong in the spec's section 6. *A listing age this store can read* — populate `live_as_of` on a first sighting, or record a `first_listed_at` when `emit` pushes, and the third term stops being a proxy and the report's header paragraph goes away. *A reason column in the worklist*, at the cost named above. *An importer that rejects a zero-quantity row*, which would make the whole design unbuildable in this shape and is the one outcome the 649 rows argue hardest against.

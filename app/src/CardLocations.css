@@ -122,6 +122,20 @@
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   overflow: hidden;
+  /* ONE SLOT COLUMN FOR THE LIST, DECLARED WHERE THE LIST IS — which is the only place the
+     decision can be made honestly. A row's slot holds `CARD 17`, or, for a copy that has left
+     the box, a void where the figure would be (D58, D71); the two reserve different widths, and
+     while each row sized its own the departed rows' paths started 2.109px left of every live
+     one's. That is not a rounding error to absorb, it is the column `lead='slot'` exists to
+     draw, ragged for exactly the cards a person had just sold — and it is the assertion
+     `app/tests/inventory.spec.ts` has been carrying red since the merge.
+
+     84px is measured, not chosen: at this list's `--pos-slot: 22px` the widest content is a live
+     row's 82.06px (`CARD` 33.59 + the 4px gap + the figure's 3ch, 44.47), and the two px on top
+     are slack so the column holds it rather than overflowing it. A `width` rather than a
+     `min-width` deliberately — a floor lets a row grow past its neighbours again, which is the
+     failure being fixed, and a column that is a little wide is a column. */
+  --pos-slot-col: 5.25rem;
 }
 
 /* One copy: where it is (label + neighbours), the lens, the state, the action. The lens takes

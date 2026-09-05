@@ -450,3 +450,9 @@ boolean
 [Aa]imable
 [Ff]illable
 [Uu]nintuitive
+[Dd]elist\w*
+[Rr]eformats
+[Uu]nmangled
+[Bb]ackfill\w*
+[Uu]nbuildable
+[Uu]nwritable

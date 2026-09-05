@@ -864,10 +864,13 @@ directly.
   sale path is unchanged**: bring the guards, and argue in a decision entry if one of them is
   already satisfied by the screen it would sit on.
 
-  **The third path landed 2026-09-02, and it met that rule rather than going around it.**
-  `POST /orders/fill` is how a card leaves inventory on the order walk this screen now hosts: one
-  press records a whole order's envelope, every copy pulled and sold in one write. D90 is the
-  entry, `docs/specs/order-pipeline.md`'s T6 is the build. Both guards came with it. The
+  **The third path landed 2026-09-02 on main, met that rule, and was then DELETED here
+  2026-09-04 without ever being reachable** (D96, amended). The paragraph is kept because the rule
+  it tests is the point: `POST /orders/fill` recorded a whole order's envelope, every copy pulled
+  and sold in one write, and it brought both guards rather than arguing them away. **There are two
+  sale paths again**, and an order's pass through the drawers presses `POST /orders/pull` a card
+  at a time from `#/orders` — the second path, with the doubled undo, exactly as above. What
+  follows describes main's build. The
   photograph is answered exactly as D57 answers it here, by the card band beside the row, because
   the walk stands the operator under the copy's own photograph before anything is pressed. **The
   undo is the receipt's alone rather than the doubled pair above**, and that is the one thing the

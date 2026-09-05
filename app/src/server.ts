@@ -38,6 +38,9 @@ import type {
   CsvUpload,
   ExportFetched,
   ExportScope,
+  MarkdownAnswer,
+  MarkdownAsk,
+  MarkdownSummary,
   RunDetail,
   PriceHistoryPayload,
   PricingPayload,
@@ -51,8 +54,6 @@ import type {
   RunSummary,
   IngestResult,
   OrderIngestOrder,
-  FillLine,
-  FillResult,
   OrdersFetched,
   OrdersPreview,
   OrdersPayload,
@@ -1776,6 +1777,73 @@ export async function reconcileLive(
   })) as { ok: boolean; exit_code: number; wrote: boolean; console: string }
 }
 
+/* ------------------------------------------------- the stale-listing markdown (D100) */
+
+/**
+ * Which live listings are not selling, and what each would be re-priced to.
+ *
+ * FREE, AND `write` PRODUCES A WORKLIST RATHER THAN AN UPLOAD. Nothing on this path talks to
+ * TCGplayer: the operator downloads the worklist, edits it or does not, and hands it back to
+ * `applyMarkdown`, which is what writes the file they upload.
+ *
+ * NOTHING HERE CAN CHANGE A QUANTITY. Every row of every file this pair writes carries
+ * `Add to Quantity` 0 — the price column edits the live listing in place and the quantity
+ * column is a delta, so a price-only push adds nothing and deletes nothing. Uploading one of
+ * these files twice is a no-op the second time, which is not true of an import from `emit`.
+ *
+ * `stamp` NAMES THE DIRECTORY A WRITE MADE, and is null on a preview. It is what
+ * `applyMarkdown` and `markdownFileUrl` address.
+ *
+ * Refusals worth branching on: `export_required`, `export_empty`, `export_not_csv`,
+ * `rule_invalid`, `basis_invalid`, `number_invalid`.
+ */
+export async function markdownListings(
+  file: CsvUpload,
+  options: MarkdownAsk = {},
+): Promise<MarkdownAnswer> {
+  return (await request('/pipeline/markdowns', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ export: file, ...options }),
+  })) as MarkdownAnswer
+}
+
+/**
+ * The edited worklist back, and — with `write` — the price-only import CSV.
+ *
+ * SENDING NO `worklist` MEANS "the one you wrote", which is the flow for an operator who did
+ * not want to edit anything: the worklist already carries a proposed price on every row.
+ *
+ * Refusals worth branching on: `stamp_invalid`, `no_such_markdown`, `no_worklist`. A
+ * worklist the command itself refuses — a raised price, a duplicated SKU — comes back as a
+ * 200 with `ok: false` and the reason in `console`, the way every other command seam does.
+ */
+export async function applyMarkdown(
+  stamp: string,
+  options: { worklist?: CsvUpload; write?: boolean } = {},
+): Promise<MarkdownAnswer> {
+  return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ worklist: options.worklist, write: Boolean(options.write) }),
+  })) as MarkdownAnswer
+}
+
+/** Every markdown this store has written, newest first. A read. */
+export async function getMarkdowns(): Promise<{ markdowns: MarkdownSummary[] }> {
+  return (await request('/pipeline/markdowns', NO_CACHE)) as { markdowns: MarkdownSummary[] }
+}
+
+/**
+ * Where a markdown's files can be downloaded — the worklist to edit, the import to upload.
+ *
+ * A URL rather than a fetch, for `runFileUrl`'s reason: the browser's own download is what
+ * the operator wants, and this is the file that goes into TCGplayer's My Pricing upload.
+ */
+export function markdownFileUrl(stamp: string, file: string): string {
+  return `${base}/pipeline/markdowns/${encodeURIComponent(stamp)}/file?name=${encodeURIComponent(file)}`
+}
+
 /**
  * The pricing corpus — every listing answer this operator has given, and the policy (D86).
  *
@@ -2314,49 +2382,6 @@ export async function previewOrders(range?: string): Promise<OrdersPreview> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(range === undefined ? { preview: true } : { preview: true, range }),
   })) as OrdersPreview
-}
-
-/**
- * Record a whole envelope — every line of one order — as pulled and sold, in ONE write.
- *
- * THE ORDER WALK'S ONE DOOR. `#/inventory`, driven by an order, writes nothing per card; the
- * press that says the envelope is filled sends every line's copies here, each aimed by its
- * own `capture_id`, and `POST /orders/fill` records all of them or none — one refusal names
- * the line and the position (`fill_entry_refused`), and nothing moves. Not N calls to
- * `pullCopy`: one SKU per call means a half-recorded envelope on the second refusal, and
- * `undoPull` refuses `pull_spans_lines`. The answer carries the PRE-write `places` for the
- * receipt (D58) and `complete`, the ledger's word on the whole order after the write.
- */
-export async function fillEnvelope(
-  order: { source: string; number: string },
-  lines: readonly FillLine[],
-): Promise<FillResult> {
-  return (await fill({ source: order.source, number: order.number, lines: [...lines] })) as FillResult
-}
-
-/**
- * Reverse a whole envelope in one write — the receipt's Undo. Unlike `undoPull`, this NAMES
- * its lines: the screen holds what it sent, and the server refuses `fill_line_mismatch` if
- * the ledger holds a copy under a different line than the one named.
- */
-export async function undoEnvelope(
-  order: { source: string; number: string },
-  lines: readonly FillLine[],
-): Promise<FillResult> {
-  return (await fill({
-    undo: true,
-    source: order.source,
-    number: order.number,
-    lines: [...lines],
-  })) as FillResult
-}
-
-async function fill(body: Record<string, unknown>): Promise<FillResult> {
-  return (await request('/orders/fill', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })) as FillResult
 }
 
 /* One route in both directions — `POST /orders/pull`, with `{"undo": true}` to reverse — and

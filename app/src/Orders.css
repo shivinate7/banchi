@@ -701,7 +701,9 @@
 .orders-walk-progress { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .orders-walk-figure { display: flex; align-items: baseline; gap: var(--bn-2); flex-wrap: wrap; }
 .orders-walk-figure strong { font-family: var(--bn-font-display); font-size: var(--bn-fs-xl); font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--bn-ink); }
-.orders-walk-figure span { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+/* `:not(.bn-pill)` because the orders-filled count sits on this line and a kit primitive
+   answers to the kit, never to the screen that hosts it (D50). */
+.orders-walk-figure span:not(.bn-pill) { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-walk-bar { width: 100%; }
 .orders-walk-next { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; text-align: right; min-width: 0; }
 .orders-walk-next-label { font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; color: var(--bn-ink-3); }
