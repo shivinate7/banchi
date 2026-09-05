@@ -74,8 +74,9 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
   )
 
   /* Focus lands inside on open, stays inside under Tab, and returns to the opener on close;
-     Escape closes. */
-  useOverlayFocus(sheet, open, onClose)
+     Escape closes, unless a read or a write is in flight — `busy` is the hold, and it covers
+     both presses of the two-step gate. */
+  useOverlayFocus(sheet, open, onClose, busy)
 
   /* Portalled to <body> for the same reason the composer is: `main.bn-page` keeps a filled
      transform after its enter animation, and a fixed sheet inside it would hang off the column. */
