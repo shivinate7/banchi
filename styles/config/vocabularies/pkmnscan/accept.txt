@@ -255,6 +255,7 @@ uploadexportcsv
 [Uu]pserted
 Vilemaw
 Vite
+Xerath
 [Vv]alidator
 [Vv]alidators
 [Vv]endored
