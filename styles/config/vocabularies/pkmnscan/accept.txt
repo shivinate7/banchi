@@ -473,3 +473,6 @@ viewBox
 [Ss]uperellipse
 [Hh]olo
 [Kk]eyline
+
+# the owner's own spelling of `lilacish`, quoted verbatim in docs/specs/logo.md
+lilic

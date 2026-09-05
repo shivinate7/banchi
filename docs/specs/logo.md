@@ -53,8 +53,9 @@ Units are the 100 x 100 icon viewBox.
 | Inverted ground | **eliminated** | LOCKED | the sheen cancels the inversion rather than adding to it |
 | Ground gradient | derived from the prism | RANGED | see "the ground is the prism, driven to black" below |
 | Warm ground | **eliminated** | LOCKED | swept at four chromas on its own hue and rejected at every one |
-| Prism | bluesteel, warmer, quieter, lilacish, mint | RANGED | colder and richer rejected |
-| Prism chroma | 0.025 – 0.098 | measured | `warmer` and `quieter` are below 0.030 and cannot drive a ground |
+| Prism | **bluesteel, lilacish, mint** | **LOCKED** | the owner's words, 2026-09-05: *"bluesteel, lilic, and mint are good"* |
+| Prism — parked | `warmer`, `quieter` | PARKED | ground unresolved; see "the two gray prisms" below |
+| Prism chroma | 0.025 – 0.098 | measured | `warmer` and `quieter` are below 0.030 and can never drive a ground |
 | Chrome gradient angle | free | RANGED | 90 to 200 degrees all read as metal |
 | Chrome gradient colors | `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` | **HELD** | never swept |
 | Turbulence base frequency | `0.035 0.09` | **HELD** | never swept — this sets the scale of the marbling |
@@ -106,13 +107,39 @@ for them to look nice."*
 live and neither is a fallback**, so the answer is two complete sets rather than one set with an
 alternate:
 
-| prism | family A · 0.23 | family B · 0.39 |
-| --- | --- | --- |
-| bluesteel | `#1D242B` → `#080B0F` | `#182430` → `#060B12` |
-| lilacish | `#23212D` → `#0B0A10` | `#231F34` → `#0B0914` |
-| mint | `#1C2522` → `#070C0A` | `#162722` → `#050D0A` |
-| quieter | `held`, `#1E232B` → `#080B0F` | `cooler`, `#182430` → `#050A12` |
-| warmer | `held`, `#1E232B` → `#080B0F` | `cooler`, `#182430` → `#050A12` |
+### THE THREE THAT ARE SETTLED
+
+**These are LOCKED as of 2026-09-05** — *"bluesteel, lilic, and mint are good"* — at sheen
+0.10 – 0.20 over the L pair 0.255 → 0.148. **The prism keeps its own name; the ground is named
+after it.** Both chroma ratios are live because the owner called `held` and `cooler` the same.
+
+| prism | prism stops | ground A · 0.23 | ground B · 0.39 |
+| --- | --- | --- | --- |
+| **bluesteel** | `#E4EEF8 #B0C8E0 #7F9FC0 #F2F8FF #6086AC` | `#1D242B` → `#080B0F` | `#182430` → `#060B12` |
+| **lilacish** | `#EFEAFA #BCB4E0 #8E86C0 #F6F2FF #6E68A8` | `#23212D` → `#0B0A10` | `#231F34` → `#0B0914` |
+| **mint** | `#E6F6F0 #A8D4C4 #78AC9C #F2FCF8 #589084` | `#1C2522` → `#070C0A` | `#162722` → `#050D0A` |
+
+The prism stops are written out here because they are the input the grounds are derived from —
+**if a prism stop ever moves, every ground hex in this table is stale**, and there would
+otherwise be no way to tell. The five-stop gradient runs at `x1 .671 y1 .030` → `x2 .329 y2 .970`.
+
+### The two gray prisms, parked
+
+`warmer` and `quieter` are **not settled and not rejected.** The tonal rule cannot serve them —
+its ceiling is C .014 and C .012, both invisible — so their ground has to be asserted. Seven were
+put up for each on 2026-09-05 and the pass was cut short by a pivot to black and gold before an
+answer. **The candidates are recorded so the pass does not have to be re-run**, and the working
+hypothesis from the sweep is that a gray card wants a *contrasting* hue at C .045 – .065, roughly
+three times what the tonal rule permits, because it has no hue of its own to compete with:
+
+| prism | strongest candidates |
+| --- | --- |
+| warmer | deep indigo `#1B1F40` → `#07091A`; its cool shadow hue `#182239` → `#060A16` |
+| quieter | its own blue at 2.6x, `#042441` → `#010B1A`; at 1.6x, `#132435` → `#040B14` |
+
+**Both picks land close to each other, and the two cards were already nearly one tile.** That is
+twice over the same evidence: **five prism options may really be four.** Settle that before
+settling their grounds, or one of these two answers is wasted.
 
 **The owner's rejection confirmed the lightness pair without being asked to.** Three grounds went
 up at sheen 0.20 — `held` (ratio 0.23), `deeper drop`, `cooler` (ratio 0.39). `deeper drop` was
