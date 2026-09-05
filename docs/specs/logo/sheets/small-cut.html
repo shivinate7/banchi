@@ -1,0 +1,313 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the small optical cut</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px;max-width:1500px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 18px;max-width:1000px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:26px 0 6px}
+ .note{font:400 11px system-ui;color:#8a919b;margin:0 0 10px;max-width:1000px}
+ .note b{color:#c2410c}
+ .strip{background:#fff;border-radius:14px;padding:18px 22px}
+ .strip.dark{background:#0c0e12}
+ .strip.dark .cap,.strip.dark .num{color:#7d8794}
+ table{border-collapse:collapse}
+ td,th{padding:7px 10px;text-align:center;vertical-align:bottom}
+ th{font:600 9px system-ui;letter-spacing:.09em;text-transform:uppercase;color:#9aa1ab}
+ th.rowhead{text-align:right;white-space:nowrap;padding-right:14px}
+ .cap{font:500 9px system-ui;color:#8b93a0;margin-top:5px}
+ .num{font:500 8.5px ui-monospace,monospace;color:#6b7480;margin-top:3px}
+ .true{display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap}
+ .tcell{display:flex;flex-direction:column;align-items:center;gap:5px}
+ canvas{display:block;image-rendering:pixelated}
+ svg{display:block}
+ .pick{background:#fffaf0;box-shadow:inset 0 0 0 2px #e0836a;border-radius:10px}
+ .strip.dark .pick{background:#1a1410}
+</style>
+<div class="wrap">
+<h1>the small optical cut — the sweep</h1>
+<div class="sub">
+Section 3 asserts a small cut of <b>stroke 3.4, no taper</b> below 64px and nothing has ever drawn it.
+That value is the <i>starting bracket</i> here, not the answer: section 7 rule 2 says open wide enough that
+both ends are wrong, so the stroke sweep runs 2.4 to 5.0 and is expected to fail at both.
+Every mark is the locked <b>bluesteel</b> — ground <code>#182430 → #060B12</code>, sheen 0.15, prism bluesteel,
+chrome brackets, base <code>#5A6E80</code> — so the only thing moving in each sweep is the one named parameter.
+<br><br>
+<b>The magnified views are rasterised, not re-drawn.</b> Each mark is rendered to a canvas at its true pixel
+size and then blown up with nearest-neighbour, so what you are looking at is the actual pixel grid a 1x
+display gets. Scaling the vector instead would have shown a drawing nobody's screen ever renders — which is
+how section 9's small row flattered itself: shot at deviceScaleFactor 2, its "28px" tiles carry 56 real pixels.
+</div>
+<div id="out"></div></div>
+<script>
+window.__sheetReady = false
+
+/* ---- the mark, lifted from locked-set.html --------------------------------------------------
+   Identical geometry: SQ, taperParts and the parameter line are byte-identical across all ten
+   committed sheets. What changed here is that the parameters are OPTIONS rather than consts,
+   because a sweep cannot move a const — and the defaults are section 9's LOCKED values
+   (#182430 -> #060B12, sheen .15) rather than icon()'s own older defaults (#1E232B, .14), so a
+   cell that names no colour is drawing the mark of record.                                   */
+const CW=31.782, CH=44.495
+const SQ=(function(){const a=50,N=220,p=[]
+ for(let i=0;i<=N;i++){const t=i/N*2*Math.PI,ct=Math.cos(t),st=Math.sin(t)
+  p.push((a+a*Math.sign(ct)*Math.pow(Math.abs(ct),.4)).toFixed(2)+' '+(a+a*Math.sign(st)*Math.pow(Math.abs(st),.4)).toFixed(2))}
+ return 'M'+p.join('L')+'Z'})()
+
+function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
+ const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=320,pts=[]
+ const tl=Math.max(tlf*Math.max(aX,aY),0.0001)
+ for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
+  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
+  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
+  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
+  const f=tip+(1-tip)*Math.min(Math.min(1,s/tl),Math.min(1,(L-s)/tl))
+  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
+ const q=function(v){return v.toFixed(3)}
+ const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
+ const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
+ return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
+   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
+  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+
+/* The same centreline as a REAL stroked path. Only valid with no taper (tip = 1), which is
+   exactly what the small cut asks for, and it is what banchi-icon.svg has always used. Two
+   hundred bytes against nine thousand — section 6 puts the two side by side. */
+function strokeBody(x0,y0,aX,aY,r){const f=function(v){return v.toFixed(3)}
+ return 'M'+f(x0)+' '+f(y0+aY)+'V'+f(y0+r)+'A'+r+' '+r+' 0 0 1 '+f(x0+r)+' '+f(y0)+'H'+f(x0+aX)}
+
+const BRK={chrome:['#FFFFFF','#B8C8D8','#F2F8FF','#8FA4B8']}
+const PRISMS={bluesteel:['#E4EEF8','#B0C8E0','#7F9FC0','#F2F8FF','#6086AC']}
+
+let n=0
+function icon(px,o){o=o||{}
+ const w   = o.w   === undefined ? 1.7  : o.w
+ const arm = o.arm === undefined ? .38  : o.arm
+ const r   = o.r   === undefined ? 8    : o.r
+ const tip = o.tip === undefined ? .07  : o.tip
+ const tl  = o.tl  === undefined ? .3   : o.tl
+ const e   = o.e   === undefined ? 11.5 : o.e
+ const rc  = o.rc  === undefined ? 1.9  : o.rc
+ const dsc = o.dsc === undefined ? 60   : o.dsc
+ const cs  = o.cs  === undefined ? 1    : o.cs      /* card scale */
+ const holo= o.holo=== undefined ? true : o.holo
+ const seed=23
+ const g1=o.g1||'#182430', g2=o.g2||'#060B12', sh=o.sh===undefined?.15:o.sh
+ const pr=PRISMS[o.prism||'bluesteel'], id='m'+(n++)
+ const cw=CW*cs, ch=CH*cs, cx=50-cw/2, cy=50-ch/2
+ const EW=cw+2*e, EH=ch+2*e, EX=50-EW/2, EY=50-EH/2
+ const aX=EW*arm, aY=EH*arm
+ let one
+ if(o.stroked){
+  one='<path d="'+strokeBody(EX,EY,aX,aY,r)+'" fill="none" stroke="url(#'+id+'c)" stroke-width="'+w+'" stroke-linecap="round"/>'
+ }else{
+  const p=taperParts(EX,EY,aX,aY,r,w,tip,tl)
+  one='<path d="'+p.body+'" fill="url(#'+id+'c)"/>'+p.caps.map(function(c){
+    return c[2]>0.02?'<circle cx="'+c[0].toFixed(3)+'" cy="'+c[1].toFixed(3)+'" r="'+c[2].toFixed(3)+'" fill="url(#'+id+'c)"/>':''}).join('')
+ }
+ const card='<rect x="'+cx.toFixed(3)+'" y="'+cy.toFixed(3)+'" width="'+cw.toFixed(3)+'" height="'+ch.toFixed(3)+'" rx="'+rc+'"'
+ /* holo:false draws the prism gradient flat — the marbling removed, the colour kept */
+ const face = holo
+  ? '<g clip-path="url(#'+id+'k)" opacity="1" filter="url(#'+id+'f)"><rect x="'+(cx-18).toFixed(2)+'" y="'+(cy-18).toFixed(2)+'" width="'+(cw+36).toFixed(2)+'" height="'+(ch+36).toFixed(2)+'" fill="url(#'+id+'p)"/></g>'
+  : (o.flatBase ? '' : card+' fill="url(#'+id+'p)"/>')
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+
+ '<defs><linearGradient id="'+id+'b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+g1+'"/><stop offset="1" stop-color="'+g2+'"/></linearGradient>'+
+ '<linearGradient id="'+id+'c" x1=".75" y1=".067" x2=".25" y2=".933">'+(BRK[o.brk||'chrome']).map(function(c,i){return '<stop offset="'+[0,.33,.67,1][i]+'" stop-color="'+c+'"/>'}).join('')+'</linearGradient>'+
+ '<linearGradient id="'+id+'sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="'+sh+'"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'+
+ '<linearGradient id="'+id+'p" x1=".671" y1=".030" x2=".329" y2=".970">'+
+   pr.map(function(c,i){return '<stop offset="'+(i/(pr.length-1)).toFixed(3)+'" stop-color="'+c+'"/>'}).join('')+'</linearGradient>'+
+ '<filter id="'+id+'f" x="-30%" y="-30%" width="160%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.035 0.09" numOctaves="4" seed="'+seed+'" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="'+dsc+'" xChannelSelector="R" yChannelSelector="G"/></filter>'+
+ '<clipPath id="'+id+'k">'+card+'/></clipPath>'+
+ '<clipPath id="'+id+'s"><path d="'+SQ+'"/></clipPath></defs>'+
+ '<path d="'+SQ+'" fill="url(#'+id+'b)"/>'+
+ '<g clip-path="url(#'+id+'s)"><rect width="100" height="40" fill="url(#'+id+'sh)"/></g>'+
+ one+'<g transform="rotate(180 50 50)">'+one+'</g>'+
+ card+' fill="'+(o.base||'#5A6E80')+'"/>'+face+'</svg>'}
+
+/* ---- rasterise at true size, then magnify the PIXELS ---------------------------------------- */
+const jobs=[]
+function raster(px,zoom,o){
+ const c=document.createElement('canvas')
+ c.width=px*zoom; c.height=px*zoom
+ c.style.width=(px*zoom)+'px'; c.style.height=(px*zoom)+'px'
+ jobs.push(new Promise(function(res){
+  const img=new Image()
+  img.onload=function(){
+   const a=document.createElement('canvas'); a.width=px; a.height=px
+   a.getContext('2d').drawImage(img,0,0,px,px)
+   const g=c.getContext('2d'); g.imageSmoothingEnabled=false
+   g.drawImage(a,0,0,px*zoom,px*zoom); res()}
+  img.onerror=function(){const g=c.getContext('2d');g.fillStyle='#f43';g.fillRect(0,0,c.width,c.height);res()}
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(icon(px,o))}))
+ return c}
+
+const out=document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+function head(t,note){out.appendChild(el('h2',null,t));if(note)out.appendChild(el('div','note',note))}
+
+const SIZES=[16,28,32,44]
+const Z={16:7,28:5,32:4,44:3}   /* magnifications that land every column at ~112-132px wide */
+
+/* a sweep table: one row per value, one column per size, rasterised at that size */
+function sweep(values,label,mk,zoomOnly){
+ const t=document.createElement('table')
+ const hr=document.createElement('tr'); hr.appendChild(el('th','rowhead',label))
+ SIZES.forEach(function(px){hr.appendChild(el('th',null,px+'px'))})
+ t.appendChild(hr)
+ values.forEach(function(v){
+  const tr=document.createElement('tr')
+  tr.appendChild(el('th','rowhead',v.label))
+  SIZES.forEach(function(px){
+   const td=document.createElement('td')
+   if(v.pick)td.className='pick'
+   td.appendChild(raster(px,Z[px],mk(v.value,px)))
+   td.appendChild(el('div','num',px+'px · x'+Z[px]))
+   tr.appendChild(td)})
+  t.appendChild(tr)})
+ const s=el('div','strip'); s.appendChild(t); out.appendChild(s)}
+
+/* the same marks at TRUE size, on the app's two real grounds */
+function trueRow(values,mk,dark){
+ const s=el('div','strip'+(dark?' dark':''))
+ s.style.background=dark?'#0c0e12':'#f4f5f8'
+ const f=el('div','true')
+ values.forEach(function(v){
+  SIZES.forEach(function(px){
+   const c=el('div','tcell')
+   c.insertAdjacentHTML('beforeend',icon(px,mk(v.value,px)))
+   c.appendChild(el('div','cap',v.label+' · '+px))
+   f.appendChild(c)})})
+ s.appendChild(f); out.appendChild(s)}
+
+/* ---- 0. the control ------------------------------------------------------------------------ */
+head('0 · the control — the display cut, scaled down',
+ 'Stroke 1.7 with the 0.07 taper, which is what section 9 draws and what the app would get if the display cut '+
+ 'were wired as-is. <b>This is the failure the small cut exists to fix</b>, and it is here so every later row '+
+ 'has something to beat rather than only a floor to clear.')
+sweep([{label:'display cut',value:null}],'w 1.7 · taper .07',function(){return {}})
+trueRow([{label:'display',value:null}],function(){return {}},false)
+trueRow([{label:'display',value:null}],function(){return {}},true)
+
+/* ---- 1. stroke ----------------------------------------------------------------------------- */
+head('1 · stroke, with the taper removed',
+ 'Section 3 asserts <b>3.4</b>. Both ends here are meant to be wrong: 2.4 should still vanish at 16px and 5.0 '+
+ 'should choke the corner and start eating the card. If neither end fails, the range was too narrow and this '+
+ 'sweep proved nothing — section 7 rule 2.')
+sweep([
+ {label:'2.4',value:2.4},{label:'3.0',value:3.0},
+ {label:'3.4  ← §3',value:3.4,pick:true},
+ {label:'4.2',value:4.2},{label:'5.0',value:5.0}],
+ 'stroke',function(v){return {w:v,tip:1}})
+
+/* ---- 2. taper ------------------------------------------------------------------------------ */
+head('2 · the taper, at stroke 3.4',
+ 'Confirming the removal rather than assuming it. The taper multiplies the stroke at the free ends: at tip 0.07 '+
+ 'a 3.4 stroke is 0.24 wide where it ends, which is a quarter of one unit in a 100-unit box.')
+sweep([
+ {label:'0.07 — display',value:0.07},{label:'0.25',value:0.25},
+ {label:'0.50',value:0.5},{label:'1.00 — none',value:1,pick:true}],
+ 'taper tip',function(v){return {w:3.4,tip:v}})
+
+/* ---- 3. the holo --------------------------------------------------------------------------- */
+head('3 · the holographic foil',
+ 'The 28px row of section 9 shows the marbling already gone — the displacement map moves pixels that are no '+
+ 'longer resolvable. The question is whether it is <b>costing</b> anything: a feTurbulence the eye cannot '+
+ 'resolve is a filter a favicon pipeline may refuse, for a texture nobody sees. The last column keeps the card '+
+ 'flat in its base colour, no prism at all.')
+sweep([
+ {label:'displacement 60',value:'full'},{label:'displacement 30',value:'half'},
+ {label:'no marbling',value:'flat'},{label:'flat base only',value:'base'}],
+ 'foil',function(v){
+  if(v==='full')return {w:3.4,tip:1}
+  if(v==='half')return {w:3.4,tip:1,dsc:30}
+  if(v==='flat')return {w:3.4,tip:1,holo:false}
+  return {w:3.4,tip:1,holo:false,flatBase:true}})
+
+/* ---- 4. the sheen -------------------------------------------------------------------------- */
+head('4 · the sheen',
+ 'Locked at 0.15 for the display cut. Section 6 records that the band 0.10–0.20 was only found by showing it a '+
+ 'second time against the ground it sits on; at 28px the band is 11 pixels tall, so this asks whether it '+
+ 'survives at all.')
+sweep([
+ {label:'0',value:0},{label:'0.075',value:.075},
+ {label:'0.15 — locked',value:.15,pick:true},{label:'0.30',value:.3}],
+ 'sheen',function(v){return {w:3.4,tip:1,sh:v}})
+
+/* ---- 5. the gap and the card --------------------------------------------------------------- */
+head('5 · the gap, and the size of the card',
+ 'Two ways to buy the mark back at small sizes that are not the stroke. <b>Gap</b> moves the brackets in toward '+
+ 'the card; <b>card scale</b> grows the card inside a fixed tile. Both change what the mark IS, so both need '+
+ 'the same scrutiny as a colour.')
+sweep([
+ {label:'8.0',value:8},{label:'9.75',value:9.75},
+ {label:'11.5 — locked',value:11.5,pick:true},{label:'13.0',value:13}],
+ 'gap e',function(v){return {w:3.4,tip:1,e:v}})
+sweep([
+ {label:'1.00 — locked',value:1,pick:true},{label:'1.12',value:1.12},{label:'1.25',value:1.25}],
+ 'card scale',function(v){return {w:3.4,tip:1,cs:v,e:11.5}})
+
+/* ---- 6. construction ----------------------------------------------------------------------- */
+head('6 · the two constructions, and what each costs',
+ 'With no taper the bracket is a constant-width wire, so it does not need the 642-point outlined polygon the '+
+ 'variable-width taper forces. A real stroked path draws the same shape. <b>Print the measurement</b> — '+
+ 'section 7 — because "smaller" is not an argument until it is a number, and this number is what decides '+
+ 'whether the favicon can be a live SVG.')
+;(function(){
+ const A={w:3.4,tip:1}, B={w:3.4,tip:1,stroked:true}
+ const s=el('div','strip'); const f=el('div','true')
+ ;[['outlined polygon',A],['stroked path',B]].forEach(function(pair){
+  const c=el('div','tcell')
+  c.insertAdjacentHTML('beforeend',icon(160,pair[1]))
+  c.appendChild(el('div','cap',pair[0]))
+  c.appendChild(el('div','num',icon(160,pair[1]).length.toLocaleString()+' bytes'))
+  f.appendChild(c)})
+ SIZES.forEach(function(px){
+  const c=el('div','tcell'); c.appendChild(raster(px,Z[px],B))
+  c.appendChild(el('div','cap','stroked · '+px)); f.appendChild(c)})
+ s.appendChild(f); out.appendChild(s)})()
+
+/* ---- 7. the forced choice ------------------------------------------------------------------ */
+head('7 · the forced choice',
+ 'Section 7 rule 1: people are unreliable at absolute judgement and reliable at comparison, so the sweeps '+
+ 'above end in a choice between three and not in a score. All three drop the taper, which section 2 settles. '+
+ 'They differ in the two things the sweeps left genuinely open — <b>whether the marbling survives</b>, and '+
+ '<b>whether 3.4 is enough bracket at 16px</b>. Shown rasterised, then at true size on the app\'s own two '+
+ 'grounds, which are the only surfaces this mark is ever seen on.')
+;(function(){
+ const CAND=[
+  ['A · §3 as written','stroke 3.4 · marbled',{w:3.4,tip:1}],
+  ['B · no marbling','stroke 3.4 · flat prism',{w:3.4,tip:1,holo:false}],
+  ['C · heavier bracket','stroke 4.2 · flat prism',{w:4.2,tip:1,holo:false}]]
+ const t=document.createElement('table')
+ const hr=document.createElement('tr'); hr.appendChild(el('th','rowhead','candidate'))
+ SIZES.forEach(function(px){hr.appendChild(el('th',null,px+'px'))})
+ t.appendChild(hr)
+ CAND.forEach(function(c){
+  const tr=document.createElement('tr')
+  const th=el('th','rowhead',c[0]); th.insertAdjacentHTML('beforeend','<div class="num">'+c[1]+'</div>')
+  tr.appendChild(th)
+  SIZES.forEach(function(px){
+   const td=document.createElement('td')
+   td.appendChild(raster(px,Z[px],c[2]))
+   td.appendChild(el('div','num',px+'px · x'+Z[px]))
+   tr.appendChild(td)})
+  t.appendChild(tr)})
+ const s1=el('div','strip'); s1.appendChild(t); out.appendChild(s1)
+
+ out.appendChild(el('div','note','True size. Top strip is the app in light theme, bottom in dark \u2014 '+
+  '<code>--bn-bg</code> at <code>#f4f5f8</code> and <code>#0c0e12</code>. The 32px column is the sidebar, '+
+  '26\u201330 the phone bar and drawer, 44 the puller\u2019s header, 16 the browser tab.'))
+ ;[false,true].forEach(function(dark){
+  const s2=el('div','strip'+(dark?' dark':'')); s2.style.background=dark?'#0c0e12':'#f4f5f8'
+  const f=el('div','true')
+  CAND.forEach(function(c){
+   SIZES.forEach(function(px){
+    const cell=el('div','tcell')
+    cell.insertAdjacentHTML('beforeend',icon(px,c[2]))
+    cell.appendChild(el('div','cap',c[0].split(' \u00b7 ')[0]+' · '+px))
+    f.appendChild(cell)})})
+  s2.appendChild(f); out.appendChild(s2)})})()
+
+Promise.all(jobs).then(function(){window.__sheetReady=true})
+</script>

@@ -1,9 +1,13 @@
 # The Banchi mark
 
-**Status: SIX MARKS LOCKED AT THE DISPLAY CUT (section 9). THE GROUND IS DERIVED. THE SMALL CUT
-AND THE LOCKUP ARE STILL UNDRAWN, AND THE COMMITTED SVG IS STALE AGAINST ALL OF IT.** This file
-is the state of record. `logo/banchi-icon.svg` matches neither section 3 nor section 9 and must be
-regenerated before anyone uses it.
+**Status: SIX MARKS LOCKED AT THE DISPLAY CUT (section 9). THE GROUND IS DERIVED, AND ITS RULE
+GAINED A FOURTH PARAMETER ON 2026-09-05 (section 3). THE SMALL CUT IS DRAWN AND SWEPT AND AWAITS
+ONE CHOICE (section 11). THE LOCKUP IS STILL UNDRAWN, AND THE COMMITTED SVG IS STALE AGAINST ALL
+OF IT.** This file is the state of record. `logo/banchi-icon.svg` matches neither section 3 nor
+section 9 and must be regenerated before anyone uses it.
+
+**A light-theme ground was derived on 2026-09-05 and lost to the mark it would have replaced
+(section 12).** The mark is fixed dark in both themes.
 
 Nothing under `app/` or `server/` has been touched. `app/src/kit/index.tsx:258` (`Logo`) and
 `app/public/favicon.svg` still hold the placeholder: a geometric **B** in a rounded square.
@@ -76,6 +80,35 @@ peak chroma 0.0721 — the formula reproduces both grounds that were already on 
 | --- | --- | --- |
 | 0.23 | `#1D242B` → `#080B0F` | `held`, `#1E232B` → `#080B0F` |
 | 0.39 | `#182430` → `#060B12` | `cooler`, `#182430` → `#050A12` |
+
+**THE RULE HAS A FOURTH PARAMETER AND THIS FILE STATED IT WITH THREE.** Written as above — one
+hue, one L pair, one chroma ratio — the rule reproduces every ground's TOP stop exactly and
+misses every BOTTOM stop in the file. **The chroma falls to 0.60 of its ratio at the bottom of
+the gradient**, and with that taper the rule reproduces **all twelve published stops byte for
+byte**: three prisms, both chroma families, top and bottom.
+
+| | held constant | tapered to 0.60 | published |
+| --- | --- | --- | --- |
+| bluesteel 0.23 | `#060B11` | **`#080B0F`** | `#080B0F` |
+| bluesteel 0.39 | `#030B16` | **`#060B12`** | `#060B12` |
+| lilacish 0.39 | `#080918` | **`#0B0914`** | `#0B0914` |
+| mint 0.39 | `#000E0B` | **`#050D0A`** | `#050D0A` |
+
+The taper was never chosen; it was **recovered from the values the rule had already produced**,
+by asking what single multiplier reconciles the stated rule with the published bottoms. It is
+0.60 for all six. Nothing was drawn wrong — the grounds on the sheets are right, and were made
+by an eye that was applying a rule it had not fully written down. What was wrong is the
+sentence, and a sentence is what the next session derives from.
+
+**`docs/specs/logo/sheets/grounds.py` is the one implementation**, and it prints that twelve-stop
+check on every run. The sheets carry its output as literals rather than repeating the arithmetic:
+a second implementation of a rule is a second thing to drift, which is what `make docs-audit`'s
+`motion params` row already exists to catch elsewhere in this repo.
+
+**Two facts the script also pins down.** The hue is the **chroma-weighted** hue of the five stops,
+not the hue of the highest-chroma stop — the two disagree by up to 5° and only the weighted one
+reproduces this file's 249.1 / 291.1 / 174.1 / 76.0. And the dark side never meets the sRGB
+gamut wall, which the light side does immediately (§12).
 
 **The wall is a RATIO of about 0.47, and this file said "an absolute chroma, not a ratio" until
 2026-09-05.** That was wrong on its own numbers: as absolute chroma the three walls spread
@@ -205,6 +238,9 @@ block 4px; padding moves it 16px. Three rounds were spent tuning the wrong param
 
 Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 
+**The small cut is DRAWN and SWEPT as of 2026-09-05 — see §11.** Stroke 3.4 and the removal of
+the taper both survived; two things the table above does not mention did not.
+
 ## 4. Where the assets stand
 
 | file | state |
@@ -221,7 +257,10 @@ Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 | `logo/pass-black-and-gold.png` | **section 8** — nine golds, five blacks, five brackets |
 | `logo/pass-white-and-rose-gold.png` | white gold and rose gold on the locked black, one pass each |
 | `logo/pass-locked-set.png` | **section 9 — the six locked marks**, at 200px and at 48/28px |
+| `logo/pass-small-cut.png` | **§11 — the small cut swept.** NOT COMMITTED: the pre-commit image guard refuses a PNG and has no hatch. Re-render from the sheet |
+| `logo/pass-light-ground.png` | **§12 — the light ground**, derived and rejected. NOT COMMITTED, same reason |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
+| `logo/sheets/grounds.py` | **the ground rule, and the only implementation of it.** Self-checks against every published stop |
 
 **Every PNG here went in past the pre-commit image guard, on the owner's word each time.** That
 guard has no `PKMNSCAN_*=off` hatch — unlike the dupes, links, docs and sigil guards — because a
@@ -487,14 +526,13 @@ marks are locked at the display cut and none is locked at the small cut**, and a
 
 ## 10. Still open
 
-- The four **HELD** parameters in section 3. **The ground sweep took a bite out of one of them**:
-  the card base fill `#5A6E80` and the prism gradient sit under a ground that is now derived, so
-  the base fill is the next thing worth sweeping — it is the only remaining color in the mark
-  that nothing else constrains.
-- **The small optical cut, which is now the biggest gap in this file.** Six marks are locked at
-  the display cut and **none at the small cut**. A favicon is 28px and a nav rail is 48px; at
-  those sizes the locked brackets are essentially gone, which section 9's second row shows. Every
-  color decision on this page was made at 104 – 268px.
+- The four **HELD** parameters in section 3. `#5A6E80` was put up against three alternatives on
+  the light ground (§12 §5) and nothing there argues against it, but that was a sweep about the
+  ground and not about the base — **it is still HELD, and still the only color in the mark that
+  nothing else constrains.**
+- **The small optical cut is SWEPT and awaiting one choice** (§11). It is no longer the biggest
+  gap; the forced choice between its three candidates is. Every color decision on this page was
+  still made at 104 – 268px, and §11 is the first evidence any of them survives being small.
 - **`warmer` and `quieter`**, parked in section 3, are outside the locked six. They differ from
   each other only in the top of the gradient and take the same ground in both families — **five
   candidate prisms may really have been four**, and the locked set answers that by taking three.
@@ -502,5 +540,178 @@ marks are locked at the display cut and none is locked at the small cut**, and a
 - Regenerating the four assets, and generating the lockup.
 - A drawn wordmark. `Banchi` is set in Manrope today.
 - Which of tile / bare mark the sidebar takes. Decide by looking at the rail.
-- How the icon ships: it uses `feTurbulence`, which browsers render but a favicon pipeline may
-  drop. Exported bitmaps per size may be needed rather than a live SVG.
+- How the icon ships: the display cut uses `feTurbulence`, which browsers render but a favicon
+  pipeline may drop. **§11 narrows this**: at the sizes a favicon and a rail use, the marbling is
+  not merely invisible, it loses to a flat prism gradient — so the small cut may carry no filter
+  at all, and the question becomes moot for every surface in the app.
+
+## 11. The small cut, drawn
+
+**Swept 2026-09-05. Section 3 asserted this cut in two words and nothing had ever drawn it.**
+Sheet: `logo/sheets/small-cut.html`. **The render is not committed** — every PNG in this
+directory went in past the pre-commit image guard on the owner's word, one at a time, and that
+guard has no `PKMNSCAN_*=off` hatch. Re-render it:
+
+```
+node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/small-cut.html /tmp/small.png 1240 1000
+```
+
+**Every mark on that sheet is rasterised at its true pixel size and then magnified with
+nearest-neighbour**, so what is on screen is the pixel grid a display actually gets. This is not
+a presentation detail. Section 9's small row scaled the *vector* down and was shot at
+deviceScaleFactor 2, so its "28px" tiles carry 56 real pixels — it flattered itself by a factor
+of two, in the one row whose whole job was to show a failure.
+
+**The sizes swept are the sizes that occur**: 16, 28, 32 and 44. Nothing in the app draws this
+mark larger. `App.tsx` renders it at 32 (sidebar and rail), 26 (phone bar), 30 (drawer) and 40
+(both crash pages); `Fulfillment.tsx` at 44; the favicon is 16 to 32. **The display cut is
+correct at none of them.**
+
+### What held
+
+| what | result |
+| --- | --- |
+| **stroke 3.4** | HELD. Swept 2.4 / 3.0 / 3.4 / 4.2 / 5.0. 2.4 is still a ghost at 16px; 5.0 chokes the corner and crowds the card. The pick is interior, which is what section 7 rule 5 asks for |
+| **no taper** | HELD, and now argued rather than asserted. At tip 0.07 a 3.4 stroke is 0.24 wide where it ends — a quarter of one unit in a 100-unit box, which is a third of a pixel at 28px. Swept 0.07 / 0.25 / 0.50 / 1.00 |
+| **gap 11.5** | HELD. 9.75 crowds; 13.0 pushes the brackets into the tile's own corner radius |
+| **card scale 1.0** | HELD. 1.12 and 1.25 buy legibility and stop the mark being a card *in* a slot |
+
+### What did not, and it is the marbling
+
+**At every size the app uses, the holographic foil is not merely invisible — it loses to a flat
+prism gradient.** Swept at displacement 60 (locked), 30, no marbling, and a flat base with no
+prism at all. 60 and 30 are indistinguishable, which is section 7 rule 7 and the end of that
+axis. With the marbling removed the same five prism stops render as a clean diagonal highlight
+and the card reads as a lit, glossy surface; with it, the card is mush. The flat base is the
+failing end — it loses the idea, not just the texture — so the sweep is bounded on both sides.
+
+**This is the same shape of finding as section 8's bracket measurement.** A value chosen at
+200px, failing at a size nobody had looked at, for a reason that is about the size rather than
+about the value.
+
+**And it decides the engineering.** `feTurbulence` was §10's open question about whether the icon
+can ship as a live SVG. If the small cut carries no filter, the question does not arise for any
+surface in the app, because every surface in the app is below 64px.
+
+### What it costs, measured
+
+With no taper the bracket is a constant-width wire, so it does not need the 642-point outlined
+polygon that variable width forces. A real stroked path — which is the construction
+`banchi-icon.svg` has used all along — draws the same shape:
+
+| construction | bytes |
+| --- | --- |
+| outlined polygon | 25,101 |
+| stroked path | 7,091 |
+
+Section 7's *print the measurement*: "smaller" is not an argument until it is a number.
+
+### The forced choice, open
+
+Three candidates, all with the taper removed, differing in the two things the sweeps left
+genuinely open. **This is the one thing §11 does not settle**:
+
+| | stroke | card face |
+| --- | --- | --- |
+| **A** | 3.4 | marbled, displacement 60 — section 3 as written |
+| **B** | 3.4 | flat prism gradient |
+| **C** | 4.2 | flat prism gradient |
+
+B and C differ only in whether 3.4 is enough bracket at 16px, which is the browser tab and the
+one size where the answer is least comfortable.
+
+**C is the pick, on the owner's instruction of 2026-09-05** — *"all prisms light beside dark are
+so nice, just do whatever's most faithful to that"*. What makes §12's §6 row read is a **visible
+bracket** and a **card that glows**; A loses the glow to mush and B loses the bracket first as
+the size drops. C keeps both at every size the app draws. **B is one number away** and section 8's
+rule applies: it was not chosen, it was not eliminated.
+
+## 12. The light-theme ground — derived, and it loses
+
+**Asked for on 2026-09-05 and answered on the sheet rather than in a sentence.** Sheet:
+`logo/sheets/light-ground.html`; the render is not committed, for the reason §11 gives.
+
+```
+node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/light-ground.html /tmp/light.png 1300 1000
+```
+
+The mark is a dark tile in both themes. The question was whether a light ground can be derived
+for it the way the dark one was — the prism's own hue, driven the other way.
+
+**It can be derived. It loses to the mark it would replace.**
+
+### The derivation is sound; the object is not
+
+Section 3's rule runs upward without modification, and `grounds.py` produces the light grounds by
+the same arithmetic that reproduces all twelve dark stops. Two walls appear that the dark side
+never meets:
+
+- **sRGB runs out.** Above L 0.94, and above chroma ratio 0.39, the ground leaves the gamut and
+  the hex is a clip rather than the prism's hue. The dark side has no equivalent — there is
+  always room below.
+- **The chroma ratio stops mattering.** Swept 0.23 to 0.70, the five tiles are one tile. Section
+  7 rule 7: the just-noticeable difference has been reached and further sweeping is noise.
+
+### Why it fails, and section 3 already knew
+
+**The mark is a lit object on a dark ground, and both of its parts are light.** The chrome
+bracket runs `#FFFFFF` → `#8FA4B8`; the prism runs `#E4EEF8` → `#6086AC`. Put either on a
+near-white tile and it stops being an object. On the sheet, **chrome and platinum brackets are
+not faint — they are invisible.**
+
+This is section 3's own elimination of the `inverted` ground, arriving again from the other
+direction: *"the sheen substitutes for the top of the ground gradient but not the bottom."* A
+light ground has no bottom to fall to and nothing to light.
+
+**The fixes were tested and each one costs the mark.** Cream, pale gold and bronze brackets are
+visible on a light ground — because they are warm against a cool tile, which makes a bluesteel
+mark two metals, the exact thing section 8 says "black and gold" was invented to avoid. A dark
+card base helps the card sit and does nothing for the tile. A dark bracket **with** a dark card
+is legible, and is a different mark: the foil stops reading as foil, because a holographic
+surface needs a dark surround to look lit.
+
+Put beside the locked mark on the app's own light page — section 7 rule 1, with the incumbent
+present so that "worse" is available as an answer — **the locked dark mark wins, and not
+narrowly.**
+
+### The first version of this section argued it on a broken comparison
+
+**§6 of that sheet drew three of the six dark marks with a ground this file had already
+eliminated.** It derived all six grounds from the tonal rule, and for `rich`, `wg_warm` and
+`rg_classic` the tonal rule produces the espresso — `#331E00`, `#26221B`, `#341C12` — that
+**section 8 rejected in favour of true black.** Section 9's locked grounds for those three are
+`#141619` → `#000000`. So the comparison that was put up showed light against a dark row that
+was one-half a set of drawings this file says are wrong, and it flattered light by exactly the
+amount section 8 had already measured.
+
+Corrected, the dark row is stronger than the one that was reviewed: true black behind a gold
+foil is the whole point of section 8, and the espresso is what section 8 says removes it.
+
+**The finding this cost is worth keeping.** A sheet that DERIVES a value the file has LOCKED
+will silently redraw a rejected option, because a derivation does not know it was overruled.
+Section 9's table is the authority for the six grounds and a sheet must read it, not re-derive
+it. `light-ground.html` now carries `LOCKED9` written out for that reason.
+
+### And the light family does not survive being small, which is the whole app
+
+The corrected §6 is a fair fight and the light row is genuinely attractive at 150px — six tinted
+tiles, each with its card glowing. **That is not the question the app asks.** Drawn at 44 / 32 /
+28 / 16px on the app's own light page, the light tiles **lose their silhouette**: a near-white
+tile on a near-white page has no edge, so the mark stops being an object and becomes a smudge.
+The dark tile keeps a hard silhouette at every size, on both page colours.
+
+**So the answer is not "light is worse."** It is that light is a display-size idea and every
+surface in this app is below 64px — the same boundary section 3 draws for the two optical cuts,
+arriving from a completely different direction.
+
+### The recommendation, and what would reopen it
+
+**The mark stays fixed dark in both themes**, and the reason is the size rather than the taste. It is an object, not an ink colour: an app icon on
+a phone home screen does not invert when the phone does, and this is the same kind of thing.
+What changes is the placeholder's behaviour — `Logo` today is drawn in `--bn-ink` on `--bn-bg`
+and so inverts — and the change is deliberate rather than a regression.
+
+**What is NOT eliminated**, in section 8's sense of the word: the dark-bracket, dark-card mark on
+a light tile is a real drawing that a person could prefer, and its stops are on the sheet. It was
+not chosen, once, by one person, on one day. `logo/sheets/light-ground.html` §7 puts it back on
+screen.
