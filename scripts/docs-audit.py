@@ -5363,6 +5363,262 @@ def check_export_request(report: Report) -> None:
     )
 
 
+def _reason_labels() -> Optional[Set[str]]:
+    """The screen's `REASON_LABELS` keys, or None if the block cannot be read."""
+    if not exists(REVIEW_QUEUE_TSX):
+        return None
+    block = _REASON_LABELS_RE.search(read(REVIEW_QUEUE_TSX))
+    if block is None:
+        return None
+    return set(re.findall(r"^\s*([a-z_][a-z0-9_]*)\s*:", block.group(1), re.M))
+
+
+def _constant_for(module: str, value: str) -> Optional[str]:
+    """The constant NAME a module binds to this reason string."""
+    path = ROOT / module
+    if not exists(path):
+        return None
+    try:
+        tree = ast.parse(read(path))
+    except SyntaxError:
+        return None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if (isinstance(target, ast.Name)
+                and isinstance(node.value, ast.Constant)
+                and node.value.value == value):
+            return target.id
+    return None
+
+
+def _emitted_names() -> Set[str]:
+    """Every identifier LOADED anywhere in the production tree.
+
+    A load and not a definition: `NO_POSITION = "no_position"` binds the name, and what says
+    a reason can reach a card is somebody reading it back out. Attribute access counts, since
+    the usual site is `routing.SET_AMBIGUOUS` from another module.
+
+    **THE ROSTER TUPLES THEMSELVES ARE EXCLUDED, and leaving them in made this row vacuous.**
+    `ROUTING_REASONS = (LOW_CONFIDENCE, ..., CARD_NOT_DETECTED, ...)` loads every reason name
+    by construction, so the declaration alone satisfied the emission test for all thirteen —
+    the row went green the moment the rosters landed, including for the one reason measured to
+    have no producer at all. A check that is satisfied by the act of declaring the thing it
+    checks is the vacuous green this file opens by warning about, and it was reachable here in
+    the same commit that added the rosters.
+    """
+    declarations = {name for _, name in REASON_ROSTERS}
+    names: Set[str] = set()
+    for root in EMISSION_ROOTS:
+        base = ROOT / root
+        if not exists(base):
+            continue
+        for path in _walk(base, (".py",)):
+            try:
+                tree = ast.parse(read(path))
+            except SyntaxError:
+                continue
+            skip: Set[int] = set()
+            for node in tree.body:
+                if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)
+                        and node.targets[0].id in declarations):
+                    for element in ast.walk(node.value):
+                        if isinstance(element, ast.Name):
+                            skip.add(id(element))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                    if id(node) not in skip:
+                        names.add(node.id)
+                elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
+                    names.add(node.attr)
+    return names
+
+
+# The two tuples that publish the review vocabulary, and where each is declared.
+REASON_ROSTERS = (
+    ("pipeline/variant.py", "LADDER_REASONS"),
+    ("pipeline/routing.py", "ROUTING_REASONS"),
+)
+
+# Where a reason may be handed to a card. The harness is excluded deliberately: a test that
+# constructs a reason proves the string exists, never that the pipeline can produce it, and
+# counting those would make every reason permanently "emitted".
+EMISSION_ROOTS = ("pipeline", "server", "cli", "identify", "store", "codes")
+
+# Reasons that are declared and deliberately have no producer: name -> the argument.
+#
+# THE SAME SHAPE AS `UNDISPATCHED` ABOVE, AND FOR THE SAME REASON. Without it the only ways
+# to quiet this row are to delete a reason or to emit one artificially, and both land in a
+# diff looking like tidying. An entry here is an argument a reviewer can disagree with.
+#
+# Self-cleaning: an entry naming a reason that IS emitted is stale and reported, and one
+# naming nothing in the rosters is dangling and reported. A list that only grows stops
+# being read.
+UNEMITTED_REASONS: Dict[str, str] = {
+    "card_not_detected": (
+        "reachable in principle and has no producer in the repo today — recorded in "
+        "docs/specs/capture-app.md, which argues it is not a defect in the screen and costs "
+        "no more than a line in a lookup table. The screen must still label it, because a "
+        "reason with no label draws the bare machine string on the day something first "
+        "emits one."
+    ),
+}
+
+
+def _roster(module: str, name: str) -> Optional[List[str]]:
+    """One published reason tuple, resolved through the constants beside it.
+
+    `literals_from_module` cannot read these: the tuple's members are NAMES, not string
+    literals, which is the whole point of declaring it next to the constants rather than
+    repeating their values. So the module's own `NAME = "value"` assignments are collected
+    first and the tuple is resolved against them.
+    """
+    path = ROOT / module
+    if not exists(path):
+        return None
+    try:
+        tree = ast.parse(read(path))
+    except SyntaxError:
+        return None
+    constants: Dict[str, str] = {}
+    roster: Optional[List[str]] = None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name):
+            continue
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            constants[target.id] = node.value.value
+        elif target.id == name and isinstance(node.value, ast.Tuple):
+            roster = [
+                constants[element.id]
+                for element in node.value.elts
+                if isinstance(element, ast.Name) and element.id in constants
+            ]
+    return roster
+
+
+def check_reason_emissions(report: Report) -> None:
+    """Every published reason is in a roster, and every roster reason has a producer.
+
+    `check_reason_codes` reconciles this vocabulary across the screen, docs/DESIGN.md and the
+    constants — but only ever in one direction. It starts from a reason somebody published and
+    asks whether the code defines it. Its own docstring records what that cannot see: a reason
+    constant no doc and no screen mentions, invisible because the modules never said which of
+    their constants are reasons.
+
+    **The fix was in the code, not in a cleverer checker.** `pipeline/variant.py` declares
+    fourteen module-level constants and six are reasons; the rest are finishes and ladder
+    stages, spelled identically. Any rule for telling them apart is a guess, and the cheapest
+    one is wrong about eight of fourteen in that file alone. So the modules publish
+    `LADDER_REASONS` and `ROUTING_REASONS`, and this row is a set comparison rather than a
+    heuristic — which is the bar this repo now holds a new row to (D16, amended 2026-09-05).
+
+    Two things it asks that nothing asked before:
+
+      the rosters ARE the vocabulary   a reason the screen labels and no roster names, or a
+                                       roster entry no screen labels. Either way the code and
+                                       the product disagree about what can happen to a card.
+      a reason has a producer          a constant nothing assigns is dead vocabulary: it
+                                       occupies a label, a doc line and a reader's attention,
+                                       and no card can ever carry it.
+
+    The harness is not a producer. A test constructing a reason proves the string exists, not
+    that the pipeline can reach it, and counting tests would make every reason permanently
+    emitted — the vacuous green this file exists to refuse.
+    """
+    findings: List[Finding] = []
+    published: Set[str] = set()
+    missing_roster = False
+    for module, name in REASON_ROSTERS:
+        roster = _roster(module, name)
+        if roster is None:
+            missing_roster = True
+            findings.append(
+                Finding(
+                    module,
+                    f"declares no `{name}` tuple this row can read. It is what lets the "
+                    f"vocabulary be checked from the code outwards; without it only the "
+                    f"doc-to-code direction is provable.",
+                )
+            )
+            continue
+        published.update(roster)
+
+    labelled = _reason_labels()
+    if labelled is None:
+        findings.append(
+            Finding(rel(REVIEW_QUEUE_TSX), "no `REASON_LABELS` block to read.")
+        )
+    elif not missing_roster:
+        for reason in sorted(labelled - published):
+            findings.append(
+                Finding(
+                    rel(REVIEW_QUEUE_TSX),
+                    f"`{reason}` is labelled on the screen and named by no roster.\n"
+                    f"  Add it to `LADDER_REASONS` or `ROUTING_REASONS` — whichever module "
+                    f"produces it — so the code publishes the vocabulary it can emit.",
+                )
+            )
+        for reason in sorted(published - labelled):
+            findings.append(
+                Finding(
+                    rel(REVIEW_QUEUE_TSX),
+                    f"`{reason}` is in a roster and the screen has no label for it.\n"
+                    f"  The queue would draw the bare machine string the day something emits "
+                    f"one, which is the outcome the label table exists to prevent.",
+                )
+            )
+
+    emitted = _emitted_names()
+    for module, name in REASON_ROSTERS:
+        roster = _roster(module, name) or []
+        for reason in roster:
+            constant = _constant_for(module, reason)
+            if constant is None or constant in emitted:
+                if reason in UNEMITTED_REASONS and constant in emitted:
+                    findings.append(
+                        Finding(
+                            "scripts/docs-audit.py",
+                            f"`UNEMITTED_REASONS` still excuses `{reason}`, which now has a "
+                            f"producer. Delete the entry — the argument it carries is spent.",
+                        )
+                    )
+                continue
+            if reason in UNEMITTED_REASONS:
+                continue
+            findings.append(
+                Finding(
+                    module,
+                    f"`{reason}` is declared, labelled and documented, and nothing in "
+                    f"{', '.join(EMISSION_ROOTS)} ever assigns it.\n"
+                    f"  No card can carry it, so its label and its doc line describe a state "
+                    f"the product cannot reach. Emit it, retire it, or argue it into "
+                    f"`UNEMITTED_REASONS` with the reason.",
+                )
+            )
+    for reason in sorted(UNEMITTED_REASONS):
+        if reason not in published and not missing_roster:
+            findings.append(
+                Finding(
+                    "scripts/docs-audit.py",
+                    f"`UNEMITTED_REASONS` names `{reason}`, which is in no roster. A dangling "
+                    f"exemption is one nobody can evaluate.",
+                )
+            )
+
+    report.add(
+        "reason emissions",
+        MECHANICAL,
+        findings,
+        f"{len(published)} published reasons, {len(published) - len(UNEMITTED_REASONS)} with "
+        f"a producer and {len(UNEMITTED_REASONS)} argued",
+    )
+
+
 def check_reason_codes(report: Report) -> None:
     """The twelve review reasons, reconciled across the three places they are published.
 
@@ -5386,11 +5642,16 @@ def check_reason_codes(report: Report) -> None:
                                  routing; a reason that moved between them without the doc
                                  following is a doc that is confidently wrong.
 
-    **The one thing it cannot see** is a reason constant that no doc and no screen mentions
-    at all. `self_named_strings` deliberately answers "is this string defined here" and not
-    "which strings here are reasons" — the latter needs a heuristic, and a heuristic on a
-    blocking row is a guess that stops commits. Recorded in docs/DEBTS.md rather than
-    papered over.
+    **What this could not see, `reason emissions` below now does (2026-09-05).** The gap was a
+    reason constant that no doc and no screen mentions: `self_named_strings` answers "is this
+    string defined here" and not "which strings here are reasons", and every rule for telling
+    them apart was a guess — `pipeline/variant.py` spells finishes, ladder stages and reasons
+    identically, and eight of its fourteen constants are not reasons.
+
+    **The fix was in the pipeline, not in a cleverer reader here.** `LADDER_REASONS` and
+    `ROUTING_REASONS` publish the set, so the missing direction is a set comparison. This row
+    is unchanged and still runs from the published vocabulary inwards; the two are
+    complementary, and neither subsumes the other.
     """
     findings: List[Finding] = []
     documented, problem = design_reason_lists()
@@ -8158,6 +8419,27 @@ def self_test() -> int:
        "zero would read as agreement with a section publishing 0")
     ok(_dotted(measured, "overall") is None, "and a path landing on a dict is not a count")
 
+    # The roster reader, and the vacuity this row nearly shipped with.
+    print("\na reason roster is resolved through the constants beside it")
+    ok(sorted(_roster("pipeline/variant.py", "LADDER_REASONS") or []) == [
+        "ambiguous_no_signal", "detected_finish_not_stocked", "duplicate_condition",
+        "metadata_not_stocked", "no_catalog_row", "rarity_claim_mismatch"],
+       "the ladder's six resolve to their string values",
+       f"got: {sorted(_roster('pipeline/variant.py', 'LADDER_REASONS') or [])}")
+    ok(_roster("pipeline/variant.py", "NO_SUCH_TUPLE") is None,
+       "a module with no such tuple reads as None, which is its own finding")
+    ok("normal" not in (_roster("pipeline/variant.py", "LADDER_REASONS") or []),
+       "and a finish sharing the constants' exact shape is not swept in",
+       "eight of that file's fourteen constants are not reasons")
+
+    print("\nthe roster declaration is not evidence that a reason is emitted")
+    emitted = _emitted_names()
+    ok("CARD_NOT_DETECTED" not in emitted,
+       "a reason whose only load is the roster tuple counts as unemitted",
+       "counting it made the row green for all thirteen the moment the rosters landed")
+    ok("SET_AMBIGUOUS" in emitted,
+       "while a reason with a real producer still counts")
+
     print("\na renumbered entry is found by its title, not its id")
     # EVERY PAIR HERE IS REAL HISTORY, not invented ids. `D67 -> D69` is the order-screen
     # entry and the incident this check exists for; `D50 -> D51 -> D53` is the "one link"
@@ -9230,6 +9512,7 @@ def audit(staged_only: bool) -> Report:
     check_matrix_superset(report)
     check_join_key_shape(report)
     check_reason_codes(report)
+    check_reason_emissions(report)
     check_supervisor_self_watch(report)
     check_motion_params(report)
     check_withhold_reasons(report)

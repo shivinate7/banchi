@@ -47,8 +47,26 @@ see something real that was never published.
 environment variable", "a reason rather than a ladder stage", "a module a test covers" each
 needs a heuristic, and D16 puts a heuristic on a *blocking* row out of bounds — a row that
 guesses and stops commits is how a gate gets switched off. The honest options are an
-**advisory severity** or an **explicit roster the module publishes**, and neither has been
-costed. **Fanning agents at these five separately produces five different answers to that one
+**advisory severity** or an **explicit roster the module publishes**.
+
+**THE ROSTER OPTION IS NOW COSTED, BECAUSE IT WAS TAKEN FOR ONE OF THE FIVE (2026-09-05).**
+`pipeline/variant.py:LADDER_REASONS` and `pipeline/routing.py:ROUTING_REASONS` publish the
+thirteen review reasons, and `reason emissions` is a set comparison rather than a guess. The
+whole cost was **two tuples and one runtime assertion** — no new concept, no severity change,
+and `UNPRICEABLE_REASONS` had already made the idiom native to that file. Cheaper than the
+paragraph above assumed.
+
+**Two of the five are closed, by different means, and the difference is the useful part.**
+`env names` needed no roster at all: `PKMNSCAN_*` is an exact naming convention, so the code
+side is *already* enumerable and only the direction was missing. Reasons had no such
+convention — `variant.py` spells finishes, ladder stages and reasons identically, eight of its
+fourteen constants being non-reasons — so there the set had to be declared. **Ask which case
+you have before reaching for a tuple:** where a convention already enumerates the set, a
+roster is ceremony; where it does not, a roster is the only honest answer.
+
+**What is still open is the other three**, and one of them may not want this shape at all: a
+roster of "modules a test covers" would be a second place to maintain what `tested_by` already
+says. **Fanning agents at these five separately produces five different answers to that one
 question.** Settle it in a decision entry first; afterwards they are five independent edits in
 five different modules.
 

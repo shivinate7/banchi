@@ -66,9 +66,36 @@ CARD_NOT_DETECTED = "card_not_detected"
 # precisely D29's group-answer eligibility.
 NUMBER_UNREAD_NAME_MATCHED = "number_unread_name_matched"
 
+# ROUTING'S OWN REVIEW REASONS, PUBLISHED AS A SET. The ladder's six live in
+# `pipeline/variant.py:LADDER_REASONS`; together the two tuples are the whole vocabulary, and
+# the split is the same one docs/DESIGN.md credits each reason by.
+#
+# `NO_MARKET_DATA` is in here and is ALSO a destination, which is why no rule over this file's
+# layout could have derived this list: it is declared under the `# Destinations.` heading at
+# the top, four lines above constants that are destinations and nothing else. A reader keying
+# off the comment blocks gets it wrong; so does one keying off the name, the case, or the
+# value's shape. See `variant.LADDER_REASONS` for the argument in full.
+ROUTING_REASONS = (
+    LOW_CONFIDENCE,
+    NO_POSITION,
+    IDENTIFICATION_FAILED,
+    SET_AMBIGUOUS,
+    CARD_NOT_DETECTED,
+    NUMBER_UNREAD_NAME_MATCHED,
+    NO_MARKET_DATA,
+)
+
 # Hard failures: no usable answer at all, so no price can be reasoned about. Always main,
 # always sorted last.
 UNPRICEABLE_REASONS = (NO_POSITION, IDENTIFICATION_FAILED)
+
+# The one runtime assertion worth writing here, and it is about the SUBSET rather than the
+# roster: a tuple built from the constants beside it cannot disagree with them, but a later
+# edit adding something to `UNPRICEABLE_REASONS` that is not a reason at all would be a real
+# error and a silent one — `route()` tests membership of it per card.
+assert set(UNPRICEABLE_REASONS) <= set(ROUTING_REASONS), (
+    "UNPRICEABLE_REASONS must be a subset of ROUTING_REASONS"
+)
 
 # `--review-below-confidence`. `none` restores "confidence never routes on its own".
 CONFIDENCE_NONE = "none"
