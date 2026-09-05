@@ -2052,6 +2052,223 @@ def check_shipping_columns(report: Report) -> None:
     )
 
 
+# The spec's own sentence, and the two literals harness T7 asserts. The harness is the
+# code-anchored end of this: `check_shipping_lane` runs the real router over the committed
+# export and fails if either number moves, so a document reconciled against those literals is
+# reconciled against the router by one hop rather than by a second copy of its rule.
+_CERTAINTY_SPEC = Path("docs") / "specs" / "order-pipeline.md"
+_CERTAINTY_HARNESS = Path("harness") / "tests" / "t7_store_and_seams.py"
+_CERTAINTY_SPEC_CLAIMS = (
+    re.compile(r"certain:\s+(\d+) of (\d+)\b"),
+    re.compile(r"\*\*(\d+) of (\d+)\*\*: a published price"),
+)
+_CERTAINTY_HARNESS_COUNT = re.compile(r"and that is (\d+) of the (\d+)\b")
+_CERTAINTY_DEFINITION = re.compile(r"return\s+self\.reason\s*==\s*VALUE_AT_THRESHOLD\b")
+
+
+def check_router_certainty(report: Report) -> None:
+    """`Routing.certain` over the committed export, published in the spec and asserted in T7.
+
+    WHY THIS ROW EXISTS. `docs/specs/order-pipeline.md` §5 called `Routing.certain` "the split
+    worth surfacing" from 2026-08-30 and never said what the split was, so the one number that
+    separates a fact from an inference — 112 answered by a published price against a published
+    threshold, out of 331 orders and 292 lanes — lived only in a harness assertion nobody
+    reading the spec would find. It is stated in two places in that file now, and this row is
+    what keeps both equal to what the harness asserts.
+
+    IT IS `shipping columns` WITH ONE MORE HOP, AND THE HOP IS DELIBERATE. That row reads a
+    count straight out of the code. This one cannot: the figure is not a literal anywhere in
+    `pipeline/shipping.py`, it is the result of running the router over
+    `fixtures/orders-shipping.csv`. Recomputing it here would put a second copy of the router's
+    first rule in this checker, which is the second-renderer failure the spec's own sections 4
+    and 5 spend paragraphs on. So the authority is `harness/tests/t7_store_and_seams.py`, which
+    runs the real router over the real fixture and fails if either number moves.
+
+    THE DEFINITION IS CHECKED TOO, because the count alone would survive the change that
+    matters most. If `Routing.certain` ever stopped being exactly `reason ==
+    VALUE_AT_THRESHOLD` — folding the weight proxy in, say — 112 could keep reading 112 while
+    the sentence beside it became false. The fixture is committed and the router reads nothing
+    else, so that is the only way this claim can rot without the harness going red first.
+
+    A REWORD CANNOT SILENCE IT. A file carrying no sentence this row can find is reported as
+    unwatched rather than passing quietly.
+    """
+    findings: List[Finding] = []
+
+    source = read(ROOT / "pipeline" / "shipping.py")
+    if not _CERTAINTY_DEFINITION.search(source):
+        findings.append(
+            Finding(
+                "pipeline/shipping.py",
+                "`Routing.certain` is no longer `return self.reason == VALUE_AT_THRESHOLD`. "
+                "The published `112 of 331` is a count of the rows that reason answers, so "
+                "widening or narrowing `certain` changes what the sentence means even when "
+                "the number holds. Re-check both claims in "
+                "docs/specs/order-pipeline.md and re-point this row.",
+            )
+        )
+
+    harness_text = read(ROOT / _CERTAINTY_HARNESS)
+    asserted = _CERTAINTY_HARNESS_COUNT.search(harness_text)
+    if asserted is None:
+        report.add(
+            "router certainty",
+            MECHANICAL,
+            findings
+            + [
+                Finding(
+                    str(_CERTAINTY_HARNESS),
+                    "no longer asserts `and that is <n> of the <total>` for `Routing.certain`, "
+                    "so this row has no authority to check the spec against. Re-point it, or "
+                    "the two published figures are unwatched.",
+                )
+            ],
+            "",
+        )
+        return
+
+    certain, total = int(asserted.group(1)), int(asserted.group(2))
+    spec_text = read(ROOT / _CERTAINTY_SPEC)
+    for pattern in _CERTAINTY_SPEC_CLAIMS:
+        found = pattern.search(spec_text)
+        if found is None:
+            findings.append(
+                Finding(
+                    str(_CERTAINTY_SPEC),
+                    f"no sentence here matches `{pattern.pattern}`. The certainty split was "
+                    f"reworded past its own check or removed — either way it is unwatched "
+                    f"now. Re-point the pattern or drop the claim.",
+                )
+            )
+            continue
+        said, said_total = int(found.group(1)), int(found.group(2))
+        if (said, said_total) != (certain, total):
+            findings.append(
+                Finding(
+                    str(_CERTAINTY_SPEC),
+                    f"says `{said} of {said_total}` where "
+                    f"harness/tests/t7_store_and_seams.py asserts {certain} of {total} over "
+                    f"the committed export. The harness runs the router; the sentence does "
+                    f"not.",
+                )
+            )
+
+    report.add(
+        "router certainty",
+        MECHANICAL,
+        findings,
+        f"{len(_CERTAINTY_SPEC_CLAIMS)} published splits against harness T7 "
+        f"({certain} of {total})",
+    )
+
+
+# The block `server/order_transport.py` records them under, and the section that rules on them.
+_NOT_BUILT_MODULE = Path("server") / "order_transport.py"
+_NOT_BUILT_SPEC = Path("docs") / "specs" / "order-pipeline.md"
+_NOT_BUILT_HEADING = "WHAT IS DELIBERATELY NOT BUILT"
+_NOT_BUILT_ENDPOINT = re.compile(r"^\s{4}(POST /orders\S*)\s", re.M)
+
+
+def check_not_built_endpoints(report: Report) -> None:
+    """The two TCGplayer writes this repo has ruled it does not make, listed in two files.
+
+    WHY THIS ROW EXISTS. `server/order_transport.py` records two endpoints it deliberately
+    does not call, and says in the same breath that it records them "so that adding them is
+    visibly a change of policy rather than a change of code". That only works while the list
+    is visible from the document that carries the ruling: the module cites
+    `docs/specs/order-pipeline.md` §3 T5 for the policy, and §3 T5 quotes the module for the
+    endpoints. Neither can be read without the other, and until 2026-09-05 only one of them
+    held the list.
+
+    WHAT WOULD ROT WITHOUT IT is not a number but a set. A third write endpoint added to the
+    module's block and not to the spec leaves the spec understating what has been ruled
+    against; one added to the spec and not the module names a policy over code that does not
+    record it. Either way the "visibly a change of policy" claim stops being true, and nothing
+    would say so — this is `transport standing`'s failure one register over, a standing the
+    module declares against readers that quote it.
+
+    IT COMPARES SETS AND NOT ORDER, because the spec quotes the block for the reader's benefit
+    and the module writes it for its own; requiring the same order would fire on a formatting
+    choice. A file carrying no block this row can find is reported as unwatched rather than
+    passing quietly.
+    """
+    findings: List[Finding] = []
+    module_text = read(ROOT / _NOT_BUILT_MODULE)
+    head = module_text.find(_NOT_BUILT_HEADING)
+    if head < 0:
+        report.add(
+            "not-built endpoints",
+            MECHANICAL,
+            [
+                Finding(
+                    str(_NOT_BUILT_MODULE),
+                    f"carries no `{_NOT_BUILT_HEADING}` block, so the endpoints this repo has "
+                    f"ruled against are recorded in the spec alone. Restore the block or "
+                    f"re-point this row.",
+                )
+            ],
+            "",
+        )
+        return
+
+    # The block runs to the end of the module docstring; the endpoints are the indented lines.
+    tail = module_text[head:]
+    stop = tail.find('"""')
+    declared = set(_NOT_BUILT_ENDPOINT.findall(tail[: stop if stop > 0 else len(tail)]))
+
+    spec_text = read(ROOT / _NOT_BUILT_SPEC)
+    quoted = set(_NOT_BUILT_ENDPOINT.findall(spec_text))
+
+    if not declared:
+        findings.append(
+            Finding(
+                str(_NOT_BUILT_MODULE),
+                f"the `{_NOT_BUILT_HEADING}` block no longer lists an indented "
+                f"`POST /orders...` line, so there is nothing for the spec to be checked "
+                f"against.",
+            )
+        )
+    if not quoted:
+        findings.append(
+            Finding(
+                str(_NOT_BUILT_SPEC),
+                "quotes no `POST /orders...` endpoint. §3 T5 rules on the writes this repo "
+                "does not make and the module cites that section for the ruling; without "
+                "the list here, adding one is a change of code that reads as nothing.",
+            )
+        )
+    if declared and quoted and declared != quoted:
+        only_module = sorted(declared - quoted)
+        only_spec = sorted(quoted - declared)
+        if only_module:
+            findings.append(
+                Finding(
+                    str(_NOT_BUILT_SPEC),
+                    "does not quote "
+                    + ", ".join("`%s`" % n for n in only_module)
+                    + f", which `{_NOT_BUILT_MODULE}` records as deliberately not built.",
+                )
+            )
+        if only_spec:
+            findings.append(
+                Finding(
+                    str(_NOT_BUILT_MODULE),
+                    "does not record "
+                    + ", ".join("`%s`" % n for n in only_spec)
+                    + ", which the spec quotes as ruled against. A policy over code that does "
+                    "not carry it is a policy nobody reading the module can see.",
+                )
+            )
+
+    report.add(
+        "not-built endpoints",
+        MECHANICAL,
+        findings,
+        f"{len(declared)} declared in {_NOT_BUILT_MODULE.name}, {len(quoted)} quoted in "
+        f"{_NOT_BUILT_SPEC.name}",
+    )
+
+
 _TRANSPORT_PROVEN_RE = re.compile(r"\*\*`(\w+)` HAS (?:NOW )?RUN\b")
 _TRANSPORT_UNPROVEN_RE = re.compile(r"\*\*`(\w+)` IS STILL UNEXERCISED\b")
 _TRANSPORT_READERS = (
@@ -8005,6 +8222,8 @@ def audit(staged_only: bool) -> Report:
     check_env_vars(report, docs, allowed)
     check_server_concurrency(report)
     check_shipping_columns(report)
+    check_router_certainty(report)
+    check_not_built_endpoints(report)
     check_transport_standing(report)
     check_map(report, allowed)
     check_map_sections(report)

@@ -2,7 +2,7 @@
 
 **Every number in this file was measured on 2026-08-30 against the owner's real store**, not
 carried forward from a plan. Where a fact came from somewhere this session could not check, it
-is in section 7 and labelled as such. That split is the point of the file: an earlier draft
+is in section 6 and labelled as such. That split is the point of the file: an earlier draft
 transcribed a planning document and re-stated its measurements as though they had been taken,
 and two of them had gone stale.
 
@@ -111,6 +111,42 @@ Three snapshots in two days, two of them a day old before the ink dried. A numbe
 of a moment, and a session that finds one stale has found the store moving rather than the file
 lying.
 
+### The thirty-one sales, counted out of the history rather than inferred — measured 2026-09-01
+
+**Added 2026-09-05 from the branch that measured it, and it does not replace the table above.**
+The three-snapshot table records STATES at three moments; this counts the EVENTS that moved the
+store between the first two, out of `inventory/history.jsonl` — which is now
+`inventory/legacy-json/history.jsonl`, D88 having moved the store of record into SQLite on
+2026-09-01.
+
+At the time of measurement that file held **44 `sold` events**, and **thirty-one of them landed
+between 2026-08-31T00:39:05.926Z and 01:07:41.900Z** — 19:39 to 20:07 local, the same half hour in
+which the order screen was being committed — across **11 distinct SKUs**, **16 copies out of box 1
+and 15 out of box 3**. The per-SKU shape of the batch is 8, 4, 3, 3, 3, 2, 2, 2, 2, 1, 1, and the
+largest cluster is eight copies of one SKU inside seven minutes.
+
+**None of them went through `POST /orders/pull`.** A pull writes `ledger.fulfilment` and both of
+D63's maps are empty, so this is measured rather than inferred: every one of those thirty-one was
+`POST /inventory/<box>/<index>/sold`, D57's one press on `#/inventory`, the path that predates this
+pipeline entirely.
+
+**What that is evidence of, and what it is not.** It is measured that the store's real fulfilment
+path that evening was the sell button, and that the order screen's ledger is untouched. Reading the
+batch's shape as "what fulfilling real multi-copy orders looks like" is an inference this file is
+not entitled to make from a store file. **The timing bounds one excuse**: the order screen reached
+`main` in PR #64 at 20:06:09 local, so **twenty-six of the thirty-one** were sold while no merged
+tree carried it.
+
+**One figure from that measurement is deliberately not carried, and the reason is worth writing
+down.** The branch's own table published a `sold by box` row reading `1 → 18 · 3 → 24`, which is a
+count of the store's SOLD CARDS at that moment — 42, matching the second snapshot — and not of the
+events in the window, which are 16 and 15. The two are different quantities over different
+sources and both were right; printed side by side they read as a contradiction. **The card-state
+split no longer reproduces at all**: history positions are not stable identities, because D10 lets
+a mid-box delete slide every higher index down one, so re-deriving it today from the same file
+gives 19 and 24 over 43 distinct positions against a store that reported 42. The window count is
+what this file keeps, because it is the one the history can still be made to answer.
+
 ### The 497 unstamped cards are not a failure, and reading them as one is the trap
 
 `runs/2026-08-24-box2-01` reports `below $0.40 threshold: 108 SKU(s), 497 copies — disposition
@@ -155,7 +191,7 @@ section 7 has one fewer loose end than it was written with.
 
 Neither transcript below is a test fixture. Both are the shipped code against real data.
 
-### The resolver, against the live store
+### The resolver, against the live store — 2026-08-30
 
 ```
 ORDER A2FFC195-B8B497-80225
@@ -181,8 +217,11 @@ than a pick list that only existed on a particular afternoon.
 **AND THE SAME THING HAS SINCE HAPPENED TO THE `resolved` LINE, WHICH IS THE ONE THIS TRANSCRIPT
 COULD LEAST AFFORD TO LOSE.** The `BOX2-PLUS-UNKNOWN` row above picks `3/1, 3/2` for Rengar; both
 were sold in the thirty-one sales section 1 re-measures, along with the other six copies of that
-SKU. Re-run today the row answers `no_copies_on_hand`, and **this file no longer holds a single
-`resolved` outcome demonstrated against the live store.** The transcript is kept as taken — it is
+SKU. Re-run today the row answers `no_copies_on_hand`, and **this transcript no longer holds a
+single `resolved` outcome demonstrated against the live store.** That was true of the whole FILE
+when it was written; the 2026-09-01 pass below took a second transcript against on-hand stock and
+its first line is a `resolved`, so what stands is the narrower claim about this block.
+The transcript is kept as taken — it is
 dated evidence, and the second time a demonstration here has decayed for the same reason, which is
 the point worth carrying: **`resolve_all`'s output is a function of a store that moves under it,
 so any transcript of it is perishable by construction.** Three of the four reasons this
@@ -192,6 +231,61 @@ produce one — it is only that no order **written down here** produces one any 
 guard, which is a property of one pass over the open set rather than of which copies happen to be
 on hand.
 
+### The resolver again, against the live store — 2026-09-01
+
+**A second transcript, added 2026-09-05 from the branch that took it, and it stands beside the
+first rather than replacing it.** It was run against on-hand stock after the sales section 1
+counts, which is why it reaches reasons the block above could not.
+
+```
+ORDER-ONE
+   Xerath, FREED          x2  ->  resolved           4 on hand, 0 sold    1/27, 1/40
+   Moonfall               x3  ->  short              1 on hand, 4 sold    3/3
+ORDER-TWO
+   Xerath, FREED          x3  ->  short              4 on hand, 0 sold    1/100, 1/113
+   Moonfall               x1  ->  short              1 on hand, 4 sold    —
+ORDER-THREE
+   Rengar, Trophy Hunter  x2  ->  no_copies_on_hand  0 on hand, 8 sold    —
+   Never seen             x1  ->  sku_unseen         0 on hand, 0 sold    —
+   A playmat              x1  ->  not_a_single       0 on hand, 0 sold    —
+
+counts: resolved 1 · short 3 · no_copies_on_hand 1 · sku_unknown 0 · sku_unseen 1 ·
+        not_a_single 1
+```
+
+**Five of the six reasons fire on real records, and the double-book guard is visible twice in one
+pass** — which is the single most important property `resolve_all` has and the reason there is
+deliberately no `resolve_one`. ORDER-ONE takes two of the four Xerath copies; ORDER-TWO asks for three,
+is handed the remaining two, and is `short` rather than being told it can have four. ORDER-ONE
+takes the last Moonfall; ORDER-TWO gets none and is `short` with an empty pick list — **`short`
+and not `no_copies_on_hand`, because the copies exist and are spoken for, and `on_hand` beside the
+reason is what tells the two apart.**
+
+**`on_hand` is the STORE's count and not the remaining pool, which is why ORDER-TWO reads `4 on
+hand` while being handed two.** That is the field doing its job rather than lagging: a `short` with
+copies on hand means they are spoken for and the remedy is to wait, and a `short` with none means
+they have left and the remedy is to stop looking. A field that counted the unclaimed pool would
+make those two read identically at zero. `pipeline/orders.py:_reason` is where the distinction is
+made, and its own comment says the same thing.
+
+**`not_a_single` is answered without an inventory lookup at all**, from the line's declared kind —
+`_Draw.resolve` returns it before `available()` is ever called, and the comment above that return
+says why: an accessory's SKU is not a card's SKU, so asking the inventory about it produces
+`sku_unseen`, which reads as "we have lost track of a card" and sends the owner hunting through
+boxes for a playmat.
+
+**`sku_unknown` did not fire and could not have, for two independent reasons rather than one.**
+The structural half is permanent: `GET /orders` passes no `paperwork=`, and `do_orders`'s docstring
+argues why — `cli/resolve.py:paperwork_for` takes ONE run, calls `realign`, and `realign` hashes
+every photograph off disk and raises on an ambiguous digest, so one bad run would take the whole
+screen render down. The second half is a measurement and is dated to that pass and scoped to what
+it covered: on 2026-09-01 `paperwork_for` was run against **both runs that then had a
+`pricing.json`** — `2026-08-29-box1-01`, 50 entries, and `2026-08-30-box3-01`, 15 entries, both
+realigned clean — and not one SKU either of them named was unknown to the store. That says nothing
+about the runs the store has gained since, and it is not a claim that the reason is unreachable in
+principle; `do_orders`'s own docstring already puts it correctly, that the zero is a limit of the
+route and not a fact about the store.
+
 ### The router and the emitter, against the committed fixture
 
 ```
@@ -200,11 +294,26 @@ lanes:   {'envelope': 166, 'parcel': 126, 'unjudged': 39}
 reasons: {'value_at_threshold': 112, 'non_card_signal': 14, 'cards_only': 166,
           'no_weight_data': 39, 'no_value_data': 0, 'sub_single_weight': 0}
 parcel lane: 126 orders
+certain:     112 of 331
 ```
 
-`render()` produced a well-formed Pirate Ship import file — **twelve columns**, `Name` pre-joined,
-`Order ID` carried, `Package Weight` correctly blank, three rubber-stamp columns empty and
-waiting for a location. **The >=$50 lane is complete apart from a screen.**
+Unchanged from the last measurement, as it should be — the fixture is committed and the router
+reads nothing else, so these numbers cannot go stale the way section 1's can.
+
+**`Routing.certain` is 112 and not 292, and it is the split section 5 calls worth surfacing
+without ever stating.** 292 orders are JUDGED — they got a lane. 112 of them were answered by a
+published price against a published threshold, which is a fact; the other 180 were answered by an
+18x weight separation, which is an inference off a catalog constant. The two produce the same lane
+without being the same quality of answer, and `Routing.certain` is `reason == VALUE_AT_THRESHOLD`
+for exactly that reason. Harness T7 asserts both halves — that the only certain rows are the
+`value_at_threshold` ones, and that there are 112 of them out of the 331.
+
+`render()` produced a well-formed Pirate Ship import file — **twelve columns**, being `Name`,
+`Address`, `Address Line 2`, `City`, `State`, `Zipcode`, `Country`, `Package Weight`, `Order ID`
+and three `Rubber Stamp` columns — 126 rows, CRLF, no BOM, `QUOTE_ALL` on the rows. `Name`
+pre-joined on every row, `Order ID` present on every row, `Package Weight` blank on every row, all
+three stamp columns empty and waiting for a location. **The >=$50 lane is complete apart from a
+screen.**
 
 ---
 
@@ -220,7 +329,7 @@ The order below is D66's, and D66 carries the argument. Three claims decide it: 
 session cannot state a Done this repo accepts, the shipping lane depends on neither the screen nor
 the transport, and the transport question is one probe rather than one session.
 
-### T0 — free, no code, hours
+### T0 — free, no code, hours. DISCHARGED, but for box 2's disposition
 
 - ~~**Probe `order-management-api` auth**~~ — **answered 2026-08-30**, and the guess in the
   sentence that stood here was wrong: this host does NOT answer a Bearer challenge. The auth is a
@@ -231,7 +340,7 @@ the transport, and the transport question is one probe rather than one session.
   work, but it is the oldest thing in the store waiting on a person.
 - ~~Re-emit `runs/2026-08-30-box3-01`~~ — **done 2026-08-30**, section 1.
 
-### T1 — the order screen. The one that unlocks everything
+### T1 — the order screen. The one that unlocks everything. BUILT 2026-08-30 (D69)
 
 The eighth route; `o` is free as a chord, with `c r q p i` taken. Ingest by paste, the order list,
 the pick list, all six reasons, and the pull.
@@ -269,7 +378,7 @@ in it. The transport is then a better source behind a control that already exist
 ships an ingest route no human can reach, whose Done — *"an order lands in `inventory/orders.json`"*
 — is satisfiable without a screen, which is exactly the failure this repo keeps recording.
 
-### T2 — lanes and the Pirate Ship download
+### T2 — lanes and the Pirate Ship download. BUILT 2026-08-30 (D69)
 
 The lane badge, the abstention drawn as a third answer, and the CSV as a download.
 
@@ -298,7 +407,7 @@ convention instead of a module. The screen is typed so it cannot draw a buyer �
 carries no name, no street, no city, no postcode — and those details cross the wire exactly
 once, as the CSV download.
 
-### T2b — the rubber stamps, which this file's work list did not carry until now
+### T2b — the rubber stamps, which this file's work list did not carry until now. NOT BUILT
 
 `POST /shipping/batches/<batch>/stamps`, declared in `server/shipping_routes.py`'s own header as
 SPECIFIED AND NOT BUILT, and carried in no work item here until now. It fills Pirate Ship's three
@@ -320,7 +429,7 @@ proved rather than on a session.
 **Done:** a batch whose orders are in the ledger renders with its Rubber Stamp columns filled, and
 one whose orders are not renders them empty rather than guessing.
 
-### T3 — the transport
+### T3 — the transport. BUILT 2026-08-30 (D69)
 
 **Built 2026-08-30 as `server/order_transport.py`, and the probe T0 describes was answered by
 measurement in the owner's own logged-in browser rather than by a request from this tree.** The
@@ -333,6 +442,25 @@ established is in section 6.
 D63 makes that true by construction rather than by a guard, because `store/orders.py` holds no
 `Inventory` and imports nothing that can reach one.
 
+**It is two calls, and that is not an optimisation failure.** The search result carries no per-line
+SKU; only the order detail does, as `products[].skuId`. The SKU is the join key — `products[].skuId`
+is the export's `TCGplayer Id` is `store/master.py:Card.sku` — so an order without it resolves to
+nothing at all, and there is no bulk line-item endpoint to ask instead. The module's own header
+says the same in the same words.
+
+**One credential legitimately serves two hosts.** `TCGAuthTicket_Production` is set on
+`.tcgplayer.com`, so the same `TCGPLAYER_STORE_COOKIE` the export reads reaches the order host as
+well — it is the account's session and not one site's. A second env name would be a second thing to
+rotate, and half a working tree with no way to tell which half. **What does not transfer is the
+body convention**: the admin portal takes Knockout's `model=<json>` form and this host takes a
+plain JSON document, so a client carrying D65's shape here fails in a way that reads like an auth
+problem.
+
+**403 is `order_seller_key_rejected` and not `order_session_expired`**, because a missing or wrong
+`filters.sellerKey` answers 403 rather than 400 — measured. Folding it into "sign in again" sends
+the operator off to re-copy a working cookie over a bug in a request body, which is precisely the
+defect D65 recorded on the other host. The refusal leads with the body and not the credential.
+
 **The shape a second fetch should take is already in the tree**, landed by D65 after this file was
 written. `server/tcg_export.py` is this server's one outbound call: stdlib `urllib`, one host and
 one method reachable from it, the secret read at call time and present in no return value, refusal
@@ -341,7 +469,7 @@ problems, and a control on `#/runs` that a person presses. It is **not** the ord
 cookie session is the admin portal's and does not transfer — so what carries over is the shape and
 not the auth.
 
-### T4 — the envelope, and the money gate
+### T4 — the envelope, and the money gate. NOT BUILT
 
 The tcgtracking call for the sub-$50 lane, under **D33's gate verbatim**: a free preflight, the
 count and the premium on screen, an explicit `confirm`, and the spending control **absent** until
@@ -350,15 +478,24 @@ the preflight has answered. This is the second route in this repo that can spend
 **Done:** harness T7 asserts the refusal without `confirm`, and that replaying one order id
 creates nothing.
 
-### T5 — closing the loop
+### T5 — closing the loop. NOT BUILT
 
 Tracking read back and emitted as TCGplayer's Import Shipping Info CSV. T2's byte rules already
 govern the file, and the order id T2 carries into Pirate Ship is what makes the match possible.
 
 **pkmnscan never writes order status back to TCGplayer** — tcgtracking owns mark-shipped, and two
-authors on one shipment is D34's problem twice.
+authors on one shipment is D34's problem twice. The two endpoints that would do it were seen on
+the wire and are recorded in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT BUILT block,
+quoted here so that adding either reads as a change of policy rather than a change of code:
 
-### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen
+    POST /orders/status-updates?api-version=2.0            {orderNumbers:[], status:"Shipped"}
+    POST /orders/<orderNumber>/tracking?api-version=2.0    {carrier, trackingNumber}
+
+That module cites this section by number for the ruling, and this section quotes the module for
+the endpoints, so neither can be read without the other. `not-built endpoints` in
+`scripts/docs-audit.py` is what keeps the two lists identical.
+
+### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen. SUPERSEDED 2026-09-04 (D96 amended)
 
 > **SUPERSEDED 2026-09-04, and DELETED rather than left standing (D96, amended).** Everything
 > below records what main built and is kept as that record; none of it is in this product's tree.
@@ -591,50 +728,81 @@ in again.
 
 ---
 
-## 4. What T1 has to get right
+## 4. What the order screen holds to, and must keep holding to
+
+**These were T1's requirements and they are invariants over shipped code now.** Each is the kind a
+later edit quietly undoes, which is why they are written as things to keep rather than things to
+do.
 
 **The label formula is `pipeline/join.py:Position` and there is no second one.** D58 makes drawing
 one need the box's whole occupancy, so a formula on this screen is the second-renderer failure
-this repo has recorded three times.
+this repo has recorded three times. `server/capture_server.py:_Places` is the walk that feeds it,
+one renderer instantiated per request — per request because `Inventory.box_fill` is O(cards) and
+an uncached one would walk the store for every row.
 
-**`do_mark_sold` opens its own store session**, so pulling one card at a time needs a
-snapshot-taking form extracted first. The undo must scan the ledger rather than making the client
-name the line it is undoing.
+**`do_mark_sold` opens its own store session**, so the pull uses the snapshot-taking form
+extracted beside it. The undo scans the ledger rather than making the client name the line it is
+undoing.
 
 **All six reasons get drawn**, with the machine string small beneath a human label: `resolved`,
-`short`, `no_copies_on_hand`, `sku_unknown`, `sku_unseen`, `not_a_single`. An empty result has
-several causes with different remedies, and one blank row for all of them throws away the
-resolver's best work — section 2 shows three different empties in a single order.
+`short`, `no_copies_on_hand`, `sku_unknown`, `sku_unseen`, `not_a_single` — **including the ones
+that are zero**, which `app/tests/orders.spec.ts` asserts by name in its "all six reasons are
+drawn, including the ones that are zero" case. An empty result has several causes with different
+remedies, and one blank row for all of them throws away the resolver's best work — section 2 shows
+three different empties in a single order.
 
-**PII is projected in the client before the POST**, and unknown keys are refused on the server. A
-buyer's address should never become something the server has to remember to drop.
+**PII is projected in the client before the POST**, and unknown keys are refused on the server BY
+NAME rather than trimmed — `_reject_unknown` answers `field_not_settable` and lists both what was
+sent and what the route accepts. `app/src/orderPaste.ts` is the one place in the app that decides
+what leaves the browser about a purchase, and it draws the top-level keys it dropped rather than
+dropping them silently; keys inside a LINE are dropped without being listed, and its header says
+why. A silent trim would make a broken projection indistinguishable from a working one forever.
 
 **Fulfilment is a count, never a list of positions**, and the one identity it holds is a
 `capture_id`. D10 lets a mid-box delete slide every higher index down one, so a position written
 down today names a different card tomorrow — D63 measured exactly that.
 
-**The route count is updated in four places** — `CLAUDE.md`, `README.md`, `docs/map.py`,
-`app/src/App.tsx` — and `scripts/views.txt` gains a LINE rather than a number, which is the one a
-session looking for a count will not find. `CLAUDE.md` already warns in its own words that this count
-has been wrong more often than right and that nothing checks it.
+**The route count is maintained in four places** — `CLAUDE.md`, `README.md`, `docs/map.py`,
+`app/src/App.tsx` — and `scripts/views.txt` carries a LINE rather than a number, which is the one a
+session looking for a count will not find. **This paragraph used to end by saying nothing checks
+it, and that has been false since the route census landed**: `make docs-audit`'s `route census` row
+reconciles the published counts in the first three against `App.tsx`'s `ROUTES` table, `route
+rosters` does the same for each spec's pinned roster, and both fail a commit. `CLAUDE.md`'s own
+warning was rewritten at the same time. The sentence outlived its subject in this file and in the
+branch that rewrote this section, which is the failure a count with no reader has: nothing
+contradicts it.
 
 ---
 
-## 5. What T2 has to get right
+## 5. What the shipping lane holds to, and must keep holding to
 
-All three are D61's and all three are the kind a screen quietly undoes.
+All three are D61's and all three are the kind a screen quietly undoes. **Each one names the code
+that enforces it and the test that would catch its removal**, because an invariant with neither is
+a sentence.
 
 **The abstention is a third answer and is never defaulted into a lane.** Defaulting the 39 to the
 envelope ships a playmat in a stamped mailer; defaulting them to the parcel spends postage nobody
-chose. `Routing.certain` is the split worth surfacing — a published price against a published
-threshold is a different quality of claim from an inference off a weight ratio.
+chose. `pipeline/shipping.py:parcel_lane` leaves them out of the download entirely — its own
+docstring says an order nobody can place is not swept in to be safe — and
+`app/tests/shipping.spec.ts`'s "an unjudged order is not in the parcel file" case asserts it from
+the screen's end. `Routing.certain` is the split worth surfacing beside the lane, and it is
+**112 of 331**: a published price against a published threshold is a different quality of claim
+from an inference off a weight ratio, and section 2 has the derivation.
 
 **No weight is ever derived.** `Product Weight` is a catalog constant that counts the cardboard
 and not the mailer, so writing it buys postage for less than the parcel weighs, and the bill
-arrives weeks later at the far end.
+arrives weeks later at the far end. There is no control on the screen that could fill it —
+`app/src/OrdersShipStage.tsx`'s header says so in its own words, and the caption on the download
+tells the operator the column is blank — and `Package Weight` ships blank on all 126 rows.
 
 **No insurance is ever selected and no label is ever bought.** An insurance-shaped column raises
-rather than being dropped.
+rather than being dropped, and it raises TWICE OVER: `pipeline/pirateship.py:render` closes the
+column set, so an unknown header is a `MalformedParcel`, and a folded deny list stops the
+insurance-shaped ones first as `InsuranceRefused` with a message saying insurance is the owner's
+per-order choice inside Pirate Ship. The second is not belt and braces — a refusal reading "not a
+Pirate Ship column" invites the fix of adding it to the column set, and one naming the reason does
+not. `check_no_insurance` runs over the row's own keys on the way out of `render`, so a row that
+reached the writer by some other path still has to pass it.
 
 ---
 
@@ -649,6 +817,16 @@ and the per-label price are all claims from outside this tree.
 **Nobody has fed Pirate Ship the CSV `pipeline/pirateship.py` emits.** Their importer maps columns
 on the far side of a seam no committed fixture can hold. This is the same standing as harness
 T6's synthetic composites, and it is why `Name` is pre-joined rather than left to their mapper.
+
+**The committed shipping fixture carries no real buyer, so the PII path has never met a real name
+and street.** `fixtures/orders-shipping.csv` is 331 rows in which every buyer is `BuyerNNN
+Placeholder` at `NNN Example St` — the given name and the house number vary row by row, the
+surname `Placeholder` and the city `Springfield` do not, 43 states and 331 distinct postcodes are
+spread across it, and 26 rows carry an `Address2`. That is what makes it committable, and it also
+means `server/shipping_routes.py` and `pipeline/pirateship.render` have been exercised against
+placeholders shaped like addresses and never against a real one. It is the same standing as the
+paragraph below about `detail`, one seam later: that one is a real address never arriving, this
+one is a real address never leaving.
 
 **An order feed HAS been read, and the half that matters has not.** Amended 2026-08-30, when
 T3 landed. What was MEASURED, in the owner's own logged-in browser: the two endpoints, their
@@ -731,12 +909,20 @@ close to being struck.
   defect left no residue.
 - **`3/13` is sold with an empty `name`.** SKU and number are present, so it resolves; only what a
   screen would draw is wrong.
+- **Twelve SKUs had no copies on hand at all, measured 2026-09-01**, with three more partly sold
+  out. It is dated because it is a count over a store that moves: it is why
+  `no_copies_on_hand` was demonstrable on real records in section 2's second transcript and why
+  the resolver's old success example was not, and it is not a claim about what the store holds
+  today.
 - ~~**Nothing is `live`.**~~ **No longer true as of 2026-08-31**, and it changed without anything
   in this pipeline touching it: the store now holds **4 `live` copies across two SKUs** (`9189317`
   ×3, `9199579` ×1) against 282 `pushed` over 169 rows. The observation is kept because the
   reasoning attached to it was wrong in a way worth naming — a screen drawing a live count was
-  said to draw zero, and one drawing it today does not. `store/master.py`'s comments describe the
-  earlier state.
+  said to draw zero, and one drawing it today does not. **What the earlier observation got right
+  is the mechanism, and it is worth keeping out of the strike**: the thirty-one sales of section 1
+  moved the live count by nothing at all, because a sale is a card state and the listing counts
+  are D59's per-SKU quantities. The two move for different reasons and a reader expecting one to
+  follow the other will misread both. `store/master.py`'s comments describe the earlier state.
 
 ---
 
@@ -745,8 +931,18 @@ close to being struck.
 **Line items arriving**, which retire D61's weight cut rather than re-fitting it —
 `pipeline/orders.py` already answers the same question correctly from declared line kinds.
 
-**The probe answering Bearer**, which does not change the order of the work but does change what
-T3 is.
+~~**The probe answering Bearer**~~ — **it answered the other way, 2026-08-30**, and section 3's T0
+records it: the auth is a cookie session, the same `TCGAuthTicket_Production` the admin portal
+takes, so T3 is a Python client and not a browser relay. The bullet is struck rather than deleted
+because it was a real reopening condition that fired and was discharged, and this file annotates
+where it can rather than removing the reasoning. What would reopen the question now is the
+opposite event — the cookie ceasing to authenticate `order-management-api`, which is one host
+policy change away and would put the browser relay back on the table.
+
+**tcgtracking answering a real call**, which unblocks T4 and is the only remaining thing in this
+file that would cost money. Section 6's first paragraph is what it would discharge: the API has
+never been called from this repo and every response shape in it is documentation-verified, so the
+rate limit, the free tier and the per-label price are all still claims from outside this tree.
 
 **A real order pulled end to end**, which is the first thing here that would replace an argument
 with a measurement. **T1 being built does not do it** — the screen is the thing that makes it
