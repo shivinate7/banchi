@@ -202,7 +202,7 @@ reasons: {'value_at_threshold': 112, 'non_card_signal': 14, 'cards_only': 166,
 parcel lane: 126 orders
 ```
 
-`render()` produced a well-formed Pirate Ship import file — ten columns, `Name` pre-joined,
+`render()` produced a well-formed Pirate Ship import file — **twelve columns**, `Name` pre-joined,
 `Order ID` carried, `Package Weight` correctly blank, three rubber-stamp columns empty and
 waiting for a location. **The >=$50 lane is complete apart from a screen.**
 
