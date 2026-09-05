@@ -216,6 +216,8 @@ Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 | `logo/pass-ground-matrix.png` | the 5 x 4 ground x sheen cross on bluesteel |
 | `logo/pass-ground-choice.png` | the forced choice that settled the L pair, with the two rejections shown |
 | `logo/pass-family.png` | **both families, all five prisms, on the settled parameters** |
+| `logo/pass-gray-prisms.png` | the seven asserted grounds each for `warmer` and `quieter` |
+| `logo/pass-black-and-gold.png` | **section 8** — nine golds, five blacks, five brackets |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
 
 **Every PNG here went in past the pre-commit image guard, on the owner's word each time.** That
@@ -319,7 +321,60 @@ stable. That never happened here — no rejected value was ever shown again to c
 rejection held. Every rejection in section 3 rests on a single look.
 
 
-## 8. Still open
+## 8. Black and gold
+
+**A separate mark on the same geometry, not a sixth prism.** Asked for on 2026-09-05. Everything
+settled stays settled — the superellipse, the L pair, sheen 0.10 – 0.20, the bracket construction.
+Only what makes it gold moves.
+
+**The card base under the holo is amber `#C98A2E`, not the slate `#5A6E80` the cool marks use.**
+That is assumed rather than swept: a gold foil over a slate base reads dirty. It is the one HELD
+value this section adds, and it is named so it does not become another of section 3's quiet four.
+
+| what | value | tag | evidence |
+| --- | --- | --- | --- |
+| Gold prism | `rich`, `yellow`, `honey` | RANGED | `antique` and `brass` go olive; `bronze` and `rose` stop being gold |
+| Ground | `#141619` → `#000000` (true black) | RANGED | or the locked cool black `#1E232B` → `#080B0F` |
+| Espresso ground | **rejected** | see below | the tonal rule's own answer, and it is wrong here |
+| Brackets | **pale gold** `#FFFBEE #E8CE8A #FFFDF6 #C0A254` | RANGED | plain gold measurably loses the taper tip |
+| Card base | `#C98A2E` | **HELD** | never swept |
+
+### The tonal rule gives the wrong answer for gold, and this is the first place it has failed
+
+Applied to `rich` gold — hue 76.0°, peak chroma 0.1519 — the rule produces an espresso,
+`#2C200F` → `#100903` at ratio 0.23. Put on the sheet it is clearly worse than plain black: the
+ground reads *brown* rather than black, and the card loses its separation.
+
+**The mechanism is not the wall this file already measured.** At ratio 0.47 gold's wall would be
+C .071 and the espresso sits at C .035, well inside it. What fails is the premise underneath:
+tonal works when the ground can be driven to something the eye still calls black, and a warm hue
+at L 0.255 stops being black long before a cool one does. **Black and gold is a contrast pairing
+by construction** — the appeal is a warm metal against a cold void — so the tonal move deletes
+the effect it is named for.
+
+This is *not* the warm ground rejected in section 3. That one was a warm ground under a **blue**
+card, where warm was a clash. This is a warm ground under a **gold** card, where warm is tonal.
+Both fail, for opposite reasons, which is why it was put back on trial rather than assumed dead.
+
+### The brackets, measured rather than eyeballed
+
+The locked mark's brackets are chrome. Gold card plus chrome brackets is two metals; gold
+brackets make it one, which is what "black and gold" asks for. But plain gold is darker:
+
+| bracket | mean L | darkest stop |
+| --- | --- | --- |
+| chrome — the locked one | 0.878 | 0.709 |
+| gold | 0.829 | **0.606** |
+| **pale gold** | 0.891 | **0.723** |
+| bronze | 0.743 | 0.510 |
+
+**The darkest stop is the one that matters**, because the gradient puts it at the taper tip,
+where the bracket is already at its thinnest and nearest to vanishing. Plain gold spends 0.10 of
+lightness exactly where the mark can least afford it; pale gold clears chrome's own floor. This
+is the section 3 problem in miniature — a value chosen by eye for its mid-tone, failing at an end
+nobody looked at.
+
+## 9. Still open
 
 - The four **HELD** parameters in section 3. **The ground sweep took a bite out of one of them**:
   the card base fill `#5A6E80` and the prism gradient sit under a ground that is now derived, so
