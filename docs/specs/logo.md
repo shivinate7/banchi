@@ -149,8 +149,15 @@ Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 | `logo/banchi-icon.svg` | committed, and **stale** against section 3 |
 | `logo/pass-gold-silver-on-black.png` | committed, still accurate as a record |
 | `logo/pass-brackets.png` | committed, still accurate as a record |
+| `logo/pass-ground-per-prism.png` | the ground derived per prism, and the two null rows |
+| `logo/pass-ground-bisect.png` | 0.23 → 0.70 bisected, where each wall is |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
-| the two ground sheets as PNG | **not committed** — the pre-commit image guard refuses them |
+
+**Every PNG here went in past the pre-commit image guard, on the owner's word each time.** That
+guard has no `PKMNSCAN_*=off` hatch — unlike the dupes, links, docs and sigil guards — because a
+photograph is the one staged file that can carry a live code. `--no-verify` is the only way past
+it and it takes every other guard down with it, so the rule is: ask, stage nothing but the
+images, and say so in the message.
 
 **No asset matches section 3.** The committed icon predates the corrections in sections 5 and 6
 and carries the old stroke, arm, card radius, gap, sheen, displacement and seed. It is kept
