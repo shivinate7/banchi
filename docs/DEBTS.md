@@ -123,10 +123,22 @@ suffix and duly **failed the commit** until it was described. **One commit, both
 rule's coverage is decided by whether a filename happens to have a dot in it.**
 
 **What it now protects is what moves the priority.** The unscanned directory held one file
-when this was written. It holds three — `pre-commit`, `pre-push`, `reference-transaction` — so
-the files the rule cannot see are the commit path, the push path and the ref path. Every
-enforcement seam, none scanned. Their *disappearance* is caught, because each is listed; a
-fourth sibling's arrival is not.
+when this was written. ~~It holds three — `pre-commit`, `pre-push`, `reference-transaction`~~ —
+**it holds five.** `post-merge` and `post-checkout` arrived afterwards with the `make hooks`
+staleness reminder, and neither was written into `docs/map.py`. So the sentence below —
+*"a fourth sibling's arrival is not [caught]"* — was not a prediction. It was already a
+description of what had happened, and it happened twice more before anyone counted.
+
+**That half is closed as of 2026-09-05.** `scripts/docs-audit.py:check_hook_roster` compares
+the directory against the `scripts/` entry's `modules` in both directions and blocks. It is
+deliberately NOT the widening this section proposes below: the suffix rule is doing real work
+everywhere else — it is what keeps `views.txt` and a stray `README` from being conscripted into
+demanding entries — and repealing it repo-wide to repair one directory is the larger change.
+One directory's roster against one directory's entries.
+
+**What is still open here is the general rule, not the hooks.** A sixth enforcement seam
+somewhere else with no extension is still invisible, and `check_hook_roster` will not see it,
+because it looks in exactly one place.
 
 **The fix exists a few hundred lines away.** `code_haystack()` reaches that same file by
 handing `_walk` the whole filename as a suffix. Not done because it changes what
@@ -260,7 +272,21 @@ resolves.
 
 **Unblocked, two files, parallel with everything.** Both are D68's residue.
 
-### The copies list says the state twice on every departed row
+### ~~The copies list says the state twice on every departed row~~ — CLOSED 2026-09-05
+
+**The Banchi rebuild closed this and nobody came back to say so.** `app/src/Inventory.tsx`'s
+`Action` returns `primary || copy.state !== 'sold' ? <Pill>Sold</Pill> : null`, and the same
+shape for `retired` — so a NON-primary copy whose state is already `sold` draws nothing, which
+is exactly the departed row in the copies list. The comment above it states the reasoning:
+a copy row's own state pill says the word once the re-read lands, so only the location card and
+an optimistic sale still in flight draw one here. The per-call-site fix this item asked for is
+what shipped, and the D57 ruling it was waiting on was answered by building it.
+
+**The original entry is kept below** because its argument is still the reason the code is
+shaped this way, and because a reader who greps for the duplication should find out where it
+went rather than finding nothing.
+
+### ~~The copies list says the state twice on every departed row~~ (the original entry)
 
 Each departed row draws the word twice at 11px about 40px apart: `.card-locations-state` in
 `app/src/CardLocations.tsx`, which is `copy.state` verbatim, and `app/src/Inventory.tsx:Action`'s
@@ -277,15 +303,23 @@ loses the fact on the 92% of the store with no group. The honest fix is per-call
 a D57 ruling. **The Fulfiller's skin already does the other thing** (`sold ? null :`), so the
 two skins disagree today.
 
-### The component gallery has no departed case
+### ~~The component gallery has no departed case~~ — CLOSED 2026-09-05
 
-`app/src/Gallery.tsx` draws four position bars and a pull-confirm in three states, and every
-place fixture is a live card — the one `sold` copy still carries a live card's place. The
-departed rendering (plain label, demoted store key, absent bar) is a real state of two
-components and appears in no catalogue. **Cost is low and specific**: the gallery is where a
-treatment is checked against the tokens rather than through a screen's layout, and the departed
-row is the one that was found drawn wrong by looking at it. Nothing checks the gallery is
-complete.
+`app/src/Gallery.tsx` now carries `DEPARTED` (`slot: null`) and `POOLED` (`located: false`)
+fixtures and draws both in the copies group, and `app/tests/gallery.spec.ts` asserts the
+departed row's classes, its single state pill and its empty action cell. Proven by mutation:
+give `DEPARTED` a numeric slot and `isDeparted` goes false, the classes drop, the count goes
+to zero.
+
+**One clause of the original was wrong and is corrected rather than carried over.** It
+described the departed rendering as "plain label, demoted store key, absent bar" — the absent
+bar named code that no longer exists. The rendering is a plain label and a `.is-nobar` row.
+
+**The general point stands and is not closed**: nothing checks that the gallery is COMPLETE.
+Two cases were added because someone noticed they were missing; a third omission would be just
+as invisible. A docs-audit row would be the wrong instrument — re-implementing `isDeparted` in
+Python goes green against a fixture that renders nothing — so this stays a thing a person
+notices.
 
 ---
 
@@ -310,9 +344,19 @@ on a dark mat are all untested. 53 is a great deal more than zero; it is not a d
 
 **What would close it**: a second physical run under deliberately different lighting, scored
 through `detect_card` and committed the way T1's score is. That needs a ruling on **where rig
-photographs may live**, given the opsec rule keeping `captures/` out of git. Not blocking
-anything — Gate B produced 53/53 at high confidence with zero retries, so `detect_card` was
-never reached in anger.
+photographs may live**, given the opsec rule keeping `captures/` out of git.
+
+**~~Not blocking anything — `detect_card` was never reached in anger.~~ That was false when it
+was written and is much more false now.** `detect_card` has three production call sites —
+`cli/cmd_identify.py:267`, `cli/cmd_identify.py:488` and `server/pipeline_routes.py:933` — so
+every card that goes through `identify`, by command or by the route the runs screen presses, is
+cropped by it. The clause read as though the detector were a thing the harness exercises and
+the product does not. It is on the identify path, which is the path that costs money.
+
+**And it has now been run over the owner's whole corpus**: 1,625 photographs across six boxes,
+in the subsection below. What is still unmeasured is not whether it RUNS but whether what it
+returns is the card — see D75's own warning, and `harness/results/detect.json`'s
+`not_measured` field, which says in the file itself that no wrongness rate is in it.
 
 ### The re-measurement, 2026-09-05, and the 59 frames nobody has looked at
 
@@ -596,13 +640,27 @@ for `--no-verify`. **Not the same gap as the PII one**: this repo has no secret 
 (the hook's only content rule is the code-card regex), so a fixture carrying buyer names commits
 clean. That is about what is *inside* a file; this is about *which tool* wrote it.
 
-### Nothing in the product reads `history.jsonl`
+### Nothing in the product SHOWS the history, and it is a table now, not `history.jsonl`
+
+**Two corrections, 2026-09-05.** D88 moved the store of record into `inventory/store.sqlite`,
+so the history is a TABLE and the filename this heading carried is the legacy one — a JSON file
+left beside the database is never a fallback, which is the rule that makes the old name
+actively misleading rather than merely dated.
+
+**And the sole-reader claim was wrong in four places, this being the fourth.**
+There are three readers — `_answer_origin`, `_origin` and `_reverse_stand_down` — and
+`_state_before_sale` is none of them: it is handed a sequence of events and scans it, and it
+has a twin, `_state_before_retirement`, that scans the same way. The other three instances were
+corrected first; this one survived because it is on a line wrap in the reverse word order, and
+the guard that now catches it (`scripts/docs-audit.py:check_sole_reader`) had to be widened
+twice to see it. That widening is the useful part of this entry: a checker over prose that
+reads one line at a time is checking typography, not sentences.
 
 The three writes that changed no state — a correction, a capture undo, a review answer — all
-leave a line as of 2026-08-13, asserted by `check_history` in
-`harness/tests/t7_store_and_seams.py`. No route serves the file, no screen shows it, and the
-only reader outside the harness is `_state_before_sale`, which looks for states and skips all
-three by construction. The audit value is a person with a text editor, which is what an audit
+leave a row as of 2026-08-13, asserted by `check_history` in
+`harness/tests/t7_store_and_seams.py`. No route serves it and no screen shows it, and every
+scanner filters positively against `master.STATES`, so all three are inert to them by
+construction. The audit value is a person with a text editor, which is what an audit
 trail is for — but **a line that stops being written is invisible to everything except T7.**
 Two by choice: a `PUT` changing no value logs nothing, so a silent sidecar repair leaves no
 trace; and the vocabulary lives in two places (`master.STATES` and `SERVER_EVENTS`), so a
@@ -822,11 +880,21 @@ Browser pane over hand-rolled scripts against the live app, and when a browser p
 navigate it to `about:blank` first — a page closed mid-response leaves the handler writing to a dead
 socket, which is why `.serve/capture.log` holds thousands of `BrokenPipeError` traces.
 
-**A bound landed 2026-09-04, and it is narrower than this section's title.** `REQUEST_SLOTS` and a
-`threading.BoundedSemaphore` around `_dispatch` cap how many requests EXECUTE at once, which is the
-resource the measurements above say ran out — the interpreter, not sockets and not threads. A
-connection parked between keep-alive requests holds no slot, so the idle-worker question a real pool
-has to answer never arises here. The slot is taken *before* `_inflight_enter`, deliberately: a request
+**The FIRST of two bounds landed 2026-09-04, and it is narrower than this section's title.**
+`REQUEST_SLOTS` and a `threading.BoundedSemaphore` around `_dispatch` cap how many requests EXECUTE
+at once, which is the resource the measurements above say ran out — the interpreter, not sockets and
+not threads.
+
+~~A connection parked between keep-alive requests holds no slot, so the idle-worker question a real
+pool has to answer never arises here.~~ **That sentence was overtaken thirty lines below, in the
+same section, on the same day.** The pool landed too, and the idle-worker question is exactly what it
+had to answer — the answer being `Connection: close` on every response, which makes a worker's life
+one REQUEST rather than one connection. Both bounds are in the tree: the semaphore still caps
+execution, and `CaptureServer.process_request` submits to a `ThreadPoolExecutor(REQUEST_SLOTS)` so
+threads are capped too. Read this paragraph as the account of the first bound and the one below as
+the account of the second; neither replaced the other.
+
+The slot is taken *before* `_inflight_enter`, deliberately: a request
 queued for one has not started and cannot finish, and counting it would make the supervisor's drain
 wait out its grace on work that is not happening and then kill it — the incident above, one layer
 down. The wait is `files.LOCK_TIMEOUT_SECONDS` (30) and the refusal is `server_busy`, beside
