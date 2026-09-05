@@ -1664,10 +1664,22 @@ def code_haystack() -> str:
 # check_pass_criteria already have, and for the same reason: a broken heading there breaks
 # every consumer, not only the commit that wrote it.
 #
-# ENTRY_BUDGET is twice the median entry (6,374 bytes on the day it was set) rather than a
-# picked round number. D60 itself is 4,967. An entry at twice the median is one that should
-# have cited a neighbour instead of re-arguing it, which is that entry's own rule.
-ENTRY_BUDGET = 12000
+# ENTRY_BUDGET is twice the median entry rather than a picked round number. An entry at twice the
+# median is one that should have cited a neighbour instead of re-arguing it, which is that entry's
+# own rule.
+#
+# IT TRACKS THE CORPUS DELIBERATELY, AND IT HAS BEEN RE-DERIVED ONCE. Set at 12,000 against a median
+# of 6,374; re-derived 2026-09-05 to 15,437 against a median of 7,718, measured over 100 entries with
+# `prose-guard.entries()` — which counts CHARACTERS, so a byte count taken with `.encode()` reads
+# three entries higher and is the wrong ruler. The corpus grew 21% and the constant did not, so the
+# row was reporting 21 entries over when the rule it states would have reported 10.
+#
+# RE-DERIVING IS NOT THE SAME AS RAISING, and the difference is worth writing down because the next
+# session will be tempted by the easier one. The number is a FUNCTION of the corpus and this restores
+# it to that function; moving it because a particular entry is inconvenient would be the other thing.
+# If it is re-derived again, this comment gains another date rather than losing this one — a ceiling
+# that has moved twice with no record of either is a ceiling nobody can argue with.
+ENTRY_BUDGET = 15437
 
 
 def _sibling(name: str):

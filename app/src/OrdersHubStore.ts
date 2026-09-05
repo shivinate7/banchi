@@ -113,6 +113,16 @@ export const BATCH_GONE_NOTICE =
   'The capture server restarted, so the export it was holding is gone. Read the file again.'
 
 onServerBoot(() => {
+  /* AND THE WALK'S PASS GOES WITH IT. `walkKeys` is the orders a pass was started over (D96,
+     amended), and a capture server that restarted may have taken orders since — so a figure counted
+     against the old set describes a sitting that is over. Unlike a stale batch it is not visibly
+     broken: it is a smaller number that looks fine. Cleared rather than recounted, for the reason
+     the batch is: this listener knows the server changed and nothing here knows what it changed to.
+     The next walk freezes a fresh set from whatever `GET /orders` answers.
+
+     SEPARATELY FROM THE BATCH, because the two are not one fact. A restart with no batch held says
+     nothing to the operator — there is no export to be gone — but it still ends a pass. */
+  if (state.walkKeys !== null) setHub({ walkKeys: null })
   if (state.batch === null) return
   setHub({ batch: null, gone: BATCH_GONE_NOTICE })
 })
