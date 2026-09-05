@@ -650,7 +650,7 @@ does mean the nominal type this entry calls *the real answer* now has a shipped 
 rather than a hypothetical, and D92's rejection of it on blast radius was made without one. That
 is the owner's call and nobody else's; recording it is what this file is for.
 
-**The cheap partial was taken first, on the owner's ruling (2026-09-05).** Asked whether the
+**The cheap partial was taken first, on the owner's ruling (2026-09-04).** Asked whether the
 nominal type should be argued now or the guard shipped first, the owner chose the guard. So the
 check reads a second pattern: the word form, `Card {…index}`, which is the same claim as `#{…index}`
 in the register a screen reader speaks. **It was measured before it was written rather than adopted
@@ -676,3 +676,31 @@ is a person reading `app/src` and asking of each figure what number it is.**
 all, so no sigil rule reaches them and none should — naming the index *as* the index is the one
 thing that is never the confusion. They are here because they are the shape a future reader will
 check this file about.
+
+## 10 — The walk's pass outlives the sitting it describes, and an order arriving mid-pass is never in it
+
+`WalkView`'s figure counts the orders THIS PASS has completed — `OrdersHubStore.walkKeys`, frozen when
+the walk is entered and cleared by the next fetch (D96, amended 2026-09-04). Two things it cannot say,
+both deliberate and both reachable on the owner's store.
+
+**An order that arrives after the press is walked but never counted.** The screen re-reads after every
+pull, so a new order joins `walk.rows` and the operator pulls its copies like any other — and the pill
+goes on describing the pass they started rather than the work now in front of them. The head beside it
+is the figure that moves, which is why this is a gap and not a lie: *"4 still to pull across 3 open
+orders"* is always current. Counting arrivals would make the figure a different one — progress against
+a moving target — and that is a design question, not a fix.
+
+**And the pass is held for as long as the tab is.** `HubState` lives as long as the tab by its own
+argument, and `mode` already survives an Orders → Shipping → Orders detour under it, so `walkKeys` does
+too. A tab left open overnight keeps a figure describing a sitting that ended, and nothing on screen
+says so. `onFetch` clears it, which is the boundary the operator actually draws — but only if they
+press it. **The fix that would close this is a clock, and this repo does not put one in the client**
+(`store/orders.py` records the one deliberate exception and argues it at length), so the honest
+alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here.
+
+**Why neither is fixed.** Both were surfaced by an adversarial review of the change that introduced the
+figure, before it shipped, rather than found afterwards — and both are the figure being narrower than
+the screen rather than wrong about what it counts. A green walk means *"this many of the orders the
+pass began with are complete"*, which is less than *"this many of the orders in front of you"*, and
+that difference is the whole of this section.
+

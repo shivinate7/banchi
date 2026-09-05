@@ -1130,6 +1130,11 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       setPasteNote(null)
       setDropped([])
       setReceipt(null)
+      /* AND THE WALK'S PASS ENDS HERE. Orders arriving off TCGplayer are a new sitting, and it is
+         the only boundary the operator actually draws — a stage switch is not one, and neither is
+         a toggle (see the mode control). Without this the frozen set would outlive the work it
+         describes for as long as the tab is open. */
+      setHub({ walkKeys: null })
       /* Read the previous check BEFORE this one is written, and hold it: it is what "new since"
          is measured against. */
       const previous = readLastCheck()
@@ -1690,7 +1695,27 @@ function PullStage({
             { value: 'orders', label: 'By order', icon: 'cart' },
             { value: 'walk', label: 'Walk the boxes', icon: 'box' },
           ]}
-          onChange={(next) => setHub({ mode: next })}
+          /* ENTERING THE WALK FREEZES WHAT IT IS A WALK OVER, and only if no pass is already
+             held. The set is taken from `open` at that instant, so the figure below counts
+             orders leaving it rather than the ledger's whole history.
+
+             A TOGGLE IS NOT THE END OF A PASS, and freezing on every entry made it one. Because
+             `walkKeys` is drawn from `open` and an order leaves `open` the moment its last copy
+             is recorded, a fresh freeze can never contain an order this pass has finished — so
+             stepping out to `By order` and back reset the figure to nothing, ZERO BY
+             CONSTRUCTION, which is the same shape as the defect this whole change is about.
+             Measured: after one pull the pill read `1 of 2`, and after `By order` → `Walk the
+             boxes` it was gone. The pass is held instead, and `onFetch` ends it — new orders off
+             TCGplayer are a new sitting, and that is the only boundary the operator draws. */
+          onChange={(next) =>
+            setHub((current) => ({
+              mode: next,
+              walkKeys:
+                next === 'walk'
+                  ? (current.walkKeys ?? new Set(open.map((order) => order.key)))
+                  : current.walkKeys,
+            }))
+          }
         />
         {mode === 'walk' ? (
           <p className="orders-toolbar-note">Every open order&apos;s copies in one pass, in the order the boxes hold them.</p>
@@ -1718,7 +1743,7 @@ function PullStage({
 
       {mode === 'walk' ? (
         <>
-          <WalkView walk={walk} open={open} done={done} busy={busy} onPull={onPull} />
+          <WalkView walk={walk} open={open} done={done} walkKeys={hub.walkKeys} busy={busy} onPull={onPull} />
           {why}
         </>
       ) : shown.length === 0 ? (
@@ -2541,12 +2566,14 @@ function WalkView({
   walk,
   open,
   done,
+  walkKeys,
   busy,
   onPull,
 }: {
   readonly walk: Walk
   readonly open: OrderRow[]
   readonly done: OrderRow[]
+  readonly walkKeys: ReadonlySet<string> | null
   readonly busy: string | null
   readonly onPull: PullHandler
 }) {
@@ -2564,10 +2591,38 @@ function WalkView({
      copy is pulled it LEAVES `open` — a count of finished orders taken over `open` is zero
      by construction, always, and the walk is where that is least visible because the rows
      vanish with it. Measured on this store: pulling the one copy of order A47CCC-13B33
-     moved the page header from `20 open orders` to `19 open orders and 1 done`. The
-     denominator is therefore both halves, which is the pair that header already prints from
-     the same two arrays — so the walk's figure and the page's headline cannot disagree. */
-  const total = open.length + done.length
+     moved the page header from `20 open orders` to `19 open orders and 1 done`.
+
+     AND THERE IS NO DENOMINATOR AT ALL ANY MORE (D96, amended 2026-09-04). It was `open + done`
+     — the pair the page header prints, chosen so the two could not disagree — and `done` is
+     every order the ledger has EVER completed, with no window and nothing pruned
+     (`capture_server.do_orders` sorts the whole of `ledger.orders`). Correct on the day it was
+     measured, at 20 open and 0 done, and wrong for ever after: a store with 200 completed and
+     3 open read `200 of 203` on a three-order walk, a lifetime statistic wearing a progress
+     figure's clothes.
+
+     FREEZING THE DENOMINATOR TO THIS PASS FIXED THAT AND BOUGHT A WORSE STATE. Orders arrive
+     while you walk — the screen re-reads after every pull — so a pass over {A, B} with both
+     pulled draws `2 of 2 orders fully pulled` beside a head reading `3 still to pull across 1
+     open order`. A fraction that has reached its own denominator says FINISHED, over a screen
+     with work on it, and no wording rescues that: the figure is complete and the work is not.
+
+     SO IT IS A COUNT. `2 orders complete in this pass` cannot claim completion, because it never
+     had a total to reach. `walkKeys` is still what makes `in this pass` mean anything — the set
+     frozen when the walk began — and the count is its members that have LEFT `open`, which
+     starts at 0 and only rises, and is therefore NOT the zero-by-construction figure this
+     comment rejects above.
+
+     `complete` AND NOT `fully pulled`, WHICH IS WHAT IT SAID. An order reaches `done` by any
+     route — a sale marked on `#/inventory`, an ingest, another device — and this screen sees
+     none of them. The old verb claimed presses the figure cannot account for.
+
+     WHAT IS GIVEN UP IS NAMED: the walk's figure and the page's headline can now disagree, and
+     that agreement is what the old denominator was bought for. It is the right trade because
+     they answer different questions — the headline is about the ledger, this is about the
+     sitting you are in. A `null` set draws nothing rather than falling back to the lifetime
+     figure: a fallback that silently restores it is how it would come back. */
+  const passComplete = walkKeys === null ? 0 : done.filter((order) => walkKeys.has(order.key)).length
   const next = walk.rows[0] ?? null
 
   if (walk.rows.length === 0) {
@@ -2598,9 +2653,9 @@ function WalkView({
                 the state every walk starts in, and a figure that reads 0 on arrival is not one
                 anybody acts on. It says `orders` in the label because the figure it sits next
                 to counts cards. */}
-            {done.length === 0 ? null : (
+            {passComplete === 0 ? null : (
               <Pill size="sm" icon="check">
-                {done.length} of {total} orders fully pulled
+                {passComplete} order{passComplete === 1 ? '' : 's'} complete in this pass
               </Pill>
             )}
           </p>

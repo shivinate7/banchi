@@ -3230,7 +3230,7 @@ COMPONENTS = [
                                        "sees, and what the two stages share is a client-side "
                                        "join by order number with nothing written across the "
                                        "seam.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -3253,7 +3253,7 @@ COMPONENTS = [
                                               "long as the tab, which is the batch's own "
                                               "lifetime, and D27 permits persistence rather than "
                                               "requiring it.",
-                                      "governed_by": ["D27", "D61", "D63", "D66", "D69", "D73", "D94"]},
+                                      "governed_by": ["D27", "D61", "D63", "D66", "D69", "D73", "D94", "D96"]},
             "src/OrdersShipStage.tsx": {"does": "the SHIP stage of that hub: TCGplayer's Orders "
                                                 "-> Export Shipping read into D61's three "
                                                 "lanes, with the Pirate Ship import CSV as a "

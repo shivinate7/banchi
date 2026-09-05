@@ -619,33 +619,86 @@ test('a fetch the cap cut short says how many it left, and an empty one still re
  * none finished draws no pill at all rather than `0 of 1` — the walk starts in the none-finished
  * state every single time, and a figure that reads zero on arrival is not one anybody acts on. */
 
-test('the walk counts finished orders over both halves, and draws none before one is', async ({
+test('the walk counts the orders it was started over, and the figure moves as one is finished', async ({
   page,
 }) => {
-  const finished = order({
-    key: `TCGplayer:${OTHER_ORDER}`,
-    number: OTHER_ORDER,
-    wanted: 1,
+  const SECOND = 'B58DDD-24C44'
+  const secondKey = `TCGplayer:${SECOND}`
+  const secondLine = () => line({ order: SECOND, order_key: secondKey, picks: [pick({ index: 22, capture_id: 'cap-b' })] })
+
+  /* TWO OPEN ORDERS AND ONE THE LEDGER FINISHED BEFORE ANY OF THIS, and the third one is the
+     whole point of the fixture. Without it a frozen denominator and the ledger's lifetime pair
+     agree — two orders, one done, `1 of 2` either way — and this case would pass against the
+     figure it was written to replace. With it they part: the walk is over TWO, and the ledger
+     knows THREE. A store with sales history is the normal case and the one nothing had ever
+     rendered here. It carries no resolution entry, because a finished order has nothing left for
+     the resolver to offer, which is what one really looks like on this wire. */
+  const HISTORY = 'C99EEE-31A77'
+  const history = order({
+    key: `TCGplayer:${HISTORY}`,
+    number: HISTORY,
     recorded: 1,
     open: false,
-    progress: [
-      { sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null },
-    ],
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null }],
   })
-  const resolved = [
-    { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
-  ]
 
-  /* One still owing a copy, one already whole. The finished order carries no resolved entry,
-     which is what a finished order actually looks like on this wire — there is nothing left for
-     the resolver to offer. */
-  await open(page, { orders: payloadOf([order(), finished], resolved) })
+  const both = payloadOf(
+    [order(), order({ key: secondKey, number: SECOND }), history],
+    [
+      { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] },
+      { key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] },
+    ],
+  )
+
+  /* AND THE SAME WORLD WITH THE FIRST ONE PULLED. `open` is the ledger's answer to "does this
+     still owe copies", so the moment its last copy is recorded the order LEAVES `open` — which
+     is exactly what the numerator has to survive. */
+  const afterPull = payloadOf(
+    [order({ recorded: 1, open: false }), order({ key: secondKey, number: SECOND }), history],
+    [{ key: secondKey, number: SECOND, complete: false, outstanding: 1, lines: [secondLine()] }],
+  )
+
+  let served = both
+  await open(page, { orders: both })
+  /* Registered after `open`, so it wins: Playwright matches the most recent route first. */
+  await page.route(/\/orders$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(served) })
+  })
+
   await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
 
-  /* THE ASSERTION A REVERT WOULD FAIL. Counted over `open` this reads 0 and the pill is never
-     drawn, so the text below is the whole guard. The denominator is both halves — the same pair
-     the page header prints from the same two arrays, so the two can never disagree. */
-  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 of 2 orders fully pulled')
+  /* NONE FINISHED IS WHERE EVERY WALK STARTS, and a figure that reads 0 on arrival is not one
+     anybody acts on — so there is no pill yet. */
+  await expect(page.locator('.orders-walk-figure')).toContainText('still to pull')
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveCount(0)
+
+  served = afterPull
+  await page.locator('.orders-walk button.orders-pull').first().click()
+
+  /* ONE, OUT OF THE PASS AND NOT OUT OF THE LEDGER. Counted over `open` this reads 0 by
+     construction — the order left `open` the instant its copy was recorded — which is the defect
+     the previous denominator was chosen to avoid. Counted over the ledger's lifetime it would say
+     2, because the third order was finished before any of this began. The set frozen when the walk
+     was entered is what makes it neither, and the third order is what makes those two answers
+     different enough for this line to tell them apart.
+
+     A COUNT AND NOT A FRACTION, deliberately (D96, amended). Orders arrive while you walk, so a
+     pass with everything in it pulled would draw `2 of 2` beside a head still naming work to do —
+     a figure that has reached its own denominator says finished, and no wording rescues that.
+     `complete` and not `fully pulled` because an order reaches `done` by routes this screen never
+     sees: a sale on `#/inventory`, an ingest, another device. */
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
+
+  /* AND A TOGGLE IS NOT THE END OF THE PASS. `walkKeys` is drawn from `open`, and an order leaves
+     `open` the instant its last copy is recorded — so a set frozen again on re-entry can never
+     contain an order this pass has already finished, and the figure would reset to nothing, zero
+     by construction, which is the same shape as the defect this whole case is about. Measured
+     before the pass was held: the pill was GONE after this round trip. `By order` is a reachable
+     press, not a hypothetical: it is on the toolbar, and `Orders.tsx`'s own order rows use it. */
+  await page.locator('main.orders').getByRole('button', { name: 'By order' }).click()
+  await page.locator('main.orders').getByRole('button', { name: 'Walk the boxes' }).click()
+  await expect(page.locator('.orders-walk-figure .bn-pill')).toHaveText('1 order complete in this pass')
 })
 
 /* The other direction, and its own world rather than a second navigation inside the case above:
