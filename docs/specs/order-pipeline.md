@@ -460,11 +460,19 @@ real orders unstamped today, and that is the reopening condition rather than a d
 the ratio holds as the store deepens, what changes is the REGISTER — a stop per box in D97's
 walk-plan vocabulary rather than a card per corner — and never the refusal to truncate.
 
-**What is NOT built: the client half.** `app/src/server.ts` has no function for this route and
-`#/shipping` has no control that presses it, so by CLAUDE.md's own hard rule this is the unfinished
-part of one task and not a follow-up. The rendering half already exists — `OrdersShipStage.tsx`
-draws `row.stamp` as a pinned line and `batch.stamps.stamped` in its file sentence — so what is
-owed is a `shippingStamps(batch)` call and a button beside the download.
+**The client half landed the same day.** `app/src/server.ts:fillShippingStamps` and a control on
+`#/shipping` beside the download — placed BEFORE it, because the press re-renders the file and an
+operator who grabs the CSV first gets blank corners. The rendering half already existed:
+`OrdersShipStage.tsx` draws `row.stamp` as a pinned line and the counts in its file sentence.
+
+**EXERCISED THROUGH A BROWSER, NOT ONLY THROUGH THE HARNESS.** The committed 331-order export was
+uploaded to a worktree server, one order was seeded into that worktree's own ledger, the control
+was pressed, and the downloaded CSV carried
+`"A2FFC195-000002-0000E","Box 1 · Section 1 · Card 1","Box 1 · Section 1 · Card 2",""` — three
+separate columns, two filled, the third empty. Before the press the same batch reported `0 of 126`
+and the file's corners were blank, which is this section's second half proved from the far end.
+**What has still never happened is a press against the owner's real store**, whose ledger holds
+the 20 orders measured above.
 
 ### T3 — the transport. BUILT 2026-08-30 (D69)
 

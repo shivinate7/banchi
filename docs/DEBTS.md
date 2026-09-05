@@ -314,6 +314,30 @@ photographs may live**, given the opsec rule keeping `captures/` out of git. Not
 anything — Gate B produced 53/53 at high confidence with zero retries, so `detect_card` was
 never reached in anger.
 
+### The re-measurement, 2026-09-05, and the 59 frames nobody has looked at
+
+**`scripts/score-detect.py` exists now, so the paragraph above is re-runnable rather than a
+one-off.** Over all 1,625 photographs in the owner's six boxes, `detect_card` returned a box
+for every one and refused none, and the crop guard declined 59 — `harness/results/detect.json`.
+
+**The declines are entirely boxes 3 and 4** (42 of 723, and 17 of 56). Boxes 5 and 6 were
+captured after D75's fitting too and decline NONE, so the departure is not the rig moving,
+which is the first thing a jumping rate would otherwise suggest.
+
+**Both constants still sit exactly on the sample, and that is the finding.** Box 1's smallest
+crop is `area 0.3002` against a `SMALL_CROP_AREA` of `0.30` — a margin of two ten-thousandths
+— and box 1's `detail min` is `0.4376`, BELOW a `MIN_CROP_DETAIL` of `0.50`, so its crops
+survive on the area leg alone. D75 wrote both down as fitted facts; this is the first time
+they have been checked since, and both reproduce to the digit.
+
+**WHAT IS STILL NOT MEASURED IS THE ONLY THING THAT MATTERS FOR CORRECTNESS.** A decline is the
+SAFE direction — the whole frame is sent, which costs tokens and returns a correct answer. A
+false ACCEPT is the dangerous one, and no count in that file can see it: a small crop that is
+the whole card shot from far back is indistinguishable from a crop of the card's rules-text
+panel to every statistic the script produces. **The 59 declined frames are named by box and
+filename in the score file and have not been looked at.** Settling them is an eye pass over 59
+photographs and nothing else will do it.
+
 ### What T7 leaves uncovered in `server/`
 
 - **Twenty-way contention.** T7 runs two and four simultaneous captures, matching D5's two
@@ -360,6 +384,24 @@ Bottom loss is what gets noticed because the collector number and the set line p
 survey passed `card_rect`'s corrected box at the default 0.716; three frames were checked
 against the photographs by eye and the rest were not, so the per-frame rows are indicative and
 the counts are the claim.
+
+### The `#/inventory` preview does the OTHER thing, and the declaration saying otherwise is dead
+
+**`app/src/BoxBrowse.css`'s `object-fit: cover` has no effect, so that preview letterboxes
+today.** The frame is `className="bn-photo browse-photo-frame"` and `app/src/kit.css`'s
+`.bn-photo img { object-fit: contain }` has specificity (0,1,1) against `.browse-photo`'s
+(0,1,0). There is no `@layer` anywhere in `app/src` and no `!important` on `object-fit`, so
+nothing rescues it. Identical on main.
+
+**That silently reversed D38 on the owner's most-used preview** — an entry that argues in
+writing that "`object-fit: cover` stays" — and shrank the card to show the desk around it.
+Nobody chose it; the Banchi rebuild introduced `.bn-photo` and the older, less specific rule
+stopped applying without failing.
+
+**It is recorded here rather than fixed in the same breath** because the section above costs
+out both behaviours and the choice between them is D38's owner's, not a session's. What has
+changed is that the tree is no longer doing what D38 says it does, so the question is now
+which of the two to KEEP rather than whether to change anything.
 
 ### Why `make design-check` is green over it
 
