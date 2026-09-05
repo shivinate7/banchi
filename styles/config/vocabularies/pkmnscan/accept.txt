@@ -476,3 +476,14 @@ viewBox
 
 # the owner's own spelling of `lilacish`, quoted verbatim in docs/specs/logo.md
 lilic
+
+# docs/specs/logo.md section 11: the small-cut sheet renders each mark at its true pixel size
+# and magnifies the PIXELS rather than the vector, which is the distinction the word carries.
+[Rr]asteris?[ez]
+[Rr]asteri[sz]ed
+[Rr]asteri[sz]es
+[Rr]asteri[sz]ing
+# what section 4 has called the small cut, the bare brackets and the lockup since it was written
+[Uu]ndrawn
+# the owner's own words, quoted verbatim in section 11
+whatever's

@@ -274,7 +274,12 @@ watching it is reported as an unwatched sentence.
 ### The design system
 
 `app/src/tokens.css` is the system, and **it is the only file in `app/` that may name a
-color.** Every token is `--bn-*` — color, type, spacing, radius, elevation, motion, the
+color — with one argued exception.** `app/src/kit/markPalettes.ts` holds the six locked marks'
+sixty hexes (D102): they are an *illustration's* colors, locked by `docs/specs/logo.md` §9, and
+they must NOT be theme-overridable, which is what moving them into `tokens.css` would invite.
+That file is generated, never hand-edited, and `make docs-audit`'s `logo parity` row reconciles
+it against §9 in both directions — because `raw color` cannot see it at all, its scope being
+`app/src/*.css` and never a `.ts`. **An exception with no reader is how a rule stops being one.** Every token is `--bn-*` — color, type, spacing, radius, elevation, motion, the
 shell's own metrics — and the legacy names the old sheet exported (`--ink`, `--muted`,
 `--line`, `--s1…`, `--r`, `--util`) survive at the bottom as aliases so no stylesheet was
 orphaned. **Write new CSS with `--bn-*`.**
@@ -307,6 +312,16 @@ available on hover and in the run log. Enum values are labelled, never printed r
 (`premium` → `Premium`). Empty states are a real sentence and one action. Danger is red, money
 moments are deliberate and carry the figure in the label, success is green, live is vermilion.
 An icon never appears alone without an accessible name.
+
+**The mark is generated, and it has two optical cuts** (D102). `Logo` renders
+`docs/specs/logo.md`'s locked set — six variants, `bluesteel` the default — and
+`scripts/build-mark.mjs` writes its geometry, its palettes and `app/public/favicon.svg` by
+reading that spec's own generator. **Nothing about the mark is hand-drawn in `app/`, and nothing
+is hand-edited**: change the spec, re-run the script. It picks its cut off `size`, and **every
+call site in this product is below the 64px boundary**, so the small cut is what ships and the
+display cut exists to be looked at on `#/gallery`. It is fixed dark in both themes on purpose —
+a light ground was derived and lost its silhouette at every size the app draws (§12). **Never
+put a `border-radius` on it**: the tile is a superellipse and a CSS radius clips it twice.
 
 **Motion is part of the system, not decoration.** Durations and easing curves are tokens; the page
 enters, list rows stagger off `--bn-stagger`, selection changes and receipts and progress
@@ -892,10 +907,11 @@ D98  The cheap-card figure is the control, the floor choice is retired, and a ru
 D99  The cut-off is a figure the operator sets, and one press writes one spreadsheet
 D100 Nothing is deleted to lower a price, the quantity is not a variable, and the age is a proxy that says so
 D101 A claim a screen names is a claim a screen can fix, and the derived tuple outran its decoder
+D102 The mark is an illustration with its own palette, and the spec is its store of record
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
-without being adopted: the envelope walk and the copies picker were declined in favour of this
+without being adopted: the envelope walk and the copies picker were declined in favor of this
 product's own per-copy walk and copy map, and the card-number sigil is deferred. D96 carries the
 owner's reasoning for each. **D99 is numbered where it is because main took D90 while this branch
 was open** — the rule is renumber your own, never another's.

@@ -6,7 +6,8 @@ import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
-import { Button, EmptyState, Icon, Kbd, Notice, Pill, Segmented, Stat, type ButtonSize, type ButtonVariant, type IconName, type PillTone } from './kit'
+import { Button, EmptyState, Icon, Kbd, Logo, Notice, Pill, Segmented, Stat, VARIANTS as LOGO_VARIANTS, type ButtonSize, type ButtonVariant, type IconName, type PillTone } from './kit'
+import { MARKS } from './kit/markPalettes'
 import { ICON_NAMES } from './kit/Icon'
 import './Gallery.css'
 
@@ -99,7 +100,7 @@ const GROUP: SearchGroup = {
 }
 
 const SECTIONS: readonly { id: string; label: string; group: string }[] = [
-  { id: 'colour', label: 'Colour', group: 'Foundations' },
+  { id: 'color', label: 'Color', group: 'Foundations' },
   { id: 'type', label: 'Type', group: 'Foundations' },
   { id: 'space', label: 'Space & radius', group: 'Foundations' },
   { id: 'elevation', label: 'Elevation', group: 'Foundations' },
@@ -292,7 +293,56 @@ export function Gallery() {
 
         <div className="kit-sections">
           {/* ------------------------------------------------------------ foundations */}
-          <Section id="colour" title="Colour" lede="Three registers: ink is what you read, line is what separates, brand is where to look. Indigo for action, vermilion for what is live.">
+          <Section
+            id="mark"
+            title="The mark"
+            lede={<>Six locked marks, <Code>bluesteel</Code> the default. <Code>docs/specs/logo.md</Code> is the state of record and <Code>scripts/build-mark.mjs</Code> generates the geometry from that spec&rsquo;s own generator &mdash; nothing here is hand-drawn.</>}
+          >
+            <Spec
+              label="The small cut · below 64px"
+              wide
+              note={<>What ships. Stroke 4.2, no taper, no <Code>feTurbulence</Code> &mdash; swept in section 11 at 16, 28, 32 and 44px, which is every size this app draws. The display cut&rsquo;s brackets are gone by 28px and its marbling loses to this flat prism gradient.</>}
+            >
+              <div className="kit-marks">
+                {LOGO_VARIANTS.map((v) => (
+                  <span key={v} className="kit-mark">
+                    <Logo variant={v} size={56} />
+                    <span className="kit-mark-name">{MARKS[v].label}</span>
+                  </span>
+                ))}
+              </div>
+            </Spec>
+            <Spec
+              label="The display cut · 64px and up"
+              wide
+              note={<>The holographic foil, drawn with a variable-width taper and a displacement map. Nothing in the product reaches this size; it is here so the cut that is locked can be looked at.</>}
+            >
+              <div className="kit-marks">
+                {LOGO_VARIANTS.map((v) => (
+                  <span key={v} className="kit-mark">
+                    <Logo variant={v} size={96} />
+                    <span className="kit-mark-name">{MARKS[v].label}</span>
+                  </span>
+                ))}
+              </div>
+            </Spec>
+            <Spec
+              label="At the sizes it is drawn"
+              wide
+              note={<>26 is the phone bar, 30 the drawer, 32 the sidebar and its rail, 40 both crash pages, 44 the puller&rsquo;s header. The mark is fixed dark in both themes on purpose &mdash; a light ground was derived and lost its silhouette (section 12).</>}
+            >
+              <div className="kit-marks kit-marks-tight">
+                {[16, 26, 30, 32, 40, 44, 64].map((px) => (
+                  <span key={px} className="kit-mark">
+                    <Logo size={px} />
+                    <span className="kit-mark-name">{px}px</span>
+                  </span>
+                ))}
+              </div>
+            </Spec>
+          </Section>
+
+          <Section id="color" title="Color" lede="Three registers: ink is what you read, line is what separates, brand is where to look. Indigo for action, vermilion for what is live.">
             <div className="kit-swatches">
               {COLOURS.map((c) => (
                 <div key={c.token} className="kit-swatch">
