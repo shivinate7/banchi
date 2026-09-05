@@ -729,7 +729,8 @@ so it reaps a thread parked on `readline` for a request that is never coming —
 closed tab leaves behind. Its own comment states what it does not fix, and it is right: an ACTIVE
 connection performs socket operations, so no idle timeout touches it.
 
-**Measured three times on this machine, and the third was avoidable.**
+**Measured three times on this machine, and the third was avoidable.** (A fourth attempt, the load
+sweep that was supposed to size the bound below, reproduced nothing — see what is still owed.)
 
 1. **1,178 handler threads alive at 1,318% CPU**, twice in one working day, every one blocked in
    `PyEval_AcquireThread` — waiting for the interpreter lock, not for the store — with the process
@@ -752,8 +753,37 @@ Browser pane over hand-rolled scripts against the live app, and when a browser p
 navigate it to `about:blank` first — a page closed mid-response leaves the handler writing to a dead
 socket, which is why `.serve/capture.log` holds thousands of `BrokenPipeError` traces.
 
-**The fix is a bounded worker pool, and the reason it is not a swap is written down rather than
-left to be rediscovered.** A pool of N converts unbounded degradation into back pressure: connection
+**A bound landed 2026-09-04, and it is narrower than this section's title.** `REQUEST_SLOTS = 12`
+and a `threading.BoundedSemaphore` around `_dispatch` cap how many requests EXECUTE at once, which
+is the resource the measurements above say ran out — the interpreter, not sockets and not threads.
+A connection parked between keep-alive requests holds no slot, so the idle-worker question a real
+pool has to answer never arises here. The slot is taken *before* `_inflight_enter`, deliberately: a
+request queued for one has not started and cannot finish, and counting it would make the supervisor's
+drain wait out its grace on work that is not happening and then kill it — the incident above, one
+layer down. The wait is `files.LOCK_TIMEOUT_SECONDS` (30) and the refusal is `server_busy`, beside
+`store_busy`; 30 sits inside the 40s drain by construction, so a queued request always resolves one
+way or the other before the drain gives up.
+
+**WHAT IS STILL OWED, AND IT IS THE HALF THAT MATTERS: the bound is UNPROVEN AGAINST THE FAILURE, and
+`12` IS CHOSEN RATHER THAN MEASURED.** The plan for it said the number would come from a load sweep.
+The sweep was run — an isolated server on its own port over a scratch store, swept at 4, 8, 12, 24
+and 48 slots under 120 and then 500 concurrent connections — and **every reading was identical**:
+~1,230 requests a second, no errors, and the server answering throughout, bounded or not. The
+reproduction failed, and the reason is understood: on an empty store every endpoint answers in under
+ten milliseconds, so nothing contends the interpreter, and the collapse recorded above needed 80 real
+browsers driving real screens against a store holding 1,625 cards. **That store is the owner's and is
+not a load-test target**, which is the same argument this whole section exists to make. So `12` is a
+ceiling somebody picked, and the honest reading of it is "small enough to bound contention, large
+enough that ordinary two-device use never reaches it" — not a plateau anybody measured.
+
+**What IS proven is the mechanism**, by `harness/tests/t7_store_and_seams.py:check_request_slots`: with
+18 callers against 12 slots, 12 execute, 12 are in flight, no handler ever observes the count above
+the bound, and every slot is given back. It was observed failing twice — with the semaphore removed,
+and with the slot taken after the in-flight count rather than before it.
+
+**So the real bound on thread COUNT is still open, and a worker pool is still what it needs.**
+
+**The reason a pool is not a swap is written down rather than left to be rediscovered.** A pool of N converts unbounded degradation into back pressure: connection
 N+1 waits in the accept queue instead of taking a thread. But over HTTP/1.1 keep-alive **a worker
 held by an idle connection is a worker serving nobody**, so N idle browser tabs starve a pool of N
 completely, and closing that needs one of: `Connection: close`, which throws away the thing

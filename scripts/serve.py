@@ -963,6 +963,48 @@ def _sweep_orphans() -> None:
         clear_pidfile(child)
 
 
+def owned_by_agent(root: Path = REPO_ROOT) -> bool:
+    """Is the server on this checkout's port the OWNER'S, kept alive at login?
+
+    Two conditions, and both are needed. A linked worktree's server is its own — its store and
+    its ports are per-checkout (D43) — so stopping one costs nobody anything and a refusal there
+    would only teach sessions to reach past this guard. The main tree with an agent installed is
+    the case where a stop reaches a process somebody else is using.
+    """
+    return not ports.is_linked_worktree(root) and agent_installed(root)
+
+
+def refuse_unconfirmed(args: argparse.Namespace, verb: str) -> bool:
+    """True when this stop must not proceed. Shaped on `make merge` (D42), deliberately.
+
+    THE COMMAND IS RIGHT AND THE MOMENT IS WRONG, which is the same class D42 built the
+    preview/confirm shape for, so this reuses it rather than inventing a second vocabulary for
+    it. A bare `make down` in the main tree previews and presses nothing; `--confirm` performs
+    it, and the word is still the operator's.
+
+    WHY IT EXISTS. On 2026-09-04 a session ran `make design-check` about eight times against the
+    owner's live server, degraded it the way `docs/DEBTS.md` section 11 describes, and then ran
+    `make restart` to fix what it had done. The drain expired and the supervisor killed the
+    process with a request in flight, which crashed Python out from under the owner mid-use. The
+    wedge is survivable; the kill past the drain is what was not. Nothing on this path said a
+    word, because nothing on it knew the process was anyone else's.
+    """
+    if getattr(args, "confirm", False) or not owned_by_agent():
+        return False
+    print("refusing: this is the main checkout and a launch agent keeps its server alive.")
+    print()
+    print("  That server is the one the bookmark points at, over the real store, and something")
+    print("  may be mid-request against it right now. Stopping it drains for")
+    print(f"  {DRAIN_GRACE_SECONDS:.0f}s and then KILLS whatever is still in flight.")
+    print()
+    print("  If it stopped answering under load, that is section 11 of docs/DEBTS.md and a")
+    print("  restart is not the repair — it is how the write gets cut.")
+    print()
+    print(f"  make {verb} ARGS=--confirm     do it anyway")
+    print("  make launch-agent ARGS=--remove  stop it coming back at login")
+    return True
+
+
 def do_down(_args: argparse.Namespace) -> int:
     # THIS SIGNALS THE SUPERVISOR THAT IS RUNNING, WHATEVER STARTED IT, and the special case
     # that used to sit here is deleted rather than repaired.
@@ -986,6 +1028,9 @@ def do_down(_args: argparse.Namespace) -> int:
     # success on the strength of something that did not apply to the process in question — and
     # it survived that fix by living in a branch nobody re-read. Deleting the branch is the
     # repair: one path, and it acts on the pid that is actually there.
+
+    if refuse_unconfirmed(_args, "down"):
+        return 1
 
     pid = supervisor_pid()
     if pid is None:
@@ -1021,7 +1066,11 @@ def do_down(_args: argparse.Namespace) -> int:
 
 
 def do_restart(args: argparse.Namespace) -> int:
-    do_down(args)
+    """Guarded through `do_down`, which is the only stop path — so there is one refusal and not
+    two to keep in step. It returns non-zero without stopping anything when it refuses, and this
+    must NOT go on to start a second supervisor over the one still running."""
+    if do_down(args) != 0:
+        return 1
     return do_up(args)
 
 
@@ -1176,10 +1225,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     up.add_argument("--no-watch", action="store_true")
     up.set_defaults(func=do_up)
 
-    sub.add_parser("down", help="stop").set_defaults(func=do_down)
+    down = sub.add_parser("down", help="stop")
+    down.add_argument("--confirm", action="store_true",
+                      help="stop the main tree's agent-kept server anyway")
+    down.set_defaults(func=do_down)
 
     restart = sub.add_parser("restart", help="stop then start")
     restart.add_argument("--no-watch", action="store_true")
+    restart.add_argument("--confirm", action="store_true",
+                         help="bounce the main tree's agent-kept server anyway")
     restart.set_defaults(func=do_restart)
 
     rep = sub.add_parser("report", help="read-only state, for `make status`")

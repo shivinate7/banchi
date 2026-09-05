@@ -8963,6 +8963,20 @@ class CaptureHandler(BaseHTTPRequestHandler):
         methods would be four places to remember; putting it here means a mutating route
         cannot be written that skips it.
         """
+        # THE SLOT IS TAKEN BEFORE THE REQUEST COUNTS AS IN FLIGHT, AND THE ORDER IS
+        # LOAD-BEARING. `_inflight` is what `drain()` waits on, and a request queued for a slot
+        # has not started and cannot finish — counting it would make the drain wait on work that
+        # is not happening and then kill it, which is the failure this whole bound is about.
+        if not _slots.acquire(timeout=files.LOCK_TIMEOUT_SECONDS):
+            self._fail(
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "server_busy",
+                f"This server is answering {REQUEST_SLOTS} requests already and this one waited "
+                f"{files.LOCK_TIMEOUT_SECONDS:.0f}s for a turn. Nothing was read or written. "
+                f"Retry, and if it keeps happening something is driving it harder than a person "
+                f"can — see docs/DEBTS.md section 11.",
+            )
+            return
         _inflight_enter()
         try:
             # BEFORE THE BODY IS READ, let alone before the lock is taken. A page that is not
@@ -9057,6 +9071,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             )
         finally:
             _inflight_leave()
+            _slots.release()
 
     def do_OPTIONS(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's naming
         """The preflight. It answers 204 for any path, and now not for any origin.
@@ -9628,6 +9643,40 @@ class CaptureHandler(BaseHTTPRequestHandler):
 # would multiply it, and this is what pays for it.
 _inflight_lock = threading.Condition()
 _inflight = 0
+
+
+# ------------------------------------------------------- the bound on concurrent requests
+#
+# WHAT RAN OUT WAS THE INTERPRETER, NOT THREADS, AND THAT IS WHY THE BOUND IS HERE.
+# `docs/DEBTS.md` section 11 records the measurement this exists for: 969 handler threads under
+# a Playwright fleet, every one of them blocked in `PyEval_AcquireThread` — waiting for the GIL,
+# not for the store and not for the network — at 338% CPU, holding the port and answering
+# nothing. The contended resource was Python itself.
+#
+# So the cap is on requests EXECUTING, and it is deliberately not a thread pool. A pool bounds
+# thread count, which is the wrong number: a thread parked on `readline` between keep-alive
+# requests consumes no interpreter at all, and `CaptureHandler.timeout` already reaps those. A
+# pool would also have to answer what happens when idle connections hold every worker — N idle
+# browser tabs starving a pool of N — which is the hardest question in this file and is not one
+# this failure asks. A semaphore here composes with what exists instead: the timeout bounds idle
+# connections, this bounds active ones, and neither needs a new lifetime concept.
+#
+# WHAT IT DOES NOT DO, said plainly so section 11 does not have to be read to learn it: it does
+# not bound thread count. Under the same fleet the threads are still created — they park on this
+# semaphore, releasing the GIL while they wait, so the server goes on answering. If thread count
+# ever becomes the cost that bites, that is memory rather than CPU and only a real pool fixes it.
+#
+# THE WAIT IS THE STORE LOCK'S, NEVER A NEW CONSTANT. `files.LOCK_TIMEOUT_SECONDS` is what every
+# other wait in this process is derived from, including `serve.py`'s drain grace, which is that
+# plus ten — so a request queued for a slot either gets one and completes or refuses INSIDE the
+# drain window, which is exactly the guarantee the drain needs and did not have.
+REQUEST_SLOTS = 12
+_slots = threading.BoundedSemaphore(REQUEST_SLOTS)
+
+
+def slots_in_use() -> int:
+    """For the harness: how many requests hold a slot right now. Never more than `REQUEST_SLOTS`."""
+    return REQUEST_SLOTS - _slots._value  # noqa: SLF001 — the counter has no public reader
 
 
 def _inflight_enter() -> None:

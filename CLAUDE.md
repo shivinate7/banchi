@@ -370,11 +370,18 @@ A screen is not finished because it compiles.
   a bounded worker pool and it is not a swap; `docs/DEBTS.md` §11 has the whole argument, the three
   measurements, and why a pool over keep-alive starves.
 
+  **A bound landed 2026-09-04 and it is not the pool.** `REQUEST_SLOTS = 12` caps how many requests
+  EXECUTE at once — the interpreter, which is what ran out — and leaves thread count alone. Its
+  mechanism is proven by T7; **its efficacy is not**, because the failure could not be reproduced
+  on a scratch store and the owner's is not a load-test target. `12` is a chosen ceiling, not a
+  measured plateau. §11 has all of it.
+
   **`make launch-agent` keeps that process alive at login over the owner's real store**, so the
   thing on `:8000` in the main checkout is theirs. Run the full suite ONCE at the end rather than
-  after every edit, and **never `make restart` / `make down` / `make up` to fix a wedge** — ask. The
-  drain is 40s and a kill past it cuts a write in flight; that same session did exactly that and
-  crashed Python out from under the owner mid-use.
+  after every edit, and **never `make restart` / `make down` / `make up` to fix a wedge** — `down`
+  and `restart` now refuse there without `--confirm`, and the refusal is the answer, not an
+  obstacle. The drain is 40s and a kill past it cuts a write in flight; that same session did
+  exactly that and crashed Python out from under the owner mid-use.
 
 - **The join key is PER-GAME, and matching is normalized on both sides.** Pokemon composes
   `zfill(3)(number) + "/" + printedTotal` — the shape is pokemontcg.io's schema (`printedTotal`
