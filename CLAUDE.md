@@ -38,14 +38,17 @@ make map            # docs/map.py RENDERED — the file is 2,700 lines and had n
                     #   sat wrong for three weeks. ARGS=<package|path|D<n>|--stale>;
                     #   `--stale` ranks entries whose FILE has moved since the prose about
                     #   it did, which is the one drift no audit row can decide.
-make harness        # all NINE verification tests; the Stop hook runs it at turn end. It said
+make harness        # all TEN verification tests; the Stop hook runs it at turn end. It said
                     #   seven until 2026-08-31 — `t8_codes.py` landed with the code-card track
                     #   and nothing counts these either (see the route-count warning below).
                     #   T9 landed the same day: the first test here whose inputs are
                     #   RECORDINGS OF THE RIG (`harness/traces/`) rather than frames a test
                     #   drew for itself. It exists because both Playwright specs over the
                     #   motion trigger stayed green while 38 real cards were refused as an
-                    #   empty stand (D81). RECOUNT from `harness/run.py`'s TESTS list.
+                    #   empty stand (D81). T10 landed 2026-09-03 and is the first whose
+                    #   expected values come from a PUBLISHED EXTERNAL SPECIFICATION —
+                    #   USPS-B-3200's own four worked examples — rather than from this repo
+                    #   agreeing with itself. RECOUNT from `harness/run.py`'s TESTS list.
 make up             # BOTH servers, detached, and the capture server RELOADS ITSELF when you
                     #   edit Python under server/ store/ pipeline/ cli/ identify/ geometry/ codes/.
                     #   The SUPERVISOR reloads itself too, by re-exec, when one of the four

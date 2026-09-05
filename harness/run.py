@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Harness runner — T1-T8.
+"""Harness runner — T1-T10.
 
-`make harness` exits 0 only when all eight tests pass. Nothing in this project is "done"
+`make harness` exits 0 only when all ten tests pass. Nothing in this project is "done"
 until it does. See docs/GATES.md for the contract; every threshold there is a number, not
 an adjective, and the numbers live in the test modules next to the code that checks them.
 
@@ -13,7 +13,14 @@ T8 (code cards) arrived with C9-C11 on 2026-08-30, for the same reason: a code i
 bearer instrument, and reading one wrong, selling one twice, or letting a premium one
 leave in a bulk lot are three different failures that must not hide inside one another.
 
-All eight tests always run, even after one fails. A runner that stops at the first failure
+T9 reads RECORDINGS OF THE RIG rather than frames a test drew for itself. T10 (2026-09-03)
+is the first test here whose expected values come from a PUBLISHED EXTERNAL SPECIFICATION
+— USPS-B-3200's own worked examples — rather than from this repo's agreement with itself.
+
+THIS COUNT HAS BEEN WRONG BEFORE. It said eight while the list below held nine. Recount
+from TESTS; never increment.
+
+All ten tests always run, even after one fails. A runner that stops at the first failure
 hides the state of everything behind it, which is the opposite of what a status signal
 is for.
 """
@@ -35,6 +42,7 @@ from harness.tests import (  # noqa: E402
     t7_store_and_seams,
     t8_codes,
     t9_traces,
+    t10_imb,
 )
 
 # Explicit and ordered. No discovery magic: a test that silently stops being collected is
@@ -49,6 +57,7 @@ TESTS = [
     t7_store_and_seams,
     t8_codes,
     t9_traces,
+    t10_imb,
 ]
 
 

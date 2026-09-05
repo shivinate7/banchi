@@ -788,6 +788,43 @@ stand on every session anybody has recorded.
 at 38x28 — the watch region, quantised — which cannot carry a readable QR, and every session
 here is the singles feeder. T8's rule stands untouched.
 
+### T10 — The Intelligent Mail barcode encoder, against USPS-B-3200's four examples
+
+New 2026-09-03. **Pass: all four of USPS-B-3200 Appendix C's examples reproduce byte for byte at every step
+— binary data, FCS, codewords, characters and the 65-bar string; the bar map uses
+each of the 130 character-bit positions exactly once; and every field-length rule
+refuses rather than pads.**
+
+**It checks a different KIND of claim from every other test here.** T1 through T9 ask whether
+this repo agrees with itself, with its own fixtures, or with recordings of its own rig. T10
+asks whether it agrees with a PUBLISHED EXTERNAL SPECIFICATION — USPS-B-3200 Rev H, Appendix C,
+Tables 13 to 16, which are the Postal Service's own worked examples carrying their own answers.
+Nothing in this repo authored a single expected value in it.
+
+**The four vectors share one tracking code and differ only in routing length**, which is the
+spec's design and the reason all four are worth running: the routing code has four legal shapes
+(0, 5, 9 and 11 digits) and four different conversions, so the last vector alone would leave
+three branches of `_routing_value` asserted by nothing.
+
+**Every step is asserted, not only the answer.** A wrong CRC and a wrong bar map both produce
+sixty-five wrong letters. The spec publishes the intermediates, so naming which of the six
+steps broke costs nothing and is what makes a failure actionable.
+
+**The bar map is the one table nothing generates, and the bijection check is what stands under
+it.** Ten characters of thirteen bits is 130 positions; sixty-five bars carrying a descender and
+an ascender each is 130 slots, and every position must be used exactly once. The two character
+tables are the opposite case — 1,287 rows and 78 — and are GENERATED at import by the spec's own
+`InitializeNof13Table` rather than transcribed, because 1,365 hand-copied hex values are 1,365
+chances to typo one. Their generator is checked against the spec's own published anchors.
+
+**WHAT A GREEN T10 DOES NOT MEAN.** It does not mean an envelope gets scanned. The encoder is
+arithmetic and this test is arithmetic about arithmetic. A barcode reports nothing unless the
+Mailer ID it carries is registered to an Informed Visibility subscription and the piece runs on
+mail processing equipment — both account facts this repo does not hold. **No barcode from this
+module has ever been printed and no envelope carrying one has ever been mailed.** That is the
+same standing T6's synthetic composites and T8's synthetic QR symbols have, and
+`docs/specs/order-pipeline.md` is where the gap is tracked.
+
 ## Gates
 
 ### Gate A — TCGplayer seam. PASSED 2026-07-26
