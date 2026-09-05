@@ -331,13 +331,23 @@ Only what makes it gold moves.
 That is assumed rather than swept: a gold foil over a slate base reads dirty. It is the one HELD
 value this section adds, and it is named so it does not become another of section 3's quiet four.
 
+**LOCKED 2026-09-05.** The owner picked the fourth tile of the comparison row — *"have that be
+locked as our gold and black option"*:
+
 | what | value | tag | evidence |
 | --- | --- | --- | --- |
-| Gold prism | `rich`, `yellow`, `honey` | RANGED | `antique` and `brass` go olive; `bronze` and `rose` stop being gold |
-| Ground | `#141619` → `#000000` (true black) | RANGED | or the locked cool black `#1E232B` → `#080B0F` |
-| Espresso ground | **rejected** | see below | the tonal rule's own answer, and it is wrong here |
-| Brackets | **pale gold** `#FFFBEE #E8CE8A #FFFDF6 #C0A254` | RANGED | plain gold measurably loses the taper tip |
-| Card base | `#C98A2E` | **HELD** | never swept |
+| Gold prism | **`rich`** — `#FFD97A #F0A82E #C9821E #FFEFC0 #B36F18` | **LOCKED** | picked from nine |
+| Ground | **`#141619` → `#000000`**, true black | **LOCKED** | the espresso lost; see below |
+| Brackets | **gold** — `#FFF4D0 #D9A93C #FFFAE8 #A87820` | **LOCKED** | the owner's tile carries these |
+| Card base | `#C98A2E` amber | **HELD** | never swept |
+| Sheen | 0.15 | LOCKED | inside the settled 0.10 – 0.20 |
+
+**The bracket is the owner's call over a measurement, and the measurement is kept rather than
+deleted.** The locked tile carries *plain* gold, not the pale gold this file argued for below on
+a lightness reading. That reading still stands and is not re-litigated here: it is written down
+so that if the taper tip is ever found to be weak at small sizes, the cause is already on the
+page and the fix is one palette away. **A rejected recommendation is evidence about a risk, not
+an argument to keep having.**
 
 ### The tonal rule gives the wrong answer for gold, and this is the first place it has failed
 
@@ -373,6 +383,11 @@ where the bracket is already at its thinnest and nearest to vanishing. Plain gol
 lightness exactly where the mark can least afford it; pale gold clears chrome's own floor. This
 is the section 3 problem in miniature — a value chosen by eye for its mid-tone, failing at an end
 nobody looked at.
+
+**The owner locked plain gold anyway, and that is the answer.** The measurement predicts a
+weakness at the taper tip, and a prediction is not a defect: nothing has yet been rendered at
+32px or 16px, where it would show, and section 3's *small* optical cut removes the taper
+entirely. **The place to settle this is the small cut, not here.**
 
 ## 9. Still open
 
