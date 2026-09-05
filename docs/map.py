@@ -1113,7 +1113,10 @@ COMPONENTS = [
                         "the same predicate reference-transaction evaluates at `prepared` — so "
                         "the hook is never asked to refuse. Idempotent on a PR already merged, "
                         "which is what makes a failed local half re-runnable rather than a "
-                        "handoff.",
+                        "handoff. THEN IT DELETES THE HEAD BRANCH, since 2026-09-05: on origin "
+                        "unconditionally, and in this clone only when no worktree holds it and "
+                        "it is an ancestor of main. Before that it deleted neither, and 125 "
+                        "merged pull requests had left 85 branches on origin and 106 here.",
                 # D42 governs it twice over: the operation it performs and the rejection it
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
@@ -1128,7 +1131,13 @@ COMPONENTS = [
                         "standing on, moves no protected ref and trips no hook. Nothing here "
                         "resolves a path relative to itself: the repository is the one "
                         "`git rev-parse` answers for from the caller's directory, which is what "
-                        "lets the self-test point it at a temporary clone.",
+                        "lets the self-test point it at a temporary clone. THE CLEANUP IS NOT "
+                        "`gh pr merge --delete-branch` AND THE DIFFERENCE IS THE POINT: that "
+                        "flag also deletes the local branch, and to do it gh may switch the "
+                        "current working tree to the base branch — underneath a local half "
+                        "whose entire job is deciding which tree main moves in. So it runs "
+                        "after that half has succeeded, and `--cut <branch>` is its seam, the "
+                        "way `--local <rev>` is the other half's.",
             },
             "merge-selftest.sh": {
                 "does": "merge-pr.py's local half, against an origin, a clone and a linked "

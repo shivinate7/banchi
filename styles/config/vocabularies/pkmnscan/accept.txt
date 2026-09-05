@@ -456,3 +456,8 @@ boolean
 [Bb]ackfill\w*
 [Uu]nbuildable
 [Uu]nwritable
+[Ww]ordmark
+[Ff]avicon
+[Ll]ockup
+[Hh]olo
+[Ss]uperellipse

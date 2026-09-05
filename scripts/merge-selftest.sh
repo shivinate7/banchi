@@ -180,6 +180,80 @@ same "and main did not move" "$before" "$(git rev-parse refs/heads/main)"
 echo "  -- a rev that names nothing --"
 expect refuse "an unknown rev" python3 "$MERGE_PR" --local "no-such-thing" --confirm
 
+# ------------------------------------------------------------------- the branch afterwards
+# NEW 2026-09-05. `delete_head_branch` runs after a successful local half and deletes the merged
+# PR's head branch. Its gh lookup cannot be tested here; `--cut` is the seam, exactly as
+# `--local` is for the half that moves main.
+#
+# THE CASE THAT MATTERS IS THE WORKTREE ONE. The wrapper refused to delete anything for a
+# stated reason — "live worktrees track branches in this clone" — and that reason is now a
+# runtime check rather than a blanket refusal. If the check goes, a merge deletes a branch
+# somebody is standing on.
+echo "  -- the merged branch is deleted, unless somebody is standing on it --"
+PKMNSCAN_MAIN=off git update-ref refs/heads/main "$MERGED"
+git switch -q --detach HEAD
+git update-ref refs/heads/feature "$MERGED"
+
+expect allow "the preview presses nothing" python3 "$MERGE_PR" --cut feature
+if git rev-parse --verify -q refs/heads/feature >/dev/null; then
+  ok "and the branch is still here after the preview"
+else
+  bad "the preview deleted the branch"
+fi
+
+# held by a worktree — the branch must survive even though it IS an ancestor of main
+git worktree add -q "$tmp/standing" feature 2>/dev/null
+held_out="$(python3 "$MERGE_PR" --cut feature --confirm 2>&1)"
+if git rev-parse --verify -q refs/heads/feature >/dev/null; then
+  ok "KEPT — a tree is standing on it"
+else
+  bad "deleted a branch that is checked out in $tmp/standing"
+fi
+# AND IT IS THIS CHECK THAT KEPT IT. Survival alone is vacuous here: `git branch -D` refuses a
+# branch checked out in a worktree on its own, so the assertion above stayed green with the
+# worktree check mutated out — caught 2026-09-05. What the check actually buys is a stated
+# decision instead of git's opaque "Cannot delete branch ... checked out at", so that sentence
+# is what the case asserts.
+case "$held_out" in
+  *"kept — checked out in"*) ok "AND SAID SO, rather than leaving git to refuse it" ;;
+  *) bad "kept, but not by this wrapper — git's own refusal stood in for the check"
+     printf '%s\n' "$held_out" | sed 's/^/         /' ;;
+esac
+git worktree remove --force "$tmp/standing" 2>/dev/null
+
+# not an ancestor of main — the branch holds commits main does not, so it must survive
+expect allow "a branch main does not contain" python3 "$MERGE_PR" --cut local-only --confirm
+if git rev-parse --verify -q refs/heads/local-only >/dev/null; then
+  ok "KEPT — it is not an ancestor of main"
+else
+  bad "deleted a branch holding commits main does not have"
+fi
+
+# nobody standing on it, and every commit is in main — this one goes, on both sides.
+#
+# ORIGIN IS RE-ARMED HERE ON PURPOSE. The worktree case above KEPT the local branch and still
+# deleted the remote one — the remote is checked out nowhere by definition, so that half is
+# unconditional — which left origin with no feature branch and made the "AND DELETED ON ORIGIN"
+# assertion below pass without this case doing anything. Caught 2026-09-05 by the fixture
+# assertion that follows, which is the only reason it was not scored as coverage.
+git -C "$tmp/origin.git" update-ref refs/heads/feature "$MERGED"
+if git -C "$tmp/origin.git" rev-parse --verify -q refs/heads/feature >/dev/null; then
+  ok "the fixture arms the case: origin still carries feature"
+else
+  bad "the fixture is wrong — origin has no feature branch to delete"
+fi
+expect allow "an ancestor branch nobody holds" python3 "$MERGE_PR" --cut feature --confirm
+if git rev-parse --verify -q refs/heads/feature >/dev/null; then
+  bad "the branch survived"
+else
+  ok "deleted here"
+fi
+if git -C "$tmp/origin.git" rev-parse --verify -q refs/heads/feature >/dev/null; then
+  bad "origin still carries it"
+else
+  ok "AND DELETED ON ORIGIN"
+fi
+
 echo "  -- no pull request named --"
 expect refuse "a bare invocation" python3 "$MERGE_PR"
 

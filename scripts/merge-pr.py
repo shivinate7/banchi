@@ -40,6 +40,7 @@ from the caller's directory, so the self-test can point it at a temporary one.
     scripts/merge-pr.py <n>                  preview. Presses nothing.
     scripts/merge-pr.py <n> --confirm        merge it, then move main.
     scripts/merge-pr.py --local <rev>        the local half alone, for the self-test.
+    scripts/merge-pr.py --cut <branch>       the branch cleanup alone, for the self-test.
 """
 
 from __future__ import annotations
@@ -116,6 +117,25 @@ def main_worktrees(root: str) -> List[str]:
         elif line.strip() == "branch refs/heads/main" and here:
             found.append(here)
     return found
+
+
+def worktree_holding(root: str, branch: str) -> Optional[str]:
+    """The working tree with `branch` checked out, or None. main_worktrees generalised.
+
+    This exists because deleting a merged branch is only safe when nobody is standing on it,
+    and this clone runs several worktrees. Git allows a branch in at most one, so the answer
+    is one path or none.
+    """
+    got = run(["git", "worktree", "list", "--porcelain"], cwd=root)
+    if not got.ok:
+        return None
+    here = None
+    for line in got.out.splitlines():
+        if line.startswith("worktree "):
+            here = line[len("worktree "):].strip()
+        elif line.strip() == "branch refs/heads/{0}".format(branch) and here:
+            return here
+    return None
 
 
 def head_of(root: str, ref: str) -> str:
@@ -298,7 +318,8 @@ def github_half(number: int, confirm: bool) -> Tuple[Optional[str], int]:
     if not confirm:
         say("", "  would run:  gh pr merge {0} --merge".format(number),
             "  a merge commit, matching every merge in this repository's history.",
-            "  the branch is NOT deleted: live worktrees track branches in this clone.")
+            "  then the head branch is deleted on origin, and here too unless a worktree",
+            "  holds it — that check is what the old refusal to delete anything stood in for.")
         return None, 0
 
     merged = run(["gh", "pr", "merge", str(number), "--merge"])
@@ -331,6 +352,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("pr", nargs="?", type=int, help="the pull request number")
     parser.add_argument("--confirm", action="store_true",
                         help="perform it. Without this, everything is a preview.")
+    parser.add_argument("--cut", metavar="BRANCH",
+                        help="run the branch cleanup alone against BRANCH, skipping gh. What "
+                             "scripts/merge-selftest.sh drives.")
     parser.add_argument("--local", metavar="REV",
                         help="run the local half alone against REV, skipping gh. What "
                              "scripts/merge-selftest.sh drives.")
@@ -343,6 +367,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     root = repo_root()
     if root is None:
         return refuse("not a git repository.")
+
+    if args.cut:
+        cut_branch(root, args.cut, args.confirm)
+        return 0
 
     if args.local:
         commit = head_of(root, args.local)
@@ -375,8 +403,92 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "  after the merge, main would move in: {0}".format(tree or "(undecidable)"),
             "",
             "  PREVIEW — nothing was run. Add --confirm to perform it.")
+        delete_head_branch(root, args.pr, args.confirm)
         return 0
-    return local_half(root, commit, args.confirm)
+    code = local_half(root, commit, args.confirm)
+    if code == 0:
+        delete_head_branch(root, args.pr, args.confirm)
+    return code
+
+
+# ------------------------------------------------------------------- the branch afterwards
+
+
+def delete_head_branch(root: str, number: int, confirm: bool) -> None:
+    """Delete the merged PR's head branch — on origin always, here when nobody stands on it.
+
+    THIS RAN NOWHERE UNTIL 2026-09-05, AND 125 MERGED PULL REQUESTS LEFT 125 BRANCHES BEHIND.
+    `delete_branch_on_merge` is false on the repository and `gh pr merge` was called without
+    `--delete-branch`, so neither side ever cleaned up: 85 branches on origin and 106 here, of
+    which 81 and 98 were pure ancestors of main holding nothing main did not.
+
+    IT IS NOT `gh pr merge --delete-branch`, and the difference is the reason this function
+    exists rather than a flag. That flag deletes the local branch too, and to do it gh may
+    switch the current working tree to the base branch — underneath a local half whose whole
+    job is to decide which tree main moves in and how. A merge wrapper that moves the ground
+    under its own second half is worse than one that leaves a branch lying around. So this
+    runs AFTER the local half has finished and succeeded, and it asks git the same question
+    D42's local half asks: who is standing where.
+
+    THE ORIGINAL REFUSAL IS KEPT AS THE LOCAL RULE. `github_half` used to print "the branch
+    is NOT deleted: live worktrees track branches in this clone", and that hazard is real —
+    this clone runs linked worktrees and one of them may hold the branch just merged. The
+    remote branch is checked out nowhere by definition, so it goes unconditionally; the local
+    one goes only when `worktree_holding` says no tree has it AND it is an ancestor of main,
+    which after a successful local half it is.
+
+    Nothing here can fail the merge. The merge already happened and main already moved; a
+    branch that outlives them is untidy, not wrong, so every failure below is reported and
+    swallowed.
+    """
+    data, _ = pr_state(number)
+    branch = (data or {}).get("headRefName")
+    if not branch:
+        say("  could not read the head branch name — nothing deleted.")
+        return
+    cut_branch(root, branch, confirm)
+
+
+def cut_branch(root: str, branch: str, confirm: bool) -> None:
+    """The decision half of delete_head_branch, with no `gh` in it.
+
+    Split out for the reason `--local` is split out: the GitHub half is a shell-out to a
+    service and cannot be tested here, so the part that can be is made reachable on its own.
+    `--cut <branch>` is what scripts/merge-selftest.sh drives.
+    """
+    if not confirm:
+        say("", "  would then delete branch {0} on origin,".format(branch),
+            "  and here too unless a worktree holds it.")
+        return
+
+    rule("the branch afterwards")
+
+    gone = run(["git", "push", "origin", "--delete", branch], cwd=root)
+    say("  origin/{0}: {1}".format(branch, "deleted" if gone.ok else "not deleted — " + (
+        (gone.err or gone.out or "git said nothing").strip().splitlines()[-1])))
+
+    if not head_of(root, "refs/heads/" + branch):
+        say("  {0}: not in this clone.".format(branch))
+        return
+
+    held = worktree_holding(root, branch)
+    if held:
+        say("  {0}: kept — checked out in {1}.".format(branch, held))
+        return
+
+    if not run(["git", "merge-base", "--is-ancestor", branch, "main"], cwd=root).ok:
+        say("  {0}: kept — not an ancestor of main, so it holds commits main does not."
+            .format(branch))
+        return
+
+    # -D, not -d, and the check above is why. `git branch -d` refuses a branch that is behind
+    # its own upstream — "not yet merged to refs/remotes/origin/<branch>" — even when every
+    # commit on it is already in main. That refusal fires here routinely: the remote branch was
+    # just deleted, and a branch whose upstream is gone reads as unmerged. The ancestor test is
+    # a STRONGER claim than the one -d makes, so it stands in for it rather than beside it.
+    cut = run(["git", "branch", "-D", branch], cwd=root)
+    say("  {0}: {1}".format(branch, "deleted" if cut.ok else "not deleted — " + (
+        (cut.err or cut.out or "git said nothing").strip().splitlines()[-1])))
 
 
 if __name__ == "__main__":

@@ -116,6 +116,11 @@ make merge-selftest # the merge wrapper's local half, against a throwaway origin
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
                     #   ARGS=<n> previews and presses nothing; ARGS="<n> --confirm" performs it.
                     #   A bare `make merge` refuses: there is no default PR and will not be one.
+                    #   IT DELETES THE HEAD BRANCH AFTERWARDS (2026-09-05) — on origin always,
+                    #   and here only when no worktree holds it and it is an ancestor of main.
+                    #   Until then it deleted neither, and 125 merged PRs had left 85 branches
+                    #   on origin and 106 in this clone. It is NOT `--delete-branch`: that flag
+                    #   would switch this tree's branch out from under the local half.
 
 ./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY. Read the QR codes into the ledger.
                                    #   FREE — no model call, no network. The QR IS the code.
