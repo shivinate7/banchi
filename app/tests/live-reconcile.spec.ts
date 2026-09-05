@@ -216,3 +216,56 @@ test('the log well fold toggle is a thumb target on a phone, outside the markdow
   expect(seen.toggle).toBeGreaterThanOrEqual(40)
 })
 
+/* ESCAPE HOLDS HERE TOO, AND THIS SHEET IS WHERE IT WAS WIRED AND NOT TESTED.
+ *
+ * `LiveReconcile.tsx` passes `busy` as `useOverlayFocus`'s `hold`, the same as the markdown sheet,
+ * and until now the only case for it lived in `markdown.spec.ts` — so this sheet's half of the
+ * contract was asserted by a file that does not render it. The two sheets share one hook and
+ * nothing else; a case in one is not coverage of the other.
+ *
+ * WHAT THE HOLD IS FOR, restated because it is narrow: this sheet stays mounted, so a picked file
+ * and a preview survive a close and reopen intact. What does not survive is a request nobody can
+ * see — nothing aborts it, and its receipt toasts for a sheet that is gone. Everything else closes
+ * on Escape as it always has, which the second half asserts. */
+test('Escape leaves this sheet alone while it is mid-request, and closes it once the answer lands', async ({
+  page,
+}) => {
+  const wire: Wire[] = []
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  await open(page)
+
+  /* Registered AFTER `open`, which installs its own route for this path: Playwright matches the
+     most recently registered first, so this one has to come second to win. Getting that backwards
+     is silent — `open`'s route answers instantly, the sheet never enters the state under test, and
+     the only thing that catches it is the `wire` length at the end of this case. */
+  await page.route(/\/pipeline\/reconcile-live$/, async (route) => {
+    wire.push({ path: '/pipeline/reconcile-live', body: route.request().postDataJSON() })
+    await held
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, exit_code: 0, wrote: false, console: REPORT }),
+    })
+  })
+
+  await pick(page)
+
+  /* In flight, said by the drop zone's own input — disabled by `busy` and nothing else, unlike
+     the footer's presses. */
+  await expect(page.locator('.livecheck input[type=file]')).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(panel(page)).toBeVisible()
+
+  release()
+  await expect(settle(page)).toBeVisible()
+
+  /* Answered: it closes, which is what says the hold was the request and not the sheet. */
+  await page.keyboard.press('Escape')
+  await expect(panel(page)).toHaveCount(0)
+  expect(wire).toHaveLength(1)
+})
+

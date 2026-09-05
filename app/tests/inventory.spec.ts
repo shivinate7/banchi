@@ -4078,11 +4078,21 @@ test('the slot column holds a four-digit card number, and the gap beside it surv
       return [...document.querySelectorAll('.card-locations-rows .position-parts')].map((parts) => {
         const slot = parts.querySelector('.position-slot') as HTMLElement
         const path = parts.querySelector('.position-path') as HTMLElement
-        const figure = parts.querySelector('.position-num, .position-void') as HTMLElement
+        const num = parts.querySelector('.position-num')
         return {
-          figure: parts.querySelector('.position-num')?.textContent ?? null,
+          figure: num?.textContent ?? null,
           overflow: slot.scrollWidth - slot.clientWidth,
-          inkToPath: +(path.getBoundingClientRect().left - ink(figure).right).toFixed(2),
+          /* NULL ON A ROW WITH NO INK, and that is the whole of this field's contract. A
+             departed row's figure is `.position-void`, whose em-dash comes from a `::before`,
+             so the element has NO CHILD NODES and `selectNodeContents` over it returns an
+             all-zero rect — measured: `width` 0 and `right` 0, which made `path.left - 0` read
+             1003.25 against a floor of 11 and passed by a factor of ninety-one. The row was in
+             the loop and testing nothing. What holds that row is `overflow` and `pathX` below,
+             which do not need ink. */
+          inkToPath:
+            num === null
+              ? null
+              : +(path.getBoundingClientRect().left - ink(num).right).toFixed(2),
           pathX: +path.getBoundingClientRect().x.toFixed(2),
           height: +parts.getBoundingClientRect().height.toFixed(2),
         }
@@ -4098,11 +4108,18 @@ test('the slot column holds a four-digit card number, and the gap beside it surv
   /* NOTHING OVERFLOWS ITS SLOT. 6px on the shipped column, at this exact row. */
   for (const row of rows) expect(row.overflow).toBeLessThanOrEqual(0)
 
-  /* AND THE GAP SURVIVES. 5.6px on the shipped column against 18.8px for a three-digit row;
-     `--pos-gap` is 12px, and the floor is set below it because the column reserves in `ch`,
-     which over-reserves against real digits by design — the figure-less row has no glyphs to
-     measure, so `ch` is the only unit both rows can share. */
-  for (const row of rows) expect(row.inkToPath).toBeGreaterThanOrEqual(11)
+  /* AND THE GAP SURVIVES, ON EVERY ROW THAT HAS INK TO MEASURE. 5.6px on the shipped column
+     against 18.8px for a three-digit row; `--pos-gap` is 12px, and the floor is set below it
+     because the column reserves in `ch`, which over-reserves against real digits by design.
+
+     THE FIGURE-LESS ROW IS EXCLUDED RATHER THAN SILENTLY PASSING, which is the correction. It
+     used to be in this loop scoring 1003.25 — an all-zero Range rect subtracted from the path's
+     left edge — so it cleared a floor of 11 ninety-one times over while measuring nothing. It is
+     held by `overflow` and by `pathX` instead, neither of which needs a glyph. The count below
+     is what stops the exclusion quietly emptying the loop. */
+  const inked = rows.filter((row) => row.inkToPath !== null)
+  expect(inked.length).toBeGreaterThanOrEqual(2)
+  for (const row of inked) expect(row.inkToPath).toBeGreaterThanOrEqual(11)
 
   /* THE COLUMN IS STILL ONE COLUMN, across a four-digit row and a row with no figure at all.
      This is `two departed copies` one digit-count further out: that case proves the reserve

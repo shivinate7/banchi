@@ -374,10 +374,13 @@ test('Escape leaves a sheet alone while it is mid-request, and closes it once th
   await expect(sheet(page)).toBeVisible()
   await pickExport(page)
 
-  /* IN FLIGHT, and said so by the thing the hold is keyed on rather than by a sleep: the press
-     that starts the survey is busy until the answer lands, so a disabled worklist-less footer with
-     a busy control in it IS the state under test. */
-  await expect(page.locator('.runs-md .bn-btn[disabled], .runs-md [aria-busy="true"]').first()).toBeVisible()
+  /* IN FLIGHT, SAID BY THE ONE CONTROL THAT CANNOT BE BUSY FOR ANOTHER REASON. This read
+     `.runs-md .bn-btn[disabled], .runs-md [aria-busy="true"]` and took `.first()`, which is any
+     disabled button in the sheet — and two of the six here disable for reasons that are NOT the
+     request: the worklist press on `!survey.ok` and the import press on `!applied.ok`. A refusal
+     with nothing in flight would have satisfied it. The drop zone's own input is disabled by
+     `busy` alone, so it is the honest witness. */
+  await expect(page.locator('.runs-md .runs-drop input[type=file]')).toBeDisabled()
   await page.keyboard.press('Escape')
   await expect(sheet(page)).toBeVisible()
 
@@ -434,6 +437,45 @@ test('a check that comes back refused keeps the press that runs it again', async
  * IT ASSERTS THE COMPUTED `flex-shrink` RATHER THAN A HEIGHT, because a height is only zero once
  * the column actually overflows — at this fixture's sizes both consoles render tall and a height
  * assertion would pass against the defect. */
+/* AND THE SAME ON THE PRESS THAT WRITES THE FILE. `apply` sets its answer whether or not the
+ * answer is `ok`, and `write: true` goes through the same call — so a refused WRITE lands in
+ * exactly the state a refused check does. The check case above proves the `nextPress` condition
+ * reads `applied.ok`; this one proves the condition is reached from the other press too, which is
+ * the half a single case cannot show. */
+test('a write that comes back refused also keeps the press that runs it again', async ({ page }) => {
+  const wire = await stub(page)
+  let refuse = false
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
+    const body = route.request().postDataJSON()
+    wire.push({ path: '/apply', body })
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: !refuse,
+        exit_code: refuse ? 2 : 0,
+        wrote: false,
+        console: refuse ? 'refused: the manifest moved under this worklist' : APPLIED,
+        stamp: STAMP,
+      }),
+    })
+  })
+
+  await opener(page).click()
+  await pickExport(page)
+  await worklistPress(page).click()
+  await checkPress(page).click()
+  await expect(importPress(page)).toBeVisible()
+
+  /* The write refuses. The footer must go back to offering the check, not strand the operator on
+     a disabled import press with the worklist it was about still on the server. */
+  refuse = true
+  await importPress(page).click()
+  await expect(page.getByText('refused: the manifest moved under this worklist')).toBeVisible()
+  await expect(checkPress(page)).toBeVisible()
+  await expect(importPress(page)).toHaveCount(0)
+})
+
 test('both consoles refuse to shrink, not just the one that is a direct child', async ({ page }) => {
   const wire = await open(page)
   await pickExport(page)
