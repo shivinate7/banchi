@@ -331,23 +331,29 @@ Only what makes it gold moves.
 That is assumed rather than swept: a gold foil over a slate base reads dirty. It is the one HELD
 value this section adds, and it is named so it does not become another of section 3's quiet four.
 
-**LOCKED 2026-09-05.** The owner picked the fourth tile of the comparison row — *"have that be
-locked as our gold and black option"*:
+**Locked 2026-09-05**, on the owner's instruction — *"have pale gold with true black as our
+locked option"*:
 
 | what | value | tag | evidence |
 | --- | --- | --- | --- |
-| Gold prism | **`rich`** — `#FFD97A #F0A82E #C9821E #FFEFC0 #B36F18` | **LOCKED** | picked from nine |
-| Ground | **`#141619` → `#000000`**, true black | **LOCKED** | the espresso lost; see below |
-| Brackets | **gold** — `#FFF4D0 #D9A93C #FFFAE8 #A87820` | **LOCKED** | the owner's tile carries these |
+| Brackets | **pale gold** — `#FFFBEE #E8CE8A #FFFDF6 #C0A254` | **LOCKED** | the owner's instruction; and it clears chrome's own floor at the taper tip, see below |
+| Ground | **true black** — `#141619` → `#000000` | **LOCKED** | the owner's instruction; the espresso lost, see below |
+| Gold prism | `rich`, `yellow`, `honey` | RANGED | not named in the instruction, so it stays open. `antique` and `brass` go olive; `bronze` and `rose` stop being gold |
 | Card base | `#C98A2E` amber | **HELD** | never swept |
 | Sheen | 0.15 | LOCKED | inside the settled 0.10 – 0.20 |
 
-**The bracket is the owner's call over a measurement, and the measurement is kept rather than
-deleted.** The locked tile carries *plain* gold, not the pale gold this file argued for below on
-a lightness reading. That reading still stands and is not re-litigated here: it is written down
-so that if the taper tip is ever found to be weak at small sizes, the cause is already on the
-page and the fix is one palette away. **A rejected recommendation is evidence about a risk, not
-an argument to keep having.**
+**The alternatives on that sheet are KEPT, not pruned** — the owner's words, same instruction:
+*"the other passes in here are really good and i may wanna revisit some day"*. That is a rule
+about this file, not a passing remark. `near-black`, `graphite`, the cool black, the six golds that were not
+picked, and the chrome / cream / bronze brackets are **live alternatives, not rejections**, and a
+future session must not delete them to tidy the table. Everything needed to put any of them back
+on screen is in `logo/sheets/black-and-gold.html`.
+
+**A rejection and an option that was simply not picked are different things, and this file now says which is
+which.** Section 3's rejections were argued and bounded on both sides. These were simply not
+picked, once, by one person, on one day. Section 7 rule 5 already warns that a single look is
+thin evidence; letting "not chosen" harden into "eliminated" would turn thin evidence into a
+locked door.
 
 ### The tonal rule gives the wrong answer for gold, and this is the first place it has failed
 
@@ -384,10 +390,14 @@ lightness exactly where the mark can least afford it; pale gold clears chrome's 
 is the section 3 problem in miniature — a value chosen by eye for its mid-tone, failing at an end
 nobody looked at.
 
-**The owner locked plain gold anyway, and that is the answer.** The measurement predicts a
-weakness at the taper tip, and a prediction is not a defect: nothing has yet been rendered at
-32px or 16px, where it would show, and section 3's *small* optical cut removes the taper
-entirely. **The place to settle this is the small cut, not here.**
+**Pale gold is the locked bracket and the measurement is why.** It is the only candidate on the
+sheet whose darkest stop clears chrome's — the bracket this mark has been drawn with all along —
+so nothing is given up at the taper tip to gain the second metal. That is a rare shape for an
+answer here: the owner's eye and the number agreed, rather than one overriding the other.
+
+**None of this has been rendered at 32px or 16px, where a weak taper tip would actually show.**
+Section 3's *small* optical cut removes the taper entirely, so the small cut is where this would
+be settled if it ever came under doubt.
 
 ## 9. Still open
 
