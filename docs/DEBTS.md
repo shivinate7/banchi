@@ -710,13 +710,24 @@ read on that screen is a pull. Two pulls in one case did not produce two reads a
 and shipping the clear without a case that had been observed failing is the thing this repo does not
 do. The behavior is therefore unchanged and the gap is here instead.
 
+**And the obstacle is the harness, not the code — which is a hazard of its own.** Measured
+2026-09-04 while trying again: `app/tests/orders.spec.ts` stubs the four `/orders*` routes and
+nothing else, so `/status`, `/games` and `/boxes` reach the REAL capture server on this checkout's
+port, and it sends a real `X-Pkmnscan-Boot` of its own. **Two sources alternating is a value that
+changes on almost every read**, which fires `onServerBoot` continuously — the pass was cleared the
+instant it was frozen, and the case read as though the listener did not work. Rewriting the header on
+every capture-server response fixed that half (the app then saw `boot-one` and nothing else) and the
+fixture still would not reach the state under test. **`onServerBoot` also clears the shipping batch
+(D73)**, so any spec holding one can have it cleared by the real server's boot id; nothing has been
+observed failing that way, and nothing would say so if it did — the batch would simply be gone.
+
 **Why none of these is fixed.** All three were surfaced by an adversarial review of the change that
 introduced the figure, before it shipped, rather than found afterwards — and all three are the
 figure being narrower than the screen rather than wrong about what it counts. A green walk means *"this many of the orders the
 pass began with are complete"*, which is less than *"this many of the orders in front of you"*, and
 that difference is the whole of this section.
 
-## 11 — The capture server has no bound on concurrency, and a Playwright fleet is what finds out
+## 11 — The capture server bounds concurrent requests, not threads, and a Playwright fleet is what finds out
 
 `server/capture_server.py` serves on `class CaptureServer(ThreadingHTTPServer)` with
 `request_queue_size = 128`. **`request_queue_size` bounds the ACCEPT BACKLOG, not the thread count**:

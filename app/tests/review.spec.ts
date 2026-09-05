@@ -303,6 +303,16 @@ test('answering a card costs no scrolling, and the page never scrolls sideways',
      budget is spent on the card rather than the desk, and the document fits. Both instruments
      are kept: this one catches an overflow anywhere, the three below say WHICH surface left the
      screen, and a failure in one but not the other is the useful signal. */
+  /* THE RULER AND THE TYPE HAVE TO AGREE ABOUT WHICH FACE IS ON SCREEN. This case takes four pixel
+     measurements and was the only one in this directory that measured without settling the faces
+     first. `app/index.html` fetches with `&display=swap`, which is a deliberate instruction to paint
+     in the fallback and re-lay-out when the real face arrives — right for a reader, wrong for a
+     ruler. Under `make design-check`'s parallel load the swap window is wide enough to be measured
+     inside: observed at 88px over the viewport on a run where it passes alone every time.
+     `fontsReady.ts` carries the whole argument. It weakens nothing — a false statement is still
+     false, and the document either fits or it does not. */
+  await settleFonts(page)
+
   const tall = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)
   expect(tall).toBeLessThanOrEqual(0)
 
