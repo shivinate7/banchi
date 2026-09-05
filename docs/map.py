@@ -2497,17 +2497,29 @@ COMPONENTS = [
                         "classes exist only where the component rendered them. TWO DERIVATIONS "
                         "CARRY A LABEL WITH NO FIGURE (D71): in a list the whole slot column is "
                         "reserved, key included, so a figure-less row's path starts at the same x "
-                        "as every other (it hung 38.3px left); as a singleton the path re-ranks "
+                        "as every other; as a singleton the path re-ranks "
                         "to clamp(11px, 0.45em, 20px), because with no figure the path is the "
-                        "payload. THAT COLUMN IS THE LIST'S SINCE 2026-09-04 and no longer a "
-                        "per-row guess: this file reads `--pos-slot-col`, which src/"
-                        "CardLocations.css declares once on the copies list, because a row cannot "
-                        "see whether its siblings drew a key. The width it replaced was computed "
-                        "from a per-character factor and 3ch of the WRONG font, and came out "
-                        "2.109px short — an assertion app/tests/inventory.spec.ts carried red from "
-                        "the merge until then. The dash in the empty column is `content`, so it "
+                        "payload. THAT COLUMN IS THE LIST'S, AND IT IS TWO TERMS WITH DIFFERENT "
+                        "PROVENANCE (D92, amended 2026-09-05). The figure's width is DATA — how "
+                        "many cards are in the box — and is spent here in the figure's own `ch` "
+                        "off `--pos-slot-digits`, which src/CardLocations.tsx computes from the "
+                        "`place.card` of the copies it is drawing. The key's is TYPOGRAPHY, a "
+                        "four-letter word in a second font that no CSS unit measures, and is the "
+                        "one constant left: `--pos-slot-key`, 37.594px, declared by src/"
+                        "CardLocations.css and spent as padding on the figure-less row. A row "
+                        "cannot compute either — it cannot see whether its siblings drew a key, "
+                        "nor how many digits they held. THE SINGLE `--pos-slot-col` BEFORE IT was "
+                        "right about the fonts and could never be right about the digit count: a "
+                        "box past 999 cards overflowed it silently, because the figure is "
+                        "flex-shrunk and its glyphs paint outside their own box. Before THAT the "
+                        "width was computed from a per-character factor and 3ch of the WRONG "
+                        "font, and came out 2.109px short — an assertion app/tests/inventory."
+                        "spec.ts carried red from the merge until 2026-09-04. The figure-less "
+                        "row carries the figure's FACE, family and weight both, because `ch` is "
+                        "the advance of `0` in the element's own face and Manrope is variable. "
+                        "The dash in the empty column is `content`, so it "
                         "never joins the label's textContent.",
-                "governed_by": ["D24", "D31", "D41", "D58", "D68", "D71"]},
+                "governed_by": ["D24", "D31", "D41", "D58", "D68", "D71", "D92"]},
             "src/PlaceNeighbors.tsx": {
                 "does": "D30's neighbours, RANKED rather than joined (D41's move one line down, "
                         "2026-08-30). `after` / `before` as a muted mono key column with the two "
@@ -2843,7 +2855,7 @@ COMPONENTS = [
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
                                               "action.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D68"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "

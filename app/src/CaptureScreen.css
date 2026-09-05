@@ -753,6 +753,16 @@
 }
 .capture-undo-row:hover:not(:disabled) .capture-undo-thumb,
 .capture-undo-row:focus-visible .capture-undo-thumb { box-shadow: 0 0 0 2px var(--bn-danger), var(--bn-shadow-2); }
+/* IT WRAPS AT A TWO-DIGIT BOX, AND THAT IS THE LEAST BAD OF THE THREE (measured 2026-09-05).
+   This caption grew from `#40` to the store key when the null-label path started drawing one, and
+   nothing had looked at it in a 5-column filmstrip since. At 390 the cell is 56px and the ink is:
+   `B3 #345` 45.81 on one line, `B3 #1345` 52.92 on one line — so the FOUR-DIGIT box the owner is
+   about to fill still fits — and `B12 #1345` wraps to two, taking the caption from 34.5px to 51px.
+   Wrapping is degradation and not breakage: the caption is absolutely positioned over the bottom
+   of the thumbnail, so a second line covers more photograph and moves no layout.
+   `white-space: nowrap` is deliberately NOT set. With `left: 0; right: 0` there is nothing to
+   push, so an unwrapped `B12 #1345` at ~63px would SPILL outside the cell rather than wrap inside
+   it, and an ellipsis would truncate the one string on this row that identifies the record. */
 .capture-undo-pos {
   position: absolute;
   left: 0;

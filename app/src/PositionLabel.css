@@ -71,26 +71,42 @@
 /* Slot-first: the figures in a hard column at the cell's left edge, the path after. */
 .position-parts[data-lead='slot'] .position-path { order: 2; }
 .position-parts[data-lead='slot'] .position-slot { order: 1; }
+/* THE DIGITS RESERVE THEMSELVES, IN THE FIGURE'S OWN `ch`. `1ch` here is the advance of `0` in
+   `--bn-font-display` at `--pos-slot`, tabular — which is the true digit advance and needs no
+   formula. The COUNT is the list's, because a row cannot see how many digits its siblings drew;
+   `3` is the fallback for a label standing on its own, and it is what every list rendered before
+   the count existed. */
 .position-parts[data-lead='slot'] .position-num,
-.position-parts[data-lead='slot'] .position-void { min-width: 3ch; }
+.position-parts[data-lead='slot'] .position-void {
+  min-width: calc(var(--pos-slot-digits, 3) * 1ch);
+}
 /* THE COLUMN BELONGS TO THE LIST, AND THAT IS THE WHOLE OF THE FIX. The rule above holds the
    DIGITS in a column, which a row can do alone. What a row cannot hold is the KEY beside them:
    it may or may not draw one — `slot.key === ''` renders the number alone, and a state terminal
    renders a void where the figure would be (D58, D71) — and no row can see what its siblings
-   drew. So a list that reads these down a column declares `--pos-slot-col` once and every row
-   in it reserves the same width; a label standing on its own declares nothing and sizes to its
-   own content, which is what `auto` is.
+   drew. So the list declares the KEY's advance once, as `--pos-slot-key`, and the figure-less row
+   reserves it as padding; a label standing on its own declares nothing and reserves nothing, which
+   is the `0px` fallback below.
 
-   WHAT WAS HERE was a hand-computed approximation of the key's advance width, and it was 2.109px
-   short — the deliberate red assertion in `app/tests/inventory.spec.ts`. Measured in
-   `#/inventory`'s copies list at `--pos-slot: 22px`: a live row's slot is 82.06px, being `CARD`
-   at 33.59 + the 4px gap + the figure's 3ch of MANROPE at 44.47, while the reserve computed
-   79.95, being 3ch of INTER at 41.63 + 4 + `4 × 0.78 × 11px` at 34.32. Two different fonts'
-   `ch` and a per-character factor for a four-letter word, neither of which a formula can know
-   it is wrong about — which is why a better factor was never the fix. A departed copy's path
-   hung 2.1px left of every live one's, so the hard column `lead='slot'` exists to draw was
-   ragged for exactly the cards a person had just sold. */
-.position-parts[data-lead='slot'] .position-slot { width: var(--pos-slot-col, auto); }
+   THE TWO TERMS HAVE DIFFERENT PROVENANCE, AND THAT IS THE WHOLE OF THE DESIGN. The figure's width
+   is DATA — how many cards are in the box — and it is spent above in the figure's own `ch`, where
+   the browser measures it. The key's is TYPOGRAPHY: a four-letter word in a second font, which no
+   CSS unit gives you. A constant may be right about typography forever; it can never be right about
+   data. The version this replaced put both in one number and so was right about the fonts and wrong
+   about the digit count the day a box passed 999 — measured on the real screen at 1440: three
+   digits leave 18.8px between the figure's ink and the path, four leave 5.6px, and five OVERLAP it
+   by 7.6px, none of which any element's own box reports, because the figure is flex-shrunk to a
+   fixed width and its glyphs paint outside it.
+
+   WHAT WAS HERE BEFORE THAT was a hand-computed approximation of the key's advance width, and it
+   was 2.109px short — the deliberate red assertion in `app/tests/inventory.spec.ts`. It computed
+   79.95, being 3ch of INTER at 41.63 + 4 + `4 × 0.78 × 11px` at 34.32, against a real 82.06. Two
+   different fonts' `ch` and a per-character factor for a four-letter word, neither of which a
+   formula can know it is wrong about — which is why a better factor was never the fix, and why the
+   key's term is MEASURED rather than derived. A departed copy's path hung 2.1px left of every live
+   one's, so the hard column `lead='slot'` exists to draw was ragged for exactly the cards a person
+   had just sold. */
+.position-parts[data-lead='slot'] .position-slot { width: max-content; }
 
 /* ---- the number column of a card that is in no slot ---- */
 .position-void {
@@ -102,8 +118,39 @@
   text-align: center;
 }
 .position-parts[data-lead='path']:has(.position-void) { --pos-path: clamp(11px, 0.45em, 20px); }
-.position-parts[data-lead='slot'] .position-void::before { content: '\2014'; }
-.position-parts[data-lead='slot'] .position-void { margin-left: auto; }
+/* THE EM-DASH IS PAINTED AT THE MUTED WEIGHT, on a box measured at the figure's. Splitting them
+   is the whole trick of the rule below: the ELEMENT carries the figure's face so its `ch` is the
+   figure's, and the GLYPH carries the register a void is supposed to have. */
+.position-parts[data-lead='slot'] .position-void::before {
+  content: '\2014';
+  font-family: var(--bn-font-ui);
+  font-weight: 400;
+}
+/* THE KEY THIS ROW DOES NOT DRAW, RESERVED. `margin-left: auto` did this while the slot had a hard
+   width — it pushed the void to the right edge of a box whose size came from elsewhere. Under
+   `max-content` that would silently absorb an under-reservation instead of failing visibly, which
+   is the opposite of what this column needs, so it is REPLACED and not merely left redundant. */
+.position-parts[data-lead='slot'] .position-void {
+  /* THE FIGURE'S WHOLE FACE, FOR THE METRICS, AND ONLY WHERE A COLUMN IS BEING SHARED. `1ch` is
+     the advance of `0` in THIS element's face; matching `.position-num` means matching the family
+     AND the weight, because Manrope is variable and its `0` is 14.828px at 800 against 13.772px at
+     400. Measured, both errors in turn: inheriting Inter left the departed path 27.3px short, and
+     fixing only the family left it 3.156px short — the same defect as the one recorded above, one
+     axis further in. A `ch` reservation that has to match another element's must match the whole
+     FACE. This is scoped to `lead='slot'` because it is a RESERVATION and nothing else: a
+     path-lead void shares no column with anything and keeps the register it always had.
+
+     CONTENT-BOX, AND IT IS LOAD-BEARING. `base.css` sets `border-box` on everything, under which
+     the `min-width` above would mean "digits AND key together" and the padding would be absorbed
+     rather than added — measured: the departed path landed 27.3px LEFT of the live one, thirteen
+     times the 2.109px defect this column was built to fix. Content-box makes `min-width` mean the
+     DIGIT FIELD on this element exactly as it does on `.position-num`, so the two rows are the same
+     `--pos-slot-key` + N`ch` and the reservation is additive. */
+  font-family: var(--bn-font-display);
+  font-weight: 800;
+  box-sizing: content-box;
+  padding-inline-start: var(--pos-slot-key, 0px);
+}
 
 /* ---- the store key a label may end on (D68) ---- */
 .position-plain { display: flex; flex-direction: column; min-width: 0; }
