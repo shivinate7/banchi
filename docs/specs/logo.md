@@ -257,8 +257,8 @@ the taper both survived; two things the table above does not mention did not.
 | `logo/pass-black-and-gold.png` | **section 8** — nine golds, five blacks, five brackets |
 | `logo/pass-white-and-rose-gold.png` | white gold and rose gold on the locked black, one pass each |
 | `logo/pass-locked-set.png` | **section 9 — the six locked marks**, at 200px and at 48/28px |
-| `logo/pass-small-cut.png` | **§11 — the small cut swept.** NOT COMMITTED: the pre-commit image guard refuses a PNG and has no hatch. Re-render from the sheet |
-| `logo/pass-light-ground.png` | **§12 — the light ground**, derived and rejected. NOT COMMITTED, same reason |
+| `logo/pass-small-cut.png` | **§11 — the small cut swept**, rasterised at the sizes the app draws |
+| `logo/pass-light-ground.png` | **§12 — the light ground**, derived and rejected |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
 | `logo/sheets/grounds.py` | **the ground rule, and the only implementation of it.** Self-checks against every published stop |
 
@@ -548,9 +548,8 @@ marks are locked at the display cut and none is locked at the small cut**, and a
 ## 11. The small cut, drawn
 
 **Swept 2026-09-05. Section 3 asserted this cut in two words and nothing had ever drawn it.**
-Sheet: `logo/sheets/small-cut.html`. **The render is not committed** — every PNG in this
-directory went in past the pre-commit image guard on the owner's word, one at a time, and that
-guard has no `PKMNSCAN_*=off` hatch. Re-render it:
+Sheet: `logo/sheets/small-cut.html`, render `logo/pass-small-cut.png` — which went in past the
+pre-commit image guard on the owner's word, the way every PNG in this directory did. Re-render:
 
 ```
 node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/small-cut.html /tmp/small.png 1240 1000
@@ -629,7 +628,7 @@ rule applies: it was not chosen, it was not eliminated.
 ## 12. The light-theme ground — derived, and it loses
 
 **Asked for on 2026-09-05 and answered on the sheet rather than in a sentence.** Sheet:
-`logo/sheets/light-ground.html`; the render is not committed, for the reason §11 gives.
+`logo/sheets/light-ground.html`, render `logo/pass-light-ground.png`. Re-render:
 
 ```
 node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/light-ground.html /tmp/light.png 1300 1000
