@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`make sigil-check` — a bare `#` on an owner-side screen is a COUNT, never a store key (D92).
+"""`make sigil-check` — the figure on an owner-side screen is a COUNT, never a store key (D92).
 
 WHAT THIS EXISTS ABOUT. D58 split one address into two numbers: `Place.index` is the store key
 — the `/inventory/<box>/<index>` path, the `<index>.jpg` the photograph is named after, what
@@ -10,8 +10,10 @@ drew `Section 1 · #1–#82` in count space while the neighbour row beside it dr
 key. On the owner's box 3 those spaces are 76 apart, so `#27` named two different cards on one
 screen and nothing said which was which.
 
-THE RULE IS THE NARROW ONE, because it is the only one a text check can hold honestly: a `#`
-composed from an expression that mentions `index` is refused. Not "every number is checked" —
+THE RULE IS THE NARROW ONE, because it is the only one a text check can hold honestly: a
+figure composed from an expression that mentions `index` is refused, in either of the two ways
+this product spells one — a bare `#`, and the word `Card` (D92 amended, 2026-09-04, after four
+of the word form shipped past a green run of the first). Not "every number is checked" —
 this cannot tell a count from a key in general, and a check that claimed to would be worse than
 none. What it catches is the specific, repeated mistake: reaching for the field named `index`
 when drawing a figure a hand is meant to count to.
@@ -35,7 +37,8 @@ documents it.
     make sigil-check          check app/src
     python3 scripts/sigil-check.py --self-test    the extractors, against fixtures
 
-An intentional key render marks its line `sigil-ok:` with a reason. Nothing does today.
+An intentional key render marks its line `sigil-ok:` with a reason. Two do: `storeKey.ts`,
+which is the server's own spelling, and `BoxOps.tsx`, whose receipt names skipped records.
 """
 
 from __future__ import annotations
@@ -56,7 +59,7 @@ ALLOW = re.compile(r"sigil-ok:\s*\S")
 # WHERE THE MARKER MAY SIT: on the offending line, or anywhere in the CONTIGUOUS COMMENT BLOCK
 # directly above it. Not a fixed line window — a window can reach past intervening code and
 # silence a violation nobody meant to exempt. The comment block is the right unit because every
-# real exemption here needs a paragraph, not a trailing clause: all four in this tree explain
+# real exemption here needs a paragraph, not a trailing clause: both in this tree explain
 # why the record has no slot to draw instead, which does not fit after the code.
 #
 # "IS THIS LINE A COMMENT" IS ASKED OF THE STRIPPER RATHER THAN OF A SECOND REGEX, and the first
@@ -75,6 +78,22 @@ ALLOW = re.compile(r"sigil-ok:\s*\S")
 # rather than swallowing the rest of the file.
 SIGIL = re.compile(r"#\$?\{([^{}]*)\}")
 
+# THE SAME CONFUSION IN THE WORD FORM, which the rule above cannot see and which shipped four
+# times while it was green (D92 amended, 2026-09-04). `Card {sample.index}` makes exactly the
+# claim `#{sample.index}` makes — D58's countable number — and makes it in the register a
+# screen reader reads aloud, since two of the four were `aria-label`s.
+#
+#   Card {preview.sample.index}      JSX child
+#   `card ${preview.sample.index}`   template literal, `alt=` and `aria-label=`
+#
+# MEASURED BEFORE IT WAS WRITTEN, over every `.ts`/`.tsx` in `app/src`: this pattern returns the
+# four real violations and nothing else. The eight other word-form renders in the tree —
+# `Card ${slot}` four times in `PositionBar`, `card {preview.offset + 1}`, `Card {walkAt + 1}`,
+# `from card ${opened.start}`, and `<FulfillerCard {...props}>` — all fall outside it on the
+# `index` requirement alone, so the spread form needs no special case. Same brace-free body as
+# `SIGIL`, for the same reason.
+WORD = re.compile(r"\b[Cc]ard \$?\{([^{}]*)\}")
+
 # What makes a captured expression a store key. Word-boundaried so `indexOf` — which is a string
 # search and appears in this very directory — is not a hit.
 KEY = re.compile(r"\bindex\b", re.IGNORECASE)
@@ -85,14 +104,28 @@ class Finding(NamedTuple):
     line: int
     text: str
     expression: str
+    # WHICH OF THE TWO CLAIMS WAS MADE, because the remediation differs. A `#` is respelled with
+    # D68's sigil; the word `Card` cannot be — there is no spelling of it that means a key — so
+    # that one either draws the slot or draws `storeKeyText`.
+    kind: str = "sigil"
 
     def render(self) -> str:
+        drew = (
+            f"draws `#` over `{self.expression.strip()}`"
+            if self.kind == "sigil"
+            else f"calls `{self.expression.strip()}` a *card number* in words"
+        )
+        fix = (
+            "Send and draw the slot; keep the index for addressing. See D92."
+            if self.kind == "sigil"
+            else "Draw the slot, or `storeKey.ts`'s `storeKeyText(box, index)` where the "
+            "record has no slot to count. See D92."
+        )
         return (
             f"  {self.path}:{self.line}\n"
             f"      {self.text.strip()}\n"
-            f"      draws `#` over `{self.expression.strip()}`, which is a store key. D58 made "
-            f"a bare `#` a COUNT.\n"
-            f"      Send and draw the slot; keep the index for addressing. See D92.\n"
+            f"      {drew}, which is a store key. D58 made the figure a COUNT.\n"
+            f"      {fix}\n"
         )
 
 
@@ -159,9 +192,10 @@ def scan_text(path: str, source: str) -> List[Finding]:
         raw = raw_lines[number - 1] if number <= len(raw_lines) else ""
         if allowed(raw_lines, cleaned, number):
             continue
-        for match in SIGIL.finditer(line):
-            if KEY.search(match.group(1)):
-                out.append(Finding(path, number, raw, match.group(1)))
+        for pattern, kind in ((SIGIL, "sigil"), (WORD, "word")):
+            for match in pattern.finditer(line):
+                if KEY.search(match.group(1)):
+                    out.append(Finding(path, number, raw, match.group(1), kind))
     return out
 
 
@@ -199,6 +233,28 @@ SELF_TEST: Tuple[Tuple[str, str, int], ...] = (
     ("a line comment describing it", "// `#${side.index}` was the bug", 0),
     ("a quoted string in a test message", "checks.equal(x, y, 'the #{index} it drew')", 0),
     ("indexOf is not an index", "const at = `#${name.indexOf(', ')}`", 0),
+    # ---- the word form (D92 amended). The four shapes that shipped, then every legitimate
+    # `Card {…}` render standing in this tree, each as a zero — the false-positive rate is the
+    # whole question this rule had to answer before it could be adopted.
+    ("the word form, JSX child", "<span>Card {preview.sample.index}</span>", 1),
+    (
+        "the word form, alt text",
+        "<img alt={`Box ${sample.box}, card ${sample.index}, as sent`} />",
+        1,
+    ),
+    (
+        "the word form, aria-label",
+        "<div aria-label={`Card ${sample.index} at full size`} />",
+        1,
+    ),
+    ("the word form, capitalised in a template", "const t = `Card ${s.index}`", 1),
+    ("the word form over a slot is the fix", "<span>Card {place.slot}</span>", 0),
+    ("a slot in a template is the fix", "const t = `Card ${slot} of ${box_total}`", 0),
+    ("a one-based walk offset is not a key", "<span>card {preview.offset + 1}</span>", 0),
+    ("a walk cursor is not a key", "<span>Card {walkAt + 1} of {walk.length}</span>", 0),
+    ("a section start is not a key", "const p = `from card ${opened.start}`", 0),
+    ("a JSX spread onto a Card component", "<FulfillerCard {...props} missing={m} />", 0),
+    ("the word form behind an explicit allow", "<b>Card {s.index}</b> // sigil-ok: pooled", 0),
     ("an explicit allow", "<b>#{side.index}</b> // sigil-ok: this row addresses", 0),
     ("a bare allow marker does not count", "<b>#{side.index}</b> // sigil-ok:", 1),
     (
@@ -250,10 +306,10 @@ def main(argv: Sequence[str]) -> int:
     found = scan()
     if not found:
         scanned = sum(1 for _ in files())
-        print(f"sigil-check: {scanned} files, no bare `#` drawn over a store key.")
+        print(f"sigil-check: {scanned} files, no store key drawn as a card number.")
         return 0
 
-    print("sigil-check: a bare `#` on these screens is a COUNT, and these draw a store key.\n")
+    print("sigil-check: the figure on these screens is a COUNT, and these draw a store key.\n")
     for finding in found:
         print(finding.render())
     print(

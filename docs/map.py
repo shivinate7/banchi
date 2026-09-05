@@ -1493,8 +1493,11 @@ COMPONENTS = [
             "sigil-check.py": {
                 "does": "`make sigil-check` \u2014 a bare `#` on an owner-side screen draws "
                         "D58's COUNT of the cards in a box and never the store key, and a key "
-                        "is drawn only with D68's `B<box>` sigil (D92). Refuses a `#` composed "
-                        "from an expression naming `index`, over app/src, with a per-line "
+                        "is drawn only with D68's `B<box>` sigil (D92). Refuses a FIGURE composed "
+                        "from an expression naming `index`, in either spelling this product "
+                        "uses \u2014 a bare `#`, and the word `Card` (D92 amended 2026-09-05, after "
+                        "four of the word form shipped past a green run of the first, measured "
+                        "at four true positives and zero false ones over app/src) \u2014 with a per-line "
                         "`sigil-ok: <reason>` escape that demands the reason. ON THE COMMIT "
                         "PATH \u2014 scripts/githooks/pre-commit runs it, self-test first \u2014 "
                         "because it writes nothing and needs no venv, which is the whole of "
@@ -2929,7 +2932,7 @@ COMPONENTS = [
                                              "from (D39 — `#/inventory` keeps the only mass "
                                              "select); this owns how each is read and everything "
                                              "after the press.",
-                                     "governed_by": ["D32", "D33", "D39", "D48", "D65", "D76", "D94"]},
+                                     "governed_by": ["D32", "D33", "D39", "D48", "D52", "D58", "D65", "D76", "D94"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
@@ -3535,7 +3538,7 @@ COMPONENTS = [
                         "undoing exactly one, a row undoing that card AND everything after "
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
-                "governed_by": ["D10", "D41"],
+                "governed_by": ["D10", "D41", "D58"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "

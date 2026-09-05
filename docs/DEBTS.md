@@ -648,7 +648,31 @@ over that line from the day it was written until the sweep D92 deferred was carr
 lines it can see: it read 61 files and the sweep found nothing it had missed except this one. It
 does mean the nominal type this entry calls *the real answer* now has a shipped defect behind it
 rather than a hypothetical, and D92's rejection of it on blast radius was made without one. That
-is the owner's call and nobody else's; recording it is what this file is for. **Until it is made,
-a green run means "no `#` is drawn over a field literally named index on that line", which is less
-than it sounds like, and the sweep that catches the rest is a person reading `app/src` for
-`#{…}` and asking of each one what number it is.**
+is the owner's call and nobody else's; recording it is what this file is for.
+
+**The cheap partial was taken first, on the owner's ruling (2026-09-05).** Asked whether the
+nominal type should be argued now or the guard shipped first, the owner chose the guard. So the
+check reads a second pattern: the word form, `Card {…index}`, which is the same claim as `#{…index}`
+in the register a screen reader speaks. **It was measured before it was written rather than adopted
+on the argument that it sounded cheap** — over every `.ts`/`.tsx` in `app/src` it returns four
+violations and nothing else, all four in `RunsComposer.tsx`, and the eight legitimate `Card {…}`
+renders standing in the tree fall outside it on the `index` requirement alone. Those eight are
+self-test cases now, so the false-positive rate that made it adoptable is asserted rather than
+remembered. **The four it found had shipped**: two of them `aria-label`s, on a panel whose figure
+names a photograph the run is about to pay to have read.
+
+**What the second pattern does NOT do is close this section.** It is the same text match one word
+wider. `const n = side.index` then `Card {n}` walks past both patterns exactly as it walked past
+one, and the ceiling this section was opened about is where it was. What changed is that the
+sweep D92 deferred is no longer the only thing standing between this class and a screen — for the
+two spellings the product actually uses. **Until the nominal type is ruled on, a green run means
+"no figure is drawn over a field literally named index on that line, in either of two spellings",
+which is more than it meant and still less than it sounds like, and the sweep that catches the rest
+is a person reading `app/src` and asking of each figure what number it is.**
+
+**Two the sweep can see and neither pattern can, left deliberately.** `Pricing.tsx:2641` draws
+`` `no label · ${photoAt.box}/${photoAt.index}` `` and `Orders.tsx:1205` draws
+`` `box ${target.box}, index ${target.index}` ``. Both spell the key in prose with no figure at
+all, so no sigil rule reaches them and none should — naming the index *as* the index is the one
+thing that is never the confusion. They are here because they are the shape a future reader will
+check this file about.

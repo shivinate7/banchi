@@ -368,7 +368,7 @@ audit-self-test:
 # D92 — a bare `#` on an owner-side screen is D58's COUNT, and three renderers spelled the
 # store key the same way. ON THE COMMIT PATH, unlike its neighbours here: it writes nothing,
 # needs no venv and no node, and reads only tracked source, so none of D18's reasons apply.
-# Its own self-test runs with it — cheap enough (16 cases over strings) that splitting them
+# Its own self-test runs with it — cheap enough (27 cases over strings) that splitting them
 # into a second target would cost more to explain than to run.
 sigil-check:
 	@python3 scripts/sigil-check.py --self-test
