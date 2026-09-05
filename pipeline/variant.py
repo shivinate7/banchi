@@ -118,6 +118,34 @@ DETECTED_FINISH_NOT_STOCKED = "detected_finish_not_stocked"
 AMBIGUOUS_NO_SIGNAL = "ambiguous_no_signal"
 DUPLICATE_CONDITION = "duplicate_condition"
 
+# THE LADDER'S REVIEW REASONS, PUBLISHED AS A SET (D3). Six of the fourteen module-level
+# constants in this file are reasons; the other eight are finishes (`normal`, `holo`,
+# `reverse_holo`) and ladder stages (`metadata`, `catalog_forced`, `detection`, `review`,
+# `human_answered`). Every one of the fourteen is spelled `UPPER_NAME = "lowercase_string"`,
+# so nothing in the SHAPE of a line says which kind it is.
+#
+# WHY THAT MATTERS ENOUGH TO ADD A TUPLE. `scripts/docs-audit.py` reconciles this vocabulary
+# against the screen's labels and docs/DESIGN.md, and it could only ever run one direction —
+# it starts from a reason somebody published and asks whether the code defines it. The other
+# direction, "what are all the reasons", had no answer that did not involve guessing which
+# constants qualify, and the cheapest guess ("every UPPER = lowercase string here") is wrong
+# about eight of fourteen in this file alone. On a blocking row a guess does not produce a
+# report someone shrugs at; it stops commits, and a row that stops commits for bad cause is
+# one people learn to bypass.
+#
+# So the set is declared rather than inferred. The reader is the audit, not the interpreter —
+# there is no runtime assertion here worth writing, because a tuple built from the constants
+# beside it cannot disagree with them. What it buys is that a SEVENTH reason added below and
+# left out of this tuple is now a failed commit instead of a silent omission.
+LADDER_REASONS = (
+    NO_CATALOG_ROW,
+    RARITY_CLAIM_MISMATCH,
+    METADATA_NOT_STOCKED,
+    DETECTED_FINISH_NOT_STOCKED,
+    AMBIGUOUS_NO_SIGNAL,
+    DUPLICATE_CONDITION,
+)
+
 
 class UnknownFinish(ValueError):
     """A finish string outside the enum. Never coerce — guess once and it prices wrong."""

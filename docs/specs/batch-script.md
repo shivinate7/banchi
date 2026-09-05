@@ -344,11 +344,18 @@ would queue by reason code, and returns before the first write: no queues, no
 the write is a preview that can be wrong in the one way that matters, so the counts come off
 `entries_for` — the same function the write uses.
 
-**Raw reason codes, no gloss table.** `app/src/ReviewQueue.tsx` holds the only label map in
-the product and says in its own comment that nothing keeps it in step with the Python
-constants; a second table in the CLI would be a third vocabulary with even less holding it
+**Raw reason codes, no gloss table.** `app/src/reasons.ts` holds the only label map in the
+product; a second table in the CLI would be a third vocabulary with even less holding it
 together (D16). The plain English the operator needs is about the rule, not about each code,
 and it is one sentence printed once.
+
+**Two corrections, 2026-09-05.** The map used to live in `app/src/ReviewQueue.tsx` and this
+paragraph still named that file. And it said *nothing keeps it in step with the Python
+constants* — two rows do now. `reason codes` reconciles the labels against the constants and
+`docs/DESIGN.md`; `reason emissions` reconciles them against the rosters the pipeline
+publishes (`variant.LADDER_REASONS`, `routing.ROUTING_REASONS`) and fails on a declared reason
+with no producer. The argument for one table is unchanged — it was never the drift that made a
+second table wrong — but the drift itself is no longer unwatched.
 
 ### 5.4 Routing — which queue a card lands in
 
