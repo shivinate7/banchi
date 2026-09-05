@@ -491,7 +491,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
 function WhichKey({ armed }: { armed: boolean }) {
   if (!armed) return null
   return (
-    <div className="bn-whichkey bn-anim-pop" role="status" aria-live="polite">
+    <div className="bn-whichkey" role="status" aria-live="polite">
       <div className="bn-whichkey-title">
         <Kbd>,</Kbd> then…
       </div>
