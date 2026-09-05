@@ -1286,7 +1286,7 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
-                "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72", "D76", "D80", "D81", "D84", "D92"],
+                "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72", "D76", "D80", "D81", "D84", "D90", "D92", "D96"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

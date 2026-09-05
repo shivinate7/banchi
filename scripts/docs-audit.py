@@ -2052,6 +2052,135 @@ def check_shipping_columns(report: Report) -> None:
     )
 
 
+# `docs/specs/order-pipeline.md` §3 declares each work item's state in its own heading, and
+# CLAUDE.md's pointer at that spec restates some of them. `NOT BUILT` leads the alternation so
+# it is never read as a bare `BUILT`.
+_WORK_ITEM_SPEC = Path("docs") / "specs" / "order-pipeline.md"
+_WORK_ITEM_READER = Path("CLAUDE.md")
+_WORK_ITEM_STATES = ("NOT BUILT", "BUILT", "SUPERSEDED", "DISCHARGED")
+_WORK_ITEM_HEADING = re.compile(
+    r"^### T(\w+) — .*?\.\s+(" + "|".join(_WORK_ITEM_STATES) + r")\b", re.M
+)
+# The reader's claim form: the item, an optional em-dash aside, then `is <state>`. Anchored on
+# `is` because this repo strikes and annotates rather than deleting — "said T6 was BUILT until
+# 2026-09-05" is the correction, not the claim, and must not be read as one.
+_WORK_ITEM_CLAIM = re.compile(
+    r"T(\w+)\b(?:\s*—[^—]*—)?\s+is\s+("
+    + "|".join(_WORK_ITEM_STATES)
+    + r"|unbuilt|deleted)\b",
+    re.S,
+)
+_WORK_ITEM_SYNONYM = {"unbuilt": "NOT BUILT", "deleted": "SUPERSEDED"}
+_WORK_ITEM_BULLET = "- `docs/specs/order-pipeline.md`"
+
+
+def check_work_item_standing(report: Report) -> None:
+    """Whether an order-pipeline work item is built is decided by its spec, not by the pointer.
+
+    WHY THIS ROW EXISTS. `CLAUDE.md`'s pointer said *"Its T6 — an order DRIVING the inventory
+    walk — is BUILT as of 2026-09-02 (D90), and the UNIT OF THE WRITE is the envelope"* until
+    2026-09-05. D96 superseded that on 2026-09-04 and DELETED the code — `POST /orders/fill`,
+    `do_order_fill`, `app/src/orderWalk.ts`, `OrderWalkBanner.tsx`/`.css` and harness T7's
+    `check_order_fill` — so for three days the file a session loads first described a feature no
+    longer in the tree, and described it in the present tense. `docs/map.py` had it right the
+    whole time, which is the same asymmetry `shipping columns` found: one reader wrong, one
+    right, nothing comparing them.
+
+    IT IS `transport standing` ONE REGISTER OVER. There a module declares which calls have run;
+    here a spec declares which work items are built, in its own §3 headings, and the pointer at
+    that spec may not assert otherwise. The direction of the error is the one that costs a
+    session: BUILT over deleted code sends somebody looking for a route that answers 404.
+
+    SCOPED TO CLAUDE.md's ORDER-PIPELINE BULLET, WHICH IS NOT TIMIDITY. `T6` is overloaded in
+    this repository — `harness/tests/t6_geometry.py` is a different T6 and the spec's own §3
+    opens by saying so — and `docs/GATES.md` and `docs/map.py` carry dozens of references to it.
+    A row reading a bare `T6` anywhere would be a false-positive machine, and a check that fires
+    on correct prose teaches `--no-verify`, which switches off the three opsec rules in the same
+    hook (D16).
+
+    HISTORICAL PROSE IS DELIBERATELY NOT CAUGHT. The claim form is `T<n> ... is <state>`; "said
+    T6 was BUILT until 2026-09-05" is the correction that replaced the defect and this repo
+    strikes and annotates rather than deleting. Silence is allowed too — a bare cross-reference
+    like "§3's T2b" asserts nothing. What is not allowed is asserting the opposite.
+
+    A REWORD CANNOT SILENCE IT. A bullet carrying no claim this row can read is reported as
+    unwatched rather than passing quietly.
+    """
+    findings: List[Finding] = []
+
+    declared = {
+        item: state for item, state in _WORK_ITEM_HEADING.findall(read(ROOT / _WORK_ITEM_SPEC))
+    }
+    if not declared:
+        report.add(
+            "work item standing",
+            MECHANICAL,
+            [
+                Finding(
+                    str(_WORK_ITEM_SPEC),
+                    "§3's headings no longer end in a state — `### T<n> — <title>. BUILT` and "
+                    "the rest — so nothing here declares what is built and the pointer at this "
+                    "spec is unwatched. Restore the labels or re-point this row.",
+                )
+            ],
+            "",
+        )
+        return
+
+    text = read(ROOT / _WORK_ITEM_READER)
+    start = text.find(_WORK_ITEM_BULLET)
+    bullet = ""
+    if start < 0:
+        findings.append(
+            Finding(
+                str(_WORK_ITEM_READER),
+                f"carries no `{_WORK_ITEM_BULLET}` bullet, so the pointer this row reads is "
+                f"gone or renamed and every work-item claim in this file is unwatched.",
+            )
+        )
+    else:
+        end = text.find("\n- `", start + 1)
+        bullet = text[start : end if end > 0 else len(text)]
+
+    claims = _WORK_ITEM_CLAIM.findall(bullet)
+    if bullet and not claims:
+        findings.append(
+            Finding(
+                str(_WORK_ITEM_READER),
+                "the order-pipeline bullet makes no `T<n> ... is <state>` claim this row can "
+                "read. It was reworded past its own check, or the claims were dropped — either "
+                "way the pointer's account of what is built is unwatched now.",
+            )
+        )
+
+    for item, said in claims:
+        state = _WORK_ITEM_SYNONYM.get(said, said)
+        wanted = declared.get(item)
+        if wanted is None:
+            findings.append(
+                Finding(
+                    str(_WORK_ITEM_READER),
+                    f"claims `T{item}` is {state}, and {_WORK_ITEM_SPEC} §3 declares no `T{item}` "
+                    f"at all. It is {', '.join(sorted('T' + k for k in declared))} there.",
+                )
+            )
+        elif state != wanted:
+            findings.append(
+                Finding(
+                    str(_WORK_ITEM_READER),
+                    f"says `T{item}` is {state} where {_WORK_ITEM_SPEC} §3 declares it "
+                    f"{wanted}. The spec owns that standing; a pointer at it does not.",
+                )
+            )
+
+    report.add(
+        "work item standing",
+        MECHANICAL,
+        findings,
+        f"{len(claims)} claims in {_WORK_ITEM_READER.name} against "
+        f"{len(declared)} work items declared in §3",
+    )
+
 # The spec's own sentence, and the two literals harness T7 asserts. The harness is the
 # code-anchored end of this: `check_shipping_lane` runs the real router over the committed
 # export and fails if either number moves, so a document reconciled against those literals is
@@ -8223,6 +8352,7 @@ def audit(staged_only: bool) -> Report:
     check_server_concurrency(report)
     check_shipping_columns(report)
     check_router_certainty(report)
+    check_work_item_standing(report)
     check_not_built_endpoints(report)
     check_transport_standing(report)
     check_map(report, allowed)
