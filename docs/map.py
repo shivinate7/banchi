@@ -1092,6 +1092,25 @@ COMPONENTS = [
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE either — no suffix. It is the "
                         "case the comment above this modules block predicted by name.",
             },
+            "githooks/post-merge": {
+                "does": "prints the `make hooks` reminder the moment a pull makes the "
+                        "installed copy of these hooks stale. Before it, that was visible "
+                        "only in `make status`, which is exactly the moment nobody runs it.",
+                # Nothing is enforced here and nothing should be: a post-merge hook that
+                # refused would refuse AFTER the merge, which is the wrong end of the
+                # operation. It prints.
+                "governed_by": ["D42"],
+                "note": "Extensionless, unscanned, listed by hand — see the sibling below. "
+                        "It and post-checkout were missing from this list from the day they "
+                        "landed until 2026-09-05, which is what `hook roster` now reads.",
+            },
+            "githooks/post-checkout": {
+                "does": "the same reminder on a branch switch, for the same reason: "
+                        "core.hooksPath never travels, so a checkout can leave the armed "
+                        "copy behind the tree.",
+                "governed_by": ["D42"],
+                "note": "Extensionless, unscanned, listed by hand.",
+            },
             "githooks/pre-push": {
                 "does": "D42's remote half: refuses any push whose REMOTE ref is main, which "
                         "the ref hook beside it cannot see because `git push origin HEAD:main` "
@@ -1286,7 +1305,7 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
-                "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72", "D76", "D80", "D81", "D84", "D90", "D92", "D96"],
+                "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D90", "D92", "D96", "D101"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

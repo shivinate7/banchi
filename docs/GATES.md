@@ -60,7 +60,12 @@ per set and overall.
   the holdout is the measurement. `overall_accuracy` is still reported and is still useful,
   but it includes the half the prompt was fitted against, which is exactly the number the
   paragraph below says means nothing about the next card. Current split: 82 tune, 68
-  holdout, 150 together.
+  holdout, 150 together. **`PKMNSCAN_T1_SPLIT=tune`** restricts a run to that half, which is
+  what prompt iteration should use — it halves the upload and keeps the holdout from being
+  consulted on every attempt, itself a slow way of fitting to it. The holdout's card-level
+  failures are deliberately not printed for the same reason; **`PKMNSCAN_T1_REVEAL_HOLDOUT`**
+  opts into seeing them, and the moment a tuner reads them the holdout has become tuning data
+  and the score stops measuring generalisation.
 - **A cache miss refuses; IT NEVER SUBMITS.** T1 replays banked responses, so an ordinary
   `make harness` makes no API call — and when there is nothing to replay it fails with
   instructions rather than spending. That rule is cause-independent by design, and it was

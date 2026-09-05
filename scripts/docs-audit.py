@@ -1070,6 +1070,61 @@ def docstring_pass_claim(source: str) -> Optional[str]:
     return None
 
 
+# The two forms `docs/GATES.md` publishes a criterion in. Seven sections use the bullet and
+# two use the inline bold; both are legitimate markdown and neither is worth rewriting seven
+# or two files to unify. The lifter accepts both so that the CHECK gets stricter without the
+# DOCUMENT having to change — the whole doc cost of the equality rewrite was zero.
+_PASS_BULLET_RE = re.compile(r"^-\s+\*\*Pass\*\*:\s*(.*)$")
+_PASS_INLINE_RE = re.compile(r"\*\*Pass:\s*(.*)$")
+
+
+def strip_presentation(text: str) -> str:
+    """Drop markdown's wrapping so the comparison is about words, not formatting.
+
+    Exactly three wrappers come off, and each one is presentation the author did not choose
+    as part of the criterion: the inline form's closing `**`, the code ticks a machine string
+    like `holdout_accuracy >= 0.95` is properly written in, and a terminal full stop.
+
+    THE LIST IS DELIBERATELY SHORT AND CLOSED. Every entry added here is a character the two
+    sides may now differ by, which is exactly the freedom this check exists to remove — so a
+    fourth is an argument to have, not a convenience to add. What must never be stripped is
+    anything inside the sentence: a number, a comparison operator, a word.
+    """
+    stripped = " ".join(text.split())
+    stripped = stripped.rstrip("*").strip()
+    stripped = stripped.strip("`").strip()
+    return stripped.rstrip(".").strip()
+
+
+def gates_pass_line(section: str) -> List[str]:
+    """Every `Pass:` claim in one `### Tn` section, joined across its 96-column wraps.
+
+    Returns a LIST, and the count is load-bearing in both directions. Zero means the section
+    publishes no criterion at all and the equality below has nothing to stand on; two or more
+    means a reader cannot tell which one governs. Both are findings, and neither was
+    detectable while the check asked only whether the criterion appeared SOMEWHERE in the
+    section — T8 and T9 have never had a `- **Pass**:` line and passed for it.
+
+    Continuation stops at a blank line, the next bullet, or the next heading, the same rule
+    `docstring_pass_claim` uses on the test side. Prose about a claim is not the claim.
+    """
+    lines = section.split("\n")
+    claims: List[str] = []
+    for index, line in enumerate(lines):
+        text = line.strip()
+        match = _PASS_BULLET_RE.match(text) or _PASS_INLINE_RE.search(text)
+        if match is None:
+            continue
+        claim = [match.group(1)]
+        for follow in lines[index + 1:]:
+            following = follow.strip()
+            if not following or following.startswith("- ") or following.startswith("#"):
+                break
+            claim.append(following)
+        claims.append(" ".join(claim))
+    return claims
+
+
 def check_pass_criteria(report: Report) -> None:
     """A test's PASS_CRITERIA must appear in its docs/GATES.md section, word for word.
 
@@ -1126,22 +1181,54 @@ def check_pass_criteria(report: Report) -> None:
         section = sections.get(name)
         if section is None:
             continue
-        for number in _NUMBER_RE.findall(criteria):
-            if number not in section:
-                mechanical.append(
-                    Finding(
-                        rel(path),
-                        f"PASS_CRITERIA says {number!r} but `### {name}` in docs/GATES.md "
-                        f"never mentions it.\n  PASS_CRITERIA: {criteria}",
-                    )
+        # THE COMPARISON IS AGAINST THE PUBLISHED LINE, BY EQUALITY, and the two legs it
+        # replaces were both substring tests against the whole section. That is not a
+        # tightening for its own sake — measured on 2026-09-05, lowering T1's
+        # `holdout_accuracy >= 0.95` to `>= 0.9` in the TEST left both rows green:
+        #
+        #   the number leg   `'0.9' in section`  — true, because the section says `0.95`
+        #   the wording leg  `'... >= 0.9' in section` — true, for the same reason
+        #
+        # So the threshold that decides whether it is safe to spend money on a batch could be
+        # lowered by deleting one character, and this file would report `ok` twice. Equality
+        # against the lifted line cannot be satisfied that way.
+        claims = gates_pass_line(section)
+        if len(claims) != 1:
+            mechanical.append(
+                Finding(
+                    f"docs/GATES.md `### {name}`",
+                    f"publishes {len(claims)} `Pass:` claims; exactly one governs.\n"
+                    f"  PASS_CRITERIA: {criteria}\n"
+                    f"  Zero means the criterion is not published where a reader looks for "
+                    f"it. More than one means nobody can tell which is the gate.",
                 )
-        if normalise(criteria) not in normalise(section):
+            )
+            continue
+        published = strip_presentation(claims[0])
+        wanted = strip_presentation(criteria)
+        if published == wanted:
+            continue
+        # Numbers first, so a moved threshold is never reported as a reworded sentence.
+        moved = sorted(set(_NUMBER_RE.findall(wanted)) ^ set(_NUMBER_RE.findall(published)))
+        if moved:
+            mechanical.append(
+                Finding(
+                    rel(path),
+                    f"PASS_CRITERIA and `### {name}` in docs/GATES.md disagree about "
+                    f"{', '.join(repr(number) for number in moved)}.\n"
+                    f"  test:      {wanted}\n"
+                    f"  published: {published}\n"
+                    f"  A threshold is the one thing here that costs money to get wrong.",
+                )
+            )
+        else:
             wording.append(
                 Finding(
                     rel(path),
-                    f"PASS_CRITERIA does not appear in `### {name}` in docs/GATES.md.\n"
-                    f"  test:  {criteria}\n"
-                    f"  Update the `- **Pass**:` line in `### {name}` to this text. The test "
+                    f"PASS_CRITERIA is not what `### {name}` in docs/GATES.md publishes.\n"
+                    f"  test:      {wanted}\n"
+                    f"  published: {published}\n"
+                    f"  Update the `Pass:` line in `### {name}` to the test's text. The test "
                     f"is the source; the gate publishes it. Do not reword the test to match "
                     f"the doc.",
                 )
@@ -1842,6 +1929,438 @@ _BACKLOG_RE = re.compile(r"^    request_queue_size = (\d+)$", re.M)
 _SLOTS_RE = re.compile(r"^REQUEST_SLOTS = (\d+)$", re.M)
 
 
+def _close_header_owner() -> Optional[str]:
+    """The method that sends `Connection: close`, or None if nothing does.
+
+    A NAME AND NOT A LINE NUMBER, because the name is the fact section 11 rests on. The pool
+    is only safe over HTTP/1.1 because a worker's life is one REQUEST rather than one
+    connection, and what makes that true is that every response carries this header. Sending
+    it from `_send` was not enough — `_photo`'s 304 branch answers a conditional GET by hand
+    and never goes through `_send` — so it moved to `end_headers`, which every response
+    reaches by construction. Which method it is IS the guarantee: back in `_send`, the same
+    header is a convention any new route can forget.
+    """
+    try:
+        tree = ast.parse(read(ROOT / "server" / "capture_server.py"))
+    except (SyntaxError, OSError):
+        return None
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Call):
+                continue
+            func = inner.func
+            if not isinstance(func, ast.Attribute) or func.attr != "send_header":
+                continue
+            literals = [
+                arg.value.lower()
+                for arg in inner.args
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
+            ]
+            if literals[:2] == ["connection", "close"]:
+                return node.name
+    return None
+
+
+# Where a claim about the history's readers may live, and where its readers may live. Both
+# lists are the production tree only: the harness reads the history constantly and correctly,
+# and counting those would make the number meaningless.
+_HISTORY_READER_ROOTS = ("server", "store", "pipeline", "cli", "identify", "geometry", "codes")
+_SOLE_READER_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`[^.\n]{0,40}?the only reader")
+
+
+def _history_readers() -> List[str]:
+    """Every production call of the store's `history()`, as `path:line in function`.
+
+    ZERO-ARGUMENT CALLS ONLY, and that is the whole disambiguation rather than a heuristic:
+    `Store.history()` takes none, and `pipeline/pricehistory.py`'s unrelated method of the
+    same name takes a product and a range. Matching on the name alone counts two price-history
+    calls as readers of the card history and makes the number a lie in the other direction.
+    """
+    readers: List[str] = []
+    for root in _HISTORY_READER_ROOTS:
+        base = ROOT / root
+        if not exists(base):
+            continue
+        for path in _walk(base, (".py",)):
+            try:
+                tree = ast.parse(read(path))
+            except SyntaxError:
+                continue
+            owner: Dict[int, str] = {}
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for inner in ast.walk(node):
+                        line = getattr(inner, "lineno", None)
+                        if line is not None:
+                            owner.setdefault(line, node.name)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not isinstance(func, ast.Attribute) or func.attr != "history":
+                    continue
+                if node.args or node.keywords:
+                    continue
+                where = owner.get(node.lineno, "<module>")
+                if where == "history":  # the definition in store/, not a call of it
+                    continue
+                readers.append(f"{rel(path)}:{node.lineno} in {where}")
+    return sorted(readers)
+
+
+# The two routes that write a claim. D70 gives a card a `product`, D101 says a claim a screen
+# names is a claim a screen can fix, and these are the two doors that ruling opened.
+_CLAIM_WRITERS = ("do_put_card", "do_put_box_claims")
+
+
+def _payload_keys(function: ast.AST) -> Set[str]:
+    """The literal keys this handler decodes out of its request body.
+
+    `if "<key>" in payload:` is the shape every claim in both handlers is written in, so the
+    decode table is readable without running anything. It is a narrow reader on purpose: a
+    handler that switched to `payload.get(name)` over a loop would present an empty table
+    here, which is why the row below reports an EMPTY table as a finding rather than as
+    agreement.
+    """
+    keys: Set[str] = set()
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+            continue
+        if not isinstance(node.ops[0], ast.In):
+            continue
+        if not (isinstance(node.left, ast.Constant) and isinstance(node.left.value, str)):
+            continue
+        target = node.comparators[0]
+        if (getattr(target, "id", None) or getattr(target, "attr", None)) == "payload":
+            keys.add(node.left.value)
+    return keys
+
+
+def check_claim_decode(report: Report) -> None:
+    """The card writer and the box writer decode the same claim vocabulary.
+
+    `product` was in `do_put_card`'s table from D70 and in `do_put_box_claims`'s from never.
+    The route did not refuse it — it decoded every key it knew and answered 200 with
+    `"applied": 0, "unchanged": N`, which reads exactly like "the box already said that". So
+    a correction typed into the box editor was accepted, reported as a success, and dropped,
+    and `#/codes` went on drawing the banner that sent you there.
+
+    Nothing detected it because the two handlers are 160 lines apart and agree about five of
+    six keys. The docstring on the second one asserted the tables matched, which is the
+    failure D16 is about: a claim of agreement, in prose, beside the disagreement.
+
+    **Set equality, in both directions.** A key one door takes and the other does not is the
+    defect regardless of which door is ahead — a claim writable per-card but not per-box is
+    the bug that was here, and one writable per-box but not per-card is a box that can assert
+    something no card can carry. If a claim genuinely belongs to one scope, the answer is a
+    named exception argued in the code, not a silent asymmetry.
+    """
+    try:
+        tree = ast.parse(read(ROOT / "server" / "capture_server.py"))
+    except (SyntaxError, OSError):
+        report.add("claim decode", MECHANICAL, [
+            Finding("server/capture_server.py", "does not parse; the decode tables cannot be read.")
+        ], "")
+        return
+
+    tables: Dict[str, Set[str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in _CLAIM_WRITERS:
+            tables[node.name] = _payload_keys(node)
+
+    findings: List[Finding] = []
+    for name in _CLAIM_WRITERS:
+        if name not in tables:
+            findings.append(Finding(
+                "server/capture_server.py",
+                f"`{name}` is gone, and this row reconciles the two claim writers against "
+                f"each other. Re-point it, or retire it with the route.",
+            ))
+        elif not tables[name]:
+            findings.append(Finding(
+                "server/capture_server.py",
+                f"`{name}` decodes no `\"key\" in payload` at all. Either the handler changed "
+                f"shape — in which case this reader is now blind and must be re-pointed — or "
+                f"it takes nothing, which is not what a claim writer does.",
+            ))
+    if not findings and len(tables) == len(_CLAIM_WRITERS):
+        card, box = (tables[name] for name in _CLAIM_WRITERS)
+        for missing, where, other in ((card - box, _CLAIM_WRITERS[1], _CLAIM_WRITERS[0]),
+                                      (box - card, _CLAIM_WRITERS[0], _CLAIM_WRITERS[1])):
+            for key in sorted(missing):
+                findings.append(Finding(
+                    "server/capture_server.py",
+                    f"`{other}` decodes `{key}` and `{where}` does not.\n"
+                    f"  The route that ignores it still answers 200, reporting the write it "
+                    f"did not do as a no-op. Add the branch, or argue the exception where a "
+                    f"reader of both will see it.",
+                ))
+    report.add(
+        "claim decode",
+        MECHANICAL,
+        findings,
+        f"{len(_CLAIM_WRITERS)} claim writers, one vocabulary "
+        f"({len(tables.get(_CLAIM_WRITERS[0], ())) } keys)",
+    )
+
+
+# The client function that writes each server handler's claims. D101 opened the second door;
+# this is what keeps both of them speaking the same vocabulary as the route behind them.
+_CLAIM_CLIENTS = {"do_put_card": "updateCard", "do_put_box_claims": "applyBoxClaims"}
+
+# Keys a client sends that are SCOPE rather than a claim. `indices` says which positions in
+# the box the claim applies to; it is not something a card can carry, and the server reads it
+# outside the decode table this row compares against.
+_CLIENT_SCOPE_KEYS = {"indices"}
+
+_PAYLOAD_ASSIGN_RE = re.compile(r"payload\.([a-z_][a-z0-9_]*)\s*=")
+
+
+def _ts_function_body(source: str, name: str) -> Optional[str]:
+    """The text of one exported function, comments stripped.
+
+    Bounded by the next top-level `export` rather than by brace counting: a `{` inside a
+    template literal or a regex would defeat the counter, and this file has both. The overrun
+    a loose bound could cause is a key attributed to the wrong function, which the comparison
+    below would report as a finding — so the failure is loud rather than silent.
+    """
+    stripped = _strip_ts_comments(source)
+    start = stripped.find(f"function {name}")
+    if start < 0:
+        return None
+    following = stripped.find("\nexport ", start)
+    return stripped[start:following if following > 0 else len(stripped)]
+
+
+def check_claim_clients(report: Report) -> None:
+    """The client sends the keys the route decodes, on both doors.
+
+    D101 ruled that a claim a screen names is a claim a screen can fix, and answered it with
+    two doors: the inventory claim editor and an inline correction on `#/codes`. Two doors to
+    one claim is two chances for the vocabulary to drift, and the drift is silent in the
+    direction that matters — the server decodes what it knows and answers 200 for the rest.
+
+    So this reads the wire keys each client function actually assigns and compares them to the
+    handler's own decode table, across the language boundary. `app/src/server.ts` is the only
+    place a client call is written (CLAUDE.md), which is what makes one reader enough.
+
+    **A key the client sends and the server does not decode is the worse half**, and it is the
+    one a type checker cannot see: `tsc` proves the object is well-formed, never that anything
+    on the other end reads it. A key the server decodes and no client sends is the milder
+    failure — a capability with no door, which is a rule this repo already has words for.
+    """
+    client_source = ROOT / "app" / "src" / "server.ts"
+    if not exists(client_source):
+        report.add("claim clients", MECHANICAL, [
+            Finding("app/src/server.ts", "is gone, and it is the only place a client call is written.")
+        ], "")
+        return
+    try:
+        tree = ast.parse(read(ROOT / "server" / "capture_server.py"))
+    except (SyntaxError, OSError):
+        report.add("claim clients", MECHANICAL, [
+            Finding("server/capture_server.py", "does not parse; the decode tables cannot be read.")
+        ], "")
+        return
+
+    handlers = {
+        node.name: _payload_keys(node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in _CLAIM_CLIENTS
+    }
+    source = read(client_source)
+    findings: List[Finding] = []
+    checked = 0
+    for handler, client in _CLAIM_CLIENTS.items():
+        body = _ts_function_body(source, client)
+        if body is None:
+            findings.append(Finding("app/src/server.ts", f"no `{client}` to read."))
+            continue
+        if handler not in handlers:
+            findings.append(Finding("server/capture_server.py", f"no `{handler}` to read."))
+            continue
+        checked += 1
+        sent = set(_PAYLOAD_ASSIGN_RE.findall(body)) - _CLIENT_SCOPE_KEYS
+        decoded = handlers[handler]
+        for key in sorted(sent - decoded):
+            findings.append(Finding(
+                "app/src/server.ts",
+                f"`{client}` sends `{key}` and `{handler}` decodes no such key.\n"
+                f"  The route answers 200 and writes nothing. A type checker cannot see this: "
+                f"it proves the body is well-formed, never that anything reads it.",
+            ))
+        for key in sorted(decoded - sent):
+            findings.append(Finding(
+                "app/src/server.ts",
+                f"`{handler}` decodes `{key}` and `{client}` never sends it.\n"
+                f"  A capability no screen can reach is not built (CLAUDE.md's hard rule). "
+                f"Send it, or retire the branch.",
+            ))
+    report.add(
+        "claim clients",
+        MECHANICAL,
+        findings,
+        f"{checked} client writers send exactly what their route decodes",
+    )
+
+
+DETECT_RESULT = ROOT / "harness" / "results" / "detect.json"
+
+# What `docs/DEBTS.md` section 6 publishes about the current scan, and where the number lives
+# in `harness/results/detect.json`. Each is a (claim pattern, dotted path into the result).
+#
+# THE PHRASES ARE PART OF THE PIN. "photographs in the owner's six boxes" is THIS scan; D75's
+# "three real boxes" is a different corpus measured on a different day, and CLAUDE.md's rule
+# is that a measured number is evidence and is never rewritten to match a later tree. Matching
+# on a bare integer would drag the 867 into this reconciliation and demand it change, which is
+# precisely the corruption the rule forbids.
+_DETECT_CLAIMS = (
+    (re.compile(r"([\d,]+) photographs in the owner's six boxes"), "overall.photographs"),
+    (re.compile(r"the crop guard declined ([\d,]+)"), "overall.declined"),
+    (re.compile(r"\*\*The declines are entirely boxes 3 and 4\*\* \(([\d,]+) of ([\d,]+), and "
+                r"([\d,]+) of ([\d,]+)\)"),
+     ("per_box.box3.declined", "per_box.box3.photographs",
+      "per_box.box4.declined", "per_box.box4.photographs")),
+)
+
+
+def _dotted(data: object, path: str) -> Optional[int]:
+    for step in path.split("."):
+        if not isinstance(data, dict) or step not in data:
+            return None
+        data = data[step]
+    return data if isinstance(data, int) else None
+
+
+def check_detector_standing(report: Report) -> None:
+    """The detector figures section 6 publishes are the ones its scanner wrote.
+
+    `scripts/score-detect.py` walks the owner's real photographs and writes
+    `harness/results/detect.json`. Section 6 quotes that run in prose. Nothing reconciled the
+    two, and the prose is what a session reads before deciding whether the crop guard's two
+    constants still fit — a decision about whether 59 real cards get cropped or refused.
+
+    **The result file is the authority and the prose is the reader**, which is the same
+    direction `check_criteria_evidence` runs and for the same reason: one of them is written
+    by a measurement and the other by a person summarising it. A re-run that moves a count
+    should fail this row until the sentence moves with it.
+
+    **D75's 867-photograph corpus is deliberately out of scope.** It is a different scan of a
+    different set of boxes on a different day, it has no entry in this file, and CLAUDE.md
+    forbids rewriting a measured number to match a later tree. The patterns above pin the
+    six-box phrasing so the two corpora cannot be confused for each other — which is a real
+    risk here, because both are counts of the owner's photographs run through `detect_card`.
+    """
+    findings: List[Finding] = []
+    if not exists(DETECT_RESULT):
+        report.add("detector standing", MECHANICAL, [
+            Finding("harness/results/detect.json",
+                    "is absent, and docs/DEBTS.md section 6 quotes it. Re-run "
+                    "`scripts/score-detect.py`, or strike the figures it published.")
+        ], "")
+        return
+    try:
+        result = json.loads(read(DETECT_RESULT))
+    except ValueError:
+        report.add("detector standing", MECHANICAL, [
+            Finding("harness/results/detect.json", "is not readable JSON.")
+        ], "")
+        return
+
+    section = _debts_section(6) or ""
+    checked = 0
+    for pattern, target in _DETECT_CLAIMS:
+        match = pattern.search(section)
+        if match is None:
+            findings.append(Finding(
+                "docs/DEBTS.md",
+                f"section 6 no longer publishes the figure this row reads "
+                f"(`{pattern.pattern}`). Either the sentence was reworded past its own "
+                f"guard, or the claim is gone and this pin should go with it.",
+            ))
+            continue
+        targets = target if isinstance(target, tuple) else (target,)
+        for group, path in zip(match.groups(), targets):
+            checked += 1
+            published = int(group.replace(",", ""))
+            measured = _dotted(result, path)
+            if measured is None:
+                findings.append(Finding(
+                    "harness/results/detect.json",
+                    f"has no `{path}`, which section 6 publishes as {published}.",
+                ))
+            elif published != measured:
+                findings.append(Finding(
+                    "docs/DEBTS.md",
+                    f"section 6 says {published} where `{path}` in "
+                    f"harness/results/detect.json measured {measured}.\n"
+                    f"  The result file is what the scanner wrote; the prose is a person's "
+                    f"summary of it. Update the sentence.",
+                ))
+    report.add(
+        "detector standing",
+        MECHANICAL,
+        findings,
+        f"{checked} published figures against harness/results/detect.json",
+    )
+
+
+def check_sole_reader(report: Report) -> None:
+    """"The only reader of the history" is a countable claim, and it is wrong.
+
+    Three places say `_state_before_sale` is the only thing in this repo that reads the
+    history — two comments in `server/capture_server.py` and one line of
+    `docs/specs/order-flow.md`. Measured 2026-09-05 the count is three, and the more useful
+    half of the finding is that **`_state_before_sale` is not one of them**: it takes a
+    sequence of events as an argument and scans it. The readers are `_answer_origin`,
+    `_origin` and `_reverse_stand_down`.
+
+    That distinction is what the claim was load-bearing for. A comment that says one function
+    is the only reader is telling the next session it can reason about the history's access
+    pattern by reading one function — and D26's reversal, D83's third door and the sale
+    origin all go through a different one. The comment was true when it was written and two
+    features walked past it.
+
+    **The claim is the subject, not the count.** Nothing here says three readers is too many;
+    a checker cannot hold that (D16). It holds that a sentence asserting a number agrees with
+    the number, which is the only half that is mechanical.
+    """
+    readers = _history_readers()
+    functions = {reader.rsplit(" in ", 1)[-1] for reader in readers}
+    findings: List[Finding] = []
+    sources = list(markdown_files())
+    for root in _HISTORY_READER_ROOTS:
+        base = ROOT / root
+        if exists(base):
+            sources.extend(_walk(base, (".py",)))
+    for path in sources:
+        for number, line in enumerate(read(path).splitlines(), start=1):
+            match = _SOLE_READER_RE.search(line)
+            if match is None:
+                continue
+            named = match.group(1)
+            if named in functions and len(readers) == 1:
+                continue
+            listed = "\n    ".join(readers) or "(none found)"
+            reads = "does not read it at all" if named not in functions else "is one of them"
+            findings.append(
+                Finding(
+                    f"{rel(path)}:{number}",
+                    f"claims `{named}` is the only reader of the history; there are "
+                    f"{len(readers)}, and `{named}` {reads}.\n"
+                    f"    {listed}",
+                )
+            )
+    report.add(
+        "sole reader",
+        MECHANICAL,
+        findings,
+        f"{len(readers)} history readers, every claim about them counts right",
+    )
+
+
 def check_server_concurrency(report: Report) -> None:
     """`docs/DEBTS.md` section 11 names the capture server's concurrency; the code decides it.
 
@@ -1854,10 +2373,17 @@ def check_server_concurrency(report: Report) -> None:
     nothing reconciles goes stale exactly the way those comments did, and this file spends a
     section on that difference.
 
-    So the three literals the section publishes are read out of the code and compared. A worker
-    pool — which is what section 11 says the fix is — changes the base class, and this row then
-    FAILS until the section that describes threads is rewritten. That is the point: the row is
-    built to go red on the change it is documenting.
+    So the literals the section publishes are read out of the code and compared.
+
+    **THE PARAGRAPH THAT STOOD HERE PREDICTED SOMETHING THAT DID NOT HAPPEN, and it is kept
+    as a correction rather than quietly swapped.** It said a worker pool "changes the base
+    class, and this row then FAILS until the section is rewritten" — the row built to go red
+    on the change it documents. The pool landed on 2026-09-04 and the base class did not
+    change: `CaptureServer` still subclasses `ThreadingHTTPServer` and submits from
+    `process_request` to a `ThreadPoolExecutor`. The row stayed green through the exact change
+    it claimed it would catch. What actually carries the pool's safety is a header, which no
+    literal here was reading, so a fifth fact was added below rather than the prediction being
+    re-worded into something it could still claim.
 
     Nothing here judges whether the concurrency is right. It judges whether the document and the
     code agree about what it IS, which is the only half a checker can hold honestly (D16).
@@ -1916,11 +2442,36 @@ def check_server_concurrency(report: Report) -> None:
                 )
             )
 
+    # The fifth fact, and the only one that is a NAME rather than a literal. Section 11 already
+    # names `Connection: close`; what it did not name is where the header is sent from, and
+    # that is the half the pool's safety actually rests on.
+    owner = _close_header_owner()
+    if owner is None:
+        findings.append(
+            Finding(
+                "server/capture_server.py",
+                "nothing sends `Connection: close` any more. Section 11 says a worker's life "
+                "is one REQUEST rather than one connection, and this header is what makes "
+                "that true — without it four idle keep-alive connections hold all four "
+                "workers and `make harness` does not fail, it HANGS.",
+            )
+        )
+    elif re.search(rf"\b{re.escape(owner)}\b", section) is None:
+        findings.append(
+            Finding(
+                "docs/DEBTS.md",
+                f"section 11 does not name `{owner}`, which is where `Connection: close` is "
+                f"sent from. The method is the guarantee: every response reaches "
+                f"`end_headers` by construction, so no new route can forget the header, "
+                f"which is not true of any single send site.",
+            )
+        )
+
     report.add(
         "server concurrency",
         MECHANICAL,
         findings,
-        "4 published facts against server/capture_server.py",
+        "5 published facts against server/capture_server.py",
     )
 
 
@@ -2528,6 +3079,86 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
                         )
                     )
     report.add("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real")
+
+
+# Every file that is not markdown and can name an environment variable, WITH the extensionless
+# git hooks that `code_haystack` cannot see. That omission is not incidental here: the hook
+# roster is the one place this repo keeps growing extensionless files, and `PKMNSCAN_SIGIL` —
+# printed in every refusal the sigil check makes — lives in exactly such a file.
+def _env_sites() -> Dict[str, List[str]]:
+    """`PKMNSCAN_*` and friends named outside markdown, mapped to where they are named."""
+    sites: Dict[str, List[str]] = {}
+    sources: List[Path] = list(python_files())
+    for name in ("Makefile", ".env.example"):
+        candidate = ROOT / name
+        if exists(candidate):
+            sources.append(candidate)
+    sources.extend(_walk(ROOT / "scripts", (".sh",)))
+    sources.extend(_walk(ROOT / ".claude", (".json",)))
+    hooks = ROOT / "scripts" / "githooks"
+    for hook in sorted(child_names(hooks)):
+        candidate = hooks / hook
+        if exists(candidate):
+            sources.append(candidate)
+    for path in sources:
+        for number, line in enumerate(read(path).splitlines(), start=1):
+            for found in _ENV_RE.findall(line):
+                sites.setdefault(found, []).append(f"{rel(path)}:{number}")
+    return sites
+
+
+def check_env_names(report: Report) -> None:
+    """A variable the code reads must be named in the markdown somewhere.
+
+    `check_env_vars` above runs the other direction — documented, therefore real — and has
+    since D16. Nothing ran this one, and the asymmetry is the whole finding: a variable
+    invented in code is invisible to every check in this file, so the way to add an
+    undocumented switch to this repo was simply to add it.
+
+    Measured 2026-09-05, four had gone in that way, and the list is not a set of oddities:
+    `PKMNSCAN_SIGIL` is the bypass the sigil check PRINTS IN EVERY REFUSAL, so the one
+    sentence a blocked commit reads names a variable no document explains. `PKMNSCAN_T1_SPLIT`
+    chooses which half of the eval corpus T1 scores; `PKMNSCAN_TCG_ORDERS_URL` points the
+    order fetch at an endpoint.
+
+    **Naming it anywhere in markdown is the whole bar**, deliberately low. This cannot judge
+    whether the explanation is any good — that is the semantic half D16 gives to a person —
+    and a row that demanded a *good* explanation would be a row nobody could satisfy. What it
+    can hold is that the variable was written down once, on purpose, where a reader looking
+    for it would find it.
+    """
+    documented: Set[str] = set()
+    for doc in markdown_files():
+        for found in _ENV_RE.findall(read(doc)):
+            documented.add(found)
+    findings: List[Finding] = []
+    sites = _env_sites()
+    for name in sorted(sites):
+        if name in documented:
+            continue
+        # THIS FILE SORTS LAST when choosing which site to cite. It is a legitimate source —
+        # it reads `PKMNSCAN_EXPORTS` — so excluding it would leave a hole exactly where a
+        # checker is least watched. But it also NAMES variables in prose, including this
+        # docstring, and citing a sentence that describes the problem instead of the code
+        # that has it sends the reader to the wrong file.
+        where = sorted(sites[name], key=lambda site: site.startswith(rel(SELF)))
+        shown = ", ".join(where[:3]) + (f", +{len(where) - 3} more" if len(where) > 3 else "")
+        findings.append(
+            Finding(
+                where[0],
+                f"`{name}` is read by the code and named in no markdown file.\n"
+                f"  named at: {shown}\n"
+                f"  Document it where its subject lives — the switch's own document, not a "
+                f"list of switches. A variable nothing explains is one only its author can "
+                f"use.",
+            )
+        )
+    report.add(
+        "env names",
+        MECHANICAL,
+        findings,
+        f"{len(sites)} named in code, all documented",
+    )
 
 
 # ------------------------------------------------------- the current-gate check, retired
@@ -3170,6 +3801,100 @@ def _consumer_block() -> Tuple[Optional[str], List[str]]:
             column = gap.end()
         rows.append(line[:column].strip())
     return head.group(1).lower(), rows
+
+
+def _map_component(path: str) -> Optional[Dict[str, object]]:
+    """One entry out of docs/map.py's COMPONENTS, by its `path`."""
+    components = literals_from_module(MAP).get("COMPONENTS")
+    if not isinstance(components, list):
+        return None
+    for entry in components:
+        if isinstance(entry, dict) and entry.get("path") == path:
+            return entry
+    return None
+
+
+def check_hook_roster(report: Report) -> None:
+    """Every file in `scripts/githooks/` has an entry in docs/map.py.
+
+    THE ORPHAN SCAN CANNOT COVER THIS DIRECTORY, and docs/map.py says so in its own comment:
+    a git hook is extensionless by git's requirement, `scan_plan` matches entries by suffix,
+    and an entry with no suffix is rejected. So the hooks are listed BY HAND, and a list kept
+    by hand is a list that stops being kept.
+
+    It stopped twice. D42 added `reference-transaction` and `pre-push` and wrote both entries;
+    `post-merge` and `post-checkout` landed later with the `make hooks` staleness reminder and
+    neither was written. Measured 2026-09-05: five hooks on disk, three in the map. The map's
+    own comment calls this hole hypothetical — it had already fired once when that sentence
+    was written, and fired again afterwards.
+
+    **This is the narrowest possible reader of that hole**, and deliberately not a widening of
+    `scan_plan` to admit extensionless entries. That was the obvious fix and it is the wrong
+    one: the suffix rule is what keeps `views.txt` and a stray `README` from being conscripted
+    into demanding entries, and relaxing it repeals a rule that is doing work everywhere else
+    to repair one directory. One directory's roster, checked against one directory's entries.
+
+    The commit path is the subject, which is why this blocks. A hook nobody wrote down is a
+    thing that runs on every commit and appears in no account of what runs on every commit.
+    """
+    hooks = ROOT / "scripts" / "githooks"
+    if not exists(hooks):
+        report.add(
+            "hook roster",
+            MECHANICAL,
+            [
+                Finding(
+                    "scripts/githooks/",
+                    "the directory is gone, and `make hooks` installs from it. Restore it, "
+                    "or delete this row with it.",
+                )
+            ],
+            "",
+        )
+        return
+
+    component = _map_component("scripts/")
+    if component is None:
+        report.add(
+            "hook roster",
+            MECHANICAL,
+            [Finding("docs/map.py", "no COMPONENTS entry has `path: 'scripts/'` to read.")],
+            "",
+        )
+        return
+
+    listed = set((component.get("modules") or {}).keys())
+    on_disk = sorted(child_names(hooks))
+    findings: List[Finding] = []
+    for hook in on_disk:
+        if f"githooks/{hook}" not in listed:
+            findings.append(
+                Finding(
+                    f"scripts/githooks/{hook}",
+                    f"runs on the commit path and has no entry in docs/map.py.\n"
+                    f"  Add `\"githooks/{hook}\"` to the `scripts/` component's `modules`, "
+                    f"with a `does` and its `governed_by`. The orphan scan cannot find this "
+                    f"directory — the suffix rule rejects an extensionless key — so this row "
+                    f"is the only thing that will.",
+                )
+            )
+    for key in sorted(listed):
+        if not key.startswith("githooks/"):
+            continue
+        if key.split("/", 1)[1] not in set(on_disk):
+            findings.append(
+                Finding(
+                    "docs/map.py",
+                    f"`{key}` has an entry but no file. A roster kept by hand goes stale in "
+                    f"both directions; this is the half that describes a hook that has left.",
+                )
+            )
+    report.add(
+        "hook roster",
+        MECHANICAL,
+        findings,
+        f"{len(on_disk)} hooks, all in docs/map.py",
+    )
 
 
 def check_map_sections(report: Report) -> None:
@@ -6946,7 +7671,69 @@ def check_audit_invocation(report: Report) -> None:
                                 f"reading that as a finding would stop gating.",
                             )
                         )
-    report.add("audit invocation", MECHANICAL, findings, f"{len(INVOKERS)} callers, flags all declared")
+    # THE EXIT CODES THE ARGUMENT ABOVE RESTS ON, READ OUT OF `main()` RATHER THAN TRUSTED.
+    #
+    # The docstring's whole case for `_Parser` is a COLLISION: argparse's usage exit is 2, and
+    # 2 is this script's advisory code, so an undeclared flag would make the gate stop running
+    # while reporting the routine coupling question. That case is only true while `main()`
+    # still maps advisory to 2 and `EXIT_USAGE` is something else. Nothing read either, so the
+    # override could have outlived its reason with the comment still explaining it.
+    #
+    # A NOTE ON WHAT THIS IS NOT. The plan that scheduled this row expected it to land red on
+    # "exit 2 bound to coupling without `--staged`". That was wrong and is recorded rather
+    # than quietly dropped: `check_coupling` is not the only ADVISORY row — `entry budget`,
+    # `game coverage` and `views exposure` among others emit one on every plain run — so exit
+    # 2 is reachable without `--staged` and always was. The row below pins the collision,
+    # which is the fact that was actually unread.
+    advisory_code: Optional[int] = None
+    try:
+        for node in ast.walk(ast.parse(read(SELF))):
+            if not (isinstance(node, ast.FunctionDef) and node.name == "main"):
+                continue
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.IfExp):
+                    continue
+                orelse = inner.orelse
+                if isinstance(orelse, ast.IfExp) and isinstance(orelse.body, ast.Constant):
+                    advisory_code = orelse.body.value
+    except (SyntaxError, OSError):
+        advisory_code = None
+
+    if advisory_code is None:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py",
+                "`main()` no longer maps severities to exit codes in a shape this row can "
+                "read. `_Parser` exists because argparse's usage exit collides with the "
+                "advisory code; re-point this, or the override outlives its reason.",
+            )
+        )
+    elif advisory_code != 2:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py",
+                f"the advisory exit code is {advisory_code}, not 2, so argparse's default no "
+                f"longer collides with it — and `_Parser`'s docstring still says it does. "
+                f"Either the override is now unnecessary, or its argument needs rewriting.",
+            )
+        )
+    elif advisory_code == EXIT_USAGE:
+        findings.append(
+            Finding(
+                "scripts/docs-audit.py",
+                f"`EXIT_USAGE` is {EXIT_USAGE}, which IS the advisory code. A caller cannot "
+                f"tell a broken command line from a routine question, which is the exact "
+                f"failure `_Parser` was written to prevent.",
+            )
+        )
+
+    report.add(
+        "audit invocation",
+        MECHANICAL,
+        findings,
+        f"{len(INVOKERS)} callers, flags all declared, usage {EXIT_USAGE} clear of advisory "
+        f"{advisory_code}",
+    )
 
 
 # ------------------------------------------------- the checks defined here vs the ones run
@@ -7297,6 +8084,66 @@ def self_test() -> int:
     # A RENUMBER IS A TITLE THAT KEPT ITS NAME AND CHANGED ITS ID, and this is the reader of
     # that. The git walk around it needs a repository; this does not, and it is where the
     # logic that could be wrong lives (D72).
+    # THE EQUALITY THAT REPLACED TWO SUBSTRING TESTS. Both legs of check_pass_criteria used
+    # to ask whether the criterion appeared SOMEWHERE in the section, which `0.9` satisfies
+    # inside `0.95`. These cases are the arithmetic of that, with no filesystem in the way.
+    print("\na published criterion is compared by equality, not by containment")
+    bullet = "- **Pass**: `holdout_accuracy >= 0.95`\n- **The gate is the holdout**, not all."
+    inline = "New 2026-08-30 with C9-C11. **Pass: every decode round-trips its own\ncode.**\n\nProse after."
+    ok(gates_pass_line(bullet) == ["`holdout_accuracy >= 0.95`"],
+       "the bullet form is lifted and stops at the next bullet",
+       f"got: {gates_pass_line(bullet)}")
+    ok(gates_pass_line(inline) == ["every decode round-trips its own code.**"],
+       "the inline bold form is lifted and joined across its wrap",
+       f"got: {gates_pass_line(inline)}")
+    ok(gates_pass_line("no claim here at all") == [],
+       "a section publishing nothing lifts nothing, which is itself the finding")
+    ok(strip_presentation("`holdout_accuracy >= 0.95`") == "holdout_accuracy >= 0.95",
+       "code ticks come off a machine string")
+    ok(strip_presentation("every decode round-trips.**") == "every decode round-trips",
+       "the inline terminator and the full stop come off")
+    ok(strip_presentation("a >= 0.9") != strip_presentation("a >= 0.95"),
+       "AND THE MEASURED DEFECT: 0.9 no longer satisfies 0.95")
+    ok("0.9" in "0.95",
+       "which the old containment test could not say, because this is true")
+
+    # The two claim writers' decode tables, read the way check_claim_decode reads them.
+    print("\na handler's decode table is read off its `\"key\" in payload` branches")
+    tree = ast.parse(
+        'def do_put_card(self, payload):\n'
+        '    if "game" in payload:\n        pass\n'
+        '    if "product" in payload:\n        pass\n'
+        '    if "note" in other:\n        pass\n'
+    )
+    keys = _payload_keys(tree.body[0])
+    ok(keys == {"game", "product"}, "every key branched on payload is found", f"got: {sorted(keys)}")
+    ok("note" not in keys, "and a branch on a different dict is not one of them")
+
+    # The cross-language half of D101's two doors, and the reader that pins a published
+    # figure to the file a scanner wrote.
+    print("\nthe client's wire keys are read out of its payload assignments")
+    ts = (
+        "export async function updateCard(a, fields) {\n"
+        "  const payload = {}\n"
+        "  if ('product' in fields) payload.product = fields.product ?? null\n"
+        "  // payload.commented = 1\n"
+        "}\n"
+        "export async function other() { payload.elsewhere = 2 }\n"
+    )
+    body = _ts_function_body(ts, "updateCard")
+    keys = set(_PAYLOAD_ASSIGN_RE.findall(body or ""))
+    ok(keys == {"product"}, "one function's keys, and not the next function's",
+       f"got: {sorted(keys)}")
+    ok("commented" not in keys, "and a key that only appears in a comment is not sent")
+    ok(_ts_function_body(ts, "noSuchFunction") is None, "a missing function reads as None")
+
+    print("\na published figure is looked up in the result file by path")
+    measured = {"overall": {"declined": 59}, "per_box": {"box4": {"declined": 17}}}
+    ok(_dotted(measured, "per_box.box4.declined") == 17, "a nested count resolves")
+    ok(_dotted(measured, "per_box.box9.declined") is None, "a missing path is None, not zero",
+       "zero would read as agreement with a section publishing 0")
+    ok(_dotted(measured, "overall") is None, "and a path landing on a dict is not a count")
+
     print("\na renumbered entry is found by its title, not its id")
     # EVERY PAIR HERE IS REAL HISTORY, not invented ids. `D67 -> D69` is the order-screen
     # entry and the incident this check exists for; `D50 -> D51 -> D53` is the "one link"
@@ -8349,6 +9196,11 @@ def audit(staged_only: bool) -> Report:
     check_renumbered_decisions(report)
     check_entry_budget(report)
     check_env_vars(report, docs, allowed)
+    check_env_names(report)
+    check_claim_decode(report)
+    check_claim_clients(report)
+    check_detector_standing(report)
+    check_sole_reader(report)
     check_server_concurrency(report)
     check_shipping_columns(report)
     check_router_certainty(report)
@@ -8356,6 +9208,7 @@ def audit(staged_only: bool) -> Report:
     check_not_built_endpoints(report)
     check_transport_standing(report)
     check_map(report, allowed)
+    check_hook_roster(report)
     check_map_sections(report)
     check_build_order_mirror(report)
     check_game_vocabulary(report)

@@ -483,6 +483,12 @@ relay. `POST /orders/fetch` answers EXACTLY the body `POST /orders/ingest` accep
 the fetch needed no adapter and enters through the same one door the paste does. What is NOT
 established is in section 6.
 
+**`PKMNSCAN_TCG_ORDERS_URL` re-points the base URL, and it is a test seam with a guard on it.**
+T7 aims it at a loopback socket so the transport's refusal codes can be exercised without the live
+portal. The module refuses to send the session cookie anywhere but https or loopback, deliberately:
+a knob that redirects a session cookie is an exfiltration channel wearing a test seam, so the
+variable can move the endpoint but cannot move the credential off this machine.
+
 **The deliverable is that a fetch replaces a paste behind the control T1 already built.** Ingest writes no card state and no listing count, so a replay is a no-op — and
 D63 makes that true by construction rather than by a guard, because `store/orders.py` holds no
 `Inventory` and imports nothing that can reach one.
