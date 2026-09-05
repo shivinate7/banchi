@@ -3373,6 +3373,15 @@ def literals_from_module(path: Path) -> Dict[str, object]:
     return out
 
 
+# Files whose bytes are not prose. `cited_decisions` reads every mapped file looking for `D<n>`
+# and a compressed image will eventually contain those three bytes by chance — icon-180.png
+# "cited" D31 and icon-512.png "cited" D2 on the day they were added.
+BINARY_SUFFIXES = frozenset({
+    ".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".avif", ".pdf",
+    ".ico", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".sqlite",
+})
+
+
 def cited_decisions(path: Path) -> Set[str]:
     """Every decision id a file cites, suppressions excluded.
 
@@ -3384,7 +3393,17 @@ def cited_decisions(path: Path) -> Set[str]:
     commits the moment the third digit came into reach — measured, on the first full run
     after the widen, and the reason `without_noqa` is applied here and not only to the
     citation scan.
+
+    A BINARY FILE CITES NOTHING, and reading one as text is how it comes to. The map gained
+    entries for `app/public/icon-*.png` on 2026-09-05 and this reader found `D31` in one and
+    `D2` in another — byte sequences inside compressed image data, matched by a regular
+    expression that had no reason to expect anything but source. The finding is MECHANICAL, so
+    it blocked the commit, and the remedy it names is to add a decision id to `governed_by`
+    that the file does not cite and nobody chose. A citation is a thing a person wrote; a file
+    with no text to read has written none.
     """
+    if path.suffix.lower() in BINARY_SUFFIXES:
+        return set()
     lines = (without_noqa(line) for line in read(path).splitlines())
     return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
 
