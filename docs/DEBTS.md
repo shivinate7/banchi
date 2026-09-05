@@ -698,9 +698,21 @@ press it. **The fix that would close this is a clock, and this repo does not put
 (`store/orders.py` records the one deliberate exception and argues it at length), so the honest
 alternatives are an explicit *end this pass* control nobody has asked for, or leaving it here.
 
-**Why neither is fixed.** Both were surfaced by an adversarial review of the change that introduced the
-figure, before it shipped, rather than found afterwards — and both are the figure being narrower than
-the screen rather than wrong about what it counts. A green walk means *"this many of the orders the
+**And a capture-server restart does not end it either, which is the same gap one door along.**
+`OrdersHubStore`'s `onServerBoot` clears `batch` and raises a notice; `mode` and `walkKeys` survive
+it. So a pass frozen before a restart goes on describing a reading taken from a process that no
+longer exists. **Clearing it there is a one-line change and it was written and then reverted**, on
+2026-09-04, for a reason worth recording rather than repeating: it could not be given a test.
+`server.ts:noteBoot` deliberately ignores the FIRST boot id it sees — an absent header means a
+stubbed route or an older server, and inventing a reload from one would fire on every spec in the
+suite — so proving a restart needs two reads carrying two different ids, and the only unprompted
+read on that screen is a pull. Two pulls in one case did not produce two reads against the fixture,
+and shipping the clear without a case that had been observed failing is the thing this repo does not
+do. The behavior is therefore unchanged and the gap is here instead.
+
+**Why none of these is fixed.** All three were surfaced by an adversarial review of the change that
+introduced the figure, before it shipped, rather than found afterwards — and all three are the
+figure being narrower than the screen rather than wrong about what it counts. A green walk means *"this many of the orders the
 pass began with are complete"*, which is less than *"this many of the orders in front of you"*, and
 that difference is the whole of this section.
 
