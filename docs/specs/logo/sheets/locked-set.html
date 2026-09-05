@@ -1,0 +1,133 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the locked set</title>
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 16px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:22px 0 9px}
+ .note{font:400 11px system-ui;color:#9aa1ab;margin:0 0 10px;max-width:920px}
+ .strip{display:flex;gap:24px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:20px 24px;align-items:flex-start}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:7px;width:126px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .hex{font:500 8.5px ui-monospace,monospace;color:#6b7480;display:flex;align-items:center;gap:4px}
+ .sw{width:11px;height:11px;border-radius:2px;border:1px solid rgba(0,0,0,.15)}
+ .held{color:#c2410c;font-weight:700}
+ .keep{background:#fffaf0;box-shadow:inset 0 0 0 2px #e0836a}
+ .bar{width:110px;height:26px;border-radius:5px;border:1px solid rgba(0,0,0,.12)}
+ svg{display:block}
+</style>
+<div class="wrap">
+<h1>the locked set — six marks</h1>
+<div class="sub">Locked 2026-09-05. bluesteel is the default. Every parameter under each tile is the value of record; nothing here is RANGED any more except what is named as such in section 3.</div>
+<div id="out"></div></div>
+<script>
+const CW=31.782, CH=44.495, CX=50-CW/2, CY=50-CH/2
+const SQ=(function(){const a=50,N=220,p=[]
+ for(let i=0;i<=N;i++){const t=i/N*2*Math.PI,ct=Math.cos(t),st=Math.sin(t)
+  p.push((a+a*Math.sign(ct)*Math.pow(Math.abs(ct),.4)).toFixed(2)+' '+(a+a*Math.sign(st)*Math.pow(Math.abs(st),.4)).toFixed(2))}
+ return 'M'+p.join('L')+'Z'})()
+function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
+ const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=320,pts=[]
+ const tl=Math.max(tlf*Math.max(aX,aY),0.0001)
+ for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
+  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
+  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
+  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
+  const f=tip+(1-tip)*Math.min(Math.min(1,s/tl),Math.min(1,(L-s)/tl))
+  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
+ const q=function(v){return v.toFixed(3)}
+ const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
+ const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
+ return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
+   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
+  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+const BRK={
+ whitegold:['#FFFFFF','#E8E4D8','#FFFFFF','#CFC8B8'],
+ platinum:['#FFFFFF','#DEE4E8','#FAFCFD','#BAC4CA'],
+ rose:['#FFF0E8','#E8B49C','#FFF8F4','#C88A6C'],
+ palerose:['#FFF6F0','#F0CBBA','#FFFAF7','#D9A28C'],
+ chrome:['#FFFFFF','#B8C8D8','#F2F8FF','#8FA4B8'],
+ gold:['#FFF4D0','#D9A93C','#FFFAE8','#A87820'],
+ palegold:['#FFFBEE','#E8CE8A','#FFFDF6','#C0A254'],
+ cream:['#F5EBD4','#D8C8A0','#FCF6E4','#B8A578'],
+ bronze:['#F0D0A8','#B8823C','#FCE8CC','#8A5A24']}
+const PRISMS={
+ wg_warm:['#FFFBF2','#EFE6D2','#DCD0B8','#FFFFFF','#C9BCA2'],
+ wg_neutral:['#FFFFFF','#EAEAE4','#D2D2C8','#FFFFFF','#BEBEB2'],
+ wg_cool:['#FCFDFF','#E6EAEC','#CBD2D4','#FFFFFF','#B2BABC'],
+ wg_champagne:['#FFFDF6','#F2E8D4','#E0D2B8','#FFFFFF','#CDBC9E'],
+ rg_classic:['#FFD9C8','#F0B49A','#DE9070','#FFE9DF','#C87A5C'],
+ rg_deep:['#FFCDB8','#E8A184','#CE7B58','#FFE0D2','#B26444'],
+ rg_blush:['#FFE4DA','#F5C6B4','#E3A38C','#FFF0EA','#D08F76'],
+ rg_copper:['#FFCBAE','#E09A72','#C27A4E','#FFE2CE','#A6633C'],
+ champagne:['#FFF6E0','#F2E0B8','#E8D2A0','#FFFBF0','#DFC894'],
+ yellow:['#FFE7A8','#FFC24D','#E8A23C','#FFF3D0','#D98F30'],
+ rich:['#FFD97A','#F0A82E','#C9821E','#FFEFC0','#B36F18'],
+ antique:['#E8D9A0','#C9A94E','#9E8438','#F2E8C4','#8A7030'],
+ brass:['#F5E0A0','#D9B44A','#B08C2E','#FFF0C8','#96771F'],
+ honey:['#FFE4A0','#F5B942','#D99A2B','#FFF2CC','#C08820'],
+ bronze:['#F0C9A0','#C98A50','#9E6634','#FFE0C0','#8A5528'],
+ rose:['#FFD9C8','#F0B49A','#DE9070','#FFE9DF','#C87A5C'],
+ whitegold:['#FFFBF2','#EFE6D2','#DCD0B8','#FFFFFF','#C9BCA2'],
+ bluesteel:['#E4EEF8','#B0C8E0','#7F9FC0','#F2F8FF','#6086AC'],
+ warmer:   ['#F4F0E8','#C8C4C0','#9A9EA8','#FFF8EE','#7C8698'],
+ quieter:  ['#EEF2F6','#C4CED8','#A0AAB6','#F6FAFE','#8A96A4'],
+ lilacish: ['#EFEAFA','#BCB4E0','#8E86C0','#F6F2FF','#6E68A8'],
+ mint:     ['#E6F6F0','#A8D4C4','#78AC9C','#F2FCF8','#589084']}
+let n=0
+function icon(px,o){o=o||{}
+ const w=1.7,arm=.38,r=8,tip=.07,tl=.3,e=11.5,rc=1.9,dsc=o.dsc||60,seed=23
+ const g1=o.g1||'#1E232B', g2=o.g2||'#080B0F', sh=o.sh===undefined?.14:o.sh
+ const pr=PRISMS[o.prism||'bluesteel'], id='g'+(n++)
+ const EW=CW+2*e, EH=CH+2*e, EX=50-EW/2, EY=50-EH/2
+ const p=taperParts(EX,EY,EW*arm,EH*arm,r,w,tip,tl)
+ const one='<path d="'+p.body+'" fill="url(#'+id+'c)"/>'+p.caps.map(function(c){
+   return c[2]>0.02?'<circle cx="'+c[0].toFixed(3)+'" cy="'+c[1].toFixed(3)+'" r="'+c[2].toFixed(3)+'" fill="url(#'+id+'c)"/>':''}).join('')
+ return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+
+ '<defs><linearGradient id="'+id+'b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+g1+'"/><stop offset="1" stop-color="'+g2+'"/></linearGradient>'+
+ '<linearGradient id="'+id+'c" x1=".75" y1=".067" x2=".25" y2=".933">'+(BRK[o.brk||'chrome']).map(function(c,i){return '<stop offset="'+[0,.33,.67,1][i]+'" stop-color="'+c+'"/>'}).join('')+'</linearGradient>'+
+ '<linearGradient id="'+id+'sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="'+sh+'"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'+
+ '<linearGradient id="'+id+'p" x1=".671" y1=".030" x2=".329" y2=".970">'+
+   pr.map(function(c,i){return '<stop offset="'+(i/(pr.length-1)).toFixed(3)+'" stop-color="'+c+'"/>'}).join('')+'</linearGradient>'+
+ '<filter id="'+id+'f" x="-30%" y="-30%" width="160%" height="160%"><feTurbulence type="fractalNoise" baseFrequency="0.035 0.09" numOctaves="4" seed="'+seed+'" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="'+dsc+'" xChannelSelector="R" yChannelSelector="G"/></filter>'+
+ '<clipPath id="'+id+'k"><rect x="'+CX.toFixed(3)+'" y="'+CY.toFixed(3)+'" width="'+CW+'" height="'+CH+'" rx="'+rc+'"/></clipPath>'+
+ '<clipPath id="'+id+'s"><path d="'+SQ+'"/></clipPath></defs>'+
+ '<path d="'+SQ+'" fill="url(#'+id+'b)"/>'+
+ '<g clip-path="url(#'+id+'s)"><rect width="100" height="40" fill="url(#'+id+'sh)"/></g>'+
+ one+'<g transform="rotate(180 50 50)">'+one+'</g>'+
+ '<rect x="'+CX.toFixed(3)+'" y="'+CY.toFixed(3)+'" width="'+CW+'" height="'+CH+'" rx="'+rc+'" fill="'+(o.base||'#5A6E80')+'"/>'+
+ '<g clip-path="url(#'+id+'k)" opacity="1" filter="url(#'+id+'f)"><rect x="'+(CX-18).toFixed(2)+'" y="'+(CY-18).toFixed(2)+'" width="'+(CW+36)+'" height="'+(CH+36)+'" fill="url(#'+id+'p)"/></g></svg>'}
+
+const o=document.getElementById('out')
+const SET=[
+ ['bluesteel','DEFAULT','bluesteel','chrome','#5A6E80','#182430','#060B12'],
+ ['lilacish','','lilacish','chrome','#5A6E80','#231F34','#0B0914'],
+ ['mint','','mint','chrome','#5A6E80','#162722','#050D0A'],
+ ['yellow gold','','rich','palegold','#C98A2E','#141619','#000000'],
+ ['white gold','','wg_warm','palegold','#D8D2C4','#141619','#000000'],
+ ['rose gold','','rg_classic','rose','#D99878','#141619','#000000']]
+const h=document.createElement('h2');h.textContent='the six, at 200px';o.appendChild(h)
+const s=document.createElement('div');s.className='strip'
+SET.forEach(function(m){
+ const d=document.createElement('div');d.className='cell';d.style.width='236px'
+ if(m[1])d.style.cssText+=';background:#fffaf0;border-radius:12px;box-shadow:inset 0 0 0 2px #e0836a;padding:10px 6px'
+ d.insertAdjacentHTML('beforeend',icon(200,{g1:m[5],g2:m[6],sh:.15,prism:m[2],brk:m[3],base:m[4]}))
+ d.insertAdjacentHTML('beforeend','<div class="cap held" style="font-size:12px">'+m[0]+(m[1]?' · '+m[1]:'')+'</div>')
+ d.insertAdjacentHTML('beforeend','<div class="hex" style="font-size:8.5px;display:block;line-height:1.6;text-align:center;margin-top:4px">'
+  +'ground '+m[5]+' → '+m[6]+'<br>bracket '+m[3]+' · base '+m[4]+'<br>prism '+m[2]+' · sheen 0.15</div>')
+ s.appendChild(d)})
+o.appendChild(s)
+const h2=document.createElement('h2');h2.textContent='at 48px and 28px — the sizes a rail and a favicon actually use';o.appendChild(h2)
+const nb=document.createElement('div');nb.className='note'
+nb.innerHTML='Not a decision, a check. The display cut is drawn here at small sizes; section 3 says a <b>separate small cut</b> (stroke 3.4, no taper) is required below 64px, and this row is why.'
+o.appendChild(nb)
+;[48,28].forEach(function(px){
+ const r=document.createElement('div');r.className='strip';r.style.alignItems='center'
+ SET.forEach(function(m){const d=document.createElement('div');d.className='cell';d.style.width='96px'
+  d.insertAdjacentHTML('beforeend',icon(px,{g1:m[5],g2:m[6],sh:.15,prism:m[2],brk:m[3],base:m[4]}))
+  d.insertAdjacentHTML('beforeend','<div class="cap" style="font-size:9px">'+m[0]+'</div>')
+  r.appendChild(d)})
+ o.appendChild(r)})
+</script></body>
