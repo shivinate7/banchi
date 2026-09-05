@@ -5226,7 +5226,7 @@ All 104 of those sales went through `#/inventory`'s plain sale — the write thi
 
 **And the sweep closed the red test the merge left behind, which was a layout defect and not a sigil one.** `PositionLabel.css` reserved the slot column with a hand-computed approximation of the key's advance width, so a departed row — which draws a void where the figure goes — reserved less than a live row's real glyphs and its path started 2.109px left. Measured in `#/inventory`'s copies list at `--pos-slot: 22px`: a live slot is 82.06px (`CARD` at 33.59 + the 4px gap + the figure's 3ch of **Manrope**, 44.47) against a reserve computing 79.95 (3ch of **Inter**, 41.63 + 4 + `4 × 0.78 × 11px`, 34.32). Two fonts' `ch` and a per-character factor for a four-letter word — a formula cannot know which half it is wrong about, which is why no better factor was the fix. The column is the LIST's now: `CardLocations.css` declares `--pos-slot-col` once on the copies list and every row reserves it, because a row cannot see whether its siblings drew a key. `app/tests/inventory.spec.ts`'s `two departed copies of one card draw two different rows` is green.
 
-### Amended 2026-09-05 — the column's two terms have different provenance, and only one of them may be a constant
+### Amended 2026-09-04 — the column's two terms have different provenance, and only one of them may be a constant
 
 **The ruling above is unchanged: the slot column belongs to the LIST, because a row cannot see whether its siblings drew a key.** What moved is one term inside it. `--pos-slot-col: 5.25rem` is deleted; the column is now `--pos-slot-key` plus `--pos-slot-digits`, and `.position-slot` is `max-content` rather than a hard width.
 
