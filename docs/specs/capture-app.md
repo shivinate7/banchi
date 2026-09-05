@@ -75,7 +75,11 @@ one fact.
   cell is priced by hand on `#/pricing` (`inventory/prices.json`, D9/D86) and never appears on
   that screen.
   Separately, `card_not_detected` is a constant nothing in `pipeline/`, `cli/` or `identify/`
-  ever assigns — it is reachable in principle and has no producer in the repo today. Neither
+  ever assigns — it is reachable in principle and has no producer in the repo today. **That is
+  machine-checked as of 2026-09-05** rather than a standing note: `reason emissions` fails on
+  any declared reason with no producer, and this one is excused by name in
+  `UNEMITTED_REASONS`, carrying this paragraph as its argument. If something ever emits it,
+  the exemption goes stale and the row says so. Neither
   is a defect in the screen and neither costs more than a line in a lookup table; both are
   recorded because §10.2 item 2 asks for the codes that fired ZERO times, and a zero for
   these two would mean nothing about the owner's stock.

@@ -694,8 +694,8 @@ narrower than the one it was proposed against.
 `removed` is already taken. The capture server uses it as a **history event name** — it is what
 undo appends when it deletes a record and releases its position. The server's own comment states
 the invariant: not one of its seven event names is a member of the store's states, because
-`_state_before_sale` is the only reader of the history file and it scans backwards for the last
-event naming a state, filtering against those states so that an event name is inert to it. T7
+`_state_before_sale` and `_state_before_retirement` scan backwards for the last event naming a
+state, filtering against those states so that an event name is inert to them. T7
 asserts the two sets are disjoint.
 
 Adding `removed` to the states tuple **breaks that invariant directly**. An undo event from

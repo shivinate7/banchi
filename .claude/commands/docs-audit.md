@@ -19,8 +19,13 @@ well-formed, and no longer true.**
 python3 scripts/docs-audit.py
 ```
 
-Exit 1 means a provably wrong reference; exit 2 means the coupling question fired; exit 0
+Exit 1 means a provably wrong reference; exit 2 means **any ADVISORY row has findings**; exit 0
 means neither. Report what it found — do not re-derive it by hand.
+
+**Exit 2 is not the coupling question**, which is what this line said until 2026-09-05. The
+coupling row only runs under `--staged`, but `entry budget`, `game coverage`, `views exposure`
+and several others emit ADVISORY on every plain run — so exit 2 is the ordinary outcome here,
+not a signal that staged code and its docs disagreed. Read the rows; the code says which.
 
 **2. Read the diff, then the docs it touches.**
 

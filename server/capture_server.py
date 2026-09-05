@@ -852,9 +852,14 @@ UNDOABLE_STATES = (master.CAPTURED,)
 # that the file they change is overwritten in place.
 #
 # NONE OF THESE IS A STATE, AND WHAT ENFORCES THAT IS THEIR ABSENCE FROM `master.STATES`.
-# `_state_before_sale` — the only reader of `history.jsonl` in this repo — scans backwards
-# for the last event naming a state and filters against that tuple, so a name added here is
-# inert to it by construction. A name that collided would restore a reversed sale to
+# `_state_before_sale` — one of the TWO scanners of the history, the other being
+# `_state_before_retirement` — scans backwards for the last event naming a state and filters
+# against that tuple, so a name added here is inert to BOTH by construction. This said "the
+# only reader of `history.jsonl` in this repo" until 2026-09-05, and it was wrong twice over:
+# the twin scanner arrived with D26 and `_state_before_sale` does not read the history at all,
+# it is handed a sequence. The readers are `_answer_origin`, `_origin` and
+# `_reverse_stand_down`. The invariant is unchanged; what was wrong was the count a later
+# session would have reasoned from. A name that collided would restore a reversed sale to
 # `corrected`. T7 asserts the two sets are disjoint rather than leaving that to whoever adds
 # the next event — WHICH IS WHY THE ROSTER IS NOT COUNTED IN PROSE ANY MORE. The ordinals
 # below number the route-written names in the order they arrived, and the tuple at the foot of
@@ -973,9 +978,10 @@ BOX_REOPENED = "box_reopened"
 # ASSERTION, stated here and worth a T7 case: NOT ONE OF THESE NAMES IS A MEMBER OF
 # `master.STATES`, which is `(captured, identified, sold)`. Nothing enforces that at import
 # time and nothing should — the check that matters is a test, because the failure is silent.
-# `_state_before_sale` is the only reader of `history.jsonl` in this repo and it scans
-# backwards for the last event naming a state; it filters against `master.STATES` precisely
-# so that a name in this tuple is inert to it. A collision would restore a reversed sale to
+# `_state_before_sale` and its twin `_state_before_retirement` scan backwards for the last
+# event naming a state; both filter against `master.STATES` precisely so that a name in this
+# tuple is inert to them. (This claimed a single reader until 2026-09-05 — see the correction
+# at the sibling comment above.) A collision would restore a reversed sale to
 # `resectioned`.
 #
 # The five D20 names are a MIRROR of literals that live inside `store/master.py:_log` calls
@@ -9999,10 +10005,16 @@ def serve(host: str = HOST, port: int = PORT) -> None:
         if waiting and drain(DRAIN_SECONDS):
             print(f"stopped — {waiting} request(s) finished first.")
         elif waiting:
-            # LOUD, because this is the one path that can still tear the store: `Store.write()`
-            # replaces four JSON files in sequence and a kill between them leaves a torn set.
+            # LOUD, and D88 CHANGED WHAT IS AT RISK HERE rather than removing the risk.
+            # `Store.write()` is one SQLite transaction over every table now, so a kill can no
+            # longer leave the torn set of four JSON files this comment used to describe — the
+            # tables commit or they do not. What a kill still cuts is everything that was never
+            # in the transaction and still is not: the photograph, its sidecar, and
+            # `codes.jsonl`, all written inside the flock but outside the commit. So the thing
+            # to look at is no longer `history.jsonl`, which is a table now and not a file.
             print(f"STOPPED WITHOUT DRAINING — {inflight()} request(s) were cut after "
-                  f"{DRAIN_SECONDS:.0f}s. If the store looks wrong, check history.jsonl.")
+                  f"{DRAIN_SECONDS:.0f}s. The store's tables commit atomically; what a cut "
+                  f"write can leave half-done is a photograph, its sidecar, or codes.jsonl.")
         else:
             print("stopped.")
 
