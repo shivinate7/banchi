@@ -46,7 +46,11 @@ Units are the 100 x 100 icon viewBox.
 | Holo displacement | 40 – 68 | RANGED | 14 goes flat; 76 dropped; 90 too much |
 | Holo opacity | 1.0 | LOCKED | — |
 | Seed | 5, 7, 11, 13, 23, 41 | RANGED | **the seed is part of the design** — a different roll is a different drawing |
-| Sheen over the tile top | 0 – 0.30 | RANGED | 0.40 eliminated. **0.22** stays the value of record; see section 6 |
+| Sheen over the tile top | 0.10 – 0.20 | RANGED | 0 and 0.30 eliminated on the second look; 0.40 on the first |
+| Ground lightness pair | L 0.255 → 0.148 | LOCKED | `deeper drop` (0.288 → 0.115) was the only candidate that moved it, and lost |
+| Ground chroma ratio | 0.23 – 0.39 | RANGED | `held` and `cooler` called "about the same" — the JND, §7 rule 7 |
+| Flat ground | **eliminated** | LOCKED | no bottom to fall to; the sheen lifts its top and it reads muddy |
+| Inverted ground | **eliminated** | LOCKED | the sheen cancels the inversion rather than adding to it |
 | Ground gradient | derived from the prism | RANGED | see "the ground is the prism, driven to black" below |
 | Warm ground | **eliminated** | LOCKED | swept at four chromas on its own hue and rejected at every one |
 | Prism | bluesteel, warmer, quieter, lilacish, mint | RANGED | colder and richer rejected |
@@ -85,15 +89,34 @@ Mint turns color soonest — its ground competes with the card for the same gree
 others do. **0.23 – 0.39 is the band all three share**, and it is the band `held` and `cooler`
 already occupied.
 
-The answers:
+**The ratio was settled by the owner at ratio, not per prism.** `held` (0.23) and `cooler`
+(0.39) were called *"both work"* — §7 rule 7, the just-noticeable difference. **Both families are
+live and neither is a fallback**, so the answer is two complete sets rather than one set with an
+alternate:
 
-| prism | ground | note |
+| prism | family A · 0.23 | family B · 0.39 |
 | --- | --- | --- |
-| bluesteel | `#1E232B` → `#080B0F` (`held`) or `#182430` → `#060B12` | widest tolerance of the five; good to 0.48 |
-| lilacish | **`#231F34` → `#0B0914`** | 0.39. `#23212D` → `#0B0A10` at 0.23 if it should whisper |
-| mint | **`#162722` → `#050D0A`** | 0.39. `#1C2522` → `#070C0A` at 0.23 |
-| quieter | `held` | see below |
-| warmer | `held` | see below |
+| bluesteel | `#1D242B` → `#080B0F` | `#182430` → `#060B12` |
+| lilacish | `#23212D` → `#0B0A10` | `#231F34` → `#0B0914` |
+| mint | `#1C2522` → `#070C0A` | `#162722` → `#050D0A` |
+| quieter | `held`, `#1E232B` → `#080B0F` | `cooler`, `#182430` → `#050A12` |
+| warmer | `held`, `#1E232B` → `#080B0F` | `cooler`, `#182430` → `#050A12` |
+
+**The owner's rejection confirmed the lightness pair without being asked to.** Three grounds went
+up at sheen 0.20 — `held` (ratio 0.23), `deeper drop`, `cooler` (ratio 0.39). `deeper drop` was
+the only one of the three that moves L, to 0.288 → 0.115, and it is the only one that lost. The
+two that were kept are exactly the two the formula produces at the L pair it already had. That
+is a derived value surviving a test it was not the subject of, which is the one kind of evidence
+this file has been short of.
+
+**`flat` and `inverted` were shown again rather than dropped quietly** — §7's re-show rule, which
+this file records as never having been honoured. Both failed for a reason that is about the
+interaction rather than about either parameter: **the sheen substitutes for the top of the ground
+gradient but not the bottom.** `flat` has no dark bottom to fall to, so the sheen lifts its top
+and the whole tile reads lighter and muddier. `inverted` is lit from below, and at sheen 0.20 the
+sheen is *cancelling* the inversion — it looks acceptable by accident and comes apart the moment
+the sheen moves. Neither could have been judged in a sweep that moved one parameter at a time,
+which is why they were crossed in a matrix and §7 rule 6 says to say so.
 
 **Two of the five prisms cannot drive a ground, and that is the finding rather than a gap.**
 `quieter` peaks at 0.025 chroma and `warmer` at 0.0297, against bluesteel's 0.0721. Every ratio
@@ -151,6 +174,9 @@ Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 | `logo/pass-brackets.png` | committed, still accurate as a record |
 | `logo/pass-ground-per-prism.png` | the ground derived per prism, and the two null rows |
 | `logo/pass-ground-bisect.png` | 0.23 → 0.70 bisected, where each wall is |
+| `logo/pass-ground-matrix.png` | the 5 x 4 ground x sheen cross on bluesteel |
+| `logo/pass-ground-choice.png` | the forced choice that settled the L pair, with the two rejections shown |
+| `logo/pass-family.png` | **both families, all five prisms, on the settled parameters** |
 | `logo/sheets/*.html` | **the generators.** Self-contained; render with `sheets/shot.mjs` |
 
 **Every PNG here went in past the pre-commit image guard, on the owner's word each time.** That
@@ -196,11 +222,17 @@ change was mine and was never flagged; it was found by the owner noticing the ti
 flat. The value of record is **0.22**.
 
 **The sheen drift is dissolved and the lesson is not.** Swept 0 to 0.40, everything from 0 to
-0.30 was accepted and only 0.40 rejected — so 0.08 and 0.22 are both inside the range, and the
-stale asset was never wrong on this axis. That makes the drift harmless in hindsight, which is
-exactly the case worth recording: it went unnoticed for as long as it did *because* it was
-inside a tolerance nobody had measured. A value silently changed inside an unmeasured range is
-the same failure as one changed outside it, minus the luck.
+0.30 was accepted and only 0.40 rejected. **Shown a second time against the ground it sits on,
+the band narrowed to 0.10 – 0.20** — 0 and 0.30 both failed on the second look, which is rule 3
+working: crossing the optimum in both directions is what turned a five-wide acceptance into a
+two-wide answer.
+
+That leaves the drift harmless anyway. `0.22` sits a hair past 0.20 and is indistinguishable
+from it side by side, so **the value of record stands and needs no correction** — and `0.08`,
+the value in the stale file, was inside the first range if not the second. Which is exactly the
+case worth recording: the change went unnoticed for as long as it did *because* it sat inside a
+tolerance nobody had measured. **A value silently changed inside an unmeasured range is the same
+failure as one changed outside it, minus the luck.**
 
 Both were drift about earlier settings rather than mistakes in the moment, and both surfaced
 only because a render was questioned. That is the argument for this file existing.
@@ -254,9 +286,10 @@ rejection held. Every rejection in section 3 rests on a single look.
   the card base fill `#5A6E80` and the prism gradient sit under a ground that is now derived, so
   the base fill is the next thing worth sweeping — it is the only remaining color in the mark
   that nothing else constrains.
-- **Which prism.** Five are RANGED and two of them (`warmer`, `quieter`) resolve to the same
-  neutral ground and differ from each other only in the top of the gradient. That is a question
-  about whether five options are really five.
+- **Which prism.** Five are RANGED and two of them (`warmer`, `quieter`) now resolve to the
+  *same ground in both families* and differ from each other only in the top of the gradient. Put
+  side by side on the family sheet they are very nearly one tile. **That is a question about
+  whether five options are really four**, and it is the next thing worth an owner's eye.
 - Regenerating the four assets, and generating the lockup.
 - A drawn wordmark. `Banchi` is set in Manrope today.
 - Which of tile / bare mark the sidebar takes. Decide by looking at the rail.
