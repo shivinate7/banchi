@@ -6026,3 +6026,60 @@ Three things, none of which depend on which way the price moved:
 ### What would reopen this
 
 *A rule that proposes raises* — repricing to market after a spike, which wants a market-movement trigger and is a sibling command rather than a flag on this one; the owner has named no such need yet. *A raise ceiling*, if a typo ever sends a $2 card to $2,000 — TCGplayer's own validator caps at 200,000 and `server/tcg_import.py` enforces that, but nothing here asks "is this raise plausible". *An operator who wants the sheet renamed*, since "Mark down what is not selling" is now the primary case rather than the only one.
+
+## D108 — The dock app is the page Chrome already renders, and the manifest is what makes it one
+
+**Banchi goes in the dock as an installed web app on the engine it already runs on. Nothing is wrapped, nothing is bundled, and the capture server stays a launch agent.** Investigated 2026-09-06 from the owner asking for "a proper app in the Mac dock rather than a URL in a browser tab".
+
+### What "feels real" decomposes into, and what already answered each
+
+Five things, and four of them were already true or one click away:
+
+- **Its own dock icon, its own ⌘-Tab entry.** Chrome's *Install page as app* writes a real bundle to `~/Applications/Chrome Apps.localized/` with its own `CFBundleIdentifier`, its own `CFBundleName` and its own `app.icns`. Verified by inspection of `My Hue.app`, a Chrome-installed app already on this Mac — not from documentation.
+- **Its own window, no browser chrome.** Measured on this machine in a throwaway profile: an app-mode window reports `display-mode: standalone`, `outerWidth === innerWidth` (no side chrome at all) and a 32px frame, which is the title bar and nothing else.
+- **It remembers its size.** Measured: resized to 1512x780, Chrome quit, relaunched — 1512x780 came back. Position is remembered too, clamped to the screen.
+- **The camera.** Unchanged, because the engine is unchanged. This is the whole argument and it is in the next section.
+- **Always live.** `make launch-agent` already does this and D53 argued the shape. Nothing here touches it.
+
+### The camera is why this is not an open question
+
+**`app/src/useCamera.ts` asks for 3840x2160 `ideal` over a Cam Link with `deviceId: {exact}`, and the rig has only ever been proven on Chromium.** An installed web app is the same Chromium, the same profile and the same origin, so there is nothing to re-prove: `http://localhost:5173` is a secure context, the permission grant lives in the profile's content settings, and the installed bundle points at that same profile — `My Hue.app`'s `CrAppModeUserDataDir` names the default profile's `Web Applications` directory, which is what makes the grant carry. Measured in a *fresh* profile the state is `prompt`, which is the same statement from the other side: the grant is per profile, and the owner's profile already has it.
+
+**Every other host re-opens a question this one never asks.** `MIN_WIDTH`/`MIN_HEIGHT` is 1280x720 and it is a hard floor, so a host that could not clear 720p would fail loudly — but a host that settled on 1920x1080 would pass the floor and be **four times worse than the rig can produce, silently**. That is the failure `useCamera.ts`'s own header is written against, and it is the reason engine changes are not a free variable here.
+
+### Rejected: Safari's Add to Dock
+
+It produces the same thing — a real bundle, own icon, own window — and it is one click, so it was the closest competitor rather than an also-ran. **It is WebKit.** Two unknowns ride on that and neither is worth carrying for a dock icon that Chrome gives for free: this app has never been rendered in Safari at all (`make design-check` and every spec run on Chromium), and the Cam Link's 4K mode under WebKit's `getUserMedia` is unmeasured — the silent-1080p case above. Cheap to try later as a *second* app; not the one to depend on.
+
+### Rejected: Tauri and Electron
+
+- **Tauri is WebKit** (`WKWebView`), so it inherits Safari's unknowns *and* adds a Rust toolchain this machine does not have — `cargo` and `rustc` are both absent — to a repo whose stated invariant is that the capture server must never need `make venv`.
+- **Electron is Chromium**, so the camera would be fine, and that is the only thing it gets right. It is 150-250MB, a second build pipeline, and a wrapper large enough to be tempted into owning the server — see below. It buys a dock icon that already costs nothing.
+
+**Neither was built and neither should be without a reason this entry does not have.** What would reopen it: wanting the app when Chrome is uninstalled, wanting a signed artifact to hand to a second person, or the page needing something a browser will not give it.
+
+### The server stays a launch agent, and a wrapper owning it would be D53's own defect
+
+**A wrapper that also starts the capture server is a second answer to a solved problem, and this repo has already measured what that costs.** D53 records it: `make launch-agent` bootstrapped a second supervisor whose capture child could not bind, gave up after five retries, and overwrote `supervisor.pid` with its own pid — *"Two supervisors: one serving, one supervising nothing, and the pidfile naming the wrong one."* A wrapper process holding a third opinion about who owns `:8000` would reproduce that with a GUI in front of it. The dock app is a **client**. It opens a URL; the launch agent keeps the URL answering.
+
+**What that leaves honest: if the supervisor is down, the dock icon opens Chrome's error page.** The window is the app's, the error is the browser's, and there is nothing in the product to say so. That is the one place this shape is visibly a web app, and it is accepted rather than unnoticed — `KeepAlive` makes it rare and D53's fast-failure cap makes it possible.
+
+### What actually changed in the repo
+
+**The manifest, which was an icon manifest and is now also an install manifest.** It was written so `apple-touch-icon` had a raster to point at; being installable was never its job, and it was wrong for it in one way that no check could see.
+
+**Every URL in it was site-absolute, and that is measurably broken at any base but `/`.** Measured against the published demo on 2026-09-06: `https://shivinate7.github.io/pkmnscan/manifest.webmanifest` answers 200, and inside it `"/icon-192.png"` resolves to `https://shivinate7.github.io/icon-192.png` — **404**, while the file it means is served one directory down under the demo base — and `start_url: "/"` resolves to a 404 as well. Vite rebases the `<link rel="manifest">` address and copies `app/public/` **verbatim**, so this is the one file in that directory that has to carry its own base and did not. Relative URLs (`.`, `icon-192.png`) resolve against the manifest's own address and are therefore correct at both: at the root they are byte-for-byte what the absolute forms meant, and under the demo base they are what the absolute forms failed to mean. Verified under a simulated base directory: `start_url`, `scope` and all three icons 200.
+
+**`launch_handler: {client_mode: "focus-existing"}`** is the line that is about the dock rather than about correctness. Clicking a dock icon focuses the window that is open; without it a second press opens a second window, which is the tell that separates an app from a shortcut. `focus-existing` and not `navigate-existing` because a press mid-review should return to the review, not to Home.
+
+**`id`** decouples the app's identity from `start_url`, so changing where it opens later does not orphan an installed copy. **`scope`** is the default made explicit, and correct under a base for the same reason `start_url` is.
+
+**The colors were considered and left alone.** `background_color` is `#0c0e12`, which is the dark ground, while the app's default theme is light — so a light-theme launch flashes dark for the moment before first paint. A manifest holds one value and cannot be media-queried, so changing it trades that flash for the same flash in the other theme. `app/index.html` already carries two `<meta name="theme-color">` entries, one per scheme, which is the accurate statement in the one place that can make it.
+
+### What is NOT done, and is a spec question rather than an oversight
+
+**The icon is edge-to-edge and macOS app icons are not.** Chrome will build `app.icns` from `icon-512.png`, which is the mark's superellipse tile filling the frame; Apple's icon grid insets the artwork and uses its own corner curve, so Banchi will read slightly larger in the dock than its neighbors. **This is not fixed here on purpose.** `docs/specs/logo.md` is the mark's store of record (D102), nothing in `app/` may hand-draw it, and the padding and corner geometry a macOS icon wants are a locked-geometry question for that spec — not a value to re-derive in a manifest. `scripts/build-mark.mjs --icons` writes 180, 192 and 512; a 1024 with the Apple grid applied would be the change, and it belongs in the spec's own section.
+
+### What would reopen this
+
+*A second person needing the app*, which wants something signed and installable rather than a click in one profile. *Chrome going away* on this machine. *The page needing a capability a browser withholds* — a real filesystem, a background process, a global hotkey. *The demo being meant to install*, which it is not: the manifest is correct there now, but a demo with no server behind it is a page to look at.

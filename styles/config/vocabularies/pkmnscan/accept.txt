@@ -418,6 +418,7 @@ routing's
 [Tt]cgtracking
 [Tt]ypechecked
 [Tt]ypechecking
+Tauri
 [Uu]ncached
 [Uu]nconfounded
 undo's
