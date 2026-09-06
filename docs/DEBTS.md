@@ -1501,3 +1501,34 @@ through `scan`, so no pooled card is ever joined". It reads as a design constrai
 not enforced anywhere — the registry, `cli/cmd_identify.py:397` and
 `harness/tests/t7_store_and_seams.py:11336` each contradict it. If the owner wants it to be
 true, the place to make it true is `pipeline/games.py` or `cli/resolve.py`, not `CLAUDE.md`.
+
+## 15 — The lockup does not fit the phone, and the bar keeps the mark
+
+**Closed by a decision, not by work.** Three routes are drawn and costed; none is free, and which
+one is right is the owner's to say. Recorded 2026-09-06, when the lockup landed everywhere else.
+
+`docs/specs/logo.md` §16 carries the measurement and the three options in full — this is a pointer
+so a later session does not rediscover the conflict by trying it.
+
+**The numbers.** The phone top bar is **52px**. The lockup at §11's floor — kanji 32 — is a
+**102 × 75px** block, 23px taller than the whole bar. And that floor is not a preference: §11
+settled it because 番's counters close before the bracket does, so drawing it smaller makes the
+kanji mush at exactly the size a phone renders it.
+
+**So the bar keeps `Logo` at 26 beside a "Banchi" title**, which is what shipped before the lockup
+existed and reads correctly at that size. `App.tsx`'s `PhoneBar` is unchanged.
+
+**What each way out costs:**
+
+| route | cost |
+| --- | --- |
+| grow the bar to ~91px | 39px of vertical space on the device where it is scarcest, on every screen — and the top bar stops matching the 52px tab bar beneath it |
+| a horizontal lockup — 番地 beside BANCHI | a NEW artifact, not a re-use: the bracket proportions, the gap and the roman's fill would each need settling, which is another series of forced choices |
+| leave it | the phone spells the name in one script where every other surface spells it in two |
+
+**Why this is a debt and not a build-order step.** There is no deliverable to schedule until the
+route is chosen, and two of the three are design work rather than engineering. `docs/GATES.md`'s
+`OPEN` is for steps with deliverables; this is a question with three answers.
+
+**The owner asked to be reminded of this** — it is the one thing from the lockup's build that was
+raised, understood and deliberately left.
