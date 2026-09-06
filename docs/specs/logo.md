@@ -864,6 +864,14 @@ re-show them.
 The brackets were plain stroked paths with round caps. They carry the icon's tapered outline now,
 off the same `taperParts` the sheet already used for the icon — asked for on 2026-09-05.
 
+**The clamp is at 0.82 on this geometry, and §6 never said where it was.** That entry records the
+defect — *"every value above that rendered identically while being presented as a sweep"* — without
+ever quantifying it, so every later session had to rediscover it. Measured at the settled stroke,
+radius and arm: **the ramp binds at `tl` 0.82**, where it reaches 63.0px at kanji 96 and the taper runs
+from the tip to the midpoint of both arms. Above 0.82 the routine draws an identical bracket forever.
+That is a ceiling on the parameter itself rather than a matter of taste, and it is the one edge in this
+whole sweep that a wider range cannot move.
+
 **§6's taper clamp came back in the sweep that added them.** `taperParts` clamps the ramp at half
 the path, so a ramp fraction above that renders identically while being presented as a sweep —
 *"three images approved as different were the same image."* At pad 0.22 the clamp binds at 0.80.
