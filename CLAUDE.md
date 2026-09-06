@@ -13,17 +13,33 @@ card), and the app is named after that idea.
 **Everything under the app keeps the name it has always had.** Renaming any of it is a
 defect, not a follow-up:
 
-- the repository and its directory, and the CLI `./pkmnscan` with every subcommand
+- the checkout's own directory (`~/Developer/pkmnscan`), and the CLI `./pkmnscan` with
+  every subcommand
 - the Python packages — `server/ store/ pipeline/ identify/ geometry/ codes/ cli/`
 - the store on disk (`inventory/store.sqlite`), `PKMNSCAN_HOME`, and every route on the wire
 - `PKMNSCAN_MAIN=off`, the git hooks' escape hatch, printed in every refusal
 - the harness, the fixtures, `docs/`, and `make` itself
 
-The rename is a front-end fact and it reaches exactly these places: `app/index.html`'s title
-and meta, the brand block in `app/src/App.tsx`'s sidebar, the document title per screen,
-the `banchi.*` keys in `localStorage`, and the copy on every screen. **Nothing on the wire
-changed.** A session that "finishes" the rename by touching `server/` or `store/` has moved
-the store of record for a word.
+**THE GITHUB REPOSITORY IS THE ONE EXCEPTION, AND IT IS THE OWNER'S OWN CHANGE.** It was
+renamed `shivinate7/pkmnscan` -> `shivinate7/banchi` on 2026-09-06, deliberately, and this
+list named the repository among the things that keep the old name until that day. **The
+LOCAL directory is not renamed** and neither is anything else above: `git remote -v` points
+at `banchi.git`, `~/Developer/pkmnscan` is still the checkout, and the two disagreeing is
+correct rather than half-finished. GitHub redirects the old name, so an old clone URL and
+every link in a merged PR still resolve.
+
+**It reached one derived thing and one only, and that was already guarded**: GitHub Pages
+serves a project site at `/<repo>/`, so the demo moved to `shivinate7.github.io/banchi/`.
+`.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name for exactly this
+reason, in a comment written before the rename happened, and the published demo followed it
+by itself. The Makefile's default is a fallback for a hand-run build and is stale by design
+rather than by oversight — override it, or let CI derive it.
+
+The rest of the rename is a front-end fact and it reaches exactly these places:
+`app/index.html`'s title and meta, the brand block in `app/src/App.tsx`'s sidebar, the
+document title per screen, the `banchi.*` keys in `localStorage`, and the copy on every
+screen. **Nothing on the wire changed.** A session that "finishes" the rename by touching
+`server/` or `store/` has moved the store of record for a word.
 
 **The gating system is retired as of 2026-08-23.** Gate A passed 2026-07-26; Gate B passed
 2026-08-22 with 53 real cards end to end — the first numbers this project has about cards
