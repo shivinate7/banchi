@@ -69,9 +69,22 @@ function askedWords(entry: MarkdownSummary): string {
   const days = asked.days
   if (typeof days === 'number') parts.push(`${days} day${days === 1 ? '' : 's'}`)
   const rule = asked.rule
+  const basis = asked.basis
+  /* THE BASIS IS PART OF THE CUT AND NOT A SEPARATE FACT: "10% off" means nothing until you know
+     10% off WHAT. `asking` is the default and is left silent — naming it on every row would be
+     noise on the ordinary case — so the line says the basis exactly when it is not the one the
+     operator would assume. */
+  const off =
+    basis === 'market' ? ' of market' : basis === 'low' ? ' of TCG Low' : ''
   if (typeof rule === 'string' && rule !== '') {
     const pct = /^undercut:(.+)$/.exec(rule)
-    parts.push(pct === null ? rule : `${pct[1]}% off`)
+    parts.push(
+      rule === 'match'
+        ? `at${off === '' ? ' the asking price' : off.replace(' of', '')}`
+        : pct === null
+          ? `${rule}${off}`
+          : `${pct[1]}% off${off}`,
+    )
   }
   const above = asked.above_market
   if (above !== null && above !== undefined && `${above}` !== '') parts.push(`>${above}% over market`)
@@ -103,6 +116,25 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
   /* WHAT WAS PICKED, IN STATE RATHER THAN OFF THE REF BELOW. The drop zone draws the file's
      name and the re-read control only exists once there is a file to re-read; a ref answers
      neither question, because writing one renders nothing. */
+  /** WHAT THE CUT COMES OFF (D103). `asking` is the operator's own live price and is the
+   *  default for D100's reason: `TCG Marketplace Price` is populated on 441 of 441 live rows of
+   *  a My Pricing export and blank on 7,787 of 7,802 of the wide Filtered Export, which is why
+   *  `reprice.BASES` is local to that module rather than added to `pricing.BASES`. The other
+   *  two are the same columns `#/pricing`'s rule strip prices against, so a person who has used
+   *  that screen already knows what they mean. */
+  const [basis, setBasis] = useState<'asking' | 'market' | 'low'>('asking')
+  /** CUT BY A PERCENTAGE, OR PRICE AT THE BASIS EXACTLY. These are the CLI's own mutually
+   *  exclusive pair — `cli/__main__.py`'s `markdown_size` group — and the screen mirrors the
+   *  exclusion rather than inventing a third state: `_markdown_flags` reads `rule` first and
+   *  `percent` only `elif`, so sending both would silently drop one.
+   *
+   *  `markup` IS DELIBERATELY NOT OFFERED. It is a real `pricing.Rule`, and on this path it is
+   *  a trap: a price above the live one is `RAISED`, which refuses THE WHOLE FILE (D100). A
+   *  control whose every use is refused is worse than no control. `match` is the one that means
+   *  something here — price at the basis exactly, which is how an operator says "put everything
+   *  back to market" — and against `asking` it means "leave it", which the `unchanged` refusal
+   *  already names honestly. */
+  const [cut, setCut] = useState<'percent' | 'match'>('percent')
   const [exportName, setExportName] = useState<string | null>(null)
   const [worklistName, setWorklistName] = useState<string | null>(null)
 
@@ -134,12 +166,17 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
   const ask = useCallback(() => {
     const options: Record<string, unknown> = {}
     if (days.trim() !== '') options.days = Number(days)
-    if (percent.trim() !== '') options.percent = percent.trim()
+    if (cut === 'match') options.rule = 'match'
+    else if (percent.trim() !== '') options.percent = percent.trim()
+    /* SENT ALWAYS AND NOT ONLY WHEN CHANGED, because the command's own default is `asking` and
+       a survey that did not say so would be indistinguishable in `asked` from one that could
+       not. The history line reads `asked` verbatim. */
+    options.basis = basis
     if (aboveMarket.trim() !== '') options.above_market = aboveMarket.trim()
     if (limit.trim() !== '') options.limit = Number(limit)
     if (again) options.again = true
     return options
-  }, [days, percent, aboveMarket, limit, again])
+  }, [days, percent, aboveMarket, limit, again, basis, cut])
 
   const read = useCallback(
     async (write: boolean) => {
@@ -363,15 +400,45 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                 />
               </label>
               <label className="bn-field">
-                <span className="bn-field-label">Cut, percent</span>
-                <input
+                <span className="bn-field-label">New price is</span>
+                <select
                   className="bn-input"
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={percent}
-                  onChange={(event) => setPercent(event.currentTarget.value)}
-                />
+                  value={cut}
+                  onChange={(event) => setCut(event.currentTarget.value as typeof cut)}
+                >
+                  <option value="percent">A percentage under</option>
+                  <option value="match">Exactly</option>
+                </select>
+              </label>
+              {cut !== 'percent' ? null : (
+                <label className="bn-field">
+                  <span className="bn-field-label">Cut, percent</span>
+                  <input
+                    className="bn-input"
+                    type="number"
+                    min="0"
+                    max="99"
+                    value={percent}
+                    onChange={(event) => setPercent(event.currentTarget.value)}
+                  />
+                </label>
+              )}
+              <label className="bn-field">
+                <span className="bn-field-label">Cut comes off</span>
+                {/* A `select` AND NOT A `Segmented`, which the rule strip on `#/pricing` uses
+                    for its four presets. This is one of four fields in a grid row and has to be
+                    the height and shape of the three number inputs beside it; a segmented
+                    control here would be a fifth kind of thing in a row of four. The kit has no
+                    select primitive and `bn-input` is what the field row already speaks. */}
+                <select
+                  className="bn-input"
+                  value={basis}
+                  onChange={(event) => setBasis(event.currentTarget.value as typeof basis)}
+                >
+                  <option value="asking">Your asking price</option>
+                  <option value="market">Market</option>
+                  <option value="low">TCG Low</option>
+                </select>
               </label>
               <label className="bn-field">
                 <span className="bn-field-label">Only above market by</span>

@@ -646,3 +646,89 @@ test('a markdown with no survey offers its files and not the lens', async ({ pag
   await expect(page.getByRole('button', { name: 'Hand it back' })).toBeVisible()
   HISTORY = []
 })
+
+/* THE CUT COMES OFF SOMETHING, AND UNTIL D103 THE SCREEN COULD ONLY SAY "the asking price".
+ *
+ * `--basis` was on the wire, validated by `_markdown_flags` against `reprice.BASES`, and
+ * reachable by no control — a route and a wire type that no screen touches is what CLAUDE.md's
+ * hard rule calls not done. `asking` stays the default for D100's reason: `TCG Marketplace
+ * Price` is populated on 441 of 441 live rows of a My Pricing export and blank on 7,787 of
+ * 7,802 of the wide Filtered Export. */
+test('the survey says what the cut comes off, and defaults to the operator’s own price', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await pickExport(page)
+  await expect.poll(() => wire.length).toBe(1)
+  expect((wire[0]?.body as { basis?: string }).basis).toBe('asking')
+
+  await page.getByLabel('Cut comes off').selectOption('market')
+  await page.getByRole('button', { name: /Read it again/ }).click()
+  await expect.poll(() => wire.length).toBe(2)
+  expect((wire[1]?.body as { basis?: string }).basis).toBe('market')
+
+  /* AND THE SAME BYTES, because the basis is a question about one export and re-picking the
+     file would make the two answers about two reads. */
+  expect((wire[1]?.body as { export?: { name?: string } }).export?.name).toBe(
+    (wire[0]?.body as { export?: { name?: string } }).export?.name,
+  )
+})
+
+/* AND A PAST SURVEY SAYS WHICH BASIS IT USED, or two markdowns that differ only by it are two
+ * identical rows. `asking` is left silent — naming the default on every row would be noise on
+ * the ordinary case. */
+test('the history line names a basis only when it is not the default', async ({ page }) => {
+  HISTORY = [
+    {
+      stamp: '20260902-100000',
+      at: '2026-09-02T10:00:00.000+00:00',
+      asked: { days: 7, rule: 'undercut:10', basis: 'market' },
+      source: '/tmp/a.csv',
+      skus: 4,
+      files: ['manifest.json', 'worklist.csv'],
+    },
+    {
+      stamp: '20260902-090000',
+      at: '2026-09-02T09:00:00.000+00:00',
+      asked: { days: 7, rule: 'undercut:10', basis: 'asking' },
+      source: '/tmp/b.csv',
+      skus: 4,
+      files: ['manifest.json', 'worklist.csv'],
+    },
+  ]
+  await open(page)
+  const lines = page.locator('.runs-md-history-asked')
+  await expect(lines.first()).toContainText('10% off of market')
+  await expect(lines.nth(1)).toContainText('10% off')
+  await expect(lines.nth(1)).not.toContainText('of market')
+  HISTORY = []
+})
+
+/* MATCH IS THE OTHER HALF OF THE CLI'S OWN EXCLUSIVE PAIR, and the screen mirrors the exclusion
+ * rather than inventing a third state: `_markdown_flags` reads `rule` first and `percent` only
+ * `elif`, so a request carrying both would silently drop one. `markup` is deliberately absent —
+ * a price above the live one is `RAISED`, which refuses the WHOLE file, so a control whose every
+ * use is refused is worse than no control. */
+test('pricing at the basis exactly sends a rule and no percent, and hides the percent field', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await page.getByLabel('New price is').selectOption('match')
+  /* THE PERCENT FIELD GOES, because it is not a number this survey has a use for. An absence
+     rather than a disabled input, which is this sheet's rule throughout (D33). */
+  await expect(page.getByLabel('Cut, percent')).toHaveCount(0)
+
+  await pickExport(page)
+  await expect.poll(() => wire.length).toBe(1)
+  const body = wire[0]?.body as { rule?: string; percent?: string }
+  expect(body.rule).toBe('match')
+  expect(body.percent).toBeUndefined()
+
+  await page.getByLabel('New price is').selectOption('percent')
+  await expect(page.getByLabel('Cut, percent')).toBeVisible()
+  await page.getByRole('button', { name: /Read it again/ }).click()
+  await expect.poll(() => wire.length).toBe(2)
+  const second = wire[1]?.body as { rule?: string; percent?: string }
+  expect(second.rule).toBeUndefined()
+  expect(second.percent).toBe('10')
+})

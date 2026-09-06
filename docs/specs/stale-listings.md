@@ -307,9 +307,22 @@ neither Runs' nor Pricing's contained *stale*, *markdown*, *reprice* or *live li
 feature was reachable only by already standing on `#/runs` and scanning the header. Both routes
 carry those words now.
 
-**Not fixed, and argued rather than missed:** the sheet still offers `--percent` and not `--rule`
-or `--basis`. §9 has carried that as a reopening condition since D100, and the per-row form on
-`#/pricing` is what serves the want. And step 1 — fetching the export — still happens at
+**The basis and the rule are on the sheet** (the owner reopened §9's condition on 2026-09-06).
+*New price is* — **A percentage under** or **Exactly** — and *Cut comes off* — **Your asking
+price**, **Market**, or **TCG Low**. The two mirror `cli/__main__.py`'s own mutually exclusive
+`markdown_size` group rather than inventing a third state, because `_markdown_flags` reads `rule`
+first and `percent` only `elif`, so a request carrying both would silently drop one; picking
+*Exactly* removes the percent field rather than disabling it.
+
+**`markup` is deliberately not offered.** It is a real `pricing.Rule` and on this path it is a
+trap: a price above the live one is `RAISED`, which refuses **the whole file**. A control whose
+every use is refused is worse than no control.
+
+**`asking` stays the default** for D100's reason: `TCG Marketplace Price` is populated on 441 of
+441 live rows of a My Pricing export and blank on 7,787 of 7,802 rows of the wide Filtered
+Export, which is why `reprice.BASES` is local to that module rather than added to
+`pricing.BASES`. A history row names the basis only when it is not the default — naming it on
+every row would be noise on the ordinary case. And step 1 — fetching the export — still happens at
 TCGplayer: `server/tcg_export.py` can download one, but only at `MyInventory: False`, the
 *catalogue* scope, and its own comment forbids flipping that without the owner. What the screen
 gained is a link to My Pricing and a sentence saying it does not fetch for you, so the operator
