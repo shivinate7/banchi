@@ -6904,21 +6904,78 @@ def _photo_reach(entry_file: Path) -> List[str]:
     return sorted(reached)
 
 
+# A Playwright title, and ONLY off a bare `test(`. Every one of this repo's 370 tests is
+# written that way, so nothing is lost by refusing `test.skip` and `test.only` — and a
+# skipped proof must never go on holding a route out of the exposure list. Anything this
+# cannot parse yields no title, which puts a route back IN the list rather than out of it.
+_TEST_TITLE_RE = re.compile(
+    r"^\s*test\(\s*(?P<q>['\"`])(?P<title>(?:\\.|(?!(?P=q))[^\\])*)(?P=q)",
+    re.M,
+)
+_POOLED_SUBJECT_RE = re.compile(r"\bpooled\b", re.I)
+_ABSOLUTE_NEGATIVE_RE = re.compile(r"\bnever\b", re.I)
+
+
+def _pooled_absence_titles(spec_text: str) -> List[str]:
+    """The test titles in a spec that CLAIM a pooled card is never drawn.
+
+    The claim has to be in the TITLE, and that is the whole correction. A title is where
+    this repo makes a spec answerable: it is the sentence the runner prints, the one a
+    grep finds, and the one a person deletes when the behavior goes away. A spec's BODY
+    carries the vocabulary whichever way its assertions run, so matching the body reads
+    `pooled` out of a fixture field, a passing comment, or a proof of the OPPOSITE claim.
+
+    MEASURED ON THE COMMITTED TREE, not predicted. The body match `pooled|located` held
+    three routes out of the exposure list and not one of them asserted anything:
+
+      - `app/tests/gallery.spec.ts` says `pooled` twelve times while proving the pooled
+        row IS drawn — "the pooled row is a second no-bar shell, and it has not left".
+        The spec whose subject is the pooled shape was the spec that suppressed the
+        question about it.
+      - `app/tests/inventory.spec.ts` matched on `located: true`, a fixture field.
+      - `app/tests/pricing.spec.ts` contains no `pooled` at all. Its first match is the
+        substring inside the word RELOCATED, in a comment about where a test was moved
+        from. The pattern was not even word-bounded.
+
+    A qualifying title names the pooled subject and makes an ABSOLUTE negative claim about
+    it — `never`, not `not`. The row asks whether ANY render can contain a bearer
+    instrument, so a title hedged to one case does not answer it, and `not` is how the two
+    presence-asserting titles above happen to read ("has not left"). Two titles qualify
+    today: the Fulfillment view's "a pooled card is never on his screen", which is the
+    shape D24 asked for by name, and the review queue's "a pooled card never draws a
+    photograph here", which cites this row in its own comment.
+
+    What this still cannot do is read the assertions under the title, and a title using
+    `never` to claim a pooled card is always drawn would pass it. That residual is a
+    sentence a human deliberately wrote about a pooled card in the place this repo puts
+    claims it stands behind, and the row is ADVISORY (D16). The defect being repaired is
+    not a claim misjudged; it is that no claim was being read at all.
+    """
+    return [
+        match.group("title")
+        for match in _TEST_TITLE_RE.finditer(spec_text)
+        if _POOLED_SUBJECT_RE.search(match.group("title"))
+        and _ABSOLUTE_NEGATIVE_RE.search(match.group("title"))
+    ]
+
+
 def _pooled_exclusion_evidence(route_path: str) -> Optional[str]:
     """Committed proof that a route's screen never draws a pooled card's photo.
 
     The Fulfillment shape, exactly as D24 demanded it: `app/tests/fulfillment.spec.ts`
     asserts "a pooled card is never on his screen", in a spec `make design-check` runs.
-    The tie is mechanical — the spec named after the route, mentioning the pooled fact —
-    and self-cleaning: delete the assertion and the route rejoins the exposure list. The
-    root route has no segment to name a spec after, so it maps to `capture.spec.ts`: the
-    capture screen is what `/` renders, and the manifest has always called it that.
+    The tie is mechanical — the spec named after the route, carrying a TEST TITLE that
+    makes that claim (`_pooled_absence_titles`, which argues the title/body line) — and
+    self-cleaning: delete the assertion, or soften its title off the claim, and the route
+    rejoins the exposure list. The root route has no segment to name a spec after, so it
+    maps to `capture.spec.ts`: the capture screen is what `/` renders, and the manifest
+    has always called it that.
     """
     name = route_path.strip("/") or "capture"
     if "/" in name:
         return None
     spec = APP_TESTS / f"{name}.spec.ts"
-    if exists(spec) and re.search(r"pooled|located", read(spec), re.I):
+    if exists(spec) and _pooled_absence_titles(read(spec)):
         return rel(spec)
     return None
 
@@ -7062,8 +7119,10 @@ def check_views_opsec(report: Report) -> None:
                 f"that state holds at render time is runtime fact this script cannot "
                 f"see. Discharge: drop this line, or prove the screen pooled-free in "
                 f"app/tests/{route.strip('/') or 'capture'}.spec.ts the way the "
-                f"Fulfillment view does, or take the render-conditions ruling to D24's "
-                f"owner.",
+                f"Fulfillment view does — a `test(...)` whose TITLE names `pooled` and "
+                f"claims `never`, because a title is the claim a spec is answerable for "
+                f"and a body match reads the same words out of a proof of the opposite — "
+                f"or take the render-conditions ruling to D24's owner.",
             )
         )
 
@@ -8690,6 +8749,59 @@ def self_test() -> int:
        f"got: {sorted(keys)}")
     ok("commented" not in keys, "and a key that only appears in a comment is not sent")
     ok(_ts_function_body(ts, "noSuchFunction") is None, "a missing function reads as None")
+
+    # The exemption `views exposure` grants, and the ones it used to grant for nothing.
+    # EVERY TITLE HERE IS A REAL COMMITTED TITLE, the way moves_across's ids are real
+    # history: the two that qualify are the assertions D24 asked for by name, and the two
+    # that do not are specs that were suppressing the question while proving the opposite.
+    print("\na pooled-free claim is read off a test TITLE, never the spec body")
+
+    proves = ("test('a pooled card is never on his screen — not on the walk, not in a "
+              "search, not in a count', async ({\n")
+    photo = "test('a pooled card never draws a photograph here', async ({ page }) => {\n"
+    presence = ("test('the pooled row is a second no-bar shell, and it has not left', "
+                "async ({ page }) => {\n")
+    drawn = ("test('a pooled copy is drawn as pooled rather than as a position (D24)', "
+             "async ({ page }) => {\n")
+
+    ok(len(_pooled_absence_titles(proves)) == 1,
+       "the Fulfillment view's assertion earns the exemption",
+       f"got: {_pooled_absence_titles(proves)}")
+    ok(len(_pooled_absence_titles(photo)) == 1,
+       "and so does the review queue's, which cites this row by name")
+    ok(_pooled_absence_titles(presence) == [],
+       "THE MEASURED DEFECT: the spec proving the pooled row IS drawn earns nothing",
+       "app/tests/gallery.spec.ts held /gallery out of the exposure list on that title")
+    ok(_pooled_absence_titles(drawn) == [],
+       "nor does a title whose claim is that a pooled copy IS drawn")
+
+    # The body match this replaced, in the three shapes that really bought the exemption:
+    # a fixture field, a passing comment, and a substring inside an unrelated word.
+    body = ("/* four copies that were all LOCATED and all carried a slot number. */\n"
+            "const fixture = { located: true }\n"
+            "/* RELOCATED HERE FROM `run-panel.spec.ts` on 2026-08-30 */\n")
+    ok(_pooled_absence_titles(body) == [],
+       "a fixture field, a comment and the tail of RELOCATED assert nothing")
+    ok(re.search(r"pooled|located", body, re.I) is not None,
+       "which the old body test could not say, because this is exactly what it matched",
+       "it was not word-bounded, so `RELOCATED` alone exempted /pricing")
+
+    # SELF-CLEANING, the property the docstring claims: soften the title off the claim and
+    # the route rejoins the list. Same spec, same subject, one word gone.
+    ok(_pooled_absence_titles("test('a pooled card is not on his screen', () => {})\n") == [],
+       "a title hedged from `never` to `not` stops earning it",
+       "the row asks whether ANY render can hold a bearer instrument")
+    ok(_pooled_absence_titles("") == [], "and a spec with no tests at all earns nothing")
+
+    # Fail-closed on the forms this repo does not write: a parked proof must not go on
+    # holding a route out of the exposure list.
+    ok(_pooled_absence_titles(
+        "test.skip('a pooled card is never on his screen', () => {})\n") == [],
+       "a SKIPPED proof earns nothing")
+    ok(_pooled_absence_titles('test("a pooled card is never drawn", () => {})\n')
+       == ["a pooled card is never drawn"], "the double-quoted title form is read")
+    ok(_pooled_absence_titles("test(`a pooled card is never drawn`, () => {})\n")
+       == ["a pooled card is never drawn"], "and the backticked one")
 
     print("\na published figure is looked up in the result file by path")
     measured = {"overall": {"declined": 59}, "per_box": {"box4": {"declined": 17}}}

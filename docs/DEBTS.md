@@ -1427,7 +1427,7 @@ signal reaching it is a string inside `label`.
 | `#/inventory` | **live, and deliberate** | `app/src/BoxBrowse.tsx:79` gives pooled cards their own `Pooled` shelf and `app/src/BoxBrowse.tsx:115` a `Pooled · <game>` section header; `PhotoPanel` draws `app/src/BoxBrowse.tsx:1771`'s `photoUrl` checking only `photo === null` and `photo_reclaimed_at`. The screen is BUILT to walk them. |
 | `#/pricing` | **live** | the chain above. Also: `app/src/Pricing.tsx:782` starts `picked` empty, which D86 defines as "every open run", so the manifest's no-`?run=` render draws the worklist and its thumbnails, not a picker. |
 | `#/` | **live, and the weakest link** | `app/src/Home.tsx:125` builds `photoUrl` from a box's `next_index` high-water mark and consults no card record at all, so `located` is not knowable there. `app/src/Home.tsx:156`'s second pass filters on photo, capture time, state and name — not on `located` — though `InventoryCard` carries both `game` and `place`. |
-| `#/runs` | **live** | `app/src/RunsComposer.tsx:692` draws the crop-preview sample, and `server/pipeline_routes.py:917` picks it out of the box's whole capture directory with no game filter. |
+| `#/runs` | **real reach, gated render** | `app/src/RunsComposer.tsx:692` draws the crop-preview sample, and `server/pipeline_routes.py:917` picks it out of the box's whole capture directory with no game filter. **Three gates hold in a bare render** and this entry first said "live" without them: the composer is a modal (`app/src/RunsComposer.tsx:430`), `stage` opens on `'boxes'` (`:115`), and the preview is not even fetched unless `scoped` (`:190`). `scripts/views.txt` states them; the reach is real and the screenshot is not the way it leaks. |
 | `#/gallery` | **formality, genuinely discharged** | `app/src/Gallery.tsx` replaced `photoUrl` with `SPECIMEN_PHOTO` through `CardLocations`'s `photoSrc` seam on 2026-09-06, and its pooled fixture carries `has_photo: false`. The reach `_photo_reach` still reports is through that seam. |
 
 **`app/tests/inventory.spec.ts:4357` does not answer this**, though it reasons about pooled
@@ -1444,12 +1444,16 @@ they choose rather than stumble into.
 
 ### The recommendation
 
-**Do not weaken `_pooled_exclusion_evidence`.** The tightening on PR #148 — a `test(...)` whose
-title names `pooled` and claims `never` — is the correct reading, and this trace is why: the
-loose form buys `#/inventory` and `#/pricing` with incidental prose (`app/tests/pricing.spec.ts`
-mentions `located` once, about a departed record; `app/tests/inventory.spec.ts` mentions
-`pokemon_code` in a `#/codes` fixture) on two screens that draw pooled photographs in fact.
-An exemption bought by a word is worse than no exemption.
+**Do not weaken `_pooled_exclusion_evidence`.** The tightening — a `test(...)` whose title
+names `pooled` and claims `never` — is the correct reading, and this trace is why: the loose
+form bought `#/inventory` and `#/pricing` with incidental prose on two screens that draw pooled
+photographs in fact. `app/tests/pricing.spec.ts` matched on `located` **inside the word
+RELOCATED**, and `app/tests/inventory.spec.ts` on a `pokemon_code` fixture belonging to
+`#/codes`. An exemption bought by a word is worse than no exemption.
+
+**IT LANDED (PR #148, merged 2026-09-05), AND THE LIST IT PRODUCED IS THE ONE THIS ENTRY
+PREDICTED.** Four questions where there were two: `#/gallery`, `#/`, `#/runs` and `#/pricing`.
+`#/inventory` is absent because its line was dropped, not because it was exempted.
 
 **One shape already exists and it is the one to copy.** `app/src/Fulfillment.tsx` drops a pooled
 copy from the view outright — `app/src/Fulfillment.tsx:272`, `:437`, `:545` — rather than
@@ -1458,8 +1462,11 @@ the only exclusion in the product that a photograph cannot get past.
 
 **Three answers are available per screen, and they are not the same answer:**
 
-1. **`#/gallery`** — nothing to decide. Write the `never`-titled test over the existing
-   `SPECIMEN_PHOTO` fact and the row goes quiet honestly.
+1. **`#/gallery`** — nothing to decide, and it is now the cheapest row on the list. The screen
+   genuinely cannot fetch a stored photograph (`SPECIMEN_PHOTO` through `CardLocations`'s
+   `photoSrc` seam), so a `never`-titled test over a fact that already holds retires the
+   question honestly. `app/tests/gallery.spec.ts` already tests the pooled row; what it lacks
+   is a title that makes the claim.
 2. **`#/`, `#/runs`, `#/pricing`** — these draw pooled photographs incidentally, and none of the
    three has a reason to. The cheapest honest fix is a filter at the source: a `located` field
    on `PricingSku.positions` (the wire cannot express the fact today), a `game` test in

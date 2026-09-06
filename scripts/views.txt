@@ -64,43 +64,80 @@ capture       http://localhost:5173/#/
 review        http://localhost:5173/#/review
 
 # `inventory http://localhost:5173/#/inventory` STOOD HERE UNTIL 2026-09-05, AND WHAT REMOVED
-# IT IS A RULING RATHER THAN A DEFECT. The screen draws a pooled card's photograph on purpose:
-# `app/src/BoxBrowse.tsx:79` gives code cards their own `Pooled` shelf and `PhotoPanel` draws
-# them like any other row, which is D31's "one owner-side view of stored cards" meaning every
-# card. Asked whether that shelf is worth looking at, the owner said yes — so the photograph
-# stays and the RENDER goes, which is the `views exposure` row's own first discharge ("drop
-# this line") taken deliberately.
+# IT IS A RULING RATHER THAN A DEFECT. Unlike the `runs` and `pricing` paragraphs below, whose
+# reach is real and whose bare render is gated, this screen draws a pooled card's photograph
+# with nothing in the way and on purpose: `app/src/BoxBrowse.tsx:79` gives code cards their own
+# `Pooled` shelf, `sectionTitleOf` heads it `Pooled · <game>`, and `PhotoPanel` draws them like
+# any other row. That is D31's "one owner-side view of stored cards" meaning EVERY card.
 #
-# What it costs is one automated screenshot of the product's densest screen, and that is a real
-# loss rather than a free win: `#/inventory` is three columns at 1440 and a stack at 390, and
-# nothing else in this list exercises that. Look at it by hand at the three widths in both
-# themes, the way `## Verifying a screen` prescribes, and never by pointing `make screenshot`
-# back at it. `docs/DEBTS.md` section 14 has the trace and the other three screens' standing.
+# Asked whether that shelf is worth looking at, D24's owner said yes — so the photograph stays
+# and the RENDER goes. It is the `views exposure` row's own first discharge ("drop this line"),
+# taken deliberately, and it is the only line this list has lost to opsec rather than to a
+# route that went away.
+#
+# WHAT IT COSTS IS NAMED, because it is a real loss and not a free win: `#/inventory` is the
+# densest screen in the product — three columns at 1440, a stack at 390 — and it is now the
+# only owner screen with no automated render. Verify it by hand at the three widths in both
+# themes, the way CLAUDE.md's `## Verifying a screen` prescribes. Pointing `make screenshot`
+# back at it re-arms the leak. `docs/DEBTS.md` section 14 has the trace and the ruling.
 
 # The pipeline, on its own route since 2026-08-29 (D39). Worth its own render for the reason
 # every other line here has one: it is a screen a human looks at, and with the capture server
 # down it draws its own refusal rather than the box picker — which is a real state and the
 # wrong one to judge the layout by.
 #
-# IT DOES DRAW A STORED CAPTURE PHOTO, and this comment claimed the opposite until 2026-09-05.
-# `app/src/RunsComposer.tsx:692` draws the crop preview's sample, and
-# `server/pipeline_routes.py:917` picks that sample out of the box's whole capture directory
-# with no game filter — so a box holding code cards previews one. The `views exposure` question
-# arises here exactly as it does on the other owner routes; `docs/DEBTS.md` §14 has the trace
-# and the ruling it is waiting on.
+# THIS RENDER DRAWS NO STORED CAPTURE PHOTO, AND THE SCREEN IS NOT WHY. It said "it draws no
+# stored capture photo at all" until 2026-09-05, which is a claim about `#/runs` and is false:
+# `app/src/RunsComposer.tsx:692` draws `photoUrl(preview.sample.box, preview.sample.index)` —
+# the ghost under the read-preview's crop, a real stored photograph of a real card. What is
+# true is narrower and is a fact about the RENDER STATE this line takes, so it is written that
+# way. Three independent gates stand between a bare `#/runs` and that image, and all three hold
+# in a headless render that presses nothing:
+#
+#   the composer is a modal          `if (!open) return null` (RunsComposer.tsx:430), and
+#                                    nothing opens it but a press
+#   the stage is not the read stage  `stage` initialises to 'boxes' (RunsComposer.tsx:115) and
+#                                    only the Next button sets 'read'; the preview lives in the
+#                                    `stage === 'read'` branch at RunsComposer.tsx:575
+#   the scope is empty               `scoped = cart.length > 0` (RunsComposer.tsx:190), and the
+#                                    preview is not even FETCHED unless `showing && scoped`
+#                                    (RunsComposer.tsx:241, 246)
+#
+# So the `views exposure` row still names this line, and it is right to: that row reads the
+# component subtree for reach and cannot read React control flow, which is exactly the judgement
+# its docstring declines to make. Reach is unchanged by this paragraph. The discharge it names is
+# a `pooled` assertion in `app/tests/runs.spec.ts` — which does not exist — not a sentence here.
 runs          http://localhost:5173/#/runs
 
-# Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter,
-# which is how the screen is reached by its chord rather than by the link from `#/runs`, and
-# the state whose chrome the page-chrome numbers govern.
+# Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter.
 #
-# THAT STATE IS THE WORKLIST, NOT THE RUN PICKER, AND THIS COMMENT SAID OTHERWISE UNTIL
-# 2026-09-05. D86 made an empty selection mean "every open run" — `app/src/Pricing.tsx:782`
-# seeds `picked` from the hash and `app/src/Pricing.tsx:521` labels the empty case "showing all
-# of them" — so a no-`?run=` render draws rows, and every row with a position draws a thumbnail
-# off `app/src/Pricing.tsx:764`. The drawer's larger photo is still per-row and on demand; the
-# thumbnails are not. `docs/DEBTS.md` §14 traces how a pooled card's position gets into that
-# table in the first place.
+# WHAT STOOD HERE WAS FALSE ON BOTH HALVES, AND IT IS DRIFT RATHER THAN AN ERROR OF REASONING.
+# The paragraph was written 2026-08-29 (a5b7064), when a run WAS the unit of this screen; D86's
+# corpus landed on it 2026-09-01 (7013c9f) and moved the pricing answer to one file for the
+# store. The sentences below it never moved.
+#
+# It said "what a person sees here is the run picker". There is no picker state to open in.
+# `app/src/Pricing.tsx:497` documents `PickRuns` as "a filter over the worklist, never a gate in
+# front of it (D86)", and the no-run branch at Pricing.tsx:3085 renders "{runCount} runs are
+# loaded" (Pricing.tsx:3087) — a note beside a cut-off control, not a door. With no `?run=` the
+# FULL cross-run worklist renders, which is the screen's own default and the whole point of D86.
+#
+# It said the photo panel "cannot be in a render taken with nothing selected", and named only
+# the drawer at Pricing.tsx:2637. That is one of two photo draws and the wrong one to stop at.
+# `PricingThumb` (defined Pricing.tsx:709, used Pricing.tsx:2386 as `<PricingThumb at={first}`,
+# where `first = sku.positions[0] ?? null` at Pricing.tsx:2365) draws
+# `src={photoUrl(at.box, at.index)}` at Pricing.tsx:764 on EVERY row that has a position. No
+# selection, no press, no drawer. A render of this line over a populated store is a wall of
+# stored card photographs, and the `views exposure` row is right to disagree with the old text.
+#
+# WHAT THAT ROW ACTUALLY SAYS ABOUT THIS LINE TODAY IS A SEPARATE FACT, AND IT IS AN ACCIDENT.
+# `#/pricing` is exempted by `_pooled_exclusion_evidence`, which passes any route whose
+# `app/tests/<route>.spec.ts` merely CONTAINS the word `pooled` or `located` — and
+# `app/tests/pricing.spec.ts` line 898 says "RELOCATED HERE FROM `run-panel.spec.ts`". The
+# match is a SUBSTRING OF AN UNRELATED WORD, in prose about where a test block moved from. That
+# is a body-vocabulary match, not the proof in a Playwright assertion the Fulfillment view
+# earns, and it is what the exemption is being rewritten to refuse. Do not read this line's
+# silence in the audit as clearance.
 pricing       http://localhost:5173/#/pricing
 
 # The order screen and the shipping lane, both routed 2026-08-30 (D69). Two renders because

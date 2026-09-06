@@ -1719,20 +1719,21 @@ COMPONENTS = [
                 # five while the file listed eight — the lines were added (pricing by D49,
                 # orders and shipping by D69) and the count beside them was not, the same
                 # drift the app/ entry below carries a paragraph about. It went eight to seven
-                # on 2026-09-05 when D24's owner ruled that `#/inventory` keeps its pooled
-                # photographs and loses its render (docs/DEBTS.md section 14) — and the `route
-                # census` row caught this sentence in the same run, which is the whole reason
-                # that row exists. D13 is
+                # on 2026-09-05 when D24's owner ruled that `#/inventory` keeps the pooled
+                # photographs on its `Pooled` shelf and loses its render (docs/DEBTS.md
+                # section 14) — and the `route census` row caught this sentence in the same
+                # run that dropped the line, which is the whole reason that row exists. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another. D39 added
-                # the `runs` line on 2026-08-29 — the pipeline's own route, and this comment
-                # called it "the one owner render that draws no stored capture photo" until
-                # 2026-09-05, which was the third copy of a claim that was never true:
-                # `app/src/RunsComposer.tsx` draws the crop preview's sample out of the box's
-                # whole capture directory. D24 is the ruling the `views exposure` row defers
-                # to, and D86 is why the `pricing` line's own comment had drifted — an empty
-                # run selection means "every open run", so that render draws the worklist and
-                # its thumbnails rather than a picker. docs/DEBTS.md section 14 traces both.
+                # the `runs` line on 2026-08-29 — the pipeline's own route. This comment said
+                # that line was "the one owner render that draws no stored capture photo, so
+                # the `views exposure` question the others raise does not arise for it", and
+                # both halves were wrong: RunsComposer.tsx:692 draws one, `views exposure`
+                # names the line on every run, and the manifest's own paragraph was corrected
+                # on 2026-09-05 to describe the RENDER STATE and the three gates that hold it
+                # rather than the screen. D86 is the same drift on the `pricing` line — the
+                # corpus made that screen's default the full cross-run worklist, and the
+                # paragraph beside it still described a run picker that draws nothing.
                 "governed_by": ["D5", "D13", "D24", "D31", "D39", "D49", "D63", "D69", "D86"],
             },
         },
