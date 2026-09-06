@@ -779,7 +779,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 
 | key | value | settled |
 | --- | --- | --- |
-| `pad` | 0.22 | carried from the recovered pass |
+| `pad` | 0.50 | rounds 16–20, closed on the pixel floor |
 | `gap` | 0.06 | carried from the recovered pass |
 | `stroke` | 0.050 | rounds 1–5 |
 | `arm` | 0.32 | carried; §3's lockup row |
@@ -790,6 +790,46 @@ two caption bugs in that sheet happened, twice, in the same row.
 **A key in this table is not the same as a key that has been argued.** `tip` and `tl` are here
 because the sheet holds them, not because anyone chose them — they are the next two rounds, and
 the column says so.
+
+### The padding, settled over five rounds — and rule 5 fired twice more
+
+**0.50 of the kanji size, each side.** It replaces the 0.22 carried from the recovered pass,
+which had been the ground under fifteen earlier rounds without ever being offered against
+anything.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 16 | 0.10 – 0.36 | 0.22 and up | the top end was not bracketed |
+| 17 | 0.22 – 0.52 | above 0.28, up | the top end was not bracketed **again** |
+| 18 | 0.34 – 1.25 | 0.34 – below 0.72 | both ends failed at last |
+| 19 | 0.30 – 0.70 | above 0.40 – below 0.60 | both ends failed again |
+| 20 | 0.42 – 0.58 | above 0.46 – 0.54 | the step reached 1.9px |
+
+**Rule 5 fired twice, and the shape it took is worth recording.** Rounds 16 and 17 each ended
+with the largest value offered still in the kept band, so neither said anything about where the
+top was. More than that: **0.22 was kept in round 16 and rejected in round 17.** The drawing did
+not change between them — the company it kept did. That is what a range does to an eye, and it
+is the reason rule 5 exists rather than a lapse by the person answering.
+
+**The round that broke the anchor ran to 1.25 — padding wider than the kanji is tall.** Only a
+range too wide to anchor could tell a real preference from a tracked one, and 0.72 failed the
+moment one was offered.
+
+**The stop is measured, not felt.** Each caption prints its own gap from the specimen before it,
+so the size of the question is on the sheet. Round 20's step was 1.9px of padding at the sidebar
+size; the next halving is 0.96px, and a sheet asking for a choice between two drawings a pixel
+apart is measuring the monitor rather than the design. The final bracket was 0.46 – 0.54 and
+**0.50 is its midpoint**, taken under §7 rule 7 rather than split further.
+
+**One value failed by measurement rather than by eye**, and it is the only one in this variable
+that did: at 1.25 the block is 229px wide and the sidebar gives 212px, so it is outside the
+product before taste gets a vote.
+
+**What the sweep found that was not about padding.** Past about 0.40 the padding stops being the
+visible difference and the height of the brand block becomes it — 108px of sidebar column at
+0.42 against 124px at 0.58, above a nav that begins immediately underneath. That is why the
+sheet gained a third row drawing each value inside the 212px the shell actually gives; on white,
+more air always reads calmer, because there is nothing for it to be calm against.
 
 ### The stroke, settled over five rounds
 
