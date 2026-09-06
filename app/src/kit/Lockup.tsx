@@ -17,11 +17,13 @@ import { MARKS } from './markPalettes'
  * a viewBox cannot re-layout, so the roman cannot reflow between the sidebar's 40 and the
  * gallery's larger draws. Live text could, and did — the width match had to be SOLVED per size.
  *
- * THE ACCESSIBILITY CONTRACT IS THE OPPOSITE OF `Logo`'s, AND THEN INVERTS AGAIN INSIDE A LINK.
- * `Logo` is `aria-hidden` always, because every call site names its own wrapper. The lockup IS
- * the word "Banchi" — standing alone at #/gallery it must carry `role="img"` and a name. But
- * inside the sidebar's `<a aria-label="Banchi home">` a named child would announce "Banchi Banchi
- * home", so that one call site passes `decorative`. Section 15 named only the first half of this.
+ * THE ACCESSIBILITY CONTRACT IS THE OPPOSITE OF `Logo`'s, AND THEN INVERTS AGAIN INSIDE THE
+ * BRAND. `Logo` is `aria-hidden` always, because every call site names its own wrapper. The
+ * lockup IS the word "Banchi" — standing alone at #/gallery it must carry `role="img"` and a
+ * name. But the sidebar's brand carries its own label — "Collapse the sidebar" on the button
+ * that is the rail control, "Banchi home" on the anchor at the tablet breakpoint — and a named
+ * child would announce the name over it. So that call site passes `decorative`, and the a11y
+ * tree does not change across the collapse at all. Section 15 named only the first half of this.
  *
  * THREE CLASS HOOKS, ON PURPOSE. `.bn-lockup-bracket`, `.bn-lockup-kanji` and `.bn-lockup-roman`
  * exist so the shell can choreograph the collapse — the roman leaves first, then the kanji and the

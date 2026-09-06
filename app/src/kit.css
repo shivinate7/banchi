@@ -904,9 +904,19 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    `--bn-ink`, on dark it carries `bluesteel`'s own four-stop chrome so the lockup and the rail
    mark are the same object in the same metal. The gradient's id is per instance — `Lockup`
    publishes it as `--bn-lockup-metal` because a stylesheet cannot name a `useId()`.
-   THE THREE-STATE PATTERN IS NOT OPTIONAL: `tokens.css` has an explicit dark, an explicit light,
-   and a system default that stamps NEITHER. A rule written only against `[data-theme='dark']`
-   leaves every system-dark user on the light bracket. */
+   THE THEME IS TWO STATES HERE, NOT THREE, AND THE SYSTEM PREFERENCE IS RESOLVED IN JS.
+   `kit/index.tsx:applyTheme` stamps `data-theme="dark"` for dark and REMOVES the attribute for
+   light; `index.html` does the same before first paint, reading the system preference itself.
+   `tokens.css` carries no `prefers-color-scheme` block at all — light is simply the absence of
+   the attribute. So a `@media (prefers-color-scheme: dark)` rule here does not fill a gap: it
+   fires on a system-dark machine WHILE THE APP IS PAINTING LIGHT, which is a state the rest of
+   the product cannot enter.
+
+   THAT WAS SHIPPED AND MEASURED. On a system-dark machine with the theme set to light, the
+   running app read: body `rgb(244,245,248)`, kanji `rgb(15,18,23)`, and the bracket
+   `url("#_r_0_m")` — bluesteel's #FFFFFF-to-#8FA4B8 chrome drawn as a frame around near-black
+   type on a light sidebar. Both resting themes were correct, which is why nothing caught it:
+   the defect needs the system preference and the stored choice to disagree. */
 .bn-lockup { display: block; }
 .bn-lockup-bracket { fill: var(--bn-ink); }
 .bn-lockup-kanji { fill: var(--bn-ink); }
@@ -919,6 +929,15 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    carrying the attribute, with the light form after it so an island can go either way. */
 [data-theme='dark'] .bn-lockup-bracket { fill: var(--bn-lockup-metal); }
 [data-theme='light'] .bn-lockup-bracket { fill: var(--bn-ink); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .bn-lockup-bracket { fill: var(--bn-lockup-metal); }
-}
+/* `[data-theme='light']` is never stamped by the app, only by a light island nested inside
+   Gallery.tsx's dark one. It is kept for that, and there is deliberately no media query. */
+
+/* THE RAIL MARK IS THE SAME BRACKET IN THE SAME METAL, and takes the same switch. The property
+   is `stroke`, not `fill`: the small cut is a constant-width wire where the lockup's frame is a
+   filled taper. Without this it would paint `bluesteel`'s near-white chrome on a light sidebar —
+   the drawing has no tile of its own to sit on, which is the whole point of it. */
+.bn-rail-mark { display: block; }
+.bn-rail-mark-arm { stroke: var(--bn-ink); }
+[data-theme='dark'] .bn-rail-mark-arm { stroke: var(--bn-lockup-metal); }
+[data-theme='light'] .bn-rail-mark-arm { stroke: var(--bn-ink); }
+

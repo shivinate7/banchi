@@ -4,7 +4,8 @@ import { isEditableTarget } from './keys'
 import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot } from './server'
 import { Button, Icon, Kbd, Lockup,
-  Logo, applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
+  Logo,
+  RailMark, applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
 import { BLOCK } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
 
@@ -902,6 +903,25 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
 
+/* THE TABLET RAIL IS A MEDIA QUERY AND REACT CANNOT SEE IT. App.css rails the shell between 768
+   and 1023 by breakpoint, ignoring `data-rail` entirely — so a toggle offered at that width would
+   set state the layout does not read and appear to do nothing. Worse than not offering one. This
+   is the same hook shape BoxBrowse.tsx and Orders.tsx already carry; it is not lifted into a
+   shared file here because that is a refactor of two other screens. */
+const TABLET_RAIL = '(min-width: 768px) and (max-width: 1023px)'
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia(query).matches)
+  useEffect(() => {
+    const mql = window.matchMedia(query)
+    const on = () => setMatches(mql.matches)
+    on()
+    mql.addEventListener('change', on)
+    return () => mql.removeEventListener('change', on)
+  }, [query])
+  return matches
+}
+
 function Sidebar({
   path,
   rail,
@@ -915,7 +935,7 @@ function Sidebar({
 }: {
   path: string
   rail: boolean
-  onToggleRail: () => void
+  onToggleRail?: () => void
   armed: boolean
   server: ServerState
   cards: number | null
@@ -923,6 +943,28 @@ function Sidebar({
   onToggleTheme: () => void
   onPalette: () => void
 }) {
+    /* the slot's two sizes come from the GENERATED block rather than from tokens: a token would be
+     a second copy of a number `lockupGeometry.ts` already carries, and a value typed twice is the
+     defect section 13 spent thirty-seven rounds learning */
+  const brandSlot = (
+    <span
+      className="bn-brand-slot"
+      style={{
+        ['--bn-lockup-w' as string]: `${(SIDEBAR_KANJI * BLOCK.w) / BLOCK.ref}px`,
+        ['--bn-lockup-h' as string]: `${(SIDEBAR_KANJI * BLOCK.h) / BLOCK.ref}px`,
+        ['--bn-rail-mark' as string]: `${RAIL_MARK}px`,
+      }}
+    >
+      <Lockup size={SIDEBAR_KANJI} className="bn-brand-lockup" decorative />
+      {/* THE EMPTY SLOT, not the app icon. logo.md section 1: "with the card removed the same
+          brackets become an empty slot, which is the in-product mark" — the lockup is the name
+          inside its address and the rail is the address with the name taken out. The full tile
+          mark was what shipped here and it read as the favicon rather than as the collapsed
+          lockup. */}
+      <RailMark size={RAIL_MARK} className="bn-brand-mark" />
+    </span>
+  )
+
   return (
     <aside className="bn-side">
       {/* THE LOCKUP REPLACES THE MARK, THE WORDMARK AND THE TAGLINE TOGETHER (logo.md section 16).
@@ -931,31 +973,37 @@ function Sidebar({
           after the words instead of owning the row.
           BOTH DRAWINGS ARE MOUNTED AND CSS CHOOSES. A JSX branch on `rail` would be wrong at
           768-1023px, where App.css rails the shell by media query and `data-rail` is inert; a
-          stylesheet reads the same condition the layout does. The rail keeps the FULL mark, which
-          is what ships today — section 16 settled the lockup's size and metal, not the rail's
-          drawing, and `sidebar-morph.html`'s bare brackets are a sheet's idea rather than a
-          decision.
-          Both are `aria-hidden`: this anchor already carries the name, and two named children
-          would announce "Banchi Banchi home". */}
-      <a className="bn-brand" href="#/" aria-label="Banchi home">
-        {/* the slot's two sizes come from the GENERATED block rather than from tokens: a token
-            would be a second copy of a number `lockupGeometry.ts` already carries, and a value
-            typed twice is the defect section 13 spent thirty-seven rounds learning. */}
-        <span
-          className="bn-brand-slot"
-          style={{
-            ['--bn-lockup-w' as string]: `${(SIDEBAR_KANJI * BLOCK.w) / BLOCK.ref}px`,
-            ['--bn-lockup-h' as string]: `${(SIDEBAR_KANJI * BLOCK.h) / BLOCK.ref}px`,
-            ['--bn-rail-mark' as string]: `${RAIL_MARK}px`,
-          }}
+          stylesheet reads the same condition the layout does.
+          Both are `aria-hidden`: whichever element wraps them carries the name, and two named
+          children would announce it twice. */}
+      {/* THE BRAND IS THE TOGGLE. It was a link to `#/` with a separate 22px chevron beside it,
+          and that chevron was barely clickable: `.bn-side` is `overflow: hidden` and the button
+          sat half outside the sidebar's right edge, so the outer half was CLIPPED — measured,
+          probes at 50%, 65% and 85% of its own box all missed it — and whatever occupied the
+          content column at y=18, an offline banner for instance, covered what was left. About
+          11px of a 22px control was real.
+          So the affordance moves onto the thing that is already 128 x 93. `Home` is a nav item
+          with its own key, so nothing is lost by the brand no longer being a link.
+          AT 768-1023 IT STAYS A LINK. That breakpoint rails the shell by media query and ignores
+          `data-rail` entirely, so a toggle there would silently do nothing — worse than not
+          offering one. `onToggleRail` is undefined at that width and the element renders as an
+          anchor, which is exactly what it does today. */}
+      {onToggleRail ? (
+        <button
+          type="button"
+          className="bn-brand"
+          onClick={onToggleRail}
+          aria-label={rail ? 'Expand the sidebar' : 'Collapse the sidebar'}
+          aria-expanded={!rail}
         >
-          <Lockup size={SIDEBAR_KANJI} className="bn-brand-lockup" decorative />
-          <Logo size={RAIL_MARK} className="bn-brand-mark" />
-        </span>
-      </a>
-      <button type="button" className="bn-side-collapse" onClick={onToggleRail} aria-label={rail ? 'Expand the sidebar' : 'Collapse the sidebar'}>
-        <Icon name={rail ? 'chevronRight' : 'chevronLeft'} size={14} />
-      </button>
+          {brandSlot}
+          <Icon name={rail ? 'chevronRight' : 'chevronLeft'} size={14} className="bn-brand-chevron" />
+        </button>
+      ) : (
+        <a className="bn-brand" href="#/" aria-label="Banchi home">
+          {brandSlot}
+        </a>
+      )}
       <nav className="bn-nav app-nav" aria-label="Screens" aria-keyshortcuts={STEP_SHORTCUTS} data-armed={armed ? 'true' : undefined}>
         {GROUPS.map((group) => (
           <div key={group.id} className="bn-nav-group">
@@ -1103,6 +1151,7 @@ export function App() {
     setKeysOpen(false)
   }, [path])
 
+  const tabletRail = useMedia(TABLET_RAIL)
   const toggleRail = useCallback(() => {
     setRail((previous) => {
       const next = !previous
@@ -1177,7 +1226,7 @@ export function App() {
       <Sidebar
         path={path}
         rail={rail}
-        onToggleRail={toggleRail}
+        onToggleRail={tabletRail ? undefined : toggleRail}
         armed={arm !== null}
         server={server}
         cards={cards}

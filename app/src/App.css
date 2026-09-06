@@ -53,9 +53,17 @@
 
 /* ---- sidebar ------------------------------------------------------------- */
 .bn-side {
-  /* the rail cuts this 12px -> 8px, which snapped every child sideways in the frame the column
-     began easing. On the column's own clock instead, so the whole panel closes as one thing. */
-  transition: padding var(--bn-t-slow) var(--bn-ease);
+  /* THE HORIZONTAL PADDING SNAPS, ON PURPOSE, AND EASING IT WAS MEASURABLY WORSE. The rail cuts
+     it 12px -> 8px, and the first attempt put that on the column's own clock so the panel would
+     close as one thing. But every child is pinned to the x = 32 spine, and in the rail a nav
+     link is a 48px box at `padding-left`, so its icon's centre IS `padding-left + 24`. Easing
+     the padding therefore drags that centre: measured across the 320ms, the icon went
+     33 -> 35.9 -> 32, overshooting three pixels RIGHT of both resting positions in the first
+     frames. That is the width rubber-band this file already fixed, one register smaller and out
+     of the same cause — a centring rule resolving against an animating box.
+     Snapped, the padding is 8px from frame 0 and the link is 48px wide in the same frame, so
+     the icon is at 32 immediately and stays there. What it costs is 4px of gutter moving
+     instantly under a column that eases; nothing is drawn in that gutter at rest. */
   position: sticky;
   top: 0;
   height: 100vh;
@@ -71,6 +79,10 @@
 }
 :root[data-theme='dark'] .bn-side { background: var(--bn-surface-2); }
 
+/* ONE RULE, TWO ELEMENTS. `.bn-brand` is a <button> in the sidebar — it collapses the rail —
+   and an <a> in the phone drawer and at the 768-1023px media rail, where `data-rail` is inert
+   and a toggle would press nothing. The reset is what keeps the two indistinguishable: a button
+   brings its own background, border, font and centred text, and none of those are wanted. */
 .bn-brand {
   display: flex;
   align-items: center;
@@ -80,6 +92,14 @@
   color: var(--bn-ink);
   text-decoration: none;
   min-height: 48px;
+  /* the reset */
+  appearance: none;
+  background: none;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
 .bn-brand:hover { text-decoration: none; background: var(--bn-surface-3); }
 /* The slot is the only thing here that animates LAYOUT, and it is why the nav below does not
@@ -127,6 +147,20 @@
               scale var(--bn-t-fast) var(--bn-ease-spring) var(--bn-brand-mark-delay);
 }
 
+/* THE CHEVRON IS A HINT, NOT THE CONTROL. The control is the whole 128 x 93 brand row; this only
+   says which way it goes, so it is quiet until the row is under the cursor — the same reveal the
+   22px collapse button used, on a target that is actually hittable this time.
+   It is GONE in the rail rather than faded: 64px less 2 x --bn-2 leaves 48, the mark takes 32,
+   and there is no honest room for a second glyph. The whole mark is the expand target there. */
+.bn-brand-chevron {
+  margin-left: auto;
+  flex: none;
+  color: var(--bn-ink-3);
+  opacity: 0;
+  transition: opacity var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-brand:hover .bn-brand-chevron, .bn-brand:focus-visible .bn-brand-chevron { opacity: 1; color: var(--bn-ink); }
+
 .bn-brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
 .bn-brand-name {
   font-family: var(--bn-font-display);
@@ -136,25 +170,6 @@
 }
 .bn-brand-tag { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-weight: 500; letter-spacing: 0.02em; white-space: nowrap; }
 
-.bn-side-collapse {
-  position: absolute;
-  top: 18px;
-  right: -1px;
-  transform: translateX(50%);
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--bn-surface);
-  box-shadow: var(--bn-shadow-2);
-  color: var(--bn-ink-3);
-  opacity: 0;
-  transition: opacity var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast);
-  z-index: 21;
-}
-.bn-side:hover .bn-side-collapse, .bn-side-collapse:focus-visible { opacity: 1; }
-.bn-side-collapse:hover { color: var(--bn-ink); }
 
 .bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
 .bn-nav-group { display: flex; flex-direction: column; gap: 2px; }
@@ -224,12 +239,20 @@
 .bn-shell[data-rail='true'] .bn-side .bn-nav-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link .bn-kbd,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-badge,
-.bn-shell[data-rail='true'] .bn-side .bn-side-foot-text { display: none; }
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot-text,
+.bn-shell[data-rail='true'] .bn-side .bn-brand-chevron { display: none; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; margin: 0; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
-.bn-shell[data-rail='true'] .bn-side .bn-side-foot { align-items: center; }
-.bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn { width: 40px; padding: 0; }
+/* THE SPINE REACHES THE FOOTER TOO, and it did not until now. `align-items: center` here
+   resolves against the sidebar's ANIMATING width exactly as the nav's `margin: 0 auto` did:
+   measured across the collapse, the footer icons went 37 -> 103.8 -> 20.5, a hundred-pixel
+   excursion two hundred pixels wide of both resting positions. It survived the first pass
+   because that pass fixed the brand and the nav and nothing had looked below them.
+   The width goes 40 -> 48 to match `.bn-nav-link`, which is what puts these icons on x = 32
+   with every other one — at 40 they rested at 20.5, eleven pixels left of the column above. */
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot { align-items: flex-start; }
+.bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn { width: 48px; padding: 0; justify-content: center; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
 
 /* Tooltip for rail links */
@@ -290,15 +313,16 @@
     --bn-brand-bracket-delay: 40ms; --bn-brand-mark-delay: 200ms;
   }
   .bn-side { padding: var(--bn-3) var(--bn-2); }
-  .bn-side-collapse { display: none; }
   /* the spine, again — see the rail block above. This breakpoint has no `data-rail` at all. */
   .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
-  .bn-side .bn-brand-text, .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge, .bn-side .bn-side-foot-text { display: none; }
+  .bn-side .bn-brand-text, .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge,
+  .bn-side .bn-side-foot-text, .bn-side .bn-brand-chevron { display: none; }
   .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
   .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0; }
   .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
-  .bn-side .bn-side-foot { align-items: center; }
-  .bn-side .bn-side-foot .bn-btn { width: 44px; height: 44px; padding: 0; }
+  /* the spine, again — see the rail block above */
+  .bn-side .bn-side-foot { align-items: flex-start; }
+  .bn-side .bn-side-foot .bn-btn { width: 48px; height: 44px; padding: 0; justify-content: center; }
   .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
   .bn-side .bn-nav-link[data-tip]:hover::after { opacity: 1; transform: translateY(-50%); }
 }
