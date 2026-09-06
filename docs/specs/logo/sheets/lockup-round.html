@@ -47,18 +47,18 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 27,
- title: 'the roman’s run, last round — and the incumbent is deliberately not in it',
- sweeping: 'romanFill',
- unit: '× the kanji’s width',
- values: [0.68, 0.715, 0.75, 0.785, 0.82],
- notes: {0.75:'below the incumbent', 0.785:'above it — 0.775 falls between these two'},
- rejected: {0.62:'the letters had begun to tighten — round 25', 0.88:'too near flush — round 25',
-            0.66:'out below — round 26', 0.83:'out above — round 26'},
+ n: 28,
+ title: 'the roman’s size — now that its width is fixed, this is weight rather than length',
+ sweeping: 'romanSize',
+ unit: '× the kanji',
+ values: [0.24, 0.30, 0.36, 0.42, 0.48],
+ notes: {0.36:'the carried value, and the one this whole set was drawn at',
+         0.48:'past the natural width — the letters have to tighten to fit'},
+ rejected: {},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
-         romanSize:0.36, romanTrack:0.14, romanOpacity:0.62, tails:true},
+         romanFill:0.75, romanTrack:0.14, romanOpacity:0.62, tails:true},
  sizes: [48, 32],
- context: [0.68, 0.75, 0.785, 0.82],
+ context: [0.24, 0.30, 0.36, 0.42],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -68,19 +68,19 @@ const ROUND = {
   ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 twice; stopped at 1.9px'],
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
-  ['25', 'roman run', '0.62 – 1.00', '0.62 – 0.88 open', 'both ends failed on the FIRST pass'],
-  ['26', 'roman run', '0.66 – 0.87', '0.66 – 0.83 open', 'the incumbent survived a forced choice'],
+  ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
  ],
- lede: '<b>0.775 is not in this row, and that is the point of the round.</b> It has now sat in two '+
-  'consecutive rows and been inside the kept band both times — which is what a good value does, and also '+
-  'what a familiar one does, and nothing so far separates those two explanations. It falls between 0.75 '+
-  'and 0.785 here. If your eye goes to one of those, the incumbent was near-optimal and this closes. If it '+
-  'goes somewhere else, twenty-five rounds of familiarity were doing work a forced choice could not see.'+
-  '<br><br><b>An even 0.035 step — 3.6px of roman width at the sidebar size.</b> Ends sit just inside the '+
-  'two rejections from round 26.'+
-  '<br><br><b>This is the last round for the roman’s run, as promised in round 26.</b> Whatever band comes '+
-  'back, the answer is its midpoint. Then the roman’s SIZE, which round 25 deferred because fill had to be '+
-  'stable first — and after that the opacity, and the set is finished.'
+ lede: '<b>0.75 — three quarters, and it won a row the incumbent was not in.</b> That is the answer to the '+
+  'question round 26 could not settle: 0.775 was <i>near</i>-optimal and not optimal, 2.6px away at the '+
+  'sidebar size. A control that is never removed cannot tell you whether a value is good or merely '+
+  'familiar.'+
+  '<br><br><b>With the width fixed, the size sweep asks a different question than it would have.</b> Every '+
+  'specimen below occupies the same 77px of width — the solve sees to that — so what moves is the roman’s '+
+  '<i>weight and presence</i> against the kanji, not its length. This is precisely why round 25 deferred '+
+  'it: run first, then size, because a size judged against a moving width is judged against nothing.'+
+  '<br><br><b>The upper end fails by arithmetic rather than by eye, and the caption says so.</b> Past '+
+  'roughly 0.43 the type’s natural width exceeds the 0.75 target, so the solve tracks NEGATIVE and the '+
+  'letters crowd. 0.48 is there to show it, flagged in the same red as a rejection.'
 }
 
 const o=document.getElementById('out')
@@ -122,9 +122,18 @@ function mk(size, v){
               SWEPT==='pad' ? v : ROUND.holds.pad,
               '#0f1217', o)
 }
+/* EVERY hold reaches the drawing, derived rather than listed. This was a hardcoded five-key
+   object -- stroke, arm, tl, rrMul, tip -- so a hold outside that list was declared in the sheet
+   and never passed to `frame()`. `romanFill` was the first one: round 28 declared it at 0.75 and
+   drew it at 1, and `tails` had been in the same position unnoticed, correct only because the
+   default happens to match. A list that must be edited whenever a parameter is added is the same
+   defect as a caption that must be edited whenever a value changes; both were in this file. */
 function optsFor(v){
- const o = {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
-            rrMul:ROUND.holds.rrMul, tip:ROUND.holds.tip}
+ const o = {}
+ Object.keys(ROUND.holds).forEach(function(k){
+  if (k==='pad' || k==='gap' || STAMP_KEYS.indexOf(k)>=0) return
+  o[k] = ROUND.holds[k]
+ })
  if (SWEPT!=='pad' && SWEPT!=='gap' && STAMP_KEYS.indexOf(SWEPT)<0) o[SWEPT] = v
  return o
 }

@@ -787,7 +787,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `tip` | 0.15 | round 13 |
 | `tl` | 0.70 | rounds 11–12 |
 | `romanSize` | 0.36 | carried; round 26 |
-| `romanFill` | 1.0 | round 25 |
+| `romanFill` | 0.75 | rounds 25–27 |
 | `romanTrack` | 0.14 | a SEED, not an answer — see below |
 | `romanOpacity` | 0.62 | carried from the recovered pass |
 
@@ -811,6 +811,45 @@ this file that **no drawing on any sheet has ever used** — the same defect as 
 value the picture beside it does not have, one level further back. The drawing now records
 `romanTrackSolved`, the tracking that actually reached it, and **it cannot be swept**: it is
 derived, and §7 rule 6 has nothing to hold constant while it moves.
+
+### The roman's run, settled over three rounds — and the parameter did not exist when they started
+
+**0.75 of the kanji's width.** The roman is tracked out to three quarters of 番地 and hangs left.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 25 | 0.62 – 1.00 | 0.62 – 0.88 open | both ends failed on the first pass |
+| 26 | 0.66 – 0.87 | 0.66 – 0.83 open | the incumbent survived a forced choice |
+| 27 | 0.68 – 0.82, **incumbent absent** | 0.75 | it won without it in the row |
+
+**`romanFill` did not exist before round 25, and the reason it had to is a defect.** `frame()`
+has always contained a thirty-iteration solve that tracks the roman out to match the kanji's
+width. **It never ran.** `.go` and `.rom` are both `display:block`, so
+`getBoundingClientRect().width` returns the *containing block's* width for either — the same
+number, always — and `kw - rw` was identically zero. The loop exited on its first iteration
+having already written `letter-spacing: 0px`, and that assignment destroyed the 0.14em seed
+before anything was drawn. A `Range` measures inline content regardless of the box's display,
+which is the fix.
+
+**So every lockup in rounds 1 – 24 carried zero tracking on the roman**, and the width it filled
+— 0.775 of the kanji at roman 0.36 — was never chosen by anyone. It was where Manrope lands.
+**It is also not stable**: the unmatched roman fills a different fraction at every roman size, so
+the relationship being judged would have moved the moment the size did. As a fraction it is the
+same shape at every size, which is the difference between a design and a coincidence.
+
+**Shown the repaired match, the owner rejected both states** — flush right was too much, and the
+accident was not a choice — which is what made it a parameter rather than a switch.
+
+**Round 27 is the one worth reading twice.** 0.775 had sat in two consecutive rows and been kept
+both times, and nothing in the method could yet distinguish *good* from *familiar* — the eye had
+twenty-five rounds of practice with that exact drawing. So it was **left out of the final row**.
+0.75 won against four alternatives with the familiar one absent, and it is 2.6px from the
+accident at the sidebar size: **the incumbent was near-optimal, and not optimal.** A control that
+is never removed cannot tell you which of those it is.
+
+**Below the natural width the tracking goes negative and the letters tighten**, which is a floor
+rather than a taste. The sheet prints the solved tracking and flags a negative one in the same
+red it uses for a rejection.
 
 ### The line gap, settled over three rounds — and the first answer that came from the column
 
