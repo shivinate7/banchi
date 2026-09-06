@@ -11,6 +11,13 @@
  .strip{display:inline-flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
  .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
  .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .strip.dk{background:#0c0e12}
+ .strip.dk .cap{color:#838b98}
+ .strip.dk .cap.was{color:#fb923c}
+ .strip.dk .num{color:#4ade80}
+ .strip.dk .panel{background:#14171c;border-color:#262b34}
+ .strip.dk .nav{color:#b9bfc9}
+ .strip.dk .nav b{color:#93a7ff;background:#1b2547}
  .panel{width:236px;padding:12px;background:#fff;border:1px solid #e3e6ea;border-radius:12px;
         display:flex;flex-direction:column;align-items:flex-start;gap:14px}
  .nav{display:flex;flex-direction:column;gap:7px;width:100%;font:500 11px system-ui;color:#4b5563}
@@ -58,6 +65,7 @@ const ROUND = {
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
          romanFill:0.75, romanSize:0.25, romanTrack:0.14, tails:true},
  sizes: [48, 32],
+ dark: true,
  context: [0.20, 0.27, 0.35, 0.45],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
@@ -117,13 +125,14 @@ const SWEPT = ROUND.sweeping
    drawing (stroke, arm, radius, tip, ramp). `SWEPT` picks which one receives the value; nothing
    else on the sheet knows or needs to. */
 const STAMP_KEYS = ['romanSize','romanTrack','romanOpacity']
-function mk(size, v){
+const INK = {light:'#0f1217', dark:'#eef0f4'}
+function mk(size, v, theme){
  const o = {}
  STAMP_KEYS.forEach(function(k){ o[k] = (SWEPT===k) ? v : ROUND.holds[k] })
  return stamp(size,
               SWEPT==='gap' ? v : ROUND.holds.gap,
               SWEPT==='pad' ? v : ROUND.holds.pad,
-              '#0f1217', o)
+              INK[theme||'light'], o)
 }
 /* EVERY hold reaches the drawing, derived rather than listed. This was a hardcoded five-key
    object -- stroke, arm, tl, rrMul, tip -- so a hold outside that list was declared in the sheet
@@ -141,11 +150,11 @@ function optsFor(v){
  return o
 }
 
-function row(size, values, capFn){
- const s=el('div','strip'); const made=[]
+function row(size, values, capFn, theme){
+ const s=el('div','strip'+(theme==='dark'?' dk':'')); const made=[]
  values.forEach(function(v){
   const c=el('div','cell')
-  const lk=mk(size, v)
+  const lk=mk(size, v, theme)
   c.appendChild(lk)
   const cp=capFn(v)
   const cap=el('div','cap'+(cp.was?' was':''))
@@ -209,6 +218,19 @@ const groups = ROUND.sizes.map(function(sz){
    to be calm against. The sidebar is where it has to hold: a 236px panel that already carries 12px
    of its own padding, with nav beneath it. Same builder, same assertions -- this is not a second
    variable, it is the one variable in the place it lands. */
+/* THE SAME ROW ON THE OTHER GROUND. An opacity is not symmetric between themes: white at 0.35 on
+   #0c0e12 is not the mirror of black at 0.35 on white, either in contrast -- the ratios differ,
+   because luminance is not linear in alpha -- or in rendering, since antialiasing a light stem
+   onto a dark ground spreads differently from the reverse. The app ships both themes, so a value
+   graded on one is graded on half the product. Colours are `tokens.css`'s real dark values. */
+const darkRows = (function(){
+ if(!ROUND.dark) return []
+ return ROUND.sizes.map(function(sz){
+  o.appendChild(el('h2',null,'on the dark ground — kanji '+sz))
+  return row(sz, ROUND.values, function(v){
+   const note=ROUND.notes[v]
+   return {text:String(v)+(note?' — '+note:''), was:!!note}}, 'dark')})})()
+
 const context = (function(){
  if(!ROUND.context) return []
  o.appendChild(el('h2',null,'in the column the shell actually gives — 212px of usable width'))
@@ -236,7 +258,7 @@ const rejected = (function(){
   return {text:v+ROUND.unit+' — '+ROUND.rejected[v], was:true}})})()
 
 document.fonts.ready.then(function(){
- const all = groups.concat(context.length?[context]:[]).concat(rejected.length?[rejected]:[])
+ const all = groups.concat(darkRows).concat(context.length?[context]:[]).concat(rejected.length?[rejected]:[])
  all.forEach(function(g){ g.forEach(function(r,i){
   frame(r.lk, optsFor(r.v))
   /* The figure under a specimen has to be the quantity being SWEPT. Round 20 added a delta and
@@ -261,11 +283,17 @@ document.fonts.ready.then(function(){
       composite and the WCAG ratio follows from it. Printed because `docs/DESIGN.md` floors
       contrast elsewhere in this product at 7:1 and nothing had ever measured it here. */
    + (SWEPT==='romanOpacity' ? (function(){
+       /* against THIS specimen's ground, not against white. Computing the dark row's ratio
+          against a white page would have published a confident wrong number on every dark cell. */
        const a=r.v, L=function(c){c/=255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
-       const mix=function(f,b){return f*a+b*(1-a)}
-       const rr=mix(0x0f,255), gg=mix(0x12,255), bb=mix(0x17,255)
-       const lum=0.2126*L(rr)+0.7152*L(gg)+0.0722*L(bb)
-       const ratio=(1.05)/(lum+0.05)
+       const dk = r.lk.dataset.col === '#eef0f4'
+       const ink = dk ? [0xee,0xf0,0xf4] : [0x0f,0x12,0x17]
+       const gnd = dk ? [0x0c,0x0e,0x12] : [255,255,255]
+       const mix=function(i){return ink[i]*a+gnd[i]*(1-a)}
+       const lumOf=function(c){return 0.2126*L(c[0])+0.7152*L(c[1])+0.0722*L(c[2])}
+       const lum=lumOf([mix(0),mix(1),mix(2)]), lg=lumOf(gnd)
+       const hi=Math.max(lum,lg), lo=Math.min(lum,lg)
+       const ratio=(hi+0.05)/(lo+0.05)
        const col = ratio<4.5 ? '#c2410c' : '#6b7280'
        return '<br><span style="color:'+col+'">contrast '+ratio.toFixed(1)+':1'+(ratio<4.5?' — under 4.5':'')+'</span>'
      })() : '')
