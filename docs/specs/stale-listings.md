@@ -499,6 +499,33 @@ at a real file. The upload's own safety net is what made this recoverable rather
 pressed from here, so nothing in this repo has changed a price a buyer can see. §9 records the
 contract for it, read from the bundle rather than exercised.
 
+## 6b. This path cannot raise a price, and the owner wants it to
+
+**`reprice apply` refuses a whole file that raises any price** — reason code `raised`, *"above
+the live price; this path only lowers"* — and it refuses the FILE rather than the row, on D7's
+duplicate-SKU logic. That is D100 working as designed: a markdown marks down.
+
+**The owner did not know that, and asked for the other direction on 2026-09-06**: *"oh i had no
+idea it can ONLY markdown, i'd like to be able to raise prices too, maybe thats outside of the
+scope for right now tho."* Deferred by them, recorded here so it is not rediscovered.
+
+It surfaced from a test rather than a review: $750 was chosen as a deliberately absurd price
+precisely because a raise is the SAFE direction to test with — nobody accidentally buys a $750
+common — and the pipeline refused it. **The safe direction to test in is the one this feature
+cannot do.**
+
+**What a raise would need, none of it built:** a rule that means "up" (`markup` exists in the
+vocabulary and is refused by the same guard downstream), a name for the feature that is not
+"markdown", and an answer to what a raise is FOR — repricing to market after a spike is a
+different job from clearing stale stock, and D100's whole window-and-staleness apparatus is
+about the second.
+
+**And the guard is in one place only.** `pipeline/reprice.py` refuses the raise; the push path
+in `server/tcg_import.py` does NOT re-assert it. `_check` there enforces D100's other invariant
+— `AddToQuantity` of 0 on every row — and says nothing about direction, so a hand-placed
+`import.csv` holding a raise is sent. Left open deliberately: the owner has asked for raises, so
+hardening the push against them would build a wall this feature is about to want a door through.
+
 ## 7. What is reversible
 
 **Reversible.** Both previews (they write nothing and are re-runnable). The worklist and the
