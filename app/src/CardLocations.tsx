@@ -167,6 +167,22 @@ export type CardLocationsProps = {
   /** Replaces the action slot for EVERY copy, sold ones included — this is how a screen draws
    *  its own undo. */
   renderAction?: (copy: SearchCopy) => ReactNode
+
+  /** Where a copy's photograph comes from. Omitted by every screen in the product, which is
+   *  how they all get D6's `GET /photo/<box>/<index>` and stay the single caller shape.
+   *
+   *  IT EXISTS FOR `#/gallery` AND FOR NOTHING ELSE, and the reason is not convenience. The
+   *  kit sheet is what `make screenshot` renders and what a person compares against a
+   *  reference, so its contents must not depend on which capture server is up or on what is
+   *  in box 3 today — and a pooled capture's photograph is a live code card, which
+   *  `scripts/views.txt` is not allowed to write into `captures/ui/` (D24). Setting
+   *  `has_photo: false` on the fixtures would buy that by deleting the photo-bearing shell
+   *  from the one page whose job is drawing every shell, which `app/tests/gallery.spec.ts`
+   *  refuses. So the shell stays and the sheet brings its own image.
+   *
+   *  A SEAM, NOT A POLICY: it may not become the way a screen points at a second photo
+   *  service. The default below is the product's answer. */
+  photoSrc?: (copy: SearchCopy) => string
 }
 
 export function CardLocations(props: CardLocationsProps) {
@@ -459,6 +475,7 @@ function FulfillerCard({
   sections,
   listedAt,
   renderAction,
+  photoSrc,
   missing,
   setMissing,
 }: Omit<CardLocationsProps, 'persona'> & {
@@ -509,7 +526,11 @@ function FulfillerCard({
                   <img
                     key={copy.key}
                     className="card-locations-photo"
-                    src={photoUrl(copy.place.box, copy.place.index)}
+                    src={
+                      photoSrc === undefined
+                        ? photoUrl(copy.place.box, copy.place.index)
+                        : photoSrc(copy)
+                    }
                     alt={where === null ? 'The card' : `The card in ${where}`}
                     onError={() =>
                       setMissing((held) => (held.includes(copy.key) ? held : [...held, copy.key]))

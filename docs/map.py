@@ -2934,8 +2934,9 @@ COMPONENTS = [
                                     "governed_by": ["D5", "D6"]},
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5"]},
-            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
-                                "governed_by": ["D5", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95"]},
+            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
+                                "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95", "D102"],
+                                "note": "THE SHEET DREW FOUR REAL CARDS OUT OF THE OWNER'S STORE UNTIL 2026-09-06. Its `CardLocations` fixtures carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the Fulfiller skin sourced each `<img>` from `photoUrl(box, index)` — so the one page whose entire purpose is being compared against a reference was the one page whose contents depended on which capture server was up and what was in boxes 3, 4 and 7 that day, and `GET /photo/<box>/<index>` serves stored bytes without knowing a code card from a Thievul (D24). The one-line fix — `has_photo: false` on all four — was NOT taken: it buys a closed sheet by deleting the photo-bearing shell from the page whose job is drawing every shell, which is the trade `app/tests/gallery.spec.ts` exists to refuse. The image names its own colors, which is the same exception `src/kit/markPalettes.ts` argues at D102: an illustration's colors, on stage ground that is dark in both themes."},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
                                 "governed_by": ["D5", "D94"]},
 
@@ -3739,8 +3740,13 @@ COMPONENTS = [
                         "— the departed shell (`is-gone is-nobar`), the pooled one, the "
                         "current one, and the state cell's single pill — asserted against "
                         "`#/gallery`'s own fixtures rather than a server. One count per shape, "
-                        "so a fixture that quietly stops producing one is caught.",
-                "governed_by": ["D24", "D58", "D68", "D71", "D93"],
+                        "so a fixture that quietly stops producing one is caught. Since "
+                        "2026-09-06 it also reads every specimen photograph's `src` back off "
+                        "the DOM: four bundled data URIs and two missing-photo sentences, and "
+                        "nothing addressing `/photo/`. That assertion is the one that survives "
+                        "`shell.ts:stubStore`, which answers the photo route — so the seal "
+                        "alone could never have said the sheet had stopped asking.",
+                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
                         "2026-09-05. `docs/DEBTS.md` section 5 recorded the departed row as "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "

@@ -15,6 +15,24 @@ import './Gallery.css'
  * rather than only written. `make screenshot` renders it and `make design-check` measures the
  * Fulfillment floors here. Nothing is wired to a server.
  *
+ * THAT LAST SENTENCE WAS FALSE FOR THE ONE THING ON THIS PAGE MADE OF PIXELS, until 2026-09-06.
+ * `CardLocations`'s Fulfiller skin draws an `<img>` per photo-bearing copy, and its source was
+ * `photoUrl(box, index)` — so the sheet fetched whatever was in boxes 3, 4 and 7 of whichever
+ * store answered the capture port, and showed different cards as those boxes changed. Two costs,
+ * and the second is the serious one: the page whose entire purpose is being compared against a
+ * reference (docs/DESIGN.md's mandatory loop) was the page nobody could reproduce, and a pooled
+ * capture is a code card whose photograph is a bearer instrument (D24) that `make screenshot`
+ * would have written into `captures/ui/`. `GET /photo/<box>/<index>` serves stored bytes and
+ * does not know a code card from a Thievul; nothing filters it here.
+ *
+ * SO THE SHEET BRINGS ITS OWN IMAGE — `SPECIMEN_PHOTO` below, through `CardLocations`'s
+ * `photoSrc` seam, which no screen in the product passes. What was NOT done is the one-line
+ * version: setting `has_photo: false` on the four fixtures buys a closed sheet by deleting the
+ * photo-bearing shell from the page whose job is to draw every shell, and
+ * `app/tests/gallery.spec.ts` exists to refuse exactly that trade for the departed and pooled
+ * rows. Both photo shells are still drawn here: four copies carry an image, two carry the
+ * missing-photo sentence.
+ *
  * The four pull-confirm specimens keep their `data-specimen` names and their order:
  * app/tests/pull-confirm.spec.ts measures the vertical gaps between exactly those. */
 
@@ -91,13 +109,61 @@ const GROUP: SearchGroup = {
     { key: '9/4', state: 'captured', state_at: null, has_photo: false, capture_id: null, place: SINGLE_SECTION },
     { key: '4/1', state: 'sold', state_at: null, has_photo: true, capture_id: 'cap-4-1', place: NO_FRACTION },
     { key: '3/31', state: 'sold', state_at: null, has_photo: true, capture_id: 'cap-3-31', place: DEPARTED },
-    /* NO PHOTOGRAPH ON THE POOLED ROW, AND IT IS THE OPSEC RULE RATHER THAN A MISSING FIXTURE:
-       a pooled capture is a code card, its photograph is a live bearer instrument, and this
-       sheet is what `make screenshot` renders. The Fulfiller's skin draws its missing-photo
-       sentence instead, which is a real state and the only honest one here. */
+    /* NO PHOTOGRAPH ON THE POOLED ROW, AND IT IS THE PRODUCT'S SHAPE RATHER THAN A MISSING
+       FIXTURE. The opsec half of this reason moved on 2026-09-06 and is recorded rather than
+       deleted: while the sheet drew `photoUrl`, a photographed pooled fixture would have put a
+       live code card into `captures/ui/`, and that is now impossible for every row here at
+       once — the image is `SPECIMEN_PHOTO` and the store is not asked. What is left is the
+       reason that was always the stronger one: `app/tests/fulfillment.spec.ts` asserts a pooled
+       card is never on the Fulfiller's screen at all, so a photographed pooled copy is a shape
+       this product does not produce. The missing-photo sentence it draws instead is a real
+       state. */
     { key: '12/5', state: 'identified', state_at: null, has_photo: false, capture_id: 'cap-12-5', place: POOLED },
   ],
 }
+
+/* THE SPECIMEN PHOTOGRAPH, and it is a drawing rather than a photograph on purpose.
+ *
+ * WHY IT IS BUNDLED: a data URI is a closed system — no origin, no port, no store, no server
+ * that has to be up. `make screenshot` renders this page against `make dev` alone, and the
+ * render is the same bytes in every checkout on every day, which is what makes comparing it
+ * against `docs/design-refs/` the loop docs/DESIGN.md calls mandatory rather than a coin toss.
+ *
+ * WHY 9:16 AND NOT CARD-SHAPED: 2160x3840 is the rig's stored aspect, the same reasoning
+ * `app/tests/review.spec.ts` states over its own fixture. `.card-locations-fulfiller
+ * .card-locations-photo` is `aspect-ratio: 63/88` with `object-fit: cover`, so a real capture
+ * is cropped to its middle 78.5% vertically and a card-shaped source would quietly show a crop
+ * the product never performs. Everything drawn below sits inside that band.
+ *
+ * WHY IT NAMES ITS OWN COLORS. `tokens.css` is the only file in `app/` that may name one, and
+ * this is the same exception `app/src/kit/markPalettes.ts` argues at D102: these are an
+ * ILLUSTRATION's colors, not the interface's, and they must not follow the theme — the photo
+ * sits on `--bn-stage-*` ground that is dark in light and dark alike, because the subject is a
+ * photograph. `make docs-audit`'s `raw color` row cannot see it either way; its scope is
+ * `app/src/*.css` and this is a `.ts` expression.
+ *
+ * AND WHY IT SAYS SO IN WORDS: a render of this page ends up in `captures/ui/`, and the one
+ * thing a reader of that file must never have to wonder is whether they are looking at a real
+ * card out of a real box. */
+const SPECIMEN_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="2160" height="3840" viewBox="0 0 1080 1920">' +
+  // The stand. `--bn-stage-bg-2`'s value, so the ground under this card is the same family the
+  // product's own viewfinders and photo heroes are drawn on.
+  '<rect width="1080" height="1920" fill="#171b25"/>' +
+  // The card, at 63:88, inside the middle band `object-fit: cover` keeps.
+  '<rect x="90" y="331" width="900" height="1257" rx="44" fill="#d7dae1" stroke="#aab0bd" stroke-width="6"/>' +
+  '<rect x="134" y="375" width="812" height="1169" rx="26" fill="none" stroke="#b8bec9" stroke-width="5"/>' +
+  '<rect x="186" y="427" width="708" height="86" rx="18" fill="#c3c8d2"/>' +
+  '<rect x="186" y="551" width="708" height="668" rx="18" fill="#6f7f99"/>' +
+  '<rect x="186" y="1257" width="708" height="58" rx="14" fill="#c3c8d2"/>' +
+  '<rect x="186" y="1349" width="470" height="58" rx="14" fill="#c3c8d2"/>' +
+  '<text x="540" y="915" text-anchor="middle" font-family="monospace" font-size="88" ' +
+  'letter-spacing="10" fill="#eef0f4">SPECIMEN</text>' +
+  '</svg>'
+
+/** `encodeURIComponent` rather than base64, so the drawing above stays readable and editable in
+ *  this file — a base64 blob is a color nobody can see and a rectangle nobody can move. */
+const SPECIMEN_PHOTO = `data:image/svg+xml;utf8,${encodeURIComponent(SPECIMEN_SVG)}`
 
 const SECTIONS: readonly { id: string; label: string; group: string }[] = [
   { id: 'color', label: 'Color', group: 'Foundations' },
@@ -957,8 +1023,16 @@ export function Gallery() {
                   <CardLocations group={GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} currentKey="7/12" />
                 </div>
               </Spec>
-              <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="Photographs resolve against the capture server; without one each copy draws its missing-photo sentence, which is a real state.">
-                <CardLocations group={GROUP} persona="fulfiller" onSell={noop} busyKey={null} soldKeys={new Set()} />
+              <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="The photograph is this sheet's own specimen, not a stored capture: nothing here asks the capture server, so the page renders the same in every checkout. Two copies carry no image and draw the missing-photo sentence, which is a real state.">
+                <CardLocations
+                  group={GROUP}
+                  persona="fulfiller"
+                  onSell={noop}
+                  busyKey={null}
+                  soldKeys={new Set()}
+                  /* THE ONE CALL SITE OF `photoSrc` IN THIS PRODUCT. See the header. */
+                  photoSrc={() => SPECIMEN_PHOTO}
+                />
               </Spec>
             </div>
           </Section>
