@@ -146,7 +146,24 @@ function frame(el, opt){
     return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="'+col+'"/>':''}).join('')
   body=one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g>'
  }
- el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+body+'</svg>')
+ /* THE BRACKET MAY CARRY A GRADIENT, and it is never invented here. `opt.bracketStops` is a
+    LOCKED palette out of `app/src/kit/markPalettes.ts` -- the same four-stop `chrome` the icon
+    has always used, applied on the icon's own axis (objectBoundingBox, .75/.067 -> .25/.933).
+    Passing stops is how a sheet says "draw this in the mark's metal" without any sheet owning
+    a colour: `make docs-audit`'s `lockup bracket` row reconciles them against the generated
+    palettes, because a hex typed a second time is the defect this file keeps finding. */
+ let paint = body, defs = ''
+ if (opt.bracketStops && opt.bracketStops.length) {
+  const gid = 'lkb' + (n++)
+  defs = '<defs><linearGradient id="'+gid+'" x1="0.750" y1="0.067" x2="0.250" y2="0.933">' +
+    opt.bracketStops.map(function(st){
+      return '<stop offset="'+st[0]+'" stop-color="'+st[1]+'"/>'}).join('') +
+    '</linearGradient></defs>'
+  paint = body.split('fill="'+col+'"').join('fill="url(#'+gid+')"')
+             .split('stroke="'+col+'"').join('stroke="url(#'+gid+')"')
+ }
+ el.dataset.bracketStops = opt.bracketStops ? opt.bracketStops.map(function(s){return s[1]}).join(' ') : ''
+ el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+defs+paint+'</svg>')
  /* A FINGERPRINT OF WHAT WAS ACTUALLY DRAWN, and every option that reached the drawing. A sheet
     claims some variables are held and one is swept; without these two the claim is prose. With
     them the sheet can assert the held ones were identical, the swept one moved, and no two
@@ -162,7 +179,7 @@ function frame(el, opt){
     The round sheet's first assertion is only as good as this string. */
  el.dataset.geom = body.length + ':' + body.slice(0, 400) +
    '|type ' + el.dataset.romanW + '/' + el.dataset.kanjiW + '/' + ls.toFixed(3) +
-   '|ink ' + el.dataset.romanOpacity + '/' + col
+   '|ink ' + el.dataset.romanOpacity + '/' + col + '/' + el.dataset.bracketStops
  el.dataset.used = JSON.stringify({
   stroke: +(sw/size).toFixed(4), arm: +arm.toFixed(4), rr: +rr.toFixed(2),
   rrMul: +(rr/sw).toFixed(3),
