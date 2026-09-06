@@ -506,3 +506,8 @@ MyFonts
 OFL
 fsType
 
+antialiasing
+unswept
+superellipse
+logotype
+logotypes

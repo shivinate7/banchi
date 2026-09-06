@@ -1017,7 +1017,7 @@ upward exposed a hole nobody had noticed, that 0.045 was good and 0.065 was not 
 them ever drawn*. A 44% step had been standing in for a bracket.
 
 **Rounds 1 and 2 disagree, and that is rule 3 rather than a contradiction.** 0.065 and 0.085 were
-accepted the first time and passed over the second, once they were shown against thinner neighbours and
+accepted the first time and passed over the second, once they were shown against thinner neighbors and
 at size. §6 records the identical narrowing for the sheen.
 
 **The last step was decided by a measurement, not by the eye.** 0.045 and 0.050 are a fifth of a pixel
@@ -1045,7 +1045,7 @@ multiple of the stroke, and the multiple the original pass shipped lost in round
 | 10 | 3.85 – 4.95 × | **all five alike — the JND** |
 
 **Round 10 ended on §7 rule 7 and the claim is measured rather than reported.** Rendered at true size
-and differenced pixel for pixel, adjacent specimens at kanji 40 differ by a mean of **0.7 to 3.5 out of
+and subtracted pixel for pixel, adjacent specimens at kanji 40 differ by a mean of **0.7 to 3.5 out of
 255** — under 1.4% — with the deviation confined to a few dozen pixels at each corner. "About the same"
 is a result, and here it is a number.
 
@@ -1190,7 +1190,7 @@ the path, so a ramp fraction above that renders identically while being presente
 *"three images approved as different were the same image."* At pad 0.22 the clamp binds at 0.80.
 The sheet prints the ramp actually used under every specimen and marks a clamped one in orange,
 so the defect is visible rather than silent. **A sweep whose top end is clamped is not a sweep,
-and the only defence that has ever worked here is printing the number.**
+and the only defense that has ever worked here is printing the number.**
 
 ## 14. The lockup's font — what it cannot ship with, and what it can
 
