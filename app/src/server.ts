@@ -39,6 +39,8 @@ import type {
   ExportFetched,
   ExportScope,
   MarkdownAnswer,
+  MarkdownPublish,
+  MarkdownPush,
   LiveExportFetched,
   MarkdownTable,
   MarkdownAsk,
@@ -1878,6 +1880,40 @@ export async function applyMarkdown(
       write: Boolean(options.write),
     }),
   })) as MarkdownAnswer
+}
+
+/**
+ * Push this markdown's `import.csv` into TCGplayer's STAGED inventory.
+ *
+ * NOTHING A BUYER CAN SEE CHANGES HERE. Staged is the operator's own working copy —
+ * measured 2026-09-06, a 100-row push moved 0 of 759 live prices and 0 live quantities.
+ * `publishMarkdown` is what publishes, and it is a separate call for that reason.
+ *
+ * `confirm` IS NOT A FORMALITY AND IS NOT DEFAULTED TRUE HERE. The route refuses without it,
+ * the same way `POST /pipeline/identify` refuses without one, because both reach outside this
+ * machine and change something there.
+ */
+export async function pushMarkdown(stamp: string): Promise<MarkdownPush> {
+  return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as MarkdownPush
+}
+
+/**
+ * Move this markdown's staged upload LIVE. **This changes what buyers pay.**
+ *
+ * IT SENDS NO UPLOAD ID. The server reads that off the push receipt on disk, so a replayed or
+ * mistyped body cannot publish an upload this markdown never made — and TCGplayer's `scope` is
+ * pinned to "this upload" server-side, so the id IS the scope.
+ */
+export async function publishMarkdown(stamp: string): Promise<MarkdownPublish> {
+  return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as MarkdownPublish
 }
 
 /**

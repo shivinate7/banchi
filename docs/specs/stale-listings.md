@@ -459,28 +459,94 @@ then on, not a property of one file.
 from files TCGplayer produced and from files this pipeline produced that TCGplayer then
 accepted; none of it is a measurement of *this* file being accepted.
 
-Unmeasured, in order of consequence:
+**ALL FOUR QUESTIONS ARE ANSWERED AS OF 2026-09-06, AND THE FOURTH WAS ANSWERED BY ACCIDENT.**
+The paragraph above stands as the record of what was owed. What follows is what was measured,
+and how — because the how bears on how much the numbers are worth.
 
-1. **Does the My Pricing importer accept a zero-quantity, price-only row?** The evidence for yes
-   is strong: TCGplayer's own export writes that byte on 649 rows it knows are live, and
-   `Total Quantity` is a separate unwritable column. That is an argument from their format, not
-   a measurement of their importer. The failure modes split cleanly — a no-op is silent and
-   safe, and only a reading of `Add to Quantity` as *set the quantity to* could delist, which is
-   the reading the 649 rows rule out.
-2. **Does it accept a SUBSET of rows** rather than the whole export? `emit`'s files are subsets
-   and TCGplayer took them, which is suggestive; that was Import to Staged, and this is the My
-   Pricing upload.
-3. **Does a price change land immediately, or stage?** Unknown. `reconcile --live` against a
-   fresh download is what answers it.
-**Question 4 is answered.** *Can the live export be fetched?* **Yes** — measured 2026-09-06
-against the owner's account: 128,700 bytes, 759 rows across six product lines, 388 live rows,
-1,021 live copies, 4 photo rows, matching the download they took by hand the same day. The three
-above are unchanged: they are about the IMPORTER, and nothing this pipeline writes has been
-uploaded.
+1. **Does the My Pricing importer accept a zero-quantity, price-only row? YES.** A real
+   `import.csv` — 100 rows, `Add to Quantity` of `0` on every one — was put through
+   `Import To Staged` against the owner's own account. Their validator's verbatim verdict:
+   *"Headers are valid! · 100 records processed. · No duplicates exist! · Validated 100
+   records."* Then *"CSV Upload complete. 100 products were successfully imported."* The
+   argument from their format was right.
+2. **Does it accept a SUBSET of rows? YES.** Those 100 rows were a subset of a 759-row export,
+   and nothing complained about the 659 that were absent.
+3. **Does a price change land immediately, or stage? IT STAGES, and the staging is total.**
+   Measured by re-fetching the live export immediately afterwards and diffing it against the
+   morning's: of the 100 SKUs uploaded, **live marketplace price changed on 0 and live quantity
+   changed on 0**; across all **759** rows, live price changed on **0**. `Import To Staged` puts
+   nothing in front of a buyer. A separate `Move To Live` press does that, and §9 is its
+   contract.
+4. **Can the live export be fetched? YES** — 128,700 bytes, 759 rows across six product lines,
+   388 live rows, 1,021 live copies, 4 photo rows, matching the download the owner took by hand
+   the same day.
 
-**The first real press should be `reprice list --limit 5 --write`, then `apply --write`,
-uploaded, then `reconcile --live` against a fresh download to read the prices back.** Record the
-answer in this section, in the session that gets it.
+**HOW 1 TO 3 WERE MEASURED IS PART OF THE MEASUREMENT.** They were not the deliberate first
+press this section asked for. The session was driving the importer as a DRY RUN, with a
+request interceptor armed to block the upload, and the interceptor was built from endpoint
+names read out of the bundle's *function* names — `initializeUpload`, `uploadPrices`,
+`uploadPriceChunk`, `finalizeUpload`. The wire names are `initializeexportcsv`,
+`uploadexportcsv`, `finalizeexportcsv`. Nothing matched, nothing was blocked, and the upload
+was real.
+
+**A deny-list over a surface nobody has seen fails OPEN, and that is the transferable finding.**
+The next session that drives this path blocks every non-GET by default, allows only what it has
+already observed and judged, and proves the guard fires on a harmless write BEFORE pointing it
+at a real file. The upload's own safety net is what made this recoverable rather than costly:
+`Import To Staged` is not a live write, which is exactly what question 3 was asking.
+
+**THE PUBLISH IS MEASURED TOO, AS OF 2026-09-06 19:25 UTC.** On the owner's explicit
+instruction, a real round trip ran through this repo's own routes against their live store:
+
+| | |
+|---|---|
+| 19:24:49 | `POST .../push` — staged, `upload_id 16810824`, **1 of 1 accepted**, no messages |
+| 19:25:32 | `POST .../publish` — `Update: [{ProductConditionId: 9189317, ProductName: "Vilemaw", ChannelName: "Marketplace"}]`, **0 errors, 0 warnings** |
+| ~19:26 | `Export From Live` still reported **23.2200** — the PRE-publish price |
+| ~19:28 | the seller portal's own Live grid reported **750.00**, quantity 4 |
+| 19:32:25 | the revert published; the grid reported **23.22** again |
+
+Vilemaw (Riftbound, Unleashed, Epic, Near Mint Foil, 4 live) went $23.22 → $750.00 → $23.22,
+and every press was this repo's. **The form encoding is right**: the ~36 bytes per row this
+implementation sends less than the browser — their `isPriceValid` computed — changed nothing,
+and TCGplayer accepted 1 of 1.
+
+**AND `Export From Live` IS NOT READ-YOUR-WRITES.** Roughly forty seconds after a confirmed
+publish, the export still served the old price while the portal's own grid served the new one.
+That is a measured lag on the document `pkmnscan reconcile --live` reads, so **a reconcile run
+immediately after a publish will write the pre-publish price into the store's `live` field**
+(D87). Nothing guards against that today. It is not a hypothetical: it happened in this very
+sequence, and the export was believed until the grid contradicted it.
+
+**$750 is a RAISE and could not go through `reprice apply`** — see §6b. The file was pushed
+directly to the route, which is why this measurement says nothing about the apply guard.
+
+## 6b. This path cannot raise a price, and the owner wants it to
+
+**`reprice apply` refuses a whole file that raises any price** — reason code `raised`, *"above
+the live price; this path only lowers"* — and it refuses the FILE rather than the row, on D7's
+duplicate-SKU logic. That is D100 working as designed: a markdown marks down.
+
+**The owner did not know that, and asked for the other direction on 2026-09-06**: *"oh i had no
+idea it can ONLY markdown, i'd like to be able to raise prices too, maybe thats outside of the
+scope for right now tho."* Deferred by them, recorded here so it is not rediscovered.
+
+It surfaced from a test rather than a review: $750 was chosen as a deliberately absurd price
+precisely because a raise is the SAFE direction to test with — nobody accidentally buys a $750
+common — and the pipeline refused it. **The safe direction to test in is the one this feature
+cannot do.**
+
+**What a raise would need, none of it built:** a rule that means "up" (`markup` exists in the
+vocabulary and is refused by the same guard downstream), a name for the feature that is not
+"markdown", and an answer to what a raise is FOR — repricing to market after a spike is a
+different job from clearing stale stock, and D100's whole window-and-staleness apparatus is
+about the second.
+
+**And the guard is in one place only.** `pipeline/reprice.py` refuses the raise; the push path
+in `server/tcg_import.py` does NOT re-assert it. `_check` there enforces D100's other invariant
+— `AddToQuantity` of 0 on every row — and says nothing about direction, so a hand-placed
+`import.csv` holding a raise is sent. Left open deliberately: the owner has asked for raises, so
+hardening the push against them would build a wall this feature is about to want a door through.
 
 ## 7. What is reversible
 
