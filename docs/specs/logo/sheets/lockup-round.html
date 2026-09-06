@@ -22,18 +22,27 @@
  svg,img{display:block}
 </style>
 <div class="wrap">
-<h1>the lockup — round 1 · the bracket stroke</h1>
+<h1>the lockup — round 2 · the bracket stroke, re-opened downward</h1>
 <div class="sub">
-<b>One variable.</b> Everything else is held at what was approved: pad 0.22, gap 0.06, roman 0.36&times;
-width-matched, caps, kanji tracking 0.07em, roman at 62% opacity, arm 0.32, tail tip 0.07, ramp 0.45.
+<b>Round 1 offered 0.045 to 0.140 and you took 0.045 &ndash; 0.085.</b> The accepted band reaches the
+bottom of the range, which is &sect;7 rule 5 firing: <i>&ldquo;a pick on the edge of an offered range is not
+an answer, it is evidence the range was wrong.&rdquo;</i> So this round opens downward until the stroke
+actually fails, and carries the three you kept along so the new ones have something to beat.
+<br><br>
+<b>One variable, same holds as round 1:</b> pad 0.22, gap 0.06, roman 0.36&times; width-matched, caps,
+kanji tracking 0.07em, roman at 62% opacity, arm 0.32, tail tip 0.07, ramp 0.45.
 <br><br>
 <b>The corner radius is held ABSOLUTE for this round, deliberately.</b> The recovered code defines it as
 <code>1.85 &times; stroke</code>, so sweeping the stroke would drag the radius along and two things would
 move at once &mdash; &sect;7 rule 6. It is pinned at the incumbent&rsquo;s value here so only thickness
 moves. The radius gets its own round.
 <br><br>
-<b>Both ends should be wrong.</b> If nothing reads as too thin, the floor was not found and the range was
-mine rather than yours &mdash; &sect;7 rule 5.
+<b>0.018 is meant to be a hairline that dies.</b> If it does not, the floor is lower still and this round
+was another survey of my own prior rather than a measurement.
+<br><br>
+<b>Where a thin stroke actually dies is at SIZE, not at 40px</b>, so the small rows carry the weight of this
+round. Note the sheet is shot at deviceScaleFactor 2 &mdash; the small specimens are what a retina screen
+renders, which is the common case but is twice the detail a 1&times; display gets.
 </div>
 <div id="out"></div></div>
 <script>
@@ -132,8 +141,9 @@ function kanjiStem(size){
 }
 
 const HOLD = {pad:0.22, gap:0.06, tip:0.07, tl:0.45, arm:0.32}
-const VALUES = [0.045, 0.065, 0.085, 0.110, 0.140]
-const INCUMBENT = 0.110
+const VALUES = [0.018, 0.026, 0.034, 0.045, 0.065, 0.085]
+const KEPT = [0.045, 0.065, 0.085]   /* what round 1 accepted, re-shown so the new ones have a bar */
+const INCUMBENT = null
 
 function row(size, dark){
  const s=el('div','strip'); if(dark) s.style.background='#0c0e12'
@@ -142,8 +152,9 @@ function row(size, dark){
   const c=el('div','cell')
   const lk=stamp(size, HOLD.gap, HOLD.pad, dark?'#eef0f4':'#0f1217')
   c.appendChild(lk)
-  const cap=el('div','cap'+(v===INCUMBENT?' was':''))
-  cap.textContent=v.toFixed(3)+(v===INCUMBENT?' — as drawn':'')
+  const kept = KEPT.indexOf(v) >= 0
+  const cap=el('div','cap'+(kept?' was':''))
+  cap.textContent=v.toFixed(3)+(kept?' — kept in round 1':'')
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
   s.appendChild(c); made.push([lk,v,num,size])})
@@ -153,19 +164,24 @@ function row(size, dark){
 
 o.appendChild(el('h2',null,'at kanji 40 — big enough to judge the shape'))
 const A=row(40,false)
-o.appendChild(el('h2',null,'the same five, on the app’s own dark page'))
-const B=row(40,true)
-o.appendChild(el('h2',null,'at kanji 22 — nearer the size it would be used at'))
+o.appendChild(el('h2',null,'at kanji 22 — the size it would be used at'))
 const C=row(22,false)
+o.appendChild(el('h2',null,'at kanji 14 — where a thin stroke is supposed to die'))
+const D=row(14,false)
+o.appendChild(el('h2',null,'kanji 22 on the app’s own dark page — a light stroke optically thickens'))
+const B=row(22,true)
 
 document.fonts.ready.then(function(){
- const stem40=kanjiStem(40), stem22=kanjiStem(22)
- ;[A,B,C].forEach(function(g){ g.forEach(function(r){
+ const stem={40:kanjiStem(40), 22:kanjiStem(22), 14:kanjiStem(14)}
+ ;[A,C,D,B].forEach(function(g){ g.forEach(function(r){
   const lk=r[0], v=r[1], num=r[2], size=r[3]
-  frame(lk, {stroke:v, arm:HOLD.arm, tip:HOLD.tip, tl:HOLD.tl, rrAbs:size*INCUMBENT*1.85})
-  const stem = size===40 ? stem40 : stem22
-  num.innerHTML = (size*v).toFixed(2)+'px<br><span style="color:#6b7280">'
-   + (stem ? (size*v/stem).toFixed(2)+'\u00d7 the kanji stem' : '') + '</span>'
+  /* radius still pinned, at the same absolute value round 1 used, so the two rounds are comparable */
+  frame(lk, {stroke:v, arm:HOLD.arm, tip:HOLD.tip, tl:HOLD.tl, rrAbs:size*0.110*1.85})
+  const st = stem[size]
+  const px = size*v
+  num.innerHTML = px.toFixed(2)+'px<br><span style="color:#6b7280">'
+   + (st ? (px/st).toFixed(2)+'\u00d7 stem' : '')
+   + (px < 1 ? ' &middot; <span style="color:#c2410c">sub-pixel</span>' : '') + '</span>'
  })})
  window.__sheetReady = true
 })
