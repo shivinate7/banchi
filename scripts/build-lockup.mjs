@@ -36,6 +36,7 @@ const CORE = resolve(ROOT, 'docs/specs/logo/sheets/lockup-core.js')
 const KANJI_WOFF = resolve(ROOT, 'app/node_modules/@ibm/plex-sans-jp/fonts/complete/woff/hinted/IBMPlexSansJP-Regular.woff')
 const ROMAN_WOFF = resolve(ROOT, 'app/node_modules/@fontsource/manrope/files/manrope-latin-700-normal.woff')
 const OUT = resolve(ROOT, 'app/src/kit/lockupGeometry.ts')
+const MARK = resolve(ROOT, 'app/src/kit/markGeometry.ts')
 
 const must = (cond, why) => { if (!cond) { console.error('build-lockup: ' + why); process.exit(1) } }
 
@@ -249,6 +250,88 @@ must(compare.pct < 8,
 
 await browser.close()
 
+/* ---- 4b · the rail's own bracket, at the lockup's topology ----------------------------------
+
+   THE MORPH IS THE WHOLE POINT OF THIS SECTION, and section 16 said it was unavailable: "a ~600
+   point filled taper against a 52-byte stroked wire — paths that shape cannot interpolate." That
+   is true of how the two are EXPRESSED and false of what they are. Both are one L: a vertical
+   leg, a rounded elbow, a horizontal leg. `taperParts` is that L, parametrically, at a fixed 301
+   centreline samples — and the mark's small cut is the SAME CALL with `tip = 1`, because `tip` is
+   the width at the free end and the small cut's only difference from the lockup's is that section
+   11 removed the taper on a measurement.
+
+   So one sampler emits both ends at identical topology and a point-wise lerp is exact. Nothing
+   about what the rail DRAWS changes: the assertion below renders this outline against the shipped
+   stroked wire and refuses the build if they differ. Measured at 10x, they differ by 0.30% of
+   inked pixels, which is the antialiased boundary and nothing else.
+
+   EMITTED IN THE MARK'S OWN 100 x 100 BOX, not mapped into the lockup's. The mapping depends on
+   the app's two size constants (the sidebar's kanji and the rail's px) and those are a product
+   decision, not a geometry fact — baking them here would put a value in this file that the app
+   could change underneath. The component does the mapping, once, from `BLOCK`. */
+
+/* `taperParts` LIFTED VERBATIM out of the sheet rather than re-typed. It touches no DOM, so it
+   runs here unchanged — and verbatim is the point: a second copy of the sampler would be a second
+   generator that agrees today. The slice is by the two markers around it, so an edit to the
+   function travels and an edit that MOVES it fails loudly rather than silently taking the wrong
+   bytes. */
+const coreSrc = readFileSync(CORE, 'utf8')
+const fnStart = coreSrc.indexOf('function taperParts')
+const fnEnd = coreSrc.indexOf('let n=0')
+must(fnStart >= 0 && fnEnd > fnStart, 'taperParts is not where this expects it in lockup-core.js')
+const taperParts = new Function(coreSrc.slice(fnStart, fnEnd) + '; return taperParts')()
+
+const markSrc = readFileSync(MARK, 'utf8')
+const wire = /SMALL_BRACKET = '([^']+)'/.exec(markSrc)
+const wireW = /SMALL_STROKE = ([\d.]+)/.exec(markSrc)
+must(wire && wireW, 'markGeometry.ts has no SMALL_BRACKET / SMALL_STROKE — the rail end of the morph')
+
+/* Read the L out of the shipped path rather than retyping its numbers: M x y V y2 A r r 0 0 1 x2 y3 H x3 */
+const L = /^M([\d.-]+) ([\d.-]+)V([\d.-]+)A([\d.-]+) [\d.-]+ 0 0 1 ([\d.-]+) ([\d.-]+)H([\d.-]+)$/.exec(wire[1].trim())
+must(L, `SMALL_BRACKET is not the vertical-elbow-horizontal L this reads: ${wire[1]}`)
+const n = L.map(Number)
+// M x yBottom V yTop A r r 0 0 1 xElbow yTop H xRight — the corner is (x, yTop) and the two legs
+// run down and right from it. `taperParts(x0, y0, aX, aY, ...)` takes the HORIZONTAL leg first;
+// passing them the other way round is a drawing that still looks like a bracket, which is why
+// the pixel assertion below is not decoration — it caught exactly that on this line.
+const corner = { x: n[1], y: n[6], aY: n[2] - n[6], aX: n[7] - n[1], r: n[4] }
+const railArm = taperParts(corner.x, corner.y, +corner.aX.toFixed(6), +corner.aY.toFixed(6),
+                           corner.r, Number(wireW[1]), 1, 0)
+must((railArm.body.match(/[A-Za-z]/g) || []).length === (armPath[1].match(/[A-Za-z]/g) || []).length,
+     'the two ends of the morph do not have the same command count — a lerp would be undefined')
+
+const railCheck = await (async () => {
+  const br = await chromium.launch()
+  const pg = await br.newPage({ viewport: { width: 320, height: 320 } })
+  const sheet = (inner) => `<body style="margin:0;background:#fff"><svg width="320" height="320" viewBox="0 0 100 100">${inner}<g transform="rotate(180 50 50)">${inner}</g></svg></body>`
+  const shot = async (h) => { await pg.setContent(h); return (await pg.screenshot()).toString('base64') }
+  const a = await shot(sheet(`<path d="${wire[1]}" fill="none" stroke="#000" stroke-width="${wireW[1]}" stroke-linecap="round"/>`))
+  const b2 = await shot(sheet(`<path d="${railArm.body}" fill="#000"/>` +
+    railArm.caps.map(([cx, cy, r]) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#000"/>`).join('')))
+  const out = await pg.evaluate(async ([x, y]) => {
+    const load = (s) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = 'data:image/png;base64,' + s })
+    const [ia, ib] = await Promise.all([load(x), load(y)])
+    const g = (img) => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height
+      const k = c.getContext('2d'); k.drawImage(img, 0, 0); return k.getImageData(0, 0, c.width, c.height).data }
+    const A = g(ia), B = g(ib)
+    let inked = 0, diff = 0
+    // INK, not alpha — a screenshot is opaque everywhere, so an alpha compare passes on anything
+    for (let i = 0; i < A.length; i += 4) {
+      const p = A[i] < 128, q = B[i] < 128
+      if (p || q) inked++
+      if (p !== q) diff++
+    }
+    return { inked, diff }
+  }, [a, b2])
+  await br.close()
+  return out
+})()
+must(railCheck.inked > 500, 'the rail comparison drew almost nothing — it would pass on two blank images')
+const railPct = (100 * railCheck.diff) / railCheck.inked
+must(railPct < 2, `the morph's rail end is not the shipped mark: ${railCheck.diff} of ${railCheck.inked} ` +
+  `inked pixels differ (${railPct.toFixed(2)}%) at 10x. The rail must draw markGeometry.ts's own ` +
+  'wire (D102, section 1); an outline that only resembles it is a second mark.')
+
 /* ---- 5 · write ------------------------------------------------------------------------------ */
 
 const R = (n) => +n.toFixed(4)
@@ -302,6 +385,17 @@ export const ROMAN_PATH = '${ROMAN_D}'
 export const BRACKET_ARM = '${round3(armPath[1])}'
 export const BRACKET_CAPS = ${JSON.stringify(caps)} as const
 export const BRACKET_SPIN = '${spin[1]}'
+
+/** THE RAIL END OF THE MORPH — the same L as \`BRACKET_ARM\`, sampled by the same \`taperParts\` at
+ *  the same 301 points, with \`tip = 1\` because section 11 removed the taper from the small cut.
+ *  So the two are point-for-point correspondent and a lerp between them is exact.
+ *  IN THE MARK'S OWN 100 x 100 BOX, not this one: mapping it into the lockup's viewBox needs the
+ *  app's sidebar and rail sizes, which are a product decision and would go stale here. \`Lockup\`
+ *  maps it from \`BLOCK\`.
+ *  The generator renders this against markGeometry.ts's shipped stroked wire and refuses to write
+ *  if they differ by more than 2% of inked pixels at 10x. Measured: ${railPct.toFixed(2)}%. */
+export const RAIL_ARM = '${round3(railArm.body)}'
+export const RAIL_CAPS = ${JSON.stringify(railArm.caps.map((c) => c.map(R)))} as const
 `
 
 writeFileSync(OUT, ts)

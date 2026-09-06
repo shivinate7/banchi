@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 
@@ -46,25 +50,21 @@ test('the sidebar brand draws the mark, and names itself without it', async ({ p
   await expect(brand).toHaveAttribute('aria-label', 'Collapse the sidebar')
   await expect(brand).toHaveAttribute('aria-expanded', 'true')
 
-  // TWO DRAWINGS, ONE OF WHICH IS SHOWING. Section 16 puts the lockup in the open sidebar and
-  // the empty slot in the rail, and both are mounted at once so CSS can choose — a JSX branch on
-  // `rail` would be wrong at 768-1023px, where App.css rails the shell by media query and
-  // `data-rail` is inert. So this counts them and then scopes.
-  await expect(brand.locator('.bn-brand-slot > svg')).toHaveCount(2)
-  // and the third svg is the chevron, which is a HINT rather than the control: the control is the
-  // whole 128 x 93 row, which is the entire point of moving the affordance here.
+  // ONE DRAWING. It was two — the lockup and a separate rail mark, crossfading — until the
+  // generator was taught to emit both ends of the bracket at one topology. A second svg here is
+  // that crossfade coming back, and it would look almost right, which is why this counts.
+  await expect(brand.locator('.bn-brand-slot > svg')).toHaveCount(1)
+  // the chevron is a HINT, not the control: the control is the whole 128 x 93 row, which is the
+  // entire point of moving the affordance here.
   await expect(brand.locator('.bn-brand-chevron')).toHaveCount(1)
 
-  const svg = brand.locator('.bn-brand-mark')
-  // The mark is never the accessible name of anything: every call site names its own wrapper.
-  await expect(svg).toHaveAttribute('aria-hidden', 'true')
-  await expect(svg).toHaveAttribute('viewBox', '0 0 100 100')
-
-  // AND NEITHER IS THE LOCKUP, HERE. Standing alone at #/gallery it carries `role="img"` and a
-  // name, because it IS the word — but inside this button a named child would announce the name
-  // twice over the control's own label, so the sidebar's call site passes `decorative`.
+  // NOT THE ACCESSIBLE NAME OF ANYTHING, HERE. Standing alone at #/gallery the lockup carries
+  // `role="img"` and a name, because it IS the word — but inside this button a named child would
+  // announce the name twice over the control's own label, so this call site passes `decorative`.
+  // The a11y tree is then identical either side of the collapse.
   const lockup = brand.locator('.bn-brand-lockup')
   await expect(lockup).toHaveAttribute('aria-hidden', 'true')
+  await expect(lockup).not.toHaveAttribute('role', 'img')
   // section 16 settled kanji 40, which is a 128 x 93 block in the sidebar's 212px
   await expect(lockup).toHaveAttribute('width', '127.6')
   await expect(lockup).toHaveAttribute('height', '93.2')
@@ -79,34 +79,98 @@ test('the sidebar brand draws the mark, and names itself without it', async ({ p
   await expect(brand).not.toHaveClass(/bn-nav-link/)
 })
 
-test('the small cut ships below 64px, and carries no filter', async ({ page }) => {
+/* THE COLLAPSE LANDS ON THE MARK'S OWN WIRE, AND THAT IS THE WHOLE RISK OF THE MORPH.
+ *
+ * Section 16 recorded a morph as impossible — "a ~600-point filled taper against a 52-byte stroked
+ * wire" — and shipped two drawings crossfading instead. The claim was true of how the two were
+ * EXPRESSED and false of what they are: both are one L, and `taperParts` emits that L at a fixed
+ * 301 samples, so the mark's small cut is the same call with `tip = 1`. The generator now emits
+ * both ends and refuses to write if its untapered end differs from `SMALL_BRACKET` by more than 2%
+ * of inked pixels at 10x.
+ *
+ * WHAT THAT CANNOT SEE is the app: the geometry can be exactly the mark and still be drawn at the
+ * wrong size, in the wrong place, or not reached at all. It already was — `base.css` gives every
+ * svg `max-width: 100%`, so the slot closing to 32px rescaled the whole viewBox underneath the
+ * morph and it landed at a QUARTER of the mark. Both resting states still looked plausible.
+ *
+ * So this reads `markGeometry.ts` off disk rather than retyping its numbers — the values are
+ * generated and a copy here would be the defect this repo keeps finding — derives the ink box the
+ * mark's wire must occupy at the rail's 32px, and measures the settled bracket against it. */
+const MARK_GEOMETRY = resolve(dirname(fileURLToPath(import.meta.url)), '../src/kit/markGeometry.ts')
+
+function markInkBox(px: number) {
+  const src = readFileSync(MARK_GEOMETRY, 'utf8')
+  const d = /SMALL_BRACKET = '([^']+)'/.exec(src)
+  const w = /SMALL_STROKE = ([\d.]+)/.exec(src)
+  if (!d || !w) throw new Error('markGeometry.ts has no SMALL_BRACKET / SMALL_STROKE')
+  /* `M x yBottom V yTop A r r 0 0 1 xElbow yTop H xRight` in the mark's 100 x 100 box, parsed by
+     SHAPE and not by counting numbers: an arc carries three FLAGS (`0 0 1`) that scan as numbers,
+     so a bare number sweep puts `yTop` on a flag and quietly reads 0 — which is a height of 33.34
+     against the real 22.94, and a test that fails for a reason that has nothing to do with the
+     drawing. The twin is `rotate(180 50 50)`, so the PAIR runs from (x, yTop) to their mirrors;
+     the stroke is added because a round cap puts half of it outside the geometry at each end and
+     `getBoundingClientRect` measures ink. */
+  const L = /^M([\d.-]+) ([\d.-]+)V([\d.-]+)A([\d.-]+) [\d.-]+ 0 0 1 ([\d.-]+) ([\d.-]+)H([\d.-]+)$/
+    .exec((d[1] ?? '').trim())
+  if (!L) throw new Error(`SMALL_BRACKET is not the vertical-elbow-horizontal L this reads: ${d[1]}`)
+  const x = Number(L[1]!)
+  const yTop = Number(L[6]!)
+  const stroke = Number(w[1])
+  return { w: ((100 - 2 * x + stroke) * px) / 100, h: ((100 - 2 * yTop + stroke) * px) / 100 }
+}
+
+test('the collapsed bracket is markGeometry.ts own wire, at the rail size', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
+  await page.click('.bn-side .bn-brand')
+  await page.waitForTimeout(700)
 
-  const drawn = await page.locator('.bn-side .bn-brand .bn-brand-mark').evaluate((el) => ({
-    width: el.getAttribute('width'),
-    filters: el.querySelectorAll('filter').length,
-    turbulence: el.querySelectorAll('feTurbulence').length,
-    stroked: el.querySelectorAll('path[stroke-width]').length,
-    caps: el.querySelectorAll('circle').length,
-    // the tile and the card, which `Logo` draws and this does not
-    tiles: el.querySelectorAll('rect').length,
-  }))
+  const drawn = await page.locator('.bn-side .bn-lockup-bracket').evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return {
+      w: r.width, h: r.height,
+      // the morph must not have left a second drawing or a filter behind it
+      svgs: el.closest('.bn-brand-slot')!.querySelectorAll('svg').length,
+      filters: el.querySelectorAll('filter').length,
+      tiles: el.closest('svg')!.querySelectorAll('rect').length,
+    }
+  })
 
-  expect(drawn.width, 'the sidebar draws the mark at 32px').toBe('32')
-  // Section 11: the marbling loses to a flat prism gradient at every size this app draws, and
-  // removing it is what makes the favicon a plain SVG.
+  const want = markInkBox(32)
+  // half a pixel: the assertion is that this IS the mark, not that it resembles it. Before the
+  // `max-width` fix these read 4.7 x 5.7 against 18.87 x 22.94.
+  expect(Math.abs(drawn.w - want.w), `settled bracket ${drawn.w.toFixed(2)}px wide, the mark is ${want.w.toFixed(2)}`).toBeLessThan(0.5)
+  expect(Math.abs(drawn.h - want.h), `settled bracket ${drawn.h.toFixed(2)}px tall, the mark is ${want.h.toFixed(2)}`).toBeLessThan(0.5)
+
+  expect(drawn.svgs, 'one drawing, not a crossfade between two').toBe(1)
+  // Section 11: the marbling loses to a flat prism gradient at every size this app draws.
   expect(drawn.filters, 'the small cut carries no filter').toBe(0)
-  expect(drawn.turbulence, 'the small cut carries no feTurbulence').toBe(0)
-  // No taper means the bracket is a constant-width wire: two stroked paths, not two outlines.
-  expect(drawn.stroked, 'two stroked brackets').toBe(2)
-  // The display cut caps each tapered free end with a disc. A constant-width wire ends in a
-  // round linecap and needs none, so a circle here means the display cut leaked through.
-  expect(drawn.caps, 'the small cut draws no cap discs').toBe(0)
   // THE EMPTY SLOT, NOT THE APP ICON (section 1). `Logo` draws a superellipse tile and the card
-  // inside it; the rail draws the brackets with the card taken out. Shipping `Logo` here read as
-  // the favicon rather than as the collapsed lockup, and no assertion in this file could tell —
-  // every other number above is identical for both drawings.
-  expect(drawn.tiles, 'the rail mark carries no tile and no card').toBe(0)
+  // inside it; this is the brackets with the card taken out.
+  expect(drawn.tiles, 'the rail carries no tile and no card').toBe(0)
+})
+
+test('the bracket is one continuous path across the collapse, never two', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  const arm = page.locator('.bn-side .bn-lockup-arm').first()
+  const open = await arm.getAttribute('d')
+
+  await page.click('.bn-side .bn-brand')
+  // mid-flight: the path must already be neither end. A crossfade would leave `d` untouched and
+  // move opacity instead, which is exactly what shipped before and what this catches.
+  await page.waitForTimeout(90)
+  const mid = await arm.getAttribute('d')
+  await page.waitForTimeout(700)
+  const rail = await arm.getAttribute('d')
+
+  expect(mid, 'the bracket did not move mid-collapse — it is being swapped, not morphed').not.toBe(open)
+  expect(mid, 'the bracket jumped straight to the rail end').not.toBe(rail)
+  expect(rail, 'the collapse ended where it started').not.toBe(open)
+  // and the command structure never changes, which is what makes the lerp defined at all
+  const shape = (d: string | null) => (d ?? '').replace(/-?\d+\.?\d*/g, '#')
+  expect(shape(mid), 'the two ends are not the same topology').toBe(shape(open))
+  expect(shape(rail), 'the two ends are not the same topology').toBe(shape(open))
 })
 
 test('the display cut is what the gallery shows at 64px and above', async ({ page }) => {
@@ -151,7 +215,7 @@ test('all six locked marks are drawn, and they differ', async ({ page }) => {
   expect(new Set(palettes).size, 'each variant draws its own palette').toBe(6)
 })
 
-test('the tile mark is fixed dark in both themes, and the rail mark is not', async ({ page }) => {
+test('the tile mark is fixed dark in both themes, and the brand frame is not', async ({ page }) => {
   // D102: the placeholder was drawn in --bn-ink on --bn-bg and inverted with the theme. `Logo`
   // does not — a light ground was derived in section 12 and lost its silhouette at every size
   // this app draws. The gallery is where that claim lives now, because the sidebar no longer
@@ -198,13 +262,13 @@ test('the tile mark is fixed dark in both themes, and the rail mark is not', asy
 test.describe('with the system preference set to dark', () => {
   test.use({ colorScheme: 'dark' })
 
-  test('the lockup and the rail mark follow the app, not the system', async ({ page }) => {
+  test('the brand frame follows the app, not the system', async ({ page }) => {
     await page.goto('/')
     const inks = () =>
       page.evaluate(() => ({
         body: getComputedStyle(document.body).backgroundColor,
         bracket: getComputedStyle(document.querySelector('.bn-lockup-bracket')!).fill,
-        rail: getComputedStyle(document.querySelector('.bn-rail-mark-arm')!).stroke,
+        kanji: getComputedStyle(document.querySelector('.bn-lockup-kanji')!).fill,
       }))
 
     // the app painting LIGHT while the machine asks for dark — the attribute is absent, which is
@@ -213,14 +277,14 @@ test.describe('with the system preference set to dark', () => {
     const light = await inks()
     expect(light.bracket, 'flat ink on light — a paint, not a gradient reference')
       .not.toContain('url(')
-    expect(light.rail, 'the rail mark takes the same ink').not.toContain('url(')
-    // and it is the SAME ink the type beside it is drawn in, which is section 16's own claim
-    expect(light.rail, 'one ink for the whole frame').toBe(light.bracket)
+    // ONE DRAWING, so there is no second element to disagree — which is itself the fix. The
+    // rail mark used to be its own component with its own copy of this switch.
+    expect(light.bracket, 'the frame is the same ink as the type inside it').toBe(light.kanji)
 
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
     const dark = await inks()
     expect(dark.bracket, "bluesteel's own chrome on dark").toContain('url(')
-    expect(dark.rail, 'and the rail mark is the same object in it').toContain('url(')
+    expect(dark.kanji, 'and the type stays flat ink — only the frame carries metal').not.toContain('url(')
   })
 })
 

@@ -7417,7 +7417,7 @@ def check_logo_parity(report: Report) -> None:
 LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
 SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
 MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
-RAIL_MARK_TSX = ROOT / "app" / "src" / "kit" / "RailMark.tsx"
+LOCKUP_TSX_ = ROOT / "app" / "src" / "kit" / "Lockup.tsx"
 MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
 
 _LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
@@ -7513,32 +7513,42 @@ def check_rail_mark(report: Report) -> None:
             f"mark's is {want_stroke.group(1)}.",
         ))
     # THE SHIPPED COMPONENT IS THE THIRD SIDE, and it is checked differently on purpose.
-    # `RailMark.tsx` does not COPY the path — it imports both constants, which is stronger than
-    # any reconciliation this row could perform. So what is checked is that it still does: a
-    # session that pastes the `d` in to "avoid the import" reproduces exactly the invention this
-    # row was written for, one file further along, and every literal here would still agree.
-    if exists(RAIL_MARK_TSX):
-        comp = read(RAIL_MARK_TSX)
-        imports = re.search(
-            r"import\s*\{[^}]*\bSMALL_BRACKET\b[^}]*\bSMALL_STROKE\b[^}]*\}"
-            r"\s*from\s*'\./markGeometry'", comp)
-        if not imports:
+    # `Lockup.tsx` does not COPY the rail's bracket — it imports `RAIL_ARM`, which
+    # `build-lockup.mjs` generates by running the sheet's own `taperParts` at `tip = 1` and then
+    # RENDERS against this file's stroked wire, refusing to write if they differ by more than 2%
+    # of inked pixels at 10x. That is a stronger check than anything this row could perform, so
+    # what is checked here is that it is still the check in force: a component that stops
+    # importing the generated end, or grows a path literal, has quietly reintroduced the
+    # invention this row was written for, one file further along.
+    if exists(LOCKUP_TSX_):
+        comp = read(LOCKUP_TSX_)
+        if not re.search(r"import\s*\{[^}]*\bRAIL_ARM\b[^}]*\}\s*from\s*'\./lockupGeometry'", comp,
+                         re.S):
             problems.append(Finding(
-                rel(RAIL_MARK_TSX),
-                "the rail mark no longer takes SMALL_BRACKET and SMALL_STROKE from the generated "
-                "`markGeometry.ts`. Below 64px the product draws ONE wire (D102) and this is it "
-                "with the card and the tile omitted; a component holding its own copy is a second "
-                "mark that agrees today.",
+                rel(LOCKUP_TSX_),
+                "the lockup no longer takes RAIL_ARM from the generated `lockupGeometry.ts`. That "
+                "path is the collapse's rail end and the ONLY thing holding it to markGeometry.ts's "
+                "own wire (D102, section 1) is the generator's pixel assertion against it; a "
+                "component that draws its own is a second mark that agrees today.",
             ))
-        # a path literal long enough to be a bracket, which is what a paste looks like
         if re.search(r"d=[\"']M[^\"']{40,}", comp):
             problems.append(Finding(
-                rel(RAIL_MARK_TSX),
-                "a path literal is written into the rail mark. Every drawing below 64px comes "
-                "from the generator (D102); nothing about the mark is hand-drawn in app/.",
+                rel(LOCKUP_TSX_),
+                "a path literal is written into the lockup. Every drawing comes from the "
+                "generator (D102); nothing about the mark is hand-drawn in app/.",
+            ))
+    if exists(LOCKUP_GEOMETRY):
+        gen = read(LOCKUP_GEOMETRY)
+        if "RAIL_ARM" not in gen:
+            problems.append(Finding(
+                rel(LOCKUP_GEOMETRY),
+                "the generated geometry has no RAIL_ARM. The collapse morphs the bracket from the "
+                "lockup's tapered frame to the mark's wire and needs both ends at one topology; "
+                "without it the shell can only crossfade two drawings, which is what section 16 "
+                "recorded as unavoidable and it was not.",
             ))
     report.add("rail mark", MECHANICAL, problems,
-               "the rail bracket is the shipped mark, path and stroke, in the sheet and in app/")
+               "the rail bracket is the shipped mark, in the sheet and at both ends of the morph")
 
 
 def check_lockup_params(report: Report) -> None:

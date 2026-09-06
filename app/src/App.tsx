@@ -5,7 +5,7 @@ import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot } from './server'
 import { Button, Icon, Kbd, Lockup,
   Logo,
-  RailMark, applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
+  applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
 import { BLOCK } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
 
@@ -955,13 +955,12 @@ function Sidebar({
         ['--bn-rail-mark' as string]: `${RAIL_MARK}px`,
       }}
     >
-      <Lockup size={SIDEBAR_KANJI} className="bn-brand-lockup" decorative />
-      {/* THE EMPTY SLOT, not the app icon. logo.md section 1: "with the card removed the same
-          brackets become an empty slot, which is the in-product mark" — the lockup is the name
-          inside its address and the rail is the address with the name taken out. The full tile
-          mark was what shipped here and it read as the favicon rather than as the collapsed
-          lockup. */}
-      <RailMark size={RAIL_MARK} className="bn-brand-mark" />
+      {/* ONE DRAWING, NOT TWO. The rail's empty slot is this same lockup with its bracket morphed
+          and its type faded out — logo.md section 1: "with the card removed the same brackets
+          become an empty slot, which is the in-product mark." It was a second component
+          crossfading past this one until the generator was taught to emit both ends of the
+          bracket at one topology; section 16 records why that was thought impossible. */}
+      <Lockup size={SIDEBAR_KANJI} railSize={RAIL_MARK} className="bn-brand-lockup" decorative />
     </span>
   )
 
