@@ -90,6 +90,17 @@ from pipeline import setnames  # noqa: E402
 # a credential-forwarding primitive guarded by an origin header.
 DEFAULT_URL = "https://store.tcgplayer.com/admin/pricing/downloadexportcsv"
 
+# THE OPERATOR'S ENTIRE LIVE INVENTORY, WHICH IS A DIFFERENT ENDPOINT AND A DIFFERENT METHOD.
+# Captured off the portal's own `Export From Live` button, whose tooltip reads "Export your
+# entire Live inventory": a GET, two query parameters, and no scope of any kind.
+#
+# D65 FOUND THIS ENDPOINT AND CORRECTLY REJECTED IT — FOR THE OTHER PATH. Its comment records
+# that `DownloadMyExportCSV` "ignores every parameter: eight different spellings returned
+# byte-identical output". That is fatal to a JOIN, which must ask for a named scope and check
+# what arrived (D65's whole argument). It is exactly right for a live inventory, which HAS no
+# scope: unscoped is the answer, not the bug.
+LIVE_URL = "https://store.tcgplayer.com/Admin/Pricing/DownloadMyExportCSV"
+
 # The filter vocabulary for one category: its sets, rarities, printings and conditions with
 # the ids the export scopes on. A GET, and the only other call this module makes.
 FILTERS_URL = "https://store.tcgplayer.com/admin/pricing/getjsonfilters"
@@ -174,112 +185,35 @@ STANDING_FILTERS = {
     "ExcludeListos": True,
 }
 
-# ------------------------------------------------- AND THE SAME THREE FOR THE LIVE INVENTORY
+# ------------------------------------------------ AND THE LIVE INVENTORY'S OWN TWO, MEASURED
 #
-# A SECOND CONSTANT AND NOT A PARAMETER ON THE FIRST (D104). `STANDING_FILTERS` is the
-# CATALOGUE fetch's instruction — the run path, whose whole job is listing cards that are not
-# listed — and it does not move. What the markdown and the store-wide reconcile want is the
-# opposite document: the operator's own live listings, which is `MyInventory: True`. Making that
-# a parameter of one dict would put the two instructions in one place where a future edit to
-# either reads as an edit to both; two literals, each guarded, cannot be confused.
+# CAPTURED OFF THE PORTAL, NOT DESIGNED. `Export From Live` sends
+# `GET /Admin/Pricing/DownloadMyExportCSV?type=Pricing&exportLowestListingNotMe=true` — read out
+# of the page's own network log on 2026-09-06 — and that is the whole request. No category, no
+# sets, no conditions, no `MyInventory`, no `ExcludeListos`, no POST body.
 #
-# `MyInventory` — TRUE, and this is the whole point of this path. The owner asked for it on
-# 2026-09-06 in those words, which is the authority the comment above says the field needs.
+# THE FIRST BUILD OF THIS PATH GUESSED A POST BODY AND WAS SILENTLY WRONG. It sent the FILTERED
+# request with `MyInventory: True` and `CategoryId: "0"`, on the reasoning that `"0"` is how the
+# portal spells "all of them" for every other field. It is not: the portal's own category select
+# carries 77 options and — alone among the six selects on that form — HAS NO `0=All` ROW. The
+# request was accepted and returned a valid CSV header with ZERO rows. Measured, against the
+# owner's account: `CategoryId: "0"` → 0 rows; `CategoryId: "3"` → 333 rows.
 #
-# `ExcludeListos` — FALSE, AND THIS IS NOT A REPEAL OF THE OWNER'S 2026-08-31 INSTRUCTION. That
-# instruction is above, on `STANDING_FILTERS`, and it does not move: on the CATALOGUE fetch the
-# flag excludes OTHER sellers' photo listings, which is noise to a join. This is a different
-# request about a different document, and the flag's effect on it is the opposite — on My
-# Pricing every row IS the operator's own listing, so `True` excludes THEIRS.
+# SO THE "LOUD FAILURE" THE FIRST BUILD RELIED ON DOES NOT EXIST HERE. A wrong scope is not
+# refused with `System Error`; it is answered with an empty file. That is why `fetch_live`
+# refuses an export with no rows rather than reporting a successful fetch of nothing.
 #
-# MEASURED ON THEIR OWN FILE RATHER THAN READ OFF THE FIELD NAME, which is exactly what the
-# comment above forbids doing. Their My Pricing download of 2026-09-01 carries four rows with a
-# `Photo URL`, and all four are LIVE:
-#
-#     C-4619147    6 copies   $20.49    Paramount War - Booster Pack
-#     C-4669926    3 copies   $27.00    Double Pack Set Vol. 11
-#     C-4654187    1 copy   $7000.00    Kai'Sa, Daughter of the Void (Signature)
-#     C-4619603   37 copies   $11.39    Spiritforged - Booster Pack
-#
-# So `True` here would make the markdown lens silently omit the single most valuable listing in
-# the store, and a 37-copy line beside it. D64's finding that `Photo URL` is empty in all eleven
-# exports is what makes that permanent: nothing downstream could ever notice.
-#
-# THE RULE THIS FOLLOWS, AND IT DECIDES EVERY NARROWING AXIS BELOW: on the live path an all-row
-# the portal REJECTS fails loudly — `System Error` as a 200 carrying HTML, which `_check_body`
-# names `tcg_request_rejected` — while a narrowed value that is wrong fails SILENTLY, as a
-# smaller, perfectly parseable CSV. Loud beats silent every time on a document nothing
-# downstream can audit.
-#
-# `PrintingIds` — All Printings, always. The same argument, unchanged.
-LIVE_FILTERS = {
-    "MyInventory": True,
-    "PrintingIds": ["0"],
-    "ExcludeListos": False,
+# `type=Pricing` — the Live tab rather than Staged. `Export From Staged` is the same endpoint
+# with the other value, and the two are different documents (D87 reconciles against the LIVE
+# one).
+# `exportLowestListingNotMe=true` — the portal's own default, checked on that form as "If me,
+# show next lowest". It changes a column this pipeline reads and is transcription, not a
+# decision, but it is pinned here for the reason every other transcribed field is: the next
+# person to re-capture this URL will paste over both.
+LIVE_QUERY = {
+    "type": "Pricing",
+    "exportLowestListingNotMe": "true",
 }
-
-
-@dataclass(frozen=True)
-class LiveScope:
-    """Everything the operator has listed, across every product line. No narrowing at all.
-
-    A SECOND TYPE BECAUSE `Scope` IS THE WRONG SHAPE, not because two types are tidier.
-    `Scope.category_id` is a single int and its `model()` spreads `STANDING_FILTERS`
-    unconditionally — but the owner's own My Pricing download of 2026-09-01 is 759 rows across
-    SIX product lines (Riftbound 400, Pokemon 314, One Piece 41, YuGiOh 2, Card Sleeves 1,
-    Playmats 1). A live inventory is not scoped to a category, and expressing "all of them" by
-    looping a scalar over the registry's three ids would silently omit the other three.
-
-    D65's ARGUMENT SURVIVES AND IS WHY THIS IS STILL A NAMED SCOPE. That entry's point is that
-    completeness cannot be read off a file's contents, so the fetch names what it asked for and
-    the check downstream becomes "did I get what I asked for". The answer here is simply
-    "everything", which is a scope like any other and is the one this document can be complete
-    within.
-
-    `CategoryId: "0"` IS THE UNMEASURED FIELD AND IT IS THE LOAD-BEARING ONE. `["0"]` is how the
-    portal spells "all of them" for every LIST field — the `ids()` helper below carries the
-    finding that cost the most, that an empty array answers `System Error` — and this is the
-    scalar spelling of the same idea. Nothing in this repo has sent it. What makes it shippable
-    rather than a guess is that its failure is LOUD: a malformed body comes back as HTTP 200
-    carrying an HTML page titled `System Error`, which `_check_body` already names
-    `tcg_request_rejected` with the sentence "the session is fine — this is the export request
-    itself being malformed". A silent narrowing is the failure this project cannot detect; this
-    one announces itself on the first press.
-    """
-
-    def model(self) -> dict:
-        """The request body for "everything I have listed".
-
-        THE ELEVEN TRANSCRIBED FIELDS ARE `Scope.model`'s, VERBATIM, and are duplicated rather
-        than shared on purpose: that body is a capture off the portal's own submit and the next
-        person to re-capture it will paste over all of them. Two independent copies is what makes
-        a re-capture of one visible as a difference from the other; a shared helper would let a
-        paste move both at once, which is exactly what hoisting the standing filters exists to
-        prevent.
-        """
-        return {
-            "PricingType": "Pricing",
-            # "ALL OF THEM", THE SCALAR SPELLING — see the class docstring for why this is the
-            # one unmeasured field and why its failure is loud rather than silent.
-            "CategoryId": "0",
-            "SetNameIds": ["0"],
-            "ConditionIds": ["0"],
-            "RarityIds": ["0"],
-            # ALL LANGUAGES, WHICH IS THE OPPOSITE OF THE RUN PATH'S `["1"]` AND IS THE SAME
-            # RULE AS EVERY OTHER AXIS HERE. `["1"]` is English and is the value proven on the
-            # catalogue fetch — but its failure mode on THIS document is silent: an operator's
-            # non-English listings simply never arrive, and the export carries no Language
-            # column for anything to notice with. `["0"]` is unproven and fails loudly.
-            "LanguageIds": ["0"],
-            "PrintingIds": ["0"],
-            "CompareAgainstPrice": False,
-            "PriceToCompare": 3,
-            "ValueToCompare": 1,
-            "PriceValueToCompare": None,
-            "ExportLowestListingNotMe": True,
-            # SPREAD LAST, for `Scope.model`'s reason exactly.
-            **LIVE_FILTERS,
-        }
 
 
 @dataclass(frozen=True)
@@ -641,17 +575,71 @@ def match_sets(hints, sets, aliases=None) -> Tuple[Tuple[int, ...], Tuple[str, .
     return tuple(dict.fromkeys(matched)), tuple(dict.fromkeys(missed))
 
 
-def fetch_live(scope: "LiveScope") -> bytes:
-    """The operator's own live listings, as bytes, or a `FetchRefusal` naming what went wrong.
+def live_endpoint() -> str:
+    """Where the live-inventory download comes from. Follows `endpoint()`'s override.
 
-    `fetch` WITH A DIFFERENT BODY, AND THE SPLIT IS THE SCOPE TYPE RATHER THAN A FLAG. Every
-    transport concern below is identical — the POST, Knockout's `postJson` form shape, the one
-    deliberate redirect hop, the status and body checks — so this delegates rather than
-    restating them, and the only difference on the wire is what `model()` returned. A boolean
-    parameter on `fetch` would have put the two standing instructions behind one call site,
-    which is the thing `LIVE_FILTERS`' own comment exists to prevent.
+    `_filters_endpoint`'s RULE AND ITS EXACT SHAPE: swap the last path segment rather than take
+    the override verbatim. A test that redirects the download must not leave this one pointed at
+    TCGplayer with the operator's cookie attached — and the segment has to survive, because it
+    is what tells the two requests apart at the other end.
     """
-    return _post_export(scope.model())
+    override = (envfile.get_live(URL_ENV) or "").strip()
+    if not override:
+        return LIVE_URL
+    endpoint()  # re-uses its https-or-loopback refusal rather than restating it
+    return override.rstrip("/").rsplit("/", 1)[0] + "/DownloadMyExportCSV"
+
+
+def fetch_live() -> bytes:
+    """The operator's entire live inventory, as bytes, or a `FetchRefusal` naming what went wrong.
+
+    A GET, AND NO SCOPE AT ALL — captured off the portal's own `Export From Live` button rather
+    than designed. See `LIVE_QUERY` for the measurement, and for what the first build of this
+    got wrong: it guessed a filtered POST with `CategoryId: "0"`, which the portal answered with
+    a valid CSV header and zero rows.
+
+    NO ARGUMENT, BECAUSE THERE IS NOTHING TO ASK FOR. D65's rule is that a fetch names its scope
+    so completeness becomes "did I get what I asked for" — and the answer here is "everything I
+    have listed", which is the one scope that needs no expression. A `LiveScope` parameter would
+    have been a type whose only value is its default.
+
+    IT REFUSES AN EMPTY EXPORT. A store with listings does not answer zero rows, so an empty file
+    is a wrong request or a session that is no longer whole — and unlike the filtered endpoint,
+    this one does NOT announce that with `System Error`. Reporting a successful fetch of nothing
+    would let a lens draw an empty live inventory and let a reconcile write `live: 0` across the
+    store.
+    """
+    url = live_endpoint()
+    if "?" not in url:
+        url = f"{url}?{urlencode(LIVE_QUERY)}"
+    status, headers, body = _open(url, cookie=_cookie())
+    following = _check_status(status, headers, url)
+    if following is not None:
+        same_host = urlparse(following).netloc == urlparse(url).netloc
+        if urlparse(following).scheme not in ("https", "http"):
+            raise FetchRefusal(
+                "tcg_unexpected_response",
+                "TCGplayer redirected the download somewhere this will not follow. "
+                "Nothing was written.",
+            )
+        status, headers, body = _open(following, cookie=_cookie() if same_host else None)
+        if _check_status(status, headers, following) is not None:
+            raise FetchRefusal(
+                "tcg_unexpected_response",
+                "TCGplayer redirected the download twice. One hop is followed; a chain is "
+                "not. Nothing was written.",
+            )
+    checked = _check_body(body, headers)
+    # THE HEADER-ONLY ANSWER, WHICH IS THIS ENDPOINT'S SILENT FAILURE MODE. Measured: a request
+    # the portal cannot satisfy comes back 200 with a well-formed 216-byte header and no rows.
+    if len(checked.splitlines()) < 2:
+        raise FetchRefusal(
+            "tcg_export_empty",
+            "TCGplayer answered with an export header and no rows. A store with listings does "
+            "not answer nothing, so this is a request it could not satisfy or a session that is "
+            "no longer whole — not an empty inventory. Nothing was kept.",
+        )
+    return checked
 
 
 def fetch(scope: Scope) -> bytes:

@@ -554,14 +554,11 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
             </div>
             {fetched === null ? null : (
               <Notice tone="ok" title={`${fetched.live_rows} listings live · ${fetched.live_copies} copies`}>
-                Read from TCGplayer just now, {fetched.rows} rows.
-                {/* WHAT THE FETCH COULD NOT BRING, SAID OUT LOUD, because nothing downstream can
-                    ever disagree with it: `ExcludeListos` is the standing instruction and D64
-                    measured `Photo URL` empty in every export, so the file cannot report its own
-                    omissions. A lens that claims to draw a whole live inventory owes this. */}
-                {fetched.shortfall === null ? null : (
-                  <span className="runs-md-shortfall"> {fetched.shortfall}</span>
-                )}
+                Read from TCGplayer just now, {fetched.rows} rows across every product line.
+                {/* NO CAVEAT, AND THAT IS A PROPERTY OF THE REQUEST RATHER THAN AN OMISSION.
+                    `Export From Live` takes no scope at all, so there is nothing it could have
+                    left out — and an answer with no rows is refused by the server rather than
+                    reported here as an empty inventory. */}
               </Notice>
             )}
 

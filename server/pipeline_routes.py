@@ -2151,7 +2151,9 @@ def do_live_export() -> dict:
     CATALOGUE — `MyInventory: False`, narrowed to a run's sets, whose whole job is listing cards
     that are NOT listed. This fetches the opposite: everything the operator has live, across
     every product line, which is what `reprice list` and `reconcile --live` both read. See
-    `tcg_export.LIVE_FILTERS` for why that is a second guarded constant rather than a flag.
+    `tcg_export.LIVE_QUERY` for the request, which was MEASURED off the portal's own
+    `Export From Live` button rather than designed — a GET with two query parameters and no
+    scope, because a live inventory has none.
 
     ONE FETCH FEEDS BOTH CONSUMERS. The file is kept and named, and `POST /pipeline/markdowns`
     and `POST /pipeline/reconcile-live` both accept `fetched: <name>` in place of an upload — so
@@ -2162,7 +2164,7 @@ def do_live_export() -> dict:
     directory = files.inventory_dir() / LIVE_DIR
     directory.mkdir(parents=True, exist_ok=True)
     try:
-        body = tcg_export.fetch_live(tcg_export.LiveScope())
+        body = tcg_export.fetch_live()
     except tcg_export.FetchRefusal as caught:
         # A BAD GATEWAY AND NOT A 500, `do_pipeline_export`'s rule: the failure is at TCGplayer
         # or in the credential this machine holds for it, and every one of these carries a
@@ -2200,36 +2202,7 @@ def do_live_export() -> dict:
         "rows": len(export.rows),
         "live_rows": live_rows,
         "live_copies": live_copies,
-        # WHAT THE FETCH COULD NOT BRING, NAMED RATHER THAN LEFT TO BE NOTICED. See
-        # `_live_shortfall`.
-        "shortfall": _live_shortfall(),
     }
-
-
-def _live_shortfall() -> Optional[str]:
-    """The sentence saying what this document cannot contain, or None when it can contain all.
-
-    IT RETURNS None TODAY, AND THE FUNCTION EXISTS ANYWAY. `LIVE_FILTERS` narrows by nothing —
-    every axis is the portal's all-row, on the rule that a rejected all-row fails LOUDLY while a
-    wrong narrowing fails silently — so there is nothing for this to say.
-
-    WHAT IT GUARDS IS THE DAY SOMEBODY NARROWS ONE. `ExcludeListos: True` would drop the
-    operator's own photo listings; measured on their real 2026-09-01 download, that is four
-    rows, including a single copy at $7,000. And D64 measured `Photo URL` empty in all eleven
-    catalogue exports, so nothing downstream could ever notice the omission. A lens that claims
-    to draw a whole live inventory has to be able to say when it cannot — otherwise the first
-    narrowing anybody adds is silent forever.
-
-    A SENTENCE AND NOT A COUNT, because there is no count to be had: the file cannot report its
-    own omissions, which is the whole reason this is needed.
-    """
-    if tcg_export.LIVE_FILTERS.get("ExcludeListos") is True:
-        return (
-            "Listings that carry a photo are not in this file — `ExcludeListos` is on. Nothing "
-            "in an export records how many, so this cannot say. On the last real download that "
-            "was four listings, one of them a single copy at $7,000."
-        )
-    return None
 
 
 def _open_live_export(name: str) -> Path:

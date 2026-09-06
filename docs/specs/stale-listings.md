@@ -331,18 +331,20 @@ then reconciling act on **one** reading rather than two downloads minutes apart.
 stays and is not a fallback — an operator with a download in hand should not fetch again, and a
 dead cookie must not be a dead end.
 
-**It narrows by nothing, and that is a rule rather than a convenience.** On this path an all-row
-the portal rejects fails **loudly** — `System Error` as a 200 carrying HTML, already named
-`tcg_request_rejected` — while a wrong narrowing fails **silently**, as a smaller, perfectly
-parseable CSV. So every axis is `0`, `LanguageIds` included, where the catalogue's proven `["1"]`
-is the worse choice for exactly that reason.
+**The request was captured off the portal, not designed.** `Export From Live` sends
+`GET /Admin/Pricing/DownloadMyExportCSV?type=Pricing&exportLowestListingNotMe=true` — no
+category, no sets, no conditions, no POST body. Its tooltip reads *"Export your entire Live
+inventory."*
 
-**`ExcludeListos` is FALSE here and TRUE on the catalogue**, and the audit row asserts they
-disagree. On the catalogue the flag excludes *other sellers'* photo listings; on My Pricing every
-row is the operator's own. Measured on their 2026-09-01 download: four rows carry a `Photo URL`
-and all four are live — including **C-4654187, Kai'Sa (Signature), one copy at $7,000.00**, and
-C-4619603 at 37 copies. `True` would have made the lens omit the most valuable listing in the
-store, permanently and invisibly.
+**The first build of this guessed a filtered POST and was silently wrong.** `CategoryId: "0"` is
+not the portal's all-row: that select is the one field on the form with no `0=All` option, and
+the request came back a valid 216-byte header with **zero rows**. Measured: `"0"` → 0 rows,
+`"3"` → 333. So this endpoint's failure mode is *empty*, not `System Error` — which is why
+`fetch_live` refuses an export with no rows outright. Unrefused it is a lens drawing an empty
+inventory and a reconcile writing `live: 0` across the store.
+
+**And `ExcludeListos` is not a question here.** The endpoint has no such parameter; the fetched
+file carries all four photo listings, the $7,000 Kai'Sa included.
 
 **The press is `edits`**, not a CSV the browser wrote: `app/package.json` carries two runtime
 dependencies and PapaParse is not one, so the pairs go as JSON and `do_markdown_apply` materialises
@@ -452,12 +454,11 @@ Unmeasured, in order of consequence:
    Pricing upload.
 3. **Does a price change land immediately, or stage?** Unknown. `reconcile --live` against a
    fresh download is what answers it.
-4. **Does the portal accept `CategoryId: "0"` and `LanguageIds: ["0"]` on a My Pricing fetch?**
-   (D104.) Nothing in this repo has sent either. The evidence that some cross-category value
-   exists is the owner's own file — 759 rows over six product lines from one download — and the
-   failure is loud rather than silent. **Two unmeasured values on one press makes a refusal
-   harder to attribute**: if it refuses, try `LanguageIds: ["1"]` — the value proven on the run
-   path — with `CategoryId: "0"` before concluding the category is the problem.
+**Question 4 is answered.** *Can the live export be fetched?* **Yes** — measured 2026-09-06
+against the owner's account: 128,700 bytes, 759 rows across six product lines, 388 live rows,
+1,021 live copies, 4 photo rows, matching the download they took by hand the same day. The three
+above are unchanged: they are about the IMPORTER, and nothing this pipeline writes has been
+uploaded.
 
 **The first real press should be `reprice list --limit 5 --write`, then `apply --write`,
 uploaded, then `reconcile --live` against a fresh download to read the prices back.** Record the

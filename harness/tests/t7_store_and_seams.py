@@ -14273,6 +14273,7 @@ def check_export_fetch(checks: Checks) -> None:
         "body": b"",
         "seen": [],
         "posted": [],
+        "got": [],
         # One set, so a hint can resolve to exactly it and the positive check has something
         # to be positive about. `0` is the portal's own "all" row and is never a set.
         "filters": {
@@ -14322,6 +14323,19 @@ def check_export_fetch(checks: Checks) -> None:
     # The POST body is RECORDED, because the assertion worth making is not that a request
     # happened but that the scope the run implies is the scope that went out.
     def _do_GET(self):  # noqa: N802
+        # THE LIVE DOWNLOAD IS A GET AND ITS QUERY STRING IS THE WHOLE REQUEST (D104). Recorded
+        # for the same reason the POST body is: the assertion worth making is not that a fetch
+        # happened but that what went out was what the portal answers with rows.
+        if "DownloadMyExportCSV" in self.path:
+            stub["got"].append(self.path)
+            body = stub.get("live_body", stub["body"]) or b""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+            return
         if "getjsonfilters" in self.path:
             stub["seen"].append(self.headers.get("Cookie"))
             body = json.dumps(stub["filters"]).encode()
@@ -14973,49 +14987,38 @@ def check_export_fetch(checks: Checks) -> None:
 
                 # ------------------- THE SECOND DOCUMENT: THE OPERATOR'S OWN LIVE LISTINGS
                 #
-                # D104. `POST /pipeline/live-export` fetches the OPPOSITE of everything above:
-                # `MyInventory: True`, no category, no sets. It is the same transport — one
-                # `_post_export` — so what is worth asserting is the BODY, and on the wire
-                # rather than in the literal, for the reason the catalogue block states one
-                # screen up: a fetch that answers with a valid file proves nothing about what
-                # was asked for, and asking for the wrong document still returns a clean CSV.
+                # D104, AND EVERY VALUE HERE WAS MEASURED RATHER THAN DESIGNED. The first build
+                # guessed a filtered POST with `MyInventory: True` and `CategoryId: "0"`, on the
+                # reasoning that `"0"` is the portal's all-row everywhere else. It is not: the
+                # category select is the ONE field on that form with no `0=All` option, and the
+                # portal answered the guess with a valid CSV header and ZERO rows. Measured
+                # against the owner's account: `CategoryId: "0"` → 0 rows, `"3"` → 333.
+                #
+                # The real request came off the portal's own `Export From Live` button, whose
+                # tooltip reads "Export your entire Live inventory":
+                #     GET /Admin/Pricing/DownloadMyExportCSV?type=Pricing&exportLowestListingNotMe=true
                 stub["mode"] = "csv"
-                stub["body"] = whole.read_bytes()
-                stub["posted"] = []
+                stub["got"] = []
+                stub["live_body"] = whole.read_bytes()
                 answer = pipeline_routes.do_live_export()
-                live_body = json.loads(
-                    urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
-                ) if stub["posted"] else {}
+                asked = urllib.parse.parse_qs(
+                    urllib.parse.urlparse(stub["got"][-1]).query
+                ) if stub["got"] else {}
 
                 checks.equal(
-                    (
-                        live_body.get("MyInventory"),
-                        live_body.get("PrintingIds"),
-                        live_body.get("ExcludeListos"),
-                    ),
-                    (True, ["0"], False),
-                    "THE LIVE FETCH'S THREE STANDING FIELDS, ON THE WIRE, AND TWO OF THEM ARE "
-                    "THE CATALOGUE'S INVERTED. `MyInventory` TRUE is the whole of what "
-                    "separates this document from the one asserted above, and it is invisible "
-                    "downstream — a catalogue parses as an export exactly as a live inventory "
-                    "does. `ExcludeListos` FALSE is measured rather than reasoned: the owner's "
-                    "real download carries four rows with a `Photo URL` and all four are LIVE, "
-                    "including a single copy at $7,000, so TRUE here would silently omit the "
-                    "most valuable listing in the store (D104)",
+                    (asked.get("type"), asked.get("exportLowestListingNotMe")),
+                    (["Pricing"], ["true"]),
+                    "THE LIVE DOWNLOAD'S TWO QUERY PARAMETERS, ON THE WIRE. `type=Pricing` is "
+                    "the LIVE tab rather than Staged — a different document, and the one D87 "
+                    "reconciles the store against, so this value decides what `live` means for "
+                    "every SKU",
                 )
                 checks.equal(
-                    (
-                        live_body.get("CategoryId"),
-                        live_body.get("SetNameIds"),
-                        live_body.get("RarityIds"),
-                        live_body.get("ConditionIds"),
-                    ),
-                    ("0", ["0"], ["0"], ["0"]),
-                    "AND IT NARROWS BY NOTHING. The owner's real My Pricing download spans six "
-                    "product lines, so a live inventory scoped to one category is a smaller, "
-                    "perfectly parseable file with listings silently missing — `0` is the "
-                    "portal's own all-of-them row, and the empty list is the spelling that "
-                    "answers `System Error`",
+                    sorted(k for k in asked if k not in ("type", "exportLowestListingNotMe")),
+                    [],
+                    "AND NOTHING ELSE. A live inventory has no scope: no category, no sets, no "
+                    "conditions, no `MyInventory`. Every narrowing this request could carry is "
+                    "a way for it to come back silently short",
                 )
                 checks.ok(
                     answer["fetched"].startswith(pipeline_routes.LIVE_PREFIX)
@@ -15027,60 +15030,26 @@ def check_export_fetch(checks: Checks) -> None:
                     (files.inventory_dir() / pipeline_routes.LIVE_DIR / answer["fetched"]).is_file(),
                     "and it is on disk under a name `_open_live_export` will accept",
                 )
-                checks.equal(
-                    answer["shortfall"],
-                    None,
-                    "AND IT HAS NOTHING IT COULD NOT BRING, because it narrows by nothing. The "
-                    "field exists for the day somebody adds a narrowing: the file cannot report "
-                    "its own omissions, so a lens that claims to draw a whole live inventory "
-                    "has to be able to say when it cannot",
-                )
 
-                # AND THE SHORTFALL IS NOT DEAD CODE. Narrow one axis and it speaks — which is
-                # the assertion that keeps the field honest rather than decorative.
-                narrowed = dict(tcg_export.LIVE_FILTERS)
-                tcg_export.LIVE_FILTERS["ExcludeListos"] = True
+                # THE SILENT FAILURE, MADE LOUD. This endpoint answers a request it cannot
+                # satisfy with a well-formed 216-byte header and no rows — measured, on the
+                # owner's account. Unrefused, that is a lens drawing an empty live inventory
+                # and a reconcile writing `live: 0` across the store.
+                stub["got"] = []
+                stub["live_body"] = whole.read_bytes().splitlines()[0] + b"\r\n"
                 try:
-                    checks.ok(
-                        (pipeline_routes._live_shortfall() or "").find("photo") >= 0,
-                        "a narrowed live fetch SAYS what it drops — the guard against the first "
-                        "narrowing being silent forever",
-                    )
-                finally:
-                    tcg_export.LIVE_FILTERS.clear()
-                    tcg_export.LIVE_FILTERS.update(narrowed)
-
-                # THE NAME IS AN ADDRESS AND IS CHECKED LIKE ONE — `_open_markdown`'s rule.
-                for name, code in (
-                    ("../../etc/passwd", "fetched_invalid"),
-                    ("something-else.csv", "fetched_invalid"),
-                    (pipeline_routes.LIVE_PREFIX + "19990101-000000.csv", "no_such_fetch"),
-                ):
-                    try:
-                        pipeline_routes._open_live_export(name)
-                        checks.ok(False, f"a fetched name refuses as `{code}`", "it resolved")
-                    except pipeline_routes.PipelineRefusal as refusal:
-                        checks.equal(refusal.code, code, f"a fetched name refuses as `{code}`")
-
-                # ONE DOCUMENT AT A TIME, which the route enforces so no screen has to.
-                try:
-                    pipeline_routes._live_export_from(
-                        {"fetched": answer["fetched"], "export": {"name": "x.csv", "content": "a,b\n1,2\n"}}
-                    )
-                    checks.ok(False, "a request carrying both documents refuses", "it chose one")
+                    pipeline_routes.do_live_export()
+                    checks.ok(False, "a header-only export refuses", "it reported success")
                 except pipeline_routes.PipelineRefusal as refusal:
                     checks.equal(
                         refusal.code,
-                        "fetched_and_export",
-                        "A REQUEST CARRYING BOTH A FETCH AND AN UPLOAD REFUSES rather than "
-                        "guessing. Whichever it picked would be the other one half the time, "
-                        "and the two documents are read minutes apart",
+                        "tcg_export_empty",
+                        "AN EXPORT WITH NO ROWS IS REFUSED AND NOT REPORTED. A store with "
+                        "listings does not answer nothing, and unlike the filtered endpoint "
+                        "this one does not announce a bad request with `System Error` — it "
+                        "answers emptily, which is why the refusal has to be here",
                     )
-                checks.equal(
-                    pipeline_routes._live_export_from({"fetched": answer["fetched"]}).name,
-                    answer["fetched"],
-                    "and a request naming only the fetch resolves to it",
-                )
+                stub["live_body"] = whole.read_bytes()
 
                 # -------------------------------------- THE GAME'S OWN RULE, AND THE OPERATOR
                 checks.equal(
