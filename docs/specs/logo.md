@@ -762,13 +762,47 @@ Recovered from the generator rather than from memory:
 | Case | all caps |
 | Padding | fractions of the kanji size; `0.28` and `0.22` are the two kept |
 | Line gap | `0.06` of the kanji size |
-| Bracket stroke | `0.11` of the kanji size |
+| Bracket stroke | **`0.050`** of the kanji size — swept over five rounds, see below |
 | Bracket arm | `0.32` |
 | Bracket corner radius | **`1.85 × stroke`** — a value §3 never names |
 
 **The roman's 0.62 opacity is not in §3's table and is doing real work.** It is what makes the
 roman read as subordinate at a size that would otherwise compete, and it was recovered from the
 generator; nobody had written it down.
+
+### The stroke, settled over five rounds
+
+**`0.11` was the recovered value and it is wrong once the bracket is tapered.** The owner's first
+word on the tails was that they read too thick, and five rounds of forced choice put the stroke at
+**0.050 of the kanji size** — less than half what the recovered pass carried.
+
+| round | offered | taken |
+| --- | --- | --- |
+| 1 | 0.045 – 0.140 | 0.045 – 0.085 |
+| 2 | 0.018 – 0.085 | 0.026 – 0.045 |
+| 3 | 0.026 – 0.045 | 0.036 – 0.045 |
+| 4 | 0.036 – 0.056 | 0.045 and 0.050 |
+| 5 | forced pair | **0.050** |
+
+**§7 rule 5 fired twice and both times the range was mine.** Round 1's band reached its own floor, so
+round 2 opened downward; round 3's reached its own ceiling, so round 4 opened upward — and opening
+upward exposed a hole nobody had noticed, that 0.045 was good and 0.065 was not with *nothing between
+them ever drawn*. A 44% step had been standing in for a bracket.
+
+**Rounds 1 and 2 disagree, and that is rule 3 rather than a contradiction.** 0.065 and 0.085 were
+accepted the first time and passed over the second, once they were shown against thinner neighbours and
+at size. §6 records the identical narrowing for the sheen.
+
+**The last step was decided by a measurement, not by the eye.** 0.045 and 0.050 are a fifth of a pixel
+apart at kanji 40 and another bisection would have been noise (rule 7). What separates them is that the
+stroke is a *fraction* of the kanji size, so it shrinks with the lockup: **0.050 holds a whole pixel down
+to kanji 20, and 0.045 gives out at 22.2.**
+
+**What this leaves open, and it is not small.** The corner radius was pinned at `1.85 × 0.110` for the
+whole sweep so the stroke could move alone (§7 rule 6). At the settled stroke that pin is **4.07 × the
+stroke**, where the recovered rule says 1.85 ×. Every specimen judged across those five rounds carries a
+corner more than twice the rule's — so the radius is not merely unswept, it is currently *wrong*, and it
+is the next round.
 
 ### The tails
 

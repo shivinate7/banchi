@@ -88,7 +88,12 @@ function frame(el, opt){
  /* The radius normally follows the stroke (1.85x), which is what keeps the bracket self-similar at
     any weight. `rrAbs` pins it instead, so a STROKE sweep moves one thing rather than two --
     section 7 rule 6. Nothing but a sweep should pass it. */
- const rr=Math.min(opt.rrAbs===undefined ? sw*1.85 : opt.rrAbs, Math.min(W,H)/2-.1)
+ const rrWant = opt.rrAbs!==undefined ? opt.rrAbs : sw*(opt.rrMul===undefined ? 1.85 : opt.rrMul)
+ const rrCap  = Math.min(W,H)/2-.1
+ const rr=Math.min(rrWant, rrCap)
+ /* the cap is printed rather than applied silently -- the taper clamp already taught this file
+    that a bound which binds without saying so turns a sweep into repeated specimens */
+ el.dataset.rr = rr.toFixed(2) + (rr < rrWant-1e-6 ? ' CLAMPED from '+rrWant.toFixed(2) : '')
  const aX=Math.max(W*arm, rr+2), aY=Math.max(H*arm, rr+2)
  let body
  if(opt.tails===false){
