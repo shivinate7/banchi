@@ -41,9 +41,13 @@ The owner&rsquo;s idea, drawn: <b>the lockup when the sidebar is open, collapsin
 is a rail</b>. &sect;1 already calls that second state the mark &mdash; <i>&ldquo;with the card removed the
 same brackets become an empty slot, which is the in-product mark.&rdquo;</i>
 <br><br>
-<b>The sizes are not chosen, they are what fits.</b> The expanded sidebar is 236px with 12px padding, so the
-lockup sits at kanji 32 &mdash; which is exactly the floor measured in round 15, and the block is 83&times;59px
-inside 212px of usable width. The rail is 64px and <b>cannot hold the lockup at all</b>: at kanji 22 the block
+<b>The lockup REPLACES the wordmark and the tagline.</b> An earlier draft of this sheet drew it beside
+<code>Banchi</code> and <code>every card has an address</code>, which was wrong twice: the lockup already says
+the name, in two scripts, so the row read as twice as busy as it would be &mdash; and it faked the sizing,
+squeezing the lockup into what was left after the text instead of letting it own the row.
+<br><br>
+<b>So the size is now an open question rather than a forced one.</b> With 212px of usable width the lockup
+fits anywhere from the kanji-32 floor up to kanji 80, and three candidates are drawn below. The rail is 64px and <b>cannot hold the lockup at all</b>: at kanji 22 the block
 is 57px and two of its three measures have already failed. That is why the rail gets the brackets rather than
 a smaller lockup.
 <br><br>
@@ -181,15 +185,13 @@ function bareBrackets(px, col){
 function sidebar(dark, rail){
  const s=el('div','side'+(dark?' dark':'')+(rail?' rail':''))
  if(!rail) s.style.width='236px'
+ /* NO WORDMARK AND NO TAGLINE. The lockup REPLACES `[mark] Banchi / every card has an address` --
+    it already says the name twice, in two scripts. Drawing it beside the text was wrong twice over:
+    it made the sidebar read as twice as busy as it would be, and it faked the sizing, because the
+    lockup was squeezed into what was left after the text instead of owning the row. */
  const brand=el('div','brand')
  const holder=el('div'); holder.style.cssText='flex:none'
  brand.appendChild(holder)
- if(!rail){
-  const t=el('div','brandtext')
-  t.appendChild(el('span','bname','Banchi'))
-  t.appendChild(el('span','btag','every card has an address'))
-  brand.appendChild(t)
- }
  s.appendChild(brand)
  ;[['Home',true],['Capture',false],['Runs',false],['Review',false],['Pricing',false]].forEach(function(n,i){
   if(i===1) s.appendChild(el('div','navlab','Workflow'))
@@ -203,14 +205,15 @@ function sidebar(dark, rail){
 o.appendChild(el('h2',null,'the two states, at the widths the shell actually gives'))
 ;(function(){
  const st=el('div','stage')
- ;[[false,false,'open · 236px · lockup at kanji 32'],[false,true,'rail · 64px · the bare brackets'],
-   [true,false,'open · dark'],[true,true,'rail · dark']].forEach(function(c){
+ ;[[false,32,'open · kanji 32 — the floor'],[false,40,'open · kanji 40'],[false,48,'open · kanji 48'],
+   [false,0,'rail · 64px'],[true,40,'open · dark · kanji 40'],[true,0,'rail · dark']].forEach(function(c){
   const wrap=el('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center'
-  const b=sidebar(c[0], c[1]); wrap.appendChild(b.side)
+  const b=sidebar(c[0], c[1]===0); wrap.appendChild(b.side)
   const col = c[0] ? '#eef0f4' : '#0f1217'
-  if(c[1]) b.holder.innerHTML = bareBrackets(36, col)
-  else { const lk=stamp(32, P.gap, P.pad, col); b.holder.appendChild(lk); lk.dataset.pend='1' }
+  if(c[1]===0) b.holder.innerHTML = bareBrackets(36, col)
+  else { const lk=stamp(c[1], P.gap, P.pad, col); b.holder.appendChild(lk); lk.dataset.pend='1' }
   wrap.appendChild(el('div','cap',c[2]))
+  if(c[1]) wrap.appendChild(el('div','num', Math.round(83*c[1]/32)+'×'+Math.round(59*c[1]/32)+'px in 212px'))
   st.appendChild(wrap)})
  o.appendChild(st)})()
 

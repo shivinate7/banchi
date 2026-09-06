@@ -42,67 +42,31 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 15,
- title: 'the size floor — where the lockup stops working, and which part gives out first',
- sweeping: 'size',
- unit: 'px kanji',
- values: [40, 32, 26, 22, 18, 14],
- notes: {22:'a sidebar', 14:'expected to be gone'},
+ n: 16,
+ title: 'the padding — inherited for fifteen rounds, never measured in this series',
+ sweeping: 'pad',
+ unit: ' of the kanji size',
+ values: [0.10, 0.16, 0.22, 0.28, 0.36],
+ notes: {0.22:'what every round so far was drawn at', 0.28:'the other one you kept, in the lost pass'},
  rejected: {},
- holds: {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
- sizes: [0],
+ holds: {gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
+ sizes: [48, 32],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
   ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
+  ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
  ],
- lede: '<b>THIS SHEET IS SHOT AT deviceScaleFactor 1 AND MAGNIFIED BY PIXEL.</b> Every other round was '+
-  'shot at 2, which is right for reading a sheet and wrong for judging a floor — §9\'s small row was '+
-  'shot at 2 and so showed twice the detail a 1× display gets, in the one row whose whole job was to '+
-  'demonstrate a failure. What you are looking at is the actual pixel grid, blown up whole.'+
-  '<br><br><b>A floor is not one number, because three different things give out and they give out at '+
-  'different sizes.</b> The bracket goes sub-pixel; the roman becomes unreadable; the kanji strokes '+
-  'merge. The floor is whichever fails first, and each is measured under its specimen rather than '+
-  'guessed at.'+
-  '<br><br><b>番 has 12 strokes and 地 has 6</b>, so they do not fail together either — the denser glyph '+
-  'closes up first. The figure printed is the <b>tenth percentile</b> of 番&rsquo;s interior whites, '+
-  'measured off the rendered glyph: the point at which a tenth of its counters have stopped being '+
-  'resolvable. The minimum was tried first and is useless — it is a single near-tangent between two '+
-  'strokes and reads 0.02–0.07px at every size, which measures antialiasing rather than legibility.'+
-  '<br><br><b>Each figure turns orange below its own threshold</b> — counters and bracket below 1px, '+
-  'roman below 8px — so the row shows not just where the lockup fails but <b>which part fails first</b>.'
-}
-
-/* The tightest interior white in 番 at a given size. Rasterise the glyph, scan every row, take the
-   SMALLEST run of white with ink on both sides. That is the counter that closes first, and it is what
-   decides whether a dense kanji still reads or turns into a block. 番 has 12 strokes and 地 has 6, so
-   they do not fail together and the denser one is the one worth measuring. */
-function tightestWhite(size){
- /* Rasterise at a FIXED high resolution and scale the result down, rather than at a multiple of
-    the target size. The first version drew 番 at 3x the target, where its tightest counter is
-    already a single pixel, so the measurement saturated and reported 0.33px at four different
-    sizes — a number that does not move is not a measurement. */
- const S=600, c=document.createElement('canvas')
- c.width=S; c.height=S
- const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,S,S)
- x.fillStyle='#000'; x.font=(S*0.92).toFixed(1)+'px "Hiragino Sans"'; x.textBaseline='middle'
- x.fillText('番', S*0.04, S/2)
- const d=x.getImageData(0,0,S,S).data, runs=[]
- for(let y=0;y<S;y++){
-  let run=0, seenInk=false
-  for(let px=0;px<S;px++){
-   const dark=d[(y*S+px)*4]<128
-   if(dark){ if(seenInk && run>0) runs.push(run); run=0; seenInk=true }
-   else if(seenInk) run++
-  }}
- /* THE TENTH PERCENTILE, NOT THE MINIMUM. The minimum is a single near-tangent between two strokes
-    and comes out at 0.02–0.07px at every size — a number that small is measuring an antialiasing
-    artefact, not legibility. The median is the typical counter and stays comfortable everywhere.
-    The p10 is the one that moves through the interesting range: it is where a tenth of 番's
-    counters have stopped being resolvable, which is when a dense glyph starts filling in. */
- runs.sort(function(a,b){return a-b})
- return runs.length ? runs[Math.floor(runs.length*0.10)]*size/S : 0
+ lede: '<b>Padding and gap are the last two, and they are the only values in the set I inherited rather '+
+  'than measured.</b> Both came off the recovered pass. In that pass you kept <b>0.28 and 0.22</b> for '+
+  'padding; I took 0.22 without a round and every one of the fifteen rounds since has been drawn at it. '+
+  'That is exactly the shape of thing §3 tags HELD and calls <i>“the risk — four of them survived twenty '+
+  'rounds unexamined, and when finally swept, three turned out to be wrong.”</i>'+
+  '<br><br><b>Both ends are meant to fail.</b> 0.10 should crowd the brackets onto the type; 0.36 should '+
+  'let the frame float free of what it is holding.'+
+  '<br><br><b>Drawn at kanji 48 and 32</b> — the sidebar candidate and the floor — because padding is a '+
+  'fraction of the kanji size, so it scales with the lockup and cannot be judged at one size only.'
 }
 
 const o=document.getElementById('out')
@@ -174,18 +138,18 @@ function check(groups){
  document.getElementById('checks').appendChild(box)
 }
 
-const groups = [(function(){
- o.appendChild(el('h2',null,'at true size — this is the pixel grid, magnified whole'))
+const groups = ROUND.sizes.map(function(sz){
+ o.appendChild(el('h2',null,'at kanji '+sz+(sz===48?' — the sidebar candidate':' — the floor')))
  const s2=el('div','strip'); const made=[]
- ROUND.values.forEach(function(sz){
+ ROUND.values.forEach(function(v){
   const c=el('div','cell')
-  const lk=stamp(sz, ROUND.holds.gap, ROUND.holds.pad, '#0f1217'); c.appendChild(lk)
-  const note=ROUND.notes[sz]
-  const cap=el('div','cap'+(note?' was':'')); cap.textContent='kanji '+sz+(note?' — '+note:'')
+  const lk=stamp(sz, ROUND.holds.gap, v, '#0f1217'); c.appendChild(lk)
+  const note=ROUND.notes[v]
+  const cap=el('div','cap'+(note?' was':'')); cap.textContent=v.toFixed(2)+(note?' — '+note:'')
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
-  s2.appendChild(c); made.push({lk:lk, v:sz, num:num, size:sz})})
- o.appendChild(s2); return made})()]
+  s2.appendChild(c); made.push({lk:lk, v:v, num:num, size:sz})})
+ o.appendChild(s2); return made})
 
 /* §7: "re-present an earlier lens to check the answer is stable". The rebuild dropped this strip
    and it is a rule rather than a flourish, so it is back — and driven by ROUND.rejected, so its
@@ -208,15 +172,8 @@ document.fonts.ready.then(function(){
  groups.concat(rejected.length?[rejected]:[]).forEach(function(g){ g.forEach(function(r){
   frame(r.lk, {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
                rrMul:ROUND.holds.rrMul, tip:ROUND.holds.tip})
-  const sw = r.size*ROUND.holds.stroke
-  const roman = r.size*0.36
-  const white = tightestWhite(r.size)
-  const bad = function(v, floor){ return v < floor ? 'color:#c2410c;font-weight:700' : 'color:#6b7280' }
-  r.num.innerHTML =
-     'block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
-   + '<br><span style="'+bad(white,1)+'">番 counters '+white.toFixed(2)+'px</span>'
-   + '<br><span style="'+bad(roman,8)+'">roman '+roman.toFixed(1)+'px</span>'
-   + '<br><span style="'+bad(sw,1)+'">bracket '+sw.toFixed(2)+'px</span>'
+  r.num.innerHTML = 'block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
+   + '<br><span style="color:#6b7280">pad '+(r.size*r.v).toFixed(1)+'px each side</span>'
  })})
  check(groups)
  window.__sheetReady = true
