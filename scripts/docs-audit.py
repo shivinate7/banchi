@@ -7414,6 +7414,131 @@ def check_logo_parity(report: Report) -> None:
 
 
 
+BUILD_MARK = ROOT / "scripts" / "build-mark.mjs"
+APP_MANIFEST = ROOT / "app" / "public" / "manifest.webmanifest"
+
+_S17_GRID = re.compile(r"\*\*(\d+)pt of artwork, cent(?:er|r)ed on a (\d+)pt canvas")
+_MAC_GRID_CONST = re.compile(r"^const MAC_GRID = (\d+) / (\d+)\s*$", re.M)
+_APP_SIZES = re.compile(r"^  const APP = \[([0-9, ]+)\]", re.M)
+
+
+def _png_canvas(path: Path) -> "tuple[int, int] | None":
+    """Width and height out of a PNG's IHDR. Stdlib only — this check is on the commit path.
+
+    The pre-commit hook runs a bare `python3` with nothing installed (D18), so Pillow is not
+    available here and never will be. The IHDR is the first chunk and its geometry is at a
+    fixed offset, which is all this row needs: it reconciles DECLARATIONS, and the one fact it
+    takes from the file itself is how big its canvas is.
+    """
+    try:
+        head = path.read_bytes()[:24]
+    except OSError:
+        return None
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+
+
+def check_mac_icon_grid(report: Report) -> None:
+    """Apple's icon grid is one number in three places, and they must agree.
+
+    docs/specs/logo.md section 17 publishes it, `scripts/build-mark.mjs` insets by it, and
+    `app/public/manifest.webmanifest` lists the sizes it was applied to. The mark's own
+    geometry is locked by section 3 and is NOT this row's business — what is, is that the
+    generator and the spec do not drift apart, which is the failure `motion params` was added
+    for one document over.
+
+    **It cannot see the pixels, and says so rather than implying otherwise.** Whether a
+    generated PNG's artwork really occupies 80.47% of its canvas needs an alpha bounding box,
+    which needs Pillow, which is not on the commit path. So this reconciles the declarations
+    and checks the one thing a PNG header can answer — that the file exists at the canvas size
+    the manifest claims. A hand-edited PNG whose artwork was moved would pass; re-running the
+    generator is what makes that unlikely, and the generator is what this row pins.
+    """
+    findings: list[Finding] = []
+    spec = read(LOGO_SPEC)
+    code = read(BUILD_MARK)
+
+    published = _S17_GRID.search(spec)
+    const = _MAC_GRID_CONST.search(code)
+    if not published:
+        findings.append(Finding(
+            f"{rel(LOGO_SPEC)}",
+            "section 17 no longer publishes the grid as `**<n>pt of artwork, centered on a "
+            "<n>pt canvas`. That sentence is what `scripts/build-mark.mjs:MAC_GRID` is "
+            "checked against; reword it back, or move this row to the new wording.",
+        ))
+    if not const:
+        findings.append(Finding(
+            f"{rel(BUILD_MARK)}",
+            "`const MAC_GRID = <n> / <n>` is gone. docs/specs/logo.md section 17 publishes "
+            "that ratio and nothing else reconciles the two.",
+        ))
+    if published and const and (
+        (published.group(1), published.group(2)) != (const.group(1), const.group(2))
+    ):
+        findings.append(Finding(
+            f"{rel(BUILD_MARK)} -> MAC_GRID",
+            f"insets by {const.group(1)}/{const.group(2)} and docs/specs/logo.md "
+            f"section 17 publishes {published.group(1)}/{published.group(2)}. Section 17 "
+            f"is the store of record; re-run `node scripts/build-mark.mjs --icons`, or "
+            f"move section 17 first.",
+        ))
+
+    # The manifest's set and the generator's set are the same set, and every file is there at
+    # the canvas the manifest names. An icon listed but never generated is an install with a
+    # missing size; one generated but not listed is dead weight Chrome will never read.
+    sizes_m = _APP_SIZES.search(code)
+    generated = ([int(n) for n in sizes_m.group(1).split(",") if n.strip()]
+                 if sizes_m else [])
+    try:
+        listed = json.loads(read(APP_MANIFEST)).get("icons", [])
+    except (ValueError, OSError):
+        listed = []
+    declared: list[int] = []
+    for icon in listed:
+        src, sizes = icon.get("src", ""), icon.get("sizes", "")
+        if not src.endswith(".png"):
+            findings.append(Finding(
+                f"{rel(APP_MANIFEST)} -> {src}",
+                "is in the manifest's icon list and is not one of the inset PNGs. Section 17 "
+                "insets the WHOLE set on purpose: Chrome resizes these into the installed "
+                "app's .icns, and one full-bleed entry pads the dock icon at one size and not "
+                "the next. Keep it as a `<link rel=\"icon\">` instead.",
+            ))
+            continue
+        try:
+            declared.append(int(sizes.split("x")[0]))
+        except ValueError:
+            findings.append(Finding(f"{rel(APP_MANIFEST)} -> {src}",
+                                    f"has an unreadable `sizes` of {sizes!r}."))
+    if sizes_m and sorted(declared) != sorted(generated):
+        findings.append(Finding(
+            f"{rel(APP_MANIFEST)}",
+            f"lists {sorted(declared)} and `scripts/build-mark.mjs:APP` generates "
+            f"{sorted(generated)}. They are one set — a size listed but never written is a "
+            f"404 at install time.",
+        ))
+    for size in declared:
+        path = ROOT / "app" / "public" / f"icon-{size}.png"
+        canvas = _png_canvas(path)
+        if canvas is None:
+            findings.append(Finding(f"{rel(APP_MANIFEST)}",
+                                    f"names icon-{size}.png, which is missing or is not a PNG."))
+        elif canvas != (size, size):
+            findings.append(Finding(
+                f"app/public/icon-{size}.png",
+                f"is {canvas[0]}x{canvas[1]} and the manifest calls it {size}x{size}. "
+                f"Re-run `node scripts/build-mark.mjs --icons`.",
+            ))
+
+    report.add("mac icon grid", MECHANICAL, findings,
+               (f"{published.group(1)}/{published.group(2)} in section 17 and in build-mark.mjs, "
+                f"over {len(declared)} inset icons"
+                if published and const and not findings
+                else f"{len(findings)} problem(s)"))
+
+
 LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
 SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
 MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
@@ -10791,6 +10916,7 @@ def audit(staged_only: bool) -> Report:
     check_supervisor_self_watch(report)
     check_motion_params(report)
     check_logo_parity(report)
+    check_mac_icon_grid(report)
     check_lockup_params(report)
     check_rail_mark(report)
     check_lockup_bracket(report)

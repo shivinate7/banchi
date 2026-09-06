@@ -1647,7 +1647,7 @@ no handler, and the element renders as the anchor it was.
 
 ### The defect the choreography found, which had nothing to do with the lockup
 
-**The rail's rules centred their children** — `justify-content: center` on the brand and
+**The rail's rules centered their children** — `justify-content: center` on the brand and
 `margin: 0 auto` on every nav link — and both resolve against a width that is *animating*. Measured
 at 1440 on ⌘.: the mark's centre went **36 → 114.8 → 31.5** and every nav icon did the same. The
 sidebar threw itself 79px right and slid back, on every collapse, in the shipped product.
@@ -1667,7 +1667,7 @@ keeping the test rather than treating it as a one-off:
   easing the padding dragged it **33 → 35.9 → 32**, three pixels right of both resting positions.
   It snaps now, and what that costs is 4px of gutter moving instantly under a column that eases,
   in a strip where nothing is drawn at rest.
-- **The footer was never looked at.** It still centred its buttons against the animating column
+- **The footer was never looked at.** It still centered its buttons against the animating column
   (`align-items: center`, the same shape as the nav's old `margin: 0 auto`) and measured
   **37 → 103.8 → 20.5**. Its buttons went 40px → 48px at the same time, to match `.bn-nav-link`:
   at 40 they rested at x = 20.5, eleven pixels left of every icon above them.
@@ -1686,3 +1686,96 @@ The three ways out, none of them free: **grow the bar to ~91px**, which costs 39
 where vertical space is scarcest and breaks its match with the 52px tab bar; **design a horizontal
 lockup**, which is a new artifact needing its own rounds; or **leave it**, which is what ships.
 Recorded as a decision deferred rather than a surface nobody looked at.
+
+## 17. The macOS app icon — the grid, and why the tile does not fill it
+
+**Asked for on 2026-09-06, once the mark was going into the dock (D108).** The mark is a tile
+that fills its frame, and every icon beside it in the dock does not. This section locks the one
+number that reconciles them.
+
+### The grid
+
+**824pt of artwork, centered on a 1024pt canvas — 80.47% of the width.** That is Apple's macOS
+icon grid, and it is not a guideline this project chose to follow: it is what the neighbors
+already are. Measured on this Mac at 2026-09-06, from the shipped `.icns` of three system apps,
+taking the solid body and ignoring the drop shadow:
+
+| icon | solid body | including its shadow |
+| --- | --- | --- |
+| Safari | 80.47% | 87.50% |
+| Mail | 80.47% | 87.50% |
+| Calculator | 80.47% | 87.50% |
+| **Banchi, before this section** | **100.00%** | 100.00% |
+| **Banchi, after** | **80.47%** | 80.47% |
+
+Three unrelated apps agreeing to the second decimal place is the grid, not a coincidence. A
+full-bleed tile beside them is **24% wider and 55% more area**, which is what "it looks too big
+in the dock" turns out to mean when it is measured.
+
+### What is inset and what is not
+
+**The inset is applied by drawing the mark smaller on a transparent canvas.** Section 3's
+geometry is untouched — nothing here redraws the tile, changes its corner, or pads the SVG.
+`scripts/build-mark.mjs` holds `MAC_GRID = 824 / 1024` and `make docs-audit`'s `mac icon grid`
+row reconciles it against this section, in both directions.
+
+| asset | inset? | why |
+| --- | --- | --- |
+| `app/public/icon-1024.png` | **yes** | the manifest's largest, and what a Retina dock draws from |
+| `app/public/icon-512.png` | **yes** | in the manifest set |
+| `app/public/icon-192.png` | **yes** | in the manifest set; 155 of 192 is 80.73%, the rounding |
+| `app/public/icon-180.png` | **no** | `apple-touch-icon`. iOS masks a full-bleed square itself, and insetting would put the mark in a box inside a box |
+| `app/public/favicon.svg` | **no** | a tab icon is 16 to 32px and has no grid to obey |
+
+**The whole manifest set is inset rather than only the largest, and that is the load-bearing
+choice.** Chrome builds an installed app's `.icns` by resizing the manifest icons; a set that
+disagreed with itself would pad the dock icon at one size and not at the next, which is worse
+than either answer applied consistently. **`favicon.svg` was removed from the manifest's icon
+list** for the same reason — it is full bleed, `sizes: "any"` makes it a candidate at every
+size, and one un-inset entry is all it takes.
+
+### What is NOT done, and it is the shadow
+
+**Every system icon measured carries a drop shadow out to 87.5% and the mark carries none.** It
+was left alone deliberately: a shadow is a drawing decision, section 3 locks this drawing, and
+adding one to fit a platform convention is the kind of change this file exists to stop being
+made in passing. What it costs is that Banchi sits slightly flatter on the dock's shelf than
+its neighbors. **What would settle it: a sweep, on a sheet, at 128, 64 and 32px against the
+same three icons** — the method section 7 already sets out, not a value typed here.
+
+### Also not done: the `.icns` carries one cut, and its small reps get the wrong one
+
+**Looked at, at real pixels, magnified 6x — not inferred.** Chrome builds the installed app's
+`.icns` by downsizing the manifest PNGs, which are the DISPLAY cut, and an `.icns` carries 16
+and 32px representations. At 32px the display cut's brackets go thin and mushy and the card
+reads as noise; the SMALL cut at the same inset is crisp and legible. That is section 11's
+finding arriving at a surface section 11 did not cover — it swept the favicon and the rail, and
+the dock's small representations are the same size band.
+
+**It cannot be fixed from here, and that is why it is written down rather than filed as work.**
+A manifest cannot say "this cut below 64px"; Chrome picks the source and rewrites the `.icns`
+itself, so hand-authoring one would be overwritten. **It is also not new** — the display cut has
+always been what those reps were downsized from. What the inset changed is the degree: the
+artwork is 80.47% of the canvas now, so a 32px rep carries 26 pixels of mark where it carried
+32, and the cut was already past its range at both.
+
+**What would settle it, and it is not a value to type here**: whether the dock's 16 and 32px
+reps are ever actually seen. The dock draws 64pt and up; 32 and 16 are Finder lists, ⌘-Tab at
+small settings, and the menu bar. If the answer is "rarely", this stays a note. If not, the
+honest fix is a native bundle that ships its own `.icns` — which is a different decision from
+D108's, and would have to argue its way past the camera question that entry settles.
+
+### The light and dark question, answered by section 12 rather than here
+
+**macOS 26 introduced per-appearance app icons — an app may ship a dark variant — and Banchi
+cannot use it, twice over.** The platform half: those variants are authored as an Icon Composer
+`.icon` asset in a native bundle, and Chrome builds a plain `.icns` from manifest PNGs, which
+has no way to express one. The web half is smaller still — a manifest icon takes no media
+query, and there is no `prefers-color-scheme` on `icons[]`.
+
+**And the design half already ruled, before either mattered.** Section 12 derived a light ground
+and rejected it, in these words: *the mark stays fixed dark in both themes*, because it *"is an
+object, not an ink color: an app icon on a phone home screen does not invert when the phone
+does."* A dark-mode dock icon is that same argument at the same size. **Nothing here reopens
+it** — if it is ever reopened it is section 12's to reopen, on a sheet, and the platform
+question is downstream of that rather than a reason to revisit it.
