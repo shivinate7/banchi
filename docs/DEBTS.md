@@ -1409,9 +1409,11 @@ and the photograph on none of them.** Four call sites, one shape:
 - `app/src/Inventory.tsx:654` draws the pooled sentence in place of a label; the retire
   dialog's `<img>` at `app/src/Inventory.tsx:836` is unguarded, and the `located` test at
   `app/src/Inventory.tsx:849` suppresses only `PositionBar`.
-- `app/src/CardLocations.tsx:547` drops the bar for a pooled copy; the `<img>` at
-  `app/src/CardLocations.tsx:530` above it is unguarded.
-- `app/src/PositionBar.tsx:111` returns null for a pooled place.
+- `app/src/CardLocations.tsx:484` drops the bar for a pooled copy; the `<img>` at
+  `app/src/CardLocations.tsx:464` above it is unguarded.
+- `app/src/position.ts:119` returns null for a pooled place. It sat inside
+  `app/src/PositionBar.tsx` until 2026-09-06, when the position arithmetic moved out of the
+  component so React Refresh could update it in place; the guard itself is unchanged.
 - `server/capture_server.py:2295` and `server/capture_server.py:2569` serve a pooled row
   "undecorated but not bare" — no flat `label`, and `box`, `index` and `photo` all present.
 

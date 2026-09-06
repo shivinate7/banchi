@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
-import type { Persona } from './PositionBar'
+import type { Persona } from './position'
 import { Icon } from './kit'
 import './SearchField.css'
 
