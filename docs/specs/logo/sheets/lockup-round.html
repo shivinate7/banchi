@@ -54,15 +54,16 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 36,
- title: 'the roman’s size, re-offered on the shipping face — a same-or-different check, not a sweep',
- sweeping: 'romanSize',
- unit: '× the kanji',
- values: [0.22, 0.235, 0.25, 0.265, 0.28],
- notes: {0.25:'the settled value, decided at true pixels against a font that cannot ship'},
- rejected: {},
+ n: 37,
+ title: 'the roman’s opacity, re-offered on the shipping face — the second half of §15’s gate',
+ sweeping: 'romanOpacity',
+ unit: ' of the ink',
+ values: [0.40, 0.425, 0.45, 0.475, 0.50],
+ notes: {0.45:'the settled value — clears the floor on dark, under it on light, on purpose',
+         0.50:'clears on both, and was declined once already'},
+ rejected: {0.27:'1.84:1 on light — round 33', 0.58:'out above — round 32'},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
-         romanFill:0.75, romanTrack:0.14, romanOpacity:0.45, tails:true},
+         romanFill:0.75, romanSize:0.25, romanTrack:0.14, tails:true},
  sizes: [48, 32],
  dark: true,
  context: null,
@@ -74,21 +75,20 @@ const ROUND = {
   ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
   ['32–34', 'roman opacity', '0.20 – 1.00', '0.45 of the ink', 'light sits under a floor, on purpose'],
   ['35', 'nothing', '—', 'the finished lockup, 32 – 80px', 'all eleven values asserted'],
+  ['36', 'roman size', '0.22 – 0.28, on Plex', 'awaiting an answer', 'a same-or-different check'],
  ],
- lede: '<b>The face is decided: IBM Plex Sans JP 400, and every sheet from here draws it.</b> The two '+
-  'recovered sheets keep Hiragino because they are records of a pass already judged, and changing their '+
-  'face would rewrite what was approved.'+
-  '<br><br><b>Nine of the eleven values need no second look, and that is measured rather than assumed.</b> '+
-  'Re-rendering §13’s settled lockup on the new face gives <b>byte-identical block dimensions at every '+
-  'size</b> — 102 × 75, 128 × 93, 153 × 112, 204 × 149, 255 × 186. Anything that is a fraction of the '+
-  'kanji’s box could not move, because a full-width em is a full-width em, and 番地 measures 214.00px in '+
-  'Hiragino against 214.81 in Plex.'+
-  '<br><br><b>Two values were judged optically rather than geometrically</b>, and those are the gate §15 '+
-  'named: the roman’s size and its opacity, both chosen as a weight against the kanji’s. Plex 400 is not '+
-  'Hiragino regular’s weight, so both get re-offered — <b>one round each, and this is not a fresh '+
-  'sweep.</b> It is a same-or-different check around a settled value, so the band is deliberately narrow: '+
-  'if 0.25 still reads best, it stands with a second face behind it, which is a stronger claim than it '+
-  'had this morning.'
+ lede: '<b>The second half of §15’s gate, and it is offered alongside round 36 rather than after it.</b> '+
+  'The two are independent enough for that: a size answer that moves by fifteen thousandths does not '+
+  'change which ink reads right. If round 36 moves 0.25 by more than that, this round is re-run — the '+
+  'history table above says plainly that it is still open rather than treating silence as agreement.'+
+  '<br><br><b>The contrast figures are re-measured on the new face and they do not move</b>, because '+
+  'contrast is a property of the composite colour and the ground, not of the letterform. What the face '+
+  'changes is how many PIXELS carry that colour, which is what `ink.mjs` counts and what the magnified '+
+  'floor row shows.'+
+  '<br><br><b>0.45 is here defending a decision, not just a value.</b> §13 records it clearing the floor '+
+  'on dark at 4.09:1 and sitting under it on light at 3.02:1 against 3.6 — chosen deliberately, with 0.50 '+
+  'drawn and declined. A second face is the right moment to check that the argument still holds, since '+
+  'the whole reason it was defensible is that the roman repeats what the kanji already says.'
 }
 
 const o=document.getElementById('out')
