@@ -2015,6 +2015,14 @@ export type TcgSets = {
   sets: { name: string; id: string }[]
   aliases?: Record<string, string>
   reason: string | null
+  /** The transport's own remedial sentence, and the FLOOR under an unlabelled `reason` rather
+   *  than what the operator normally reads. `server/tcg_export.py` writes a sentence for each
+   *  of its refusals — which `.env` value to replace, which knob to set — and this route was
+   *  the one of four that used to keep the code and discard it. The screen still writes its
+   *  own copy in the operator's terms (`hintReason`); this is what a code that map does not
+   *  yet name falls back to, in place of the raw string it used to print. Null on success and
+   *  on `no_category`, which is a fact about `pipeline/games.py` and not about the portal. */
+  message: string | null
 }
 
 export type ExportFetched = {
