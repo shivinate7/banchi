@@ -42,13 +42,13 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 16,
- title: 'the padding — inherited for fifteen rounds, never measured in this series',
+ n: 17,
+ title: 'the padding, continued — because you kept my top end, so nothing was bracketed above',
  sweeping: 'pad',
  unit: ' of the kanji size',
- values: [0.10, 0.16, 0.22, 0.28, 0.36],
- notes: {0.22:'what every round so far was drawn at', 0.28:'the other one you kept, in the lost pass'},
- rejected: {},
+ values: [0.22, 0.28, 0.34, 0.42, 0.52],
+ notes: {0.22:'the inherited value, and your low end', 0.34:'near the middle of what you kept'},
+ rejected: {0.10:'crowded the bracket onto 番', 0.16:'still tight', 0.36:'kept — which is why this round exists'},
  holds: {gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
  sizes: [48, 32],
  history: [
@@ -57,16 +57,16 @@ const ROUND = {
   ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
+  ['16', 'padding', '0.10 – 0.36', '0.22 – 0.36 kept', 'the top end was NOT bracketed'],
  ],
- lede: '<b>Padding and gap are the last two, and they are the only values in the set I inherited rather '+
-  'than measured.</b> Both came off the recovered pass. In that pass you kept <b>0.28 and 0.22</b> for '+
-  'padding; I took 0.22 without a round and every one of the fifteen rounds since has been drawn at it. '+
-  'That is exactly the shape of thing §3 tags HELD and calls <i>“the risk — four of them survived twenty '+
-  'rounds unexamined, and when finally swept, three turned out to be wrong.”</i>'+
-  '<br><br><b>Both ends are meant to fail.</b> 0.10 should crowd the brackets onto the type; 0.36 should '+
-  'let the frame float free of what it is holding.'+
-  '<br><br><b>Drawn at kanji 48 and 32</b> — the sidebar candidate and the floor — because padding is a '+
-  'fraction of the kanji size, so it scales with the lockup and cannot be judged at one size only.'
+ lede: '<b>You kept 0.22 through 0.36, and 0.36 was the largest value I offered.</b> That is exactly the '+
+  'shape §7 rule 5 forbids — <i>never let the answer define the range</i> — because a kept end may be the '+
+  'optimum or may simply be as far as I let you look. The only way to tell them apart is to go past it.'+
+  '<br><br><b>So the low end is already bracketed and the high end is not.</b> 0.16 failed last round, so '+
+  '0.22 is bounded below by a real rejection. Above, this round runs to <b>0.52</b> — more than double the '+
+  'inherited value — and one of these is meant to look wrong. If none of them does, the range opens again.'+
+  '<br><br><b>0.28 is offered again on purpose.</b> It is one of the two you kept in the lost pass, and it '+
+  'now sits in the middle of a range rather than at the edge of one, which is a different question.'
 }
 
 const o=document.getElementById('out')
@@ -84,15 +84,39 @@ document.getElementById('lede').innerHTML = ROUND.lede +
   ROUND.history.map(function(r){return '<tr><td>'+r[0]+'</td><td style="color:#8b93a0">'+r[1]+'</td><td>'+r[2]+'</td><td><b>'+r[3]+'</b></td><td style="color:#8b93a0">'+r[4]+'</td></tr>'}).join('')
  document.getElementById('hist').appendChild(t)})()
 
-function row(size){
+/* ONE builder turns a swept value into a drawing, and EVERY row on this sheet goes through it.
+   They did not. Round 16 inlined a near-copy of `row()` to sweep two sizes, `row()` went dead,
+   and the re-shown row kept handing `stamp` the HELD pad instead of the value it was captioned
+   with — so round 17 published three identical drawings under three different labels. That is
+   round 6's defect, in the one row whose job is to check the answer against what was already
+   rejected, and it survived because `check()` was called on the sweep rows only.
+   Both halves are fixed: one builder below, and the re-shown row is asserted with the rest. */
+const SWEPT = ROUND.sweeping
+
+/* The swept key lives in one of two places — `stamp`'s geometry, or `frame`'s options — and
+   nothing else on this sheet needs to know which. */
+function mk(size, v){
+ return stamp(size,
+              SWEPT==='gap' ? v : ROUND.holds.gap,
+              SWEPT==='pad' ? v : ROUND.holds.pad,
+              '#0f1217')
+}
+function optsFor(v){
+ const o = {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
+            rrMul:ROUND.holds.rrMul, tip:ROUND.holds.tip}
+ if (SWEPT!=='pad' && SWEPT!=='gap') o[SWEPT] = v
+ return o
+}
+
+function row(size, values, capFn){
  const s=el('div','strip'); const made=[]
- ROUND.values.forEach(function(v){
+ values.forEach(function(v){
   const c=el('div','cell')
-  const lk=stamp(size, ROUND.holds.gap, ROUND.holds.pad, '#0f1217')
+  const lk=mk(size, v)
   c.appendChild(lk)
-  const note=ROUND.notes[v]
-  const cap=el('div','cap'+(note?' was':''))
-  cap.textContent=v+ROUND.unit+(note?' — '+note:'')
+  const cp=capFn(v)
+  const cap=el('div','cap'+(cp.was?' was':''))
+  cap.textContent=cp.text
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
   s.appendChild(c); made.push({lk:lk, v:v, num:num, size:size})})
@@ -139,17 +163,10 @@ function check(groups){
 }
 
 const groups = ROUND.sizes.map(function(sz){
- o.appendChild(el('h2',null,'at kanji '+sz+(sz===48?' — the sidebar candidate':' — the floor')))
- const s2=el('div','strip'); const made=[]
- ROUND.values.forEach(function(v){
-  const c=el('div','cell')
-  const lk=stamp(sz, ROUND.holds.gap, v, '#0f1217'); c.appendChild(lk)
+ o.appendChild(el('h2',null,'at kanji '+sz+(sz===ROUND.sizes[0]?' — the sidebar candidate':' — the floor')))
+ return row(sz, ROUND.values, function(v){
   const note=ROUND.notes[v]
-  const cap=el('div','cap'+(note?' was':'')); cap.textContent=v.toFixed(2)+(note?' — '+note:'')
-  c.appendChild(cap)
-  const num=el('div','num'); c.appendChild(num)
-  s2.appendChild(c); made.push({lk:lk, v:v, num:num, size:sz})})
- o.appendChild(s2); return made})
+  return {text:v.toFixed(2)+(note?' — '+note:''), was:!!note}})})
 
 /* §7: "re-present an earlier lens to check the answer is stable". The rebuild dropped this strip
    and it is a rule rather than a flourish, so it is back — and driven by ROUND.rejected, so its
@@ -158,24 +175,18 @@ const rejected = (function(){
  const keys=Object.keys(ROUND.rejected).map(Number)
  if(!keys.length) return []
  o.appendChild(el('h2',null,'re-shown — what this band has already rejected'))
- const s2=el('div','strip'); const made=[]
- keys.forEach(function(v){
-  const c=el('div','cell')
-  const lk=stamp(96, ROUND.holds.gap, ROUND.holds.pad, '#0f1217'); c.appendChild(lk)
-  const cap=el('div','cap was'); cap.textContent=v+ROUND.unit+' — '+ROUND.rejected[v]
-  c.appendChild(cap)
-  const num=el('div','num'); c.appendChild(num)
-  s2.appendChild(c); made.push({lk:lk, v:v, num:num, size:96})})
- o.appendChild(s2); return made})()
+ return row(96, keys, function(v){
+  return {text:v+ROUND.unit+' — '+ROUND.rejected[v], was:true}})})()
 
 document.fonts.ready.then(function(){
- groups.concat(rejected.length?[rejected]:[]).forEach(function(g){ g.forEach(function(r){
-  frame(r.lk, {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
-               rrMul:ROUND.holds.rrMul, tip:ROUND.holds.tip})
+ const all = groups.concat(rejected.length?[rejected]:[])
+ all.forEach(function(g){ g.forEach(function(r){
+  frame(r.lk, optsFor(r.v))
+  const pad = r.size*(SWEPT==='pad' ? r.v : ROUND.holds.pad)
   r.num.innerHTML = 'block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
-   + '<br><span style="color:#6b7280">pad '+(r.size*r.v).toFixed(1)+'px each side</span>'
+   + '<br><span style="color:#6b7280">pad '+pad.toFixed(1)+'px each side</span>'
  })})
- check(groups)
+ check(all)
  window.__sheetReady = true
 })
 </script>
