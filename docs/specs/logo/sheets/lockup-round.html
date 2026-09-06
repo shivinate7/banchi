@@ -42,14 +42,13 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 8,
- title: 'the corner radius, halved again and probed above',
+ n: 9,
+ title: 'the corner radius, and the band is closing from below only',
  sweeping: 'rr',
  unit: '× the stroke',
- values: [2.6, 3.3, 4.05, 4.8, 5.5, 6.2],
- notes: {4.05:'the pinned value you judged five rounds against', 6.2:'new, above your edge'},
- /* re-shown at the foot — §7's rule that a rejection is put back so the pick has something to lose to */
- rejected: {1.85:'the recovered rule — you eliminated it this round', 7.0:'passed over, R6'},
+ values: [3.3, 3.85, 4.4, 4.95, 5.5],
+ notes: {4.4:'nearest the 4.05 you judged five rounds against'},
+ rejected: {2.6:'eliminated this round', 6.2:'eliminated this round — the ceiling is now tight'},
  holds: {pad:0.22, gap:0.06, stroke:0.050, arm:0.32, tip:0.07, tl:0.45, tails:true},
  sizes: [96, 40, 22],
  history: [
@@ -60,16 +59,19 @@ const ROUND = {
   ['5', 'stroke', 'forced pair', '0.050', 'settled — holds 1px to kanji 20'],
   ['6', 'radius', '1.0 – 7.0 ×', '1.85 – 5.5 ×', 'both ends failed — 1.0 “far too square”'],
   ['7', 'radius', '1.85 – 5.5 ×', '2.6 – 5.5 ×', 'the recovered rule eliminated; reached my ceiling'],
+  ['8', 'radius', '2.6 – 6.2 ×', '3.3 – 5.5 ×', 'both ends failed; ceiling now tight at 5.5 / 6.2'],
  ],
- lede: '<b>The recovered rule is out.</b> 1.85× is the multiple the original pass actually shipped, it '+
-  'survived round 6, and round 7 eliminated it. That is worth saying plainly: the lockup this sweep '+
-  'started from had a corner materially tighter than anything now in the running.'+
-  '<br><br><b>5.5× is on my top edge again</b> — §7 rule 5, third time in this sweep. The ceiling is '+
-  'bracketed at coarse resolution (5.5 good, 7.0 passed over in R6) but nothing between them has been '+
-  'drawn, so 6.2× fills that while the rest halves the surviving band.'+
-  '<br><br><b>4.05× is here on purpose.</b> It is the value the radius was pinned at for rounds 1–5, so '+
-  'if it wins, five rounds of stroke judgement were made against a corner that turns out to be right '+
-  'after all — and if it loses, they were not.'
+ lede: '<b>The ceiling is settled and the floor is not.</b> 6.2× failed, so 5.5× good against 6.2× bad '+
+  'is a 13% bracket — fine enough to stop pushing upward. Everything left is where in 3.3–5.5.'+
+  '<br><br><b>A pattern worth naming before it decides something quietly.</b> Across rounds 6, 7 and 8 '+
+  'the bottom of your band has risen every time — 1.85 → 2.6 → 3.3 — while the top has not moved off '+
+  '5.5 once. Three rounds of the floor walking upward and the ceiling standing still is either a real '+
+  'optimum sitting near the top, or it is the tighter option losing simply for being the tightest thing '+
+  'on the row each time. <b>Those look identical from where I am sitting and they are not the same '+
+  'thing</b>, so if this round comes back “the top half” again I would rather stop halving and put 4.95 '+
+  'against 5.5 as a straight pair than keep walking a floor upward round after round.'+
+  '<br><br><b>4.4× is the nearest value to the 4.05×</b> the radius was pinned at for rounds 1–5, and it '+
+  'is still in.'
 }
 
 const o=document.getElementById('out')
