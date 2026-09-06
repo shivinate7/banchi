@@ -524,3 +524,8 @@ woff
 woff2
 opentype
 lockup
+untapered
+morphable
+filmstrip
+romanisation
+choreography

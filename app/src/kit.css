@@ -913,7 +913,12 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 /* never the literal 0.45 — `Lockup` publishes section 13's settled value and this reads it */
 .bn-lockup-roman { fill: var(--bn-ink); opacity: var(--bn-lockup-roman-opacity); }
 
-:root[data-theme='dark'] .bn-lockup-bracket { fill: var(--bn-lockup-metal); }
+/* NOT `:root[data-theme='dark']`. #/gallery has to show both treatments on one page, and a
+   root-only selector makes the dark specimen impossible — it would draw the light bracket on a
+   dark ground, which is the one thing that specimen exists to disprove. Scoped to any ancestor
+   carrying the attribute, with the light form after it so an island can go either way. */
+[data-theme='dark'] .bn-lockup-bracket { fill: var(--bn-lockup-metal); }
+[data-theme='light'] .bn-lockup-bracket { fill: var(--bn-ink); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .bn-lockup-bracket { fill: var(--bn-lockup-metal); }
 }

@@ -1562,3 +1562,58 @@ would have made one drawing into two. This varies the ink and not the drawing.
 **No sheet owns these hexes.** `opt.bracketStops` in `sheets/lockup-core.js` takes a palette and
 never names one; `make docs-audit`'s `lockup bracket` row reconciles the sheet's four stops
 against `markPalettes.ts`, and its `rail mark` row does the same for the bracket path and stroke.
+
+### BUILT 2026-09-06 — and the collapse turned out to be a defect before it was a design
+
+**The sidebar mounts both drawings and CSS chooses.** A JSX branch on `rail` would be wrong at
+768–1023px, where `App.css` rails the shell by media query and `data-rail` is inert — a stylesheet
+reads the same condition the layout does. Verified at 820: the lockup's three parts read opacity 0
+and the mark reads 1.
+
+**The rail keeps the full mark.** §16 settled the lockup's size and its metal, not the rail's
+drawing, and `sheets/sidebar-morph.html`'s bare brackets are a sheet's idea rather than a decision
+— that sheet has already been wrong about the rail three times.
+
+**A true morph is not available, and the reason is this section's own correction.** The filmstrip
+in that sheet interpolated real geometry only because *both* ends were `taperParts` outlines at the
+same point count; the rail end was the invented bracket. Now that the rail draws the actual mark,
+the two ends are categorically different objects — a ~600-point filled taper against a 52-byte
+stroked wire, untapered because §11 removed the taper on a measurement. Paths that shape cannot
+interpolate, and rebuilding a morphable rail bracket would mean drawing something that is not the
+shipped mark.
+
+**What the collapse does instead is one switch and one clock.** `--bn-brand-open` is 1 open and 0
+railed; both rail conditions set that and nothing else. Every delay is a position inside the 320ms
+the column already spends, so the gesture does not get slower, it gets legible: BANCHI leaves
+first, then 番地 and the frame, a 40ms rest, and the mark lands last. Expanding reverses it.
+**The 40ms rest is why there is no cross-fade** — showing a tapered outline beside a stroked wire
+invites the eye to compare two objects the design insists are one.
+
+**And `base.css` crushes transition DURATION while leaving DELAY alone.** Without an override a
+reduced-motion user would get the name snapping out, **200ms of an empty brand row**, then the mark
+snapping in — a hole rather than an instant swap. Every delay is a variable so the fix is five
+values and no `!important`.
+
+### The defect the choreography found, which had nothing to do with the lockup
+
+**The rail's rules centred their children** — `justify-content: center` on the brand and
+`margin: 0 auto` on every nav link — and both resolve against a width that is *animating*. Measured
+at 1440 on ⌘.: the mark's centre went **36 → 114.8 → 31.5** and every nav icon did the same. The
+sidebar threw itself 79px right and slid back, on every collapse, in the shipped product.
+
+The sidebar has a spine at **x ≈ 32** and the collapse is meant to delete everything to the right
+of it while nothing travels. That held at both resting states and failed at every frame between,
+which is why no check could see it: a screenshot proves nothing and neither does an assertion on
+either end. `app/tests/brand.spec.ts` now samples **mid-transition** and asserts a *corridor*
+rather than a curve, so it survives anyone retuning `--bn-ease`.
+
+### Still open: the phone
+
+**The phone top bar is 52px and the lockup at its floor is 102 × 75.** It is 23px taller than the
+whole bar, and §11's floor is a measurement rather than a preference. So the bar keeps the mark at
+26 beside a "Banchi" title, unchanged.
+
+The three ways out, none of them free: **grow the bar to ~91px**, which costs 39px on the device
+where vertical space is scarcest and breaks its match with the 52px tab bar; **design a horizontal
+lockup**, which is a new artifact needing its own rounds; or **leave it**, which is what ships.
+Recorded as a decision deferred rather than a surface nobody looked at.

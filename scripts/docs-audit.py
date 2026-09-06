@@ -7272,6 +7272,8 @@ def check_raw_color(report: Report) -> None:
 
 LOGO_SPEC = ROOT / "docs" / "specs" / "logo.md"
 MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
+LOCKUP_GEOMETRY = ROOT / "app" / "src" / "kit" / "lockupGeometry.ts"
+LOCKUP_TSX = ROOT / "app" / "src" / "kit" / "Lockup.tsx"
 
 # Section 9's rows, as they are written: | mark | prism | ground | bracket | card base |
 # THE BRACKET LEGEND, WHICH SECTION 9 PUBLISHES AND THIS ROW READ FOR THE FIRST TIME ON
@@ -7434,6 +7436,18 @@ def check_lockup_bracket(report: Report) -> None:
     if not exists(SIDEBAR_MORPH) or not exists(MARK_PALETTES):
         return
     sheet, gen = read(SIDEBAR_MORPH), read(MARK_PALETTES)
+    # the component reads the palette rather than naming hexes; if it ever stops, say so here
+    if exists(LOCKUP_TSX):
+        tsx = read(LOCKUP_TSX)
+        if "MARKS.bluesteel.bracket" not in tsx and re.search(r"#[0-9A-Fa-f]{6}", tsx):
+            report.add("lockup bracket", MECHANICAL, [Finding(
+                rel(LOCKUP_TSX),
+                "the lockup names a color of its own instead of reading "
+                "`MARKS.bluesteel.bracket`. §16 settles the dark bracket as the MARK's metal so "
+                "the two are one object; `markPalettes.ts` is the only file in app/ outside "
+                "tokens.css allowed to name a hex, and `raw color` cannot see a .tsx.",
+            )], "")
+            return
     m = re.search(r"bluesteel:\s*\{.*?bracket:\s*\[([^\]]+)\]", gen, re.S)
     if not m:
         report.add("lockup bracket", MECHANICAL, [Finding(
@@ -7574,8 +7588,41 @@ def check_lockup_params(report: Report) -> None:
                 f"the spec first and say which round moved it.",
             ))
 
+    # THE GENERATED FILE IS THE THIRD COPY, and §15 asked for it by name: "once a generated file
+    # exists it must reconcile both directions against that too, exactly as `logo parity` does
+    # for `markPalettes.ts`". Without this row the app could draw a lockup the spec does not
+    # describe and every other check would stay green — which is what `logo parity` exists for.
+    if exists(LOCKUP_GEOMETRY):
+        gen = read(LOCKUP_GEOMETRY)
+        block = re.search(r"export const PARAMS = \{(.*?)\} as const", gen, re.S)
+        if block is None:
+            findings.append(Finding(
+                rel(LOCKUP_GEOMETRY),
+                "no `PARAMS` in the generated geometry. The app draws from this file; with the "
+                "block missing nothing reconciles what it draws against the spec that settled it.",
+            ))
+        else:
+            built = {k: float(v) for k, v in
+                     re.findall(r"(\w+)\s*:\s*([0-9.]+)", block.group(1))}
+            for key in sorted(set(published) & set(built)):
+                if abs(built[key] - published[key]) > 1e-9:
+                    findings.append(Finding(
+                        f"{rel(LOCKUP_GEOMETRY)} -> {key}",
+                        f"generated at {built[key]} and settled at {published[key]} in "
+                        f"docs/specs/logo.md. Re-run `node scripts/build-lockup.mjs`, or move the "
+                        f"spec first and say which round moved it.",
+                    ))
+            for key in sorted(set(published) - set(built)):
+                findings.append(Finding(
+                    rel(LOCKUP_GEOMETRY),
+                    f"docs/specs/logo.md settles `{key}` and the generated geometry does not "
+                    f"carry it. A settled value the app never receives is one the drawing can "
+                    f"ignore.",
+                ))
+
     report.add("lockup params", MECHANICAL, findings,
                f"{len(published)} settled values against the sheet's holds"
+               + (" and the generated geometry" if exists(LOCKUP_GEOMETRY) else "")
                + (f", `{sweeping}` under test" if sweeping in published else "")
                if not findings else f"{len(findings)} disagreements")
 
