@@ -22,28 +22,24 @@
  svg,img{display:block}
 </style>
 <div class="wrap">
-<h1>the lockup — round 3 · the bracket stroke, bisected</h1>
+<h1>the lockup — round 4 · halved again, and past the top edge</h1>
 <div class="sub">
-<b>The two rounds disagree, and that is the method working.</b> Round 1 offered 0.045&ndash;0.140 and you
-took <b>0.045&ndash;0.085</b>. Round 2 offered 0.018&ndash;0.085 and you took <b>0.026&ndash;0.045</b>.
-The same 0.065 and 0.085 were accepted the first time and passed over the second, shown against thinner
-neighbours and at size &mdash; which is &sect;7 rule 3, and the same narrowing &sect;6 records for the sheen:
-<i>&ldquo;shown a second time against the ground it sits on, the band narrowed&hellip; 0 and 0.30 both failed
-on the second look.&rdquo;</i>
+<b>Where the three rounds have got to.</b> R1 offered 0.045&ndash;0.140 &rarr; took 0.045&ndash;0.085.
+R2 offered 0.018&ndash;0.085 &rarr; took 0.026&ndash;0.045. R3 offered 0.026&ndash;0.045 &rarr; took
+<b>0.036&ndash;0.045</b>, eliminating 0.026 and 0.031.
 <br><br>
-<b>Both edges are interior now.</b> 0.018 was offered and failed; 0.065 was offered and passed over. So the
-range is finally yours rather than mine, and this round halves it &mdash; &sect;7 rule 4. The two confirmed
-failures are re-shown at the foot so the pick has something to lose to.
+<b>0.045 is now sitting on the top edge of what I offered, so the range was wrong again</b> &mdash;
+&sect;7 rule 5. And there is a real hole in the evidence: 0.045 is good and 0.065 is not, but
+<b>nothing between them has ever been drawn</b>. R2 jumped straight from one to the other. So this round
+does two things at once, which is allowed because they are the same axis: it halves the surviving band
+and it fills that hole.
 <br><br>
-<b>&ldquo;About the same&rdquo; is the answer I am expecting, and it ends this.</b> Across 0.026&ndash;0.045
-the stroke moves by three quarters of one pixel at kanji 40. If the five read alike, that is the
-just-noticeable difference and &sect;7 rule 7 says stop rather than sweep further.
+<b>Same holds throughout:</b> pad 0.22, gap 0.06, roman 0.36&times; width-matched, caps, kanji tracking
+0.07em, roman at 62% opacity, arm 0.32, tail tip 0.07, ramp 0.45, radius pinned absolute.
 <br><br>
-<b>One thing this band forces, and it is not about taste.</b> Every value here is <b>sub-pixel below
-kanji 26</b> &mdash; at kanji 22 the whole band is 0.57&ndash;0.99px. The stroke is a fraction of the kanji
-size, so it shrinks with the lockup, and below that the bracket stops being a line and becomes an
-antialiased grey. That sets a MINIMUM SIZE for the lockup rather than a different stroke, and it is its
-own round.
+<b>The step is now a third of a pixel at kanji 40.</b> 0.036 to 0.040 is 1.44px to 1.60px. If this row
+reads as one row, that is the JND and &sect;7 rule 7 ends it &mdash; take any of them and the sweep is
+finished rather than inconclusive.
 </div>
 <div id="out"></div></div>
 <script>
@@ -142,8 +138,8 @@ function kanjiStem(size){
 }
 
 const HOLD = {pad:0.22, gap:0.06, tip:0.07, tl:0.45, arm:0.32}
-const VALUES = [0.026, 0.031, 0.036, 0.040, 0.045]
-const REJECTED = [0.018, 0.065]      /* offered and failed — re-shown at the foot, section 7's rule */
+const VALUES = [0.036, 0.040, 0.045, 0.050, 0.056]
+const REJECTED = [0.031, 0.065]      /* eliminated in R3, and rejected in R2 — re-shown at the foot */
 const KEPT = []
 const INCUMBENT = null
 
@@ -156,7 +152,7 @@ function row(size, dark){
   c.appendChild(lk)
   const kept = KEPT.indexOf(v) >= 0
   const cap=el('div','cap'+(kept?' was':''))
-  cap.textContent=v.toFixed(3)+(kept?' — kept in round 1':'')
+  cap.textContent=v.toFixed(3)+(v<=0.045?' — survived R3':' — new, above your edge')
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
   s.appendChild(c); made.push([lk,v,num,size])})
@@ -170,8 +166,6 @@ o.appendChild(el('h2',null,'at kanji 40'))
 const A=row(40,false)
 o.appendChild(el('h2',null,'at kanji 22 — the size it would be used at'))
 const C=row(22,false)
-o.appendChild(el('h2',null,'at kanji 14 — where a thin stroke is supposed to die'))
-const D=row(14,false)
 o.appendChild(el('h2',null,'kanji 22 on the app’s own dark page — a light stroke optically thickens'))
 const B=row(22,true)
 
@@ -182,15 +176,15 @@ const R=(function(){
  REJECTED.forEach(function(v){
   const c=el('div','cell')
   const lk=stamp(40, HOLD.gap, HOLD.pad, '#0f1217'); c.appendChild(lk)
-  const cap=el('div','cap was'); cap.textContent=v.toFixed(3)+(v<0.02?' — failed, round 2':' — passed over, round 2')
+  const cap=el('div','cap was'); cap.textContent=v.toFixed(3)+(v<0.04?' — you eliminated this, R3':' — passed over, R2')
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
   s2.appendChild(c); made.push([lk,v,num,40])})
  o.appendChild(s2); return made})()
 
 document.fonts.ready.then(function(){
- const stem={64:kanjiStem(64), 40:kanjiStem(40), 22:kanjiStem(22), 14:kanjiStem(14)}
- ;[Z,A,C,D,B,R].forEach(function(g){ g.forEach(function(r){
+ const stem={64:kanjiStem(64), 40:kanjiStem(40), 22:kanjiStem(22)}
+ ;[Z,A,C,B,R].forEach(function(g){ g.forEach(function(r){
   const lk=r[0], v=r[1], num=r[2], size=r[3]
   /* radius still pinned, at the same absolute value round 1 used, so the two rounds are comparable */
   frame(lk, {stroke:v, arm:HOLD.arm, tip:HOLD.tip, tl:HOLD.tl, rrAbs:size*0.110*1.85})
