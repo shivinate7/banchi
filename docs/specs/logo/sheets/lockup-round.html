@@ -6,223 +6,143 @@
  body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
  .wrap{padding:26px 28px}
  h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
- .sub{font-size:12px;color:#6b7280;margin:0 0 16px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 14px;max-width:1060px}
  h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:22px 0 9px}
  .strip{display:flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
  .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
  .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
  .was{color:#c2410c;font-weight:700}
- .num{font:500 9px ui-monospace,monospace;color:#15803d}
+ .num{font:500 9px ui-monospace,monospace;color:#15803d;text-align:center;line-height:1.5}
  .lk{position:relative;display:inline-block}
  .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
  .go{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;line-height:1;display:block}
  .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
- .mx{display:grid;gap:16px 22px;background:#fff;border-radius:14px;padding:20px 24px;align-items:center;justify-items:center}
- .hd{font:600 9px system-ui;color:#8b93a0;letter-spacing:.06em;text-transform:uppercase}
+ table.hist{border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:10px;margin:0 0 10px}
+ table.hist td,table.hist th{padding:4px 14px;text-align:left;border-bottom:1px solid #eef1f4}
+ table.hist th{color:#8b93a0;font-weight:600}
+ .checks{border-radius:10px;padding:12px 16px;margin:0 0 14px;font:12px/1.6 system-ui}
+ .pass{background:#dcfce7;border:1px solid #16a34a;color:#14532d}
+ .fail{background:#fee2e2;border:2px solid #c2410c;color:#7f1d1d;font-weight:600}
  svg,img{display:block}
 </style>
 <div class="wrap">
-<h1>the lockup — round 6 · the corner radius, unpinned at last</h1>
-<div class="sub">
-<b>The stroke is settled at 0.050</b> and is held fixed from here. This round moves the corner radius,
-which has been pinned since round 1 so the stroke could move alone.
-<br><br>
-<b>What you have been looking at is not the rule.</b> The recovered code sets the radius at
-<code>1.85 &times; stroke</code>. It was pinned at <code>1.85 &times; 0.110</code> &mdash; the old
-stroke&rsquo;s value &mdash; and at the settled stroke that works out to <b>4.07 &times;</b>. So every
-specimen across five rounds carried a corner more than twice what the rule gives. The radius is not
-merely unswept; as it stands it is wrong.
-<br><br>
-<b>Both ends are meant to fail.</b> At 1.0&times; the corner is barely a corner and the bracket reads as a
-square angle; at 7.0&times; the arc eats the straight arms and there is nothing left to read as an arm.
-&sect;5 already records this trade for the icon &mdash; the derived 9.945 radius <i>&ldquo;ate the straight
-arm&rdquo;</i> and 8 was taken instead <i>&ldquo;to give the arms visible length&rdquo;</i>.
-<br><br>
-<b>The radius is capped at half the shorter side, and the cap is printed.</b> The taper clamp already
-taught this sheet that a bound which binds silently turns a sweep into a row of identical specimens.
-<br><br>
-<b>Same holds:</b> pad 0.22, gap 0.06, roman 0.36&times; width-matched, caps, kanji tracking 0.07em, roman
-at 62% opacity, arm 0.32, stroke 0.050, tail tip 0.07, ramp 0.45.
-</div>
+<h1 id="title"></h1>
+<div id="checks"></div>
+<div class="sub" id="lede"></div>
+<div id="hist"></div>
 <div id="out"></div></div>
+<script src="./lockup-core.js"></script>
 <script>
 window.__sheetReady = false
-const SQ=(function(){const a=50,N=220,p=[]
- for(let i=0;i<=N;i++){const t=i/N*2*Math.PI,ct=Math.cos(t),st=Math.sin(t)
-  p.push((a+a*Math.sign(ct)*Math.pow(Math.abs(ct),.4)).toFixed(2)+' '+(a+a*Math.sign(st)*Math.pow(Math.abs(st),.4)).toFixed(2))}
- return 'M'+p.join('L')+'Z'})()
-function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
- const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=300,pts=[]
- const tl=Math.min(tlf*Math.max(aX,aY),L/2)
- for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
-  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
-  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
-  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
-  const dE=Math.min(s,L-s);const f=dE<tl?tip+(1-tip)*(dE/tl):1
-  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
- const q=function(v){return v.toFixed(3)}
- const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
- const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
- return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
-   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
-  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
-let n=0
-function stamp(size,gap,pd,col){
- const el=document.createElement('div');el.className='lk'
- el.style.padding=(size*pd).toFixed(2)+'px '+(size*pd*1.05).toFixed(2)+'px'
- el.innerHTML='<div style="color:'+(col||'#0f1217')+'">'+
-  '<span class="go k" style="font-size:'+size+'px;letter-spacing:.07em">番地</span>'+
-  '<span class="rom r" style="font-size:'+(size*0.36).toFixed(2)+'px;letter-spacing:.14em;margin-top:'+(size*gap).toFixed(2)+'px;opacity:.62">BANCHI</span></div>'
- Object.assign(el.dataset,{size:size,col:col||'#0f1217'});return el}
 
-/* The frame, with tails. Everything above the bracket is the recovered code untouched: the
-   iterative width-match on the roman, the 0.11 stroke, the 0.32 arm, the 1.85x radius. What
-   changed is that the two paths are no longer stroked -- they are the icon's tapered OUTLINE,
-   so the arms thin toward their free ends the way the mark's do. `tip` is the width at the tip
-   as a fraction of the stroke; `tlf` is how much of the arm the ramp takes. */
-function frame(el, opt){
- opt = opt || {}
- if(el.querySelector('svg')) return 0
- const k=el.querySelector('.k'), r=el.querySelector('.r')
- const kw=k.getBoundingClientRect().width, nn=r.textContent.length
- let ls=0
- for(let i=0;i<30;i++){const rw=r.getBoundingClientRect().width
-  ls+=(kw-rw)/nn; r.style.letterSpacing=ls.toFixed(3)+'px'
-  if(Math.abs(kw-r.getBoundingClientRect().width)<0.2) break}
- r.style.marginRight=(-ls).toFixed(3)+'px'
- const size=+el.dataset.size, col=el.dataset.col
- const sw=size*(opt.stroke===undefined?0.11:opt.stroke), arm=opt.arm===undefined?0.32:opt.arm
- const w=el.offsetWidth, h=el.offsetHeight, i=sw/2, W=w-sw, H=h-sw
- /* The radius normally follows the stroke (1.85x), which is what keeps the bracket self-similar at
-    any weight. `rrAbs` pins it instead, so a STROKE sweep moves one thing rather than two --
-    section 7 rule 6. Nothing but a sweep should pass it. */
- const rrWant = opt.rrAbs!==undefined ? opt.rrAbs : sw*(opt.rrMul===undefined ? 1.85 : opt.rrMul)
- const rrCap  = Math.min(W,H)/2-.1
- const rr=Math.min(rrWant, rrCap)
- el.dataset.rr = rr.toFixed(2) + (rr < rrWant-1e-6 ? ' CLAMPED from '+rrWant.toFixed(2) : '')
- const aX=Math.max(W*arm, rr+2), aY=Math.max(H*arm, rr+2)
- let body
- if(opt.tails===false){
-  const TL='M'+i.toFixed(2)+' '+(i+aY).toFixed(2)+'V'+(i+rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+rr).toFixed(2)+' '+i.toFixed(2)+'H'+(i+aX).toFixed(2)
-  const BR='M'+(i+W).toFixed(2)+' '+(i+H-aY).toFixed(2)+'V'+(i+H-rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+W-rr).toFixed(2)+' '+(i+H).toFixed(2)+'H'+(i+W-aX).toFixed(2)
-  body=[TL,BR].map(function(d){return '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+sw.toFixed(2)+'" stroke-linecap="round"/>'}).join('')
- }else{
-  const tlf = opt.tl===undefined?0.45:opt.tl
-  /* SECTION 6's RECORDED DEFECT, GUARDED. taperParts clamps the ramp at half the path length, so
-     every tlf above that renders identically while being presented as a sweep -- "three images
-     approved as different were the same image". The clamp point is computed and printed here so a
-     clamped specimen cannot pose as a distinct one. */
-  const _L1=Math.max(aY-rr,0), _L2=rr*Math.PI/2, _L3=Math.max(aX-rr,0), _L=_L1+_L2+_L3
-  const _req=tlf*Math.max(aX,aY), _used=Math.min(_req,_L/2)
-  el.dataset.ramp = _used.toFixed(1)+(_used<_req-1e-6 ? ' CLAMPED from '+_req.toFixed(1) : '')
-  const p=taperParts(i, i, aX, aY, rr, sw, opt.tip===undefined?0.07:opt.tip, tlf)
-  const one='<path d="'+p.body+'" fill="'+col+'"/>'+p.caps.map(function(c){
-    return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="'+col+'"/>':''}).join('')
-  body=one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g>'
- }
- el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+body+'</svg>')
- el.dataset.geom = body.length + ':' + body.slice(0, 400)   /* a fingerprint of what was actually drawn */
- return h}
-
+/* ===========================================================================================
+   THE ROUND, AS DATA.
+   Everything below is derived from this object -- the title, the prose, the history table, the
+   captions, and the assertions. Nothing about the round is typed twice, because the two caption
+   bugs in this sheet were both a hand-written label disagreeing with the round it described.
+   =========================================================================================== */
+const ROUND = {
+ n: 6,
+ title: 'the corner radius, unpinned at last',
+ sweeping: 'rr',                       /* the key in `used` that must MOVE */
+ unit: '× the stroke',
+ values: [1.0, 1.85, 2.8, 4.07, 5.5, 7.0],
+ notes: {1.85:'the recovered rule', 4.07:'what you have been seeing'},
+ /* every one of these must be IDENTICAL across every specimen, and equal to what is declared */
+ holds: {pad:0.22, gap:0.06, stroke:0.050, arm:0.32, tip:0.07, tl:0.45, tails:true},
+ sizes: [96, 40, 22],
+ history: [
+  ['1', '0.045 – 0.140', '0.045 – 0.085', 'reached my floor'],
+  ['2', '0.018 – 0.085', '0.026 – 0.045', 'opened downward; 0.065 and 0.085 now passed over'],
+  ['3', '0.026 – 0.045', '0.036 – 0.045', 'reached my ceiling'],
+  ['4', '0.036 – 0.056', '0.045 and 0.050', 'opened upward; filled the 0.045→0.065 hole'],
+  ['5', 'forced pair', '0.050', 'settled — holds 1px to kanji 20'],
+ ],
+ lede: 'The stroke is settled at <b>0.050</b> and held from here. This round moves the corner radius, '+
+  'pinned since round 1 so the stroke could move alone. <b>What you have been looking at is not the '+
+  'rule:</b> the recovered code says <code>1.85 × stroke</code>, but it was pinned at '+
+  '<code>1.85 × 0.110</code> — the old stroke’s value — which at 0.050 is '+
+  '<b>4.07 ×</b>. Every specimen across five rounds carried a corner more than twice the rule’s. '+
+  '<br><br><b>Both ends are meant to fail.</b> At 1.0× the corner is barely a corner; at 7.0× the '+
+  'arc eats the straight arms. §5 records that trade for the icon — the derived radius '+
+  '<i>“ate the straight arm”</i>.'
+}
 
 const o=document.getElementById('out')
 function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
 
-/* PRINT THE MEASUREMENT. A bracket's weight only means anything against the weight of the type it
-   holds, so the kanji's own stem is measured off the rendered glyph -- rasterise 番 large, scan every
-   row, take the median run of dark pixels -- and each stroke is printed as a multiple of it. */
-function kanjiStem(size){
- const S=400, c=document.createElement('canvas'); c.width=S; c.height=S
- const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,S,S)
- x.fillStyle='#000'; x.font='300px "Hiragino Sans"'; x.textBaseline='middle'; x.fillText('番',20,S/2)
- const d=x.getImageData(0,0,S,S).data, runs=[]
- for(let y=0;y<S;y++){let run=0
-  for(let px=0;px<S;px++){const dark=d[(y*S+px)*4]<128
-   if(dark)run++; else {if(run>1)runs.push(run); run=0}}
-  if(run>1)runs.push(run)}
- runs.sort(function(a,b){return a-b})
- return runs.length ? runs[Math.floor(runs.length/2)]/300*size : 0
-}
+document.getElementById('title').textContent =
+ 'the lockup — round '+ROUND.n+' · '+ROUND.title
+document.getElementById('lede').innerHTML = ROUND.lede +
+ '<br><br><b>Held this round, and asserted rather than promised:</b> ' +
+ Object.keys(ROUND.holds).map(function(k){return k+' '+ROUND.holds[k]}).join(', ') + '.'
 
-const HOLD = {pad:0.22, gap:0.06, tip:0.07, tl:0.45, arm:0.32}
-const STROKE = 0.050                 /* settled, round 5 */
-const VALUES = [1.0, 1.85, 2.8, 4.07, 5.5, 7.0]   /* multiples of the stroke */
-const REJECTED = []
-const KEPT = []
-const INCUMBENT = null
+;(function(){
+ const t=el('table','hist')
+ t.innerHTML='<tr><th>round</th><th>offered</th><th>taken</th><th></th></tr>' +
+  ROUND.history.map(function(r){return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td><b>'+r[2]+'</b></td><td style="color:#8b93a0">'+r[3]+'</td></tr>'}).join('')
+ document.getElementById('hist').appendChild(t)})()
 
-function row(size, dark){
- const s=el('div','strip'); if(dark) s.style.background='#0c0e12'
- const made=[]
- VALUES.forEach(function(v){
+function row(size){
+ const s=el('div','strip'); const made=[]
+ ROUND.values.forEach(function(v){
   const c=el('div','cell')
-  const lk=stamp(size, HOLD.gap, HOLD.pad, dark?'#eef0f4':'#0f1217')
+  const lk=stamp(size, ROUND.holds.gap, ROUND.holds.pad, '#0f1217')
   c.appendChild(lk)
-  const kept = KEPT.indexOf(v) >= 0
-  const cap=el('div','cap'+(kept?' was':''))
-  cap.textContent=v.toFixed(2)+'\u00d7'
-   + (v===1.85?' — the recovered rule':'') + (v===4.07?' — what you have been seeing':'')
+  const note=ROUND.notes[v]
+  const cap=el('div','cap'+(note?' was':''))
+  cap.textContent=v+ROUND.unit+(note?' — '+note:'')
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
-  s.appendChild(c); made.push([lk,v,num,size])})
- o.appendChild(s)
- return made
+  s.appendChild(c); made.push({lk:lk, v:v, num:num, size:size})})
+ o.appendChild(s); return made
 }
 
-o.appendChild(el('h2',null,'at kanji 96 — where half a pixel is visible'))
-const Z=row(96,false)
-o.appendChild(el('h2',null,'at kanji 40'))
-const A=row(40,false)
-o.appendChild(el('h2',null,'at kanji 22 — the size it would be used at'))
-const C=row(22,false)
-o.appendChild(el('h2',null,'kanji 22 on the app’s own dark page — a light stroke optically thickens'))
-const B=row(22,true)
-
-/* the two that were offered and lost, re-shown so the pick is a choice rather than a default */
-const R=(function(){ if(!REJECTED.length) return []
- o.appendChild(el('h2',null,'re-shown'))
- const s2=el('div','strip'); const made=[]
- REJECTED.forEach(function(v){
-  const c=el('div','cell')
-  const lk=stamp(40, HOLD.gap, HOLD.pad, '#0f1217'); c.appendChild(lk)
-  const cap=el('div','cap was'); cap.textContent=v.toFixed(3)+' — the nearest loser, R4'
-  c.appendChild(cap)
-  const num=el('div','num'); c.appendChild(num)
-  s2.appendChild(c); made.push([lk,v,num,40])})
- o.appendChild(s2); return made})()
-
-/* A SWEEP WHOSE SPECIMENS ARE IDENTICAL IS NOT A SWEEP, and this file has now come within one
-   render of shipping one twice -- once when the taper ramp clamped, and once when `frame()` in this
-   copy did not know the option the round was sweeping and silently drew the same bracket six times.
-   Section 6 records the original: "three images approved as different were the same image." So the
-   drawn geometry is fingerprinted and any two specimens in a row that match are called out ON the
-   sheet, where they cannot be missed, rather than left for the eye to catch. */
-function assertDistinct(group, label){
- const seen={}, dupes=[]
- group.forEach(function(r){
-  const g=r[0].dataset.geom||''
-  if(seen[g]!==undefined) dupes.push(seen[g]+' and '+r[1]); else seen[g]=r[1]})
- if(dupes.length){
-  const w=el('div','sub')
-  w.style.cssText='background:#fee2e2;border:2px solid #c2410c;border-radius:10px;padding:10px 14px;color:#7f1d1d;font-weight:600'
-  w.innerHTML='&#9888; '+label+': identical specimens drawn for '+dupes.join(', ')
-   +' &mdash; this row is not a sweep. The variable being swept is not reaching the drawing.'
-  o.insertBefore(w, o.firstChild)}
+/* ---- the assertions ------------------------------------------------------------------------ */
+function check(groups){
+ const problems=[], proved=[]
+ groups.forEach(function(g){
+  const size=g[0].size, seen={}
+  /* 1 — every specimen a different drawing */
+  g.forEach(function(r){
+   const geom=r.lk.dataset.geom||''
+   if(seen[geom]!==undefined) problems.push('kanji '+size+': '+seen[geom]+' and '+r.v+' drew the SAME bracket — the swept variable is not reaching the drawing')
+   else seen[geom]=r.v})
+  /* 2 — the swept key actually moved, and moved for every value */
+  const swept=g.map(function(r){return JSON.parse(r.lk.dataset.used)[ROUND.sweeping]})
+  if(new Set(swept).size !== g.length) problems.push('kanji '+size+': `'+ROUND.sweeping+'` took only '+new Set(swept).size+' distinct values across '+g.length+' specimens')
+  /* 3 — every held key identical across specimens AND equal to what was declared */
+  Object.keys(ROUND.holds).forEach(function(k){
+   const got=g.map(function(r){return JSON.parse(r.lk.dataset.used)[k]})
+   if(new Set(got).size !== 1) problems.push('kanji '+size+': `'+k+'` was declared held but took '+new Set(got).size+' values: '+got.join(', '))
+   else if(got[0] !== ROUND.holds[k]) problems.push('kanji '+size+': `'+k+'` declared '+ROUND.holds[k]+' but drawn at '+got[0])})
+  /* 4 — nothing clamped without saying so */
+  g.forEach(function(r){ if((r.lk.dataset.rr||'').indexOf('CLAMPED')>=0)
+   problems.push('kanji '+size+': '+r.v+' hit the radius cap — '+r.lk.dataset.rr)})
+  proved.push('kanji '+size)})
+ const box=el('div','checks '+(problems.length?'fail':'pass'))
+ box.innerHTML = problems.length
+  ? '&#9888; THIS SHEET IS NOT A SWEEP.<br>' + problems.map(function(p){return '&bull; '+p}).join('<br>')
+  : '&#10003; Checked on this render, at ' + proved.join(', ') + ': every specimen is a distinct drawing; '
+    + '<code>'+ROUND.sweeping+'</code> took '+ROUND.values.length+' distinct values; '
+    + Object.keys(ROUND.holds).length + ' declared holds were identical across every specimen and equal to what is stated above; '
+    + 'nothing hit a clamp.'
+ document.getElementById('checks').appendChild(box)
 }
+
+const groups = ROUND.sizes.map(function(sz){
+ o.appendChild(el('h2',null,'at kanji '+sz))
+ return row(sz)})
 
 document.fonts.ready.then(function(){
- const stem={96:kanjiStem(96), 40:kanjiStem(40), 22:kanjiStem(22)}
- ;[Z,A,C,B,R].forEach(function(g){ g.forEach(function(r){
-  const lk=r[0], v=r[1], num=r[2], size=r[3]
-  /* radius still pinned, at the same absolute value round 1 used, so the two rounds are comparable */
-  frame(lk, {stroke:STROKE, arm:HOLD.arm, tip:HOLD.tip, tl:HOLD.tl, rrMul:v})
-  const rr = lk.dataset.rr || ''
-  num.innerHTML = 'radius '+rr.split(' ')[0]+'px<br><span style="color:'
-   + (rr.indexOf('CLAMPED')>=0?'#c2410c':'#6b7280')+'">'
-   + (rr.indexOf('CLAMPED')>=0 ? rr.slice(rr.indexOf('CLAMPED')) : 'stroke '+(size*STROKE).toFixed(2)+'px')
-   + '</span>'
+ groups.forEach(function(g){ g.forEach(function(r){
+  frame(r.lk, {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tip:ROUND.holds.tip,
+               tl:ROUND.holds.tl, rrMul:r.v})
+  const rr=(r.lk.dataset.rr||'').split(' ')[0]
+  r.num.innerHTML = 'radius '+rr+'px<br><span style="color:#6b7280">stroke '
+   + (r.size*ROUND.holds.stroke).toFixed(2)+'px</span>'
  })})
- assertDistinct(Z, 'kanji 96'); assertDistinct(A, 'kanji 40'); assertDistinct(C, 'kanji 22')
+ check(groups)
  window.__sheetReady = true
 })
 </script>
