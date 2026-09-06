@@ -296,6 +296,57 @@ function openSection(box: string): unknown {
   return { ok: true, box: Number(box), sections, at }
 }
 
+// -------------------------------------------------------------------------------- trends
+
+/**
+ * Every recorded trend reading, indexed by SKU.
+ *
+ * WHY AN INDEX AND NOT A URL MATCH. `Pricing.tsx` asks for trends in CHUNKS of
+ * `TREND_CHUNK = 8` — `?sku=a&sku=b&…` eight at a time, in whatever order the rows are sorted
+ * on screen — while the recorder asks once for every SKU in the run. So no chunk request can
+ * ever equal a recorded URL, and matching on the URL meant "Load trends" answered
+ * `demo_not_recorded` on the first chunk, every time. Reproducing the client's chunking and
+ * its sort order in the recorder would be a second copy of a rule that lives in the screen,
+ * and it would break the next time a filter changed which rows are on screen.
+ *
+ * The data is the same real reading either way; this just re-slices it to whatever was asked
+ * for. Built once, lazily, from every recorded `/trends?` response.
+ */
+let trendIndex: Record<string, unknown> | null = null
+
+function trendsBySku(): Record<string, unknown> {
+  if (trendIndex !== null) return trendIndex
+  const index: Record<string, unknown> = {}
+  for (const [path, entry] of Object.entries(responses)) {
+    if (!path.includes('/trends?')) continue
+    const body = entry.body as Dict
+    for (const [sku, reading] of Object.entries((body.skus as Dict) ?? {})) {
+      index[sku] = reading
+    }
+  }
+  trendIndex = index
+  return index
+}
+
+/** `GET /pipeline/runs/<run>/trends?sku=…` for any subset, out of the index above. */
+function trendsFor(run: string, wanted: string[]): unknown {
+  const index = trendsBySku()
+  const skus: Record<string, unknown> = {}
+  let refused = 0
+  for (const sku of wanted) {
+    const reading = index[sku]
+    if (reading === undefined) {
+      /* A SKU THE RECORDING DOES NOT HOLD IS REFUSED, NOT INVENTED. The screen draws a
+       * refused row as "no reading", which is true; a fabricated series would be a lie
+       * about a real card's price. */
+      refused += 1
+      continue
+    }
+    skus[sku] = reading
+  }
+  return { run, asked: wanted.length, skipped: 0, refused, skus }
+}
+
 // ------------------------------------------------------------------------------ dispatch
 
 const SOLD = /^\/inventory\/(\d+)\/(\d+)\/sold$/
@@ -338,6 +389,15 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
   if (method === 'GET') {
     const entry = responses[path]
     if (entry !== undefined) return entry.body
+
+    /* The one GET answered by computation rather than by lookup — see `trendsBySku`. */
+    const trend = /^\/pipeline\/runs\/([^/]+)\/trends\?(.*)$/.exec(path)
+    if (trend !== null) {
+      const wanted = new URLSearchParams(trend[2] ?? '').getAll('sku').filter((s) => s !== '')
+      if (wanted.length > 0) {
+        return trendsFor(decodeURIComponent(trend[1] ?? ''), wanted)
+      }
+    }
     /* A GET the recording does not hold. Named as such rather than dressed up as an empty
      * result: an empty list is an answer, and answering a question this bundle cannot
      * answer with one is how a demo tells a confident lie. */
