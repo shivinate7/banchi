@@ -47,16 +47,16 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 19,
- title: 'the padding bisected — the first padding round where both ends had already failed',
+ n: 20,
+ title: 'the padding halved to a step the eye may not have — the last round this variable can honestly ask',
  sweeping: 'pad',
  unit: ' of the kanji size',
- values: [0.30, 0.40, 0.50, 0.60, 0.70],
- notes: {0.30:'two hundredths above a value you rejected', 0.70:'two hundredths below one you rejected'},
- rejected: {0.28:'“above .28” — round 17', 0.72:'out of the band — round 18', 1.25:'and it does not fit the column'},
+ values: [0.42, 0.46, 0.50, 0.54, 0.58],
+ notes: {0.50:'the midpoint, and where this lands if the row reads flat'},
+ rejected: {0.40:'below the band — round 19', 0.60:'above it — round 19', 1.25:'and it does not fit the column'},
  holds: {gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
  sizes: [48, 32],
- context: [0.30, 0.44, 0.58, 0.70],
+ context: [0.42, 0.50, 0.58],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -64,20 +64,22 @@ const ROUND = {
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
   ['16', 'padding', '0.10 – 0.36', '0.22 – 0.36 kept', 'top end NOT bracketed'],
-  ['17', 'padding', '0.22 – 0.52', 'above 0.28 – 0.52 kept', 'top end NOT bracketed AGAIN'],
-  ['18', 'padding', '0.34 – 1.25', '0.34 – below 0.72', 'BOTH ends failed at last'],
+  ['17', 'padding', '0.22 – 0.52', 'above 0.28 – 0.52', 'top end NOT bracketed AGAIN'],
+  ['18', 'padding', '0.34 – 1.25', '0.34 – below 0.72', 'both ends failed at last'],
+  ['19', 'padding', '0.30 – 0.70', 'above 0.40 – below 0.60', 'both ends failed again'],
  ],
- lede: '<b>0.72 failed and 0.28 had already failed, so for the first time in this variable the answer is '+
-  'boxed in on both sides.</b> Rounds 16 and 17 each ended with my largest value kept, which told us '+
-  'nothing about where the top is. This one ended with a rejection at each end, which is the only shape '+
-  'a bisection is allowed to start from.'+
-  '<br><br><b>So this round halves 0.34–0.72, and puts its two ends hard against the failures.</b> 0.30 '+
-  'sits two hundredths above a value you rejected; 0.70 two hundredths below one you rejected. If either '+
-  'of those now looks fine, the difference that decided round 18 is smaller than the noise, and the honest '+
-  'reading is that padding does not resolve below about four hundredths — in which case say so and I will '+
-  'take the middle rather than keep splitting.'+
-  '<br><br><b>The re-shown row carries 1.25 for the record.</b> It is the one value in this whole variable '+
-  'that failed by measurement rather than by eye: 229px of block into 212px of column.'
+ lede: '<b>0.40 and 0.60 both failed, so the band is 0.20 wide and this round halves it.</b> The step is '+
+  '0.04, which at the sidebar size is <b>1.9px of padding between neighbours</b> — the caption under each '+
+  'specimen prints its own gap from the one before it, so you can see how small a difference you are '+
+  'being asked about rather than take my word for it.'+
+  '<br><br><b>This is the last round this variable can honestly ask.</b> Halving again puts the step near '+
+  'one pixel, and a sheet that asks you to choose between two drawings a pixel apart is not measuring '+
+  'the design, it is measuring the monitor. §7 rule 7 says "about the same" is a result — if this row '+
+  'reads flat, say so, the answer is <b>0.50</b>, and I stop.'+
+  '<br><br><b>What the row is worth looking at for is not the padding.</b> At this width the thing that '+
+  'actually changes is how much of the sidebar the brand block eats: 110px of column height at 0.42 '+
+  'against 130px at 0.58, above a nav that starts right underneath it. The context row is where that '+
+  'shows.'
 }
 
 const o=document.getElementById('out')
@@ -211,11 +213,16 @@ const rejected = (function(){
 
 document.fonts.ready.then(function(){
  const all = groups.concat(context.length?[context]:[]).concat(rejected.length?[rejected]:[])
- all.forEach(function(g){ g.forEach(function(r){
+ all.forEach(function(g){ g.forEach(function(r,i){
   frame(r.lk, optsFor(r.v))
   const pad = r.size*(SWEPT==='pad' ? r.v : ROUND.holds.pad)
+  /* the gap from the neighbour, because a round is only worth asking while the step is bigger than
+     the eye's; printing it is how this sheet says when to stop rather than bisecting forever */
+  const prev = g[i-1]
+  const step = prev ? pad - prev.size*(SWEPT==='pad' ? prev.v : ROUND.holds.pad) : null
   r.num.innerHTML = 'block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
    + '<br><span style="color:#6b7280">pad '+pad.toFixed(1)+'px each side</span>'
+   + (step!==null ? '<br><span style="color:#9aa1ab">Δ '+step.toFixed(1)+'px from the last</span>' : '')
  })})
  check(all)
  window.__sheetReady = true
