@@ -353,6 +353,54 @@ resolves.
 - **An empty requested split raises `ZeroDivisionError`** in `harness/tests/t1_id_eval.py`
   instead of reporting a clean failure.
 
+### ~~Three more ways, found by a suite that could not miss~~ — CLOSED 2026-09-05
+
+**Found by asking a re-proof what it had not covered, which is the only reason they were
+found.** Fifty mutations were re-run against `1f2ab49` and every one still went red naming its
+defect — a perfect score, and the completeness critic's own verdict on it was that *a suite that
+never misses is not measuring detection, it is restating the implementation*. Each mutation had
+been derived by reading the guard it tested, so each was that guard's own inverse. The three
+below were then found by asking a different question: not *does the guard fire on the edit it
+describes*, but *can the thing it pins be wrong while it says ok*. All three were reproduced by
+hand before being believed.
+
+- **`server concurrency` passed while both its constants were INVERTED.** The row read a figure
+  out of `server/capture_server.py` and then asked only whether that number appeared anywhere in
+  section 11 — `re.search(rf"\b{value}\b", section)`. Section 11 publishes about fifty-five
+  distinct bare integers (every sweep column, every latency, every thread count), so almost any
+  retune lands on one it already says for another reason. Measured: `CaptureHandler.timeout` set
+  to 4 and `REQUEST_SLOTS` to 15 — swapped, the document wrong about both, the pool sized at the
+  value §11 itself calls within noise of no bound at all — and the row reported `ok`. **Fixed by
+  requiring the ATTRIBUTED form**: `_CONCURRENCY_FACTS` now carries a doc-side anchor per fact
+  and compares the value the section attributes to that fact against the code's. It landed RED,
+  because §11 had never stated `REQUEST_SLOTS = 4` in any attributable form at all — only as a
+  bolded column heading in the sweep table — so the section gained the sentence it was missing.
+  The swap now names both figures and both values.
+
+- **`logo parity` did not read a third of the file it exists for.** Section 9's locked-set table
+  names each mark's bracket as a WORD — `chrome`, `pale gold`, `rose` — and resolves it in a
+  second table three lines below. The row compared `prism`, `ground` and `base` and skipped the
+  word, so **24 of the 72 hexes in `app/src/kit/markPalettes.ts` were compared against nothing**
+  — in the one file CLAUDE.md's color rule takes an exception for. Measured: changing bluesteel's
+  `#B8C8D8` to `#B8C8D9` left `logo parity`, `raw color` AND `design tokens` all green, so an
+  unapproved color could reach the app past every reader that rule has. Its docstring claimed the
+  opposite in so many words. **Fixed by parsing the legend** (`_S9_BRACKET`) and resolving the
+  name to its four stops; the row now reports 72 hexes and a bracket name section 9 fails to
+  publish is a third kind of finding rather than a silent skip.
+
+- **`detector standing` was green while section 6 contradicted itself.** The section states the
+  corpus size twice and the decline count twice, eight lines apart, and `_DETECT_CLAIMS` pinned
+  one copy of each. Measured: setting the twin to 1,620 against a guarded 1,625, and the heading
+  to 61 frames against a guarded 59, left the row reporting `ok`. **A pinned figure with an
+  unpinned twin is worse than no pin**, because it licenses the belief that the section is
+  reconciled. Both twins are pinned now and the row reports 8 figures.
+
+**What this says about the method, and it is the part worth keeping.** Mutation-proving a guard
+with the mutation its own author wrote tells you the guard is wired up. It cannot tell you the
+guard is asking the right question — for that the mutation has to come from somewhere else. Two
+of these three were found by an adversarial pass whose whole brief was *what did this miss*, and
+the third by that pass reading a check's docstring against what the check actually does.
+
 ---
 
 ## 5 — The departed card on screen
@@ -1037,6 +1085,16 @@ one REQUEST rather than one connection. Both bounds are in the tree: the semapho
 execution, and `CaptureServer.process_request` submits to a `ThreadPoolExecutor(REQUEST_SLOTS)` so
 threads are capped too. Read this paragraph as the account of the first bound and the one below as
 the account of the second; neither replaced the other.
+
+**`REQUEST_SLOTS = 4`, and this line exists because the sweep table below could not carry that
+claim.** The table publishes the whole sweep — 1, 2, 3, **4**, 6, 8, 12, 24, 48, unbounded — so
+the live value appears there only as a bolded column heading among nine others. `make
+docs-audit`'s `server concurrency` row compared the code's figure against *anything* the section
+said, and a bare `4` in a row of slot counts satisfied it. Measured 2026-09-05: swapping the two
+constants — `CaptureHandler.timeout` to 4 and `REQUEST_SLOTS` to 15 — left this document wrong
+about both, sized the pool at the value this section calls within noise of no bound at all, and
+the row still reported `ok`. The row now demands the attributed form, which is this sentence, and
+the same is already true of `request_queue_size = 128` and `CaptureHandler.timeout = 15` above.
 
 The slot is taken *before* `_inflight_enter`, deliberately: a request
 queued for one has not started and cannot finish, and counting it would make the supervisor's drain

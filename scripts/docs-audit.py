@@ -1928,6 +1928,21 @@ _HANDLER_TIMEOUT_RE = re.compile(r"^    timeout = (\d+)$", re.M)
 _BACKLOG_RE = re.compile(r"^    request_queue_size = (\d+)$", re.M)
 _SLOTS_RE = re.compile(r"^REQUEST_SLOTS = (\d+)$", re.M)
 
+# WHAT SECTION 11 HAS TO SAY, AND IN WHAT SHAPE. Each row is (what, code pattern, code shape,
+# DOC-SIDE ANCHOR, the published form). The anchor is the half that was missing: it captures
+# the figure from a position that names the fact, so the comparison is between two CLAIMS
+# rather than between a number and a section that happens to contain it.
+_CONCURRENCY_FACTS = (
+    ("the base class", _SERVER_CLASS_RE, "class CaptureServer(<base>)",
+     re.compile(r"class CaptureServer\((\w+)\)"), "class CaptureServer(<base>)"),
+    ("the handler's socket timeout", _HANDLER_TIMEOUT_RE, "timeout = <seconds>",
+     re.compile(r"CaptureHandler\.timeout = (\d+)"), "CaptureHandler.timeout = <seconds>"),
+    ("the accept backlog", _BACKLOG_RE, "request_queue_size = <n>",
+     re.compile(r"request_queue_size = (\d+)"), "request_queue_size = <n>"),
+    ("the bound on executing requests", _SLOTS_RE, "REQUEST_SLOTS = <n>",
+     re.compile(r"REQUEST_SLOTS = (\d+)"), "REQUEST_SLOTS = <n>"),
+)
+
 
 def _close_header_owner() -> Optional[str]:
     """The method that sends `Connection: close`, or None if nothing does.
@@ -2231,9 +2246,17 @@ DETECT_RESULT = ROOT / "harness" / "results" / "detect.json"
 # is that a measured number is evidence and is never rewritten to match a later tree. Matching
 # on a bare integer would drag the 867 into this reconciliation and demand it change, which is
 # precisely the corruption the rule forbids.
+# EVERY COPY OF A FIGURE, NOT THE FIRST ONE SOMEBODY THOUGHT OF. Section 6 states the corpus
+# size twice and the decline count twice, eight lines apart, and until 2026-09-05 this table
+# pinned one of each. Measured: setting the twin at "photographs across six boxes" to 1,620 and
+# the heading's "59 frames" to 61 leaves the section CONTRADICTING ITSELF about both — and the
+# row reported `ok`, because the copies it reads were still right. A pinned figure with an
+# unpinned twin is worse than no pin: it licenses the belief that the section is reconciled.
 _DETECT_CLAIMS = (
     (re.compile(r"([\d,]+) photographs in the owner's six boxes"), "overall.photographs"),
+    (re.compile(r"([\d,]+) photographs across six boxes"), "overall.photographs"),
     (re.compile(r"the crop guard declined ([\d,]+)"), "overall.declined"),
+    (re.compile(r"the ([\d,]+) frames nobody has looked at"), "overall.declined"),
     (re.compile(r"\*\*The declines are entirely boxes 3 and 4\*\* \(([\d,]+) of ([\d,]+), and "
                 r"([\d,]+) of ([\d,]+)\)"),
      ("per_box.box3.declined", "per_box.box3.photographs",
@@ -2422,12 +2445,7 @@ def check_server_concurrency(report: Report) -> None:
         )
         return
 
-    for what, pattern, shape in (
-        ("the base class", _SERVER_CLASS_RE, "class CaptureServer(<base>)"),
-        ("the handler's socket timeout", _HANDLER_TIMEOUT_RE, "timeout = <seconds>"),
-        ("the accept backlog", _BACKLOG_RE, "request_queue_size = <n>"),
-        ("the bound on executing requests", _SLOTS_RE, "REQUEST_SLOTS = <n>"),
-    ):
+    for what, pattern, shape, anchor, published in _CONCURRENCY_FACTS:
         found = pattern.search(source)
         if found is None:
             findings.append(
@@ -2440,19 +2458,45 @@ def check_server_concurrency(report: Report) -> None:
             )
             continue
         value = found.group(1)
-        # WORD-BOUNDARIED, and the mutation that earned it is worth the line. A plain
-        # `value in section` is a SUBSTRING test: retuning the handler timeout from 15 to 5
-        # left this row green, because `5` occurs inside `15`, `128` and `338%` further up the
-        # same section. A check that cannot fail on the change it exists for is the vacuous
-        # green `docs/DEBTS.md` opens by warning about.
-        if re.search(rf"\b{re.escape(value)}\b", section) is None:
+        # ATTRIBUTED, NOT MERELY PRESENT — and the two rewrites this line has had are the
+        # argument for the shape it is in now.
+        #
+        # It began as `value in section`, a SUBSTRING test: retuning the handler timeout from
+        # 15 to 5 left this row green because `5` occurs inside `15`, `128` and `338%`. That
+        # was fixed to a word-boundaried search, and the fix was too narrow to hold. The
+        # question `\b4\b` asks is *does this number appear anywhere in section 11*, and that
+        # section publishes about fifty-five distinct bare integers — every sweep column, every
+        # latency, every thread count. So almost any retune lands on a number the section
+        # already says for some other reason.
+        #
+        # MEASURED, 2026-09-05: swapping the two constants — `CaptureHandler.timeout` to 4 and
+        # `REQUEST_SLOTS` to 15 — leaves the document wrong about BOTH and sizes the pool at
+        # the value this very section calls "within noise of the unbounded server it was meant
+        # to improve on". The row reported `ok`. A guard that passes while the thing it pins is
+        # inverted is not a weak guard, it is a decoration.
+        #
+        # So the section must publish the figure in a form that ATTRIBUTES it to this fact —
+        # `REQUEST_SLOTS = 4`, not a 4 in a table of slot counts — and the value it attributes
+        # is what gets compared. Coincidence cannot satisfy that; only agreement can.
+        said = anchor.search(section)
+        if said is None:
             findings.append(
                 Finding(
                     "docs/DEBTS.md",
-                    f"section 11 does not name `{value}` — {what} in "
-                    f"`server/capture_server.py`. The section is the published account of this "
-                    f"server's concurrency and the code is the authority; if the server changed, "
-                    f"the section is now describing one that is gone.",
+                    f"section 11 never attributes a value to {what}. It has to publish one as "
+                    f"`{published}` for this row to tell agreement from coincidence — a bare "
+                    f"`{value}` somewhere in the section is not a claim about {what}, and this "
+                    f"row used to accept one.",
+                )
+            )
+        elif said.group(1) != value:
+            findings.append(
+                Finding(
+                    "docs/DEBTS.md",
+                    f"section 11 publishes {what} as `{published.replace('<n>', said.group(1)).replace('<seconds>', said.group(1)).replace('<base>', said.group(1))}` "
+                    f"and `server/capture_server.py` says `{value}`. The code is the authority; "
+                    f"the section is the published account of this server's concurrency, and it "
+                    f"is now describing one that is gone.",
                 )
             )
 
@@ -6631,6 +6675,16 @@ LOGO_SPEC = ROOT / "docs" / "specs" / "logo.md"
 MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
 
 # Section 9's rows, as they are written: | mark | prism | ground | bracket | card base |
+# THE BRACKET LEGEND, WHICH SECTION 9 PUBLISHES AND THIS ROW READ FOR THE FIRST TIME ON
+# 2026-09-05. The locked-set table names each mark's bracket as a WORD — `chrome`, `pale gold`,
+# `rose` — and resolves it three lines below in a second table. Reading only the word meant the
+# four hexes it stands for were compared against nothing: 24 of the 72 hexes in
+# `markPalettes.ts` were unread, in the one file CLAUDE.md's color rule takes an exception for.
+# Measured: changing bluesteel's `#B8C8D8` to `#B8C8D9` left `logo parity`, `raw color` AND
+# `design tokens` all green, so a color nobody approved could reach the app past every reader
+# the rule has. The docstring claimed the opposite in so many words.
+_S9_BRACKET = re.compile(r"^\|\s*([a-z ]+?)\s*\|\s*`((?:#[0-9A-Fa-f]{6}\s*)+)`\s*\|", re.M)
+
 _S9_ROW = re.compile(
     r"^\|\s*\*{0,2}([a-z ]+?)\*{0,2}(?:\s*—\s*DEFAULT)?\*{0,2}\s*\|"      # the mark's name
     r"\s*`([^`]+)`\s*\|"                                                       # prism stops
@@ -6651,24 +6705,40 @@ def check_logo_parity(report: Report) -> None:
     `tokens.css` would invite.
 
     **`raw color` cannot see the file.** Its scope is `app/src/*.css`, non-recursive, and it
-    never opens a `.ts` or `.tsx`, so sixty hexes in `markPalettes.ts` pass it in silence. An
+    never opens a `.ts` or `.tsx`, so all 72 hexes in `markPalettes.ts` pass it in silence. An
     exception with no reader is how a rule stops being one, so this row stands in its place.
+
+    **AND IT ONLY BECAME TRUE OF ALL 72 ON 2026-09-05.** Section 9's locked-set table names each
+    mark's bracket as a WORD and resolves it in a second table three lines below; this row read
+    the word and never the table, so 24 of the 72 — every bracket ramp — were compared against
+    nothing. Changing one of them left this row, `raw color` and `design tokens` all green, which
+    is a color reaching the app past every reader CLAUDE.md's rule has. The sentence above about
+    an exception with no reader was, for those 24, describing this row.
 
     Both directions, because the two failures are different: a palette here that section 9 does
     not publish is a color nobody approved, and a mark in section 9 that is missing here is a
-    locked mark the product cannot draw.
+    locked mark the product cannot draw. A bracket name section 9 uses and does not publish is a
+    third, and it is reported rather than skipped.
 
     Provably wrong when it fires and no judgement to defer — both sides are literals.
     """
     if not exists(LOGO_SPEC) or not exists(MARK_PALETTES):
         return
 
+    spec = read(LOGO_SPEC)
+    # `chrome` -> ['#FFFFFF', '#B8C8D8', '#F2F8FF', '#8FA4B8'], off the legend table.
+    ramps = {name.strip(): stops.split() for name, stops in _S9_BRACKET.findall(spec)}
+
     published: Dict[str, Dict[str, object]] = {}
-    for name, prism, hi, lo, bracket, base in _S9_ROW.findall(read(LOGO_SPEC)):
+    unresolved: List[str] = []
+    for name, prism, hi, lo, bracket, base in _S9_ROW.findall(spec):
+        ramp = ramps.get(bracket.strip())
+        if ramp is None:
+            unresolved.append(f"{name.strip()} -> {bracket.strip()}")
         published[name.strip()] = {
             "prism": prism.split(),
             "ground": [hi, lo],
-            "bracket": bracket.strip(),
+            "bracket": ramp if ramp is not None else [],
             "base": base,
         }
 
@@ -6716,9 +6786,18 @@ def check_logo_parity(report: Report) -> None:
             f"without going through that table is one nobody chose.",
         ))
 
+    for pair in unresolved:
+        findings.append(Finding(
+            rel(LOGO_SPEC),
+            f"section 9's locked-set table names the bracket `{pair.split(' -> ')[1]}` and the "
+            f"gradient table below it does not publish that name, so the four hexes "
+            f"`{pair.split(' -> ')[0]}` actually draws are approved by nothing. Add the ramp, "
+            f"or rename the column to one that is published.",
+        ))
+
     for label in sorted(set(published) & set(generated)):
         want, got = published[label], generated[label]
-        for field in ("prism", "ground", "base"):
+        for field in ("prism", "ground", "bracket", "base"):
             if want[field] != got[field]:
                 findings.append(Finding(
                     f"{rel(MARK_PALETTES)} -> {label}",
@@ -6728,7 +6807,8 @@ def check_logo_parity(report: Report) -> None:
                 ))
 
     report.add("logo parity", MECHANICAL, findings,
-               f"{len(published)} locked marks, every prism, ground and base against section 9"
+               f"{len(published)} locked marks, every prism, ground, bracket and base "
+               f"against section 9 ({sum(len(m['prism']) + len(m['ground']) + len(m['bracket']) + 1 for m in published.values())} hexes)"
                if not findings else f"{len(findings)} disagreements with section 9")
 
 
@@ -9641,6 +9721,39 @@ def self_test() -> int:
         ok("TRACKS" in _map_sections(), "TRACKS is a section this check can see", str(_map_sections()))
     finally:
         globals()["MAP"] = _saved
+
+    print("\na figure the section merely contains is not a figure it attributes")
+    # The three rows below were each green while the thing they pin was wrong. These cases are
+    # the extractors that fixed them, driven on literals rather than on the live documents, so
+    # a later edit to either document cannot quietly turn them back into what they were.
+    _section = (
+        "serves on `class CaptureServer(ThreadingHTTPServer)` with `request_queue_size = 128`\n"
+        "and `CaptureHandler.timeout = 15`. `REQUEST_SLOTS = 4` is the bound.\n"
+        "| `REQUEST_SLOTS` | 1 | 2 | 3 | **4** | 6 | 8 | 12 | 24 | 48 |\n"
+    )
+    for _what, _code_re, _shape, _anchor, _published in _CONCURRENCY_FACTS:
+        _said = _anchor.search(_section)
+        ok(_said is not None, f"the attributed form of {_what} is found", _published)
+    _swapped = _section.replace("timeout = 15", "timeout = 4").replace("REQUEST_SLOTS = 4 is", "REQUEST_SLOTS = 15 is")
+    ok(
+        _CONCURRENCY_FACTS[1][3].search(_swapped).group(1) == "4",
+        "and it reads the value beside the NAME, not the first plausible integer in the table",
+        _swapped,
+    )
+
+    print("\nthe bracket ramp is resolved through section 9's own legend")
+    _legend = (
+        "| bracket | stops |\n| --- | --- |\n"
+        "| chrome | `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` |\n"
+        "| pale gold | `#FFFBEE #E8CE8A #FFFDF6 #C0A254` |\n"
+    )
+    _ramps = {n.strip(): v.split() for n, v in _S9_BRACKET.findall(_legend)}
+    ok(sorted(_ramps) == ["chrome", "pale gold"], "both named ramps are read", str(sorted(_ramps)))
+    ok(
+        _ramps.get("chrome") == ["#FFFFFF", "#B8C8D8", "#F2F8FF", "#8FA4B8"],
+        "and a name resolves to the four hexes it stands for, not to the word",
+        str(_ramps.get("chrome")),
+    )
 
     report = Report()
     check_dispatch(report)
