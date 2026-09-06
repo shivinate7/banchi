@@ -1,5 +1,5 @@
 <!doctype html>
-<meta charset="utf-8"><title>Banchi — the lockup, with tails</title>
+<meta charset="utf-8"><title>Banchi — the lockup, round by round</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700&display=swap" rel="stylesheet">
 <style>
  *{box-sizing:border-box}
@@ -22,19 +22,18 @@
  svg,img{display:block}
 </style>
 <div class="wrap">
-<h1>the lockup — the recovered pass, with tails</h1>
+<h1>the lockup — round 1 · the bracket stroke</h1>
 <div class="sub">
-<b>This sheet was lost and has been recovered.</b> The pass it continues was built in a session
-scratchpad on <code>claude/logo-state-of-record</code> and never committed — exactly the failure
-&sect;4 of <code>docs/specs/logo.md</code> already records: <i>&ldquo;the generators are committed now
-because they were lost once already.&rdquo;</i> It was recovered from
-<code>/private/tmp/.../scratchpad/tight.html</code>, and both it and this one are committed now.
+<b>One variable.</b> Everything else is held at what was approved: pad 0.22, gap 0.06, roman 0.36&times;
+width-matched, caps, kanji tracking 0.07em, roman at 62% opacity, arm 0.32, tail tip 0.07, ramp 0.45.
 <br><br>
-<b>The lockup is unchanged from what was approved</b> &mdash; padding and gap as fractions of the kanji
-size, roman at 0.36&times; width-matched by iteration, caps, kanji tracking 0.07em, roman at 62%
-opacity. The one change is the brackets: they were plain stroked paths with round caps, and they
-have <b>tails</b> now &mdash; the icon&rsquo;s own tapered construction, off the same
-<code>taperParts</code> this sheet already carried for the icon.
+<b>The corner radius is held ABSOLUTE for this round, deliberately.</b> The recovered code defines it as
+<code>1.85 &times; stroke</code>, so sweeping the stroke would drag the radius along and two things would
+move at once &mdash; &sect;7 rule 6. It is pinned at the incumbent&rsquo;s value here so only thickness
+moves. The radius gets its own round.
+<br><br>
+<b>Both ends should be wrong.</b> If nothing reads as too thin, the floor was not found and the range was
+mine rather than yours &mdash; &sect;7 rule 5.
 </div>
 <div id="out"></div></div>
 <script>
@@ -112,63 +111,61 @@ function frame(el, opt){
  el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+body+'</svg>')
  return h}
 
+
 const o=document.getElementById('out')
 function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
-function head2(t,note){o.appendChild(el('h2',null,t));if(note)o.appendChild(el('div','sub',note))}
-function sec(items, dark){
- const s=el('div','strip'); if(dark)s.style.background='#0c0e12'
+
+/* PRINT THE MEASUREMENT. A bracket's weight only means anything against the weight of the type it
+   holds, so the kanji's own stem is measured off the rendered glyph -- rasterise 番 large, scan every
+   row, take the median run of dark pixels -- and each stroke is printed as a multiple of it. */
+function kanjiStem(size){
+ const S=400, c=document.createElement('canvas'); c.width=S; c.height=S
+ const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,S,S)
+ x.fillStyle='#000'; x.font='300px "Hiragino Sans"'; x.textBaseline='middle'; x.fillText('番',20,S/2)
+ const d=x.getImageData(0,0,S,S).data, runs=[]
+ for(let y=0;y<S;y++){let run=0
+  for(let px=0;px<S;px++){const dark=d[(y*S+px)*4]<128
+   if(dark)run++; else {if(run>1)runs.push(run); run=0}}
+  if(run>1)runs.push(run)}
+ runs.sort(function(a,b){return a-b})
+ return runs.length ? runs[Math.floor(runs.length/2)]/300*size : 0
+}
+
+const HOLD = {pad:0.22, gap:0.06, tip:0.07, tl:0.45, arm:0.32}
+const VALUES = [0.045, 0.065, 0.085, 0.110, 0.140]
+const INCUMBENT = 0.110
+
+function row(size, dark){
+ const s=el('div','strip'); if(dark) s.style.background='#0c0e12'
  const made=[]
- items.forEach(function(it){
+ VALUES.forEach(function(v){
   const c=el('div','cell')
-  const lk=stamp(it.size||34, it.gap===undefined?0.06:it.gap, it.pad===undefined?0.16:it.pad, dark?'#eef0f4':'#0f1217')
-  c.appendChild(lk); made.push([lk,it])
-  const cap=el('div','cap'+(it.was?' was':'')); cap.textContent=it.cap; c.appendChild(cap)
-  const num=el('div','num'); num.dataset.for='1'; c.appendChild(num); made[made.length-1].push(num)
-  s.appendChild(c)})
+  const lk=stamp(size, HOLD.gap, HOLD.pad, dark?'#eef0f4':'#0f1217')
+  c.appendChild(lk)
+  const cap=el('div','cap'+(v===INCUMBENT?' was':''))
+  cap.textContent=v.toFixed(3)+(v===INCUMBENT?' — as drawn':'')
+  c.appendChild(cap)
+  const num=el('div','num'); c.appendChild(num)
+  s.appendChild(c); made.push([lk,v,num,size])})
  o.appendChild(s)
- return made}
+ return made
+}
 
-const pending=[]
-function build(items, dark){ pending.push([sec(items, dark)]) }
-
-/* ---- 1 · the one change ---------------------------------------------------------------------- */
-head2('1 · tails, against the pass they were added to',
- 'The approved settings, unchanged: pad 0.16, gap 0.06, roman 0.36x width-matched, caps, kanji tracking 0.07. '+
- 'Only the bracket construction moves.')
-build([{cap:'no tails — as approved', pad:0.16, gap:0.06, size:34, tails:false, was:true},
-       {cap:'tails · tip 0.07', pad:0.16, gap:0.06, size:34},
-       {cap:'tails · tip 0.20', pad:0.16, gap:0.06, size:34, tip:0.20},
-       {cap:'tails · tip 0', pad:0.16, gap:0.06, size:34, tip:0}])
-
-/* ---- 2 · padding, continued -------------------------------------------------------------------- */
-head2('2 · padding, continued — 0.28 and 0.22 were the two you kept',
- 'Both carried forward with tails on, and bracketed past each end so the pick stays interior.')
-build([{cap:'0.34', pad:0.34, size:34},{cap:'0.28 — kept', pad:0.28, size:34, was:true},
-       {cap:'0.25', pad:0.25, size:34},{cap:'0.22 — kept', pad:0.22, size:34, was:true},
-       {cap:'0.16', pad:0.16, size:34},{cap:'0.11', pad:0.11, size:34}])
-
-/* ---- 3 · the tail itself ------------------------------------------------------------------------ */
-head2('3 · how long the tail runs, at pad 0.22',
- 'The ramp as a fraction of the arm. <b>The routine clamps it at half the path length</b>, which is '+
- '&sect;6&rsquo;s recorded defect &mdash; <i>&ldquo;every value above that rendered identically while being '+
- 'presented as a sweep; three images approved as different were the same image.&rdquo;</i> The ramp actually '+
- 'used is printed under each, and a clamped one says so in orange rather than passing as a distinct specimen.')
-build([{cap:'0.15', pad:0.22, size:34, tl:0.15},{cap:'0.30', pad:0.22, size:34, tl:0.30},
-       {cap:'0.45', pad:0.22, size:34, tl:0.45},{cap:'0.65', pad:0.22, size:34, tl:0.65},
-       {cap:'0.90', pad:0.22, size:34, tl:0.90}])
-
-/* ---- 4 · at size, both grounds ------------------------------------------------------------------ */
-head2('4 · at size — pad 0.22, gap 0.06, tails tip 0.07', 'Light, then the app’s own dark page.')
-build([{cap:'56px', pad:0.22, size:56},{cap:'34px', pad:0.22, size:34},
-       {cap:'24px', pad:0.22, size:24},{cap:'18px', pad:0.22, size:18}])
-build([{cap:'56px', pad:0.22, size:56},{cap:'34px', pad:0.22, size:34},
-       {cap:'24px', pad:0.22, size:24},{cap:'18px', pad:0.22, size:18}], true)
+o.appendChild(el('h2',null,'at kanji 40 — big enough to judge the shape'))
+const A=row(40,false)
+o.appendChild(el('h2',null,'the same five, on the app’s own dark page'))
+const B=row(40,true)
+o.appendChild(el('h2',null,'at kanji 22 — nearer the size it would be used at'))
+const C=row(22,false)
 
 document.fonts.ready.then(function(){
- pending.forEach(function(g){ g[0].forEach(function(row){
-  const h = frame(row[0], row[1])
-  row[2].innerHTML = h.toFixed(1)+'px'
-   + (row[0].dataset.ramp ? '<br><span style="color:'+(row[0].dataset.ramp.indexOf('CLAMPED')>=0?'#c2410c':'#6b7280')+'">ramp '+row[0].dataset.ramp+'</span>' : '')
+ const stem40=kanjiStem(40), stem22=kanjiStem(22)
+ ;[A,B,C].forEach(function(g){ g.forEach(function(r){
+  const lk=r[0], v=r[1], num=r[2], size=r[3]
+  frame(lk, {stroke:v, arm:HOLD.arm, tip:HOLD.tip, tl:HOLD.tl, rrAbs:size*INCUMBENT*1.85})
+  const stem = size===40 ? stem40 : stem22
+  num.innerHTML = (size*v).toFixed(2)+'px<br><span style="color:#6b7280">'
+   + (stem ? (size*v/stem).toFixed(2)+'\u00d7 the kanji stem' : '') + '</span>'
  })})
  window.__sheetReady = true
 })
