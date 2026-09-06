@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 import { expect, test } from '@playwright/test'
+import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 
 /* The motion trigger's DOM half, in a real browser against the real capture screen —
@@ -242,6 +243,13 @@ async function feed(page: Page, base: number): Promise<void> {
     .toBe(before.empty + 1)
   await setScene(page, base)
 }
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER. This file registers no fixtures of its own, so it
+   takes the shared small store — `app/tests/shell.ts` carries the argument for both halves. The
+   call has to sit above every hook and every case, which `make docs-audit`'s `spec seal` row
+   checks: the navigation below happens inside a hook, and a seal declared under it would be
+   installed after the requests it exists to catch.  */
+sealEveryTest({ store: true })
 
 test('arming motion is visible, and the machine fires on a settled card', async ({ page }) => {
   await page.goto('/#/capture')

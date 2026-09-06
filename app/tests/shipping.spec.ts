@@ -1,6 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
+import { sealEveryTest } from './shell'
 
 import type { ShippingBatch, ShippingRow } from '../src/types'
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
+   `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
+   case in the file, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 /* THE SHIPPING SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -117,6 +123,36 @@ async function open(
   options: { batch?: ShippingBatch; refuse?: { code: string; message: string } } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
+
+  /* THE HUB'S TWO READS, WHICH ARE NOT THIS SCREEN'S AND WERE THEREFORE MISSED. `#/shipping`
+     is the Ship stage of `OrdersHub` — `Shipping.tsx` does nothing but point the route at it
+     with `stage="ship"` — so the hub's own `getOrders` and `getInventory` fire on mount here
+     as surely as they do on `#/orders`. Nothing in this file asked for them and nothing
+     stubbed them, so both went to the capture port until `sealEveryTest` named them.
+
+     EMPTY IS THE HONEST ANSWER RATHER THAN A CONVENIENCE. Every case in this file works from
+     an uploaded export; D63's ledger is `orders.spec.ts`'s subject. What matters is that the
+     Ship stage draws its lanes out of the file and not out of a store, which these two make
+     true by holding nothing. */
+  await page.route(/\/orders$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        summary: 'no orders',
+        orders: [],
+        resolution: { orders: [], counts: {} },
+      }),
+    })
+  })
+
+  await page.route(/\/inventory$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ version: 2, cards: {}, boxes: {}, listings: {} }),
+    })
+  })
 
   await page.route(/\/shipping\/batches$/, async (route) => {
     wire.push({

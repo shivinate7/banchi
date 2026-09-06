@@ -8,11 +8,20 @@
 # The URLs assume `make dev` is already serving. It blocks, so background it first.
 #
 # WHAT THESE RENDERS SHOW DEPENDS ON WHETHER `make server` IS UP, and that is worth knowing
-# before comparing one against docs/design-refs/locked.html. Every view below except the
-# gallery reads the capture server: with it down they draw their failure panel, which is a
+# before comparing one against docs/design-refs/locked.html. EVERY view below reads the
+# capture server, the gallery included: with it down they draw their failure panel, which is a
 # real screen and the wrong one to judge a layout by. With it up and an empty store they draw
 # their empty state. Neither shows a populated screen, and no run in this repo has ever
 # produced one — see docs/specs/capture-app.md's STATUS section.
+#
+# THE GALLERY WAS THE EXCEPTION IN THIS SENTENCE UNTIL 2026-09-06, AND IT WAS NOT ONE. It is
+# the kit sheet, so nothing on it fetches DATA — but `Gallery.tsx`'s `CardLocations` specimens
+# carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the component draws a photo by
+# calling `photoUrl(box, index)`. Rendered here with the main tree's server up, the component
+# sheet therefore shows FOUR REAL CARDS out of boxes 3, 4 and 7, and shows different ones as
+# those boxes change. The shell polls `/status` over it besides. Found by sealing the capture
+# port in `app/tests/shell.ts`, which stubs both for the specs; nothing stubs anything here,
+# so this line is a warning rather than a fix.
 
 # The hash route is load-bearing, not decoration. The gallery answered at '/' while it was
 # the whole app at step 6; step 7a mounted the capture screen there. Dropping the '#/gallery'

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { sealEveryTest } from './shell'
 
 /* THE FOURTH COMMAND, OVER THE WHOLE STORE — asserted where nothing else can see it (D87).
  *
@@ -86,6 +87,11 @@ async function pick(page: Page) {
     buffer: Buffer.from('TCGplayer Id,Total Quantity\n8608859,2\n'),
   })
 }
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
+   `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
+   case in the file, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the store-wide reconcile is reachable from the pipeline screen', async ({ page }) => {
   await open(page)

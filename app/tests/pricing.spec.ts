@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { sealEveryTest } from './shell'
 
 import type {
   HistoryRange,
@@ -464,6 +465,43 @@ async function open(
     })
   })
 
+  /* THE WINDOW ON EACH ROW'S CARD, WHICH THIS FILE NEVER STUBBED. `Pricing.tsx:pumpCrops`
+     POSTs `/pipeline/crop-preview` once per row it draws — free, and the same detector the
+     batch reading uses — so every case in this file was sending a POST per row to whatever
+     answers the capture port. `sealEveryTest` named it.
+
+     THE RECT IS THE ONE `run-panel.spec.ts` USES, and it is chosen to divide cleanly: the
+     screen turns frame pixels into percentages, so 216/2160 is 10% and 1944/2160 is 90%. What
+     matters here is only that a rect ARRIVES — `pumpCrops` writes a `CropRead` when
+     `rect`, `frame` and a null `crop_refused` all hold, and draws the row uncropped otherwise.
+     Before this stub every row took the `catch`, so the whole file measured the uncropped
+     render; with it they take the cropped one, which is what the operator sees. */
+  await page.route(/\/pipeline\/crop-preview$/, async (route) => {
+    const body = route.request().postDataJSON() as { indices?: number[]; box?: number } | null
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        scope: { box: body?.box ?? 7, whole_box: false, cards: body?.indices ?? [1] },
+        capture_dir: '/tmp/captures/cards/box7',
+        crop: true,
+        max_edge: 256,
+        total: 3,
+        offset: 0,
+        sample: {
+          box: body?.box ?? 7,
+          index: body?.indices?.[0] ?? 1,
+          game: 'pokemon',
+          frame: [2160, 3840],
+          sent: [144, 256],
+          rect: [216, 384, 1944, 3456],
+          method: 'edges',
+          crop_refused: null,
+        },
+      }),
+    })
+  })
+
   await page.goto(options.noRun === true ? '/#/pricing' : VIEW_ROUTE)
   await settleFonts(page)
   await expect(page.locator(VIEW)).toBeVisible()
@@ -599,6 +637,11 @@ function sentPolicy(wire: Wire[]): Record<string, unknown> {
 }
 
 // ------------------------------------------------------------------ it is reachable
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
+   `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
+   case in the file, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the screen is on its own route and draws the run it was linked to', async ({ page }) => {
   await open(page)

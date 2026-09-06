@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
+import { sealEveryTest } from './shell'
 
 import type {
   OrderRow,
@@ -298,6 +299,15 @@ async function open(
    * `pullCopy` threw; `onPull` re-reads only on its success path, so nothing re-read and the payload
    * never moved. The case failed for a reason unrelated to what it tested, and a write came one
    * refusal from a live store. These stubs reach nothing. */
+  /* THE HUB'S OTHER READ, UNCONDITIONALLY. `OrdersHub` asks `GET /inventory` on mount beside
+     `GET /orders` — it needs the cards to resolve a line to copies — and this file stubbed it
+     only inside the `boot` branch below, so every case that did not ask for a boot header sent
+     that read to the capture port. `sealEveryTest` named it. Registered BEFORE the branch, so
+     the boot variant is the newer handler and still wins where it is asked for. */
+  await page.route(/\/inventory$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{"cards": {}}' })
+  })
+
   if (options.boot !== undefined) {
     const withBoot = (body: string) => async (route: Route) => {
       await route.fulfill({
@@ -338,6 +348,13 @@ async function open(
 }
 
 /* -------------------------------------------------------------------------------------- 1 */
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. This
+   file already stubbed the shell's own `/status` by hand; the shared call replaces it so there
+   is one spelling of the rule, and adds what a hand-written stub could not: a catch-all that
+   REFUSES and names anything else that gets out. The call has to sit above the file's first
+   `test.beforeEach`, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the route resolves, and the nav offers it under its own chord', async ({ page }) => {
   await open(page)

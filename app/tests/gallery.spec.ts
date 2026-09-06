@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { sealEveryTest } from './shell'
 
 /* THE ROW SHAPES `#/gallery` DRAWS THAT NOTHING ELSE IN THIS APP EVER DRAWS.
  *
@@ -49,6 +50,13 @@ const NOBAR_PRESENT = '.card-locations-row.is-nobar:not(.is-gone)'
  *  skin renders `.card-locations-copy` and no `.card-locations-row` at all, so a page-wide count
  *  is the stronger claim: exactly one departed row shell exists anywhere on this sheet. If the
  *  Fulfiller's skin ever started emitting owner row classes, that is a defect and this notices. */
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER. This file registers no fixtures of its own, so it
+   takes the shared small store — `app/tests/shell.ts` carries the argument for both halves. The
+   call has to sit above every hook and every case, which `make docs-audit`'s `spec seal` row
+   checks: the navigation below happens inside a hook, and a seal declared under it would be
+   installed after the requests it exists to catch.  */
+sealEveryTest({ store: true })
+
 test.beforeEach(async ({ page }) => {
   await page.goto(GALLERY)
   await expect(page.locator('[data-kit-section="locations"]')).toBeVisible()
