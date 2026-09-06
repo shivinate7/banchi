@@ -5689,3 +5689,102 @@ The small cut carries **no `feTurbulence`**, and that is a finding rather than a
 **What is NOT settled here.** The lockup — 番地 over BANCHI — is specified in `logo.md` §3 and undrawn; the sidebar still sets "Banchi" in Manrope. The bare-bracket mark is undrawn, and is a real code change rather than a layer toggle, because the card is drawn *over* the brackets. `logo.md` §11 leaves candidate B — stroke 3.4 with the same flat prism — as unchosen rather than eliminated, in §8's sense.
 
 **What would reopen this.** *A surface at 64px or above*, which would put the display cut into the product and make the `feTurbulence` shipping question live again. *A second brand context* that wants a variant selected by something, which would need its own argument for what the variant means. *A drawn wordmark*, which is where the lockup and this entry meet.
+
+## D103 — Staleness is a filter and not a gate, the record holds every live row, and the file that leaves the machine stays narrow
+
+**`#/pricing` draws the operator's whole live inventory out of a My Pricing export, and the staleness terms become a filter over it rather than a decision taken before the data arrives.** Built 2026-09-06 on the owner's reaction to D100's screen, verbatim: *"I was sorta hoping that when I upload it, that I then get to interact with the same pricing sorta setup I get when I'm first listing prices with the ability to hit load prices and see all the graphs/charts and such and price with the UI I'm used to (instead it gives me an excel that I can then manipulate in excel, that's no fun)."*
+
+The UI they wanted already existed. It was wired to runs, and a live export is not a run.
+
+### Why a lens and not a gate, in the owner's own figures
+
+Against their My Pricing export of 2026-09-01 — 757 rows, 441 live — the gate selects **177 SKUs at one day, 109 at three and at seven, and 0 at ten and at fourteen**. That zero is the argument: the oldest capture in the store is 2026-08-23, so a ten-day window cannot select anything. **A gate hands back an empty screen for a reason that is about the store's age rather than about the listings**, and the operator's remedy — widen `--days` and read again — is the thing a filter does without a re-read.
+
+The owner ruled the stale rows are **not** the default view. The lens opens on everything.
+
+**Scale was the objection and it did not survive contact.** `app/src/Pricing.tsx` does not virtualize and already draws the merged worklist across eight runs — ~423 SKUs. 441 is not new territory.
+
+### The record widens and the offer does not
+
+This is the whole shape of the change, and it is D100 §5's own distinction applied once more: **the file that records is not the file that offers.**
+
+| file | what it is |
+|---|---|
+| `worklist.csv` | the **offer** — the rows the rule proposed, export-shaped, `Add to Quantity` 0 |
+| `manifest.json` | what the offer said per SKU, including the row's own bytes |
+| **`survey.json`** | **new** — every candidate considered, its verdict, and its verbatim export row |
+| `import.csv` | what `apply --write` produces |
+
+**A fourth file rather than a wider manifest, for two measured reasons.** `cli/cmd_reprice.py:_apply` builds the upload's bytes out of `manifest["skus"]`, so leaving that key alone is what keeps the money path *provably* untouched — every existing assertion in `check_markdown` runs over byte-identical inputs. And `server/pipeline_routes.py:_markdown_summary` parses the manifest for **every stamp** to answer `GET /pipeline/markdowns`: at ~700 bytes a row a wide manifest is ~530KB on the owner's export, so thirty markdowns would mean parsing 16MB to draw a list.
+
+**The worklist stays narrow, and this is the strongest single constraint here.** D100: *"every file this feature writes is safe to upload, whichever one the operator grabs."* A 441-row worklist would either carry a proposed price on rows the rule refused — a file that, uploaded by accident, marks down the entire store — or carry nulls through `set_writable`. `check_markdown`'s *"the worklist holds the two listings above the floor and not the one at it"* is the mechanical guard on that, and is to be read as one.
+
+**`standing` is a third state `skip` cannot express.** A `deferred` row — one that qualified and fell below `--limit` — carries `skip: null` exactly as an offered row does, so without it the difference between "the rule proposes this" and "you asked for fewer" is invisible. It is not a second fact that can disagree: both are projections of one partition taken in one pass. **No `below_limit` refusal code**, because those rows qualified and `plan` deliberately keeps them out of `skipped`.
+
+### What `not_in_worklist` now means
+
+Its own argument was *"there are no bytes to build a row from"*. Once the survey carries them that is no longer true of a row the rule merely declined to propose, so `read_back` gains `offered=` and `unpriceable=` — both optional, so every caller written before this reads exactly as it did — and the refusal narrows to a SKU **this markdown's survey never saw**: a typo'd id, or a row out of some other export.
+
+**`dropped` follows the OFFER rather than the record, and that is the assertion that catches the sloppy version of this whole change.** The figure means "SKUs this file was written for that you deleted". Measured over the wider set it would tell an operator who priced three cards that they had deleted 438.
+
+### The 33 that are drawn and may never be pushed
+
+408 of the owner's 441 live SKUs are ones this store has held; 33 are not — `Card Sleeves`, `Playmats`, a `YuGiOh` row.
+
+**They are drawn.** Omitting them shows 408 rows against an export the operator can see holds 441, with nothing saying where the rest went — `CLAUDE.md`'s both-directions rule, and D100's own closing cost becomes something the screen states rather than something a decision file does.
+
+**They are not priceable.** Pricing one would lower a live listing this pipeline did not create and whose copies it cannot verify — outside the measurement D100's entire safety argument rests on — and would write a permanent corpus answer for a SKU no card here carries, inert to `join` and `emit` and visible in `prices show` forever. `sold_out` joins it: TCGplayer holds no copies, so there is no listing for a price to edit, which is `unchanged`'s own argument.
+
+Both are refused under the survey's own code, so the sentence on the row and the sentence in the receipt are one string from one table.
+
+### Two defects this uncovered, both of which the lens makes ordinary
+
+**`corpus.Answer.at` was written in exactly one place in this repo and read in one.** `reprice apply` set it; that command's ratchet read it. So `priced_recently` meant *"marked down recently"* while D100's own ratchet section claims it means *"a card the operator hand-priced on `#/pricing` yesterday is not stale"*. **It never did.** The screen has never stamped anything, and hand-pricing fifty live listings left every one reading as stale the next morning.
+
+`pipeline/corpus.py:stamp_answers` is the one rule both writers date by, and its three constraints are each load-bearing. **Diff-based**, because `PUT /pricing` replaces the whole document on every debounced save and a blanket stamp moves every answer to now on every keystroke — the entire corpus reading `priced_recently` forever, the ratchet inverted into a permanent refusal. **`channel == "price"` only**, because `cli/cmd_join.py` seeds an `unknown` answer for every card the catalogue could not price and stamping those makes an *unpriced* card read as priced, in the direction that costs money. **A hold is not a price.**
+
+**THIS IS A BEHAVIOUR CHANGE THE OPERATOR MUST BE TOLD ABOUT.** Hand-price fifty live listings and those fifty arrive as `priced_recently` on tomorrow's survey. That is D100's stated claim *becoming true*, and `--again` is the override.
+
+**`reprice apply` had no stale-write guard**, while `PUT /pricing` has had one since D86. `emit` never needed one — `cli/cmd_emit.py` only reads — but this command read-modify-writes the corpus from a subprocess, so a `#/pricing` tab open during an apply had its next keystroke refused for a write it had made itself. Once the press lives on that screen this stops being a race and becomes the ordinary path. The digest moves to `pipeline/corpus.py:revision` because `cli/` may not import `server/`, which is the only reason the guard could not be shared before; `--corpus-revision` refuses the **whole file** before a byte is built, and the apply answers with the new digest so the screen adopts it.
+
+**One reader of the file, for both writers, also closes a hazard `check_corpus_revision`'s own header names:** a digest cache added to the route would have left a route-only test green while the real refusal silently stopped firing.
+
+### The address, and the two readings
+
+**`#/pricing?markdown=<stamp>`.** The hash router strips `?…` and that screen already parses its own query for `?run=`, so **eleven routes stays eleven** and `route census`, `route rosters` and every pinned spec roster are untouched. D100's ROUTES-table comment left the route *"available for the asking and not taken"*; this takes it as a query on an existing one, which is neither of the two options that comment anticipated.
+
+**`GET /pipeline/markdowns/<stamp>/{table,history,trends}`.** The reading routes are a second ADDRESS over one body and never a second implementation: the catalogue walk reads five identity cells — `Product Line`, `Set Name`, `Number`, `Product Name`, `TCGplayer Id` — off a verbatim export row, and a My Pricing export carries all five. The cache is keyed by product rather than by document, so a card already read on a run is warm here.
+
+**A run-free `GET /pipeline/history` taking `?sku=` and the row's own cells was rejected.** It makes the *client* the source of a card's identity, where a mistyped `Set Name` resolves silently to a different real product — the failure `pipeline/join.py:number_index_key` exists to prevent after a 950-row silent zero-join — and it has no address to check, so `sku_not_in_run`'s real membership test would have nothing to test against.
+
+**The markdown strip requires an explicit `?sku=` list.** The run route measured 46 SKUs at ~34s of courtesy delay; a survey is the whole live inventory, so an unfiltered walk is **~5.5 minutes** at a free public mirror. D62's rule is that this is a press, and a walk that big makes the press meaningless rather than merely slow.
+
+### The upload comes from `edits`, materialised server-side
+
+`#/pricing` holds `{sku -> price}` and has no CSV writer: `app/package.json` carries exactly two runtime dependencies, and PapaParse — the library `CLAUDE.md` requires for this job — is not among them. So the pairs arrive as JSON on `POST .../apply` and are written with `pipeline/tcgcsv.py:write_csv`, the repo's own writer, into the markdown's own directory.
+
+**Two columns, and that is the point.** `reprice apply` reads exactly `TCGplayer Id` and `TCG Marketplace Price` and builds every other byte from the manifest, so a two-column file is the narrowest possible expression of D100's *"the operator's editor is not where the bytes come from"* — there is no column in it for a quantity to hide in.
+
+**Synthesising it in the browser was the alternative and was argued for twice.** It works today with no server change, keeps one reader of `read_back`, and leaves an artefact on disk. Server materialisation keeps all three of those properties and does not put file-format authority in the one place D100's safety argument says it does not live. The residual risk — that `edits` is a second door upstream of the file — is closed by T7 asserting the `import.csv` it produces is **byte-identical** to the one the worklist path produces.
+
+**And `wrote` is answered by the file being there rather than by the flag that was asked for.** `_apply` exits 0 with nothing written when every row is refused — one unreadable price does it — and the route used to report `wrote: true` over an `import.csv` that does not exist, offering a download of nothing.
+
+### What it costs
+
+**The raise cliff is now reachable by one keystroke.** `read_back` marks a raised price `RAISED` and `Application.fatal` refuses the *whole file*; on a lens over 408 live listings an operator will eventually type a higher number. The screen refuses its own press while the raise count is non-zero and says so on the row, counted from the survey's own `asking` rather than a recomputed figure — but that is a second implementation of `after > before` and it can drift.
+
+**A row carries exactly one refusal code even when three apply.** `plan`'s ladder is an early exit, so a "held" filter chip will not show a row refused `sold_recently` first. `SKIP_ORDER` is the precedence and the screen names it rather than the ladder being changed.
+
+**`_stamp` walks past a collision a second at a time.** Two `reprice list --write` calls inside one second resolved to one directory and the later manifest replaced the earlier, so a worklist was judged against an offer that was no longer its own. **No suffix**: the shape is an address, spelled in five route patterns, and a `-2` would make the second markdown unreachable rather than merely lost. The cost is a directory named a few seconds after the moment it describes, and the manifest's `at` is the truth.
+
+**And nothing this feature writes has still ever been uploaded to TCGplayer.** D100's §6 is unchanged by any of this. The first real press is still `--limit 5`, upload, then `reconcile --live` against a fresh download.
+
+### What this amends
+
+**D100**, on two points: the manifest's scope — it records the offer, and the survey beside it records the export — and the placement, which that entry already flagged as *"a judgement rather than a measurement"*. Its three subjects are untouched: nothing is deleted, the quantity is not a variable, and the age is a proxy that says so.
+
+**D86**, on two: the worklist spans runs *and* the live export; and its write path never stamped the provenance its own `Answer` type declares.
+
+### What would reopen this
+
+*A listing age this store can read* — populate `live_as_of` on a first sighting, or record a `first_listed_at` when `emit` pushes — which retires the proxy and the paragraph every report carries about it. *The first upload*, whose answers belong in D100's spec §6. *An operator who wants the markdown bookmarkable on its own*, which is a ROUTES row and three mechanical counts, not a rebuild. *A raise that should be allowed*, which is a change to what this path promises and not a widening of `read_back`.

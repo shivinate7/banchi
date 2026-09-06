@@ -381,6 +381,98 @@ class Corpus:
         return self._decisions(run_name, skus, unpriced)
 
 
+# ------------------------------------------------------------------ provenance and the digest
+
+
+def revision(path: Optional[Path] = None) -> str:
+    """A short digest of the corpus as it stands on disk, or `""` if there is no file.
+
+    ONE IMPLEMENTATION, FOR BOTH WRITERS, AND THAT IS THE WHOLE REASON IT IS HERE. This was
+    `server/pipeline_routes.py:_corpus_revision` and served the route alone, so `PUT /pricing`
+    was guarded against a stale write while `pkmnscan reprice apply` and `prices adopt` — which
+    read-modify-write the same file from a subprocess — were not. `cli/` may not import
+    `server/`, so the guard could not be shared until it moved down here.
+
+    IT ALSO CLOSES A HAZARD THE ROUTE'S OWN TEST NAMES. `check_corpus_revision`'s header warns
+    that a digest CACHE in the route would leave a route-only test green while the real refusal
+    silently stopped firing. One reader of the file, for every writer, is what makes that
+    unrepresentable rather than merely untested.
+
+    OUT OF BAND, IN THE ENVELOPE, AND NEVER INSIDE THE DOCUMENT. `#/pricing` decides "unsaved"
+    by comparing the corpus object it holds against the one it last sent, BY IDENTITY. A
+    revision inside the document would mean rebuilding that object every time a write lands,
+    which is the endless unsaved -> saving -> unsaved oscillation that screen was built to
+    avoid.
+    """
+    import hashlib
+
+    from store import files  # local: `pipeline/` must not import `store/` at module scope
+
+    target = Path(path) if path is not None else files.prices_path()
+    if not target.is_file():
+        return ""
+    return hashlib.sha256(target.read_bytes()).hexdigest()[:16]
+
+
+def stamp_answers(before: "Corpus", after: "Corpus", at: str) -> List[str]:
+    """Stamp `at` on every PRICE answer in `after` that `before` did not already hold, in place.
+
+    Returns the SKUs stamped, so a caller can say how many answers it just dated.
+
+    PURE, AND THE CLOCK COMES FROM THE CALLER — `pipeline/reprice.py:plan` takes its `now` the
+    same way and for the same reason: a module that reads a clock cannot be driven by a test
+    that wants to be at a particular moment.
+
+    WHY IT EXISTS. `Answer.at` was written in exactly ONE place in this repo,
+    `cli/cmd_reprice.py`'s apply, and read in exactly one, that command's own ratchet. So
+    `priced_recently` meant "this store MARKED THIS DOWN recently" while D100 claimed it meant
+    *"a card the operator hand-priced on `#/pricing` yesterday is not stale"*. It did not: the
+    screen has never stamped anything. Hand-price fifty live listings and every one of them
+    still read as stale the next morning.
+
+    THREE RULES, AND EACH ONE IS LOAD-BEARING.
+
+    1. DIFF-BASED, NEVER BLANKET. `#/pricing` PUTs the WHOLE document on every debounced save.
+       Stamping unconditionally moves every answer's `at` to now on every keystroke, and the
+       entire corpus reads `priced_recently` forever — the ratchet inverted into a permanent
+       refusal. An answer whose value and channel are unchanged keeps the `at` it has.
+
+    2. `channel == "price"` ONLY. `cli/cmd_join.py` seeds `Answer(value=None,
+       channel="unknown")` for every card the catalog could not price, and `join` writes the
+       book. Those are not answers; they are the ABSENCE of one, and `pipeline/decisions.py:
+       blocking` reads that table to refuse an `emit`. Stamping them would make an UNPRICED
+       card read as priced, which is the opposite of the truth in the one direction that costs
+       money.
+
+    3. A HOLD IS NOT A PRICE. `Answer.is_hold` covers both spellings — the `withheld` dict and
+       a bare `unlisted` — and the ratchet already excludes holds on the read side. Stamping
+       one would date a decision NOT to list as though it were a listing.
+
+    NOT CALLED BY `prices adopt`. A folded run answer's real time is unknown, and `from_run` is
+    the provenance that migration owes; inventing an `at` for it would date every adopted answer
+    to the migration and refuse the whole corpus as `priced_recently` on the next survey.
+    """
+    stamped: List[str] = []
+    for sku, answer in after.answers.items():
+        if answer.channel != "price" or answer.is_hold:
+            continue
+        # THE COMPARISON IS ON THE ANSWER, NOT ON THE STAMP. `_token` folds `0.50` and `0.5`
+        # into one answer for D86's reason, and the same fold has to apply here or a screen
+        # that round-trips a price through a text field re-dates it on every save.
+        previous = before.answers.get(sku)
+        if (
+            previous is not None
+            and not previous.is_hold
+            and previous.channel == answer.channel
+            and _token(previous.value) == _token(answer.value)
+        ):
+            answer.at = previous.at
+            continue
+        answer.at = at
+        stamped.append(sku)
+    return stamped
+
+
 # ------------------------------------------------------------------ folding the run files in
 
 

@@ -373,7 +373,8 @@ COMPONENTS = [
                                         "prices go into the corpus keyed by SKU (D86), without "
                                         "which the next emit re-lists at the rule price and "
                                         "undoes the markdown.",
-                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86", "D100"],
+                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
+                                               "D100", "D103"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
                                     "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
@@ -636,7 +637,7 @@ COMPONENTS = [
                                   "card, so it sits beside rule and basis and is "
                                   "validated at parse time like both.",
                           "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86",
-                                          "D99"],
+                                          "D99", "D100", "D103"],
                           "tested_by": ["T7"]},
             "livecheck.py": {"does": "the whole store against one live TCGplayer export "
                                      "(My Pricing), both directions. D87: `cli/cmd_reconcile.py` "
@@ -671,7 +672,8 @@ COMPONENTS = [
                                    "on 441 of 441 live My Pricing rows and blank on 7,787 of "
                                    "7,802 wide-export rows, so a listing run reading it would "
                                    "write no price with nothing raising.",
-                           "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D87", "D100"],
+                           "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D87",
+                                           "D100", "D103"],
                            "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and the live cap spent ONCE over that union. "
@@ -1852,7 +1854,13 @@ COMPONENTS = [
                 # request, D9's decisions file is what the PUT writes, and D16 is cited in
                 # the header's own argument for rewriting a promise rather than leaning on
                 # its letter.
-                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43", "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61", "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76", "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91", "D92", "D93", "D96", "D100"],
+                "governed_by": ["D1", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11",
+                                "D12", "D13", "D16", "D20", "D21", "D22", "D23", "D24", "D26",
+                                "D28", "D29", "D30", "D33", "D34", "D36", "D37", "D41", "D43",
+                                "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
+                                "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
+                                "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
+                                "D92", "D93", "D96", "D100", "D103"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1940,7 +1948,11 @@ COMPONENTS = [
                 # D32 is why --force-resubmit is deliberately not offered to a screen.
                 # D58 is the pricing route's label re-render — the stored rendering is
                 # never served, which that entry's own amendment records at this site.
-                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88", "D100"],
+                "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19",
+                                "D20", "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35",
+                                "D36", "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59",
+                                "D62", "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87",
+                                "D88", "D100", "D103"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

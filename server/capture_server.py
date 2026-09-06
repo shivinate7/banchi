@@ -560,6 +560,13 @@ _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 # path reads first, for whoever is following this list rather than the regex engine.
 _MARKDOWN_FILE_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/file$")
 _MARKDOWN_APPLY_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/apply$")
+# The lens (D103): every live listing this survey saw, and the two readings over one of them.
+# Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
+# — the document holding the export row is what says what the card is, so the address names a
+# document and the client never supplies a card's identity.
+_MARKDOWN_TABLE_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/table$")
+_MARKDOWN_HISTORY_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/history$")
+_MARKDOWN_TRENDS_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/trends$")
 
 # The shipping batches (D61). A batch id is 128 random bits rendered as hex by
 # `server/shipping_routes.py:_new_batch_id`, and the character class here is the alphabet
@@ -9361,6 +9368,32 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # Every markdown this store has written (D100). Reads the directory and holds
                 # nothing, the way `/pipeline/runs` does.
                 return self._json(HTTPStatus.OK, pipeline_routes.do_markdowns())
+            match = _MARKDOWN_TABLE_RE.match(path)
+            if match:
+                # THE LENS'S INPUT (D103): every live listing the survey saw, refused ones
+                # included, each carrying the code that refused it. Free, reads one file.
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_markdown_table(match.group(1))
+                )
+            match = _MARKDOWN_HISTORY_RE.match(path)
+            if match:
+                # LEAVES THIS MACHINE, exactly as its run-scoped sibling does and under that
+                # route's argument — free, public hosts, one press about one SKU.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or [""]
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_markdown_history(match.group(1), asked[0]),
+                )
+            match = _MARKDOWN_TRENDS_RE.match(path)
+            if match:
+                # `sku` REPEATS AND IS REQUIRED HERE. A survey is the whole live inventory and
+                # an unfiltered walk over 441 rows is ~5.5 minutes at a public mirror, which
+                # would make D62's press meaningless — the handler refuses an empty list.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_markdown_trends(match.group(1), asked),
+                )
             match = _MARKDOWN_FILE_RE.match(path)
             if match:
                 # The worklist the operator edits and the import CSV they upload. Forced as a

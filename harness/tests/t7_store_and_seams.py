@@ -10791,6 +10791,320 @@ def check_markdown(checks: Checks) -> None:
         )
 
 
+def check_markdown_lens(checks: Checks) -> None:
+    """`survey.json`, and the rows the offer never held (D103).
+
+    THE LENS'S PREMISE IS THAT STALENESS IS A FILTER, so `#/pricing` has to be able to draw —
+    and price — a live listing the rule declined to propose. Today's manifest holds `plan.rows`
+    alone, which on the owner's export is ~109 of 441; the other ~332 had no bytes anywhere and
+    were refused `not_in_worklist`.
+
+    THE RECORD WIDENS AND THE OFFER DOES NOT, and every assertion here is about that seam.
+    `survey.json` carries every candidate with its verdict; `worklist.csv` still carries only
+    the rows the rule proposed, which is what keeps D100's *"every file this feature writes is
+    safe to upload, whichever one the operator grabs"* true — a 441-row worklist proposing
+    prices on rows the rule refused would mark down the whole store if uploaded by accident.
+
+    AND `dropped` FOLLOWS THE OFFER RATHER THAN THE RECORD. That figure means "SKUs this file
+    was written for that you deleted", and measured over the wider set it would tell an
+    operator who priced three cards that they had deleted four hundred. It is the assertion
+    that catches the sloppy version of this whole change.
+    """
+    checks.note("")
+    checks.note("MARKDOWN LENS — the survey, and pricing a row the offer never held")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "normal"),
+        (3, 3, "Articuno", "161", None),
+        (3, 4, "Dunsparce", "120", "reverse_holo"),
+    ]
+
+    def live_export(path, *, live, asking, sold_out=()):
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        by_sku = source.by_sku()
+        rows = []
+        for sku in SEAM_SKUS:
+            row = dict(by_sku[sku])
+            row[tcgcsv.LIVE_QUANTITY_COLUMN] = "0" if sku in sold_out else str(live.get(sku, 1))
+            row[tcgcsv.PRICE_COLUMN] = f"{Decimal(asking[sku]):.4f}"
+            rows.append(row)
+        tcgcsv.write_csv(path, source.header, rows)
+        return Path(path)
+
+    with isolated_home() as home:
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        old = "2026-08-01T00:00:00.000+00:00"
+        with Store().write() as writable:
+            for box, index, *_ in cards:
+                writable.inventory.cards[master.position_key(box, index)].captured_at = old
+
+        # ARTICUNO IS SOLD OUT, AND `--limit 1` DEFERS ONE OF THE TWO THAT QUALIFY. So the
+        # survey holds three rows in all three standings — one offered, one deferred, one
+        # refused — and the offer holds exactly one. That gap is the whole subject here.
+        #
+        # `at_risk` RANKS THEM: the reverse holo asks $5.00 over one live copy and Dunsparce
+        # $2.00 over two, so the limit keeps the reverse holo and defers Dunsparce.
+        export = live_export(
+            home / "live.csv",
+            live={DUNSPARCE_SKU: 2, DUNSPARCE_REVERSE_SKU: 1, ARTICUNO_SKU: 1},
+            asking={DUNSPARCE_SKU: "2.00", DUNSPARCE_REVERSE_SKU: "5.00", ARTICUNO_SKU: "20.00"},
+            sold_out=(ARTICUNO_SKU,),
+        )
+
+        command(
+            checks, "reprice", "list", str(export),
+            "--days", "7", "--percent", "10", "--limit", "1", "--write",
+        )
+        directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[0]
+
+        manifest = json.loads((directory / cmd_reprice.MANIFEST).read_text("utf-8"))
+        survey = json.loads((directory / cmd_reprice.SURVEY).read_text("utf-8"))
+        by_sku = {row["sku"]: row for row in survey["skus"]}
+
+        checks.equal(
+            sorted(manifest["skus"]),
+            [DUNSPARCE_REVERSE_SKU],
+            "THE OFFER STAYS NARROW. Only the row the rule proposed is in the manifest, which "
+            "is what keeps `worklist.csv` safe to upload by accident",
+        )
+        checks.equal(
+            sorted(by_sku),
+            sorted(SEAM_SKUS),
+            "and the SURVEY holds every live row the export carried, including the ones the "
+            "rule refused — the lens draws all of them or it is a gate wearing a filter's name",
+        )
+        checks.equal(
+            (by_sku[DUNSPARCE_REVERSE_SKU]["standing"], by_sku[DUNSPARCE_REVERSE_SKU]["skip"]),
+            ("offered", None),
+            "the proposed row is `offered` and carries no refusal code",
+        )
+        checks.equal(
+            (by_sku[DUNSPARCE_SKU]["standing"], by_sku[DUNSPARCE_SKU]["skip"]),
+            ("deferred", None),
+            "A DEFERRED ROW CARRIES NO CODE EITHER, which is why `standing` exists. It "
+            "QUALIFIED and fell below `--limit`, so a screen reading `skip` alone cannot tell "
+            "it from an offered row — and only one of the two is in the worklist",
+        )
+        checks.equal(
+            (by_sku[ARTICUNO_SKU]["standing"], by_sku[ARTICUNO_SKU]["skip"]),
+            ("refused", reprice.SOLD_OUT),
+            "and a refused row carries the survey's own code, so the sentence on the screen "
+            "and the sentence in the receipt come from one table",
+        )
+        checks.ok(
+            all(row.get("row") for row in survey["skus"]),
+            "EVERY SURVEY ROW CARRIES THE VERBATIM EXPORT ROW. It is what an upload's bytes "
+            "are built from and what the five identity cells of a price history are read out "
+            "of — a survey without it could be drawn and never acted on",
+        )
+
+        # ------------------------------------------- pricing a row the offer never held
+        def apply_edits(target, edits, *, revision=None):
+            from cli import __main__ as entry
+
+            tcgcsv.write_csv(
+                target / cmd_reprice.WORKLIST,
+                (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+                [{tcgcsv.SKU_COLUMN: sku, tcgcsv.PRICE_COLUMN: price} for sku, price in edits],
+            )
+            argv = ["reprice", "apply", str(target / cmd_reprice.WORKLIST), "--write"]
+            if revision is not None:
+                argv += ["--corpus-revision", revision]
+            with quiet() as said:
+                code = entry.main(argv)
+            return code, said.getvalue()
+
+        # DUNSPARCE IS DEFERRED — in the survey, out of the offer — and priced here anyway.
+        # Two columns, because that is exactly what the screen will send.
+        code, said = apply_edits(directory, [(DUNSPARCE_SKU, "1.50")])
+        checks.ok(
+            code == 0 and f"[{reprice.NOT_IN_WORKLIST}]" not in said,
+            "A ROW THE OFFER NEVER HELD IS PRICEABLE, because the survey holds its bytes. This "
+            "is the refusal's own argument applied honestly: it protects against there being "
+            "no row to build, and there is one",
+        )
+        # READ THROUGH A GUARD RATHER THAN OFF THE PATH, so that reverting the widening reports
+        # this assertion by name instead of tracebacking three lines later on a missing file. A
+        # harness that raises tells you something broke; one that fails tells you what.
+        pushed = (
+            list(tcgcsv.read_export(directory / cmd_reprice.IMPORT).rows)
+            if (directory / cmd_reprice.IMPORT).is_file()
+            else []
+        )
+        checks.equal(
+            [row[tcgcsv.SKU_COLUMN] for row in pushed],
+            [DUNSPARCE_SKU],
+            "and the upload carries it",
+        )
+        checks.equal(
+            sorted({row[tcgcsv.QUANTITY_COLUMN] for row in pushed}),
+            ["0"],
+            "carrying `Add to Quantity` 0, like every other file on this path",
+        )
+        original = tcgcsv.read_export(export).by_sku()
+        try:
+            tcgcsv.check_only_writable_changed(original[DUNSPARCE_SKU], pushed[0])
+            clean = True
+        except (tcgcsv.ReadOnlyColumn, IndexError):
+            clean = False
+        checks.ok(
+            clean,
+            "AND ITS BYTES CAME FROM THE SURVEY'S COPY OF THE EXPORT ROW, not from the two "
+            "columns handed back — the same property the manifest gives an offered row",
+        )
+        checks.ok(
+            "deleted from the worklist  1 SKU(s)" in said,
+            "`dropped` COUNTS THE OFFER AND NOT THE SURVEY. One row was offered and not handed "
+            "back; measured over the record this would have claimed three",
+        )
+
+        # ------------------------------------------------------ the rows that may never go
+        code, said = apply_edits(directory, [(ARTICUNO_SKU, "9.00")])
+        checks.ok(
+            code == 0 and f"[{reprice.SOLD_OUT}]" in said,
+            f"a `{reprice.SOLD_OUT}` row is refused BY NAME however good its price — TCGplayer "
+            f"holds no copies, so there is no listing for a price to edit",
+        )
+
+        # ----------------------------------------------------------------- the ratchet
+        answered = corpus.Corpus.read().answers.get(DUNSPARCE_SKU)
+        checks.ok(
+            answered is not None and bool(answered.at) and answered.channel == "price",
+            "the applied price is stamped, which is what the ratchet reads next time",
+        )
+
+        # ------------------------------------------------------ the stale-write refusal
+        code, said = apply_edits(
+            directory, [(DUNSPARCE_REVERSE_SKU, "3.00")], revision="not-the-digest"
+        )
+        checks.ok(
+            code == 1 and "REFUSED" in said,
+            "A STALE CORPUS REVISION REFUSES THE WHOLE FILE. `PUT /pricing` has been guarded "
+            "since D86 while this command was not, and now that the press lives on `#/pricing` "
+            "a tab open during an apply is the ordinary case rather than a race",
+        )
+        checks.ok(
+            DUNSPARCE_REVERSE_SKU not in corpus.Corpus.read().answers
+            or corpus.Corpus.read().answers[DUNSPARCE_REVERSE_SKU].value != "3.00",
+            "and it writes NOTHING — the refusal runs before a byte is built, because a file "
+            "built against a corpus the operator cannot see moves money on nobody's decision",
+        )
+        code, said = apply_edits(
+            directory, [(DUNSPARCE_REVERSE_SKU, "3.00")], revision=corpus.revision()
+        )
+        checks.ok(
+            code == 0 and corpus.Corpus.read().answers[DUNSPARCE_REVERSE_SKU].value == "3.00",
+            "while the current digest lands, which is what makes the guard a guard rather "
+            "than a wall",
+        )
+
+        # ------------------------------------------------- a window that proposes nothing
+        # THE MOST ORDINARY WAY TO ASK FOR THE WHOLE TABLE. On the owner's real store
+        # `--days 10` selects zero rows because the oldest capture is nine days old, and this
+        # used to return before writing anything — leaving the lens no stamp to open.
+        #
+        # AND IT LANDS IN ITS OWN DIRECTORY EVEN THOUGH IT RUNS IN THE SAME SECOND AS THE ONE
+        # ABOVE, which is the collision `_stamp` now walks past. Before that, this call
+        # replaced the first markdown's manifest with an empty offer and every assertion above
+        # about `directory` was quietly about a different survey.
+        command(checks, "reprice", "list", str(export), "--days", "9999", "--write")
+        made = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())
+        checks.equal(
+            len(made),
+            2,
+            "TWO WRITES IN ONE SECOND ARE TWO MARKDOWNS. `_stamp` advances a second at a time "
+            "until the name is free rather than growing a suffix — `[0-9]{8}-[0-9]{6}` is an "
+            "ADDRESS, spelled in five route patterns, so a `-2` would make the second markdown "
+            "unreachable instead of merely lost",
+        )
+        checks.equal(
+            sorted(json.loads((made[0] / cmd_reprice.MANIFEST).read_text("utf-8"))["skus"]),
+            [DUNSPARCE_REVERSE_SKU],
+            "and the FIRST markdown's offer is untouched by the second — the collision used "
+            "to overwrite it, so a worklist was judged against an offer that was not its own",
+        )
+        empty = made[-1]
+        checks.ok(
+            (empty / cmd_reprice.WORKLIST).is_file()
+            and not list(tcgcsv.read_export(empty / cmd_reprice.WORKLIST).rows),
+            "A SURVEY THAT PROPOSES NOTHING STILL WRITES, with a HEADER-ONLY worklist rather "
+            "than no worklist — the directory's shape is invariant, and the lens is reached BY "
+            "a stamp on a screen whose premise is that staleness is a filter",
+        )
+        checks.equal(
+            len(json.loads((empty / cmd_reprice.SURVEY).read_text("utf-8"))["skus"]),
+            len(SEAM_SKUS),
+            "and the survey is full, which is the whole point of writing at all",
+        )
+
+        # -------------------------------------- the screen's press, through the route (D103)
+        #
+        # THE ASSERTION THAT MAKES `edits` SAFE. `#/pricing` holds `{sku -> price}` and has no
+        # CSV writer — `app/package.json` carries two runtime dependencies and PapaParse is
+        # not one — so the pairs arrive as JSON and the ROUTE materialises them with the
+        # repo's own writer. That is a second entry point upstream of the file, and the only
+        # thing that makes it as safe as the tested one is that it produces the same bytes.
+        edits = [{"sku": DUNSPARCE_SKU, "price": "1.25"}]
+        answer = pipeline_routes.do_markdown_apply(directory.name, {"edits": edits, "write": True})
+        checks.ok(answer["ok"] and answer["wrote"], "the screen's press writes an upload")
+        by_edits = (directory / cmd_reprice.IMPORT).read_bytes()
+
+        tcgcsv.write_csv(
+            directory / cmd_reprice.WORKLIST,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.25"}],
+        )
+        (directory / cmd_reprice.IMPORT).unlink()
+        pipeline_routes.do_markdown_apply(directory.name, {"write": True})
+        checks.equal(
+            by_edits,
+            (directory / cmd_reprice.IMPORT).read_bytes(),
+            "AND IT IS BYTE-IDENTICAL TO THE FILE THE WORKLIST PATH PRODUCES. `edits` is a "
+            "second door into the money path, and this is what says the two doors open on "
+            "one room — every gate `check_markdown` proves over a spreadsheet runs over this",
+        )
+        checks.ok(
+            (directory / "edited-screen.csv").is_file(),
+            "and the press leaves its instruction sheet on disk beside the upload, so `what "
+            "did I send` has an answer six months later",
+        )
+
+        # `wrote` IS ANSWERED BY THE FILE BEING THERE. `_apply` exits 0 with nothing written
+        # when every row is refused, and this route used to report `wrote: true` over an
+        # `import.csv` that does not exist — the screen would then offer a download of nothing.
+        (directory / cmd_reprice.IMPORT).unlink()
+        refused_all = pipeline_routes.do_markdown_apply(
+            directory.name, {"edits": [{"sku": ARTICUNO_SKU, "price": "9.00"}], "write": True}
+        )
+        checks.ok(
+            refused_all["ok"] and not refused_all["wrote"],
+            "a press whose every row was refused reports `wrote: false` — answered by the "
+            "file being there rather than by the flag that was asked for",
+        )
+        checks.ok(
+            bool(refused_all.get("revision")),
+            "and every press answers with the NEW corpus digest, so the screen adopts it and "
+            "its next keystroke is not refused for a write it made itself",
+        )
+
+        for payload, code in (
+            ({"edits": [], "write": False}, "edits_invalid"),
+            ({"edits": [{"sku": DUNSPARCE_SKU}], "write": False}, "edits_invalid"),
+            ({"edits": edits, "worklist": {"name": "x.csv", "content": "a,b\n1,2\n"}}, "worklist_and_edits"),
+        ):
+            try:
+                pipeline_routes.do_markdown_apply(directory.name, payload)
+                checks.ok(False, f"the route refuses `{code}`", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(refusal.code, code, f"the route refuses `{code}` by name")
+
+
 def check_merged_emit_cap(checks: Checks) -> None:
     """Two runs, one SKU, one cap — the arithmetic a merged file has to re-derive (D86).
 
@@ -11177,6 +11491,72 @@ def check_corpus_revision(checks: Checks) -> None:
             after["ok"],
             "and a write carrying NO revision still lands: absent means 'did not read one', "
             "which is a person editing the file by hand",
+        )
+
+        # ------------------------------------- the answer is DATED, and only when it changed
+        #
+        # `Answer.at` WAS WRITTEN IN ONE PLACE IN THIS REPO AND READ IN ONE (D103). `reprice
+        # apply` set it; that command's ratchet read it. So `priced_recently` meant "marked
+        # down recently" while D100 claimed it meant *"a card the operator hand-priced on
+        # #/pricing yesterday is not stale"* — which it never did, because the screen has
+        # never stamped anything.
+        #
+        # BOTH DIRECTIONS, AND THE SECOND IS THE ONE THAT MATTERS. A one-directional "the
+        # answer got an `at`" assertion is passed by the naive fix — stamping every answer on
+        # every save — and this route replaces the WHOLE document on every debounced keystroke,
+        # so that fix moves every answer's date to now continuously and reads the entire corpus
+        # as `priced_recently` forever. The ratchet inverted into a permanent refusal, with
+        # nothing on screen to see.
+        book = dict(first["corpus"])
+        book["skus"] = {DUNSPARCE_SKU: {"value": "7.00"}, ARTICUNO_SKU: {"value": "8.00"}}
+        pipeline_routes.do_pricing_corpus_write({"corpus": book})
+        dated = corpus.Corpus.read().answers[DUNSPARCE_SKU].at
+        checks.ok(
+            bool(dated),
+            "A PRICE WRITTEN FROM THE SCREEN IS DATED, which is what makes D100's ratchet "
+            "claim true rather than aspirational",
+        )
+
+        book["skus"] = {DUNSPARCE_SKU: {"value": "7.00"}, ARTICUNO_SKU: {"value": "9.00"}}
+        pipeline_routes.do_pricing_corpus_write({"corpus": book})
+        settled = corpus.Corpus.read().answers
+        checks.equal(
+            settled[DUNSPARCE_SKU].at,
+            dated,
+            "AND AN UNCHANGED ANSWER KEEPS THE DATE IT HAD. This is the assertion the naive "
+            "blanket stamp fails, and the only one that does",
+        )
+        checks.ok(
+            settled[ARTICUNO_SKU].at and settled[ARTICUNO_SKU].at != dated
+            or settled[ARTICUNO_SKU].value == "9.00",
+            "while the answer that moved is re-dated",
+        )
+
+        # `.50` AND `0.50` ARE ONE ANSWER, which is D86's own rule for comparing them and has
+        # to hold here too: `#/pricing`'s price field is a text input, so a figure round-tripped
+        # through it comes back spelled differently and identical in money. Re-dating on that
+        # would make every visit to the screen a markdown refusal the next morning.
+        book["skus"] = {DUNSPARCE_SKU: {"value": "7.0"}, ARTICUNO_SKU: {"value": "9.00"}}
+        pipeline_routes.do_pricing_corpus_write({"corpus": book})
+        checks.equal(
+            corpus.Corpus.read().answers[DUNSPARCE_SKU].at,
+            dated,
+            "the same money spelled differently is not a new answer, and is not re-dated",
+        )
+
+        # AND A `no_market_data` SEED IS NEVER DATED. `cli/cmd_join.py` writes one for every
+        # card the catalogue could not price — the ABSENCE of an answer, and what makes
+        # `blocking` refuse an emit. Dating it would make an UNPRICED card read as priced, in
+        # the one direction that costs money.
+        book["skus"] = {
+            DUNSPARCE_SKU: {"value": "7.0"},
+            ARTICUNO_SKU: {"value": None, "channel": "unknown"},
+        }
+        pipeline_routes.do_pricing_corpus_write({"corpus": book})
+        checks.ok(
+            not corpus.Corpus.read().answers[ARTICUNO_SKU].at,
+            "an `unknown`-channel seed carries no date — it is the absence of an answer, and "
+            "the ratchet reads `channel == 'price'` for exactly this reason",
         )
 
 
@@ -15335,6 +15715,82 @@ def check_history_route(checks: Checks) -> None:
                 "a SKU this run never matched comes back refused, never absent",
             )
 
+            # ------------------------------------- the same two readings, addressed at a
+            # ------------------------------------- markdown instead of a run (D103)
+            #
+            # ONE IMPLEMENTATION, TWO ADDRESSES. The catalogue walk reads five identity cells
+            # off a verbatim export row, and a My Pricing export carries all five — so what a
+            # markdown needed was an ADDRESS, not a second reader. Asserted against the SAME
+            # warm cache and under the SAME socket ban: if these routes had grown their own
+            # `Market` or their own cache key, `no_sockets` would fire.
+            source = tcgcsv.read_export(RIFTBOUND_EXPORT)
+            live_row = dict(source.by_sku()["9189317"])
+            live_row[tcgcsv.LIVE_QUANTITY_COLUMN] = "1"
+            live_row[tcgcsv.PRICE_COLUMN] = "9.0000"
+            live_path = files.inventory_dir() / "live-history.csv"
+            tcgcsv.write_csv(live_path, source.header, [live_row])
+            command(checks, "reprice", "list", str(live_path), "--days", "7", "--write")
+            stamp = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1].name
+
+            # THE CARD WAS CAPTURED A MOMENT AGO, so the rule refuses it `too_young` and it is
+            # in no worklist. Reading its history anyway is the lens working: a row the rule
+            # declined to propose is a row the operator can still look at and price.
+            surveyed = json.loads(
+                (files.inventory_dir() / cmd_reprice.DIRNAME / stamp / cmd_reprice.SURVEY)
+                .read_text("utf-8")
+            )
+            checks.equal(
+                [(r["sku"], r["standing"]) for r in surveyed["skus"]],
+                [("9189317", "refused")],
+                "the survey holds the refused row, which is the row the reading is about",
+            )
+
+            from_markdown = pipeline_routes.do_markdown_history(stamp, "9189317")
+            checks.equal(
+                (
+                    from_markdown["sku"],
+                    from_markdown["product_id"],
+                    [r["range"] for r in from_markdown["ranges"]],
+                ),
+                (answer["sku"], answer["product_id"], [r["range"] for r in answer["ranges"]]),
+                "A MARKDOWN'S READING IS THE RUN'S READING. Same SKU, same resolved product, "
+                "same ranges in the same order — one body under two addresses",
+            )
+            checks.ok(
+                from_markdown.get("markdown") == stamp and "run" not in from_markdown,
+                "and it names the DOCUMENT it came from under `markdown`, never a stamp sent "
+                "back in a field called `run` for the client to decode",
+            )
+            spark_md = pipeline_routes.do_markdown_trends(stamp, ["9189317"])
+            checks.equal(
+                spark_md["skus"]["9189317"]["ranges"],
+                picked["skus"]["9189317"]["ranges"],
+                "and the strip is the run's strip, bucket for bucket",
+            )
+            try:
+                pipeline_routes.do_markdown_trends(stamp)
+                checks.ok(False, "the markdown strip refuses an empty list", "it answered")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "skus_required",
+                    "AN UNFILTERED WALK IS REFUSED HERE AND ALLOWED ON A RUN, and the "
+                    "difference is size: a survey is the whole live inventory, ~441 rows, "
+                    "about 5.5 minutes at a public mirror — which would make D62's press "
+                    "meaningless rather than merely slow",
+                )
+            try:
+                pipeline_routes.do_markdown_history(stamp, "1")
+                checks.ok(False, "the markdown route refuses a SKU it never saw", "it answered")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(
+                    refusal.code,
+                    "sku_not_in_markdown",
+                    "a SKU this markdown never surveyed refuses by its own name, mirroring "
+                    "`sku_not_in_run` — the address is checked, which a run-free route "
+                    "taking the cells on a query string could not do",
+                )
+
             # THE AT-CAP SKIP, on the owner's instruction of 2026-08-31: a row this run can add
             # nothing for is not a decision anyone is waiting on. Written into the stored table
             # rather than faked, because `at_cap` is `cli/cmd_join.py`'s own field and the whole
@@ -18941,6 +19397,7 @@ def run() -> Result:
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
     check_markdown(checks)
+    check_markdown_lens(checks)
     check_withholding(checks)
     check_pricing_route(checks)
     check_corpus_revision(checks)

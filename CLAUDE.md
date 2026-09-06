@@ -908,6 +908,7 @@ D99  The cut-off is a figure the operator sets, and one press writes one spreads
 D100 Nothing is deleted to lower a price, the quantity is not a variable, and the age is a proxy that says so
 D101 A claim a screen names is a claim a screen can fix, and the derived tuple outran its decoder
 D102 The mark is an illustration with its own palette, and the spec is its store of record
+D103 Staleness is a filter and not a gate, the record holds every live row, and the file that leaves the machine stays narrow
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
