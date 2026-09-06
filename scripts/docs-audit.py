@@ -70,6 +70,7 @@ import tempfile
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -3677,6 +3678,51 @@ EXPORT_STANDING = (
         "rather than a loud miss.",
     ),
 )
+
+# ---------------------------------------------- the transport promise, read off its own file
+#
+# `server/tcg_export.py` opens with FOUR BULLETS that are, in its own words, the REPLACEMENT
+# for a guarantee it deleted rather than qualified — the file that reads the operator's
+# `TCGPLAYER_STORE_COOKIE` saying in prose what it is allowed to do with it. The first bullet
+# is a count of hosts, methods and routes, and it is the one thing in that block a machine can
+# settle: the constants are in the same file, and so is the request construction.
+#
+# IT WAS WRONG FOR A WEEK AND NOTHING COULD SAY SO. Written 2026-08-30 over a single GET, it
+# read `One host, one method, one route` until 2026-09-06 — through D65 turning the download
+# into a POST against a different route and promoting the filter list from a probe to a real
+# call the same day, and through D104 adding the live download six days later. Three route
+# changes and a second method under a sentence that never moved, and `server/pipeline_routes.py`
+# had copied the sentence besides.
+#
+# WHY MECHANICAL RATHER THAN A QUESTION. Nothing here is a judgement. The host of a `https://`
+# constant is a fact, the path of one is a fact, and whether a `_open` call carries a body is a
+# fact — `_open` builds `method="POST" if data else "GET"`, so the keyword IS the method. A
+# finding is a route or a method the code can reach and the promise does not name, or the
+# reverse, and either one is provably wrong in the sense D16 asks for.
+TRANSPORT_PROMISE_MODULE = ROOT / "server" / "tcg_export.py"
+
+#: The one function every outbound request in that module goes through. Named here because the
+#: whole reading hangs off it: a second opener would make this row describe half the traffic.
+TRANSPORT_OPENER = "_open"
+
+#: The headline the bullet leads with, whose three numbers are what this row settles. Anchored
+#: on the bold run so a rewording is REPORTED rather than silently uncovered — `check census`'s
+#: hard-won half, and the failure mode that matters most here: a promise this row stops
+#: watching is a promise back in the state it spent a week in.
+_TRANSPORT_HEADLINE_RE = re.compile(
+    r"\*\*(\w+) hosts?, (\w+) methods?, (\w+) routes?\*\*", re.I
+)
+
+#: The routes the bullet tabulates, one `METHOD /path` per line. Indented under the headline
+#: as a block, which is how the file writes a captured request everywhere else.
+_TRANSPORT_ROUTE_RE = re.compile(r"^\s{4,}(GET|POST|PUT|PATCH|DELETE)\s+(/\S*)", re.M)
+
+#: Number words, because the headline is prose and this repo writes counts in prose. Only as
+#: far as anything here could plausibly reach; a count past it is reported rather than guessed.
+_TRANSPORT_NUMBERS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
 FIXTURES_DIR = ROOT / "fixtures"
 
 # Opt-in extra exports, colon-separated, absolute or repo-relative. For the operator who
@@ -5366,6 +5412,276 @@ def check_pricing_presets(report: Report) -> None:
         MECHANICAL,
         findings,
         f"{len(authored)} priced, written by the screen, key rule and basis agree",
+    )
+
+
+def _transport_url_constants(tree: ast.AST) -> Dict[str, str]:
+    """Module-level `NAME = "https://..."` assignments. The routes, as the code holds them."""
+    out: Dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        value = node.value
+        if not (isinstance(value, ast.Constant) and isinstance(value.value, str)):
+            continue
+        if not value.value.startswith(("http://", "https://")):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                out[target.id] = value.value
+    return out
+
+
+def _carries_a_url(value: ast.AST, accessors: Dict[str, str]) -> bool:
+    """Whether an assignment's right-hand side is a URL being BUILT rather than one being USED.
+
+    THE DISTINCTION IS THE WHOLE ACCURACY OF THE ROW, and getting it wrong was measured on the
+    first run: `following = _check_status(status, headers, url)` MENTIONS the download's URL,
+    so a reader that propagated through any expression containing it decided the redirect hop
+    was a fourth route — `GET /admin/pricing/downloadexportcsv`, a request this file cannot
+    make. A promise checked against a route that does not exist fails a commit for nothing,
+    which is how a row gets switched off.
+
+    So a string expression carries the URL forward — a name, an f-string, a concatenation, a
+    literal, a call to one of the endpoint accessors — and a call to anything else does not.
+    An accessor is a function that returns one of the constants; nothing here reads a name.
+    """
+    if isinstance(value, ast.Call):
+        return isinstance(value.func, ast.Name) and value.func.id in accessors
+    return isinstance(value, (ast.Name, ast.JoinedStr, ast.BinOp, ast.Constant))
+
+
+def _transport_requests(tree: ast.AST, urls: Dict[str, str]) -> Set[Tuple[str, str]]:
+    """(constant name, METHOD) for every request the module can issue against its own routes.
+
+    THE METHOD IS THE KEYWORD, WHICH IS WHY THIS IS A FACT AND NOT A READING. `_open` builds
+    `method="POST" if data else "GET"` and there is no other opener in the file, so a call site
+    that passes `data=` is a POST and one that does not is a GET. Nothing is inferred from a
+    function's name.
+
+    ATTRIBUTION IS BY THE URL A CALL WAS HANDED, walked back through the accessors — `endpoint`,
+    `live_endpoint`, `_filters_endpoint` are just functions that return one of the constants, so
+    a local assigned from one of them carries that constant, and so does a local assigned from
+    such a local (`url = f"{url}?..."` keeps what `url` already meant).
+
+    A REDIRECT HOP IS DELIBERATELY NOT A ROUTE. The second `_open` in each fetch is handed
+    `following`, a Location the portal chose, and this module never names it — one hop is
+    followed and the cookie does not cross a host change, which is the bullet's own sentence.
+    Counting it would make the promise answer for somebody else's server.
+    """
+    accessors: Dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for sub in ast.walk(node):
+            if (
+                isinstance(sub, ast.Return)
+                and isinstance(sub.value, ast.Name)
+                and sub.value.id in urls
+            ):
+                accessors[node.name] = sub.value.id
+
+    pairs: Set[Tuple[str, str]] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        carries: Dict[str, str] = {}
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Assign) and _carries_a_url(sub.value, accessors):
+                reached = set()
+                for inner in ast.walk(sub.value):
+                    if isinstance(inner, ast.Name):
+                        if inner.id in urls:
+                            reached.add(inner.id)
+                        elif inner.id in carries:
+                            reached.add(carries[inner.id])
+                    elif (
+                        isinstance(inner, ast.Call)
+                        and isinstance(inner.func, ast.Name)
+                        and inner.func.id in accessors
+                    ):
+                        reached.add(accessors[inner.func.id])
+                if len(reached) == 1:
+                    for target in sub.targets:
+                        if isinstance(target, ast.Name):
+                            carries[target.id] = next(iter(reached))
+            if not (
+                isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Name)
+                and sub.func.id == TRANSPORT_OPENER
+            ):
+                continue
+            first = sub.args[0] if sub.args else None
+            named = None
+            if isinstance(first, ast.Name):
+                named = carries.get(first.id) or (first.id if first.id in urls else None)
+            elif isinstance(first, ast.Call) and isinstance(first.func, ast.Name):
+                named = accessors.get(first.func.id)
+            if named is None:
+                continue
+            body = next((kw for kw in sub.keywords if kw.arg == "data"), None)
+            empty = body is not None and isinstance(body.value, ast.Constant) and body.value.value is None
+            pairs.add((named, "GET" if body is None or empty else "POST"))
+    return pairs
+
+
+def check_transport_promise(report: Report) -> None:
+    """`server/tcg_export.py`'s first bullet, against the constants and calls beneath it.
+
+    **THE FILE THIS ROW WATCHES IS THE ONE THAT READS THE BEARER CREDENTIAL**, and its opening
+    four bullets are not description — the module says so itself. `server/capture_server.py`
+    promised for months that this process "holds no API key and makes no outbound call"; this
+    file broke the second half literally, and rather than narrow the promise to a technicality
+    it deleted it and wrote four replacement bullets. A replacement nobody maintains is the
+    narrowing arriving late, which is D16's whole subject.
+
+    **AND THE FIRST BULLET HAD ALREADY DONE IT.** `One host, one method, one route` was written
+    on 2026-08-30 over a single GET and was true that morning. D65 landed the same day: the
+    download became a POST against `/admin/pricing/downloadexportcsv`, and the filter list went
+    from a line in the auth measurement table to a call the module makes. D104 added the live
+    download on 2026-09-06. Three routes, two methods, and the sentence above them never moved
+    — nor did `server/pipeline_routes.py`'s copy of it, which is the shape a claim takes once
+    it has a second home and no reader.
+
+    **MECHANICAL, because none of it is a judgement.** The host of a `https://` constant, the
+    path of one, and whether an `_open` call carries a body are three facts in one file, and
+    `_open` builds `method="POST" if data else "GET"` so the keyword is the method. A finding is
+    a (method, route) pair the code can issue and the bullet does not tabulate, or one the
+    bullet tabulates and the code cannot issue. Both directions: an unlisted route is the drift
+    that happened, and a listed-but-unreachable one is the promise describing a file that has
+    moved on.
+
+    **IT REFUSES TO GO QUIET**, which `check census` paid for and this row inherits. A headline
+    reworded past the pattern, a table that yields no routes, or a module with no attributable
+    request is REPORTED rather than passed — a promise this row stops reading is a promise back
+    in exactly the state it spent a week in, and green.
+
+    **WHAT IT DOES NOT CHECK.** The other three bullets. "It cannot cause a charge", "the secret
+    never leaves this module" and "every anticipated failure has its own code" are arguments
+    about what the code does NOT do, and a check that claimed to settle those would be asserting
+    the absence of something rather than the presence of it — the vacuous green docs/DEBTS.md
+    opens by warning about. They are verified by reading, and the reading is recorded in the
+    bullets themselves.
+    """
+    findings: List[Finding] = []
+    where = rel(TRANSPORT_PROMISE_MODULE)
+    if not exists(TRANSPORT_PROMISE_MODULE):
+        report.add("transport promise", MECHANICAL, [Finding(where, "does not exist")])
+        return
+
+    try:
+        tree = ast.parse(read(TRANSPORT_PROMISE_MODULE))
+    except SyntaxError as exc:
+        report.add(
+            "transport promise",
+            MECHANICAL,
+            [Finding(where, f"cannot be parsed, so neither its promise nor its calls can be "
+                            f"read.\n{exc}")],
+        )
+        return
+
+    promise = ast.get_docstring(tree) or ""
+    headline = _TRANSPORT_HEADLINE_RE.search(promise)
+    if headline is None:
+        report.add(
+            "transport promise",
+            MECHANICAL,
+            [Finding(where, (
+                "its module docstring no longer opens with a `**N hosts, N methods, N routes**"
+                "` headline, so the promise over the credential this file reads is watched by\n"
+                "  nothing. Either the bullet was deleted, or it was reworded past the pattern.\n"
+                "  Re-point `_TRANSPORT_HEADLINE_RE`, or take the row out deliberately — a check\n"
+                "  whose subject has left is worse than no check."
+            ))],
+            "",
+        )
+        return
+
+    tail = promise[headline.end():]
+    cut = tail.find("\n  - **")
+    bullet = tail if cut < 0 else tail[:cut]
+
+    urls = _transport_url_constants(tree)
+    issued = _transport_requests(tree, urls)
+    reachable = {(method, urlparse(urls[name]).path) for name, method in issued}
+    hosts = {urlparse(value).netloc for value in urls.values()}
+    tabulated = {(method.upper(), route) for method, route in _TRANSPORT_ROUTE_RE.findall(bullet)}
+
+    if not urls:
+        findings.append(Finding(where, (
+            "declares no module-level `https://` URL constant. The bullet promises the routes "
+            "are constants rather than\n  anything a request can name; there is nothing here "
+            "for that to be true of."
+        )))
+    if not issued:
+        findings.append(Finding(where, (
+            f"no `{TRANSPORT_OPENER}` call could be attributed to one of its URL constants, so "
+            f"this row cannot say what the\n  module reaches. Either every request moved out of "
+            f"`{TRANSPORT_OPENER}`, or the accessors stopped returning\n  the constants — and "
+            f"either way the promise above them is unread."
+        )))
+    if not tabulated:
+        findings.append(Finding(where, (
+            "its first bullet tabulates no `METHOD /path` lines. The headline counts routes and "
+            "nothing names them,\n  which is the state that let `one method, one route` stand "
+            "over three of each for a week."
+        )))
+
+    for method, route in sorted(reachable - tabulated):
+        findings.append(Finding(where, (
+            f"reaches `{method} {route}` and the promise does not name it. This is the module "
+            f"that carries the operator's\n  session cookie; a route it can open and its own "
+            f"header does not list is the narrowing D16 exists to catch."
+        )))
+    for method, route in sorted(tabulated - reachable):
+        findings.append(Finding(where, (
+            f"promises `{method} {route}` and no call in this file can issue it. A promise that "
+            f"describes a file which has\n  moved on is read as current by the next session; "
+            f"strike it, or restore the call."
+        )))
+
+    if len(hosts) > 1:
+        findings.append(Finding(where, (
+            "names more than one host — " + ", ".join(sorted("`%s`" % h for h in hosts)) + ". "
+            "The bullet says one, and `server/order_transport.py`\n  exists precisely because "
+            "the second host got its own module rather than a second URL in this one."
+        )))
+    for host in sorted(hosts):
+        if host and host not in bullet:
+            findings.append(Finding(where, (
+                f"opens sockets to `{host}` and its first bullet does not say so. The host is "
+                f"the one thing a reader\n  checks before trusting where the cookie goes."
+            )))
+
+    claimed = [_TRANSPORT_NUMBERS.get(word.lower()) for word in headline.groups()]
+    actual = [len(hosts), len({method for method, _ in reachable}), len(reachable)]
+    for word, count, real, noun in zip(headline.groups(), claimed, actual, ("host", "method", "route")):
+        if count is None:
+            findings.append(Finding(where, (
+                f"counts `{word}` {noun}s in its headline and this row cannot read that as a "
+                f"number. Write it as a word\n  up to ten, or widen `_TRANSPORT_NUMBERS` — an "
+                f"unreadable count is an unchecked one."
+            )))
+        elif count != real:
+            findings.append(Finding(where, (
+                f"says `{word}` {noun}{'' if count == 1 else 's'} and the code reaches {real}. "
+                f"Recount from the constants and the\n  `{TRANSPORT_OPENER}` calls; never "
+                f"adjust the word to end a build."
+            )))
+
+    for name in sorted(urls):
+        if name not in bullet:
+            findings.append(Finding(where, (
+                f"binds `{name}` to a URL and its first bullet does not name the constant. The "
+                f"bullet lists them so a\n  fourth cannot arrive as an ordinary assignment."
+            )))
+
+    report.add(
+        "transport promise",
+        MECHANICAL,
+        findings,
+        f"{len(hosts)} host, {len({m for m, _ in reachable})} methods, {len(reachable)} routes, "
+        f"as promised and as called",
     )
 
 
@@ -10022,6 +10338,7 @@ def audit(staged_only: bool) -> Report:
     check_order_reasons(report)
     check_pricing_presets(report)
     check_export_request(report)
+    check_transport_promise(report)
     check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)
