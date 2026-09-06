@@ -48,6 +48,8 @@ function live(over: Partial<MarkdownSku> = {}): MarkdownSku {
     cut: '2.00',
     given_up: '6.00',
     owned_since: '2026-08-01T00:00:00.000+00:00',
+    listed_since: null,
+    held_here: true,
     last_sold: null,
     priced_at: null,
     ...over,

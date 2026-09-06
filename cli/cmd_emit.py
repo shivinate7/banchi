@@ -368,6 +368,11 @@ def run(args, say) -> int:
             # something else would partition this run differently from the `join` that
             # produced the report they are looking at.
             threshold=pricing.check_threshold(policy["threshold"]),
+            # THE STORED CAP, FOR `threshold`'S REASON EXACTLY. It decides how many copies of
+            # a SKU go into the file, and `emit` re-derives the join — so reading the module
+            # constant here while the operator had set something else would push a different
+            # number of copies than the `join` report in front of them said it would.
+            live_cap=decisions.parse_live_cap(policy.get("live_cap")),
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
@@ -741,6 +746,11 @@ def _resolve_one(run_dir, book, say):
             rule=pricing.Rule.parse(policy["rule"]),
             basis=pricing.check_basis(policy["basis"]),
             threshold=pricing.check_threshold(policy["threshold"]),
+            # THE STORED CAP, FOR `threshold`'S REASON EXACTLY. It decides how many copies of
+            # a SKU go into the file, and `emit` re-derives the join — so reading the module
+            # constant here while the operator had set something else would push a different
+            # number of copies than the `join` report in front of them said it would.
+            live_cap=decisions.parse_live_cap(policy.get("live_cap")),
             review_below=run_dir.manifest.get("review_below_confidence", routing.CONFIDENCE_LOW),
         )
     except join.EmptyCatalog as refusal:

@@ -374,7 +374,7 @@ COMPONENTS = [
                                         "which the next emit re-lists at the rule price and "
                                         "undoes the markdown.",
                                "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
-                                               "D100", "D103", "D87", "D106", "D107"],
+                                               "D100", "D103", "D87", "D106", "D107", "D109"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
                                     "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
@@ -884,7 +884,7 @@ COMPONENTS = [
                                   "number is still a run's own drawer, read off the store by "
                                   "`Inventory.box_disowns_run` — the route withholds the name on "
                                   "it (D56) and the join refuses on it (D36 amended)",
-                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89"], "tested_by": ["T7"]},
+                          "governed_by": ["D3", "D7", "D8", "D10", "D11", "D20", "D21", "D23", "D26", "D34", "D36", "D56", "D58", "D59", "D83", "D87", "D88", "D89", "D100"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -3757,7 +3757,7 @@ COMPONENTS = [
                                              "eleven and three mechanical counts do not move.",
                                      # D103 is the entry; D86 is the one answer file the write
                                      # path is keyed by; D62 is the press the trends scoping keeps.
-                                     "governed_by": ["D28", "D62", "D86", "D100", "D103"]},
+                                     "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
                                           "`pkmnscan.run-scope`, D27's carve-out. NOT CLEARED BY "

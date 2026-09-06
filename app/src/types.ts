@@ -2703,10 +2703,18 @@ export type MarkdownSku = {
   proposed: string | null
   cut: string | null
   given_up: string | null
-  /** THE PROXY. How long the CARD has been owned, not how long the listing has been live —
-   *  the store cannot measure the second, and every surface drawing this owes D100's
-   *  sentence. */
+  /** THE PROXY, AND THE FALLBACK RATHER THAN THE ANSWER SINCE 2026-09-06. How long the CARD
+   *  has been owned. Read it only where `listed_since` is null, and say which one is being
+   *  drawn — D100's sentence is owed for this field and never for the other. */
   owned_since: string | null
+  /** `Listing.first_seen_live` — the earliest export observed holding this SKU live, which is
+   *  the LISTING's own age and the term the proxy above was standing in for. Null until
+   *  `pkmnscan reconcile --live --write` has seen the SKU. */
+  listed_since: string | null
+  /** Whether any card in this store has ever carried this SKU. Evidence, not a gate: it
+   *  explains a row with no thumbnail and no copies, and it stopped being a refusal on
+   *  2026-09-06. */
+  held_here: boolean
   last_sold: string | null
   priced_at: string | null
   /** The export row, verbatim, all sixteen cells. What an upload's bytes are built from and

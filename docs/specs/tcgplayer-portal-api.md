@@ -135,7 +135,12 @@ Rules for anything built on this file:
 
 ## 5. What is not known
 
-- **`movetolive` has never been called from here.** Its contract is read, not exercised.
+- ~~**`movetolive` has never been called from here.**~~ **Corrected 2026-09-06**: it was
+  called that day and the table above records the measurement — $23.22 to $750.00 and back on
+  SKU 9189317, 0 errors. This line was written in the same session that then exercised it and
+  was never updated, so the table and this list contradicted each other for a day. Left
+  struck rather than deleted: a session reading only §5 would have believed the whole publish
+  path unexercised and rebuilt it.
 - **The bodies of `clearliveinventory`, `clearstagedinventory`, `updateinventory`,
   `productsearch` and `bulkpricematch` are unread.** They are named in the bundle; their
   parameters were not traced, because tracing a destructive call means being one mistake from

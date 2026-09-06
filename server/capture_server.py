@@ -271,7 +271,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from codes import products  # noqa: E402
-from pipeline import games, join, tcgcsv  # noqa: E402
+from pipeline import corpus, games, join, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from store import Store, files, master, queues  # noqa: E402
@@ -7178,7 +7178,7 @@ def do_search(query: str) -> dict:
                     for stage in master.LISTING_STAGES
                 },
                 "on_hand": on_hand,
-                "cap": join.LIVE_QUANTITY_CAP,
+                "cap": corpus.live_cap_for(),
                 # D7 IN ONE FIELD: "listed quantity is min(cap, on hand)". The cap above is the
                 # RULE and this is what the rule comes to for THIS SKU, which are different
                 # numbers whenever the shelf holds fewer than a playset — and the screen wants
@@ -7191,7 +7191,7 @@ def do_search(query: str) -> dict:
                 # Computed HERE and not in the browser: `app/src/server.ts` records that the app
                 # is forbidden from computing the live cap, and a `Math.min` over `cap` in
                 # TypeScript is that rule living in two places.
-                "listable": min(join.LIVE_QUANTITY_CAP, on_hand),
+                "listable": min(corpus.live_cap_for(), on_hand),
                 "copies": [_copy_row(places, card) for card in copies],
                 "_rank": rank,
             }
@@ -7224,11 +7224,11 @@ def do_search(query: str) -> dict:
                 "condition": _agreed(card.condition for card in loose),
                 "listed": {stage: 0 for stage in master.LISTING_STAGES},
                 "on_hand": loose_on_hand,
-                "cap": join.LIVE_QUANTITY_CAP,
+                "cap": corpus.live_cap_for(),
                 # The same min as the keyed group above. Zero listing stages and no SKU to list
                 # under, so this can only ever be read as "what it WOULD be worth if identified"
                 # — which is the honest thing for it to say rather than a bare cap.
-                "listable": min(join.LIVE_QUANTITY_CAP, loose_on_hand),
+                "listable": min(corpus.live_cap_for(), loose_on_hand),
                 "copies": [_copy_row(places, card) for card in loose],
             }
         )

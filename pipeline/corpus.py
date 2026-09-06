@@ -151,6 +151,12 @@ class Corpus:
     #: asymmetric for a day — a defaulted cheap price beside a constant threshold — and the
     #: pair inverted. One figure, one fallback.
     threshold: object = DEFAULT_CUTOFF
+    #: How many copies of one SKU may be live at TCGplayer at once (D7). Store-wide, and
+    #: overridable per run through `policy.per_run` like the four keys above it — the run-level
+    #: override D86 named as its own reopening condition, and this is its FIRST WRITER. A lot
+    #: that genuinely wants a different exposure is exactly the case D7's "configurable" was
+    #: about, and the store-wide figure is the one that answers for everything else.
+    live_cap: object = pricing.LIVE_QUANTITY_CAP
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the
     #: standing policy, which is expected to be almost all of them.
@@ -201,6 +207,10 @@ class Corpus:
         # discarded like the two above, but a MISSING key is the store that has never set one
         # and reads `DEFAULT_CUTOFF`, where a present-and-unusable one is refused by name.
         pricing.check_threshold(policy.get("threshold"))
+        # VALIDATED AT READ TIME LIKE THE OTHERS, and by the same parser `Decisions.parse`
+        # uses, so a store whose policy holds `live_cap: 0` refuses when the file is opened
+        # rather than emitting nothing for every SKU and looking like a broken pipeline.
+        decisions_mod.parse_live_cap(policy.get("live_cap"))
         # THE ONE KEY WITH A DEFAULT VALUE, AND ONLY WHERE THE FILE IS SILENT. Absent or `null`
         # reads as `DEFAULT_SUB_THRESHOLD`; `"floor"` and a written flat price are what they
         # say. Validated ONCE here, by the parser `Decisions.parse` uses, for the argument the
@@ -219,6 +229,7 @@ class Corpus:
                 if policy.get("threshold") is None
                 else str(policy["threshold"]).strip()
             ),
+            live_cap=decisions_mod.parse_live_cap(policy.get("live_cap")),
             answers=answers,
             overrides={
                 str(name): dict(over)
@@ -258,6 +269,10 @@ class Corpus:
             # `policy.threshold` to draw the control, and a key that appears only once
             # somebody has changed it is a control that cannot draw its own current value.
             "threshold": self.threshold,
+            # WRITTEN ALWAYS, FOR `threshold`'S REASON. A screen that lets the operator set
+            # the cap has to be able to draw the figure standing now, and a key that appears
+            # only after somebody changes it cannot show its own current value.
+            "live_cap": self.live_cap,
         }
         if self.overrides:
             policy["per_run"] = self.overrides
@@ -325,7 +340,22 @@ class Corpus:
         for sku, answer in self.answers.items():
             if sku not in keys:
                 continue
-            (unknown if answer.channel == "unknown" else prices)[sku] = answer.value
+            # AN ALLOW-LIST, AND IT WAS A DENY-LIST UNTIL 2026-09-06. It read
+            # `unknown if channel == "unknown" else prices`, so EVERY value but one landed in
+            # `overrides` — the table `pipeline/join.py:prices_for` consults FIRST, which
+            # beats the rule, the market and the sub-threshold policy, for every future copy
+            # out of every future box. A channel nobody had thought of yet would therefore
+            # have priced cards, silently, in the money direction.
+            #
+            # `docs/specs/tcgplayer-portal-api.md` §4 rule 4 states this repo's position on
+            # the shape — "Never a deny-list. A guard that blocks named-dangerous calls fails
+            # open on the one nobody named" — and it was written after a dry-run interceptor
+            # built from the wrong names let 100 real rows reach TCGplayer. The same shape was
+            # sitting on the file that decides what every card lists at. An unrecognised
+            # channel now falls to `no_market_data`, which `pipeline/decisions.py:blocking`
+            # reads as "this card is not answered" and refuses the emit over: the safe
+            # direction is the one that stops rather than the one that prices.
+            (prices if answer.channel == "price" else unknown)[sku] = answer.value
         for sku in unpriced:
             if sku not in prices and sku not in unknown:
                 unknown[sku] = None
@@ -357,6 +387,7 @@ class Corpus:
             "basis": self.basis,
             "sub_threshold": self.sub_threshold,
             "threshold": self.threshold,
+            "live_cap": self.live_cap,
         }
         return {
             key: (over[key] if over.get(key) is not None else value)
@@ -634,6 +665,23 @@ def _is_hold(value: object) -> bool:
     return str(value).strip().lower() == decisions_mod.pricing.UNLISTED
 
 
+def live_cap_for(run_name: Optional[str] = None) -> int:
+    """The live cap standing right now, store-wide or for one run. Never raises.
+
+    FOR THE READ PATHS, which are the servers. `#/pricing`, `#/runs` and the copy map all draw
+    the cap, and a screen that cannot draw it because the corpus is momentarily unreadable is
+    worse than one drawing D7's default — the figure is advisory on those surfaces, and the
+    write paths (`join`, `emit`) parse the policy properly and refuse a bad one. So a malformed
+    or missing file falls back here rather than taking a read route down.
+    """
+    try:
+        return decisions_mod.parse_live_cap(
+            Corpus.read().policy_for(run_name).get("live_cap")
+        )
+    except Exception:  # noqa: BLE001 - a read surface never fails over an advisory figure
+        return pricing.LIVE_QUANTITY_CAP
+
+
 def _token(value: object) -> str:
     """An answer as a comparable string. `0.50` and `0.5` are ONE answer, for D86's reason."""
     if isinstance(value, dict):
@@ -644,7 +692,27 @@ def _token(value: object) -> str:
     if text.lower() == decisions_mod.pricing.UNLISTED:
         return "unlisted"
     try:
-        return f"${Decimal(text).normalize()}"
+        # `normalize()` IS THE COMPARISON AND `_plain` IS THE RENDERING, and they were one
+        # call until 2026-09-06. Normalising folds `0.50` and `0.5` into one answer, which is
+        # the whole point — and it also folds `7000.00` into `7E+3`, because that is what
+        # `Decimal.normalize` does to a round number of at least 100. Every string here is
+        # printed to the operator by `cli/cmd_prices.py`, so the two highest-value figures
+        # this repo has ever handled — a $7,000 listing and a $750 test publish — both
+        # rendered as exponents in the report that names what a price was changed to.
+        return f"${_plain(Decimal(text).normalize())}"
     except (ArithmeticError, InvalidOperation, ValueError):
         # A value `Decisions.parse` will refuse later. Reported as typed rather than guessed.
         return text
+
+
+def _plain(number: Decimal) -> str:
+    """A normalised `Decimal` as digits, never scientific notation.
+
+    `Decimal("7000.00").normalize()` is `Decimal("7E+3")` and `str()` of it says so. The fix
+    is `quantize` back to a whole exponent, which is exact for a value that only LOST
+    trailing zeros — the case `normalize` produces — and cannot lose a significant digit.
+    Small values are unaffected: `0.49` normalizes to itself.
+    """
+    if number == number.to_integral_value() and number.as_tuple().exponent > 0:
+        return str(number.quantize(Decimal(1)))
+    return str(number)

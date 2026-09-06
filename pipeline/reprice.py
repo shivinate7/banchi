@@ -209,8 +209,19 @@ class Candidate:
     asking: Optional[Decimal] = None
     market: Optional[Decimal] = None
     #: The oldest `captured_at` of any card that ever carried this SKU. A PROXY for how long
-    #: the listing has been live — see the module header.
+    #: the listing has been live — see the module header. `listed_since` supersedes it where
+    #: the store has one, and this stays as the fallback for a SKU seen live only once.
     owned_since: Optional[str] = None
+    #: `store/master.py:Listing.first_seen_live` — the earliest export that carried this SKU
+    #: live. THE REAL TERM the module header's proxy was standing in for, available for a
+    #: SKU no card here ever carried as much as for one photographed in a box.
+    listed_since: Optional[str] = None
+    #: Whether any card here has ever carried this SKU. DRAWN EVIDENCE AND NOT A GATE since
+    #: 2026-09-06: it was a terminal refusal (`NOT_THIS_STORE`), and on the owner's store
+    #: that refused 28 SKUs carrying 94.5% of the live book's asking value — a $2,000 box
+    #: case asking $155 under market among them. What a card record buys is a photograph and
+    #: a position, and neither is consulted to decide a price.
+    held_here: bool = True
     #: The newest `state_at` of a card of this SKU marked sold here. None means never sold.
     last_sold: Optional[str] = None
     #: When this store last wrote a price answer for this SKU (`corpus.Answer.at`).
@@ -231,6 +242,18 @@ class Candidate:
     @property
     def line(self) -> str:
         return self.row.get(tcgcsv.PRODUCT_LINE_COLUMN, "")
+
+    @property
+    def listed_for(self) -> Optional[str]:
+        """The stamp staleness is ranked on: the first sighting, else the ownership proxy.
+
+        PREFERRED IN THAT ORDER because they answer different questions. `first_seen_live` is
+        when TCGplayer was first observed holding this SKU, which is the thing `--days` claims
+        to measure; `owned_since` is when a camera first saw a card, which on the owner's
+        store made 184 of 387 live SKUs `too_young` against an oldest capture of 2026-08-23.
+        A store with no sightings yet behaves exactly as it did before, proxy and all.
+        """
+        return self.listed_since or self.owned_since
 
     @property
     def above_market(self) -> Optional[Decimal]:
@@ -274,6 +297,13 @@ class Plan:
     skipped: Dict[str, List[Candidate]] = field(default_factory=dict)
     #: The parameters, echoed back, so a receipt says what it was asked.
     asked: Dict[str, object] = field(default_factory=dict)
+    #: How many live rows were dated by each clock — `sighting` is `Listing.first_seen_live`,
+    #: `ownership` the `captured_at` proxy, `neither` a row nothing can date. COUNTED SO THE
+    #: REPORT CAN STOP GUESSING: the proxy paragraph was printed unconditionally on every
+    #: report, and once a store has sightings that paragraph is false for the rows that have
+    #: one. D100's rule is that a substitution nobody is told about is a lie; the same rule
+    #: says a substitution that is not happening must not be claimed.
+    dated: Dict[str, int] = field(default_factory=dict)
 
     @property
     def copies(self) -> int:
@@ -329,6 +359,7 @@ def plan(
     export_rows: Sequence[Mapping[str, str]],
     *,
     owned_since: Mapping[str, str],
+    listed_since: Optional[Mapping[str, str]] = None,
     last_sold: Optional[Mapping[str, str]] = None,
     priced_at: Optional[Mapping[str, str]] = None,
     held: Optional[Sequence[str]] = None,
@@ -342,10 +373,17 @@ def plan(
 ) -> Plan:
     """Rank the live listings this store would mark down, and name every row it would not.
 
-    `owned_since` maps SKU to the oldest `captured_at` of any card that ever carried it —
-    a SKU absent from it is one this store has never held, which is a refusal and not a
-    default. `last_sold` and `priced_at` map SKU to a stamp; absent means never. `held` is
-    the withheld SKUs from the corpus (D49), which are reported and never marked down.
+    `owned_since` maps SKU to the oldest `captured_at` of any card that ever carried it, and
+    `listed_since` to `Listing.first_seen_live` — the earliest export observed holding it.
+    STALENESS RANKS ON `listed_since` WHERE THERE IS ONE, because that is the quantity
+    `--days` has always claimed to measure; `owned_since` is the proxy it falls back to, and
+    every report still names the substitution where one was made. A SKU absent from BOTH is
+    one nothing can date, and it is reported `too_young` rather than priced on a guess — but
+    a SKU absent from `owned_since` alone is merely one no card here carries, which is drawn
+    as evidence and refuses nothing (it was a terminal refusal until 2026-09-06; see
+    `Candidate.held_here`). `last_sold` and `priced_at` map SKU to a stamp; absent means
+    never. `held` is the withheld SKUs from the corpus (D49), reported and never marked
+    down.
 
     Nothing here reads a clock unless `now` is None, so a test drives its own window.
     """
@@ -353,6 +391,7 @@ def plan(
     check_basis(basis)
     when = now or datetime.now(timezone.utc)
     cut_off = when - timedelta(days=days)
+    listed_at = dict(listed_since or {})
     sold_at = dict(last_sold or {})
     answered_at = dict(priced_at or {})
     withheld = set(held or ())
@@ -390,6 +429,8 @@ def plan(
             asking=asking_price(row),
             market=tcgcsv.parse_price(row.get(tcgcsv.MARKET_PRICE_COLUMN, "")),
             owned_since=owned_since.get(sku),
+            listed_since=listed_at.get(sku),
+            held_here=sku in owned_since,
             last_sold=sold_at.get(sku),
             priced_at=answered_at.get(sku),
         )
@@ -397,18 +438,23 @@ def plan(
         if live <= 0:
             refuse(candidate, SOLD_OUT)
             continue
-        if sku not in owned_since:
-            refuse(candidate, NOT_THIS_STORE)
-            continue
+        clock = (
+            "sighting" if candidate.listed_since
+            else "ownership" if candidate.owned_since
+            else "neither"
+        )
+        out.dated[clock] = out.dated.get(clock, 0) + 1
         if sku in withheld:
             refuse(candidate, HELD)
             continue
         if _before(candidate.last_sold, cut_off) is False:
             refuse(candidate, SOLD_RECENTLY)
             continue
-        if _before(candidate.owned_since, cut_off) is not True:
+        if _before(candidate.listed_for, cut_off) is not True:
             # Not older than the window, or a stamp that does not parse. Both are "this
-            # store cannot say it is old", and neither is licence to lower a price.
+            # store cannot say it is old", and neither is licence to lower a price. READ
+            # OFF `listed_for`, which prefers the first sighting to the ownership proxy —
+            # so this is a statement about the LISTING wherever the store has seen one.
             refuse(candidate, TOO_YOUNG)
             continue
         if _before(candidate.priced_at, cut_off) is False:
@@ -471,7 +517,15 @@ UNCHANGED = "unchanged"                  # equal to what the export reported
 # the screen draws but must not push is refused here under the name the survey already gave it,
 # so the sentence on the row and the sentence in the receipt are one string from one table. See
 # `unpriceable=` on `read_back` for who decides membership.
-UNPRICEABLE_CODES: Tuple[str, ...] = (NOT_THIS_STORE, SOLD_OUT)
+# NARROWED TO ONE CODE ON 2026-09-06, and the removal is the point rather than the arithmetic.
+# `SOLD_OUT` stays because there is no live listing for a price to edit — a fact about the
+# LISTING, which is what this table is for. `NOT_THIS_STORE` was a fact about this store's
+# CARD TABLE, and refusing on it meant the operator could not touch 94.5% of their own live
+# book by asking value. What a card record buys is a photograph and a position; a price needs
+# neither. The quantity path is untouched and still needs both — `pipeline/join.py`'s cap
+# spends `live_cap - copies_out` over real positions, and nothing here writes a quantity
+# (`ADD_TO_QUANTITY` is 0 and `check_quantities_zero` asserts it on the way out).
+UNPRICEABLE_CODES: Tuple[str, ...] = (SOLD_OUT,)
 
 EDIT_SENTENCE: Dict[str, str] = {
     NOT_IN_WORKLIST: "not a row this markdown's survey saw",

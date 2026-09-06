@@ -66,6 +66,27 @@ export type PricingSource = {
    *  the photo drawer. False for a live listing, which this store may never have held at all. */
   copies: boolean
 
+  /** Whether the rule's figure OPENS IN THE FIELD or only behind it as a placeholder.
+   *
+   *  TRUE FOR A RUN AND FALSE FOR A LENS, for the same reason `repartition` splits: what an
+   *  untouched row MEANS is different. A run's rows are not listed yet, so the rule's price is
+   *  the answer until the operator overrides it and a field full of it is the worklist working.
+   *  A lens's rows are already live at a price somebody chose; on the owner's store a 7-day
+   *  window has the rule speaking about 243 of 387 live SKUs, so a filled field turns one bulk
+   *  press into 243 live price changes. The figure is still one keystroke or one preset away —
+   *  it is drawn as a placeholder — but the default is that nothing moves. */
+  proposes: boolean
+
+  /** Why this SKU may not be priced AT ALL, as the operator's own sentence, or null.
+   *
+   *  THE SERVER DECIDES MEMBERSHIP AND THIS ONLY DRAWS IT. `pipeline/reprice.py:read_back` is
+   *  what actually refuses the push, and `GET …/table` ships `unpriceable` so the row can
+   *  refuse the field rather than let a price be typed that the apply will throw away. That
+   *  field was declared on the wire and read by NOTHING until 2026-09-06: a locked row drew a
+   *  live input, `pushable` counted it, the corpus write landed, and only the receipt named
+   *  the refusal — D101's defect exactly, a screen offering a control it would not honour. */
+  locked: (sku: string) => string | null
+
   /** The two readings, pre-bound to the document that holds the row. `null` means no reading
    *  can be taken from here, which is a run picker holding zero runs or more than one. */
   history: ((sku: string) => Promise<PriceHistoryPayload>) | null
@@ -97,6 +118,10 @@ export function runSource(
     sections,
     repartition: true,
     copies: true,
+    proposes: true,
+    // A RUN HAS NO LOCKED ROWS. Its rows are cards in a drawer waiting for a price; there is
+    // no live listing for a refusal to be about.
+    locked: () => null,
     // BOUND ONLY WHERE THERE IS ONE RUN TO ADDRESS. Both routes are run-scoped, and a worklist
     // merged over three runs has no single document to read a history out of — which is what
     // the old `disabled={run === null}` said, in the one place it is now said.
@@ -171,6 +196,28 @@ function asRow(entry: MarkdownSku): MergedSku {
   } as unknown as MergedSku
 }
 
+/** SKU -> the sentence saying why no price may be pushed for it, for one table.
+ *
+ *  MEMOISED ON THE TABLE OBJECT because `markdownSource` is called on every render and this
+ *  walks every live row — 759 of them on the owner's store. A `WeakMap` so a table that goes
+ *  out of scope takes its index with it. */
+const LOCKED = new WeakMap<MarkdownTable, Map<string, string>>()
+
+function lockedOf(table: MarkdownTable | null): Map<string, string> {
+  if (table === null) return new Map()
+  const cached = LOCKED.get(table)
+  if (cached !== undefined) return cached
+  const bar = new Set(table.unpriceable ?? [])
+  const out = new Map<string, string>()
+  for (const entry of table.skus ?? []) {
+    if (entry.skip !== null && bar.has(entry.skip)) {
+      out.set(entry.sku, table.says?.[entry.skip] ?? entry.skip)
+    }
+  }
+  LOCKED.set(table, out)
+  return out
+}
+
 /** The markdown source — the operator's whole live inventory, staleness as a filter over it. */
 export function markdownSource(
   stamp: string,
@@ -191,9 +238,20 @@ export function markdownSource(
     // not act on — and it would move rows under the operator's hand for no reason (D28).
     repartition: false,
     // A LIVE LISTING IS NOT A COPY IN A DRAWER. This store may never have held it at all —
-    // 33 of the owner's 441 live SKUs are exactly that — so there is no photograph, no slot
-    // and no quantity going into a file.
+    // 28 of the owner's 387 live SKUs are exactly that — so there is no photograph, no slot
+    // and no quantity going into a file. THEY ARE PRICEABLE NOW: never having held one used
+    // to be a terminal refusal, and it refused 94.5% of that live book by asking value.
     copies: false,
+    // THE FIELD OPENS EMPTY HERE. These rows are already live at a price somebody chose, and
+    // the rule speaks about 243 of the owner's 387 at a 7-day window — a filled field would
+    // make one bulk press 243 live price changes. The suggestion is drawn as a placeholder,
+    // so it is one keystroke or one preset away and nothing moves by default.
+    proposes: false,
+    // THE SERVER'S OWN LIST, LOOKED UP PER ROW. Built once here rather than per render, and
+    // read off `unpriceable` so the screen and `read_back` cannot disagree about which rows
+    // refuse. `says` is `pipeline/reprice.py:SKIP_SENTENCE` — the sentence is never re-worded
+    // on this side, so the row and the receipt say one string from one table.
+    locked: (sku: string) => lockedOf(table).get(sku) ?? null,
     history: (sku: string) => fetchers.history(stamp, sku),
     trends: (skus: string[]) => fetchers.trends(stamp, skus),
     // THE WHOLE TABLE WAS READ AT ONE MOMENT, so every row's figures carry the same age —

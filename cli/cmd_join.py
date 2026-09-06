@@ -361,6 +361,10 @@ def run(args, say) -> int:
             basis=args.basis,
             review_below=args.review_below_confidence,
             threshold=threshold,
+            # THE STORED CAP (D7, configurable). `join` is where the report saying how many
+            # copies would go out is produced, so it has to derive that figure from the same
+            # policy `emit` will spend it against.
+            live_cap=decisions.parse_live_cap(corpus.Corpus.read().policy_for(run_dir.name).get("live_cap")),
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))

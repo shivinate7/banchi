@@ -196,6 +196,14 @@ def run_live(args, say) -> int:
             say(f"                   {sku}  store {stored} (as of {stamp}) vs export {offered}")
         _say_held(lambda sku: max(0, int(snapshot.inventory.listings[sku].live))
                   if sku in snapshot.inventory.listings else 0)
+        would_record = len([row for row in report.unknown if row.sku not in just_published])
+        if would_record:
+            say(f"                 {would_record} SKU(s) live at TCGplayer with no record here "
+                f"would be recorded,")
+            say("                 each with the first sighting this export is evidence of. "
+                "`pushed` stays 0 on")
+            say("                 them: this pipeline did not send them, and `live` is what "
+                "the export attests.")
         say("`pushed` is left alone: it is the cumulative record of what was sent, and")
         say("`cli/resolve.py:_copies_out` already corrects a stuck one against the physical")
         say("ceiling. Re-run with --write.")
@@ -204,6 +212,8 @@ def run_live(args, say) -> int:
     moved = 0
     touched = 0
     kept_count = 0
+    sighted = 0
+    recorded = 0
     # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D106). Read
     # before the write opens, because it walks the markdown receipts on disk and the store
     # lock is not the place to do that.
@@ -226,6 +236,34 @@ def run_live(args, say) -> int:
                 touched += 1
             elif verdict == master.KEPT:
                 kept_count += 1
+            # THE SIGHTING IS TAKEN WHATEVER THE QUANTITY VERDICT WAS, and that is the
+            # point of it being a separate call. A SKU sitting at the same figure returns
+            # `UNCHANGED` above and is exactly the row whose age nothing else can
+            # establish — every one of the owner's 443 records was in that state when this
+            # landed, none of them carrying a first sighting.
+            if row.live > 0 and listing.sight(as_of):
+                sighted += 1
+        # SKUS TCGPLAYER HOLDS THAT THIS STORE HAS NEVER SEEN, WRITTEN RATHER THAN ONLY
+        # REPORTED. Until 2026-09-06 this loop skipped them — `listings.get(sku)` returned
+        # None and the row was named in the preview and dropped — so the store had no
+        # memory of its own live book beyond what it had photographed: measured, 0 of 443
+        # listing records had no card behind them, while the export carried 28 live SKUs
+        # that did. Without a record there is no first sighting, so nothing could say how
+        # long any of them had been listed, nothing stopped a rule marking the same one
+        # down on every pass, and a copy selling was invisible.
+        #
+        # `pushed` STAYS 0 AND THAT IS NOT AN OMISSION. It is the cumulative record of what
+        # THIS pipeline sent, and it sent none of these; `live` is an observation of what
+        # TCGplayer holds, which is exactly what the export is evidence of. The two fields
+        # already mean different things and this is the row where the difference shows.
+        for row in report.unknown:
+            if row.sku in just_published:
+                continue
+            listing = writable.inventory.listing(row.sku, condition=row.condition or None)
+            if listing.observe_live(row.live, as_of) == master.ADOPTED:
+                recorded += 1
+            if row.live > 0 and listing.sight(as_of):
+                sighted += 1
         stages = writable.inventory.listing_counts()
         # THE HELD SKUS' OWN FIGURES, LIFTED INSIDE THE LOCK. They are what the receipt
         # prints, and reading them off `snapshot` afterwards would print a number from before
@@ -243,6 +281,15 @@ def run_live(args, say) -> int:
     for sku, stored, stamp, offered in kept[:8]:
         say(f"                   {sku}  store {stored} (as of {stamp}) vs export {offered}")
     _say_held(lambda sku: max(0, int(stages_live.get(sku, 0))))
+    if recorded or sighted:
+        say("")
+        say(f"recorded         {recorded} SKU(s) live at TCGplayer that this store had no "
+            f"record of; {sighted} first sighting(s) stamped")
+        say("                 A first sighting is how long the LISTING has been up, which is "
+            "what `reprice`")
+        say("                 ranks staleness on. It is monotone — the earliest reading wins "
+            "and nothing")
+        say("                 overwrites it — so it only sharpens as more exports are read.")
     counted = ", ".join(f"{k} {v}" for k, v in stages.items() if v) or "empty"
     say(f"listings         {counted}")
     if report.unexplained_copies:

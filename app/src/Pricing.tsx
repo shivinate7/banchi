@@ -816,6 +816,11 @@ export function Pricing() {
    *  beside the store-wide reconcile on kinship of IMPLEMENTATION (both read one export), which
    *  is not kinship of work. */
   const [mdOpen, setMdOpen] = useState(false)
+  /* WHETHER THIS OPENING SHOULD FETCH ON ITS OWN. The header button opens the sheet to be
+     worked through; the marketplace band opens it to answer one question — "price what is
+     live" — and waiting for a second press to start the download is the whole distance
+     between a door and a signpost. */
+  const [mdFetch, setMdFetch] = useState(false)
   const [push, setPush] = useState<'idle' | 'checking' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
@@ -1236,11 +1241,15 @@ export function Pricing() {
     const out: { sku: string; price: string }[] = []
     if (stamp === null) return out
     for (const row of rows) {
+      // A LOCKED ROW IS NOT PUSHABLE AND MUST NOT BE COUNTED. `read_back` refuses it
+      // server-side, so counting it here made "N prices to push" a number the apply would
+      // not honour — and the operator read that number before pressing.
+      if (source.locked(row.sku) !== null) continue
       const answer = answers[row.sku]
       if (typeof answer === 'string' && answer.trim() !== '') out.push({ sku: row.sku, price: answer.trim() })
     }
     return out
-  }, [stamp, rows, answers])
+  }, [stamp, rows, answers, source])
 
   /* THE LENS'S PRESS, SEQUENCED THE WAY THE EMIT PRESS IS — and here it is not merely tidy:
      `reprice apply` reads `inventory/prices.json` off disk and refuses the whole file against a
@@ -1932,7 +1941,10 @@ export function Pricing() {
     return row === undefined ? null : runBoxLabel(row)
   }, [stamp, sheet, run, detail, runs])
 
-  const closeMarkdown = useCallback(() => setMdOpen(false), [])
+  const closeMarkdown = useCallback(() => {
+    setMdOpen(false)
+    setMdFetch(false)
+  }, [])
   /** Take the digest a subprocess write produced, so the next keystroke is not refused for it. */
   const adoptRevision = useCallback((next: string) => {
     revision.current = next
@@ -2226,6 +2238,7 @@ export function Pricing() {
   const markdownSheet = (
     <Markdown
       open={mdOpen}
+      autoFetch={mdFetch}
       onClose={closeMarkdown}
       revision={revision.current || undefined}
       onCorpusWritten={adoptRevision}
@@ -2280,14 +2293,32 @@ export function Pricing() {
             }
           />
         ) : joined.length === 0 ? (
+          /* TWO DOORS, AND THE LIVE ONE LEADS. This offered "Go to Runs" alone — the screen
+             where prices are decided sending the operator away from their own live listings
+             because none of those came out of a camera here. On the owner's store that was
+             387 live SKUs behind a signpost, while the lens that prices them existed and was
+             reachable only from a query parameter nobody types (D103's own admission). The
+             run door is unchanged and second, because a joined run is the narrower answer. */
           <EmptyState
-            icon="play"
-            title="No joined runs yet"
-            body="Identify and join a box on Runs first. Pricing opens on whatever that join leaves to answer."
+            icon="tag"
+            title="Nothing joined — price what is live instead"
+            body="Read your live TCGplayer listings and price them here: the same worklist, the same charts and presets, over the book you already have up. Or join a box on Runs to price cards you have just photographed."
             actions={
-              <Button variant="primary" icon="play" onClick={() => (window.location.hash = '#/runs')}>
-                Go to Runs
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  icon="trendDown"
+                  onClick={() => {
+                    setMdFetch(true)
+                    setMdOpen(true)
+                  }}
+                >
+                  Price my live listings
+                </Button>
+                <Button icon="play" onClick={() => (window.location.hash = '#/runs')}>
+                  Go to Runs
+                </Button>
+              </>
             }
           />
         ) : picked.size > 0 ? (
@@ -2679,6 +2710,10 @@ export function Pricing() {
                 const standing = answerFor(sku)
                 const withheld = isWithheld(standing)
                 const suggestion = suggestionFor(sku)
+                /* WHY NO PRICE MAY BE PUSHED FOR THIS ROW, or null. Drawn instead of the
+                   field, because `read_back` refuses it server-side and a screen that takes
+                   the price anyway writes a corpus answer the apply then throws away. */
+                const lockedWhy = source.locked(sku.sku)
                 const why = withheld && standing !== 'unlisted' && standing.note ? standing.note : null
                 const first = sku.positions[0] ?? null
                 const boxes = [...new Set(sku.positions.map((place) => place.box))].sort((a, b) => a - b)
@@ -2786,8 +2821,24 @@ export function Pricing() {
                       ))}
                     </div>
 
-                    <div className="pricing-price" data-answer={withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'}>
-                      {withheld ? (
+                    <div
+                      className="pricing-price"
+                      data-answer={
+                        lockedWhy !== null
+                          ? 'locked'
+                          : withheld
+                            ? 'held'
+                            : typeof standing === 'string'
+                              ? 'typed'
+                              : 'suggested'
+                      }
+                    >
+                      {lockedWhy !== null ? (
+                        <span className="pricing-locked" title={lockedWhy}>
+                          <Icon name="lock" size={13} />
+                          {lockedWhy}
+                        </span>
+                      ) : withheld ? (
                         <span className="pricing-held">
                           <Icon name="lock" size={13} />
                           Holding
@@ -2801,9 +2852,32 @@ export function Pricing() {
                             className="pricing-input"
                             type="text"
                             inputMode="decimal"
-                            placeholder={sku.bucket === 'no_market_data' ? '—' : undefined}
+                            placeholder={
+                              sku.bucket === 'no_market_data'
+                                ? '—'
+                                : source.proposes
+                                  ? undefined
+                                  : suggestion || undefined
+                            }
                             aria-label={`Price for ${sku.name}`}
-                            defaultValue={typeof standing === 'string' ? standing : suggestion}
+                            /* THE LENS OPENS EMPTY AND THE RUN OPENS FILLED, and the
+                               difference is what the press MEANS on each. A run's rows are
+                               not listed yet: the rule's figure is the answer unless the
+                               operator says otherwise, and an untouched row going out at it
+                               is the point of the whole worklist. A lens's rows are already
+                               live at a price somebody chose, and the rule speaks about 243
+                               of the owner's 387 at a default window — so a filled field
+                               there means a bulk press moves every one of them, which is the
+                               envelope arriving pre-signed. Drawn as a PLACEHOLDER instead:
+                               the suggestion is visible, one keystroke or one preset takes
+                               it, and nothing moves that the operator did not move. */
+                            defaultValue={
+                              typeof standing === 'string'
+                                ? standing
+                                : source.proposes
+                                  ? suggestion
+                                  : ''
+                            }
                             ref={(node) => {
                               if (node) inputs.current.set(sku.sku, node)
                               else inputs.current.delete(sku.sku)
