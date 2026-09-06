@@ -251,18 +251,30 @@ test('the trends press asks about the rows on screen, not about the whole survey
   expect(asked).toEqual(['8608859'])
 })
 
-test('a raise is refused on the row, before the press rather than by it', async ({ page }) => {
+test('a raise is named on the row and sent, not refused', async ({ page }) => {
   await open(page)
 
-  /* `read_back` MARKS A RAISED PRICE `RAISED` AND `Application.fatal` REFUSES THE WHOLE FILE
-     OVER ONE. On a lens over four hundred live listings an operator will eventually type a
-     higher number, so it has to be said here and not discovered afterwards. */
+  /* THIS CASE OUTLIVED THE RULE IT WAS WRITTEN FOR, AND THE TITLE HAD TO MOVE WITH IT (D107).
+     It read "a raise is refused on the row, before the press rather than by it", because
+     `Application.fatal` used to refuse the whole file over one raised row. The owner asked for
+     raises; the refusal is gone and the LABEL is not — the rule only ever proposes a cut, so a
+     row pointing up is one a person typed, and inside a screen called a markdown that is the
+     row most worth a second look. What changed is that it is a notice rather than a warning of
+     a refusal to come. */
   const field = page.locator('.pricing-input').first()
   await field.click()
   await field.fill('')
   await field.type('25.00')
   await field.blur()
   await expect(page.locator('.pricing-state').first()).toHaveText('Above the live price')
+
+  /* THE DECK SAYS WHAT WILL HAPPEN, and this is the assertion that would have caught the copy
+     going stale: it promised a refusal that no longer exists. */
+  const deck = page.locator('.pricing-verdict')
+  await expect(deck).toContainText('priced above the live price')
+  await expect(deck).toContainText('sent as typed')
+  await expect(deck).not.toContainText('only lowers')
+  await expect(deck).not.toContainText('refuses the whole upload')
 
   await field.click()
   await field.fill('')

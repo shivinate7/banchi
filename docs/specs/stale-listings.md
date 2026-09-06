@@ -429,7 +429,7 @@ mark down the entire store on a rounding artifact. Asserted in T7.
 | `unchanged` | the same price it is already listed at. Dropped: a no-op row is a press that did nothing and reads like a press that did something. |
 | `below_floor` | under `$0.40` |
 | `not_in_worklist` | a SKU this worklist was not written for, so there are no bytes to build a row from |
-| `raised` | **whole file.** Above the live price. This path only lowers. |
+| `raised` | RETIRED as a refusal by D107 — an operator's raise is sent and named. Kept in the vocabulary so older receipts still render. |
 | `duplicate` | **whole file.** Two rows, one SKU. Undefined behavior in a TCGplayer import (D7). |
 
 A deleted line is not a refusal: **deleting a row is how a person says "not this one"**, and the
@@ -521,32 +521,39 @@ sequence, and the export was believed until the grid contradicted it.
 **$750 is a RAISE and could not go through `reprice apply`** — see §6b. The file was pushed
 directly to the route, which is why this measurement says nothing about the apply guard.
 
-## 6b. This path cannot raise a price, and the owner wants it to
+## 6b. This path could not raise a price. It can now (D107)
 
-**`reprice apply` refuses a whole file that raises any price** — reason code `raised`, *"above
-the live price; this path only lowers"* — and it refuses the FILE rather than the row, on D7's
-duplicate-SKU logic. That is D100 working as designed: a markdown marks down.
+**BUILT 2026-09-06, hours after this section was written to record it as deferred.** Asked what
+a raise was for, the owner said *"i just feel like it's a no brainer to have"* — an argument for
+symmetry rather than a scenario, and the build is scoped to exactly that.
 
-**The owner did not know that, and asked for the other direction on 2026-09-06**: *"oh i had no
-idea it can ONLY markdown, i'd like to be able to raise prices too, maybe thats outside of the
-scope for right now tho."* Deferred by them, recorded here so it is not rediscovered.
+**The operator's typed price goes through in either direction. The rule still cannot propose a
+raise.** `plan` refuses its own non-markdown proposal (`NOT_A_MARKDOWN`) and that stays: this is
+a *markdown* rule, ranking by staleness and cutting by a percentage, and a rule that pointed up
+would need a market-movement trigger — a sibling command, not a flag. **So a price above `was`
+reaching `read_back` is necessarily one a person typed**, which is what makes letting it through
+safe, and it is an argument from the code rather than from intent.
 
-It surfaced from a test rather than a review: $750 was chosen as a deliberately absurd price
-precisely because a raise is the SAFE direction to test with — nobody accidentally buys a $750
-common — and the pipeline refused it. **The safe direction to test in is the one this feature
-cannot do.**
+**What was actually wrong** is that `#/pricing` drew a price field on every live row and then
+`apply` refused the whole file if a typed price pointed up — the screen offering a control it
+would not honour. It surfaced from a test rather than a review: **$750 was chosen as an absurd
+test value precisely because a raise is the SAFE direction to test in**, and the pipeline
+refused it.
 
-**What a raise would need, none of it built:** a rule that means "up" (`markup` exists in the
-vocabulary and is refused by the same guard downstream), a name for the feature that is not
-"markdown", and an answer to what a raise is FOR — repricing to market after a spike is a
-different job from clearing stale stock, and D100's whole window-and-staleness apparatus is
-about the second.
+**What D100 protects is untouched**: `Add to Quantity` 0 on every row (now asserted over a
+raised row too), nothing deleted at TCGplayer, and a duplicate SKU still fatal — `fatal` holds
+that alone now. Its *"safe to upload by accident"* argument survives and points this way: a file
+uploaded by mistake that RAISES costs sales until noticed; one that LOWERS sells real stock at
+the wrong price and cannot be recalled.
 
-**And the guard is in one place only.** `pipeline/reprice.py` refuses the raise; the push path
-in `server/tcg_import.py` does NOT re-assert it. `_check` there enforces D100's other invariant
-— `AddToQuantity` of 0 on every row — and says nothing about direction, so a hand-placed
-`import.csv` holding a raise is sent. Left open deliberately: the owner has asked for raises, so
-hardening the push against them would build a wall this feature is about to want a door through.
+**A raise is never silent.** `Application.raised` and `taken_on` sit beside `lowered` and
+`given_up`; the preview and `receipt.txt` name the count and the amount on their own line, with
+a `^` on the row. **`given_up` counts reductions only** — it answers "what does pressing this
+cost me", and netting a raise against a markdown would report a file that cuts $40 and lifts $40
+as free.
+
+**Still not built:** a rule that proposes raises, and any plausibility check on the figure —
+TCGplayer's own 0.01–200,000 validator is the only ceiling, enforced in `server/tcg_import.py`.
 
 ## 7. What is reversible
 

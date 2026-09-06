@@ -10696,16 +10696,35 @@ def check_markdown(checks: Checks) -> None:
             return rows
 
         code, said = apply_edited(hand_back("20200101-000001", raised))
+        # THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACES (D107). It used to read "a
+        # raised price refuses the whole file — this path only lowers". The owner asked for
+        # raises, and what was retired is the REFUSAL, not the care: the rule still cannot
+        # propose one (`plan` refuses `NOT_A_MARKDOWN`), so a price above `was` is one a person
+        # typed, and the file says so on its face rather than passing quietly.
+        written = (files.inventory_dir() / cmd_reprice.DIRNAME / "20200101-000001"
+                   / cmd_reprice.IMPORT)
         checks.ok(
-            code == 1 and f"[{reprice.RAISED}]" in said,
-            "A RAISED PRICE REFUSES THE WHOLE FILE, not the row. This path only lowers, and a "
-            "file that quietly dropped the one row that would have raised a price would be a "
-            "press that did something other than what the operator read",
+            code == 0 and written.exists(),
+            "AN OPERATOR'S RAISE GOES THROUGH — the screen offers a price field and this is "
+            "what makes it one the pipeline will honour in both directions",
         )
         checks.ok(
-            not (files.inventory_dir() / cmd_reprice.DIRNAME / "20200101-000001"
-                 / cmd_reprice.IMPORT).exists(),
-            "and it wrote nothing",
+            "RAISED" in said or "raised" in said.lower(),
+            "and the report SAYS SO. A row pointing up inside a thing called a markdown is the "
+            "one an operator most needs told about",
+        )
+        # THE MONEY FIGURE DOES NOT NET, which is the part a careless implementation gets
+        # wrong: `given_up` answers "what does pressing this cost me", and a raise offsetting a
+        # markdown would report a file that cuts $40 and lifts $40 as free.
+        sent = tcgcsv.read_export(written).rows
+        checks.ok(
+            any(row[tcgcsv.PRICE_COLUMN] == "99.99" for row in sent),
+            "and the raised price is what reaches the upload, unrounded and unmodified",
+        )
+        checks.ok(
+            all(row[tcgcsv.QUANTITY_COLUMN] == "0" for row in sent),
+            "AND EVERY ROW STILL CARRIES `Add to Quantity` 0 — D100's invariant is about "
+            "quantity and is untouched by which way the price moved",
         )
 
         def duplicated(rows):

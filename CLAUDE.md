@@ -948,6 +948,7 @@ D103 Staleness is a filter and not a gate, the record holds every live row, and 
 D104 The live export is fetched, and the second standing instruction is a second constant
 D105 The markdown lives where prices are decided, and one file may not have two unguarded writers
 D106 The push and the publish are two presses, and the second one is the only thing here a buyer can see
+D107 The rule only ever marks down; the operator may point either way
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

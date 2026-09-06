@@ -374,7 +374,7 @@ COMPONENTS = [
                                         "which the next emit re-lists at the rule price and "
                                         "undoes the markdown.",
                                "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
-                                               "D100", "D103", "D87", "D106"],
+                                               "D100", "D103", "D87", "D106", "D107"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
                                     "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
@@ -673,7 +673,7 @@ COMPONENTS = [
                                    "7,802 wide-export rows, so a listing run reading it would "
                                    "write no price with nothing raising.",
                            "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D87",
-                                           "D100", "D103"],
+                                           "D100", "D103", "D107"],
                            "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and the live cap spent ONCE over that union. "
@@ -3243,7 +3243,7 @@ COMPONENTS = [
                                                 "D33", "D35", "D37", "D39", "D41", "D48",
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
-                                                "D99", "D100", "D103", "D101", "D105"]},
+                                                "D99", "D100", "D103", "D101", "D105", "D107"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -4001,7 +4001,7 @@ COMPONENTS = [
                                                "at a marketplace, and it pins that the trends "
                                                "press is scoped to the filter rather than to "
                                                "the whole survey (D62). Not a harness test.",
-                                               "governed_by": ["D62", "D100", "D103"]},
+                                               "governed_by": ["D62", "D100", "D103", "D107"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "

@@ -241,7 +241,7 @@ const LIVE_SECTIONS: SectionSpec[] = [
     bucket: 'listable',
     title: 'Live at TCGplayer',
     icon: 'tag',
-    note: () => 'Every listing this export reported live. Type a lower price on any of them; nothing is sent until you press.',
+    note: () => 'Every listing this export reported live. Type a price on any of them; nothing is sent until you press.',
   },
 ]
 
@@ -3597,7 +3597,7 @@ function MarkdownPanel({
           {typed === 0 ? (
             <>
               <strong>Nothing typed yet.</strong> Every row here is a listing TCGplayer is holding
-              right now. Type a lower price on any of them — nothing leaves this machine until you
+              right now. Type a price on any of them — nothing leaves this machine until you
               press.
             </>
           ) : (
@@ -3610,12 +3610,17 @@ function MarkdownPanel({
           )}
         </p>
       ) : (
+        /* A RAISE IS DRAWN, NOT REFUSED (D107). This said "this path only lowers, and one
+           raised row refuses the whole upload" — true until the operator asked for raises, and
+           the refusal it described is gone. What is left is worth saying anyway: the rule only
+           ever proposes cuts, so every row here is one a person typed, and inside a screen
+           called a markdown that is the row most worth a second look. */
         <p className="pricing-verdict-says">
           <strong>
-            {raises} row{raises === 1 ? '' : 's'} above the live price.
+            {raises} row{raises === 1 ? '' : 's'} priced above the live price.
           </strong>{' '}
-          This path only lowers, and one raised row refuses the whole upload — not just that row.
-          Bring them back down or clear them.
+          The rule only ever proposes a cut, so these are prices you typed. They will be sent as
+          typed and named as raises on the receipt.
         </p>
       )}
 
@@ -3639,7 +3644,7 @@ function MarkdownPanel({
 
       <p className="pricing-verdict-fine">
         Apply can still refuse for a reason this screen cannot see — the floor, a duplicate, or a
-        price that has not moved.
+        price that has not moved. A raise is no longer one of them.
       </p>
     </section>
   )
@@ -3856,7 +3861,7 @@ function fieldState(
       if (now > was) {
         return {
           text: 'Above the live price',
-          title: `Listed at $${was.toFixed(2)}. This path only lowers, and one raised row refuses the whole upload.`,
+          title: `Listed at $${was.toFixed(2)}. Above it is a raise — the rule never proposes one, so it is sent as typed and named on the receipt (D107).`,
           tone: 'warn',
         }
       }
