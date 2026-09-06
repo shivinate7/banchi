@@ -1,0 +1,145 @@
+# Rebuild the published demo from source and put it on GitHub Pages.
+#
+# WHY THIS EXISTS RATHER THAN A COMMITTED BUNDLE. `app/demo/bundle.json` is a RECORDING of the
+# capture server's answers, and a recording goes stale the moment a wire shape moves — silently,
+# because a screen reading a field its recording predates renders BLANK rather than failing. A
+# committed bundle would therefore be a copy of the contract that drifts from it, which is the
+# defect this repo refuses everywhere else. So nothing derived is committed: this job runs the
+# same three steps `make demo-static` runs locally, from the code as it stands on main, and the
+# thing that gets published is always built from the thing it describes.
+#
+# WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. The seed reads
+# `fixtures/` — real TCGplayer exports, no personal data — and `demo-assets/`, a TRACKED set
+# of the owner's own card photographs that they have said to publish. Every one of those was
+# cleared by `scripts/demo-photos.py` before it reached a tracked path: refused if any QR
+# decoded out of it at full resolution, because a live code card is a bearer instrument and
+# its whole identity is that QR (D70). This job re-runs none of that — it consumes what is
+# committed — and it never touches a real store, which is why `inventory/` has never been in
+# git. The recorder scrubs machine-local absolute paths and REFUSES to write a bundle if any
+# survive (`scripts/demo_scrub.py:audit`), so a `/Users/<name>/` cannot reach the page even
+# by accident.
+#
+# IT PUBLISHES AND NOTHING ELSE. No gate, no commit, no branch move — D42 keeps main moving by
+# pull request only, and a workflow that pushed would be a second way. It reads the repo and
+# writes to Pages.
+
+name: demo
+
+on:
+  push:
+    branches: [main]
+    # Only when something the demo is BUILT FROM moves. A README edit republishing an
+    # identical page is a minute of CI and a notification for nothing.
+    paths:
+      - 'app/**'
+      - 'server/**'
+      - 'store/**'
+      - 'pipeline/**'
+      - 'cli/**'
+      - 'identify/**'
+      - 'geometry/**'
+      - 'codes/**'
+      - 'fixtures/**'
+      - 'scripts/demo-*'
+      - 'scripts/demo_*'
+      - 'Makefile'
+      - '.github/workflows/demo.yml'
+  # So a republish can be forced without an empty commit — after changing a Pages setting,
+  # or to confirm a fix without waiting for the next real push.
+  workflow_dispatch:
+
+# Read the repo, write to Pages, and mint the token the deploy needs. Nothing else.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time, and let a newer push win: a queued build of older code has nothing
+# to offer once newer code is on main. `cancel-in-progress` rather than a queue for that
+# reason — the last push is the one whose result anybody wants.
+concurrency:
+  group: demo-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # NOT the rig's version, and the difference is deliberate rather than overlooked.
+          # That Mac runs 3.9.6, which is why requirements.txt pins zxing-cpp==2.3.0 for its
+          # cp39 wheel. Nothing on this path touches that pin: the demo seeds a store, joins
+          # against a fixture export and builds a page — no QR decode, no camera, no Batch
+          # API. So this picks a supported runtime rather than reproducing an EOL one, and
+          # what a green run here means is "the demo builds", never "the rig is fine".
+          python-version: '3.11'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm ci --prefix app
+
+      # The record step makes outbound requests to two public price mirrors — D62's reading,
+      # the thing a `t` hold shows on #/pricing. Fetched here rather than tracked: the cache
+      # is 5.1 MB across 140 files, larger than the recording it produces, and would be stale
+      # the day it was committed. It is best-effort — the recorder keeps 200s only, so a
+      # mirror having a bad day costs the trend strip and never the publish.
+      - name: Seed, record and build
+        # DEMO_BASE must match where Pages serves this. A project site lives at
+        # /<repo>/, and a bundle built for / 404s every asset there while working
+        # perfectly on localhost — the failure that only appears once it is published.
+        # Derived from the repo name so a rename cannot leave it pointing at the old one.
+        run: make demo-static DEMO_BASE="/${GITHUB_REPOSITORY#*/}/"
+
+      - name: Prove nothing private reached the bundle
+        # The recorder already refuses to write a dirty bundle. This asserts the same thing
+        # against what is ACTUALLY about to be uploaded, because the check that matters is
+        # the one standing over the artefact rather than over an earlier copy of it.
+        #
+        # THE SECOND SCAN IS FOR SECRETS, and it guards a property rather than a suspicion.
+        # Vite inlines only `VITE_`-prefixed variables, and not one secret in `.env.example`
+        # carries that prefix — ANTHROPIC_API_KEY, POKEMONTCG_API_KEY,
+        # TCGPLAYER_STORE_COOKIE and PKMNSCAN_TCG_SELLER_KEY are all read server-side by
+        # Python. So a public build cannot inline one today. That is a property of a naming
+        # convention, which is exactly the kind of thing that holds until somebody adds a
+        # variable without knowing the rule — and the cost of it failing is a live key on a
+        # public page. `.env` is the whole guard on this repo (that file says so), so this
+        # is the second one, on the one path that makes something public.
+        run: |
+          fail=0
+          if grep -rlE '/(Users|home)/[a-z]' dist-demo/ 2>/dev/null; then
+            echo "::error::a machine-local path reached the built demo — not publishing"
+            fail=1
+          fi
+          if grep -rlE 'sk-ant-|TCGAuthTicket|ANTHROPIC_API_KEY|TCGPLAYER_STORE_COOKIE' \
+               dist-demo/ 2>/dev/null; then
+            echo "::error::a secret-shaped string reached the built demo — not publishing"
+            fail=1
+          fi
+          [ "$fail" -eq 0 ] || exit 1
+          echo "clean: no machine-local paths and no secret-shaped strings in dist-demo/"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-demo
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

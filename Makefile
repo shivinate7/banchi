@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -90,6 +90,16 @@ help:
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
+	@echo
+	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
+	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
+	@echo "                    store: SOURCE=<checkout>. Refuses any photo carrying a QR."
+	@echo "  make demo-seed    the store alone, built on the curated photographs."
+	@echo "  make demo-record  the bundle alone — sweep every GET the client can build."
+	@echo "  make demo-static  the two above, then a static build to dist-demo/."
+	@echo "                    DEMO_BASE=<path> is where it will be served from."
+	@echo "  make demo-preview serve dist-demo/ exactly as a static host would."
+	@echo "  make demo-freshness  whether the bundle still matches the wire it recorded."
 	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
@@ -595,3 +605,92 @@ lint:
 typecheck:
 	$(NPM_GUARD)
 	@npm --prefix app run typecheck
+
+# ------------------------------------------------------------------------------- the demo
+#
+# A published, static copy of this product over a store that is safe to show strangers.
+#
+# WHY IT IS NOT A FORK. The app is 38,705 lines and the demo differs from it in exactly two
+# functions — `request()` and `photoUrl()` in app/src/server.ts, which are the only places
+# this front end touches its server. So a fork would duplicate all of the code to carry none
+# of the difference, and would diverge the same week: this repo took 134 commits in the three
+# days before the demo was built. What differs is DATA, and data belongs in a seed script.
+#
+# THREE STEPS, EACH RE-RUNNABLE AND EACH FREE.
+#   demo-seed    writes a demo store — real catalogue rows out of fixtures/, invented
+#                positions, drawn photographs. Deterministic, so an unchanged tree rebuilds
+#                byte-identically and CI does not churn the repo.
+#   demo-record  spawns its own capture server over that store on its own port, sweeps every
+#                GET the client can build, and writes app/demo/bundle.json. It NEVER touches
+#                `make up` — on the main checkout that is the owner's live server over their
+#                real inventory, and CLAUDE.md is explicit that it is not a session's to bounce.
+#   demo-static  the two above, then a production build with VITE_DEMO=1.
+#
+# DEMO_BASE is where it will be served from. GitHub Pages puts a project site under
+# /<repo>/, and a bundle built for / 404s every asset there — a failure that shows up only
+# once it is published. Override it for a user site or a custom domain:
+#     make demo-static DEMO_BASE=/
+DEMO_HOME ?= demo
+DEMO_BASE ?= /pkmnscan/
+
+# Curate real card photographs, and their real identifications, into `demo-assets/`.
+#
+# SEPARATE FROM THE SEED AND RUN RARELY, because it is the only step here that reads a real
+# store and the only one whose output is TRACKED. Everything else is derived and rebuilt on
+# every push; this is a deliberate act of publishing somebody's photographs, so it happens
+# when a person asks for it and never as a side effect of a build.
+#
+# It refuses any photograph a QR decodes out of — a live code card is a bearer instrument
+# and its whole identity IS that QR (D70) — and checks at full resolution, before the
+# downscale, because a 1 cm symbol at 360px is a smear no decoder can read.
+DEMO_PHOTO_COUNT ?= 132
+DEMO_PHOTO_JOINABLE ?= 92
+
+demo-photos:
+	@[ -n "$(SOURCE)" ] || { \
+		echo "SOURCE=<checkout> is required — the store whose photographs to curate."; \
+		echo "  e.g. make demo-photos SOURCE=~/Developer/pkmnscan"; \
+		exit 1; }
+	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
+	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
+
+demo-seed:
+	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force
+# THE JOIN IS THE REAL ONE, and that is the point of doing it here rather than writing a
+# pricing table by hand. `identify` is the one step that costs money, so the seed fakes ONLY
+# that — it writes `identifications.json` in the shape a real run leaves behind, which
+# `cli/resolve.py` explicitly supports ("a hand-made or recovered identifications file").
+# Everything downstream then runs for real against the real fixture exports: the catalogue
+# lookup, the variant ladder, the cap arithmetic and `pricing.json` are the pipeline's own
+# output, not a fixture pretending to be one. Both are free and re-runnable.
+	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box1 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
+	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box3 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
+	@echo "  joined 2 runs against the real fixture exports"
+
+demo-record:
+	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-record.py
+
+# The bundle without the build — what to run after changing a wire shape, so `git status`
+# shows the recording moving with the contract it was recorded against.
+demo: demo-seed demo-record
+
+demo-static: demo
+	$(NPM_GUARD)
+	@cd app && VITE_DEMO=1 DEMO_BASE=$(DEMO_BASE) npx vite build --outDir ../dist-demo --emptyOutDir
+	@echo ""
+	@echo "  demo built -> dist-demo/  (base $(DEMO_BASE))"
+	@echo "  preview it: make demo-preview"
+
+# Serve the built demo exactly as a static host would, base path and all. `vite preview`
+# honours the same `base`, so a link that works here works published — which is the only
+# way to catch a base-path mistake before somebody else does.
+demo-preview:
+	$(NPM_GUARD)
+	@cd app && DEMO_BASE=$(DEMO_BASE) npx vite preview --outDir ../dist-demo --port 4173 --strictPort
+
+# Whether app/demo/bundle.json still describes the wire it was recorded against. On no gate
+# at all: the bundle is not committed and CI rebuilds it from source on every push, so the
+# only staleness left is a local preview serving a recording that predates your last edit.
+# Worth one command; not worth failing `make check` over.
+demo-freshness:
+	@$(PYTHON) scripts/demo-freshness.py

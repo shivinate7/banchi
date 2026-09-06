@@ -200,9 +200,27 @@ while IFS= read -r path; do
 
   case "$path" in
     captures/*|*/captures/*) continue ;;
+    # THE ONE TRACKED PHOTOGRAPH SET, AND IT IS NARROW ON PURPOSE (2026-09-06). The published
+    # demo shows the owner's real card photographs, on their instruction, and CI rebuilds
+    # everything else from source — so these have to be committed or the demo has no pictures.
+    #
+    # WHAT MAKES THE EXCEPTION SAFE IS NOT THIS LINE. `scripts/demo-photos.py` is the only
+    # thing that writes here, and it runs `codes/qr.py` over every candidate at FULL
+    # resolution and refuses any photograph a QR decodes out of — a positive test on the
+    # image itself, rather than a promise about which cards the store thinks it holds. A code
+    # card's whole identity IS its QR (D70), so a clean decode is a real answer. It refuses
+    # outright if the decoder cannot be loaded, because unavailable is not absent.
+    #
+    # The rule below still stands over every other path in the repo, and this exception is
+    # exactly one directory. Widening it is a decision to argue, not a convenience to reach
+    # for: the reason the blanket rule exists is that a live code is a bearer instrument and
+    # a tracked one cannot be recalled.
+    demo-assets/photos/*) continue ;;
     *.png|*.jpg|*.jpeg|*.webp|*.heic|*.PNG|*.JPG|*.JPEG)
       fail "image staged outside captures/ ($path).
-  Code-card photos are bearer instruments and must never reach a tracked path."
+  Code-card photos are bearer instruments and must never reach a tracked path.
+  The one exception is demo-assets/photos/, written only by scripts/demo-photos.py,
+  which refuses any photograph a QR decodes out of."
       ;;
   esac
 done <<< "$staged"

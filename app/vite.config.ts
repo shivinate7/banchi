@@ -28,6 +28,14 @@ import { CAPTURE_PORT, CAPTURE_URL, DEV_PORT } from './devPort'
 // it was written; Vite was the half still listening only on the loopback, so the app could not
 // be opened from the phone even though its server could be reached.
 export default defineConfig({
+  // WHERE THE BUILD WILL BE SERVED FROM, and it is a build input because only the publisher
+  // knows. GitHub Pages serves a project site under `/<repo>/`, not at the root, and a bundle
+  // built for `/` 404s every asset there while working perfectly on localhost — a failure
+  // that appears only once it is published, which is the worst moment to find it. Defaults to
+  // `/` so every ordinary build and `make dev` are untouched; `make demo-static` passes the
+  // subdirectory. `photoUrl` composes the demo's photographs against `import.meta.env.BASE_URL`
+  // for the same reason.
+  base: process.env.DEMO_BASE ?? '/',
   plugins: [react()],
   server: {
     port: DEV_PORT,
@@ -50,5 +58,15 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_CAPTURE_DEFAULT': JSON.stringify(CAPTURE_URL),
     'import.meta.env.VITE_CAPTURE_PORT': JSON.stringify(CAPTURE_PORT),
+    // DEFINED HERE OR IT DOES NOT FOLD, and this one is a correctness matter rather than a
+    // size one. `make demo-static` builds with VITE_DEMO=1; every other build must eliminate
+    // the demo branches entirely, including the dynamic `import()`s of `demoServer.ts` and
+    // `demoCamera.ts` inside them.
+    //
+    // A BARE IDENTIFIER CARRYING A BOOLEAN, not an `import.meta.env` read, and the three
+    // forms that did NOT work are recorded in `src/demoFlag.d.ts` beside the declaration.
+    // The short version: only this form makes the guard read `if (false)` in the source
+    // Rollup sees, which is what removes the branch AND the dynamic import inside it.
+    __BN_DEMO__: JSON.stringify(process.env.VITE_DEMO === '1'),
   },
 })

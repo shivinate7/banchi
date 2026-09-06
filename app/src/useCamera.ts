@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 
+/* MUST BE MODULE-LOCAL, AND THAT IS THE WHOLE REASON IT IS DECLARED HERE RATHER THAN
+ * IMPORTED. Vite substitutes `import.meta.env.VITE_DEMO` with a literal at build time, so
+ * this folds to `false` in an ordinary build and Rollup then eliminates the branch and the
+ * dynamic `import()` inside it. An IMPORTED constant does not fold: it stays a live binding
+ * across the module boundary, the branch survives, and the chunk is emitted. Measured — a
+ * first version exported `IS_DEMO` from `server.ts`, and a normal build shipped
+ * `demoCamera-*.js` plus three references to `demoStream` in the main bundle. Three
+ * declarations of one expression is the price of the guard actually working. */
+const IS_DEMO = __BN_DEMO__
+
+
+
 /* The camera behind the rig — docs/specs/capture-app.md section 6.1, D13.
  *
  * The hardware is a Sony RX100 VII or A7C over HDMI into an Elgato Cam Link 4K, and the
@@ -289,6 +301,12 @@ function mediaDevices(): MediaDevices | undefined {
 }
 
 async function listVideoInputs(media: MediaDevices): Promise<MediaDeviceInfo[]> {
+  /* THE PUBLISHED DEMO HAS NO CAMERA AND MUST NOT ASK FOR ONE. A viewer opening a shared
+   * link would otherwise meet a permission prompt for hardware the page cannot use — and
+   * granting it would put their own webcam on the screen, which is worse than refusing.
+   * `demoCamera.ts` answers both halves; see its header for why it hands back a real
+   * MediaStream rather than a picture. Folded away entirely in an ordinary build. */
+  if (IS_DEMO) return (await import('./demoCamera')).demoDevices()
   const all = await media.enumerateDevices()
   return all.filter((device) => device.kind === 'videoinput')
 }
@@ -303,6 +321,9 @@ async function listVideoInputs(media: MediaDevices): Promise<MediaDeviceInfo[]> 
  * stream. Rejected: enumerating without labels and showing the raw deviceIds, which asks
  * the owner to choose between two 64-character hashes. */
 async function revealLabels(media: MediaDevices): Promise<void> {
+  /* The demo's one device is already labelled, so there is nothing to un-blank and no
+   * reason to raise a prompt. */
+  if (IS_DEMO) return
   const probe = await media.getUserMedia({ video: true })
   stopTracks(probe)
 }
@@ -311,6 +332,13 @@ async function revealLabels(media: MediaDevices): Promise<void> {
  * Losing the remembered camera costs one click per session; letting the exception out
  * would white-screen the one view the owner spends hours in. */
 function readRememberedDeviceId(): string | null {
+  /* THE DEMO'S ONE CAMERA IS ALREADY CHOSEN. A viewer arriving at a shared link has never
+   * picked a device and has no rig to pick it for, so the screen would open on "Pick a
+   * camera" and stop — a real state at the desk, where a device genuinely has to be chosen
+   * once, and a dead end on a page with exactly one fake device in it. Remembered rather
+   * than auto-selected downstream, so `reconcile` and the picker behave exactly as they do
+   * for an operator who chose this camera yesterday. */
+  if (IS_DEMO) return 'demo-camera'
   try {
     const stored = window.localStorage.getItem(REMEMBERED_DEVICE_KEY)
     return stored === null || stored === '' ? null : stored
@@ -590,7 +618,17 @@ export function useCamera(): Camera {
     void (async () => {
       let stream: MediaStream
       try {
-        stream = await media.getUserMedia(videoConstraints(deviceId))
+        /* AN `if`, NOT A TERNARY, and the difference is measured rather than stylistic.
+         * The two other guards in this file are `if (IS_DEMO)` and both fold away
+         * completely — `demoDevices` and the remembered-device string are absent from a
+         * production bundle. The same flag in a ternary did NOT fold: the branch survived
+         * minification and `demoCamera-*.js` was emitted and referenced. Same constant,
+         * same build, different statement form. */
+        if (IS_DEMO) {
+          stream = await (await import('./demoCamera')).demoStream()
+        } else {
+          stream = await media.getUserMedia(videoConstraints(deviceId))
+        }
       } catch (cause) {
         if (!cancelled) setStreamError(describeCameraError(cause))
         return
