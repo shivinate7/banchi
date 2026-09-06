@@ -47,19 +47,18 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 29,
- title: 'the roman’s size, downward — because 0.24 was my floor and you kept it',
+ n: 30,
+ title: 'the roman’s size, halved — and the floor size is where the step runs out first',
  sweeping: 'romanSize',
  unit: '× the kanji',
- values: [0.14, 0.19, 0.24, 0.29, 0.34],
- notes: {0.14:'6.7px at the sidebar size and 4.5px at the floor — legibility, not taste',
-         0.24:'my low end last round, and inside your band'},
- rejected: {0.36:'out above — round 28', 0.42:'out above — round 28',
+ values: [0.20, 0.23, 0.265, 0.30, 0.33],
+ notes: {0.265:'the midpoint, and where this lands if the row reads flat'},
+ rejected: {0.14:'4.5px at the floor — round 29', 0.34:'out above — round 29',
             0.48:'and it could not fit without tightening'},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
          romanFill:0.75, romanTrack:0.14, romanOpacity:0.62, tails:true},
  sizes: [48, 32],
- context: [0.14, 0.19, 0.24, 0.29],
+ context: [0.20, 0.23, 0.265, 0.30],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -70,20 +69,20 @@ const ROUND = {
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
-  ['28', 'roman size', '0.24 – 0.48', '0.24 – below 0.36', 'the LOW end was not bracketed'],
+  ['28–29', 'roman size', '0.14 – 0.48', '0.19 – below 0.34', 'both ends failed at last'],
  ],
- lede: '<b>0.24 was the smallest size I offered and you kept it, so nothing below it has been tested.</b> '+
-  'That is rule 5 for the third time in this series — and unlike the line gap, where zero was a floor '+
-  'geometry imposed, there is real room underneath here. This round runs down to <b>0.14</b>.'+
-  '<br><br><b>The failure at the bottom is legibility, and it arrives at the FLOOR size first.</b> At '+
-  'kanji 48 a 0.14 roman is 6.7px; at kanji 32 — the size §11 settled as the smallest this lockup may be '+
-  'drawn — it is <b>4.5px</b>. Both rows are below, and the floor row is the one that decides: a value '+
-  'that only works at the large size is not a value this lockup can hold.'+
-  '<br><br><b>There is a second failure mode down there and it is worth watching for.</b> The fill is '+
-  'held at 0.75, so the smaller the roman gets the harder the solve has to track it out to still occupy '+
-  '77px — 8.6px of letter-spacing at 0.14, against 2.0px at 0.36. Past some point the word stops reading '+
-  'as a word and becomes six spaced letters. The caption prints the tracking, so you can see which of the '+
-  'two is biting.'
+ lede: '<b>0.14 failed below and 0.34 above, so the band is bracketed and this halves it.</b> The step is '+
+  '0.032, and here that means two different things at the two sizes: <b>1.6px of type at kanji 48, and '+
+  '1.1px at the floor.</b>'+
+  '<br><br><b>Which makes the floor the binding row again, and for a new reason.</b> Everywhere else in '+
+  'this series the two rows asked the same question at two scales; here the smaller row runs out of '+
+  'resolution first, so it is the one that decides when to stop rather than the one that decides the '+
+  'value. At 1.1px this is the last round I will offer on the roman’s size — the next halving is half a '+
+  'pixel at the size the lockup is actually smallest, and that is not a question a sheet can ask.'+
+  '<br><br><b>0.36 is nowhere in this row, and it is worth noticing how far it has gone.</b> The value '+
+  'carried from the recovered pass was rejected in round 28 and is now two rounds outside the band. It is '+
+  'the third carried value to move once it was finally offered against something, after the stroke and '+
+  'the padding — and the second to move by more than a third of its own size.'
 }
 
 const o=document.getElementById('out')
