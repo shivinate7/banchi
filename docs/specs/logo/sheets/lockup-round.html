@@ -47,17 +47,18 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 24,
- title: 'the bracket arm — carried since the recovered pass, and the one bound that was never recorded',
- sweeping: 'arm',
- unit: ' of the block',
- values: [0.12, 0.22, 0.32, 0.46, 0.62],
- notes: {0.32:'the carried value — §3’s lockup row, never offered against anything',
-         0.62:'the arms nearly close the frame'},
+ n: 25,
+ title: 'the roman’s size — the first of three numbers that were literals in the markup',
+ sweeping: 'romanSize',
+ unit: '× the kanji',
+ values: [0.24, 0.30, 0.36, 0.44, 0.54],
+ notes: {0.36:'the recovered pass’s value, and it was never a parameter until this round',
+         0.54:'the roman starts competing with the kanji rather than sitting under it'},
  rejected: {},
- holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, tl:0.70, tip:0.15, tails:true},
+ holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
+         romanTrack:0.14, romanOpacity:0.62, tails:true},
  sizes: [48, 32],
- context: [0.12, 0.22, 0.32, 0.46],
+ context: [0.24, 0.30, 0.36, 0.44],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -66,19 +67,22 @@ const ROUND = {
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
   ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 twice; stopped at 1.9px'],
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
+  ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
  ],
- lede: '<b>The gap settled at 0.08 — the midpoint of 0.05 – 0.11, taken rather than split, because the '+
-  'step was already 1.4px.</b> That closes both values this series inherited. Everything in the settled '+
-  'table has now been chosen here except one: <b>the arm</b>, carried from §3\'s lockup row and never '+
-  'offered against anything.'+
-  '<br><br><b>It is how far each bracket leg runs, as a fraction of the block.</b> At 0.12 the corners are '+
-  'ticks; at 0.62 the two legs nearly close into a full frame and the thing stops being a bracket.'+
-  '<br><br><b>The arm had a floor that was never recorded, and this is the round that would have walked '+
-  'into it.</b> `max(W*arm, rr+2)` engages below about 0.076 on this geometry — the radius prints its cap '+
-  'and the ramp prints its clamp, both because a silent bound has already turned a sweep into repeated '+
-  'specimens once in this project. The arm had neither, so the low end of an arm sweep would have drawn '+
-  'identical brackets under distinct labels and the assertion built to catch exactly that would have said '+
-  'nothing. It is recorded now and the check reads all three.'
+ lede: '<b>The arm locked at 0.32 — the value it was carrying.</b> Worth saying that plainly: it is the '+
+  'only inherited number in this series that a bracketed sweep confirmed rather than moved. The stroke, '+
+  'the padding and the gap all changed once they were actually offered against something.'+
+  '<br><br><b>Which leaves the roman, and the reason it went last is a defect rather than an order of '+
+  'preference.</b> Its three numbers — the size ratio, the tracking, the opacity — were <i>literals typed '+
+  'into the markup</i>, not parameters. So they could not be swept, could not be declared as held, could '+
+  'not be asserted against the drawing, and could not disagree with the spec in any way anything would '+
+  'notice. Every other value in this lockup has been reconciled against `docs/specs/logo.md` on every '+
+  'commit for twenty-four rounds; these three were invisible to all of it.'+
+  '<br><br><b>They are options now, defaulting to the recovered pass’s values</b>, recorded in the '+
+  'drawing’s fingerprint and declared in this round’s holds — so the two that are not being swept are '+
+  'asserted to have stayed put, like every other held value.'+
+  '<br><br><b>This round sweeps the size ratio.</b> At 0.24 the roman is a caption; at 0.54 it stops '+
+  'sitting under the kanji and starts competing with it. Both ends are meant to fail.'
 }
 
 const o=document.getElementById('out')
@@ -107,16 +111,23 @@ const SWEPT = ROUND.sweeping
 
 /* The swept key lives in one of two places — `stamp`'s geometry, or `frame`'s options — and
    nothing else on this sheet needs to know which. */
+/* Three places a parameter can live, and the sweep has to reach all of them: the block's own
+   geometry (pad, gap), the roman's type (size ratio, tracking, opacity) and the bracket's
+   drawing (stroke, arm, radius, tip, ramp). `SWEPT` picks which one receives the value; nothing
+   else on the sheet knows or needs to. */
+const STAMP_KEYS = ['romanSize','romanTrack','romanOpacity']
 function mk(size, v){
+ const o = {}
+ STAMP_KEYS.forEach(function(k){ o[k] = (SWEPT===k) ? v : ROUND.holds[k] })
  return stamp(size,
               SWEPT==='gap' ? v : ROUND.holds.gap,
               SWEPT==='pad' ? v : ROUND.holds.pad,
-              '#0f1217')
+              '#0f1217', o)
 }
 function optsFor(v){
  const o = {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
             rrMul:ROUND.holds.rrMul, tip:ROUND.holds.tip}
- if (SWEPT!=='pad' && SWEPT!=='gap') o[SWEPT] = v
+ if (SWEPT!=='pad' && SWEPT!=='gap' && STAMP_KEYS.indexOf(SWEPT)<0) o[SWEPT] = v
  return o
 }
 
@@ -222,7 +233,7 @@ document.fonts.ready.then(function(){
      this sheet's history to describe a drawing other than the one above it. `pxOf` is keyed off
      SWEPT so a caption cannot report a variable the round is not asking about. */
   const pxOf = function(size, v){
-   return (SWEPT==='pad'||SWEPT==='gap'||SWEPT==='stroke') ? size*v : null
+   return (SWEPT==='pad'||SWEPT==='gap'||SWEPT==='stroke'||SWEPT==='romanSize') ? size*v : null
   }
   const px = pxOf(r.size, r.v)
   const prev = g[i-1]
@@ -231,6 +242,10 @@ document.fonts.ready.then(function(){
    + (px!==null ? '<br><span style="color:#6b7280">'+SWEPT+' '+px.toFixed(1)+'px</span>' : '')
    + (step!==null ? '<br><span style="color:#9aa1ab">Δ '+step.toFixed(1)+'px from the last</span>' : '')
    + (SWEPT!=='pad' ? '<br><span style="color:#b6bcc5">pad '+(r.size*ROUND.holds.pad).toFixed(1)+'px, held</span>' : '')
+   /* the SOLVED tracking, on the rounds that touch the roman -- it is the number that reached the
+      drawing, and the seed beside it in `holds` is not */
+   + (SWEPT.indexOf('roman')===0
+      ? '<br><span style="color:#b6bcc5">tracking solved to '+(+r.lk.dataset.romanTrackSolved).toFixed(3)+'× </span>' : '')
  })})
  check(all)
  window.__sheetReady = true
