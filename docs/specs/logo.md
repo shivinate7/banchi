@@ -1462,3 +1462,62 @@ face-dependent rows**, the honest reading is that the lockup was designed agains
 cannot have, and the right outcome is to keep the mark alone in the sidebar and leave §13 as a
 record. That is §14's own conclusion, held open rather than quietly dropped now that a surface
 exists.
+
+## 16. The sidebar — the size, and the metal on dark
+
+**Settled 2026-09-06, against the real app rather than a sheet.** Both were judged by injecting
+the lockup into the running application's own `.bn-brand` at 1440 in both themes — real sidebar,
+real nav with its key caps, real Home screen in the column beside it. A sidebar drawn in
+isolation cannot answer either question, and §15 said so before these were asked.
+
+| what | settled | |
+| --- | --- | --- |
+| size in the open sidebar | **kanji 40** | 128 × 93px block in 212px of usable width |
+| bracket on **dark** | **the locked chrome gradient** | `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` |
+| bracket on **light** | **flat ink**, unchanged | `#0f1217` |
+
+### The size cost nothing, which is why the floor lost
+
+Measured in the running app, the nav's last item and the sidebar's own scroll height at each
+candidate:
+
+| viewport | kanji 32 | kanji 40 | kanji 48 | scrolls? |
+| --- | --- | --- | --- | --- |
+| 900 | nav ends 709 | 727 | 746 | no |
+| 820 | 709 | 727 | 746 | no |
+
+**Nothing is displaced at any height the shell is verified at**, and below about 740 the app
+already shrinks the brand row itself, so the choice stops applying before it starts costing.
+
+**So 32 lost because it is a floor rather than a choice.** §11 settled kanji 32 as *the smallest
+this may ever be drawn*; a brand row is the last element that should sit at its own minimum with
+no headroom. It also puts the roman at 8px — the size at which round 31 had to abandon ordinary
+rendering and judge on a magnified true-pixel raster, because nothing else could resolve the
+difference. At 40 the roman is 10px and off that edge.
+
+**The argument 32 had, and lost on:** the rail draws the mark at 32, so a matching kanji would
+keep identical scale across the collapse and make the morph a pure shape change. That optimises
+the transition over the resting state, and the sidebar is open far more than it is animating.
+
+### The dark bracket is the mark's own metal, and that is the whole argument
+
+**Flat white was never a decision** — it was `--bn-ink` because nothing had asked. But the mark's
+bracket has never been flat in any of the six locked variants; it is a four-stop gradient. Drawing
+the lockup's bracket in flat ink makes it **a different object from the mark it is the expanded
+form of.** In `bluesteel`'s bracket — the default mark's own — they are one object in one metal,
+and collapsing the sidebar changes only the shape.
+
+**Gold was drawn and declined.** It holds its tail better on dark: `#C0A254` sits further from
+`#0c0e12` than silver's `#8FA4B8`, so silver's lower-right arm fades where gold's does not, and
+at kanji 32 it nearly disappears. That is a real cost and it is **part of why 40 won** — the fade
+is what makes the floor size expensive rather than free. What gold cannot do is be the same metal
+as the mark, and that is the property being bought.
+
+**Light is unchanged, and the asymmetry is deliberate.** Any of these gradients on the light
+theme's white panel would sit far under §13's own contrast floor. A *color* that varies by theme
+is ordinary — every token in `tokens.css` does it — where the per-theme *opacity* §13 rejected
+would have made one drawing into two. This varies the ink and not the drawing.
+
+**No sheet owns these hexes.** `opt.bracketStops` in `sheets/lockup-core.js` takes a palette and
+never names one; `make docs-audit`'s `lockup bracket` row reconciles the sheet's four stops
+against `markPalettes.ts`, and its `rail mark` row does the same for the bracket path and stroke.

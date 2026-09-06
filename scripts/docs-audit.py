@@ -6913,8 +6913,46 @@ def check_logo_parity(report: Report) -> None:
 LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
 SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
 MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
+MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
 
 _LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
+
+
+def check_lockup_bracket(report: Report) -> None:
+    """The lockup's dark bracket is a LOCKED palette, not a colour the sheet owns.
+
+    §16 settles the dark theme's bracket as the chrome gradient `markPalettes.ts` already gives
+    `bluesteel` — the default mark's own bracket — so the lockup and the mark are one object in
+    one metal. That means four hexes are written in a sheet as well as in the generated file,
+    which is the defect this work keeps finding, so this row reconciles them.
+
+    `raw color` cannot see either side: its scope is `app/src/*.css`, and these are a `.ts` and
+    an `.html`. Provably wrong when it fires — both sides are literals.
+    """
+    if not exists(SIDEBAR_MORPH) or not exists(MARK_PALETTES):
+        return
+    sheet, gen = read(SIDEBAR_MORPH), read(MARK_PALETTES)
+    m = re.search(r"bluesteel:\s*\{.*?bracket:\s*\[([^\]]+)\]", gen, re.S)
+    if not m:
+        report.add("lockup bracket", MECHANICAL, [Finding(
+            rel(MARK_PALETTES),
+            "`bluesteel`'s bracket is gone from the generated palettes. §16 draws the lockup's "
+            "dark bracket from it; with it missing this row compares nothing.",
+        )], "")
+        return
+    want = re.findall(r"#[0-9A-Fa-f]{6}", m.group(1))
+    got_block = re.search(r"const DARK_BRACKET = \[(.*?)\]\n", sheet, re.S)
+    got = re.findall(r"#[0-9A-Fa-f]{6}", got_block.group(1)) if got_block else []
+    problems = []
+    if [c.upper() for c in got] != [c.upper() for c in want]:
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            f"the lockup's dark bracket is {' '.join(got) or 'absent'} and `bluesteel`'s is "
+            f"{' '.join(want)}. §16 settles them as the same metal so the lockup and the mark "
+            f"are one object; a sheet that drifts from the palette makes them two.",
+        ))
+    report.add("lockup bracket", MECHANICAL, problems,
+               f"{len(want)} stops against `bluesteel`'s locked bracket")
 
 
 def check_rail_mark(report: Report) -> None:
@@ -10170,6 +10208,7 @@ def audit(staged_only: bool) -> Report:
     check_logo_parity(report)
     check_lockup_params(report)
     check_rail_mark(report)
+    check_lockup_bracket(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)

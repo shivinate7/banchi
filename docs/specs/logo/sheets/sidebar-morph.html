@@ -90,6 +90,15 @@ function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls
    small cut is what draws below 64px. Nothing about the mark is re-derived here now: the two
    constants below are copied from the generated file and `make docs-audit`'s `rail mark` row
    reconciles them, because a value typed a second time is how this file already went wrong. */
+/* §16's SETTLED PAIR, chosen 2026-09-06 against the real app at 1440 in both themes.
+   The sidebar draws the lockup at kanji 40, and on DARK its bracket carries the locked chrome
+   gradient rather than flat ink -- the same four stops `markPalettes.ts` gives `bluesteel`,
+   which is the default mark's own bracket. Light is unchanged: flat `#0f1217`.
+   Not a hex owned here: `make docs-audit`'s `lockup bracket` row reconciles these four against
+   the generated palettes. */
+const SIDEBAR_KANJI = 40
+const DARK_BRACKET = [['0','#FFFFFF'],['0.333','#B8C8D8'],['0.667','#F2F8FF'],['1','#8FA4B8']]
+
 const MARK_SMALL_BRACKET = 'M22.609 41.901V24.252A8 8 0 0 1 30.609 16.252H43.426'
 const MARK_SMALL_STROKE = 4.2
 function bareBrackets(px, col){
@@ -124,8 +133,8 @@ o.appendChild(el('h2',null,'the two states, at the widths the shell actually giv
  const st=el('div','stage')
  /* ALL THREE SIZES IN BOTH THEMES. The dark column drew kanji 40 alone, which is the one thing a
     size comparison cannot do -- it asks the question on one ground and answers it on another. */
- ;[[false,32,'kanji 32 — the floor'],[false,40,'kanji 40'],[false,48,'kanji 48'],[false,0,'rail · 64px'],
-   [true,32,'dark · kanji 32'],[true,40,'dark · kanji 40'],[true,48,'dark · kanji 48'],
+ ;[[false,32,'kanji 32 — the floor'],[false,40,'kanji 40 — SETTLED'],[false,48,'kanji 48'],[false,0,'rail · 64px'],
+   [true,32,'dark · kanji 32'],[true,40,'dark · kanji 40 — SETTLED'],[true,48,'dark · kanji 48'],
    [true,0,'rail · dark']].forEach(function(c){
   const wrap=el('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center'
   const b=sidebar(c[0], c[1]===0); wrap.appendChild(b.side)
@@ -199,7 +208,9 @@ document.fonts.ready.then(function(){
    /* romanFill was missing from this call, so every sidebar specimen drew the roman at the
       DEFAULT 1.0 -- flush to the kanji -- while §13 settled it at 0.75. The mockup would have
       shown a lockup the spec does not describe, in the one place a size decision gets made. */
-   frame(lk, {stroke:P.stroke, arm:P.arm, tl:P.tl, tip:P.tip, rrMul:P.rrMul, romanFill:P.romanFill})
+   const onDark = !!lk.closest('.dark') || lk.dataset.col === '#eef0f4'
+   frame(lk, {stroke:P.stroke, arm:P.arm, tl:P.tl, tip:P.tip, rrMul:P.rrMul, romanFill:P.romanFill,
+              bracketStops: onDark ? DARK_BRACKET : null})
    const wrap=lk.closest('.side') && lk.closest('.side').parentElement
    const n=wrap && wrap.querySelector('[data-meas]')
    if(n) n.textContent=lk.offsetWidth+'×'+lk.offsetHeight+'px in 212px'})
