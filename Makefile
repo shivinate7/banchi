@@ -652,8 +652,20 @@ typecheck:
 # /<repo>/, and a bundle built for / 404s every asset there — a failure that shows up only
 # once it is published. Override it for a user site or a custom domain:
 #     make demo-static DEMO_BASE=/
+#
+# DERIVED FROM THE REMOTE, NOT WRITTEN DOWN, and it earned that on 2026-09-06: this line
+# read `/pkmnscan/` and the repository was renamed to `banchi`, so a hand-run build pointed
+# at a path that now 404s. `demo.yml` took the derived route from the start — "so a rename
+# cannot leave it pointing at the old one" — and the published demo followed the rename by
+# itself while this default did not. A name spelled in two places agrees until the day one
+# moves, which is the same argument D43 makes about the port.
+#
+# The fallback is a literal because there is nowhere else to read one from: a tarball with
+# no `.git`, or a clone with no `origin`. It is the current name, so it is right until the
+# next rename and wrong in exactly the way this comment describes — override it there.
 DEMO_HOME ?= demo
-DEMO_BASE ?= /pkmnscan/
+DEMO_REPO := $(shell n=$$(basename -s .git "$$(git config --get remote.origin.url 2>/dev/null)" 2>/dev/null); [ -n "$$n" ] && echo "$$n" || echo banchi)
+DEMO_BASE ?= /$(DEMO_REPO)/
 
 # Curate real card photographs, and their real identifications, into `demo-assets/`.
 #
