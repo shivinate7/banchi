@@ -1332,14 +1332,28 @@ much of this series has to be re-run after a substitution.
 
 | parameter | face-dependent? | why |
 | --- | --- | --- |
-| `romanFill` 0.75 | **yes, most** | it is a ratio to the kanji's **ink width**; a different face changes the denominator, so the same number draws a different picture |
-| `romanSize` 0.25 | **yes** | it was judged as the roman's *weight against the kanji's*, and Plex JP 700 is not Hiragino W6's weight |
-| `romanOpacity` 0.45 | **yes** | same argument, and the ink measurement in `ink.mjs` is a measurement of one face's stems |
-| `pad` `gap` `arm` `stroke` `rrMul` `tl` `tip` | low risk | all relative to the kanji's **box**, not its shape — a full-width em is a full-width em |
+| `romanSize` 0.25 | **yes** | it was judged as the roman's *weight against the kanji's*, and no two faces carry the same stem weight at the same nominal size |
+| `romanOpacity` 0.45 | **yes** | same argument, and `ink.mjs`'s counts are a measurement of one face's stems |
+| `romanFill` 0.75 | **barely — measured** | see below |
+| `pad` `gap` `arm` `stroke` `rrMul` `tl` `tip` | no | all relative to the kanji's **box**, and a full-width em is a full-width em |
 
-**The magnitude is not small.** Hiragino Kaku Gothic ProN is the *same drawing* by a different
-name and still differs by 1,293 of 4,729 inked pixels at 100px. An 85% outline overlap is a
-different letter at 8px.
+**`romanFill` was written into this table as the most exposed value and the measurement says
+otherwise.** At kanji 100, 番地 is **214.00px advance / 199px ink in Hiragino Sans** and
+**214.81 / 200 in IBM Plex Sans JP 400** — 0.4% and 0.5% apart. The denominator barely moves,
+so neither does the picture. The claim was reasoned from "it is a ratio to the kanji" and was
+wrong; it is corrected here rather than left standing because a plan's risk table is the part a
+later session acts on.
+
+**What the substitution costs is weight, not width**, which is why the two rows above it survive.
+
+**And one discrepancy inside this spec was found by taking that measurement.** §14 says the match
+is on **ink** — *"CSS applies letter-spacing after every glyph including the last… matched on
+advance, the roman overhangs the kanji's visible edge on both sides by half that unit"* — but
+`sheets/lockup-core.js` solves against a `Range`'s box, which is the **advance**. So `romanFill`
+0.75 is 0.75 of the advance and **0.807 of the ink**. Every round in §13 used one definition
+consistently, so the settled value is sound; what is not sound is a spec asserting two things.
+**Resolving that is part of the build, not a footnote**: either the solve moves to ink and
+`romanFill` is restated as 0.807, or §14's rule is amended to name the advance and say why.
 
 **So the plan is gated on the face, and the re-run is bounded.** Once a face is chosen, the three
 rows above are re-offered — one round each, as a same-or-different check against the settled

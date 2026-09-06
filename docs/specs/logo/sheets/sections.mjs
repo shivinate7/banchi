@@ -52,7 +52,9 @@ await p.waitForTimeout(300)
 // that shrinks the specimens once the client scales the image to fit.
 const contentW = await p.evaluate(() => {
   let m = 0
-  document.querySelectorAll('.strip, table').forEach(e => { const r = e.getBoundingClientRect(); if (r.width) m = Math.max(m, r.right) })
+  /* every block a sheet lays specimens out in, not just the two the round sheet happens to use --
+     a sheet with a row this list does not name gets its images silently cropped */
+  document.querySelectorAll('.strip, table, .big, .row').forEach(e => { const r = e.getBoundingClientRect(); if (r.width) m = Math.max(m, r.right) })
   return Math.ceil(m)
 })
 const W = Math.min(+(w || 1500), Math.max(560, contentW + 28))
