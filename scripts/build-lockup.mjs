@@ -279,25 +279,19 @@ const coreSrc = readFileSync(CORE, 'utf8')
 const fnStart = coreSrc.indexOf('function taperParts')
 const fnEnd = coreSrc.indexOf('let n=0')
 must(fnStart >= 0 && fnEnd > fnStart, 'taperParts is not where this expects it in lockup-core.js')
-const taperParts = new Function(coreSrc.slice(fnStart, fnEnd) + '; return taperParts')()
+const { taperParts, railArm } = new Function(
+  coreSrc.slice(fnStart, fnEnd) + '; return { taperParts: taperParts, railArm: railArm }')()
 
 const markSrc = readFileSync(MARK, 'utf8')
 const wire = /SMALL_BRACKET = '([^']+)'/.exec(markSrc)
 const wireW = /SMALL_STROKE = ([\d.]+)/.exec(markSrc)
 must(wire && wireW, 'markGeometry.ts has no SMALL_BRACKET / SMALL_STROKE — the rail end of the morph')
 
-/* Read the L out of the shipped path rather than retyping its numbers: M x y V y2 A r r 0 0 1 x2 y3 H x3 */
-const L = /^M([\d.-]+) ([\d.-]+)V([\d.-]+)A([\d.-]+) [\d.-]+ 0 0 1 ([\d.-]+) ([\d.-]+)H([\d.-]+)$/.exec(wire[1].trim())
-must(L, `SMALL_BRACKET is not the vertical-elbow-horizontal L this reads: ${wire[1]}`)
-const n = L.map(Number)
-// M x yBottom V yTop A r r 0 0 1 xElbow yTop H xRight — the corner is (x, yTop) and the two legs
-// run down and right from it. `taperParts(x0, y0, aX, aY, ...)` takes the HORIZONTAL leg first;
-// passing them the other way round is a drawing that still looks like a bracket, which is why
-// the pixel assertion below is not decoration — it caught exactly that on this line.
-const corner = { x: n[1], y: n[6], aY: n[2] - n[6], aX: n[7] - n[1], r: n[4] }
-const railArm = taperParts(corner.x, corner.y, +corner.aX.toFixed(6), +corner.aY.toFixed(6),
-                           corner.r, Number(wireW[1]), 1, 0)
-must((railArm.body.match(/[A-Za-z]/g) || []).length === (armPath[1].match(/[A-Za-z]/g) || []).length,
+/* `railArm` PARSES AND SAMPLES, and it lives in the sheet beside `taperParts` because
+   `sidebar-morph.html` needs exactly this to draw the filmstrip. A copy here would be a second
+   derivation of the rail's own bracket, which is the defect that sheet has already shipped twice. */
+const rail = railArm(wire[1], Number(wireW[1]))
+must((rail.body.match(/[A-Za-z]/g) || []).length === (armPath[1].match(/[A-Za-z]/g) || []).length,
      'the two ends of the morph do not have the same command count — a lerp would be undefined')
 
 const railCheck = await (async () => {
@@ -306,8 +300,8 @@ const railCheck = await (async () => {
   const sheet = (inner) => `<body style="margin:0;background:#fff"><svg width="320" height="320" viewBox="0 0 100 100">${inner}<g transform="rotate(180 50 50)">${inner}</g></svg></body>`
   const shot = async (h) => { await pg.setContent(h); return (await pg.screenshot()).toString('base64') }
   const a = await shot(sheet(`<path d="${wire[1]}" fill="none" stroke="#000" stroke-width="${wireW[1]}" stroke-linecap="round"/>`))
-  const b2 = await shot(sheet(`<path d="${railArm.body}" fill="#000"/>` +
-    railArm.caps.map(([cx, cy, r]) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#000"/>`).join('')))
+  const b2 = await shot(sheet(`<path d="${rail.body}" fill="#000"/>` +
+    rail.caps.map(([cx, cy, r]) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#000"/>`).join('')))
   const out = await pg.evaluate(async ([x, y]) => {
     const load = (s) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = 'data:image/png;base64,' + s })
     const [ia, ib] = await Promise.all([load(x), load(y)])
@@ -394,8 +388,8 @@ export const BRACKET_SPIN = '${spin[1]}'
  *  maps it from \`BLOCK\`.
  *  The generator renders this against markGeometry.ts's shipped stroked wire and refuses to write
  *  if they differ by more than 2% of inked pixels at 10x. Measured: ${railPct.toFixed(2)}%. */
-export const RAIL_ARM = '${round3(railArm.body)}'
-export const RAIL_CAPS = ${JSON.stringify(railArm.caps.map((c) => c.map(R)))} as const
+export const RAIL_ARM = '${round3(rail.body)}'
+export const RAIL_CAPS = ${JSON.stringify(rail.caps.map((c) => c.map(R)))} as const
 `
 
 writeFileSync(OUT, ts)

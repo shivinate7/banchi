@@ -46,14 +46,18 @@ same brackets become an empty slot, which is the in-product mark.&rdquo;</i>
 the name, in two scripts, so the row read as twice as busy as it would be &mdash; and it faked the sizing,
 squeezing the lockup into what was left after the text instead of letting it own the row.
 <br><br>
-<b>So the size is now an open question rather than a forced one.</b> With 212px of usable width the lockup
-fits anywhere from the kanji-32 floor up to kanji 80, and three candidates are drawn below. The rail is 64px and <b>cannot hold the lockup at all</b>: at kanji 22 the block
-is 57px and two of its three measures have already failed. That is why the rail gets the brackets rather than
-a smaller lockup.
+<b>The size was an open question and &sect;16 settled it: kanji 40.</b> With 212px of usable width the lockup
+fits anywhere from the kanji-32 floor up to kanji 80; the three candidates are still drawn below because the
+comparison is what the answer rests on, and 40 is captioned as the one that ships. The rail is 64px and
+<b>cannot hold the lockup at all</b>: at kanji 22 the block is 57px and two of its three measures have already
+failed. That is why the rail gets the brackets rather than a smaller lockup &mdash; and, since 2026-09-06, why
+it gets them by <i>morphing</i> into them rather than by swapping to a second drawing.
 <br><br>
-<b>The morph is drawn, not described.</b> Both brackets come from the same <code>taperParts</code> at the same
-point count, so the path interpolates directly &mdash; the filmstrip below is the real intermediate geometry
-at five points, not a cross-fade standing in for one.
+<b>The morph is the shipped one, drawn.</b> Both ends come out of the same <code>taperParts</code> at the same
+301 samples &mdash; the rail end is <code>railArm()</code>, the same call with <code>tip&nbsp;=&nbsp;1</code> &mdash;
+so the two <code>d</code> strings share a command structure and the filmstrip below is a straight point-wise lerp,
+the one <code>Lockup.tsx</code> runs. This sentence was here before it was true: the filmstrip used to interpolate
+the <i>parameters</i> and re-sample, which drew a <b>tapered</b> rail end the product does not contain.
 </div>
 <div id="out"></div></div>
 <script src="./lockup-core.js"></script>
@@ -101,10 +105,24 @@ const DARK_BRACKET = [['0','#FFFFFF'],['0.333','#B8C8D8'],['0.667','#F2F8FF'],['
 
 const MARK_SMALL_BRACKET = 'M22.609 41.901V24.252A8 8 0 0 1 30.609 16.252H43.426'
 const MARK_SMALL_STROKE = 4.2
-function bareBrackets(px, col){
- const one='<path d="'+MARK_SMALL_BRACKET+'" fill="none" stroke="'+col+'" stroke-width="'+
+/* THE RAIL'S OWN SPECIMEN, AND IT TAKES THE METAL ON DARK. `kit.css` switches this bracket per
+   theme exactly as it switches the lockup's -- flat `--bn-ink` on light, `bluesteel`'s four-stop
+   chrome on dark -- because the drawing has no ground of its own to sit on and the chrome runs
+   #FFFFFF to #8FA4B8. This sheet drew it in flat ink in both, so its dark column showed a rail
+   the product does not paint, beside a lockup that was painted correctly. */
+let bareN = 0
+function bareBrackets(px, col, stops){
+ let paint = col, defs = ''
+ if(stops && stops.length){
+  const gid = 'bare'+(bareN++)
+  defs = '<defs><linearGradient id="'+gid+'" x1="0.750" y1="0.067" x2="0.250" y2="0.933">'+
+    stops.map(function(st){return '<stop offset="'+st[0]+'" stop-color="'+st[1]+'"/>'}).join('')+
+    '</linearGradient></defs>'
+  paint = 'url(#'+gid+')'
+ }
+ const one='<path d="'+MARK_SMALL_BRACKET+'" fill="none" stroke="'+paint+'" stroke-width="'+
    MARK_SMALL_STROKE+'" stroke-linecap="round"/>'
- return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+one
+ return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+defs+one
    +'<g transform="rotate(180 50 50)">'+one+'</g></svg>'
 }
 
@@ -139,7 +157,7 @@ o.appendChild(el('h2',null,'the two states, at the widths the shell actually giv
   const wrap=el('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center'
   const b=sidebar(c[0], c[1]===0); wrap.appendChild(b.side)
   const col = c[0] ? '#eef0f4' : '#0f1217'
-  if(c[1]===0) b.holder.innerHTML = bareBrackets(32, col)
+  if(c[1]===0) b.holder.innerHTML = bareBrackets(32, col, c[0] ? DARK_BRACKET : null)
   else { const lk=stamp(c[1], P.gap, P.pad, col,
            {romanSize:P.romanSize, romanOpacity:P.romanOpacity})
          b.holder.appendChild(lk); lk.dataset.pend='1' }
@@ -151,56 +169,114 @@ o.appendChild(el('h2',null,'the two states, at the widths the shell actually giv
  o.appendChild(st)})()
 
 /* ---- 2 · the morph ------------------------------------------------------------------------- */
-o.appendChild(el('h2',null,'the morph — real interpolated geometry at five points, not a cross-fade'))
-o.appendChild(el('div','sub','The lockup’s frame is 83×59 and the rail’s is 36×36, so the bracket travels in shape as well as in '+
- 'size — and its <b>stroke and radius rules both change</b> across the move: 0.050 of the kanji becomes '+
- 'the mark’s own 0.042 of its tile, and 4.0× the stroke becomes the mark’s 0.08. Both are resolved to pixels at each '+
- 'end and interpolated as pixels, because interpolating the RULES would send the middle frames somewhere '+
- 'neither end goes. The name fades over the first half; the bracket travels across the whole.'))
+/* SECTION 2 RUNS AFTER `document.fonts.ready`, and that is not tidiness. Its open end is MEASURED
+   from a real settled lockup, and a lockup measured before IBM Plex Sans JP has loaded is measured
+   in a fallback CJK face: the block came out 86x53 against the true 128x93, so the rail end was
+   mapped into the wrong box and the overlay below compared two drawings at different scales. The
+   same trap section 1 already avoids by measuring in that callback. */
+function drawMorph(){
+o.appendChild(el('h2',null,'the morph — the shipped one, point for point'))
+o.appendChild(el('div','sub','This filmstrip is <b>the interpolation the app runs</b>, not a picture of one. '+
+ 'Both ends come out of <code>taperParts</code> at the same 301 samples &mdash; the rail end is <code>railArm()</code>, '+
+ 'which is that same call with <code>tip&nbsp;=&nbsp;1</code>, because &sect;11 removed the taper from the small cut '+
+ 'and changed nothing else &mdash; so the two <code>d</code> strings have identical command structure and every frame '+
+ 'below is a straight point-wise lerp between them, exactly as <code>Lockup.tsx</code> does it. '+
+ '<br><br><b>What this replaced, and why it was wrong.</b> The previous filmstrip interpolated the '+
+ '<i>parameters</i> (width, height, stroke, radius) and re-ran <code>taperParts</code> at each step with '+
+ '<code>tip&nbsp;=&nbsp;0.15</code>. So its rail end was <b>tapered</b> &mdash; a bracket the product does not '+
+ 'contain &mdash; and its prose quoted an <b>83&times;59</b> block, which is what the lockup measured before rounds '+
+ '16&ndash;23 moved <code>pad</code> and <code>gap</code>. Both numbers below are measured here, now. '+
+ 'The name is drawn <i>in</i> toward the frame&rsquo;s centre as it fades, which is what ships; a pure opacity '+
+ 'fade reads as a switch followed by a separate frame animation.'))
 ;(function(){
  const st=el('div','stage'); st.style.alignItems='center'
- /* Both ends in REAL PIXELS. The first draft took the rail's stroke as 11 — its value in a 100-unit
-    viewBox — and interpolated toward 11px, so the middle frames carried a stroke seven times too
-    heavy and read as blobs. At 36px the rail's 0.11 is 3.96px. The RADIUS RULE also changes across
-    the morph, from 4.0x the stroke to the MARK's own 0.08 of its tile, so it is interpolated as a
-    resolved pixel
-    value rather than as a rule. */
- /* the OPEN end is measured from a real settled lockup at the floor size rather than typed --
-    it was 83x59 here, which is what the block was before rounds 16-23 moved pad and gap */
- const probe=stamp(32, P.gap, P.pad, '#0f1217', {romanSize:P.romanSize, romanOpacity:P.romanOpacity})
- probe.style.cssText='position:absolute;left:-9999px'; document.body.appendChild(probe)
+ /* THE OPEN END IS MEASURED FROM A REAL SETTLED LOCKUP, at the size section 16 settled (kanji 40)
+    rather than at the floor. This sheet drew the morph at 32 while the sidebar shipped 40. */
+ const KANJI = 40, RAILPX = 32
+ const probe=stamp(KANJI, P.gap, P.pad, '#0f1217', {romanSize:P.romanSize, romanOpacity:P.romanOpacity})
+ /* SET THE TWO PROPERTIES, NEVER `cssText` — and this is the 83x59 defect's actual cause, still
+    here. `stamp()` writes the block's PADDING as an inline style, `pad` being 0.50 of the kanji;
+    `cssText =` replaces the whole inline style and threw it away, so the probe measured a lockup
+    with no padding: 86x53 against the true 128x93 at kanji 40. Every number this section printed
+    was that measurement, and the prose that quoted 83x59 was quoting it honestly. */
+ probe.style.position='absolute'; probe.style.left='-9999px'; document.body.appendChild(probe)
  frame(probe, {stroke:P.stroke, arm:P.arm, tl:P.tl, rrMul:P.rrMul, tip:P.tip, romanFill:P.romanFill})
- const A={w:probe.offsetWidth, h:probe.offsetHeight, s:32*P.stroke, r:(32*P.stroke)*P.rrMul}
+ const W=probe.offsetWidth, H=probe.offsetHeight
+ const openD = probe.querySelector('svg path').getAttribute('d')
+ const openCaps = [].slice.call(probe.querySelectorAll('svg > circle')).map(function(c){
+   return [+c.getAttribute('cx'), +c.getAttribute('cy'), +c.getAttribute('r')]})
  probe.remove()
- /* the RAIL end is the shipped mark's own geometry at the size the rail draws it -- it was a
-    locally-invented `RAIL` rule, so the morph was travelling toward a bracket the product does
-    not contain */
- const RAILPX = 32
- const B={w:RAILPX, h:RAILPX, s:RAILPX*MARK_SMALL_STROKE/100, r:RAILPX*8/100}
- for(let k=0;k<=4;k++){
-  const t=k/4
-  const w=A.w+(B.w-A.w)*t, h=A.h+(B.h-A.h)*t, sw=A.s+(B.s-A.s)*t
-  const i=sw/2, W=w-sw, H=h-sw
-  const rr=Math.min(A.r+(B.r-A.r)*t, Math.min(W,H)/2-.1)
-  const p=taperParts(i,i,W*P.arm,H*P.arm,rr,sw,P.tip,P.tl)
-  const one='<path d="'+p.body+'" fill="#0f1217"/>'+p.caps.map(function(c){
-    return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="#0f1217"/>':''}).join('')
+
+ /* THE RAIL END IS THE SHIPPED MARK'S OWN WIRE, sampled by the shared `railArm` and mapped into
+    the open end's pixel box. `frame()` draws in element PIXELS, so the mark's 100-unit box scales
+    by RAILPX/100 and centres -- which is the same mapping `Lockup.tsx` performs from `BLOCK`,
+    done in px here because this sheet has no viewBox to divide by. */
+ const rail = railArm(MARK_SMALL_BRACKET, MARK_SMALL_STROKE)
+ const k = RAILPX/100, ox = (W-RAILPX)/2, oy = (H-RAILPX)/2
+ const nums = function(d){ return (d.match(/-?\d+\.?\d*/g)||[]).map(Number) }
+ const A = nums(openD)
+ const B = nums(rail.body).map(function(v,ix){ return ix%2 ? v*k+oy : v*k+ox })
+ const bCaps = rail.caps.map(function(c){ return [c[0]*k+ox, c[1]*k+oy, c[2]*k] })
+ if(A.length !== B.length) throw new Error('the two ends are not the same topology: '+A.length+' vs '+B.length)
+
+ const draw = function(n){ let d='M'+n[0]+' '+n[1]
+   for(let ix=2;ix<n.length;ix+=2) d+='L'+n[ix]+' '+n[ix+1]
+   return d+'Z' }
+
+ for(let step=0;step<=4;step++){
+  const t=step/4
+  const d = draw(A.map(function(v,ix){ return +(v+(B[ix]-v)*t).toFixed(3) }))
+  const caps = openCaps.map(function(c,ix){ const q=bCaps[ix%bCaps.length]
+    return [c[0]+(q[0]-c[0])*t, c[1]+(q[1]-c[1])*t, c[2]+(q[2]-c[2])*t] })
+  const one='<path d="'+d+'" fill="#0f1217"/>'+caps.map(function(c){
+    return '<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="#0f1217"/>'}).join('')
   const cell=el('div'); cell.style.cssText='display:flex;flex-direction:column;align-items:center'
-  const box=el('div'); box.style.cssText='position:relative;width:'+w+'px;height:'+h+'px'
-  box.innerHTML='<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="position:absolute;inset:0;overflow:visible">'
-   +one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g></svg>'
-  /* the name, fading out over the first half */
-  const nameOp = Math.max(0, 1 - t*2)
+  const box=el('div'); box.style.cssText='position:relative;width:'+W+'px;height:'+H+'px'
+  box.innerHTML='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="position:absolute;inset:0;overflow:visible">'
+   +one+'<g transform="rotate(180 '+(W/2).toFixed(2)+' '+(H/2).toFixed(2)+')">'+one+'</g></svg>'
+  /* the name, drawn IN toward the frame's centre as it goes -- App.css scales it 0.82 -> 1 on the
+     same clock, so this reproduces the shipped gesture rather than a plainer stand-in for it */
+  const open = 1-t
   const nm=el('div'); nm.style.cssText='position:absolute;inset:0;display:flex;flex-direction:column;'
-   +'align-items:center;justify-content:center;opacity:'+nameOp.toFixed(2)+';color:#0f1217'
-  nm.innerHTML='<span class="go" style="font-size:'+(32*(1-t*0.25)).toFixed(1)+'px;letter-spacing:.07em">番地</span>'
-   +'<span class="rom" style="font-size:'+(32*0.36).toFixed(1)+'px;letter-spacing:2.6px;margin-top:'+(32*P.gap).toFixed(1)+'px;opacity:.62">BANCHI</span>'
+   +'align-items:center;justify-content:center;color:#0f1217;opacity:'+open.toFixed(2)+';'
+   +'transform:scale('+(0.82+0.18*open).toFixed(3)+')'
+  nm.innerHTML='<span class="go" style="font-size:'+KANJI+'px;letter-spacing:.07em">番地</span>'
+   +'<span class="rom" style="font-size:'+(KANJI*P.romanSize).toFixed(1)+'px;letter-spacing:'+
+     (KANJI*0.1108).toFixed(2)+'px;margin-top:'+(KANJI*P.gap).toFixed(1)+'px;opacity:'+P.romanOpacity+'">BANCHI</span>'
   box.appendChild(nm)
   cell.appendChild(box)
   cell.appendChild(el('div','cap', t===0?'open':t===1?'rail':(t*100)+'%'))
-  cell.appendChild(el('div','num', Math.round(w)+'×'+Math.round(h)+'px · stroke '+sw.toFixed(2)))
+  cell.appendChild(el('div','num', Math.round(W)+'×'+Math.round(H)+'px box · t='+t.toFixed(2)))
   st.appendChild(cell)}
- o.appendChild(st)})()
+ o.appendChild(st)
+
+ /* THE LAST FRAME IS THE SHIPPED MARK, AND THE SHEET SAYS SO IN ITS OWN DRAWING rather than in
+    prose. The generator asserts this in pixels before it writes; here the two are simply drawn
+    on top of one another at the size the rail uses, so a reader can see it. */
+ const check=el('div','stage'); check.style.alignItems='center'
+ const cw=el('div'); cw.style.cssText='display:flex;flex-direction:column;align-items:center'
+ const railD = draw(B.map(function(v){ return +v.toFixed(3) }))
+ const bx=el('div'); bx.style.cssText='position:relative;width:'+W+'px;height:'+H+'px'
+ const wire='<path d="'+MARK_SMALL_BRACKET+'" fill="none" stroke="#3d5af1" stroke-width="'+
+   MARK_SMALL_STROKE+'" stroke-linecap="round"/>'
+ /* THE CAPS GO IN TOO. Drawing the outline WITHOUT its two end discs leaves a flat butt where
+    the wire has a round cap, so the only thing a reader sees is a crescent at each tip — which
+    reads as a mismatch and is entirely the picture's fault. The first version of this overlay
+    did exactly that. */
+ const railOne='<path d="'+railD+'" fill="#0f1217"/>'+bCaps.map(function(c){
+   return '<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="#0f1217"/>'}).join('')
+ bx.innerHTML='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="position:absolute;inset:0">'
+  +railOne
+  +'<g transform="rotate(180 '+(W/2).toFixed(2)+' '+(H/2).toFixed(2)+')">'+railOne+'</g>'
+  +'<g transform="translate('+ox+' '+oy+') scale('+k+')" opacity=".55">'+wire
+  +'<g transform="rotate(180 50 50)">'+wire+'</g></g></svg>'
+ cw.appendChild(bx)
+ cw.appendChild(el('div','cap','the morph’s last frame, over markGeometry.ts’s own wire'))
+ cw.appendChild(el('div','num','black = t=1 · blue = SMALL_BRACKET stroked at '+MARK_SMALL_STROKE))
+ check.appendChild(cw)
+ o.appendChild(el('h2',null,'and the last frame is the shipped mark, drawn over it'))
+ o.appendChild(check)})()
+}
 
 document.fonts.ready.then(function(){
  setTimeout(function(){
@@ -214,6 +290,7 @@ document.fonts.ready.then(function(){
    const wrap=lk.closest('.side') && lk.closest('.side').parentElement
    const n=wrap && wrap.querySelector('[data-meas]')
    if(n) n.textContent=lk.offsetWidth+'×'+lk.offsetHeight+'px in 212px'})
+  drawMorph()
   window.__sheetReady=true
  }, 400)
 })

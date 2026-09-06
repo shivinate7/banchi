@@ -31,6 +31,33 @@ function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
  return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
    'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
   caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+/* THE RAIL END OF THE COLLAPSE, from this same sampler — and that is the whole reason the
+   sidebar's bracket can morph at all.
+   docs/specs/logo.md section 16 recorded a morph as impossible: "a ~600-point filled taper
+   against a 52-byte stroked wire -- paths that shape cannot interpolate". That is true of how
+   the two are EXPRESSED and false of what they are. Both are one L: a vertical leg, a rounded
+   elbow, a horizontal leg. `taperParts` is that L parametrically at a fixed 301 samples, and the
+   mark's small cut is THE SAME CALL with `tip = 1`, because section 11 removed the taper and
+   changed nothing else. So both ends come out at identical topology and a point-wise lerp is
+   exact.
+   IT LIVES HERE RATHER THAN IN ITS TWO CALLERS. `scripts/build-lockup.mjs` emits `RAIL_ARM` for
+   the app and `sheets/sidebar-morph.html` draws the filmstrip; a copy in each is the defect this
+   file keeps finding, and the sheet has already shipped an INVENTED rail bracket twice.
+   The path and the width are passed in, never named here -- they belong to `markGeometry.ts`,
+   which is generated, and `make docs-audit`'s `rail mark` row reconciles the sheet's copies of
+   them against it. */
+function railArm(d, w){
+ const L=/^M([\d.-]+) ([\d.-]+)V([\d.-]+)A([\d.-]+) [\d.-]+ 0 0 1 ([\d.-]+) ([\d.-]+)H([\d.-]+)$/
+   .exec(String(d).trim())
+ /* Parsed by SHAPE, never by counting numbers: an arc carries three FLAGS (`0 0 1`) that scan as
+    numbers, so a bare sweep puts the corner on a flag and reads 0 -- which still draws a bracket,
+    just the wrong one. The legs also go in as (horizontal, vertical) and passing them the other
+    way round likewise draws something bracket-shaped; the generator's pixel assertion against the
+    shipped wire caught exactly that on its first run. */
+ if(!L) throw new Error('railArm: not the vertical-elbow-horizontal L this reads: '+d)
+ const x=+L[1], yBot=+L[2], r=+L[4], yTop=+L[6], xRight=+L[7]
+ return taperParts(x, yTop, +(xRight-x).toFixed(6), +(yBot-yTop).toFixed(6), r, w, 1, 0)
+}
 let n=0
 /* THE ROMAN'S THREE NUMBERS WERE LITERALS IN THIS LINE, and that is why nothing guarded them.
    `pad`, `gap`, `stroke`, `arm`, `rrMul`, `tip` and `tl` are all parameters, all published in
