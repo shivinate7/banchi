@@ -58,5 +58,15 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_CAPTURE_DEFAULT': JSON.stringify(CAPTURE_URL),
     'import.meta.env.VITE_CAPTURE_PORT': JSON.stringify(CAPTURE_PORT),
+    // DEFINED HERE OR IT DOES NOT FOLD, and this one is a correctness matter rather than a
+    // size one. `make demo-static` builds with VITE_DEMO=1; every other build must eliminate
+    // the demo branches entirely, including the dynamic `import()`s of `demoServer.ts` and
+    // `demoCamera.ts` inside them.
+    //
+    // A BARE IDENTIFIER CARRYING A BOOLEAN, not an `import.meta.env` read, and the three
+    // forms that did NOT work are recorded in `src/demoFlag.d.ts` beside the declaration.
+    // The short version: only this form makes the guard read `if (false)` in the source
+    // Rollup sees, which is what removes the branch AND the dynamic import inside it.
+    __BN_DEMO__: JSON.stringify(process.env.VITE_DEMO === '1'),
   },
 })

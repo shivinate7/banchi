@@ -129,6 +129,31 @@ class Server:
         except subprocess.TimeoutExpired:
             self.process.kill()
 
+    def post(self, path: str, payload: dict):
+        """One POST, used ONLY to put the server into a state a GET can then be recorded from.
+
+        THE SHIPPING LANES NEED THIS AND NOTHING ELSE DOES. `server/shipping_routes.py` holds
+        a read export IN MEMORY — "what it costs is memory holding buyer addresses" — so
+        there is no batch on disk for the seed to write and `GET /shipping/batches` answers
+        404 until something has posted one. Every other write in this pipeline leaves a file
+        the seed can produce directly.
+
+        Nothing posted here is recorded. The bundle carries reads; `app/src/demoServer.ts`
+        owns what a write does.
+        """
+        body = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            self.base + path, data=body, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return response.status, json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            return exc.code, None
+        except Exception:
+            return None, None
+
     def get(self, path: str):
         """One GET, as (status, parsed body). A 404 is data, not a crash — the sweep asks
         for paths this build of the server may not answer, and which ones those are is
@@ -266,6 +291,30 @@ def sweep(server: Server, space: Dict[str, List[str]]):
     if len(names) > 1:
         both = "&".join("run=%s" % urllib.parse.quote(n) for n in names)
         take("/pipeline/pricing?%s" % both)
+
+    # ------------------------------------------------------------------ the shipping lanes
+    # D61's three lanes, over TCGplayer's own Export Shipping file. Created here rather than
+    # seeded because a batch lives in the SERVER'S MEMORY and never on disk, so there is
+    # nothing for `demo-seed.py` to write.
+    #
+    # `fixtures/orders-shipping.csv` IS ALREADY ANONYMISED — every row reads `Buyer001
+    # Placeholder / 101 Example St` — which is what makes it publishable at all. A real
+    # export is a list of buyers' home addresses and must never reach this bundle.
+    shipping = REPO_ROOT / "fixtures" / "orders-shipping.csv"
+    if shipping.is_file():
+        status, made = server.post(
+            "/shipping/batches", {"content": shipping.read_text(encoding="utf-8")}
+        )
+        if status == 200 and isinstance(made, dict):
+            # RECORDED UNDER THE VERB, because this one read is a POST. There is no
+            # `GET /shipping/batches` at all — the server keeps no list, so the only way to
+            # see a batch is the answer to the request that made it. `demoServer.ts` replays
+            # this for the same POST, which is honest: reading an export is a pure function
+            # of the file, and the demo is a frozen store throughout.
+            recorded["POST /shipping/batches"] = {"status": 200, "body": made}
+            batch = made.get("batch")
+            if batch:
+                take("/shipping/batches/%s" % urllib.parse.quote(str(batch)))
 
     # ---------------------------------------------------------------- price history
     # D62's reading, per SKU: hold `t` over a row on `#/pricing` and this is what appears.

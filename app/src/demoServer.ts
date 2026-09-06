@@ -375,6 +375,18 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
   }
   if (path === '/pricing' && (method === 'PUT' || method === 'POST')) return writePricing(body)
 
+  /* THE ONE RECORDED WRITE, and it is recorded because there is nothing else to read.
+   * `server/shipping_routes.py` holds a read export in memory and keeps no list of batches,
+   * so `GET /shipping/batches` does not exist — the only way to see the lanes is the answer
+   * to the request that made them. Replaying it for any upload is honest here: reading an
+   * export is a pure function of the file, and the whole store behind this page is frozen.
+   * The recorded batch is `fixtures/orders-shipping.csv`, which is anonymised at rest. */
+  if (path === '/shipping/batches' && method === 'POST') {
+    const made = responses['POST /shipping/batches']
+    if (made !== undefined) return made.body
+    refuse('demo_not_recorded', 'This demo recorded no shipping export.', 404)
+  }
+
   /* Everything else. Not an error page and not a crash: a named refusal, which every screen
    * in this app already draws as a sentence with the code small beneath it. */
   refuse(

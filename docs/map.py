@@ -1745,7 +1745,7 @@ COMPONENTS = [
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D62", "D76"],
+                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D76"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "
@@ -2531,6 +2531,25 @@ COMPONENTS = [
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D104"]},
+            "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
+                                          "`vite.config.ts` substitutes with a boolean "
+                                          "literal. It exists because three other forms of "
+                                          "the same flag each leaked demo code into a "
+                                          "production build; the header records all three, "
+                                          "and that the guard must be an `if` and not a "
+                                          "ternary.",
+                                  "governed_by": ["D13"]},
+            "src/demoCamera.ts": {"does": "a camera for a page that has none — a canvas "
+                                          "painted with one of the demo's own photographs, "
+                                          "handed to `useCamera` as a REAL MediaStream so "
+                                          "every `camera.ready` gate in CaptureScreen's 3,255 "
+                                          "lines opens the ordinary way and nothing above it "
+                                          "changes. Deliberately motionless: the trigger fires "
+                                          "on frame difference (D81, D84), so it arms, watches "
+                                          "and never captures, which is honest on a page with "
+                                          "no disk to write to. Reached through a dynamic "
+                                          "import inside `if (IS_DEMO)`.",
+                                  "governed_by": ["D13", "D19", "D81", "D84"]},
             "src/demoServer.ts": {"does": "the capture server, frozen — what `request()` talks "
                                           "to when VITE_DEMO=1 builds the published demo. "
                                           "Replays scripts/demo-record.py's bundle for reads "

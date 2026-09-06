@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 
 import { readUpload } from './csvUpload'
 import { Button, EmptyState, Icon, Notice, type IconName } from './kit'
@@ -8,6 +8,17 @@ import { describeFailure, fillShippingStamps, forgetShippingExport, readShipping
 import type { Failure } from './server'
 import type { OrderRow, OrdersPayload, ShippingLane, ShippingReason, ShippingRow } from './types'
 import './Shipping.css'
+
+/* MUST BE MODULE-LOCAL, AND THAT IS THE WHOLE REASON IT IS DECLARED HERE RATHER THAN
+ * IMPORTED. Vite substitutes `import.meta.env.VITE_DEMO` with a literal at build time, so
+ * this folds to `false` in an ordinary build and Rollup then eliminates the branch and the
+ * dynamic `import()` inside it. An IMPORTED constant does not fold: it stays a live binding
+ * across the module boundary, the branch survives, and the chunk is emitted. Measured — a
+ * first version exported `IS_DEMO` from `server.ts`, and a normal build shipped
+ * `demoCamera-*.js` plus three references to `demoStream` in the main bundle. Three
+ * declarations of one expression is the price of the guard actually working. */
+const IS_DEMO = __BN_DEMO__
+
 
 /* THE SHIP STAGE — TCGplayer's `Orders → Export Shipping`, read into three lanes.
  *
@@ -130,6 +141,38 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
       if (pick.current !== null) pick.current.value = ''
     }
   }
+
+  /* THE PUBLISHED DEMO HAS NOBODY TO HAND IT A FILE, so it hands itself one.
+   *
+   * This stage reads nothing on mount by design — the note at the top of this file says why,
+   * and that is right at the desk, where the operator arrives holding an export. A viewer
+   * clicking a shared link is not holding anything, and every other screen in the demo fills
+   * itself, so this one would be the single blank stage of six for a reason that is about
+   * hardware rather than about the product.
+   *
+   * The content is ignored in demo mode: `demoServer.ts` answers this POST with the batch
+   * that was recorded from `fixtures/orders-shipping.csv` — anonymised at rest, every row
+   * reading `Buyer001 Placeholder`. Runs once, and only when nothing has been read yet, so
+   * a viewer who then drops their own file keeps it. */
+  const demoLoaded = useRef(false)
+  useEffect(() => {
+    if (!IS_DEMO || demoLoaded.current || batch !== null) return
+    demoLoaded.current = true
+    void (async () => {
+      try {
+        /* The name is what the screen shows above the lanes, so it says where this came
+           from rather than pretending a file was chosen. The content is ignored. */
+        const frozen = { name: 'orders-shipping.csv (demo)', content: '' }
+        /* Bound, then folded — the same shape `readFile` above uses, and what
+           `make screen-freshness` looks for: a write whose answer goes back into the screen
+           rather than one that leaves it guessing. */
+        const answer = await readShippingExport(frozen)
+        setHub({ batch: answer, lanes: new Set(SHIP_LANES) })
+      } catch {
+        /* Left to the empty state, which is the honest thing to draw and already exists. */
+      }
+    })()
+  }, [batch])
 
   const onPick = () => {
     const chosen = pick.current?.files?.[0]

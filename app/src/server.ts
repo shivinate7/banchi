@@ -161,17 +161,28 @@ const base =
 /**
  * Whether this bundle is the published demo rather than a client for a real capture server.
  *
- * Set only by `make demo-static`, which builds with `VITE_DEMO=1`. In every other build Vite
- * substitutes the literal `undefined`, this folds to `false`, and Rollup then eliminates both
- * the branch in `request()` and the dynamic `import('./demoServer')` inside it — so an
- * ordinary build ships neither the demo module nor the ~340 KB fixture bundle it imports.
+ * Set only by `make demo-static`, which builds with `VITE_DEMO=1`. Everywhere else
+ * `vite.config.ts` defines `__BN_DEMO__` as the literal `false`, so this branch reads
+ * `if (false)` in the source Rollup sees and goes away with the dynamic
+ * `import('./demoServer')` inside it — an ordinary build carries no reference to it and no
+ * `demoServer` chunk, which is the one worth caring about at 1.3 MB of recorded fixtures.
+ * `src/demoFlag.d.ts` records the three forms of this flag that did NOT fold, and the one
+ * orphan chunk that is still emitted.
  *
  * A BUILD-TIME CONSTANT AND NOT A RUNTIME FLAG, deliberately. A runtime switch would mean the
  * real app carries a code path that answers from a recording, one misconfiguration away from
  * showing the owner a frozen store while their real one sat behind it — and D43 exists
  * because a UI answering from the wrong store is this repo's most expensive class of bug.
  */
-const DEMO = import.meta.env.VITE_DEMO === '1'
+const DEMO = __BN_DEMO__
+
+/* NOT EXPORTED, AND THAT IS LOAD-BEARING. Two other modules need this same flag —
+ * `useCamera.ts` and `OrdersShipStage.tsx`, both driven by hardware or by a file a viewer
+ * does not have — and each declares its own from `import.meta.env.VITE_DEMO` rather than
+ * importing this one. An imported constant stays a live binding across the module boundary
+ * and does not fold, so the guarded branch survives and its chunk is emitted: exporting this
+ * put `demoCamera-*.js` into an ordinary production build, measured. Keep every guard
+ * local. */
 
 /* Resolved once, on first use. `demoRequest` is reached only through this, so the chunk is
  * fetched when the demo makes its first call and never in a build where DEMO is false. */
