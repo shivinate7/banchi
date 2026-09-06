@@ -165,9 +165,15 @@ const base =
  */
 export class ServerError extends Error {
   /** The server's own code (`box_invalid`, `store_busy`, `card_not_found`, …), or one of
-   *  the two this client invents when there is no server answer to quote: `unreachable`
-   *  and `bad_response`. Codes are stable strings and are worth branching on; messages are
-   *  worth showing. */
+   *  the three this client invents when there is no server answer to quote: `unreachable`,
+   *  `origin_blocked` and `bad_response`. Codes are stable strings and are worth branching
+   *  on; messages are worth showing.
+   *
+   *  `origin_blocked` is the newest and the only one that is a CLAIM ABOUT THE SERVER rather
+   *  than about this client: it is raised when a request was refused by the browser before it
+   *  was sent, AND a plain read still answers — so the server is up and this page's address
+   *  is what it will not accept. It was `unreachable` until 2026-09-06, which sent the
+   *  operator to restart a server that was running. */
   readonly code: string
 
   /** The HTTP status, or 0 when no response arrived at all. Zero rather than a plausible
@@ -478,6 +484,26 @@ function noteBoot(response: Response): void {
   for (const listener of bootListeners) listener(seen)
 }
 
+/* Is the server up at all? Deliberately RAW `fetch` rather than `request()` — this is called
+ * from inside `request()`'s own failure path, and routing it back through would recurse. No
+ * headers and no init: anything else (a `Content-Type`, a cache directive) would make it a
+ * preflighted request and it would fail for the very reason it exists to rule out. */
+async function serverAnswersReads(): Promise<boolean> {
+  try {
+    const response = await fetch(`${base}/status`)
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+/* The address in the phone's address bar, which is the thing being refused and the thing the
+ * operator has to recognise. Guarded for the non-browser callers `sameHostBase` already names
+ * — `tsc`, the specs' module imports, an editor's type server — where there is no address bar
+ * to quote. */
+const pageOrigin = (): string =>
+  typeof window !== 'undefined' && window.location ? window.location.origin : 'this page'
+
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   const url = `${base}${path}`
 
@@ -488,10 +514,40 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   } catch {
     /* INVENTED MESSAGE #1. `fetch` rejects without detail for a dead server, a wrong
      * address and a CORS refusal alike — the browser withholds which on purpose — so this
-     * names the likeliest cause and the command that fixes it. Worth knowing while step 7a
-     * is being built: a preflight refusal reads exactly like this, so a new method that
-     * the server's `Access-Control-Allow-Methods` does not list will present as the server
-     * being down. */
+     * used to name the likeliest cause and the command that fixes it. The comment that stood
+     * here predicted the defect below and shipped it anyway: "a preflight refusal reads
+     * exactly like this, so a new method that the server's `Access-Control-Allow-Methods`
+     * does not list will present as the server being down."
+     *
+     * IT IS NOT A GUESS ANY MORE, BECAUSE THE SERVER IS STILL ASKABLE. The browser withholds
+     * the reason for THIS request; it does not stop us asking a different question. A write
+     * from an origin the server does not know is refused by the BROWSER at the preflight —
+     * measured on the rig, an unknown origin is answered `Access-Control-Allow-Methods:
+     * GET, OPTIONS` — so the request is never sent and the 403's own message, which names
+     * the remedy, is never delivered to the page.
+     *
+     * `GET /status` settles it, and it is the one probe that can: no custom headers, so it
+     * is a SIMPLE request and exempt from preflight, and reads are ungated and answered
+     * `Access-Control-Allow-Origin: *` (D43). It therefore answers whenever the server is up
+     * AT ALL — including from an origin that may not write. An answer here means the server
+     * is alive and it is this ADDRESS that is being refused.
+     *
+     * The distinction is worth a round trip on a path that has already failed, because the
+     * two remedies point at different places. `unreachable` sends the operator to start a
+     * server; on the phone that server is already running, and the shell's own status dot
+     * is saying `Server online` — off the very same ungated read — while the write claims it
+     * is down. The app was contradicting itself at the moment it was least able to explain. */
+    const answering = await serverAnswersReads()
+    if (answering) {
+      throw new ServerError(
+        'origin_blocked',
+        `The capture server at ${base} is running, but it will not accept changes from ` +
+          `${pageOrigin()}. Nothing was saved. Restarting the server will not help — the ` +
+          'address this page was opened at has to be one it allows. On the Mac, set ' +
+          'PKMNSCAN_LAN_NAME in .env to this address\u2019s host name and start it again.',
+        0,
+      )
+    }
     throw new ServerError(
       'unreachable',
       `No answer from the capture server at ${base}. It may not be running — ` +
