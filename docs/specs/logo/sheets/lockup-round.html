@@ -11,6 +11,11 @@
  .strip{display:flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
  .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
  .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .panel{width:236px;padding:12px;background:#fff;border:1px solid #e3e6ea;border-radius:12px;
+        display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+ .nav{display:flex;flex-direction:column;gap:7px;width:100%;font:500 11px system-ui;color:#4b5563}
+ .nav b{font-weight:600;color:#3b5bdb;background:#eef2ff;border-radius:7px;padding:6px 9px}
+ .nav span{padding:6px 9px}
  .was{color:#c2410c;font-weight:700}
  .num{font:500 9px ui-monospace,monospace;color:#15803d;text-align:center;line-height:1.5}
  .lk{position:relative;display:inline-block}
@@ -42,31 +47,40 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 17,
- title: 'the padding, continued — because you kept my top end, so nothing was bracketed above',
+ n: 18,
+ title: 'the padding, opened wide — because the band you keep has followed the range twice',
  sweeping: 'pad',
  unit: ' of the kanji size',
- values: [0.22, 0.28, 0.34, 0.42, 0.52],
- notes: {0.22:'the inherited value, and your low end', 0.34:'near the middle of what you kept'},
- rejected: {0.10:'crowded the bracket onto 番', 0.16:'still tight', 0.36:'kept — which is why this round exists'},
+ values: [0.34, 0.52, 0.72, 0.95, 1.25],
+ notes: {0.52:'your top end, kept twice — and both times the largest I offered',
+         1.25:'padding wider than the kanji is tall'},
+ rejected: {0.16:'still tight', 0.22:'kept in round 16, out in round 17', 0.28:'your low bound — “above .28”'},
  holds: {gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
  sizes: [48, 32],
+ context: [0.34, 0.52, 0.72, 0.95],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
   ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
-  ['16', 'padding', '0.10 – 0.36', '0.22 – 0.36 kept', 'the top end was NOT bracketed'],
+  ['16', 'padding', '0.10 – 0.36', '0.22 – 0.36 kept', 'top end NOT bracketed'],
+  ['17', 'padding', '0.22 – 0.52', 'above 0.28 – 0.52 kept', 'top end NOT bracketed AGAIN'],
  ],
- lede: '<b>You kept 0.22 through 0.36, and 0.36 was the largest value I offered.</b> That is exactly the '+
-  'shape §7 rule 5 forbids — <i>never let the answer define the range</i> — because a kept end may be the '+
-  'optimum or may simply be as far as I let you look. The only way to tell them apart is to go past it.'+
-  '<br><br><b>So the low end is already bracketed and the high end is not.</b> 0.16 failed last round, so '+
-  '0.22 is bounded below by a real rejection. Above, this round runs to <b>0.52</b> — more than double the '+
-  'inherited value — and one of these is meant to look wrong. If none of them does, the range opens again.'+
-  '<br><br><b>0.28 is offered again on purpose.</b> It is one of the two you kept in the lost pass, and it '+
-  'now sits in the middle of a range rather than at the edge of one, which is a different question.'
+ lede: '<b>Twice now the band you kept has moved with the range I offered, and both times my largest '+
+  'value survived.</b> Round 16 offered 0.10–0.36 and you kept 0.22 up. Round 17 offered 0.22–0.52 and '+
+  'you kept above 0.28 up — <i>the same 0.22 that had been good one round earlier was now out.</i> That '+
+  'is not a contradiction on your part; it is what §7 rule 5 predicts when a range anchors the eye. The '+
+  'value did not change, the company it kept did.'+
+  '<br><br><b>So this round is deliberately too wide to anchor.</b> The top is <b>1.25</b> — padding wider '+
+  'than the kanji is tall, 60px of air on each side of a 48px character. If that still reads as fine, the '+
+  'honest conclusion is that padding is not a variable this lockup is sensitive to, and I will say so and '+
+  'stop asking.'+
+  '<br><br><b>And there is a third row this time, which asks the real question.</b> Padding is air, and the '+
+  'sidebar already supplies air — a 236px panel with 12px of its own padding. Judged alone on white, more '+
+  'air always looks calmer; judged in the column it has to live in, it may just be a bigger hole. The '+
+  'context row draws four of these values in the actual 212px the shell gives, at the kanji-48 size, so '+
+  'the choice is made where it lands rather than on a sheet.'
 }
 
 const o=document.getElementById('out')
@@ -168,6 +182,26 @@ const groups = ROUND.sizes.map(function(sz){
   const note=ROUND.notes[v]
   return {text:v.toFixed(2)+(note?' — '+note:''), was:!!note}})})
 
+/* Padding read on white always flatters the larger value, because more air is calmer with nothing
+   to be calm against. The sidebar is where it has to hold: a 236px panel that already carries 12px
+   of its own padding, with nav beneath it. Same builder, same assertions -- this is not a second
+   variable, it is the one variable in the place it lands. */
+const context = (function(){
+ if(!ROUND.context) return []
+ o.appendChild(el('h2',null,'in the column the shell actually gives — 212px of usable width'))
+ const s2=el('div','strip'); const made=[]
+ ROUND.context.forEach(function(v){
+  const c=el('div','cell')
+  const panel=el('div'); panel.className='panel'
+  const lk=mk(48, v); panel.appendChild(lk)
+  const nav=el('div','nav','<b>Home</b><span>Capture</span><span>Runs</span><span>Review</span>')
+  panel.appendChild(nav)
+  c.appendChild(panel)
+  const cap=el('div','cap'); cap.textContent=v.toFixed(2); c.appendChild(cap)
+  const num=el('div','num'); c.appendChild(num)
+  s2.appendChild(c); made.push({lk:lk, v:v, num:num, size:48})})
+ o.appendChild(s2); return made})()
+
 /* §7: "re-present an earlier lens to check the answer is stable". The rebuild dropped this strip
    and it is a rule rather than a flourish, so it is back — and driven by ROUND.rejected, so its
    labels cannot drift from the round the way the hand-written ones twice did. */
@@ -179,7 +213,7 @@ const rejected = (function(){
   return {text:v+ROUND.unit+' — '+ROUND.rejected[v], was:true}})})()
 
 document.fonts.ready.then(function(){
- const all = groups.concat(rejected.length?[rejected]:[])
+ const all = groups.concat(context.length?[context]:[]).concat(rejected.length?[rejected]:[])
  all.forEach(function(g){ g.forEach(function(r){
   frame(r.lk, optsFor(r.v))
   const pad = r.size*(SWEPT==='pad' ? r.v : ROUND.holds.pad)
