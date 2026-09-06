@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import type { GameRegistry } from '../src/types'
 import { settleFonts } from './fontsReady'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
@@ -429,7 +430,19 @@ const JOINED: Cards = Object.fromEntries(
 
 const PRICED_STORE: Store = { cards: JOINED, search: (query) => searchAnswer(query, JOINED) }
 
-const GAMES = {
+/* THE ANNOTATION IS A GUARD, AND IT IS THE ONLY PART OF THIS THAT RUNS ON THE COMMIT PATH.
+ *
+ * The omission the block above the `products` key describes could happen at all because this
+ * fixture was an object literal handed to `route.fulfill` through `JSON.stringify` — nothing
+ * had ever compared it to the type it imitates. Naming that type here is what closes it:
+ * `app/tsconfig.json` includes `tests`, so `make check`'s typecheck reads this file, and the
+ * next field added to `GameRegistry` is a FAILED COMMIT rather than a crash in a browser
+ * only `make design-check` starts. Mutation: delete `products` below and `tsc --noEmit`
+ * reports `Property 'products' is missing in type ... but required in type 'GameRegistry'`.
+ *
+ * `capture-undo.spec.ts` and `capture-claims.spec.ts` carry the same annotation for the same
+ * reason. Twelve of the eighteen spec files still do not; docs/DEBTS.md §3 says so. */
+const GAMES: GameRegistry = {
   default: 'pokemon',
   games: [
     {
@@ -636,12 +649,22 @@ const SALE: SaleStub = (box, index, undo) => ({
   },
 })
 
+/** The three things one case below needs that every other case must not notice.
+ *
+ *  `route` is the hash to open, for the deep link — `#/inventory?box=<n>`, the form `#/codes`
+ *  and the home screen link here by. `boxesDelayMs` holds `GET /boxes` back so the cards land
+ *  first, which is the ORDERING THE DEFECT LIVES IN and is otherwise a race a test cannot pin.
+ *  `settle` replaces the section-fold wait, because a box with no cards has no folds and
+ *  waiting for one there would fail on the arrangement rather than on the claim. */
+type OpenOptions = { route?: string; boxesDelayMs?: number; settle?: string }
+
 async function open(
   page: Page,
   boxes: unknown = BOXES,
   store: Store = STORE,
   priced: Priced = () => PRICING,
   sale: SaleStub = SALE,
+  options: OpenOptions = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
 
@@ -872,6 +895,7 @@ async function open(
      this one would be relying on that rule to be read correctly by everyone who edits the
      file afterwards. */
   await page.route(/\/boxes$/, async (route) => {
+    if (options.boxesDelayMs) await new Promise((resolve) => setTimeout(resolve, options.boxesDelayMs))
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(boxes) })
   })
 
@@ -962,14 +986,14 @@ async function open(
     })
   })
 
-  await page.goto(VIEW_ROUTE)
+  await page.goto(options.route ?? VIEW_ROUTE)
   await settleFonts(page)
   await expect(page.locator(VIEW)).toBeVisible()
   /* THE SECTION HEADERS AND NOT A CARD ROW, because the walk arrives fully collapsed since
      2026-08-23 and there are no card rows until something asks for them. A header is the
      stronger wait anyway: it proves the inventory read landed AND that the walk grouped it,
      where a row only proves the first. */
-  await expect(page.locator('.browse-sectfold').first()).toBeVisible()
+  await expect(page.locator(options.settle ?? '.browse-sectfold').first()).toBeVisible()
 
   /* TWO INVARIANTS OVER THE SHELL, ASSERTED ONCE HERE FOR EVERY CASE IN THE FILE, because
      both of the failures they name were invisible at the point they were caused and loud
@@ -4326,4 +4350,78 @@ test('the slot column holds a four-digit card number, and the gap beside it surv
   /* AND NOTHING WRAPPED. The widened column takes 12.9px out of the path's track; this carries
      `a narrow copies column shortens the bar, never the position label` into the widened case. */
   for (const row of rows) expect(row.height).toBeLessThanOrEqual(36)
+})
+
+/* ------------------------------------------------------------ the hash's box, on a slow read
+ *
+ * `#/inventory?box=<n>` IS HONOURED FOR A BOX WITH NO CARDS IN IT, AND UNTIL 2026-09-05 IT WAS
+ * NOT. `BoxBrowse`'s shelf list is built from the ROWS first and the box registry second, and
+ * the two arrive on separate reads. A box with no located rows is therefore absent from the
+ * first shelf list the effect sees — and that effect consumed and cleared the ref holding the
+ * hash's box right there, so when the registry landed a tick later there was nothing left to
+ * honour and the walk stayed on the first shelf.
+ *
+ * WHY THAT IS NOT AN EDGE CASE. Every box of code cards has no located rows, because D24 pools
+ * them, so `#/codes`'s "Fix on Inventory" — which aims at the box holding the unclaimed codes
+ * and is one of D101's two doors onto the `product` claim — could never arrive at the box it
+ * named. It landed on box 1, whose claim editor draws no Product row at all because box 1 is
+ * Pokemon, so the door led to a room with nothing in it.
+ *
+ * THE DELAY IS THE TEST AND NOT A SLEEP AROUND IT. Both reads are in flight at once in a
+ * browser, so their order is a race and a test that did not force one would pass or fail on
+ * timing. Holding `/boxes` back reproduces the ordering the defect needs, every time.
+ *
+ * OBSERVED RED BEFORE IT WAS KEPT. Mutation: restore the old body — clear `wanted.current`
+ * unconditionally and put the `prev` branch back ahead of the asked-for one. This case then
+ * reports box 2, the first shelf, in place of 6.
+ */
+test('a box with no cards is still the box the hash asked for', async ({ page }) => {
+  /* Box 6 is in the registry and in no row of the store: `fill: 0`, which is what an empty box
+     and a box of pooled code cards look like identically from this screen. */
+  const withEmpty = {
+    boxes: [
+      ...BOXES.boxes,
+      {
+        box: 6,
+        name: 'ETB codes',
+        sections: [],
+        state: 'open',
+        capacity: null,
+        fill: 0,
+        next_index: 1,
+        cards: 0,
+        on_hand: 0,
+        sold: 0,
+        retired: 0,
+        moved: 0,
+        listed: 0,
+        sections_detail: [],
+      },
+    ],
+  }
+
+  await open(page, withEmpty, STORE, () => PRICING, SALE, {
+    route: '/#/inventory?box=6',
+    boxesDelayMs: 300,
+    /* The box strip, not a section fold: box 6 has no sections and never will draw one. */
+    settle: '.browse-boxcell',
+  })
+
+  await expect(page.locator('.browse-boxcell[aria-current="true"] .browse-boxcell-num')).toHaveText('6')
+})
+
+/* AND THE THREE PATHS THAT MUST NOT HAVE MOVED, in one case rather than three files of setup.
+ * The fix widens the window in which the hash outranks the shelf already picked, so what has to
+ * stay true is that the window CLOSES: a box that does not exist must not hold the request open
+ * and must not yank the walk later. */
+test('a hash naming no box falls back, and does not hold the walk open', async ({ page }) => {
+  await open(page, BOXES, STORE, () => PRICING, SALE, {
+    route: '/#/inventory?box=99',
+    boxesDelayMs: 300,
+    settle: '.browse-boxcell',
+  })
+
+  /* The only shelf there is. The point is not that it chose 2 — there was nothing else to
+     choose — but that it chose at all rather than waiting for a box 99 that is never coming. */
+  await expect(page.locator('.browse-boxcell[aria-current="true"] .browse-boxcell-num')).toHaveText('2')
 })

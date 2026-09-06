@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import type { GameRegistry } from '../src/types'
 
 /* THE UNDO STACK ON THE CAPTURE SCREEN — the owner's ask of 2026-08-29: "a list of 10 rather
  * than the one I can see right now", with `U` still undoing the most recent.
@@ -24,8 +25,19 @@ import type { Page } from '@playwright/test'
  * what `canCapture` gates the shutter on.
  */
 
-const GAMES = {
+/* TYPED AGAINST THE WIRE, so a field added to `GameRegistry` is a failed commit here rather
+ * than a crash in a browser nothing on the commit path runs. `app/tests/inventory.spec.ts`
+ * carries the whole account: D101's `products` was added to that type and to the screens and
+ * omitted from every one of these fixtures, and four of its cases died on it silently.
+ * `tsconfig.json` includes `tests`, so this annotation is checked by `make check`. */
+const GAMES: GameRegistry = {
   default: 'pokemon',
+  /* C10's vocabulary, as `GET /games` really answers it — see the annotation note above. */
+  products: [
+    { key: 'booster', display: 'Booster pack', premium: false, redeem_limit: 400 },
+    { key: 'pc_etb', display: 'Pokémon Center ETB', premium: true, redeem_limit: 4 },
+  ],
+  product_game: 'pokemon_code',
   games: [
     {
       key: 'pokemon',

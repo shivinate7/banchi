@@ -986,8 +986,17 @@ export function ClaimEditor({
         if (!live) return
         setEntries(registry.games)
         setFallback(registry.default)
-        setProductList(registry.products)
-        setProductGame(registry.product_game)
+        /* `?? []` AND `?? null` BECAUSE THE COMMENT ABOVE ALREADY PROMISES THIS, and until
+           2026-09-05 the code did not keep the promise: a registry that answered no products
+           overwrote the `[]` this state starts as with `undefined`, and the next read of
+           `productList.length` threw inside the editor's render. The subtree came out of the
+           DOM with no message anywhere — which is what four cases in
+           `app/tests/inventory.spec.ts` were dying on, and they said only that an element had
+           been detached. `GET /games` on a current server always sends both, so the shapes
+           this defends against are an older server and a test's stub; the first is real and
+           the second is how it was found. */
+        setProductList(registry.products ?? [])
+        setProductGame(registry.product_game ?? null)
       })
       .catch(() => {
         if (!live) return

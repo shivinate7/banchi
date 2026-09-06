@@ -950,7 +950,12 @@ export function Gallery() {
                 label="owner · a bar on every row that has one"
                 note="Three rows deliberately carry no bar, each for its own reason: the pooled copy has no coordinate to draw, the departed one is in no slot at all, and the copy the walk is standing on already has its lens drawn full size above the list."
               >
-                <CardLocations group={GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} currentKey="7/12" />
+                {/* `.kit-copies` is a `copies` query container. Without it every
+                    `@container copies` rule in CardLocations.css is dead here and this
+                    specimen draws a layout no screen produces — see Gallery.css. */}
+                <div className="kit-copies">
+                  <CardLocations group={GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} currentKey="7/12" />
+                </div>
               </Spec>
               <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="Photographs resolve against the capture server; without one each copy draws its missing-photo sentence, which is a real state.">
                 <CardLocations group={GROUP} persona="fulfiller" onSell={noop} busyKey={null} soldKeys={new Set()} />
