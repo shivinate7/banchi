@@ -1721,10 +1721,16 @@ COMPONENTS = [
                 # drift the app/ entry below carries a paragraph about. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another. D39 added
-                # the `runs` line on 2026-08-29 — the pipeline's own route, and the one owner
-                # render that draws no stored capture photo, so the `views exposure` question
-                # the others raise does not arise for it.
-                "governed_by": ["D5", "D13", "D31", "D39", "D49", "D63", "D69"],
+                # the `runs` line on 2026-08-29 — the pipeline's own route. This comment said
+                # that line was "the one owner render that draws no stored capture photo, so
+                # the `views exposure` question the others raise does not arise for it", and
+                # both halves were wrong: RunsComposer.tsx:692 draws one, `views exposure`
+                # names the line on every run, and the manifest's own paragraph was corrected
+                # on 2026-09-05 to describe the RENDER STATE and the three gates that hold it
+                # rather than the screen. D86 is the same drift on the `pricing` line — the
+                # corpus made that screen's default the full cross-run worklist, and the
+                # paragraph beside it still described a run picker that draws nothing.
+                "governed_by": ["D5", "D13", "D31", "D39", "D49", "D63", "D69", "D86"],
             },
         },
     },
