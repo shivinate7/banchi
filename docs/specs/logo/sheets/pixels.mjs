@@ -31,15 +31,25 @@ await p.setViewportSize({ width: 1400, height: Math.min(pageH + 40, 12000) })
    five magnified specimens is six thousand pixels wide, and every client that receives it scales
    it back down to fit -- which undoes the magnification exactly, and leaves an image that looks
    like evidence and is not. Stacked, each specimen keeps its real pixels at full zoom. */
+/* THE LABEL IS THE SWEPT KEY, read from the sheet. It was hardcoded to `romanSize`, so the first
+   round to magnify anything else stacked five correct drawings under five identical wrong labels.
+   That is the fifth caption in this work to name something other than the picture beside it, and
+   every one of them had the same cause: a name typed where a lookup belonged. */
 const boxes = await p.evaluate((i) => {
+  const key = (typeof ROUND !== 'undefined' && ROUND.sweeping) || null
   const s = document.querySelectorAll('.strip')[i]
   return [...s.querySelectorAll('.lk')].map(lk => {
     const r = lk.querySelector('.r').getBoundingClientRect()
-    return { label: (+lk.dataset.romanSize).toString(),
+    const used = JSON.parse(lk.dataset.used || '{}')
+    const v = key && key in used ? used[key] : (key ? lk.dataset[key] : undefined)
+    return { label: v === undefined ? '?' : String(v),
              x: Math.floor(r.left) - 2, y: Math.floor(r.top + scrollY) - 2,
              w: Math.ceil(r.width) + 4, h: Math.ceil(r.height) + 4 }
   })
 }, idx)
+if (boxes.some(b => b.label === '?'))
+  throw new Error('pixels.mjs: could not read the swept value off the sheet — refusing to label ' +
+                  'specimens with a guess')
 
 const shots = []
 for (const bx of boxes) {
