@@ -4,11 +4,13 @@ import type { SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
-import { PositionBar, type Persona } from './PositionBar'
+import { PositionBar } from './PositionBar'
+import type { Persona } from './position'
 import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
 import { Button, Icon, Pill } from './kit'
 import './CardLocations.css'
+import { readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -37,39 +39,6 @@ import './CardLocations.css'
  * delete the join.
  */
 
-const MINUTE = 60_000
-const HOUR = 3_600_000
-const DAY = 86_400_000
-
-/** `3 days`, `4 hours`, `just now` — coarse on purpose; the exact moment is in the title. */
-export function readingAgo(at: string | null | undefined): string | null {
-  if (typeof at !== 'string' || at.trim() === '') return null
-  const when = Date.parse(at)
-  if (Number.isNaN(when)) return null
-  const elapsed = Math.max(0, Date.now() - when)
-  if (elapsed < 2 * MINUTE) return 'just now'
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} minutes ago`
-  if (elapsed < DAY) {
-    const hours = Math.floor(elapsed / HOUR)
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  }
-  const days = Math.floor(elapsed / DAY)
-  return `${days} day${days === 1 ? '' : 's'} ago`
-}
-
-/** The moment itself, as a person's clock says it — the hover behind the coarse phrase. */
-export function readingExact(at: string | null | undefined): string | undefined {
-  if (typeof at !== 'string') return undefined
-  const when = new Date(at)
-  if (Number.isNaN(when.getTime())) return undefined
-  return when.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
 /** `read 3 days ago`, drawn beside a live count and never louder than it. */
 export function ReadingAge({ at, className }: { readonly at?: string | null; readonly className?: string }) {
   const ago = readingAgo(at)
@@ -90,12 +59,6 @@ export function ReadingAge({ at, className }: { readonly at?: string | null; rea
 /** An open order that has named one copy, keyed by the copy's store key. Structural, so the
  *  screen's own richer `Wanted` fits without a second import of it. */
 export type CopyClaim = { readonly order: string }
-
-/** A copy the pipeline considers gone. */
-const SOLD = 'sold'
-
-/** The other door out (D26). On the Fulfiller's skin both read as the same fact. */
-const RETIRED = 'retired'
 
 /** What the Fulfiller is told about a copy — two sentences, never the raw state word. */
 function saidState(state: string): string {
@@ -207,31 +170,6 @@ function isSold(copy: SearchCopy, soldKeys: ReadonlySet<string>): boolean {
    reading as located. */
 function isPooled(copy: SearchCopy): boolean {
   return copy.place.located === false
-}
-
-/** The tone of a state pill. Shared with `BoxBrowse` so the two draw one register. */
-export function stateTone(state: string): 'default' | 'ok' | 'warn' | 'accent' {
-  if (state === SOLD) return 'ok'
-  if (state === RETIRED || state === 'moved') return 'warn'
-  if (state === 'captured') return 'accent'
-  return 'default'
-}
-
-/** A card state as a word — the one map every state pill on the owner's screens draws
- *  through, so a raw wire value is never printed as a label. An unknown state is still
- *  shown, capitalised, rather than dropped. */
-const STATE_WORDS: Readonly<Record<string, string>> = {
-  captured: 'Captured',
-  identified: 'Identified',
-  sold: 'Sold',
-  retired: 'Retired',
-  moved: 'Moved',
-}
-export function stateLabel(state: string): string {
-  const known = STATE_WORDS[state]
-  if (known !== undefined) return known
-  const raw = String(state).replace(/_/g, ' ')
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
 
 // ------------------------------------------------------------------------- the owner's skin

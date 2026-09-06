@@ -29,8 +29,9 @@ import {
   releaseBoxListings,
   updateBox,
 } from './server'
-import { spansOf } from './PositionBar'
-import { ReadingAge, readingAgo } from './CardLocations'
+import { spansOf } from './position'
+import { ReadingAge } from './CardLocations'
+import { readingAgo } from './cardState'
 import { Button, Icon, Notice, Pill, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'

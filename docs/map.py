@@ -3177,8 +3177,31 @@ COMPONENTS = [
                                             "in' for a sealed box and '#12 of 62 so far' for an open "
                                             "one, because an open box's denominator still moves.",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68"]},
+            "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
+                                        "`sentenceOf`, `sectionDepthOf`, their types and the shared "
+                                        "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
+                                        "component can HOT-RELOAD: React Refresh only updates a module "
+                                        "in place when every export it has is a component, and one "
+                                        "exported function beside one meant every edit to that file "
+                                        "reloaded the whole page — Vite named it on each save. Kept "
+                                        "together as one module rather than un-exporting the two with "
+                                        "no outside caller, because where a card sits said three ways "
+                                        "is one concept. Nothing here decides where a divider is; every "
+                                        "bound is a card COUNT and not a stored index (D58).",
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68"]},
             "src/PositionBar.css": {"does": "the track at two densities, and the marker",
                                     "governed_by": ["D5", "D20"]},
+            "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
+                                         "component in it — `readingAgo`, `readingExact`, `stateTone`, "
+                                         "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
+                                         "written in (D26's two doors out). Split out of "
+                                         "CardLocations.tsx 2026-09-06 for src/position.ts's reason: "
+                                         "four plain functions exported beside two components meant "
+                                         "React Refresh reloaded the whole page on every edit to that "
+                                         "file. `stateLabel` is the one map every state pill on the "
+                                         "owner's screens draws through, so a raw wire value is never "
+                                         "printed as a label.",
+                                 "governed_by": ["D5", "D26", "D31", "D83", "D92"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
