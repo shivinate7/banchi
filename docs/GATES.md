@@ -339,6 +339,14 @@ at a temporary directory, so nothing here touches the real inventory.
   corpus digest refuses before a byte is built. The two are kept apart because the first must
   keep running over byte-identical inputs — that is what makes the money path provably
   untouched by the second.
+- **`check_supervisor_recovery` is the first case here that reaches `scripts/`**, which is a
+  fourth tree for a test whose own docstring names three. It is there because the supervisor
+  is the one process in this project that runs unattended for days — `make launch-agent`
+  starts it at login — so its failure mode is nobody watching. Both halves it asserts were
+  found on the owner's rig rather than reasoned about: `FAST_FAILURE_SECONDS` was declared
+  and read by nothing, so a limit meant for a crash loop was being spent by exits nineteen
+  minutes apart, and the crash-recovery respawn logged nothing about whether it worked. It
+  asserts the RULE rather than the scenario, because the scenario takes nineteen minutes.
 - **What it checks that T1–T6 cannot.** They check rules and this checks wiring. A wrong
   rule gives a wrong answer you can see; a wrong position gives a card that is exactly where
   the inventory says it is not, found weeks later by a person opening the wrong slot.

@@ -1503,7 +1503,20 @@ COMPONENTS = [
                         "may import store.files and server.ports and may never import "
                         "capture_server, whose ORIGINS_ENV it lifts with `ast` instead. "
                         "`report()` is read-only and is what `make status` asks. "
-                        "`make server` and `make dev` are untouched and still work.",
+                        "`make server` and `make dev` are untouched and still work. "
+                        "A FAST FAILURE IS ONE INSIDE `FAST_FAILURE_SECONDS`, and that "
+                        "constant was declared here from the day the file was written and "
+                        "read by NOTHING until 2026-09-06 — so `_note_exit` counted every "
+                        "exit alike, and a supervisor `make launch-agent` keeps alive for "
+                        "days accumulated unrelated deaths toward a limit meant for a crash "
+                        "loop. Found on the owner\'s rig: two clean exits nineteen minutes "
+                        "apart had spent 2 of the 5, and only editing a watched Python file "
+                        "gives them back. The crash-recovery respawn also confirms itself "
+                        "now — it used to end at `spawn_capture` with no probe and no line, "
+                        "so the log\'s last word on a recovery was `restarting in Ns` and a "
+                        "healthy rig read exactly like a wedged one. Both paths go through "
+                        "one `_await_capture`, which takes the CHILD and not just the port "
+                        "(D53\'s own correction). T7 `check_supervisor_recovery`.",
                 # D53 is the entry that argues all of it. D43 because every port and the
                 # agent label come from server/ports.py rather than a constant — a second
                 # spelling here is the cross-tree failure that entry exists to close, and the
@@ -1512,7 +1525,8 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85"],
+                "tested_by": ["T7"],
                 "status": "built",
             },
             "score-trace.py": {
