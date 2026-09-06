@@ -175,6 +175,7 @@ import io
 import json
 import hashlib
 import http.server
+import inspect
 import os
 import shutil
 import sys
@@ -227,6 +228,14 @@ from store import db, files, master, queues  # noqa: E402
 # rather than shadowing the name half this file's order cases are written against.
 from store import orders as order_store  # noqa: E402
 from store.session import Store  # noqa: E402
+from scripts import serve  # noqa: E402
+
+# `scripts/` HAS NO `__init__.py` AND DOES NOT NEED ONE — it imports as a namespace package,
+# which is a real `scripts` import rather than a file loaded by path. That distinction is the
+# whole point: `tested_by reach` reads this file's imports to decide whether a `tested_by`
+# claim in docs/map.py is true, and an `importlib.spec_from_file_location` is invisible to it.
+# A claim a checker cannot see is the kind this repo does not keep.
+_SERVE_ROOT = Path(__file__).resolve().parents[2]
 
 NAME = "T7"
 DESCRIPTION = "Inventory store, capture server, and the command seams"
@@ -19932,6 +19941,82 @@ def check_pricing_reach(checks: Checks) -> None:
     )
 
 
+def check_supervisor_recovery(checks: Checks) -> None:
+    """`scripts/serve.py` counts a FAST failure, and confirms a recovery it did not choose.
+
+    Its own block for `check_drain`'s reason: it asserts nothing about a route. It is about
+    the supervisor `make launch-agent` keeps alive across days, and both halves were found on
+    the owner's own rig on 2026-09-06 rather than reasoned about.
+
+    THE COUNTER'S NAME WAS THE SPECIFICATION AND NOTHING IMPLEMENTED IT. `FAST_FAILURE_SECONDS`
+    was declared in that file from the day it was written and read by nothing anywhere in
+    `scripts/`, so `_note_exit` counted every exit alike. A supervisor started at login and
+    alive for days therefore accumulates unrelated deaths: two clean exits nineteen minutes
+    apart had already spent 2 of the 5, and only editing a watched Python file gives them
+    back. At 5 it stops respawning a server that is fine, logging that it "failed to stay up".
+
+    This asserts the RULE and not a scenario, because the scenario takes nineteen minutes.
+    """
+    checks.note("")
+    checks.note("SUPERVISOR RECOVERY — scripts/serve.py")
+
+    sup = serve.Supervisor(root=_SERVE_ROOT, watch=False)
+
+    # A child that never got going is what the limit is for.
+    sup.capture_started = time.time() - 0.5
+    sup._note_exit()
+    checks.equal(sup.fast_failures, 1, "a death inside the window counts")
+    sup.capture_started = time.time() - 0.5
+    sup._note_exit()
+    checks.equal(sup.fast_failures, 2, "and they accumulate while they stay fast")
+
+    # A child that served, then died, is not in a crash loop — and this is the assertion the
+    # missing reader cost: before it, this said 3.
+    sup.capture_started = time.time() - (serve.FAST_FAILURE_SECONDS + 1)
+    sup._note_exit()
+    checks.equal(
+        sup.fast_failures, 1,
+        "a death AFTER the window resets the count — the owner's rig spent 2 of 5 on two "
+        "healthy days' exits",
+    )
+    checks.ok(not sup.giving_up, "and the supervisor is still respawning")
+
+    # The limit still fires on a real loop, which is the behaviour being preserved.
+    loop = serve.Supervisor(root=_SERVE_ROOT, watch=False)
+    for _ in range(serve.FAST_FAILURE_LIMIT):
+        loop.capture_started = time.time() - 0.1
+        loop._note_exit()
+    checks.ok(
+        loop.giving_up,
+        f"{serve.FAST_FAILURE_LIMIT} deaths inside the window still stops the respawn",
+    )
+
+    # DERIVED, NOT A LITERAL, in `check_drain`'s idiom: the window has to be shorter than the
+    # shortest backoff, or a child could never be observed living longer than one.
+    checks.ok(
+        serve.RESTART_BACKOFF[0] < serve.FAST_FAILURE_SECONDS,
+        "the window outlasts the shortest backoff, so a respawn is not counted as its own "
+        "fast failure",
+    )
+
+    # The recovery path confirms itself. It used to end at `spawn_capture` with no probe and
+    # no line, so the log's last word on a recovery was "restarting in 4s" and a healthy rig
+    # read exactly like a wedged one.
+    checks.ok(
+        hasattr(sup, "_await_capture"),
+        "the crash-recovery respawn has a probe-and-log step",
+    )
+    source = inspect.getsource(serve.Supervisor._reap)
+    checks.ok(
+        "_await_capture" in source,
+        "and `_reap` calls it, so a recovery says whether it worked",
+    )
+    checks.ok(
+        "_await_capture" in inspect.getsource(serve.Supervisor._restart_for),
+        "and the watcher path goes through the same one, so the two cannot drift",
+    )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -19958,6 +20043,7 @@ def run() -> Result:
     check_photo_reclaim(checks)
     check_server_routes(checks)
     check_drain(checks)
+    check_supervisor_recovery(checks)
     check_undo(checks)
     check_remove_and_box_delete(checks)
     check_queues(checks)
