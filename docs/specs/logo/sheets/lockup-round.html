@@ -42,36 +42,32 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 11,
- title: 'the tail — how far up the arm the taper runs',
+ n: 12,
+ title: 'the tail, out to the geometric ceiling',
  sweeping: 'tl',
  unit: ' of the arm',
- values: [0.15, 0.30, 0.45, 0.60, 0.75],
- notes: {0.45:'what the tails were drawn at'},
- rejected: {},
+ values: [0.38, 0.49, 0.60, 0.70, 0.80],
+ notes: {0.80:'the largest that still draws something new'},
+ rejected: {0.15:'a nick at the tip — eliminated', 0.30:'eliminated'},
  holds: {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tip:0.07, tails:true},
  sizes: [96, 40, 22],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050', 'settled; rule 5 fired twice'],
-  ['6', 'radius', '1.0 – 7.0 ×', '1.85 – 5.5 ×', 'both ends failed — 1.0 “far too square”'],
-  ['7', 'radius', '1.85 – 5.5 ×', '2.6 – 5.5 ×', 'the recovered rule eliminated'],
-  ['8', 'radius', '2.6 – 6.2 ×', '3.3 – 5.5 ×', 'both ends failed; ceiling tight'],
-  ['9', 'radius', '3.3 – 5.5 ×', '3.85 – under 5.5 ×', '5.5 out, after surviving three rounds'],
-  ['10', 'radius', '3.85 – 4.95 ×', '4.0 × — settled', 'all five alike; JND measured at under 1.4% per pixel'],
+  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND, measured at under 1.4% per pixel'],
+  ['11', 'tail ramp', '0.15 – 0.75', 'above 0.30 – 0.75', 'reached my ceiling'],
  ],
- lede: '<b>The radius is settled at 4.0 × the stroke — 0.20 of the kanji size — and is held from here.</b> '+
-  'You called round 10 alike and that was checked rather than taken: rendered at true size and '+
-  'differenced pixel for pixel, adjacent specimens at kanji 40 differ by a mean of 0.7–3.5 out of 255, '+
-  'confined to a few dozen pixels at each corner. 4.0 was picked because the radius sat pinned at 4.07 '+
-  'while five rounds of stroke were judged, so it is the only choice that leaves those rounds valid '+
-  'without an asterisk — and it is 0.34px from the pin at kanji 96.'+
-  '<br><br><b>This round is the tail itself:</b> how far back up the arm the taper ramps, as a fraction '+
-  'of the arm. 0.15 should be a nick at the very tip; 0.75 should have the whole arm tapering and read '+
-  'as a crescent rather than a wire.'+
-  '<br><br><b>§6 records a clamp living exactly here.</b> The routine limits the ramp to half the path '+
-  'length, and above that every value renders identically <i>“while being presented as a sweep — three '+
-  'images approved as different were the same image.”</i> The sheet computes the clamp, and if any value '+
-  'in this row hits it the banner at the top goes red rather than the row quietly repeating itself.'
+ lede: '<b>0.75 landed on my top edge — rule 5 for the fourth time in this sweep — but this is the one '+
+  'round where the edge turns out to be real.</b> §6 records that the taper routine clamps the ramp at '+
+  'half the path length, and that above the clamp <i>“every value rendered identically while being '+
+  'presented as a sweep.”</i> That entry never says where the clamp is. <b>Measured on this geometry: '+
+  'it binds at 0.82.</b> 0.80 is the largest fraction that still draws something new; from 0.82 up, every '+
+  'value is the same bracket at ramp 63.0px.'+
+  '<br><br><b>So this round spans the entire remaining possibility.</b> There is no opening upward to be '+
+  'done, because there is nothing above — and 0.82 is not a value I chose, it is where the arm runs out '+
+  'of room. At that setting the taper runs from the tip to the midpoint of both arms and the bracket has '+
+  'no constant-width section left at all.'+
+  '<br><br><b>What to look for:</b> where the bracket stops reading as a wire with tapered ends and '+
+  'starts reading as a crescent — a shape whose width is its subject rather than its finish.'
 }
 
 const o=document.getElementById('out')
@@ -123,8 +119,13 @@ function check(groups){
    if(new Set(got).size !== 1) problems.push('kanji '+size+': `'+k+'` was declared held but took '+new Set(got).size+' values: '+got.join(', '))
    else if(got[0] !== ROUND.holds[k]) problems.push('kanji '+size+': `'+k+'` declared '+ROUND.holds[k]+' but drawn at '+got[0])})
   /* 4 — nothing clamped without saying so */
-  g.forEach(function(r){ if((r.lk.dataset.rr||'').indexOf('CLAMPED')>=0)
-   problems.push('kanji '+size+': '+r.v+' hit the radius cap — '+r.lk.dataset.rr)})
+  /* BOTH clamps. This checked only the radius until round 12, which sweeps the ramp -- so the
+     assertion could not see the very bound the round was walking toward. A guard that watches one
+     of two bounds is the taper clamp all over again, one level up. */
+  g.forEach(function(r){
+   ;[['radius','rr'],['ramp','ramp']].forEach(function(pair){
+    const v=r.lk.dataset[pair[1]]||''
+    if(v.indexOf('CLAMPED')>=0) problems.push('kanji '+size+': '+r.v+' hit the '+pair[0]+' cap — '+v)})})
   proved.push('kanji '+size)})
  const box=el('div','checks '+(problems.length?'fail':'pass'))
  box.innerHTML = problems.length
