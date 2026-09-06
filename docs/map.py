@@ -1204,6 +1204,28 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 "governed_by": ["D18", "D42"],
             },
+            "lan-check.py": {
+                "does": "answers whether the owner's LAN URL still works, end to end and from "
+                        "this machine: the name resolves and to an address this Mac actually "
+                        "holds, Vite accepts the Host, the capture server answers on the same "
+                        "name, and A REAL WRITE IS ACCEPTED FROM THAT ORIGIN. The last row is "
+                        "the reason the script exists — reads are ungated and writes are "
+                        "origin-checked (D43), so a `PKMNSCAN_LAN_NAME` missing from `.env` "
+                        "leaves every screen rendering and the whole inventory drawing while "
+                        "capture, undo, mark-sold and the claim editor all answer 403. Looking "
+                        "at the app cannot tell you; only pressing a write can. It presses one "
+                        "that is refused by the body reader rather than the store: the origin "
+                        "gate runs in `_dispatch` ahead of every handler, so `POST /capture` "
+                        "with no body separates `origin_not_allowed` from `body_required` "
+                        "without opening the store. A sixth row sends a foreign origin as the "
+                        "control, because if an unknown origin can write too then the fifth "
+                        "row proved nothing.",
+                # NOT in `make check`, and D18 is not why — nothing here writes. `check` is
+                # hermetic: it answers from the tree alone. A row that resolves DNS and needs a
+                # server up would go red on a train and in every worktree, and a check that
+                # fails for reasons unrelated to the commit is one people learn to ignore.
+                "governed_by": ["D43", "D47", "D53"],
+            },
             "icloud-sweep.py": {
                 "does": "lists iCloud Drive conflict copies (`foo 2.py`) and, with --delete, "
                         "removes ONLY those byte-identical to their original. A differing copy "

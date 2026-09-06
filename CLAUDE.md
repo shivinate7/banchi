@@ -158,6 +158,19 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
+make lan-check      # IS THE OWNER'S LAN URL STILL GOOD? `http://pkmnscan.lan:5173`, from
+                    #   the phone. Two of the six things holding it up are on their UniFi and
+                    #   this repo does not touch them (D43); the other four are here.
+                    #   IT PRESSES A WRITE, because that is the only row that can tell:
+                    #   reads are ungated and writes are origin-checked, so a
+                    #   `PKMNSCAN_LAN_NAME` missing from `.env` leaves every screen rendering
+                    #   and the whole inventory drawing while capture, undo, mark-sold and the
+                    #   claim editor all answer 403. Looking at the app proves nothing.
+                    #   Writes NOTHING to press it: the origin gate runs ahead of the body
+                    #   reader, so a bodiless POST separates the two refusals without opening
+                    #   the store. Reaches the network, so it is deliberately NOT in
+                    #   `make check`, which answers from the tree alone — and D18 is not why,
+                    #   since nothing here writes.
 make merge-selftest # the merge wrapper's local half, against a throwaway origin, clone and
                     #   worktree. Its FOOTGUN case is the one that matters: main checked out
                     #   nowhere while another tree sits on a branch BEHIND its upstream, where
