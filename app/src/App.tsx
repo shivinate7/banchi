@@ -3,7 +3,9 @@ import type { ComponentType, ErrorInfo, KeyboardEvent as ReactKeyboardEvent, Rea
 import { isEditableTarget } from './keys'
 import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot } from './server'
-import { Button, Icon, Kbd, Logo, applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
+import { Button, Icon, Kbd, Lockup,
+  Logo, applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
+import { BLOCK } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
 
 import { Home } from './Home'
@@ -894,6 +896,12 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
 }
 
 /* ---- sidebar ---------------------------------------------------------------------------------- */
+/* docs/specs/logo.md section 16: the open sidebar draws the lockup at kanji 40, and the rail keeps
+   the mark at the 32 it already ships. Named here because they are the two numbers the shell
+   chooses; everything derived from them comes out of `lockupGeometry.ts`. */
+const SIDEBAR_KANJI = 40
+const RAIL_MARK = 32
+
 function Sidebar({
   path,
   rail,
@@ -917,11 +925,32 @@ function Sidebar({
 }) {
   return (
     <aside className="bn-side">
+      {/* THE LOCKUP REPLACES THE MARK, THE WORDMARK AND THE TAGLINE TOGETHER (logo.md section 16).
+          It already says the name twice, in two scripts, so drawing it beside the text read as
+          twice as busy as it is and faked the sizing — the lockup was squeezed into what was left
+          after the words instead of owning the row.
+          BOTH DRAWINGS ARE MOUNTED AND CSS CHOOSES. A JSX branch on `rail` would be wrong at
+          768-1023px, where App.css rails the shell by media query and `data-rail` is inert; a
+          stylesheet reads the same condition the layout does. The rail keeps the FULL mark, which
+          is what ships today — section 16 settled the lockup's size and metal, not the rail's
+          drawing, and `sidebar-morph.html`'s bare brackets are a sheet's idea rather than a
+          decision.
+          Both are `aria-hidden`: this anchor already carries the name, and two named children
+          would announce "Banchi Banchi home". */}
       <a className="bn-brand" href="#/" aria-label="Banchi home">
-        <Logo size={32} />
-        <span className="bn-brand-text">
-          <span className="bn-brand-name">Banchi</span>
-          <span className="bn-brand-tag">every card has an address</span>
+        {/* the slot's two sizes come from the GENERATED block rather than from tokens: a token
+            would be a second copy of a number `lockupGeometry.ts` already carries, and a value
+            typed twice is the defect section 13 spent thirty-seven rounds learning. */}
+        <span
+          className="bn-brand-slot"
+          style={{
+            ['--bn-lockup-w' as string]: `${(SIDEBAR_KANJI * BLOCK.w) / BLOCK.ref}px`,
+            ['--bn-lockup-h' as string]: `${(SIDEBAR_KANJI * BLOCK.h) / BLOCK.ref}px`,
+            ['--bn-rail-mark' as string]: `${RAIL_MARK}px`,
+          }}
+        >
+          <Lockup size={SIDEBAR_KANJI} className="bn-brand-lockup" decorative />
+          <Logo size={RAIL_MARK} className="bn-brand-mark" />
         </span>
       </a>
       <button type="button" className="bn-side-collapse" onClick={onToggleRail} aria-label={rail ? 'Expand the sidebar' : 'Collapse the sidebar'}>

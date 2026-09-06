@@ -896,3 +896,24 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 @media (hover: none) and (pointer: coarse) {
   .bn-btn .bn-kbd, .bn-seg-item .bn-kbd, .bn-toast-action .bn-kbd, .bn-chip .bn-kbd { display: none; }
 }
+
+
+/* ---- the lockup ---------------------------------------------------------------------------- */
+
+/* Section 16 settles two inks, not one drawing per theme: on light the bracket is flat
+   `--bn-ink`, on dark it carries `bluesteel`'s own four-stop chrome so the lockup and the rail
+   mark are the same object in the same metal. The gradient's id is per instance — `Lockup`
+   publishes it as `--bn-lockup-metal` because a stylesheet cannot name a `useId()`.
+   THE THREE-STATE PATTERN IS NOT OPTIONAL: `tokens.css` has an explicit dark, an explicit light,
+   and a system default that stamps NEITHER. A rule written only against `[data-theme='dark']`
+   leaves every system-dark user on the light bracket. */
+.bn-lockup { display: block; }
+.bn-lockup-bracket { fill: var(--bn-ink); }
+.bn-lockup-kanji { fill: var(--bn-ink); }
+/* never the literal 0.45 — `Lockup` publishes section 13's settled value and this reads it */
+.bn-lockup-roman { fill: var(--bn-ink); opacity: var(--bn-lockup-roman-opacity); }
+
+:root[data-theme='dark'] .bn-lockup-bracket { fill: var(--bn-lockup-metal); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .bn-lockup-bracket { fill: var(--bn-lockup-metal); }
+}

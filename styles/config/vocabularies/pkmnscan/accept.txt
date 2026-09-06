@@ -516,3 +516,11 @@ semibold
 letterform
 letterforms
 antialiaser
+rasterizer
+rasterizers
+devDependencies
+devDependency
+woff
+woff2
+opentype
+lockup

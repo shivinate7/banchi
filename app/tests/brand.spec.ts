@@ -40,11 +40,29 @@ test('the sidebar brand draws the mark, and names itself without it', async ({ p
   const brand = page.locator('.bn-side a.bn-brand')
   await expect(brand).toHaveAttribute('aria-label', 'Banchi home')
 
-  const svg = brand.locator('svg')
-  await expect(svg).toHaveCount(1)
+  // TWO DRAWINGS, ONE OF WHICH IS SHOWING. Section 16 puts the lockup in the open sidebar and
+  // leaves the mark for the rail, and both are mounted at once so CSS can choose — a JSX branch
+  // on `rail` would be wrong at 768-1023px, where App.css rails the shell by media query and
+  // `data-rail` is inert. So this counts 2 and then scopes.
+  await expect(brand.locator('svg')).toHaveCount(2)
+
+  const svg = brand.locator('.bn-brand-mark')
   // The mark is never the accessible name of anything: every call site names its own wrapper.
   await expect(svg).toHaveAttribute('aria-hidden', 'true')
   await expect(svg).toHaveAttribute('viewBox', '0 0 100 100')
+
+  // AND NEITHER IS THE LOCKUP, HERE. Standing alone at #/gallery it carries `role="img"` and a
+  // name, because it IS the word — but inside this anchor a named child would announce
+  // "Banchi Banchi home", so the sidebar's call site passes `decorative`.
+  const lockup = brand.locator('.bn-brand-lockup')
+  await expect(lockup).toHaveAttribute('aria-hidden', 'true')
+  // section 16 settled kanji 40, which is a 128 x 93 block in the sidebar's 212px
+  await expect(lockup).toHaveAttribute('width', '127.6')
+  await expect(lockup).toHaveAttribute('height', '93.2')
+
+  // THE LOCKUP REPLACES THE WORDMARK AND THE TAGLINE, it does not sit beside them (section 16).
+  await expect(page.locator('.bn-side .bn-brand-name')).toHaveCount(0)
+  await expect(page.locator('.bn-side .bn-brand-tag')).toHaveCount(0)
 
   // cursor.spec.ts requires exactly one `.bn-side a.bn-nav-link` outside <nav>, and the brand
   // must not become the second one.
@@ -53,9 +71,8 @@ test('the sidebar brand draws the mark, and names itself without it', async ({ p
 
 test('the small cut ships below 64px, and carries no filter', async ({ page }) => {
   await page.goto('/')
-  const svg = page.locator('.bn-side a.bn-brand svg')
 
-  const drawn = await svg.evaluate((el) => ({
+  const drawn = await page.locator('.bn-side a.bn-brand .bn-brand-mark').evaluate((el) => ({
     width: el.getAttribute('width'),
     filters: el.querySelectorAll('filter').length,
     turbulence: el.querySelectorAll('feTurbulence').length,
@@ -123,7 +140,11 @@ test('the mark is fixed dark in both themes', async ({ page }) => {
   // size this app draws.
   const ground = async () =>
     page
-      .locator('.bn-side a.bn-brand svg linearGradient > stop')
+      // scoped to the MARK. The lockup now comes first in DOM order and carries its own metal
+      // gradient, so an unscoped `.first()` would read section 16's chrome on dark and the
+      // mark's ground on light — a test that passes on one theme and fails on the other for a
+      // reason that has nothing to do with what it asserts.
+      .locator('.bn-side a.bn-brand .bn-brand-mark linearGradient > stop')
       .first()
       .getAttribute('stop-color')
 
