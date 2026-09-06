@@ -1,6 +1,6 @@
 /* ============================================================================
    KIT — the design-system sheet. A sticky index beside a column of sections, each a
-   grid of specimens on a surface. Nothing here names a colour.
+   grid of specimens on a surface. Nothing here names a color.
    ========================================================================== */
 
 .gallery { display: flex; flex-direction: column; }
@@ -252,3 +252,10 @@
   .kit-motions { grid-template-columns: minmax(0, 1fr); }
   .kit-swatches { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 }
+
+/* The mark specimens. The tile is a superellipse, so nothing here may add a border-radius:
+   a CSS radius clips the silhouette a second time and flattens the curve the shape exists for. */
+.kit-marks { display: flex; flex-wrap: wrap; gap: var(--bn-5); align-items: flex-end; }
+.kit-marks-tight { gap: var(--bn-4); }
+.kit-mark { display: flex; flex-direction: column; align-items: center; gap: var(--bn-2); }
+.kit-mark-name { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-weight: 500; }
