@@ -928,7 +928,25 @@ export function Pricing() {
     void (async () => {
       try {
         const rows = await getRuns()
-        if (live) setRuns(rows)
+        if (!live) return
+        setRuns(rows)
+        /* THE PUBLISHED DEMO PICKS A RUN, because two of them turn off the two things this
+           screen is most worth showing. `run` below is `loaded.length === 1 ? … : null` — a
+           price history and a trend strip are per-RUN routes — so with every run loaded the
+           `t` hold opens a panel it can never fill and "Load trends" is disabled. That is
+           correct for an operator, who wants all their unpriced work in one list and knows
+           to narrow; it is a dead end for somebody who arrived from a link and will never
+           open the Runs dropdown.
+
+           So the demo starts narrowed and the viewer can WIDEN — the cross-run "2 runs · 2
+           boxes · one file" story is one click away in the picker, and the rich per-row view
+           is what they meet first. Only when the hash names no run, so a shared
+           `#/pricing?run=…` link still wins. */
+        if (__BN_DEMO__ && runsInHash().length === 0) {
+          const joined = rows.filter((row) => row.joined)
+          const first = joined[0]
+          if (joined.length > 1 && first !== undefined) setPicked(new Set([first.run]))
+        }
       } catch (err) {
         if (live) setFailure(describeFailure(err))
       }
