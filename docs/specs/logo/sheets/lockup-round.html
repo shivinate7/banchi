@@ -47,17 +47,16 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 18,
- title: 'the padding, opened wide — because the band you keep has followed the range twice',
+ n: 19,
+ title: 'the padding bisected — the first padding round where both ends had already failed',
  sweeping: 'pad',
  unit: ' of the kanji size',
- values: [0.34, 0.52, 0.72, 0.95, 1.25],
- notes: {0.52:'your top end, kept twice — and both times the largest I offered',
-         1.25:'padding wider than the kanji is tall'},
- rejected: {0.16:'still tight', 0.22:'kept in round 16, out in round 17', 0.28:'your low bound — “above .28”'},
+ values: [0.30, 0.40, 0.50, 0.60, 0.70],
+ notes: {0.30:'two hundredths above a value you rejected', 0.70:'two hundredths below one you rejected'},
+ rejected: {0.28:'“above .28” — round 17', 0.72:'out of the band — round 18', 1.25:'and it does not fit the column'},
  holds: {gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
  sizes: [48, 32],
- context: [0.34, 0.52, 0.72, 0.95],
+ context: [0.30, 0.44, 0.58, 0.70],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -66,21 +65,19 @@ const ROUND = {
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
   ['16', 'padding', '0.10 – 0.36', '0.22 – 0.36 kept', 'top end NOT bracketed'],
   ['17', 'padding', '0.22 – 0.52', 'above 0.28 – 0.52 kept', 'top end NOT bracketed AGAIN'],
+  ['18', 'padding', '0.34 – 1.25', '0.34 – below 0.72', 'BOTH ends failed at last'],
  ],
- lede: '<b>Twice now the band you kept has moved with the range I offered, and both times my largest '+
-  'value survived.</b> Round 16 offered 0.10–0.36 and you kept 0.22 up. Round 17 offered 0.22–0.52 and '+
-  'you kept above 0.28 up — <i>the same 0.22 that had been good one round earlier was now out.</i> That '+
-  'is not a contradiction on your part; it is what §7 rule 5 predicts when a range anchors the eye. The '+
-  'value did not change, the company it kept did.'+
-  '<br><br><b>So this round is deliberately too wide to anchor.</b> The top is <b>1.25</b> — padding wider '+
-  'than the kanji is tall, 60px of air on each side of a 48px character. If that still reads as fine, the '+
-  'honest conclusion is that padding is not a variable this lockup is sensitive to, and I will say so and '+
-  'stop asking.'+
-  '<br><br><b>And there is a third row this time, which asks the real question.</b> Padding is air, and the '+
-  'sidebar already supplies air — a 236px panel with 12px of its own padding. Judged alone on white, more '+
-  'air always looks calmer; judged in the column it has to live in, it may just be a bigger hole. The '+
-  'context row draws four of these values in the actual 212px the shell gives, at the kanji-48 size, so '+
-  'the choice is made where it lands rather than on a sheet.'
+ lede: '<b>0.72 failed and 0.28 had already failed, so for the first time in this variable the answer is '+
+  'boxed in on both sides.</b> Rounds 16 and 17 each ended with my largest value kept, which told us '+
+  'nothing about where the top is. This one ended with a rejection at each end, which is the only shape '+
+  'a bisection is allowed to start from.'+
+  '<br><br><b>So this round halves 0.34–0.72, and puts its two ends hard against the failures.</b> 0.30 '+
+  'sits two hundredths above a value you rejected; 0.70 two hundredths below one you rejected. If either '+
+  'of those now looks fine, the difference that decided round 18 is smaller than the noise, and the honest '+
+  'reading is that padding does not resolve below about four hundredths — in which case say so and I will '+
+  'take the middle rather than keep splitting.'+
+  '<br><br><b>The re-shown row carries 1.25 for the record.</b> It is the one value in this whole variable '+
+  'that failed by measurement rather than by eye: 229px of block into 212px of column.'
 }
 
 const o=document.getElementById('out')
