@@ -1,0 +1,263 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the sidebar, and the morph</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px;max-width:1500px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 16px;max-width:1040px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:26px 0 9px}
+ .stage{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;background:#fff;border-radius:14px;padding:22px 24px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center;margin-top:8px}
+ .num{font:500 8.5px ui-monospace,monospace;color:#6b7280;text-align:center;line-height:1.5}
+ .lk{position:relative;display:inline-block}
+ .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
+ .go{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif;line-height:1;display:block}
+ .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
+
+ /* the shell, at the app's own tokens */
+ .side{--bg:#fff;--ink:#0f1217;--ink3:#6b7280;--line:rgba(15,18,23,.08);--accent:#3d5af1;--tint:rgba(61,90,241,.10);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;height:392px;padding:12px;
+  display:flex;flex-direction:column;gap:8px;overflow:hidden;font-family:Inter,system-ui,sans-serif}
+ .side.dark{--bg:#090b0e;--ink:#eef0f4;--ink3:#838b98;--line:rgba(255,255,255,.08);--accent:#7f90ff;--tint:rgba(127,144,255,.14)}
+ .brand{display:flex;align-items:center;gap:10px;padding:8px;min-height:48px}
+ .brandtext{display:flex;flex-direction:column;line-height:1.05;min-width:0}
+ .bname{font-family:Manrope;font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+ .btag{font-size:9.5px;letter-spacing:.01em;color:var(--ink3);font-weight:500;white-space:nowrap}
+ .navlab{font:600 9px Inter;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);padding:10px 8px 2px}
+ .nav{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;color:var(--ink);font-size:13px;font-weight:500;white-space:nowrap}
+ .nav.on{background:var(--tint);color:var(--accent)}
+ .ico{width:18px;height:18px;flex:none;border-radius:4px;border:1.6px solid currentColor;opacity:.85}
+ .side.rail{width:64px;align-items:center}
+ .side.rail .brandtext,.side.rail .navlab,.side.rail .nav span{display:none}
+ .side.rail .nav{justify-content:center;padding:8px 0;width:40px}
+ .side.rail .brand{padding:8px 0;justify-content:center}
+</style>
+<div class="wrap">
+<h1>the sidebar — the lockup open, the brackets closed</h1>
+<div class="sub">
+The owner&rsquo;s idea, drawn: <b>the lockup when the sidebar is open, collapsing to the bare brackets when it
+is a rail</b>. &sect;1 already calls that second state the mark &mdash; <i>&ldquo;with the card removed the
+same brackets become an empty slot, which is the in-product mark.&rdquo;</i>
+<br><br>
+<b>The sizes are not chosen, they are what fits.</b> The expanded sidebar is 236px with 12px padding, so the
+lockup sits at kanji 32 &mdash; which is exactly the floor measured in round 15, and the block is 83&times;59px
+inside 212px of usable width. The rail is 64px and <b>cannot hold the lockup at all</b>: at kanji 22 the block
+is 57px and two of its three measures have already failed. That is why the rail gets the brackets rather than
+a smaller lockup.
+<br><br>
+<b>The morph is drawn, not described.</b> Both brackets come from the same <code>taperParts</code> at the same
+point count, so the path interpolates directly &mdash; the filmstrip below is the real intermediate geometry
+at five points, not a cross-fade standing in for one.
+</div>
+<div id="out"></div></div>
+<script>
+window.__sheetReady = false
+/* THE LOCKUP'S DRAWING, IN ONE PLACE.
+ *
+ * IT EXISTS BECAUSE A SECOND COPY OF IT ALREADY COST A ROUND. `lockup-round.html` was generated
+ * from `lockup-tails.html` at round 1 and then kept its own frozen copy of `frame()`. At round 6
+ * the option being swept -- the corner radius -- did not exist in that copy, so every specimen
+ * fell through to the same value and the row was six drawings of one bracket, presented as a
+ * sweep. docs/specs/logo.md section 6 records the ancestor: "three images approved as different
+ * were the same image."
+ *
+ * A sheet that draws the lockup and does not load this file is that bug coming back.
+ *
+ * `frame()` records every option it actually used on the element, so a sheet can assert that the
+ * variables it claims to hold were held and that the one it claims to sweep actually moved.
+ */
+const SQ=(function(){const a=50,N=220,p=[]
+ for(let i=0;i<=N;i++){const t=i/N*2*Math.PI,ct=Math.cos(t),st=Math.sin(t)
+  p.push((a+a*Math.sign(ct)*Math.pow(Math.abs(ct),.4)).toFixed(2)+' '+(a+a*Math.sign(st)*Math.pow(Math.abs(st),.4)).toFixed(2))}
+ return 'M'+p.join('L')+'Z'})()
+function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
+ const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=300,pts=[]
+ const tl=Math.min(tlf*Math.max(aX,aY),L/2)
+ for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
+  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
+  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
+  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
+  const dE=Math.min(s,L-s);const f=dE<tl?tip+(1-tip)*(dE/tl):1
+  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
+ const q=function(v){return v.toFixed(3)}
+ const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
+ const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
+ return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
+   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
+  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+let n=0
+function stamp(size,gap,pd,col){
+ const el=document.createElement('div');el.className='lk'
+ el.style.padding=(size*pd).toFixed(2)+'px '+(size*pd*1.05).toFixed(2)+'px'
+ el.innerHTML='<div style="color:'+(col||'#0f1217')+'">'+
+  '<span class="go k" style="font-size:'+size+'px;letter-spacing:.07em">番地</span>'+
+  '<span class="rom r" style="font-size:'+(size*0.36).toFixed(2)+'px;letter-spacing:.14em;margin-top:'+(size*gap).toFixed(2)+'px;opacity:.62">BANCHI</span></div>'
+ Object.assign(el.dataset,{size:size,col:col||'#0f1217',gap:gap,pad:pd});return el}
+
+/* The frame, with tails. Everything above the bracket is the recovered code untouched: the
+   iterative width-match on the roman, the 0.11 stroke, the 0.32 arm, the 1.85x radius. What
+   changed is that the two paths are no longer stroked -- they are the icon's tapered OUTLINE,
+   so the arms thin toward their free ends the way the mark's do. `tip` is the width at the tip
+   as a fraction of the stroke; `tlf` is how much of the arm the ramp takes. */
+function frame(el, opt){
+ opt = opt || {}
+ if(el.querySelector('svg')) return 0
+ const k=el.querySelector('.k'), r=el.querySelector('.r')
+ const kw=k.getBoundingClientRect().width, nn=r.textContent.length
+ let ls=0
+ for(let i=0;i<30;i++){const rw=r.getBoundingClientRect().width
+  ls+=(kw-rw)/nn; r.style.letterSpacing=ls.toFixed(3)+'px'
+  if(Math.abs(kw-r.getBoundingClientRect().width)<0.2) break}
+ r.style.marginRight=(-ls).toFixed(3)+'px'
+ const size=+el.dataset.size, col=el.dataset.col
+ const sw=size*(opt.stroke===undefined?0.11:opt.stroke), arm=opt.arm===undefined?0.32:opt.arm
+ const w=el.offsetWidth, h=el.offsetHeight, i=sw/2, W=w-sw, H=h-sw
+ /* The radius normally follows the stroke (1.85x), which is what keeps the bracket self-similar at
+    any weight. `rrAbs` pins it instead, so a STROKE sweep moves one thing rather than two --
+    section 7 rule 6. Nothing but a sweep should pass it. */
+ const rrWant = opt.rrAbs!==undefined ? opt.rrAbs : sw*(opt.rrMul===undefined ? 1.85 : opt.rrMul)
+ const rrCap  = Math.min(W,H)/2-.1
+ const rr=Math.min(rrWant, rrCap)
+ /* the cap is printed rather than applied silently -- the taper clamp already taught this file
+    that a bound which binds without saying so turns a sweep into repeated specimens */
+ el.dataset.rr = rr.toFixed(2) + (rr < rrWant-1e-6 ? ' CLAMPED from '+rrWant.toFixed(2) : '')
+ const aX=Math.max(W*arm, rr+2), aY=Math.max(H*arm, rr+2)
+ let body
+ if(opt.tails===false){
+  const TL='M'+i.toFixed(2)+' '+(i+aY).toFixed(2)+'V'+(i+rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+rr).toFixed(2)+' '+i.toFixed(2)+'H'+(i+aX).toFixed(2)
+  const BR='M'+(i+W).toFixed(2)+' '+(i+H-aY).toFixed(2)+'V'+(i+H-rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+W-rr).toFixed(2)+' '+(i+H).toFixed(2)+'H'+(i+W-aX).toFixed(2)
+  body=[TL,BR].map(function(d){return '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+sw.toFixed(2)+'" stroke-linecap="round"/>'}).join('')
+ }else{
+  const tlf = opt.tl===undefined?0.45:opt.tl
+  /* SECTION 6's RECORDED DEFECT, GUARDED. taperParts clamps the ramp at half the path length, so
+     every tlf above that renders identically while being presented as a sweep -- "three images
+     approved as different were the same image". The clamp point is computed and printed here so a
+     clamped specimen cannot pose as a distinct one. */
+  const _L1=Math.max(aY-rr,0), _L2=rr*Math.PI/2, _L3=Math.max(aX-rr,0), _L=_L1+_L2+_L3
+  const _req=tlf*Math.max(aX,aY), _used=Math.min(_req,_L/2)
+  el.dataset.ramp = _used.toFixed(1)+(_used<_req-1e-6 ? ' CLAMPED from '+_req.toFixed(1) : '')
+  const p=taperParts(i, i, aX, aY, rr, sw, opt.tip===undefined?0.07:opt.tip, tlf)
+  const one='<path d="'+p.body+'" fill="'+col+'"/>'+p.caps.map(function(c){
+    return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="'+col+'"/>':''}).join('')
+  body=one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g>'
+ }
+ el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+body+'</svg>')
+ /* A FINGERPRINT OF WHAT WAS ACTUALLY DRAWN, and every option that reached the drawing. A sheet
+    claims some variables are held and one is swept; without these two the claim is prose. With
+    them the sheet can assert the held ones were identical, the swept one moved, and no two
+    specimens in a row are the same picture. */
+ el.dataset.geom = body.length + ':' + body.slice(0, 400)
+ el.dataset.used = JSON.stringify({
+  stroke: +(sw/size).toFixed(4), arm: +arm.toFixed(4), rr: +rr.toFixed(2),
+  rrMul: +(rr/sw).toFixed(3),
+  tip: opt.tip===undefined?0.07:opt.tip, tl: opt.tl===undefined?0.45:opt.tl,
+  tails: opt.tails!==false, size: size,
+  gap: +(el.dataset.gap||0), pad: +(el.dataset.pad||0)})
+ return h}
+
+
+const P = {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15}
+const o = document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+
+/* the rail's bare brackets: the same construction on a square frame, nothing inside */
+/* THE RAIL'S RADIUS IS NOT THE LOCKUP'S RULE. `rrMul` is 4.0 x a stroke of 0.050, i.e. 0.20 of the
+   kanji; the rail's bracket is 0.11 of its frame, and 4.0 x that is 0.44 of the frame — an arc with
+   no arm left, which is what the first draft drew. The rail takes the icon's own proportion instead:
+   radius 0.146 of the frame, which is the icon's 8 in a 54.8 box. */
+const RAIL = {stroke:0.11, radius:0.146}
+function bareBrackets(px, col){
+ const S=100, stroke=S*RAIL.stroke, i=stroke/2, W=S-stroke, H=S-stroke
+ const rr=Math.min(S*RAIL.radius, Math.min(W,H)/2-.1)
+ const p=taperParts(i,i,W*P.arm,H*P.arm,rr,stroke,P.tip,P.tl)
+ const one='<path d="'+p.body+'" fill="'+col+'"/>'+p.caps.map(function(c){
+   return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="'+col+'"/>':''}).join('')
+ return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+one
+   +'<g transform="rotate(180 50 50)">'+one+'</g></svg>'
+}
+
+function sidebar(dark, rail){
+ const s=el('div','side'+(dark?' dark':'')+(rail?' rail':''))
+ if(!rail) s.style.width='236px'
+ const brand=el('div','brand')
+ const holder=el('div'); holder.style.cssText='flex:none'
+ brand.appendChild(holder)
+ if(!rail){
+  const t=el('div','brandtext')
+  t.appendChild(el('span','bname','Banchi'))
+  t.appendChild(el('span','btag','every card has an address'))
+  brand.appendChild(t)
+ }
+ s.appendChild(brand)
+ ;[['Home',true],['Capture',false],['Runs',false],['Review',false],['Pricing',false]].forEach(function(n,i){
+  if(i===1) s.appendChild(el('div','navlab','Workflow'))
+  const a=el('div','nav'+(n[1]?' on':''))
+  a.appendChild(el('span','ico')); a.appendChild(el('span',null,n[0]))
+  s.appendChild(a)})
+ return {side:s, holder:holder}
+}
+
+/* ---- 1 · the two states -------------------------------------------------------------------- */
+o.appendChild(el('h2',null,'the two states, at the widths the shell actually gives'))
+;(function(){
+ const st=el('div','stage')
+ ;[[false,false,'open · 236px · lockup at kanji 32'],[false,true,'rail · 64px · the bare brackets'],
+   [true,false,'open · dark'],[true,true,'rail · dark']].forEach(function(c){
+  const wrap=el('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center'
+  const b=sidebar(c[0], c[1]); wrap.appendChild(b.side)
+  const col = c[0] ? '#eef0f4' : '#0f1217'
+  if(c[1]) b.holder.innerHTML = bareBrackets(36, col)
+  else { const lk=stamp(32, P.gap, P.pad, col); b.holder.appendChild(lk); lk.dataset.pend='1' }
+  wrap.appendChild(el('div','cap',c[2]))
+  st.appendChild(wrap)})
+ o.appendChild(st)})()
+
+/* ---- 2 · the morph ------------------------------------------------------------------------- */
+o.appendChild(el('h2',null,'the morph — real interpolated geometry at five points, not a cross-fade'))
+o.appendChild(el('div','sub','The lockup’s frame is 83×59 and the rail’s is 36×36, so the bracket travels in shape as well as in '+
+ 'size — and its <b>stroke and radius rules both change</b> across the move: 0.050 of the kanji becomes '+
+ '0.11 of the frame, and 4.0× the stroke becomes 0.146 of the frame. Both are resolved to pixels at each '+
+ 'end and interpolated as pixels, because interpolating the RULES would send the middle frames somewhere '+
+ 'neither end goes. The name fades over the first half; the bracket travels across the whole.'))
+;(function(){
+ const st=el('div','stage'); st.style.alignItems='center'
+ /* Both ends in REAL PIXELS. The first draft took the rail's stroke as 11 — its value in a 100-unit
+    viewBox — and interpolated toward 11px, so the middle frames carried a stroke seven times too
+    heavy and read as blobs. At 36px the rail's 0.11 is 3.96px. The RADIUS RULE also changes across
+    the morph, from 4.0x the stroke to 0.146 of the frame, so it is interpolated as a resolved pixel
+    value rather than as a rule. */
+ const A={w:83, h:59, s:32*P.stroke,       r:(32*P.stroke)*P.rrMul}
+ const B={w:36, h:36, s:36*RAIL.stroke,    r:36*RAIL.radius}
+ for(let k=0;k<=4;k++){
+  const t=k/4
+  const w=A.w+(B.w-A.w)*t, h=A.h+(B.h-A.h)*t, sw=A.s+(B.s-A.s)*t
+  const i=sw/2, W=w-sw, H=h-sw
+  const rr=Math.min(A.r+(B.r-A.r)*t, Math.min(W,H)/2-.1)
+  const p=taperParts(i,i,W*P.arm,H*P.arm,rr,sw,P.tip,P.tl)
+  const one='<path d="'+p.body+'" fill="#0f1217"/>'+p.caps.map(function(c){
+    return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="#0f1217"/>':''}).join('')
+  const cell=el('div'); cell.style.cssText='display:flex;flex-direction:column;align-items:center'
+  const box=el('div'); box.style.cssText='position:relative;width:'+w+'px;height:'+h+'px'
+  box.innerHTML='<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="position:absolute;inset:0;overflow:visible">'
+   +one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g></svg>'
+  /* the name, fading out over the first half */
+  const nameOp = Math.max(0, 1 - t*2)
+  const nm=el('div'); nm.style.cssText='position:absolute;inset:0;display:flex;flex-direction:column;'
+   +'align-items:center;justify-content:center;opacity:'+nameOp.toFixed(2)+';color:#0f1217'
+  nm.innerHTML='<span class="go" style="font-size:'+(32*(1-t*0.25)).toFixed(1)+'px;letter-spacing:.07em">番地</span>'
+   +'<span class="rom" style="font-size:'+(32*0.36).toFixed(1)+'px;letter-spacing:2.6px;margin-top:'+(32*P.gap).toFixed(1)+'px;opacity:.62">BANCHI</span>'
+  box.appendChild(nm)
+  cell.appendChild(box)
+  cell.appendChild(el('div','cap', t===0?'open':t===1?'rail':(t*100)+'%'))
+  cell.appendChild(el('div','num', Math.round(w)+'×'+Math.round(h)+'px · stroke '+sw.toFixed(2)))
+  st.appendChild(cell)}
+ o.appendChild(st)})()
+
+document.fonts.ready.then(function(){
+ document.querySelectorAll('.lk[data-pend]').forEach(function(lk){
+  frame(lk, {stroke:P.stroke, arm:P.arm, tl:P.tl, tip:P.tip, rrMul:P.rrMul})})
+ window.__sheetReady=true
+})
+</script>

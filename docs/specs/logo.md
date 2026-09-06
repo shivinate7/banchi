@@ -933,6 +933,39 @@ with room to spare. The 64px rail cannot: the block at kanji 22 is already 57px 
 three measures have failed by then. **The lockup is an expanded-sidebar object and the rail needs
 something else** — which is the bare-bracket question §13 leaves open.
 
+### The sidebar, and the rail's own two values
+
+Sheet: `logo/sheets/sidebar-morph.html`. **The lockup when the sidebar is open, the bare brackets when
+it is a rail** — the owner's idea, and §1's own description of the mark: *"with the card removed the
+same brackets become an empty slot, which is the in-product mark."*
+
+**Neither size is chosen; both are what fits.** The expanded sidebar is 236px with 12px padding, so the
+lockup sits at **kanji 32** — exactly the floor above — with a block of 83 × 59px inside 212px of
+usable width. The 64px rail **cannot hold the lockup at all**, which is why it gets brackets rather
+than a smaller lockup.
+
+**The rail's bracket does NOT inherit the lockup's rules, and that is a correction rather than a
+choice.** `rrMul` is 4.0 × a stroke of 0.050 — 0.20 of the kanji. Applied to a rail bracket at 0.11 of
+its frame, 4.0 × gives 0.44 of the frame: an arc with no arm left, which is what the first draft drew.
+The rail takes the icon's own proportion instead.
+
+| | rail |
+| --- | --- |
+| stroke | **0.11** of the frame — swept at 44px and 64px, both ends failing |
+| radius | **0.146** of the frame — the icon's 8 in a 54.8 box |
+
+**The morph is drawn rather than described.** Both brackets are the same routine at the same point
+count, so the path interpolates directly and the sheet's filmstrip is real intermediate geometry at
+five points, not a cross-fade standing in for one. **Both rules change across the move** — 0.050 of the
+kanji becomes 0.11 of the frame, 4.0 × the stroke becomes 0.146 of the frame — so each end is resolved
+to pixels and the pixels are interpolated. Interpolating the *rules* sends the middle frames somewhere
+neither end goes; the first draft did exactly that and carried a stroke seven times too heavy through
+the middle.
+
+**What the mockup puts in front of a decision.** At the rail the brackets enclose nothing. §1 says that
+empty slot *is* the mark, and the drawing is the first chance to judge whether it reads that way or
+reads as a frame around an absence.
+
 ### The tails
 
 The brackets were plain stroked paths with round caps. They carry the icon's tapered outline now,
