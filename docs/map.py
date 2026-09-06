@@ -1721,10 +1721,15 @@ COMPONENTS = [
                 # drift the app/ entry below carries a paragraph about. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another. D39 added
-                # the `runs` line on 2026-08-29 — the pipeline's own route, and the one owner
-                # render that draws no stored capture photo, so the `views exposure` question
-                # the others raise does not arise for it.
-                "governed_by": ["D5", "D13", "D31", "D39", "D49", "D63", "D69"],
+                # the `runs` line on 2026-08-29 — the pipeline's own route, and this comment
+                # called it "the one owner render that draws no stored capture photo" until
+                # 2026-09-05, which was the third copy of a claim that was never true:
+                # `app/src/RunsComposer.tsx` draws the crop preview's sample out of the box's
+                # whole capture directory. D24 is the ruling the `views exposure` row defers
+                # to, and D86 is why the `pricing` line's own comment had drifted — an empty
+                # run selection means "every open run", so that render draws the worklist and
+                # its thumbnails rather than a picker. docs/DEBTS.md section 14 traces both.
+                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D49", "D63", "D69", "D86"],
             },
         },
     },

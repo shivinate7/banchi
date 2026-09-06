@@ -67,16 +67,27 @@ inventory     http://localhost:5173/#/inventory
 # The pipeline, on its own route since 2026-08-29 (D39). Worth its own render for the reason
 # every other line here has one: it is a screen a human looks at, and with the capture server
 # down it draws its own refusal rather than the box picker — which is a real state and the
-# wrong one to judge the layout by. It draws no stored capture photo at all, so the `views
-# exposure` question the other owner routes raise does not arise here.
+# wrong one to judge the layout by.
+#
+# IT DOES DRAW A STORED CAPTURE PHOTO, and this comment claimed the opposite until 2026-09-05.
+# `app/src/RunsComposer.tsx:692` draws the crop preview's sample, and
+# `server/pipeline_routes.py:917` picks that sample out of the box's whole capture directory
+# with no game filter — so a box holding code cards previews one. The `views exposure` question
+# arises here exactly as it does on the other owner routes; `docs/DEBTS.md` §14 has the trace
+# and the ruling it is waiting on.
 runs          http://localhost:5173/#/runs
 
 # Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter,
-# so what a person sees here is the run picker — the state the screen opens in when it is
-# reached by its chord rather than by the link from `#/runs`, and the one whose chrome the
-# page-chrome numbers govern. It draws no stored capture photo in that state; the photo panel
-# is opened per row, on demand, and cannot be in a render taken with nothing selected. So the
-# `views exposure` question the other owner routes raise does not arise here either.
+# which is how the screen is reached by its chord rather than by the link from `#/runs`, and
+# the state whose chrome the page-chrome numbers govern.
+#
+# THAT STATE IS THE WORKLIST, NOT THE RUN PICKER, AND THIS COMMENT SAID OTHERWISE UNTIL
+# 2026-09-05. D86 made an empty selection mean "every open run" — `app/src/Pricing.tsx:782`
+# seeds `picked` from the hash and `app/src/Pricing.tsx:521` labels the empty case "showing all
+# of them" — so a no-`?run=` render draws rows, and every row with a position draws a thumbnail
+# off `app/src/Pricing.tsx:764`. The drawer's larger photo is still per-row and on demand; the
+# thumbnails are not. `docs/DEBTS.md` §14 traces how a pooled card's position gets into that
+# table in the first place.
 pricing       http://localhost:5173/#/pricing
 
 # The order screen and the shipping lane, both routed 2026-08-30 (D69). Two renders because
