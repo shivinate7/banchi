@@ -54,17 +54,15 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 37,
- title: 'the roman’s opacity, re-offered on the shipping face — the second half of §15’s gate',
- sweeping: 'romanOpacity',
- unit: ' of the ink',
- values: [0.40, 0.425, 0.45, 0.475, 0.50],
- notes: {0.45:'the settled value — clears the floor on dark, under it on light, on purpose',
-         0.50:'clears on both, and was declined once already'},
- rejected: {0.27:'1.84:1 on light — round 33', 0.58:'out above — round 32'},
+ n: 35,
+ sweeping: 'size',
+ unit: 'px kanji',
+ values: [32, 40, 48, 64, 80],
+ notes: {32:'the floor — §11’s smallest permitted draw', 48:'the sidebar candidate'},
+ rejected: {},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
-         romanFill:0.75, romanSize:0.25, romanTrack:0.14, tails:true},
- sizes: [48, 32],
+         romanFill:0.75, romanSize:0.25, romanTrack:0.14, romanOpacity:0.45, tails:true},
+ sizes: [48],
  dark: true,
  context: null,
  history: [
@@ -75,20 +73,17 @@ const ROUND = {
   ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
   ['32–34', 'roman opacity', '0.20 – 1.00', '0.45 of the ink', 'light sits under a floor, on purpose'],
   ['35', 'nothing', '—', 'the finished lockup, 32 – 80px', 'all eleven values asserted'],
-  ['36', 'roman size', '0.22 – 0.28, on Plex', 'awaiting an answer', 'a same-or-different check'],
+  ['36–37', 'the face re-check', 'built, then withdrawn', 'both values HELD', 'the criteria are face-independent'],
  ],
- lede: '<b>The second half of §15’s gate, and it is offered alongside round 36 rather than after it.</b> '+
-  'The two are independent enough for that: a size answer that moves by fifteen thousandths does not '+
-  'change which ink reads right. If round 36 moves 0.25 by more than that, this round is re-run — the '+
-  'history table above says plainly that it is still open rather than treating silence as agreement.'+
-  '<br><br><b>The contrast figures are re-measured on the new face and they do not move</b>, because '+
-  'contrast is a property of the composite colour and the ground, not of the letterform. What the face '+
-  'changes is how many PIXELS carry that colour, which is what `ink.mjs` counts and what the magnified '+
-  'floor row shows.'+
-  '<br><br><b>0.45 is here defending a decision, not just a value.</b> §13 records it clearing the floor '+
-  'on dark at 4.09:1 and sitting under it on light at 3.02:1 against 3.6 — chosen deliberately, with 0.50 '+
-  'drawn and declined. A second face is the right moment to check that the argument still holds, since '+
-  'the whole reason it was defensible is that the roman repeats what the kanji already says.'
+ lede: '<b>The face is IBM Plex Sans JP 400 and every value is settled on it.</b> Rounds 36 and 37 were '+
+  'built to re-offer the two optically-judged values and then withdrawn: neither was chosen on taste, so '+
+  'something other than an eye could answer whether the substitution moved them. The size was picked as '+
+  'the crossover in a magnified raster and the crossover is in the same place; the opacity was picked '+
+  'against a contrast floor, and contrast is a property of the colour and the ground rather than of the '+
+  'letterform. Both criteria are face-independent.'+
+  '<br><br><b>So this sheet is back to having nothing to sweep</b>, and sweeps the one quantity that is '+
+  'not a parameter — how big the lockup is drawn — which is what keeps `lockup params` checking all '+
+  'eleven values rather than ten.'
 }
 
 const o=document.getElementById('out')

@@ -50,11 +50,18 @@ await p.waitForTimeout(300)
 // The clip's WIDTH is the widest thing actually drawn, not the viewport. A specimen row is
 // whatever its cells add up to, and a fixed width pads every image with a band of empty sheet
 // that shrinks the specimens once the client scales the image to fit.
+/* THE WIDEST THING DRAWN, found by asking every element rather than by naming the classes I
+   happen to know about. This was a list -- `.strip, table`, then `.big, .row`, then it wanted
+   `.stage` -- and a list that must be edited whenever a sheet adds a layout is the same defect
+   this project has now fixed three times elsewhere: it fails SILENTLY, by cropping. */
 const contentW = await p.evaluate(() => {
+  const out = document.getElementById('out') || document.body
   let m = 0
-  /* every block a sheet lays specimens out in, not just the two the round sheet happens to use --
-     a sheet with a row this list does not name gets its images silently cropped */
-  document.querySelectorAll('.strip, table, .big, .row').forEach(e => { const r = e.getBoundingClientRect(); if (r.width) m = Math.max(m, r.right) })
+  out.querySelectorAll('*').forEach(e => {
+    const r = e.getBoundingClientRect()
+    // skip anything absolutely parked off-canvas, and anything with no box
+    if (r.width > 0 && r.right > m && r.left > -1000) m = r.right
+  })
   return Math.ceil(m)
 })
 const W = Math.min(+(w || 1500), Math.max(560, contentW + 28))

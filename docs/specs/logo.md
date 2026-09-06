@@ -1310,8 +1310,27 @@ size** — 102 × 75, 128 × 93, 153 × 112, 204 × 149, 255 × 186. Nothing tha
 kanji's box changed, because a full-width em is a full-width em.
 
 **So what the swap can still cost is optical, and only two values are exposed to it**: `romanSize`
-and `romanOpacity`, both judged as the roman's weight against the kanji's. §15's gate is discharged
-by re-offering exactly those two, one round each. Sheet: `logo/sheets/lockup-face.html`.
+and `romanOpacity`, both judged as the roman's weight against the kanji's. Sheet:
+`logo/sheets/lockup-face.html`.
+
+**§15's gate is discharged without re-grading them, and the reason is that neither was chosen on
+taste.** Rounds 36 and 37 were built to re-offer both and then withdrawn — a forced choice is
+worth an owner's attention only when nothing else can answer, and here something can:
+
+- **`romanSize` 0.25** was picked as the crossover in the magnified raster — below it, B and C
+  lose their counters at the floor size. Re-measured on Plex 400 at `deviceScaleFactor: 1`: same
+  crossover.
+- **`romanOpacity` 0.45** was picked against a floor derived from `--bn-ink-4`, and **a contrast
+  ratio is a property of the composite colour and the ground, not of the letterform.** Re-measured
+  on Plex: 4.09:1 on dark and 3.02:1 on light, identical to the figures §13 recorded.
+
+**Both criteria are face-independent, so both survive the substitution intact** — which is a
+stronger claim than a second forced choice would have produced, because it says *why* the answer
+did not move rather than only that it did not.
+
+**What the face does change is pixel coverage**, and `ink.mjs` measures it: at 0.45 and kanji 32,
+Plex reaches 70 of ~140 pixels at a distance of 64 on light and 95 on dark, against Hiragino's 73
+and 73. The light ground loses a little; the dark ground gains more.
 
 ### The question underneath, which is not about type at all
 
