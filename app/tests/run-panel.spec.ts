@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { sealEveryTest } from './shell'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -552,6 +553,11 @@ async function openJoinOptions(page: Page) {
 }
 
 // -------------------------------------------------------------- present, not disclosed
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
+   `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
+   case in the file, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the panel is open on arrival, with all four commands named and reachable', async ({
   page,

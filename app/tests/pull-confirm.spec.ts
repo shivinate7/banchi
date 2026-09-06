@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
+import { sealEveryTest } from './shell'
 
 /* The first rows of docs/DESIGN.md's Fulfillment constraints table, as assertions.
  *
@@ -75,6 +76,13 @@ function buttonFor(page: Page, state: string): Locator {
  * this constant exists to make impossible to reintroduce quietly.
  */
 const GALLERY = '/#/gallery'
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER. This file registers no fixtures of its own, so it
+   takes the shared small store — `app/tests/shell.ts` carries the argument for both halves. The
+   call has to sit above every hook and every case, which `make docs-audit`'s `spec seal` row
+   checks: the navigation below happens inside a hook, and a seal declared under it would be
+   installed after the requests it exists to catch.  */
+sealEveryTest({ store: true })
 
 test.beforeEach(async ({ page }) => {
   await page.goto(GALLERY)

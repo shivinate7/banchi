@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { sealEveryTest } from './shell'
 
 /* THE STALE-LISTING MARKDOWN, ASSERTED WHERE NOTHING ELSE CAN SEE IT (D100).
  *
@@ -142,6 +143,11 @@ async function pickWorklist(page: Page) {
     buffer: Buffer.from('TCGplayer Id,TCG Marketplace Price\n8936515,0.44\n'),
   })
 }
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THE SHELL'S OWN READ IS NOT THIS SCREEN'S.
+   `app/tests/shell.ts` carries the argument; the call has to sit above every hook and every
+   case in the file, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the markdown is reachable from the pipeline screen', async ({ page }) => {
   await open(page)

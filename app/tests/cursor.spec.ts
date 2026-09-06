@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { sealEveryTest } from './shell'
 
 /* WHAT A CONTROL SAYS TO THE POINTER, ASSERTED WHERE NOTHING ELSE COULD SEE IT.
  *
@@ -206,6 +207,20 @@ function expected(f: Found): string {
   return f.kind === 'click' ? 'pointer' : 'text'
 }
 
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THIS FILE'S OWN HEADER IS WHY IT MATTERS
+   MOST HERE. It says the sweep costs "a control which does not render in this worktree's empty
+   store" — but it registered no handlers at all, so in the main checkout the store it swept was
+   the owner's 767 real cards and the number of controls it looked at was a property of which
+   checkout ran it. The shared small store makes every screen draw the same populated controls
+   in every tree, which is more than the empty answer and reproducible, unlike the other.
+
+   MEASURED RATHER THAN ASSUMED, on this worktree 2026-09-06: 354 controls swept against the
+   small store, 332 against the dead capture port this tree had before. The gain is where the
+   store is — `#/inventory` 16 to 33, because the walk draws no rows and no search field over
+   an empty store, `#/review` 17 to 21, and `#/fulfillment` 1 to 3. `#/gallery`'s 153 come off
+   the build and move either way. `app/tests/shell.ts` carries the rest of the argument. */
+sealEveryTest({ store: true })
+
 test('every rendered control tells the pointer what it is', async ({ page }) => {
   /* THE ONE TEST IN THIS SUITE THAT LOADS EVERY SCREEN, AND THE ONLY ONE THAT ASKS THE REAL
      SERVER FOR ALL OF THEM. Both facts follow from what it is for and neither is a smell: a
@@ -271,6 +286,20 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
       }
     }
   }
+
+  /* A FLOOR ON THE SWEEP ITSELF, WHICH THIS FILE ALREADY INVENTED FOR ITS ROSTER HARVEST AND
+     NEEDS TWICE AS BADLY HERE. The screens draw their controls out of `shell.ts`'s shared
+     fixture now, and a regression in that fixture — a payload gone short, a route stopped
+     matching — leaves every screen on its empty state and turns the richest sweep in this
+     suite into a loop over nothing. It would pass, instantly, forever: exactly the vacuous
+     green the harvest's own floor exists to refuse, one level down.
+
+     300 AGAINST A MEASURED 354, on this worktree 2026-09-06. Not a pin — the number moves with
+     every control the product gains — but far enough below to survive ordinary drift and far
+     enough above the 40-odd an all-empty store draws that no fixture regression can hide under
+     it. */
+  expect(total, 'the sweep classified almost nothing — are `shell.ts`\'s fixtures still populating every screen?')
+    .toBeGreaterThan(300)
 
   expect(
     wrong,

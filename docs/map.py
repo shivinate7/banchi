@@ -3688,7 +3688,18 @@ COMPONENTS = [
                         "disabled arm was mutation-tested and the live sweep alone PASSED, "
                         "which is 30 of the 41 original defects invisible. A third case asserts "
                         "the --field-hover edge responds and that no hover reflows the box. Run "
-                        "by `make design-check`.",
+                        "by `make design-check`. THE SWEEP IS NO LONGER LIVE AS OF 2026-09-06, "
+                        "and calling it live was the defect: this file registered no "
+                        "`page.route` at all, so in the main checkout it swept the OWNER'S 767 "
+                        "real cards while its own header said it swept `this worktree's empty "
+                        "store` — the number of controls it looked at was a property of which "
+                        "tree ran it. It takes `app/tests/shell.ts`'s small store now: 354 "
+                        "controls, the same in every checkout, against 332 a dead capture port "
+                        "drew here, the gain concentrated where the store is (#/inventory 16 to "
+                        "33, #/review 17 to 21). A FLOOR OF 300 GUARDS THAT — the same rule the "
+                        "roster harvest already applies to itself, because a fixture regression "
+                        "would leave every screen on its empty state and turn the richest sweep "
+                        "in this suite into a loop over nothing, passing instantly and forever.",
                 "governed_by": ["D28", "D43", "D50", "D69", "D70"],
                 "note": "IT WAS A PINNED ROSTER OF SEVEN HASHES FOR TWO DAYS, four lines under "
                         "its own header warning against exactly that. D69 added #/orders and "
@@ -3750,9 +3761,35 @@ COMPONENTS = [
                         "harness contract in docs/GATES.md is seven Python tests run at turn "
                         "end; this runs a browser and is invoked on its own.",
             },
+            "tests/shell.ts": {
+                "does": "one call, `sealEveryTest()`, at the top of every spec that mounts the "
+                        "app — all seventeen of them. It installs a catch-all on THIS "
+                        "checkout's capture port (D43) that RECORDS and REFUSES, answers the "
+                        "shell's own `GET /status`, and asserts when each test ends that "
+                        "nothing else got out. `App.tsx:useServerPresence` polls that route "
+                        "from outside every route boundary, so it belongs to no screen and a "
+                        "file that stubbed everything its own screen asked for still missed "
+                        "it: ten specs leaked, and `cursor` and `gallery` leaked boxes, "
+                        "inventory, runs and four real card photographs besides. In the main "
+                        "tree that port is the owner's live server over their real store; in a "
+                        "worktree nothing answers and the shell draws a 44px offline banner "
+                        "that moved every geometry floor — two of the nine design-check "
+                        "failures fixed on 2026-09-05 were that banner, reported as bare pixel "
+                        "counts. It also carries the SMALL STORE the five fixture-less specs "
+                        "take, so `cursor.spec.ts` sweeps the same populated screens in every "
+                        "checkout: 354 controls against the 332 a dead port drew here, and "
+                        "against a main-tree number nobody could reproduce. THE SEAL MUST BE "
+                        "THE OLDEST HANDLER, since Playwright matches routes newest-first, "
+                        "which is why the call is a module-scope hook and why "
+                        "`scripts/docs-audit.py`'s `spec seal` row checks that it comes before "
+                        "the file's first `test.beforeEach` — the one way this can fail "
+                        "silently. Not a harness test; it has no test of its own and is "
+                        "exercised by every spec that imports it.",
+                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86"]},
             "tests/fontsReady.ts": {
-                "does": "one helper, `settleFonts`, awaited after every `page.goto` in the four "
-                        "specs that measure type. `app/index.html` fetches its two faces with "
+                "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
+                        "specs that measure type — it said FOUR until 2026-09-06, and the "
+                        "three that joined since arrived with nothing reading the sentence. `app/index.html` fetches its two faces with "
                         "`&display=swap`, which paints a fallback first and re-lays-out on "
                         "arrival — right for a reader, wrong for a ruler, because a "
                         "`getBoundingClientRect` taken inside that window measures a different "
@@ -3816,7 +3853,7 @@ COMPONENTS = [
                                                "second projection would arrive unnoticed. Not a "
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
-                                       "governed_by": ["D16", "D61", "D66", "D69"]},
+                                       "governed_by": ["D16", "D61", "D63", "D66", "D69"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "
@@ -3829,7 +3866,16 @@ COMPONENTS = [
                                               "which is the one question 56 green cases could not "
                                               "ask while the screen was a pile. Not a harness "
                                               "test — it starts a browser; `make design-check` "
-                                              "runs it.",
+                                              "runs it. AND THE ROWS ARE CROPPED SINCE "
+                                              "2026-09-06, which is what the operator sees and "
+                                              "not what this file used to measure: "
+                                              "`Pricing.tsx:pumpCrops` POSTs "
+                                              "`/pipeline/crop-preview` once per row it draws, "
+                                              "nothing here stubbed it, so every case sent that "
+                                              "POST to the capture port and took the `catch` — "
+                                              "seventy-one cases measuring the uncropped "
+                                              "fallback. Named by `app/tests/shell.ts`'s seal; "
+                                              "all seventy-one pass against the cropped render.",
                                       "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "

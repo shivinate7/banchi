@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 
@@ -266,6 +267,13 @@ async function shoot(page: Page, count: number): Promise<void> {
 function rows(page: Page) {
   return page.locator('.capture-undo-row')
 }
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. This
+   file already stubbed the shell's own `/status` by hand; the shared call replaces it so there
+   is one spelling of the rule, and adds what a hand-written stub could not: a catch-all that
+   REFUSES and names anything else that gets out. The call has to sit above the file's first
+   `test.beforeEach`, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the stack is the session, newest first, capped at ten', async ({ page }) => {
   await open(page)

@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
+import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
 
 /* docs/DESIGN.md's Fulfillment constraints table, every row of it, as assertions.
@@ -1356,6 +1357,14 @@ const WALK = [
   'Box 4 · Section 1 · Card 2',
 ]
 
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. The
+   Fulfiller's route is `persona: 'fulfiller'`, so `App.tsx` renders no chrome over it and
+   `useServerPresence` never polls: this file leaks no `/status` and never did. What it takes
+   the seal for is the other half — a read this screen makes that nothing here stubs would
+   otherwise go to the owner's real store, and the only thing that would say so is a
+   Fulfillment view drawing cards nobody put in this checkout. */
+sealEveryTest()
+
 test("the owner's position treatment never reaches the Fulfiller", async ({ page }) => {
   /* ONE HELPER CALL, and that is a property of the helpers rather than a shortcut. `openSearch`
      calls `openList` itself, and `openList` calls `stubServer` — routing a page twice leaves the
@@ -1956,6 +1965,13 @@ test('a body this screen cannot read fails the same way a dead server does', asy
       contentType: 'application/json',
       body: JSON.stringify({ version: 1 }),
     })
+  })
+  /* THE LEDGER TOO, BECAUSE THIS CASE NAVIGATES ITSELF RATHER THAN GOING THROUGH `openList`.
+     `Fulfillment.tsx` reads both on mount; only the one this case is about was stubbed, so the
+     other went to the capture port — the owner's real ledger in the main checkout, on the one
+     screen in this product a second person looks at. Named by `sealEveryTest`. */
+  await page.route(/\/orders$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(NO_ORDERS) })
   })
   await page.goto(VIEW_ROUTE)
   await settleFonts(page)

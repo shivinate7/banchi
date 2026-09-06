@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { sealEveryTest } from './shell'
 
 /* THE MARK, IN THE BROWSER THAT DRAWS IT.
  *
@@ -26,6 +27,13 @@ import { test, expect } from '@playwright/test'
  */
 
 const GALLERY = '#/gallery'
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER. This file registers no fixtures of its own, so it
+   takes the shared small store — `app/tests/shell.ts` carries the argument for both halves. The
+   call has to sit above every hook and every case, which `make docs-audit`'s `spec seal` row
+   checks: the navigation below happens inside a hook, and a seal declared under it would be
+   installed after the requests it exists to catch.  */
+sealEveryTest({ store: true })
 
 test('the sidebar brand draws the mark, and names itself without it', async ({ page }) => {
   await page.goto('/')

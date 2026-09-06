@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { sealEveryTest } from './shell'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
  *
@@ -177,44 +178,6 @@ type Sent = { method: string; url: string; body: unknown }
 async function open(page: Page, review = REVIEW): Promise<Sent[]> {
   const sent: Sent[] = []
 
-  /* THE SHELL'S OWN READ, WHICH THIS FILE HAD NEVER STUBBED. `App.tsx:useServerPresence`
-     polls `/status` from outside every route boundary, so it belongs to no screen and was
-     missed by a file that stubs everything its screen asks for. Unanswered, the shell draws a
-     44px offline banner ABOVE the view — and every geometry case here measures against a
-     900px viewport it has just made 44px smaller.
-
-     THAT IS WHAT FAILED `answering a card costs no scrolling`, AND THE COST IS TWICE THE
-     BANNER. Measured at this file's 1440x900 with the stub disabled and the fonts settled:
-     banner 44px, `.bn-view` 944.3px, document 988px, over by 88. The view is 44 too tall
-     because `App.css` sizes it `min-height: 100%` of a `.bn-shell-main` the banner has
-     already made taller — so the strip costs its own height and then the view keeps a whole
-     viewport beside it.
-
-     THE CASE'S OWN COMMENT ATTRIBUTES THAT 88 TO THE FONT SWAP, observed once under parallel
-     load, and `settleFonts` was added for it. That call stays — the swap cost this file a
-     different real red, a frame top read 4px apart either side of a Skip — but it is not what
-     this number was: with the fonts settled, disabling the stub below puts 88 straight back.
-
-     Answered instead by whatever is on this checkout's capture port, the case is just as
-     wrong the other way: in the main tree that is the owner's real server, kept alive at login
-     by `make launch-agent`, so whether a design floor passed depended on a process outside the
-     test. Shaped as `ServerStatus`; `nav.spec.ts` records what a wrong shape costs. */
-  await page.route(/\/status$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        captures_root: 'captures',
-        store: 'inventory/store.sqlite',
-        store_exists: true,
-        cards: review.length,
-        states: {},
-        queues: { review: review.length, parked: 0 },
-        next_index: {},
-      }),
-    })
-  })
-
   await page.route(/\/queues$/, async (route) => {
     await route.fulfill({
       status: 200,
@@ -290,15 +253,20 @@ async function open(page: Page, review = REVIEW): Promise<Sent[]> {
      absent panel is the correct render for it. Waiting on `.review-photo` here would make the
      pooled test fail in the helper, several assertions before the thing it is about. */
   await expect(page.locator('.review-card')).toBeVisible()
-
-  /* THE SHELL IS THE ONLINE ONE, ASSERTED ONCE FOR EVERY CASE IN THE FILE. The banner is 44px
-     of chrome this file measures around without ever naming, so its return has to fail as
-     itself rather than as a pixel count nobody can trace back to a missing stub. */
-  await expect(page.locator('.bn-banner')).toHaveCount(0)
   return sent
 }
 
 /* ---------------------------------------------------------------- the split, as numbers */
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THIS FILE PAID FOR THE RULE. Six cases below
+   spent thirty seconds each on a detached switch, and two more failed as bare pixel counts,
+   because the shell's `/status` went to whatever answers this checkout's capture port — the
+   owner's real server in the main tree, nothing at all in a worktree, where the shell then drew
+   its 44px offline banner above every measurement. Fixed by hand on 2026-09-05 and folded into
+   the shared mechanism here, so there is one spelling of it rather than two.
+   `app/tests/shell.ts` carries the argument, including the two invariants this call replaces:
+   it asserts the banner is absent and that no route boundary is showing its crash page. */
+sealEveryTest()
 
 test('the photograph is the largest thing on the screen', async ({ page }) => {
   await open(page)

@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
+import { sealEveryTest } from './shell'
 
 /* THE SHELL'S KEYBOARD, AND THE FIRST TEST THIS APP HAS HAD OF THE CHROME EVERY SCREEN SITS IN.
  *
@@ -135,6 +136,20 @@ async function stub(page: Page, cards: unknown[] = []) {
     }),
   )
   await page.route(/\/pipeline\/runs$/, (route) => json(route, { runs: [] }))
+  /* THE CORPUS FIRST AND THE WORKLIST SECOND, AND THE ORDER IS THE MECHANISM. `/\/pricing$/`
+     matches `…/pipeline/pricing` as happily as `…/pricing`, and Playwright takes the NEWEST
+     handler — so registering the corpus second answers the WORKLIST with a corpus, `roster`
+     comes back undefined, and `Home.tsx` goes down behind its route boundary on
+     `undefined.filter`. The narrower route is registered last and therefore wins. D86 is why
+     there are two: the corpus is the store's one pricing answer, the worklist is which cards
+     are in front of the operator. */
+  await page.route(/\/pricing$/, (route) =>
+    json(route, {
+      corpus: { rule: null, basis: null, sub_threshold: null, overrides: {} },
+      path: 'inventory/prices.json',
+      revision: 'r0',
+    }),
+  )
   /* Home and `#/pricing` both open on the pricing worklist (D86 made it one file for the
      store), so it is read on the way in to the ring rather than only on one screen. Every key
      present and empty, for the reason the two stubs below give at length. */
@@ -159,6 +174,10 @@ async function stub(page: Page, cards: unknown[] = []) {
      it. Every field the screen indexes is present rather than short, for the reason the order
      stub below gives at length — a payload missing a key makes "none" and "not asked" the same
      answer, and a screen drawn from a short map is a screen this stub could break. */
+  /* `#/codes` reads its lots beside its ledger, and that went to the capture port until
+     `sealEveryTest` named it — the same gap this stub's own `/status` comment records being
+     caught by hand once already. */
+  await page.route(/\/codes\/lots$/, (route) => json(route, { lots: [] }))
   await page.route(/\/codes$/, (route) =>
     json(route, {
       counts: {},
@@ -256,6 +275,13 @@ async function open(page: Page, hash: (typeof RING)[number], cards: unknown[] = 
   await page.goto(`/${hash}`)
   await expect(page.locator(VIEW[hash])).toBeVisible()
 }
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. This
+   file already stubbed the shell's own `/status` by hand; the shared call replaces it so there
+   is one spelling of the rule, and adds what a hand-written stub could not: a catch-all that
+   REFUSES and names anything else that gets out. The call has to sit above the file's first
+   `test.beforeEach`, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the step walks the sidebar in the order it is drawn, and the last screen is the last', async ({
   page,

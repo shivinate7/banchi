@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 
@@ -123,6 +124,7 @@ async function open(
   page: Page,
   session?: Record<string, string>,
   games: unknown = GAMES,
+  boxes: unknown = { boxes: [] },
 ): Promise<void> {
   await page.route(/\/games$/, async (route) => {
     await route.fulfill({
@@ -131,12 +133,25 @@ async function open(
       body: JSON.stringify(games),
     })
   })
-  await page.route(/\/status$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ cards: 0, next_index: {} }),
-    })
+  /* THE TWO READS THE CAPTURE SCREEN MAKES ON MOUNT BESIDE THE REGISTRY, WHICH THIS HELPER
+     NEVER STUBBED. `CaptureScreen.tsx`'s box-field effect fires on mount rather than when the
+     field opens — its guard is `openField !== null && openField !== 'box'` and `openField`
+     starts null — so `GET /boxes` went to the capture port from every case using this helper,
+     nineteen of them. `openWithBox` below stubs it and the cases that used that helper were
+     the only ones covered. `GET /tcg/sets` is deliberately NOT stubbed here beside
+     it: `routeSets` is called by its cases BEFORE this helper, and Playwright takes the newest
+     handler — so a stub here would shadow every one of their fixtures rather than back them up.
+
+     EMPTY IS THE ANSWER THIS ONE WANTS. These cases are about the claim tracks and the keys
+     that reach them; a box is what `openWithBox` is for.
+
+     THE `/status` STUB THAT SAT HERE IS GONE, and it is `sealEveryTest`'s now. It answered
+     `{cards: 0, next_index: {}}` — two of the eight keys `ServerStatus` carries — which is the
+     shape `nav.spec.ts` records taking the whole shell down when `Sidebar` reads
+     `status.cards` off a short payload. It survived here only because this screen renders no
+     sidebar. */
+  await page.route(/\/boxes$/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(boxes) })
   })
 
   /* Seeded BEFORE the app script runs, because `readSessionFinish` is the `useState`
@@ -212,6 +227,13 @@ async function openFinish(page: Page): Promise<void> {
   await page.keyboard.press('f')
   await expect(finishCells(page).first()).toBeVisible()
 }
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER — `app/tests/shell.ts` carries the argument. This
+   file already stubbed the shell's own `/status` by hand; the shared call replaces it so there
+   is one spelling of the rule, and adds what a hand-written stub could not: a catch-all that
+   REFUSES and names anything else that gets out. The call has to sit above the file's first
+   `test.beforeEach`, which is what `make docs-audit`'s `spec seal` row checks. */
+sealEveryTest()
 
 test('the finish claim is a SET: two cells read as pressed at once', async ({ page }) => {
   await open(page)
@@ -495,13 +517,11 @@ const DIVIDED = {
  *  route was called with, so a case can assert what went over the wire. */
 async function openWithBox(page: Page): Promise<string[]> {
   const bodies: string[] = []
-  await page.route(/\/boxes$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(ONE_BOX),
-    })
-  })
+  /* THE BOX FIXTURE IS HANDED TO `open` RATHER THAN REGISTERED AHEAD OF IT. `open` stubs
+     `GET /boxes` now — the capture screen reads it on mount and nineteen cases were sending
+     that read to the capture port — and Playwright takes the NEWEST handler, so a second one
+     here would be shadowed by the one registered later inside `open`. One parameter, one
+     handler, and the case that wants a box says which. */
   await page.route(/\/boxes\/\d+\/sections$/, async (route) => {
     bodies.push(route.request().postData() ?? '')
     await route.fulfill({
@@ -519,7 +539,7 @@ async function openWithBox(page: Page): Promise<string[]> {
       body: JSON.stringify({ error: 'no capture may happen in this spec' }),
     })
   })
-  await open(page)
+  await open(page, undefined, GAMES, ONE_BOX)
 
   await page.keyboard.press('b')
   /* WAIT FOR THE BOX TO BE OFFERED BEFORE TYPING AT IT. Under `fullyParallel` this raced:
@@ -539,6 +559,11 @@ function sectionButton(page: Page) {
 }
 
 test('S is the divider and H is the set hint: the remap, both halves', async ({ page }) => {
+  /* THE SET VOCABULARY, BECAUSE THIS CASE OPENS THE FIELD THAT FETCHES IT. Pressing `h` is
+     what `CaptureScreen.tsx:loadSets` is gated on, so this case — which is about the KEYS and
+     not about the list — was asking the capture port for the real set names. Named by
+     `sealEveryTest`; empty is the answer, because nothing below reads a row. */
+  await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: null })
   await open(page)
 
   /* `s` no longer opens a field. Asserted as an ABSENCE of the set hint's open state rather

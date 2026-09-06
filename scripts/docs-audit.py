@@ -7389,6 +7389,97 @@ def check_route_rosters(report: Report) -> None:
         f"{len(expected.get('all', []))} registered routes",
     )
 
+# ------------------------------------------------------------- the capture-port seal
+#
+# `app/src/server.ts` talks to a DIFFERENT ORIGIN from the one the page came off —
+# `${location.protocol}//${location.hostname}:${CAPTURE_PORT}` — so a spec that stubs
+# everything its own SCREEN asks for still leaks the shell's `GET /status`, which
+# `App.tsx:useServerPresence` polls from outside every route boundary and which therefore
+# belongs to no screen. Ten specs did, and two of them read boxes, inventory, runs and four
+# real card photographs besides. In the main checkout that port is the owner's live capture
+# server over their real store, kept alive at login by `make launch-agent`; in a worktree
+# nothing answers and the shell draws a 44px banner that moves every geometry floor
+# `make design-check` asserts. `app/tests/shell.ts` closes it.
+#
+# THIS ROW IS THE HALF THAT CANNOT BE CLOSED IN TYPESCRIPT. A missing call fails loudly on
+# its own — the spec's reads reach the port and the roster in `sealEveryTest`'s `afterEach`
+# names them. A call placed BELOW the file's own `test.beforeEach` does not: hooks run in
+# declaration order, so the seal installs after the navigation it was meant to catch, those
+# requests reach the real port UNRECORDED, and the assertion passes over an empty list. A
+# guard that goes green for having watched nothing is the failure `check dispatch` two
+# sections down exists about, in a second place.
+
+SEAL_CALL = re.compile(r"\bsealEveryTest\s*\(")
+
+# THE ANCHOR IS THE HOOK AND NOT `page.goto(`, and that distinction is the whole of what this
+# row gets right. A spec's `open()` helper is DEFINED above the seal call and RUNS inside the
+# test body, long after every hook has registered — `live-reconcile`, `markdown`, `pricing`
+# and `run-panel` are all shaped that way and all correct. Only a hook can register before the
+# seal does.
+SPEC_HOOK = re.compile(r"^\s*test\.before(?:Each|All)\s*\(", re.M)
+
+# Navigation is what makes a spec need the seal at all. `motion.spec.ts` drives
+# `app/src/motion.ts` directly with no page, and must not be dragged in.
+SPEC_GOTO = re.compile(r"\bpage\.goto\s*\(")
+
+
+def _blank_ts_comments(text: str) -> str:
+    """TypeScript comments replaced by their own newlines, so ORDER and LINE NUMBERS survive.
+
+    `_strip_ts_comments` collapses a block comment to a single space, which is right for
+    `route rosters` — it re-reads the raw text to find line numbers — and wrong here, where
+    the whole question is which of two constructs comes first in the file.
+    """
+    return TS_COMMENT.sub(lambda found: "\n" * found.group(0).count("\n"), text)
+
+
+def check_spec_seal(report: Report) -> None:
+    """Every spec that mounts the app seals this checkout's capture port, and seals it first.
+
+    Two claims, and the second is the one that cannot fail loudly on its own. See the banner
+    above for what each costs.
+    """
+    findings: List[Finding] = []
+    sealed = 0
+    for spec in sorted(glob_files(APP_TESTS, "*.spec.ts"), key=rel):
+        code = _blank_ts_comments(read(spec))
+        if SPEC_GOTO.search(code) is None:
+            continue
+        call = SEAL_CALL.search(code)
+        if call is None:
+            findings.append(
+                Finding(
+                    rel(spec),
+                    "navigates the app and never calls `sealEveryTest()`.\n"
+                    "Its unstubbed reads go to this checkout's capture port — in the main tree "
+                    "that is the owner's live server over their real store, and in a worktree it "
+                    "is the 44px offline banner that moves every design floor.\n"
+                    "Add `import { sealEveryTest } from './shell'` and call it at module scope, "
+                    "above the file's first `test.beforeEach`.",
+                )
+            )
+            continue
+        sealed += 1
+        hook = SPEC_HOOK.search(code)
+        if hook is not None and hook.start() < call.start():
+            findings.append(
+                Finding(
+                    f"{rel(spec)}:{code.count(chr(10), 0, call.start()) + 1}",
+                    "calls `sealEveryTest()` below the `test.beforeEach` on line "
+                    f"{code.count(chr(10), 0, hook.start()) + 1}.\n"
+                    "Hooks run in declaration order, so the seal would install AFTER that "
+                    "hook's `page.goto` — the requests it exists to catch would reach the real "
+                    "port and the roster would still be empty. Move the call above it.",
+                )
+            )
+
+    report.add(
+        "spec seal",
+        MECHANICAL,
+        findings,
+        f"{sealed} spec{'' if sealed == 1 else 's'} sealed against the capture port",
+    )
+
 # ------------------------------------------------------------------------ the route census
 #
 # CLAUDE.md said, for months: "THE COUNT IN THIS FILE HAS BEEN WRONG MORE OFTEN THAN IT HAS
@@ -9635,6 +9726,7 @@ def audit(staged_only: bool) -> Report:
     check_views_opsec(report)
     check_doc_hygiene(report, docs)
     check_route_rosters(report)
+    check_spec_seal(report)
     check_route_census(report)
     check_check_registry(report)
     check_commit_path(report)

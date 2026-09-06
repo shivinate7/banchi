@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { settleFonts } from './fontsReady'
+import { sealEveryTest } from './shell'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
  *
@@ -833,30 +834,12 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(GAMES) })
   })
 
-  /* THE SHELL'S OWN TWO READS, WHICH THIS FILE HAD NEVER STUBBED AND WHICH THEREFORE WENT TO
-     THE CAPTURE SERVER. Every other handler here carries the sentence about why: an unstubbed
-     read is a request to whatever is listening on this checkout's capture port, and in the main
-     tree that is the owner's real server over their real store, kept alive at login by
-     `make launch-agent`. These two escaped it because neither belongs to the screen — `/status`
-     is `App.tsx:useServerPresence`, outside every route boundary, and `/orders` is the walk's
-     claims read, which swallows its own failure.
-
-     BOTH ANSWERS WERE WRONG IN BOTH DIRECTIONS, WHICH IS WHY THIS IS NOT A TIDY-UP. Answered by
-     the owner's server, the walk drew THEIR open orders' claims over this fixture's seven cards.
-     Unanswered — a worktree, whose capture port has nothing on it (D43), or the main tree while
-     `make design-check`'s own browsers had the server wedged — `useServerPresence` went
-     `offline` and the shell drew its 44px banner above the view. That banner is what failed
-     `the box lives in the walk's column` (the search field at y=166 against
-     docs/DESIGN.md's 150px first-content floor, 122 without it) and `a walk-to scrolls the
-     walk` (the walked-to row pushed below the fold). Neither assertion was wrong and neither
-     number moved: the screen under them was the offline one, which no operator with a working
-     server ever sees.
-
-     `cards` MATCHES THE FIXTURE rather than being a constant: the sidebar renders it, and a
-     count that disagreed with the walk beside it is the same class of lie this stub is fixing.
-     The shape is `ServerStatus`, which `nav.spec.ts` records getting wrong once already —
-     `status.cards` is read straight into `Sidebar`, which sits outside every route boundary, so
-     a missing key takes the whole shell down a beat after the screen renders. */
+  /* THE SIDEBAR'S CARD COUNT, OVER `sealEveryTest`'s DEFAULT OF ZERO. The shared seal answers
+     `/status` for every spec in this directory and cannot know how big any one fixture is; a
+     module-scope hook has no access to a per-call `store`. This is the documented override —
+     registered later, so it wins, the same way every other handler in this file wins over the
+     seal — and it is here because the count is drawn in the sidebar BESIDE the walk, and two
+     numbers disagreeing on one screen is the class of lie this whole change is about. */
   await page.route(/\/status$/, async (route) => {
     await route.fulfill({
       status: 200,
@@ -873,9 +856,16 @@ async function open(
     })
   })
 
-  /* No open order wants anything here. D63's ledger is `orders.spec.ts`'s subject; what this
-     file needs from it is the honest empty answer, so no card in the walk carries a claim it
-     would have to draw. */
+  /* THE WALK'S CLAIMS READ, WHICH IS THIS SCREEN'S AND NOT THE SHELL'S. `Inventory.tsx` asks
+     `GET /orders` on mount for the open orders' claims on copies and swallows its own failure,
+     which is exactly how it escaped a file that stubs everything its screen asks for: nothing
+     went red when it went to the capture port instead. Answered by the owner's real server —
+     what `:8000` is in the main checkout — the walk drew THEIR open orders over this fixture's
+     seven cards. The shell's own `/status` is `sealEveryTest`'s now; this one stays here,
+     because it belongs to the screen.
+
+     EMPTY IS THE HONEST ANSWER. D63's ledger is `orders.spec.ts`'s subject; what this file
+     needs from it is that no card in the walk carries a claim it would have to draw. */
   await page.route(/\/orders$/, async (route) => {
     await route.fulfill({
       status: 200,
@@ -994,26 +984,6 @@ async function open(
      stronger wait anyway: it proves the inventory read landed AND that the walk grouped it,
      where a row only proves the first. */
   await expect(page.locator(options.settle ?? '.browse-sectfold').first()).toBeVisible()
-
-  /* TWO INVARIANTS OVER THE SHELL, ASSERTED ONCE HERE FOR EVERY CASE IN THE FILE, because
-     both of the failures they name were invisible at the point they were caused and loud
-     somewhere else entirely.
-
-     THE BANNER: a 44px strip above the view whenever `/status` does not answer. It shifts
-     every geometry measurement below it, so a floor asserted under it is asserted against a
-     screen the operator does not have. It failed two cases here as a bare number and nothing
-     said the word "offline".
-
-     THE CRASH PAGE: `RouteBoundary` swallows a throw and renders in the view's place, so the
-     control a case is reaching for is simply not there. Playwright reports that as
-     `element was detached from the DOM` after a thirty-second `locator.check` timeout — six
-     cases here, all of them naming a switch, none of them naming `undefined.find` in
-     `ClaimEditor`. Asserted on the HEADING and not on `.no-such-view`, which the 404 view
-     shares.
-
-     Both are cheap, both run before any case's first assertion, and both fail by name. */
-  await expect(page.locator('.bn-banner')).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'This screen stopped.' })).toHaveCount(0)
   return wire
 }
 
@@ -1085,6 +1055,16 @@ function censusValue(page: Page, label: string) {
 }
 
 // ------------------------------------------------------- one screen, not two modes (D31)
+
+/* NOTHING HERE MAY REACH THE CAPTURE SERVER, AND THIS FILE PAID FOR THE RULE. Six cases below
+   spent thirty seconds each on a detached switch, and two more failed as bare pixel counts,
+   because the shell's `/status` went to whatever answers this checkout's capture port — the
+   owner's real server in the main tree, nothing at all in a worktree, where the shell then drew
+   its 44px offline banner above every measurement. Fixed by hand on 2026-09-05 and folded into
+   the shared mechanism here, so there is one spelling of it rather than two.
+   `app/tests/shell.ts` carries the argument, including the two invariants this call replaces:
+   it asserts the banner is absent and that no route boundary is showing its crash page. */
+sealEveryTest()
 
 test('the walk is the screen — there is no mode switch to be on the wrong side of', async ({
   page,
