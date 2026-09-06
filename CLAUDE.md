@@ -232,6 +232,15 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   written `live`: 405 of 443 SKUs read 0 while carrying
                                    #   pushed copies, so the cap arithmetic saw 93 live copies
                                    #   where there were 1,079.
+                                   #   IT NOW RECORDS SKUS TCGPLAYER HOLDS THAT THIS STORE
+                                   #   NEVER SENT (D109), where it used to name them and drop
+                                   #   them: `live` and a first sighting are written, `pushed`
+                                   #   and `staged` stay 0 because this pipeline sent none of
+                                   #   it. Before this, 0 of 443 listing records had no card
+                                   #   behind them while the export carried 28 live SKUs that
+                                   #   did — so nothing could date a listing, nothing stopped
+                                   #   a rule marking the same one down every pass, and a copy
+                                   #   selling was invisible.
                                    #   It moves QUANTITIES and marks no card sold (D7).
                                    #   A reading OLDER than the store's own `live_as_of` is
                                    #   kept, not written, and named in the report — the
@@ -334,6 +343,14 @@ sentence**, and see "the census" below for what enforces that.
                               at `#/pricing?markdown=<stamp>` — the operator's whole LIVE
                               inventory out of a My Pricing export, where staleness is a filter
                               rather than a gate and the press writes a price-only `import.csv`.
+                              THE LIVE BOOK IS A ONE-PRESS DOOR (D109): with no joined runs this
+                              screen used to offer only "Go to Runs" — sending the operator away
+                              from 387 live listings because none came out of a camera here. It
+                              leads with "Price my live listings", which opens the sheet with the
+                              fetch already running. A listing this store never photographed is
+                              PRICEABLE there; only a sold-out row is locked, and the lens's
+                              field opens EMPTY with the rule's figure as a placeholder, so a
+                              bulk press moves only what was touched.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
                               read an export, write a worklist, price it without changing screen
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
@@ -588,7 +605,11 @@ A screen is not finished because it compiles.
   inline is one the next person disables without reading, so the exemptions are few and each
   one says why beside the key.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
-  by SKU with `Add to Quantity` = copy count, capped at 4 live.
+  by SKU with `Add to Quantity` = copy count, capped at the live cap. **That cap is
+  `policy.live_cap` in `inventory/prices.json` as of 2026-09-06** — store-wide, overridable
+  per run through `policy.per_run`, defaulting to D7's playset of four. It was a promise D7
+  made and nothing built: the parameter was threaded through `SkuMatch`, `join` and
+  `resolve.load` from the start and no caller ever passed anything but the module default.
 - **The pipeline is reachable from a screen as of 2026-08-24** (D33), **and lives on `#/runs`
   since 2026-08-29** (D39). Not folded (D33, amended): a free preflight, a two-step money gate
   with no typing, the three free steps, every command's stdout verbatim, and the import CSVs as
@@ -1032,6 +1053,7 @@ D105 The markdown lives where prices are decided, and one file may not have two 
 D106 The push and the publish are two presses, and the second one is the only thing here a buyer can see
 D107 The rule only ever marks down; the operator may point either way
 D108 The dock app is the page Chrome already renders, and the manifest is what makes it one
+D109 A price is a fact about a listing, and the store remembers listings it never photographed
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

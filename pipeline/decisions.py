@@ -84,6 +84,25 @@ def _price(value, label: str) -> Decimal:
         raise MalformedDecisions(f"{label}: {value!r} is not a price") from exc
 
 
+def parse_live_cap(value) -> int:
+    """The live cap as an integer of at least 1. Absent or null is the D7 default.
+
+    REFUSED RATHER THAN CLAMPED where it is present and unusable, the same rule
+    `check_threshold` follows: a missing key is a store that has never set one, and a key
+    holding `"four"` or `0` is somebody who meant something this cannot do. A cap of zero
+    would emit nothing for every SKU and read as a silent pipeline rather than as a setting.
+    """
+    if value is None:
+        return pricing.LIVE_QUANTITY_CAP
+    try:
+        cap = int(str(value).strip())
+    except (TypeError, ValueError):
+        raise MalformedDecisions(f"live_cap must be a whole number, got {value!r}") from None
+    if cap < 1:
+        raise MalformedDecisions(f"live_cap must be at least 1, got {cap}")
+    return cap
+
+
 def parse_sub_threshold(value) -> Optional[pricing.Disposition]:
     """`None` means unset, which is not an error here — it is what `blocking` refuses on.
 
@@ -192,6 +211,10 @@ class Decisions:
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
     sub_threshold: Optional[pricing.Disposition] = None
+    #: How many copies of one SKU may be live at TCGplayer at once (D7). A PROPERTY OF THE LOT
+    #: and so a policy key rather than a per-SKU answer — it decides how many copies leave the
+    #: drawer, never what any of them costs.
+    live_cap: int = pricing.LIVE_QUANTITY_CAP
     # A PRICE OR A `Withheld`, which is the exact widening `no_market_data` already
     # carries on the line below: that field has held `None | UNLISTED | Decimal` since D9.
     overrides: Dict[str, object] = field(default_factory=dict)
@@ -231,6 +254,7 @@ class Decisions:
             rule=pricing.Rule.parse(payload.get("rule", pricing.RULE_MATCH)),
             basis=pricing.check_basis(payload.get("basis", pricing.BASIS_MARKET)),
             sub_threshold=parse_sub_threshold(payload.get("sub_threshold")),
+            live_cap=parse_live_cap(payload.get("live_cap")),
             overrides=overrides,
             no_market_data=unpriced,
         )
@@ -255,6 +279,7 @@ class Decisions:
             "rule": str(self.rule),
             "basis": self.basis,
             "sub_threshold": sub,
+            "live_cap": self.live_cap,
             # `sorted()` OVER A MIXED-VALUE DICT IS SAFE: it compares the tuples and reaches
             # the second element only on a first-element tie, and dict keys are unique. So a
             # `Withheld` beside a `Decimal` never has to be ordered against one.

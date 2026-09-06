@@ -115,9 +115,20 @@ export function Markdown({
   onClose,
   revision,
   onCorpusWritten,
+  autoFetch = false,
 }: {
   readonly open: boolean
   readonly onClose: () => void
+  /** Fetch the live export the moment the sheet opens, rather than waiting for the press.
+   *
+   *  THE ONE-CLICK DOOR. `#/pricing` on a store with live listings and no joined runs used to
+   *  offer only "Go to Runs" — the screen where prices are decided sending the operator away
+   *  from 387 live listings because none of them came out of a camera. The marketplace band on
+   *  that deck opens this sheet with the fetch already running, so the whole distance from
+   *  "price my live inventory" to a priced worklist is one press. Fires ONCE per opening: the
+   *  guard is a ref rather than the `open` prop, because a re-render with `open` still true
+   *  must not ask TCGplayer for a second copy of the same file. */
+  readonly autoFetch?: boolean
   /** The corpus digest the screen this sheet is mounted on last read (D105).
    *
    *  IT TRAVELS BECAUSE THE SHEET NOW SHARES A TAB WITH A SCREEN THAT WRITES THE SAME FILE.
@@ -306,6 +317,22 @@ export function Markdown({
       setFetching(false)
     }
   }, [read])
+
+  /* THE AUTOMATIC FETCH, ONCE PER OPENING. `armed` is cleared when the sheet closes so the
+     next opening fetches again, and set before the await so a re-render mid-flight cannot
+     start a second one. A failure leaves it armed-and-spent deliberately: the operator gets
+     the sheet's own error and the ordinary button, rather than a retry loop against a remote
+     service. */
+  const armed = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      armed.current = false
+      return
+    }
+    if (!autoFetch || armed.current) return
+    armed.current = true
+    void fetchLive()
+  }, [open, autoFetch, fetchLive])
 
   const apply = useCallback(
     async (write: boolean) => {
@@ -547,11 +574,20 @@ export function Markdown({
             <code className="bn-code">emit</code>.
           </p>
 
+          {/* THE SUBSTITUTION, NAMED WHERE THE OPERATOR READS IT — and it is a substitution
+              only where the store has no sighting for the row. `reconcile --live --write`
+              records the first export seen holding a SKU, which IS the listing's own age, and
+              the report the run prints counts both clocks and says which it used. Claiming the
+              proxy unconditionally became a lie of its own the moment some rows had a real
+              one, which is D100's rule pointed the other way. */}
           <p className="markdown-caveat">
             <Icon name="clock" size={14} />
             <span>
-              The age this ranks on is how long the card has been <strong>owned</strong>, not how long
-              the listing has been live. The store cannot measure the second one. Read it as a floor.
+              This ranks on how long the <strong>listing</strong> has been live, from the first
+              export seen holding it. A SKU no export has caught yet falls back to how long the
+              card has been <strong>owned</strong> — a floor on the real age, never the age
+              itself. Run <code>reconcile --live</code> to give more rows a true one; the report
+              says which clock dated each.
             </span>
           </p>
 

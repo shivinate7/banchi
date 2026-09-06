@@ -772,6 +772,25 @@
   100% { background-color: var(--bn-surface-2); }
 }
 
+/* A ROW NO PRICE MAY BE PUSHED FOR — sold out at TCGplayer, so there is no live listing to
+   edit. Muted rather than warned: nothing is wrong, there is simply nothing to do here. */
+.pricing-locked {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-well);
+  color: var(--bn-muted);
+  font-size: var(--bn-fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .pricing-held {
   display: inline-flex;
   align-items: center;
@@ -1188,7 +1207,8 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   .pricing-price { grid-area: price; }
   .pricing-field { height: 44px; }
   .pricing-input { font-size: var(--bn-fs-xl); }
-  .pricing-held { height: 44px; }
+  .pricing-held,
+  .pricing-locked { height: 44px; }
   .pricing-actions { grid-area: act; align-self: start; }
   .pricing-actions .bn-btn { --btn-h: 44px; width: 44px; }
   .pricing-holdpanel { left: var(--bn-2); right: var(--bn-2); width: auto; top: calc(100% - 8px); }

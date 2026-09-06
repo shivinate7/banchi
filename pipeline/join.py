@@ -75,8 +75,12 @@ from typing import (
 
 from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 
-# D7 — a playset. Configurable, but never guessed at.
-LIVE_QUANTITY_CAP = 4
+# D7 — a playset. Configurable, but never guessed at. RE-EXPORTED rather than defined: the
+# figure lives in `pipeline/pricing.py`, which both this module and `pipeline/corpus.py`
+# import and neither of which imports the other, so the store-wide policy key and this
+# default cannot drift apart. Every caller and every document still spells it
+# `join.LIVE_QUANTITY_CAP`.
+LIVE_QUANTITY_CAP = pricing.LIVE_QUANTITY_CAP
 
 class OutputSuppressed(Exception):
     """emit_import refused: something was unmatched and has not been reported yet."""
