@@ -42,13 +42,13 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 9,
- title: 'the corner radius, and the band is closing from below only',
+ n: 10,
+ title: 'the radius, and the ceiling came down when it was finally crowded',
  sweeping: 'rr',
  unit: '× the stroke',
- values: [3.3, 3.85, 4.4, 4.95, 5.5],
- notes: {4.4:'nearest the 4.05 you judged five rounds against'},
- rejected: {2.6:'eliminated this round', 6.2:'eliminated this round — the ceiling is now tight'},
+ values: [3.85, 4.05, 4.35, 4.65, 4.95],
+ notes: {4.05:'the value pinned through rounds 1–5'},
+ rejected: {3.3:'eliminated this round', 5.5:'eliminated this round — after surviving three'},
  holds: {pad:0.22, gap:0.06, stroke:0.050, arm:0.32, tip:0.07, tl:0.45, tails:true},
  sizes: [96, 40, 22],
  history: [
@@ -59,19 +59,25 @@ const ROUND = {
   ['5', 'stroke', 'forced pair', '0.050', 'settled — holds 1px to kanji 20'],
   ['6', 'radius', '1.0 – 7.0 ×', '1.85 – 5.5 ×', 'both ends failed — 1.0 “far too square”'],
   ['7', 'radius', '1.85 – 5.5 ×', '2.6 – 5.5 ×', 'the recovered rule eliminated; reached my ceiling'],
-  ['8', 'radius', '2.6 – 6.2 ×', '3.3 – 5.5 ×', 'both ends failed; ceiling now tight at 5.5 / 6.2'],
+  ['8', 'radius', '2.6 – 6.2 ×', '3.3 – 5.5 ×', 'both ends failed; ceiling tight at 5.5 / 6.2'],
+  ['9', 'radius', '3.3 – 5.5 ×', '3.85 – under 5.5 ×', 'both ends failed; 5.5 out after surviving three rounds'],
  ],
- lede: '<b>The ceiling is settled and the floor is not.</b> 6.2× failed, so 5.5× good against 6.2× bad '+
-  'is a 13% bracket — fine enough to stop pushing upward. Everything left is where in 3.3–5.5.'+
-  '<br><br><b>A pattern worth naming before it decides something quietly.</b> Across rounds 6, 7 and 8 '+
-  'the bottom of your band has risen every time — 1.85 → 2.6 → 3.3 — while the top has not moved off '+
-  '5.5 once. Three rounds of the floor walking upward and the ceiling standing still is either a real '+
-  'optimum sitting near the top, or it is the tighter option losing simply for being the tightest thing '+
-  'on the row each time. <b>Those look identical from where I am sitting and they are not the same '+
-  'thing</b>, so if this round comes back “the top half” again I would rather stop halving and put 4.95 '+
-  'against 5.5 as a straight pair than keep walking a floor upward round after round.'+
-  '<br><br><b>4.4× is the nearest value to the 4.05×</b> the radius was pinned at for rounds 1–5, and it '+
-  'is still in.'
+ lede: '<b>The stopping condition I wrote last round did not fire, and the reason is the interesting '+
+  'part.</b> I said that if the band came back “the top half” a fourth time I would stop halving, '+
+  'because a floor that keeps walking upward while the ceiling never moves can be a real optimum near '+
+  'the top OR the tightest option losing for being tightest. It did not come back top-half: '+
+  '<b>5.5× is out</b>, after being accepted in rounds 6, 7 and 8.'+
+  '<br><br><b>So the ceiling was never being confirmed — it was never being crowded.</b> In every '+
+  'earlier round 5.5 sat at the top of the row with nothing above it and a large step below. The first '+
+  'time it had 4.95 and 4.4 pressed up against it, it lost. That is the same effect §6 records for the '+
+  'sheen and §3 for the ground: a value survives on a thin row and fails on a dense one, and only the '+
+  'second look is worth anything.'+
+  '<br><br><b>Both ends failed again</b> — 3.3 below, 5.5 above — so the band is interior and this '+
+  'halves it. <b>4.05× is carried in exactly</b>, because it is the corner the radius was pinned at '+
+  'while five rounds of stroke were judged, and whether it survives is worth knowing on the record '+
+  'rather than by inference.'+
+  '<br><br><b>This is close to the end.</b> At kanji 40 the whole band spans 2.2px of radius and each '+
+  'step is about half a pixel. If the row reads alike, that is the JND and §7 rule 7 stops it.'
 }
 
 const o=document.getElementById('out')
