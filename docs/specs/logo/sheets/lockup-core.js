@@ -74,13 +74,28 @@ function frame(el, opt){
   const g=document.createRange(); g.selectNodeContents(node)
   return g.getBoundingClientRect().width
  }
+ /* THE MATCH IS A FRACTION, NOT A BOOLEAN. The solve was written to drive the roman to the
+    kanji's full width, and the owner's answer on seeing it work was that neither end is right:
+    the roman should hang left and stop short of the right edge, by an amount worth choosing.
+    So `romanFill` is the target as a fraction of the kanji's width, and both previous states are
+    values of it -- 1.00 is the flush match, and the drawing judged for twenty-five rounds is
+    whatever fraction the type happened to set (0.774 at roman 0.36, and DIFFERENT at every other
+    roman size, which is the argument for making it a parameter rather than leaving it to
+    fall out).
+    Below the natural width the tracking goes negative and the letters tighten; that is a real
+    floor and the sweep is meant to find it. */
  const kw=textW(k), nn=r.textContent.length
+ const fill = opt.romanFill===undefined ? 1 : opt.romanFill
+ const target = kw*fill
  let ls=0
  if(opt.widthMatch!==false){
   for(let i=0;i<30;i++){const rw=textW(r)
-   ls+=(kw-rw)/nn; r.style.letterSpacing=ls.toFixed(3)+'px'
-   if(Math.abs(kw-textW(r))<0.2) break}
+   ls+=(target-rw)/nn; r.style.letterSpacing=ls.toFixed(3)+'px'
+   if(Math.abs(target-textW(r))<0.2) break}
  }
+ el.dataset.romanFill = fill.toFixed(4)
+ el.dataset.romanW = textW(r).toFixed(1)
+ el.dataset.kanjiW = kw.toFixed(1)
  r.style.marginRight=(-ls).toFixed(3)+'px'
  /* THE SOLVED TRACKING, WHICH IS THE ONLY ONE THAT REACHES THE DRAWING. The loop above overwrites
     whatever `romanTrack` asked for -- it width-matches the roman to the kanji, which is the
@@ -136,7 +151,13 @@ function frame(el, opt){
     claims some variables are held and one is swept; without these two the claim is prose. With
     them the sheet can assert the held ones were identical, the swept one moved, and no two
     specimens in a row are the same picture. */
- el.dataset.geom = body.length + ':' + body.slice(0, 400)
+ /* THE FINGERPRINT IS THE WHOLE DRAWING, NOT THE BRACKET. It was the SVG body alone, which was
+    enough while every swept variable moved the bracket -- and round 25 sweeps one that moves only
+    the TYPE, so five distinct specimens fingerprinted identically and the round sheet correctly
+    called itself not-a-sweep. The type's solved state belongs in here for the same reason the
+    bracket's does: a specimen is the lockup. */
+ el.dataset.geom = body.length + ':' + body.slice(0, 400) +
+   '|type ' + el.dataset.romanW + '/' + el.dataset.kanjiW + '/' + ls.toFixed(3)
  el.dataset.used = JSON.stringify({
   stroke: +(sw/size).toFixed(4), arm: +arm.toFixed(4), rr: +rr.toFixed(2),
   rrMul: +(rr/sw).toFixed(3),
@@ -149,5 +170,6 @@ function frame(el, opt){
      constant across a row. They are different facts and the round sheet needs each. */
   romanTrack: +(el.dataset.romanTrack||0),
   romanTrackSolved: +(el.dataset.romanTrackSolved||0),
+  romanFill: +(el.dataset.romanFill||0),
   romanOpacity: +(el.dataset.romanOpacity||0)})
  return h}

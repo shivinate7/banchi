@@ -48,17 +48,17 @@ window.__sheetReady = false
    =========================================================================================== */
 const ROUND = {
  n: 25,
- title: 'the roman’s size — the first of three numbers that were literals in the markup',
- sweeping: 'romanSize',
- unit: '× the kanji',
- values: [0.24, 0.30, 0.36, 0.44, 0.54],
- notes: {0.36:'the recovered pass’s value, and it was never a parameter until this round',
-         0.54:'the roman starts competing with the kanji rather than sitting under it'},
+ title: 'how far the roman runs — a fraction of the kanji’s width, hanging left',
+ sweeping: 'romanFill',
+ unit: '× the kanji’s width',
+ values: [0.62, 0.70, 0.775, 0.88, 1.00],
+ notes: {0.775:'what you have been looking at for twenty-five rounds — by accident, not by choice',
+         1.00:'flush right, the match the code always claimed'},
  rejected: {},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
-         romanTrack:0.14, romanOpacity:0.62, tails:true},
+         romanSize:0.36, romanTrack:0.14, romanOpacity:0.62, tails:true},
  sizes: [48, 32],
- context: [0.24, 0.30, 0.36, 0.44],
+ context: [0.70, 0.775, 0.88, 1.00],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -69,20 +69,20 @@ const ROUND = {
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
  ],
- lede: '<b>The arm locked at 0.32 — the value it was carrying.</b> Worth saying that plainly: it is the '+
-  'only inherited number in this series that a bracketed sweep confirmed rather than moved. The stroke, '+
-  'the padding and the gap all changed once they were actually offered against something.'+
-  '<br><br><b>Which leaves the roman, and the reason it went last is a defect rather than an order of '+
-  'preference.</b> Its three numbers — the size ratio, the tracking, the opacity — were <i>literals typed '+
-  'into the markup</i>, not parameters. So they could not be swept, could not be declared as held, could '+
-  'not be asserted against the drawing, and could not disagree with the spec in any way anything would '+
-  'notice. Every other value in this lockup has been reconciled against `docs/specs/logo.md` on every '+
-  'commit for twenty-four rounds; these three were invisible to all of it.'+
-  '<br><br><b>They are options now, defaulting to the recovered pass’s values</b>, recorded in the '+
-  'drawing’s fingerprint and declared in this round’s holds — so the two that are not being swept are '+
-  'asserted to have stayed put, like every other held value.'+
-  '<br><br><b>This round sweeps the size ratio.</b> At 0.24 the roman is a caption; at 0.54 it stops '+
-  'sitting under the kanji and starts competing with it. Both ends are meant to fail.'
+ lede: '<b>Neither end was right, so the match is a fraction now rather than a switch.</b> `romanFill` is '+
+  'the width the roman is tracked to, as a fraction of the kanji’s — and the two states you have already '+
+  'seen are both values of it. <b>1.00</b> is the flush match the code always claimed to perform. '+
+  '<b>0.775</b> is the drawing judged for twenty-five rounds.'+
+  '<br><br><b>That 0.775 was never chosen — it is just where Manrope lands at this size.</b> Which is the '+
+  'argument for the parameter: the unmatched roman fills a DIFFERENT fraction at every roman size, so the '+
+  'relationship you liked was never stable and could not survive round 26 moving the type. Held as a '+
+  'fraction it is the same shape at every size, which is what makes it a design rather than a coincidence.'+
+  '<br><br><b>Below the natural width the tracking goes negative and the letters tighten.</b> That is a '+
+  'real floor rather than a matter of taste, and 0.62 is there to find it — the caption prints the solved '+
+  'tracking, so a value that is crowding says so in a number as well as in the drawing.'+
+  '<br><br><b>The roman’s SIZE sweep is deferred to the next round on purpose.</b> Fill changes what a '+
+  'size looks like, so choosing size first would be choosing it against a relationship that is still '+
+  'moving — §7 rule 6.'
 }
 
 const o=document.getElementById('out')
@@ -191,7 +191,9 @@ const groups = ROUND.sizes.map(function(sz){
  o.appendChild(el('h2',null,'at kanji '+sz+(sz===ROUND.sizes[0]?' — the sidebar candidate':' — the floor')))
  return row(sz, ROUND.values, function(v){
   const note=ROUND.notes[v]
-  return {text:v.toFixed(2)+(note?' — '+note:''), was:!!note}})})
+  /* NOT toFixed(2). 0.775 printed as "0.78" is a caption naming a value the drawing beside it does
+     not have -- the smallest possible version of the bug this sheet has now had four times. */
+  return {text:String(v)+(note?' — '+note:''), was:!!note}})})
 
 /* Padding read on white always flatters the larger value, because more air is calmer with nothing
    to be calm against. The sidebar is where it has to hold: a 236px panel that already carries 12px
@@ -245,7 +247,9 @@ document.fonts.ready.then(function(){
    /* the SOLVED tracking, on the rounds that touch the roman -- it is the number that reached the
       drawing, and the seed beside it in `holds` is not */
    + (SWEPT.indexOf('roman')===0
-      ? '<br><span style="color:#b6bcc5">tracking solved to '+(+r.lk.dataset.romanTrackSolved).toFixed(3)+'× </span>' : '')
+      ? '<br><span style="color:#6b7280">roman '+r.lk.dataset.romanW+'px of '+r.lk.dataset.kanjiW+'px</span>'
+      + '<br><span style="color:'+(+r.lk.dataset.romanTrackSolved<0?'#c2410c':'#b6bcc5')+'">tracking '
+      + (+r.lk.dataset.romanTrackSolved*r.size).toFixed(2)+'px'+(+r.lk.dataset.romanTrackSolved<0?' — TIGHTENING':'')+'</span>' : '')
  })})
  check(all)
  window.__sheetReady = true

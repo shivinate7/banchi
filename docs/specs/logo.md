@@ -786,7 +786,8 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `rrMul` | 4.0 | rounds 6–10, closed on the JND |
 | `tip` | 0.15 | round 13 |
 | `tl` | 0.70 | rounds 11–12 |
-| `romanSize` | 0.36 | round 25 |
+| `romanSize` | 0.36 | carried; round 26 |
+| `romanFill` | 1.0 | round 25 |
 | `romanTrack` | 0.14 | a SEED, not an answer — see below |
 | `romanOpacity` | 0.62 | carried from the recovered pass |
 
