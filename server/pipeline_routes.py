@@ -2631,6 +2631,53 @@ def do_markdown_publish(stamp: str, payload: dict) -> dict:
     return {"published": record, "stamp": stamp}
 
 
+def do_markdown_rollback(stamp: str, payload: dict) -> dict:
+    """`POST /pipeline/markdowns/<stamp>/rollback` — discard a staged upload at TCGplayer.
+
+    THE UNDO FOR A PUSH, AND ONLY BEFORE IT IS PUBLISHED. Once the rows are live there is
+    nothing here to roll back: TCGplayer no longer holds them staged, and the way a live price
+    goes back is another markdown (D100 — nothing is deleted to change a price).
+
+    IT IS NARROWER THAN THE PORTAL'S OWN CONTROL, DELIBERATELY. `clearstagedinventory` is one
+    call that empties the operator's WHOLE staged channel and takes no id;
+    `rollbackexportcsv` takes the upload id and undoes exactly what this markdown sent. Only
+    the second is reachable from here, for `move_to_live`'s reason — a scope that can widen
+    is not something a button should be able to choose.
+    """
+    directory = _open_markdown(stamp)
+    record = _read_push(directory)
+    if record is None:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "nothing_staged",
+            f"Markdown {stamp} has nothing staged at TCGplayer, so there is nothing to "
+            f"discard. Nothing was sent.",
+        )
+    if record.get("published_at"):
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "already_published",
+            f"That upload went live at {record['published_at']}, so TCGplayer no longer holds "
+            f"it staged and there is nothing to roll back. A live price goes back the way it "
+            f"came down — another markdown. Nothing was sent.",
+        )
+    if not bool(payload.get("confirm")):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Discarding a staged upload reaches TCGplayer. Send `confirm` once the operator "
+            "has pressed it; nothing was sent.",
+        )
+    try:
+        tcg_import.rollback(str(record["upload_id"]))
+    except tcg_import.FetchRefusal as refusal:
+        raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, refusal.code, refusal.message) from None
+    # THE RECEIPT GOES WITH THE UPLOAD IT DESCRIBED. Leaving it would leave the screen
+    # offering to publish rows TCGplayer has been told to forget.
+    (directory / PUSH_RECORD).unlink(missing_ok=True)
+    return {"rolled_back": record.get("upload_id"), "stamp": stamp}
+
+
 PUSH_RECORD = "push.json"
 
 

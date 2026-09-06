@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cli import runs
+from cli import cmd_reprice, runs
 from pipeline import join, livecheck, tcgcsv
 from store import master
 from store.session import Store
@@ -144,11 +144,48 @@ def run_live(args, say) -> int:
     # THE READING'S TIME IS THE FILE'S, and the preview and the write are computed by one
     # local so they cannot disagree about which rows the store outranks.
     as_of = str(source["mtime"])
-    adopt, kept = _settlement(
-        report.agreed + report.unexplained + report.beyond,
-        snapshot.inventory.listings,
-        as_of,
-    )
+    # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D106), read
+    # BEFORE the preview and not just before the write. `_settlement`'s own docstring says the
+    # preview and the write are computed from one rule so the preview "cannot promise a
+    # correction the write then refuses" — a skip applied only on the write path would break
+    # exactly that, and silently, because the dry run is what the operator reads first.
+    just_published = cmd_reprice.published_recently()
+    settling = [
+        row for row in report.agreed + report.unexplained + report.beyond
+        if row.sku not in just_published
+    ]
+    held_back = [
+        row for row in report.agreed + report.unexplained + report.beyond
+        if row.sku in just_published
+    ]
+    adopt, kept = _settlement(settling, snapshot.inventory.listings, as_of)
+
+    def _say_held(stored_of) -> None:
+        """The SKUs this refuses to settle, and why, in both the preview and the receipt.
+
+        NAMED, NEVER SILENT. A held SKU is a settlement the operator asked for and did not
+        get, and D87's posture for a reading it will not take is to keep the stored figure and
+        REPORT it. The sentence says what to do, because "wait" is actionable and "skipped"
+        is not.
+        """
+        if not held_back:
+            return
+        say("")
+        say(f"held back        {len(held_back)} SKU(s) published from here in the last "
+            f"{cmd_reprice.PUBLISH_LAG_S // 60} minutes")
+        say("                 TCGplayer's live export is not read-your-writes: after a publish it "
+            "goes on serving")
+        say("                 the old price, and the file's date is when it was FETCHED — so a "
+            "stale reading")
+        say("                 arrives looking fresh and would overwrite what was just set. The "
+            "store keeps its")
+        say("                 own figure. Re-run this later and they settle normally.")
+        for row in held_back[:8]:
+            stored = stored_of(row.sku)
+            say(f"                   {row.sku}  published {just_published[row.sku]}  "
+                f"store {stored} vs export {row.live}")
+        if len(held_back) > 8:
+            say(f"                   … and {len(held_back) - 8} more")
 
     if not args.write:
         say("")
@@ -157,6 +194,8 @@ def run_live(args, say) -> int:
             f"this export (fetched {source['mtime']}).")
         for sku, stored, stamp, offered in kept[:8]:
             say(f"                   {sku}  store {stored} (as of {stamp}) vs export {offered}")
+        _say_held(lambda sku: max(0, int(snapshot.inventory.listings[sku].live))
+                  if sku in snapshot.inventory.listings else 0)
         say("`pushed` is left alone: it is the cumulative record of what was sent, and")
         say("`cli/resolve.py:_copies_out` already corrects a stuck one against the physical")
         say("ceiling. Re-run with --write.")
@@ -165,8 +204,11 @@ def run_live(args, say) -> int:
     moved = 0
     touched = 0
     kept_count = 0
+    # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D106). Read
+    # before the write opens, because it walks the markdown receipts on disk and the store
+    # lock is not the place to do that.
     with store.write() as writable:
-        for row in report.agreed + report.unexplained + report.beyond:
+        for row in settling:
             listing = writable.inventory.listings.get(row.sku)
             if listing is None:
                 continue
@@ -185,6 +227,14 @@ def run_live(args, say) -> int:
             elif verdict == master.KEPT:
                 kept_count += 1
         stages = writable.inventory.listing_counts()
+        # THE HELD SKUS' OWN FIGURES, LIFTED INSIDE THE LOCK. They are what the receipt
+        # prints, and reading them off `snapshot` afterwards would print a number from before
+        # a write that may have touched other rows of the same document.
+        stages_live = {
+            sku: writable.inventory.listings[sku].live
+            for sku in just_published
+            if sku in writable.inventory.listings
+        }
 
     say("")
     say(f"settled          {touched} listing(s); {moved} copy(ies) of `{master.LIVE}` "
@@ -192,6 +242,7 @@ def run_live(args, say) -> int:
         f"export")
     for sku, stored, stamp, offered in kept[:8]:
         say(f"                   {sku}  store {stored} (as of {stamp}) vs export {offered}")
+    _say_held(lambda sku: max(0, int(stages_live.get(sku, 0))))
     counted = ", ".join(f"{k} {v}" for k, v in stages.items() if v) or "empty"
     say(f"listings         {counted}")
     if report.unexplained_copies:

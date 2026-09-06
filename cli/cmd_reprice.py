@@ -37,11 +37,12 @@ SKUs from then on, and the receipt is what explains them.
 
 from __future__ import annotations
 
+import csv
 import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 from cli import runs
 from pipeline import corpus, decisions, pricing, reprice, tcgcsv
@@ -65,6 +66,92 @@ SHOWN = 25
 
 def _markdowns_dir() -> Path:
     return files.inventory_dir() / DIRNAME
+
+
+#: How long after a publish TCGplayer's own live export cannot be trusted about the SKUs that
+#: were published.
+#:
+#: MEASURED IN ONE DIRECTION ONLY, AND THIS CONSTANT SAYS SO. On 2026-09-06 a real publish was
+#: confirmed at 19:25:32 — `Update: [Vilemaw / Marketplace]`, zero errors — and roughly FORTY
+#: SECONDS later `Export From Live` still served the pre-publish price, while the seller
+#: portal's own grid served the new one. So the lower bound is measured at ~40s. **When it
+#: actually converges was never measured**, because measuring that costs another live price
+#: change on the owner's real store.
+#:
+#: 15 MINUTES IS THEREFORE A CHOICE AND NOT A READING, and it is deliberately generous: what
+#: it costs when too long is a reconcile the operator repeats later, and what it costs when
+#: too short is a wrong number written into `live` — the field `cli/resolve.py:_copies_out`
+#: treats as a floor that cannot be argued below. The two costs are not symmetric.
+#:
+#: HOW TO REPLACE IT WITH A MEASUREMENT: publish one SKU, then fetch the live export on a
+#: fixed interval until its price agrees, and record the interval. That is a real experiment
+#: and it belongs in `docs/specs/stale-listings.md` §6 beside the timeline that produced this.
+PUBLISH_LAG_S = 15 * 60
+
+
+def published_recently(now: Optional[datetime] = None, window_s: int = PUBLISH_LAG_S) -> Dict[str, str]:
+    """SKUs published to TCGplayer inside the window, mapped to when.
+
+    WHY THIS EXISTS. `Export From Live` is not read-your-writes (D106, measured): after a
+    confirmed publish it goes on serving the OLD price for a while. `reconcile --live` writes
+    the store's `live` field off that export and dates the reading by the FILE'S mtime — which
+    is the fetch time, and so looks fresh. The content is stale and the timestamp says
+    otherwise, so `Listing.live_reading` picks the export and the pre-publish figure wins.
+
+    THE RECEIPT SAYS WHEN AND THE FILE SAYS WHICH. `push.json` carries `published_at`; the
+    `import.csv` beside it carries the rows that went. Neither is re-derived from the store,
+    so this cannot disagree with what was actually sent — and a markdown that was pushed but
+    never published contributes nothing, because nothing about it reached the live export.
+
+    IT NARROWS TO SKUS RATHER THAN BLOCKING THE RECONCILE. The rest of the store is not in
+    doubt, and D87's own rule for a reading it will not take is to KEEP the stored value and
+    NAME it in the report rather than to refuse the whole document. This is that rule, pointed
+    at a second clock.
+    """
+    moment = now or datetime.now(timezone.utc)
+    recent: Dict[str, str] = {}
+    root = _markdowns_dir()
+    if not root.is_dir():
+        return recent
+    for directory in root.iterdir():
+        record = files.read_json(directory / "push.json", {}) or {}
+        stamp = record.get("published_at")
+        if not stamp:
+            continue
+        try:
+            when = datetime.fromisoformat(str(stamp))
+        except ValueError:
+            # A receipt this cannot date is treated as RECENT, not as old. The whole point is
+            # to refuse a figure we cannot vouch for, and an unparseable stamp is exactly that.
+            when = moment
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if (moment - when).total_seconds() > window_s:
+            continue
+        for sku in _skus_in(directory / IMPORT):
+            # NEWEST PUBLISH WINS, so a SKU published twice reports the stamp that matters.
+            if sku not in recent or stamp > recent[sku]:
+                recent[sku] = str(stamp)
+    return recent
+
+
+def _skus_in(path: Path) -> List[str]:
+    """The `TCGplayer Id` column of one import file, or nothing if it is unreadable.
+
+    UNREADABLE MEANS EMPTY AND NOT AN ERROR. This runs inside a reconcile the operator asked
+    for; a markdown directory somebody half-deleted must not take the settlement down with it.
+    """
+    if not path.is_file():
+        return []
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            return [
+                (row.get(tcgcsv.SKU_COLUMN) or "").strip()
+                for row in csv.DictReader(handle)
+                if (row.get(tcgcsv.SKU_COLUMN) or "").strip()
+            ]
+    except (OSError, csv.Error, UnicodeDecodeError):
+        return []
 
 
 def _stamp() -> str:

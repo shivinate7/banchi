@@ -374,7 +374,7 @@ COMPONENTS = [
                                         "which the next emit re-lists at the rule price and "
                                         "undoes the markdown.",
                                "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
-                                               "D100", "D103"],
+                                               "D100", "D103", "D87", "D106"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
                                     "is unanswered. ONE PRESS WRITES ONE SPREADSHEET (D99) — "
@@ -406,7 +406,7 @@ COMPONENTS = [
                                     "copy is committed, and set_state has no terminal guard, so "
                                     "iterating those would resurrect a sold card (D10, D26).",
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58", "D59", "D86", "D99"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106"], "tested_by": ["T7"]},
             "resolve.py": {"does": "turning a run's identifications into a join; shared by join and emit. "
                                    "`paperwork_for` is the other direction and lives here for the "
                                    "reason `pipeline/orders.py` may not hold it: it reads a run "
