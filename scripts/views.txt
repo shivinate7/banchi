@@ -67,16 +67,60 @@ inventory     http://localhost:5173/#/inventory
 # The pipeline, on its own route since 2026-08-29 (D39). Worth its own render for the reason
 # every other line here has one: it is a screen a human looks at, and with the capture server
 # down it draws its own refusal rather than the box picker — which is a real state and the
-# wrong one to judge the layout by. It draws no stored capture photo at all, so the `views
-# exposure` question the other owner routes raise does not arise here.
+# wrong one to judge the layout by.
+#
+# THIS RENDER DRAWS NO STORED CAPTURE PHOTO, AND THE SCREEN IS NOT WHY. It said "it draws no
+# stored capture photo at all" until 2026-09-05, which is a claim about `#/runs` and is false:
+# `app/src/RunsComposer.tsx:692` draws `photoUrl(preview.sample.box, preview.sample.index)` —
+# the ghost under the read-preview's crop, a real stored photograph of a real card. What is
+# true is narrower and is a fact about the RENDER STATE this line takes, so it is written that
+# way. Three independent gates stand between a bare `#/runs` and that image, and all three hold
+# in a headless render that presses nothing:
+#
+#   the composer is a modal          `if (!open) return null` (RunsComposer.tsx:430), and
+#                                    nothing opens it but a press
+#   the stage is not the read stage  `stage` initialises to 'boxes' (RunsComposer.tsx:115) and
+#                                    only the Next button sets 'read'; the preview lives in the
+#                                    `stage === 'read'` branch at RunsComposer.tsx:575
+#   the scope is empty               `scoped = cart.length > 0` (RunsComposer.tsx:190), and the
+#                                    preview is not even FETCHED unless `showing && scoped`
+#                                    (RunsComposer.tsx:241, 246)
+#
+# So the `views exposure` row still names this line, and it is right to: that row reads the
+# component subtree for reach and cannot read React control flow, which is exactly the judgement
+# its docstring declines to make. Reach is unchanged by this paragraph. The discharge it names is
+# a `pooled` assertion in `app/tests/runs.spec.ts` — which does not exist — not a sentence here.
 runs          http://localhost:5173/#/runs
 
-# Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter,
-# so what a person sees here is the run picker — the state the screen opens in when it is
-# reached by its chord rather than by the link from `#/runs`, and the one whose chrome the
-# page-chrome numbers govern. It draws no stored capture photo in that state; the photo panel
-# is opened per row, on demand, and cannot be in a render taken with nothing selected. So the
-# `views exposure` question the other owner routes raise does not arise here either.
+# Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter.
+#
+# WHAT STOOD HERE WAS FALSE ON BOTH HALVES, AND IT IS DRIFT RATHER THAN AN ERROR OF REASONING.
+# The paragraph was written 2026-08-29 (a5b7064), when a run WAS the unit of this screen; D86's
+# corpus landed on it 2026-09-01 (7013c9f) and moved the pricing answer to one file for the
+# store. The sentences below it never moved.
+#
+# It said "what a person sees here is the run picker". There is no picker state to open in.
+# `app/src/Pricing.tsx:497` documents `PickRuns` as "a filter over the worklist, never a gate in
+# front of it (D86)", and the no-run branch at Pricing.tsx:3085 renders "{runCount} runs are
+# loaded" (Pricing.tsx:3087) — a note beside a cut-off control, not a door. With no `?run=` the
+# FULL cross-run worklist renders, which is the screen's own default and the whole point of D86.
+#
+# It said the photo panel "cannot be in a render taken with nothing selected", and named only
+# the drawer at Pricing.tsx:2637. That is one of two photo draws and the wrong one to stop at.
+# `PricingThumb` (defined Pricing.tsx:709, used Pricing.tsx:2386 as `<PricingThumb at={first}`,
+# where `first = sku.positions[0] ?? null` at Pricing.tsx:2365) draws
+# `src={photoUrl(at.box, at.index)}` at Pricing.tsx:764 on EVERY row that has a position. No
+# selection, no press, no drawer. A render of this line over a populated store is a wall of
+# stored card photographs, and the `views exposure` row is right to disagree with the old text.
+#
+# WHAT THAT ROW ACTUALLY SAYS ABOUT THIS LINE TODAY IS A SEPARATE FACT, AND IT IS AN ACCIDENT.
+# `#/pricing` is exempted by `_pooled_exclusion_evidence`, which passes any route whose
+# `app/tests/<route>.spec.ts` merely CONTAINS the word `pooled` or `located` — and
+# `app/tests/pricing.spec.ts` line 898 says "RELOCATED HERE FROM `run-panel.spec.ts`". The
+# match is a SUBSTRING OF AN UNRELATED WORD, in prose about where a test block moved from. That
+# is a body-vocabulary match, not the proof in a Playwright assertion the Fulfillment view
+# earns, and it is what the exemption is being rewritten to refuse. Do not read this line's
+# silence in the audit as clearance.
 pricing       http://localhost:5173/#/pricing
 
 # The order screen and the shipping lane, both routed 2026-08-30 (D69). Two renders because
