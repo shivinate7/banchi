@@ -618,10 +618,18 @@ def _apply(args, say) -> int:
     say(f"would upload     {len(application.edits)} SKU(s), {application.copies} copy(ies)")
     if application.edits:
         say(f"                 giving up {_money(application.given_up)} of asking value")
+        # A RAISE IS SAID OUT LOUD, ON ITS OWN LINE, AND NEVER NETTED INTO THE FIGURE ABOVE
+        # (D107). This command is called a markdown; a row inside it pointing the other way is
+        # the one an operator most needs told, and `given_up` deliberately does not offset.
+        if application.raised:
+            say(f"                 {len(application.raised)} of them RAISED, adding "
+                f"{_money(application.taken_on)} — the rule never proposes a raise, so these "
+                f"are prices you typed")
         say("")
         say("  copies  sku         was       now   card")
         for edit in application.edits[:SHOWN]:
-            say(f"  {edit.live:>6}  {edit.sku:<10}  {edit.was:>6.2f}  {edit.now:>6.2f}   "
+            arrow = "^" if (edit.cut or 0) < 0 else " "
+            say(f"  {edit.live:>6}  {edit.sku:<10}  {edit.was:>6.2f}  {edit.now:>6.2f} {arrow} "
                 f"{edit.name[:44]}")
         if len(application.edits) > SHOWN:
             say(f"  ... and {len(application.edits) - SHOWN} more")
@@ -733,10 +741,13 @@ def _apply(args, say) -> int:
         f"import           {target}",
         f"rows             {len(rows)} SKU(s), {application.copies} copy(ies)",
         f"given up         {_money(application.given_up)} of asking value",
+        f"raised           {len(application.raised)} SKU(s), adding "
+        f"{_money(application.taken_on)}",
         "add to quantity  0 on every row — this file changes prices and no quantity",
         "",
     ] + [
-        f"  {edit.sku:<10} {edit.was} -> {edit.now}  x{edit.live}  {edit.name}"
+        f"  {edit.sku:<10} {edit.was} -> {edit.now}"
+        f"{'  RAISED' if (edit.cut or 0) < 0 else ''}  x{edit.live}  {edit.name}"
         for edit in application.edits
     ]
     (path.parent / RECEIPT).write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -747,7 +758,7 @@ def _apply(args, say) -> int:
     say(f"                 {len(application.edits)} answer(s) into {corpus.FILENAME}")
     say("")
     say("Upload import.csv to TCGplayer through My Pricing. It carries `Add to Quantity` 0 on")
-    say("every row, so it lowers prices and cannot add, remove or delete a single copy.")
+    say("every row, so it changes prices and cannot add, remove or delete a single copy.")
     return 0
 
 

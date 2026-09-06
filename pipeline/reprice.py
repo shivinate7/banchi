@@ -460,7 +460,11 @@ NOT_IN_WORKLIST = "not_in_worklist"      # a SKU this markdown's survey never sa
 DUPLICATE = "duplicate"                  # the same SKU twice in one file (D7)
 UNREADABLE = "unreadable"                # the price cell is not a number
 BELOW_FLOOR = "below_floor"              # under $0.40, which TCGplayer will not take
-RAISED = "raised"                        # above what the export reported. Never on this path.
+RAISED = "raised"                        # above the live price. RETIRED as a refusal by D107 —
+                                         # `read_back` lets an operator's raise through — and
+                                         # kept in the vocabulary because receipts written
+                                         # before that date carry it, and `reason_label` is
+                                         # what renders them.
 UNCHANGED = "unchanged"                  # equal to what the export reported
 
 # THE TWO THE LENS ADDS, AND THEY ARE THE SURVEY'S OWN CODES RATHER THAN NEW VOCABULARY. A row
@@ -474,7 +478,7 @@ EDIT_SENTENCE: Dict[str, str] = {
     DUPLICATE: "the same SKU appears twice",
     UNREADABLE: "the price cell is not a number",
     BELOW_FLOOR: "below the $0.40 floor",
-    RAISED: "above the live price; this path only lowers",
+    RAISED: "above the live price (a refusal until D107; kept for older receipts)",
     UNCHANGED: "the same price it is already listed at",
     # VERBATIM FROM `SKIP_SENTENCE`, not re-worded, so the survey and the apply cannot drift
     # into two descriptions of one fact.
@@ -522,18 +526,46 @@ class Application:
 
     @property
     def given_up(self) -> Decimal:
+        """Asking price surrendered across every copy — LOWERED ROWS ONLY.
+
+        RAISES ARE NOT NETTED IN, and that is the whole point of the figure. It answers "what
+        does pressing this cost me", and a raise is not a cost; letting one offset a markdown
+        would report a file that cuts $40 and lifts $40 as free, which is the one reading an
+        operator must not be given about their own money.
+        """
         return sum(
-            ((edit.cut or Decimal(0)) * edit.live for edit in self.edits), Decimal(0)
+            ((edit.cut or Decimal(0)) * edit.live for edit in self.edits
+             if (edit.cut or Decimal(0)) > 0), Decimal(0)
+        )
+
+    @property
+    def lowered(self) -> List[Edit]:
+        return [e for e in self.edits if (e.cut or Decimal(0)) > 0]
+
+    @property
+    def raised(self) -> List[Edit]:
+        """Rows the operator priced UP (D107). Named separately everywhere it is reported —
+        a raise inside a thing called a markdown is exactly the row that must not be silent."""
+        return [e for e in self.edits if (e.cut or Decimal(0)) < 0]
+
+    @property
+    def taken_on(self) -> Decimal:
+        """Asking price added across every raised copy — `given_up`'s mirror."""
+        return sum(
+            ((-(edit.cut or Decimal(0))) * edit.live for edit in self.edits
+             if (edit.cut or Decimal(0)) < 0), Decimal(0)
         )
 
     @property
     def fatal(self) -> List[Edit]:
         """Refusals that stop the whole file rather than one row.
 
-        A duplicate SKU is undefined behaviour in an import (D7) and a raised price is the
-        one thing this command promises never to do. Neither is a row to skip past.
+        A duplicate SKU is undefined behaviour in an import (D7), and that is now the only
+        one: a raised price used to be here on the grounds that it was "the one thing this
+        command promises never to do", and D107 retired that promise rather than the guard —
+        the rule still cannot propose a raise, and an operator still can.
         """
-        return [e for e in self.refused if e.refusal in (DUPLICATE, RAISED)]
+        return [e for e in self.refused if e.refusal == DUPLICATE]
 
 
 def read_back(
@@ -625,10 +657,19 @@ def read_back(
             continue
         edit.now = after
 
-        if after > before:
-            edit.refusal = RAISED
-            out.refused.append(edit)
-            continue
+        # A RAISE GOES THROUGH, AND IT IS THE OPERATOR'S AND NEVER THE RULE'S (D107).
+        #
+        # `plan` still refuses its own proposal when it is not a markdown (NOT_A_MARKDOWN), so
+        # nothing automatic can arrive here pointing up: a price above `was` is a number a
+        # person typed, in the worklist or on `#/pricing`. Refusing it made the screen offer a
+        # field it would not honour — the operator raised a price, the whole file was refused,
+        # and the reason blamed the direction rather than the design.
+        #
+        # WHAT D100 ACTUALLY PROTECTS IS UNTOUCHED BY DIRECTION: `Add to Quantity` is 0 on
+        # every row, nothing is deleted at TCGplayer, and a duplicate SKU is still fatal. Its
+        # "safe to upload by accident" argument survives too, and points this way — a file
+        # uploaded by mistake that RAISES costs sales until it is noticed, where one that
+        # lowers sells stock at the wrong price and cannot be recalled.
         if after == before:
             edit.refusal = UNCHANGED
             out.refused.append(edit)
