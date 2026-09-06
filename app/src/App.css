@@ -15,6 +15,9 @@
 
 /* ---- sidebar ------------------------------------------------------------- */
 .bn-side {
+  /* the rail cuts this 12px -> 8px, which snapped every child sideways in the frame the column
+     began easing. On the column's own clock instead, so the whole panel closes as one thing. */
+  transition: padding var(--bn-t-slow) var(--bn-ease);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -121,16 +124,26 @@
 .bn-nav[data-armed='true'] .bn-nav-link .bn-kbd { color: var(--bn-accent); border-color: var(--bn-accent); }
 .bn-nav-badge { margin-left: auto; }
 
-/* Rail (collapsed) */
+/* Rail (collapsed)
+
+   NOTHING IN HERE MAY CENTRE ITSELF IN THE SIDEBAR'S OWN WIDTH. `justify-content: center` and
+   `margin: 0 auto` resolve against a width that is ANIMATING for 320ms, so at frame 0 every
+   centred child jumped to the middle of a still-open column and slid back. Measured at 1440 on
+   ⌘.: the mark's centre went 36 -> 114.8 -> 31.5 and the nav icons went 33 -> 114.8 -> 32. A
+   rubber-band on every row, in the shipped product, and invisible in a screenshot because it only
+   exists between two resting states that are both correct.
+   The sidebar has a spine at x = 32 and the collapse is meant to delete everything to the right of
+   it while nothing travels. These rules pin to that spine instead: a left offset the animating
+   width cannot reach into. Same resting positions, to the pixel. */
 .bn-shell[data-rail='true'] .bn-side { padding: var(--bn-3) var(--bn-2); }
-.bn-shell[data-rail='true'] .bn-side .bn-brand { justify-content: center; padding: var(--bn-2) 0; }
+.bn-shell[data-rail='true'] .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
 .bn-shell[data-rail='true'] .bn-side .bn-brand-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link .bn-kbd,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-badge,
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot-text { display: none; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
-.bn-shell[data-rail='true'] .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; margin: 0 auto; }
+.bn-shell[data-rail='true'] .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; margin: 0; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot { align-items: center; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn { width: 40px; padding: 0; }
@@ -189,10 +202,11 @@
   .bn-shell, .bn-shell[data-rail='true'] { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
   .bn-side { padding: var(--bn-3) var(--bn-2); }
   .bn-side-collapse { display: none; }
-  .bn-side .bn-brand { justify-content: center; padding: var(--bn-2) 0; }
+  /* the spine, again — see the rail block above. This breakpoint has no `data-rail` at all. */
+  .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
   .bn-side .bn-brand-text, .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge, .bn-side .bn-side-foot-text { display: none; }
   .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
-  .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0 auto; }
+  .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0; }
   .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
   .bn-side .bn-side-foot { align-items: center; }
   .bn-side .bn-side-foot .bn-btn { width: 44px; height: 44px; padding: 0; }

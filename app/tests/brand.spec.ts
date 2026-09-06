@@ -136,3 +136,63 @@ test('the mark is fixed dark in both themes', async ({ page }) => {
   expect(light, 'the locked bluesteel ground').toBe('#182430')
   expect(dark, 'the same ground in dark theme').toBe(light)
 })
+
+/* THE COLLAPSE DOES NOT THROW THE SIDEBAR ACROSS THE SCREEN.
+ *
+ * `.bn-side`'s rail rules used to centre their children — `justify-content: center` on the brand
+ * and `margin: 0 auto` on every nav link. Both resolve against the sidebar's width, and that
+ * width is ANIMATING for --bn-t-slow. So at frame 0 each one re-centred itself in a column that
+ * had barely started closing and then slid back: measured at 1440, the mark's centre went
+ * 36 -> 114.8 -> 31.5 and the nav icons did the same. A rubber-band on every row of the shipped
+ * product.
+ *
+ * IT WAS INVISIBLE TO EVERY CHECK THIS REPO HAS, and would be again. Both RESTING states were
+ * correct to the pixel, so a screenshot proves nothing and neither does an assertion on either
+ * end; the defect existed only in the frames between them. This is the only test here that
+ * samples mid-transition, and that is the whole point of it.
+ *
+ * The assertion is a corridor rather than a curve. Where exactly the mark sits at 80ms depends on
+ * the easing token and on how fast the machine renders; that it never leaves the span between its
+ * own two resting positions does not. A test that pinned the curve would fail the first time
+ * anybody retuned --bn-ease, which is a change this assertion should survive. */
+test('collapsing the sidebar moves nothing sideways off its spine', async ({ page }) => {
+  await page.goto('/')
+  await page.setViewportSize({ width: 1440, height: 900 })
+
+  const centres = () =>
+    page.evaluate(() => {
+      const box = (sel: string) => {
+        const el = document.querySelector(sel)
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return r.left + r.width / 2
+      }
+      return { mark: box('.bn-side .bn-brand svg'), nav: box('.bn-side .bn-nav-link .bn-icon') }
+    })
+
+  const open = await centres()
+  expect(open.mark, 'the brand is drawn').not.toBeNull()
+
+  await page.keyboard.press('Meta+Period')
+  // three samples inside the 320ms, deliberately not synchronised to any frame
+  const during: Array<{ mark: number | null; nav: number | null }> = []
+  for (let i = 0; i < 3; i++) {
+    await page.waitForTimeout(60)
+    during.push(await centres())
+  }
+  await page.waitForTimeout(400)
+  const rail = await centres()
+
+  // the corridor: every mid-flight sample sits between the two resting positions, with 2px of
+  // slack for subpixel layout. Before the fix these read ~114 against a corridor of 31.5 to 36.
+  for (const [i, s] of during.entries()) {
+    for (const key of ['mark', 'nav'] as const) {
+      const a = open[key]!, b = rail[key]!, v = s[key]!
+      const lo = Math.min(a, b) - 2, hi = Math.max(a, b) + 2
+      expect(v, `sample ${i}: the ${key} left its spine — ${v} is outside ${lo}..${hi}`)
+        .toBeGreaterThanOrEqual(lo)
+      expect(v, `sample ${i}: the ${key} left its spine — ${v} is outside ${lo}..${hi}`)
+        .toBeLessThanOrEqual(hi)
+    }
+  }
+})
