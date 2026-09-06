@@ -487,3 +487,22 @@ lilic
 [Uu]ndrawn
 # the owner's own words, quoted verbatim in section 11
 whatever's
+
+# docs/specs/logo.md section 13: the lockup, its two scripts, and the faces measured against it
+[Kk]anji
+[Mm]anrope
+[Hh]iragino
+Gona
+[Ll]ockup's
+Kaku
+Gothic
+Plex
+UDPGothic
+[Nn]oto
+Mincho
+ProN
+Morisawa
+MyFonts
+OFL
+fsType
+

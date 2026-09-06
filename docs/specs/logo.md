@@ -240,12 +240,15 @@ block 4px; padding moves it 16px. Three rounds were spent tuning the wrong param
 | cut | use |
 | --- | --- |
 | display — the values above | 64px and up |
-| small — stroke 3.4, no taper | below 64px |
+| small — **stroke 4.2**, no taper, no filter | below 64px |
 
 Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 
-**The small cut is DRAWN and SWEPT as of 2026-09-05 — see §11.** Stroke 3.4 and the removal of
-the taper both survived; two things the table above does not mention did not.
+**The small cut is DRAWN and SWEPT as of 2026-09-05, and the stroke in this row MOVED — see
+§11.** This table asserted 3.4 before anything had been drawn. The sweep put 3.4 against 2.4 /
+3.0 / 4.2 / 5.0 and the owner chose **4.2**, which is what `app/src/kit/markGeometry.ts` ships.
+The taper's removal survived. Two things this row does not mention — the marbling and the
+filter — did not.
 
 ## 4. Where the assets stand
 
@@ -278,9 +281,16 @@ images, and say so in the message.
 and carries the old stroke, arm, card radius, gap, sheen, displacement and seed. It is kept
 because it is what was reviewed, not because it is right.
 
-**Nothing exists for**: the small optical cut, the bare brackets in either cut, or the lockup.
-All four are generated from the parameters above rather than drawn, so producing them is
-mechanical once the RANGED values are chosen.
+**Nothing exists for**: the bare brackets in either cut, or the lockup. **Both** are generated
+from the parameters above rather than drawn, so producing them is mechanical once the RANGED
+values are chosen — though the bare brackets are less mechanical than they look, because the
+card is drawn OVER the brackets and removing it is a change to the drawing rather than a layer
+being switched off.
+
+**This paragraph said "the small optical cut" and "All four" over a list of three until
+2026-09-05.** The small cut is built and shipping (§11, D102); the count was never right. Both
+errors survived because nothing reads this sentence — `logo parity` reads §9's palette table and
+stops there, and `paths` resolves repo-relative tokens, not claims about what exists.
 
 **The generators are committed now because they were lost once already.** Every sheet this
 design has been judged on was built in a session scratchpad and thrown away with it; the ground
@@ -334,7 +344,7 @@ transferable thing in this file.
 An optometrist does not ask "how good is this lens." They do seven things:
 
 1. **Forced choice between two.** *Better with one, or two?* People are unreliable at absolute
-   judgement and reliable at comparison.
+   judgment and reliable at comparison.
 2. **Bracket before bisecting.** Open wide enough that **both ends are wrong**. If nobody ever
    says "worse", the edges have not been found — only the limits of what was offered.
 3. **Deliberately cross the optimum.** Go one step past the best value to hear "worse". That
@@ -527,8 +537,9 @@ ambiguous, and this table is the place that disambiguates.
 Sheet: `logo/pass-locked-set.png` — the six at 200px, and again at 48px and 28px.
 
 **At 28px the brackets are essentially gone.** That row is not a decision, it is the evidence for
-section 3's *small* optical cut (stroke 3.4, no taper), which has still never been drawn. **Six
-marks are locked at the display cut and none is locked at the small cut**, and a favicon is 28px.
+section 3's *small* optical cut, which §11 has now drawn and swept at 4.2. **Six marks were
+locked at the display cut and none at the small cut when this row was written**, and a favicon
+is 28px.
 
 ## 10. Still open
 
@@ -578,8 +589,8 @@ correct at none of them.**
 
 | what | result |
 | --- | --- |
-| **stroke 3.4** | HELD. Swept 2.4 / 3.0 / 3.4 / 4.2 / 5.0. 2.4 is still a ghost at 16px; 5.0 chokes the corner and crowds the card. The pick is interior, which is what section 7 rule 5 asks for |
-| **no taper** | HELD, and now argued rather than asserted. At tip 0.07 a 3.4 stroke is 0.24 wide where it ends — a quarter of one unit in a 100-unit box, which is a third of a pixel at 28px. Swept 0.07 / 0.25 / 0.50 / 1.00 |
+| **stroke — 3.4 asserted, 4.2 chosen** | Swept 2.4 / 3.0 / 3.4 / 4.2 / 5.0. 2.4 is still a ghost at 16px; 5.0 chokes the corner and crowds the card. Both ends fail and the pick is interior, which is section 7 rule 5 satisfied — but the pick is **4.2**, not the 3.4 section 3 had asserted, and §3's row is corrected rather than left standing |
+| **no taper** | HELD, and now argued rather than asserted. At tip 0.07 a 4.2 stroke is 0.29 wide where it ends — under a third of one unit in a 100-unit box, which is a third of a pixel at 28px. Swept 0.07 / 0.25 / 0.50 / 1.00 |
 | **gap 11.5** | HELD. 9.75 crowds; 13.0 pushes the brackets into the tile's own corner radius |
 | **card scale 1.0** | HELD. 1.12 and 1.25 buy legibility and stop the mark being a card *in* a slot |
 
@@ -722,3 +733,113 @@ and so inverts — and the change is deliberate rather than a regression.
 a light tile is a real drawing that a person could prefer, and its stops are on the sheet. It was
 not chosen, once, by one person, on one day. `logo/sheets/light-ground.html` §7 puts it back on
 screen.
+
+## 13. The lockup, drawn — and the font it cannot ship with
+
+**Drawn 2026-09-05, on the owner's instruction to take the lockup next.** Sheet:
+`logo/sheets/lockup.html`. Re-render:
+
+```
+node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/lockup.html /tmp/lockup.png 1420 1000
+```
+
+**It works.** 番地 over BANCHI inside the same diagonal brackets reads as a member of the family
+at 420, 260 and 150px, in both themes, and §3's ×0.93 dark-mode stroke correction does what it
+says — the two weights read the same. Below about 150px wide the roman's tracking becomes
+fragile and the lockup should hand off to the icon.
+
+### §3 asked for a width match and did not say which width
+
+*"Tracked until it is exactly as wide as 番地"* has two answers, and they differ by 7.7%.
+Measured on this machine at kanji size 100, so every figure is also a fraction of the em:
+
+| | 番地, Hiragino Sans, tracked 0.07em | BANCHI, Manrope 700 at 0.36 |
+| --- | --- | --- |
+| advance | **214.00** | 211.35 |
+| ink width | **198.70** | 198.70 |
+| ink height | 91.50 | 25.54 |
+| tracking | 7.00, locked | **11.22 = 0.312em**, solved |
+
+**CSS applies letter-spacing after every glyph including the last**, so the advance carries one
+trailing unit of air the ink does not. Matched on advance, the roman overhangs the kanji's
+visible edge on both sides by half that unit. **The match is on INK**, and the sheet's §1 puts
+both up with their measured ink boxes drawn so the choice is a forced pair rather than an
+assertion.
+
+**Nothing is positioned by line box.** Hiragino's font box is 88 up / 12 down on a 100 em;
+Manrope's is 92 up / 23 down — 115 units on the same em. Stacking the two by their line boxes
+puts the optical center in the wrong place by construction.
+
+### The bracket corner radius is this section's own HELD value
+
+§3's lockup table names a stroke and an arm and no radius. The icon's 8 cannot simply travel:
+its bracket box is 54.8 x 67.5 and the lockup's is a different shape entirely. The sheet sweeps
+1.0 / 1.6 / **2.2** / 3.0 / 4.2 multiples of the stroke and 2.2 is drawn as the pick. **It is
+HELD in §2's sense — chosen once, never tested against a second eye** — and it is named here
+rather than buried, which is the whole point of that tag.
+
+### THE FONT CANNOT SHIP, AND THAT IS A CONTRACT PROBLEM RATHER THAN A COPYRIGHT ONE
+
+`Hiragino Sans` is LOCKED in §3 and is on every Mac. **Extracting its outlines into this
+repository is not permitted by the license this machine holds.** macOS SLA §2E grants the fonts
+only *"to display and print content while running the Apple Software"*; §2N forbids derivative
+works of any part of it. The `fsType` bit on all ten weights is 8, Editable embedding — that
+governs embedding the FONT into a document and is **not** authority to ship extracted outlines.
+
+**So the sheet is a judging reference and not a deliverable.** It sets live system text, which
+is exactly what the license permits, and it renders only on a Mac. Nothing generated from it may
+be committed.
+
+**The framing matters, because the obvious conclusion from that paragraph is wrong.** Typeface
+*designs* are not copyrightable in the US — *Eltra v. Ringer*, and the Copyright Office's own
+1988 rule that digitized typeface designs are not registrable. What *is* protected is the font
+file's control-point data (*Adobe v. Southern Software*, N.D. Cal. 1998). Japan sets a higher
+bar still: the Supreme Court's 2000 *Gona U* decision requires distinctive originality **and**
+artistic quality, and SCREEN markets Hiragino in precisely the disqualifying terms —
+*"orthodox, universally preferable and with excellent readability."* **The exposure is the
+macOS agreement, not the typeface.** A spec that says "we cannot use this typeface" would be
+wrong and would push toward a redesign nobody needs.
+
+### Three ways out, measured rather than guessed
+
+| route | what it costs | what it costs the repo |
+| --- | --- | --- |
+| **Adobe Fonts** — Hiragino Kaku Gothic ProN | a Creative Cloud subscription | the generator runs only on a licensed Mac |
+| **MyFonts** — Hiragino Sans W0–W9 | $109 – $210 per weight, perpetual | same, minus the subscription |
+| **Vendor an OFL face** | nothing | re-runnable forever, and a real departure from a LOCKED row |
+
+**Adobe Fonts is the same drawing, not a lookalike, and that was checked rather than assumed.**
+All four faces in `ヒラギノ角ゴシック W6.ttc` point at one CFF table at one offset, and 番
+extracted from face 0 (Hiragino Sans W6) and face 2 (Hiragino Kaku Gothic ProN W6) is
+byte-identical. Adobe's font licensing terms permit exactly the operation the lockup needs:
+convert type to outlines, modify them, and trademark the result — only modifying the font
+software file is barred.
+
+**No open face is a drop-in, and the closest one is not the obvious one.** Rendered to a
+normalized 200x200 mask and scored by intersection-over-union against Hiragino W6:
+
+| face | IoU vs W6 |
+| --- | --- |
+| **IBM Plex Sans JP 700** | **0.848** |
+| BIZ UDPGothic 700 | 0.836 |
+| IBM Plex Sans JP 600 | 0.830, and its ink ratio matches W6 exactly |
+| Noto Sans JP 700 | 0.785 |
+| Noto Sans JP 500 | 0.762 |
+
+**`Zen Kaku Gothic New` is ruled out on a measurement rather than on taste.** It draws 番 nearly
+5% wider relative to the em than 地, where Hiragino keeps the pair within 0.5% — in a two-glyph
+lockup that reads as visibly unbalanced.
+
+An 85% outline overlap is not a shape match. **Substituting is a design change to a LOCKED row,
+not a like-for-like swap**, and it is the owner's call rather than a session's.
+
+### The question underneath, which is not about type at all
+
+**Every `Logo` call site in this product is 44px or below, and this lockup is not drawn below
+about 150px.** There is no marketing page, no OG card, no app-store listing. The only surfaces
+that could carry it are `#/gallery`, the owner's crash page if it grew, and `README.md`.
+
+**If the honest answer is "nothing today", then the right outcome is this section and no
+artifact** — the parameters recorded, the measurement made, the license understood, and nothing
+built that no screen reaches. That would be CLAUDE.md's own rule applied to a brand asset rather
+than to a route.
