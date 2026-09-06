@@ -42,31 +42,34 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 13,
- title: 'the tip — how wide the tail ends',
- sweeping: 'tip',
- unit: ' of the stroke',
- values: [0, 0.07, 0.15, 0.25, 0.40],
- notes: {0:'a true point', 0.07:'what everything so far was drawn at', 0.40:'nearly untapered'},
+ n: 14,
+ title: 'the bracket, settled — every parameter of it now has a round behind it',
+ sweeping: 'size',                     /* nothing is being swept; the specimens vary only in size */
+ unit: 'px kanji',
+ values: [160, 96, 64, 40, 28],
+ notes: {96:'a README header', 40:'a sidebar', 28:'near the floor'},
  rejected: {},
- holds: {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tails:true},
- sizes: [96, 40, 22],
+ holds: {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
+ sizes: [0],
  history: [
-  ['1–5', 'stroke', '0.018 – 0.140', '0.050', 'settled; rule 5 fired twice'],
-  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND, measured'],
-  ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'settled; the clamp measured at 0.82'],
+  ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice; settled on a sub-pixel tiebreak'],
+  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND, measured at under 1.4%/px'],
+  ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'the clamp measured at 0.82 — a geometric ceiling'],
+  ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'both ends failed first time; decided on terminate-vs-dissolve'],
  ],
- lede: '<b>The ramp is settled at 0.70 and held.</b> This round is the last parameter of the bracket '+
-  'itself: how wide the tail is where it ends, as a fraction of the stroke.'+
-  '<br><br><b>A measurement that reframes the round.</b> Everything in this whole sweep has been drawn '+
-  'at tip 0.07 — and 0.07 of the stroke is <b>sub-pixel at every size the lockup is ever drawn</b>: '+
-  '0.34px at kanji 96, 0.14px at kanji 40, 0.08px at kanji 22. The tail has effectively been ending in '+
-  'a point this entire time, and the difference between 0.07 and a true 0 has never been visible on any '+
-  'sheet you have seen. So the real question is not whether 0.07 is right; it is <b>whether the tail '+
-  'should end in a point at all, or in a width you can see.</b>'+
-  '<br><br><b>Both ends are meant to fail.</b> 0 is a mathematical point — a taper to nothing, which can '+
-  'read as a hair that dissolves. 0.40 is 1.92px at kanji 96, approaching the untapered bracket you '+
-  'rejected on sight when the tails first went on. Each specimen prints its tip in real pixels.'
+ lede: '<b>The bracket is finished.</b> Fourteen rounds, four parameters, every one of them with an '+
+  'offered range and a taken band behind it rather than a value someone typed. Nothing below is a sweep '+
+  '— this is the settled bracket at the sizes it would actually be drawn.'+
+  '<br><br><b>The tip went to 0.15 on a criterion rather than an eye</b>, because you were right that '+
+  'the pair is meaningless to look at: a bisection would have stepped by a tenth of a pixel. The '+
+  'criterion is whether the taper terminates or dissolves — a sub-pixel end fades into antialiasing, a '+
+  'whole-pixel end stops. 0.15 reaches 1px at kanji 133, which a README header reaches; 0.07 needs '+
+  'kanji 286, which nothing does.'+
+  '<br><br><b>And the argument that settled the radius was deliberately not reused.</b> The radius was '+
+  'pinned at 19.54px while five rounds were judged against it, so it had to stay near that. The tip was '+
+  '0.34px through all thirteen rounds and drove none of them. Consistency binds a parameter that was '+
+  'visible; it does not bind one that was invisible, and applying it to both would have been a rule '+
+  'spreading past its own argument.'
 }
 
 const o=document.getElementById('out')
@@ -110,8 +113,10 @@ function check(groups){
    if(seen[geom]!==undefined) problems.push('kanji '+size+': '+seen[geom]+' and '+r.v+' drew the SAME bracket — the swept variable is not reaching the drawing')
    else seen[geom]=r.v})
   /* 2 — the swept key actually moved, and moved for every value */
+  /* `size` is the only thing varying in a settled view, and it is recorded in `used` like any
+     other key, so this assertion still means something: the specimens must genuinely differ. */
   const swept=g.map(function(r){return JSON.parse(r.lk.dataset.used)[ROUND.sweeping]})
-  if(new Set(swept).size !== g.length) problems.push('kanji '+size+': `'+ROUND.sweeping+'` took only '+new Set(swept).size+' distinct values across '+g.length+' specimens')
+  if(new Set(swept).size !== g.length) problems.push('`'+ROUND.sweeping+'` took only '+new Set(swept).size+' distinct values across '+g.length+' specimens')
   /* 3 — every held key identical across specimens AND equal to what was declared */
   Object.keys(ROUND.holds).forEach(function(k){
    const got=g.map(function(r){return JSON.parse(r.lk.dataset.used)[k]})
@@ -136,9 +141,18 @@ function check(groups){
  document.getElementById('checks').appendChild(box)
 }
 
-const groups = ROUND.sizes.map(function(sz){
- o.appendChild(el('h2',null,'at kanji '+sz))
- return row(sz)})
+const groups = [(function(){
+ o.appendChild(el('h2',null,'the settled bracket, at the sizes it would be drawn'))
+ const s2=el('div','strip'); const made=[]
+ ROUND.values.forEach(function(sz){
+  const c=el('div','cell')
+  const lk=stamp(sz, ROUND.holds.gap, ROUND.holds.pad, '#0f1217'); c.appendChild(lk)
+  const note=ROUND.notes[sz]
+  const cap=el('div','cap'+(note?' was':'')); cap.textContent='kanji '+sz+(note?' — '+note:'')
+  c.appendChild(cap)
+  const num=el('div','num'); c.appendChild(num)
+  s2.appendChild(c); made.push({lk:lk, v:sz, num:num, size:sz})})
+ o.appendChild(s2); return made})()]
 
 /* §7: "re-present an earlier lens to check the answer is stable". The rebuild dropped this strip
    and it is a rule rather than a flourish, so it is back — and driven by ROUND.rejected, so its
@@ -160,12 +174,11 @@ const rejected = (function(){
 document.fonts.ready.then(function(){
  groups.concat(rejected.length?[rejected]:[]).forEach(function(g){ g.forEach(function(r){
   frame(r.lk, {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
-               rrMul:ROUND.holds.rrMul, tip:r.v})
-  const tipPx = r.size*ROUND.holds.stroke*r.v
-  r.num.innerHTML = 'tip '+tipPx.toFixed(3)+'px'
-   + '<br><span style="color:'+(tipPx>0 && tipPx<1 ? '#c2410c' : '#6b7280')+'">'
-   + (r.v===0 ? 'a true point' : tipPx<1 ? 'sub-pixel' : 'a visible width')
-   + '</span>'
+               rrMul:ROUND.holds.rrMul, tip:ROUND.holds.tip})
+  const sw=r.size*ROUND.holds.stroke, tipPx=sw*ROUND.holds.tip
+  r.num.innerHTML = 'stroke '+sw.toFixed(2)+'px · tip '+tipPx.toFixed(2)+'px'
+   + '<br><span style="color:#6b7280">radius '+(r.lk.dataset.rr||'').split(' ')[0]+'px'
+   + ' · ramp '+(r.lk.dataset.ramp||'').split(' ')[0]+'px</span>'
  })})
  check(groups)
  window.__sheetReady = true

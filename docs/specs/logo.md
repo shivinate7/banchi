@@ -784,7 +784,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `stroke` | 0.050 | rounds 1–5 |
 | `arm` | 0.32 | carried; §3's lockup row |
 | `rrMul` | 4.0 | rounds 6–10, closed on the JND |
-| `tip` | 0.07 | not yet swept |
+| `tip` | 0.15 | round 13 |
 | `tl` | 0.70 | rounds 11–12 |
 
 **A key in this table is not the same as a key that has been argued.** `tip` and `tl` are here
@@ -872,6 +872,32 @@ says where the clamp is, so each session has rediscovered it by walking into it.
 geometry it binds at `tl` 0.82**, reaching 63.0px at kanji 96; **0.80 is the largest fraction that
 still draws something new.** Round 12 therefore spanned the entire remaining possibility, and 0.70 is
 interior to it.
+
+### The tip, settled at 0.15 — and why the radius argument does not transfer
+
+Round 13 offered 0 to 0.40 of the stroke and both ends failed on the first offer: a true point out, 0.25
+and 0.40 out. The survivors, 0.07 and 0.15, were called meaningless to tell apart, and they are — a
+bisection would have offered steps of **0.096px at kanji 96**, a tenth of a pixel.
+
+**So it was decided on a criterion rather than an eye, and the criterion is whether the taper
+TERMINATES or DISSOLVES.** A stroke whose end is sub-pixel fades into antialiasing; one that crosses a
+whole pixel ends definitely.
+
+| tip | reaches 1px at | |
+| --- | --- | --- |
+| 0.07 | kanji 286 | never, in practice |
+| **0.15** | kanji 133 | reachable at a README or display size |
+
+**0.15 is the only value in the accepted band that ever gives the tail a resolvable terminal**, and it
+costs nothing at small sizes because both are sub-pixel there anyway.
+
+**The consistency argument that decided the radius deliberately does NOT apply here, and the difference
+is measurable.** The radius was pinned at 4.07 while five rounds of stroke were judged, and at kanji 96
+that pin is **19.54px** — it drove every judgement, so moving far from it would have invalidated them.
+The tip across those same rounds was **0.34px at kanji 96 and 0.08px at kanji 22**: under a third of a
+pixel, and it drove nothing. Consistency binds a parameter that was visible while other things were
+being judged. It does not bind one that was invisible. Applying the same rule to both would have been
+the rule spreading past its own argument.
 
 ### The tails
 
