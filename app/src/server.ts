@@ -159,6 +159,25 @@ const base =
     : DEFAULT_BASE
 
 /**
+ * Whether this bundle is the published demo rather than a client for a real capture server.
+ *
+ * Set only by `make demo-static`, which builds with `VITE_DEMO=1`. In every other build Vite
+ * substitutes the literal `undefined`, this folds to `false`, and Rollup then eliminates both
+ * the branch in `request()` and the dynamic `import('./demoServer')` inside it — so an
+ * ordinary build ships neither the demo module nor the ~340 KB fixture bundle it imports.
+ *
+ * A BUILD-TIME CONSTANT AND NOT A RUNTIME FLAG, deliberately. A runtime switch would mean the
+ * real app carries a code path that answers from a recording, one misconfiguration away from
+ * showing the owner a frozen store while their real one sat behind it — and D43 exists
+ * because a UI answering from the wrong store is this repo's most expensive class of bug.
+ */
+const DEMO = import.meta.env.VITE_DEMO === '1'
+
+/* Resolved once, on first use. `demoRequest` is reached only through this, so the chunk is
+ * fetched when the demo makes its first call and never in a build where DEMO is false. */
+let demoModule: Promise<typeof import('./demoServer')> | null = null
+
+/**
  * Every failure out of this module, without exception — a refusal the server named, a
  * network that did not answer, a body that did not parse. Components catch one type and
  * show `message`; anything that wants to branch reads `code`.
@@ -262,6 +281,13 @@ export function describeFailure(err: unknown): Failure {
  * the review queue, the Fulfiller's card — need nothing, and the ETag covers them.
  */
 export function photoUrl(box: number, index: number): string {
+  /* THE DEMO BUILD HAS NO PHOTO SERVICE, so the same address resolves to a bundled file.
+   * `BASE_URL` rather than a leading slash: a static host serves the demo from a
+   * subdirectory (`/pkmnscan/` on GitHub Pages), and an absolute path would 404 on every
+   * photograph there while working perfectly at the root — the failure that only appears
+   * once it is published. `.jpg` is appended here and nowhere else; the seed writes the
+   * store index undecorated, so this stays D52's contract exactly. */
+  if (DEMO) return `${import.meta.env.BASE_URL}demo/photos/${box}/${index}.jpg`
   return `${base}/photo/${box}/${index}`
 }
 
@@ -479,6 +505,15 @@ function noteBoot(response: Response): void {
 }
 
 async function request(path: string, init?: RequestInit): Promise<unknown> {
+  /* THE ONE SEAM. Every client function in this module funnels through here, so this branch
+   * is the whole of what makes a published demo possible — no screen, no hook and no kit
+   * component knows which of the two it is talking to. Folded away entirely when DEMO is
+   * false; see its declaration above. */
+  if (DEMO) {
+    demoModule ??= import('./demoServer')
+    return (await demoModule).demoRequest(path, init)
+  }
+
   const url = `${base}${path}`
 
   let response: Response

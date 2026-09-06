@@ -1702,6 +1702,58 @@ COMPONENTS = [
                 "governed_by": ["D16", "D18"],
             },
 
+            # ---- the published demo. Seed, record, publish; none of it gates anything ----
+            "demo-seed.py": {
+                "does": "writes a demo store — real catalogue rows out of fixtures/, invented "
+                        "positions, drawn card photographs, a corpus with three deliberate "
+                        "holds, and two run directories in the shape `identify` leaves behind. "
+                        "Deterministic from one seeded RNG, so an unchanged tree rebuilds "
+                        "byte-identically and CI does not churn the repo. Refuses to run with "
+                        "PKMNSCAN_HOME unset, because that is somebody's real store.",
+                # D13 is the store it writes through; D43 is why PKMNSCAN_HOME is the guard —
+                # a checkout's own inventory is the default and seeding over one is the loss
+                # that decision exists to prevent. D86 is the corpus shape and D49 the holds:
+                # a first version wrote a top-level `answers` map that `Corpus.parse` kept as
+                # `unknown` and no reader ever saw. D25 is the per-game number split, which
+                # the export carries whole and a card record carries in halves.
+                "governed_by": ["D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
+                                "D43", "D46", "D49", "D67", "D78", "D83", "D86", "D87"],
+            },
+            "demo-record.py": {
+                "does": "spawns its own capture server over the demo store on its own port, "
+                        "sweeps every GET the client can build against the parameter space "
+                        "the store actually holds, and writes app/demo/bundle.json plus the "
+                        "photographs Vite will bundle. Records 200s only — a 404 here means "
+                        "the path is not a read, not that a read failed.",
+                # D43 is the port and the store, both derived rather than assumed: this
+                # spawns its own server precisely so it never touches `make up`, which on
+                # the main checkout is the owner's live process over their real inventory.
+                "governed_by": ["D13", "D43", "D52", "D76"],
+            },
+            "demo_scrub.py": {
+                "does": "strips machine-local absolute paths out of the bundle before it is "
+                        "published, and audits its own output for anything that still looks "
+                        "like a home directory. Exact prefixes rather than a pattern: a regex "
+                        "attempt truncated at a bad character class and left the account name "
+                        "it was written to remove.",
+                # The bundle goes to a public host, and `/status` and `/pricing` both answer
+                # with real filesystem paths. Underscored, not hyphenated, because it is the
+                # one file here that is IMPORTED rather than run.
+                "governed_by": ["D18"],
+            },
+            "demo-freshness.py": {
+                "does": "whether app/demo/bundle.json still describes the wire it was recorded "
+                        "against, by comparing a digest of app/src/types.ts and "
+                        "app/src/server.ts. On no gate: the bundle is not committed and CI "
+                        "rebuilds it from source on every push, so what is left is a local "
+                        "preview serving a recording that predates the last edit.",
+                # D18: reads two files, writes nothing, so it is safe on a path that decides
+                # anything. D16 is the shape — a mechanical check for a claim that would
+                # otherwise fail silently, because a stale bundle renders BLANK rather than
+                # erroring.
+                "governed_by": ["D16", "D18"],
+            },
+
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
                 "does": "headless Playwright render of a URL to captures/ui/<name>.png, or "
@@ -2462,6 +2514,19 @@ COMPONENTS = [
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
                                               "D104"]},
+            "src/demoServer.ts": {"does": "the capture server, frozen — what `request()` talks "
+                                          "to when VITE_DEMO=1 builds the published demo. "
+                                          "Replays scripts/demo-record.py's bundle for reads "
+                                          "and applies the concept-carrying writes (the sale, "
+                                          "the review answer, the stand-down, the price, the "
+                                          "hold, the rename, the divider) to a mutable copy of "
+                                          "it; refuses the rest by name, because a demo where "
+                                          "every button is inert argues against the product. "
+                                          "Reached through a dynamic import inside `if (DEMO)`, "
+                                          "so an ordinary build ships neither it nor the "
+                                          "bundle.",
+                                  "governed_by": ["D10", "D20", "D26", "D28", "D37", "D43",
+                                                  "D49", "D57", "D58", "D86", "D103"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",

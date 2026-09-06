@@ -28,6 +28,14 @@ import { CAPTURE_PORT, CAPTURE_URL, DEV_PORT } from './devPort'
 // it was written; Vite was the half still listening only on the loopback, so the app could not
 // be opened from the phone even though its server could be reached.
 export default defineConfig({
+  // WHERE THE BUILD WILL BE SERVED FROM, and it is a build input because only the publisher
+  // knows. GitHub Pages serves a project site under `/<repo>/`, not at the root, and a bundle
+  // built for `/` 404s every asset there while working perfectly on localhost — a failure
+  // that appears only once it is published, which is the worst moment to find it. Defaults to
+  // `/` so every ordinary build and `make dev` are untouched; `make demo-static` passes the
+  // subdirectory. `photoUrl` composes the demo's photographs against `import.meta.env.BASE_URL`
+  // for the same reason.
+  base: process.env.DEMO_BASE ?? '/',
   plugins: [react()],
   server: {
     port: DEV_PORT,

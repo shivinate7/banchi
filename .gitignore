@@ -104,3 +104,20 @@ styles/*
 # under `inventory/` is the truth about what a lot reserved, and a lot directory is only a
 # rendering of it that can be rebuilt. Gitignored for `inventory/`'s reason, not a weaker one.
 lots/
+
+# The published demo's derived halves. `runs/`-shaped rather than `inventory/`-shaped:
+# deleting any of it costs one `make demo`, because `scripts/demo-seed.py` is deterministic
+# from a constant seed and the recorder replays a real server over what it wrote. The
+# artefact worth committing is the SEED, not the recording it produced — the same rule
+# `harness/.cache` is here under.
+#
+# AND CI REBUILDS ALL OF IT ON EVERY PUSH, which is what makes this safe rather than merely
+# tidy: .github/workflows/demo.yml runs seed -> record -> build from source, so the
+# published bundle is regenerated from the code it describes and can never be the stale
+# recording a committed copy would eventually become.
+#
+# Bare names, no trailing slash, per the rule at the top of this file.
+demo
+app/demo
+app/public/demo
+dist-demo
