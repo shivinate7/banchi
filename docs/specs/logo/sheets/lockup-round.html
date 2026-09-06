@@ -54,45 +54,46 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 34,
- title: 'the permissible opacities — against this product’s own floor for a word, not against WCAG',
- sweeping: 'romanOpacity',
- unit: ' of the ink',
- values: [0.35, 0.40, 0.45, 0.50],
- notes: {0.45:'clears the floor on DARK (4.09:1 against ink-4’s 4.0) — under it on light',
-         0.50:'clears on BOTH — and it is outside the band you kept'},
- rejected: {0.27:'1.84:1 on light — the word never reaches a mid grey', 0.58:'out above — round 32'},
+ n: 35,
+ title: 'the finished lockup, at every size it will be drawn — and nothing left under test',
+ sweeping: 'size',
+ unit: 'px kanji',
+ values: [32, 40, 48, 64, 80],
+ notes: {32:'the floor — §11’s smallest permitted draw', 48:'the sidebar candidate'},
+ rejected: {},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
-         romanFill:0.75, romanSize:0.25, romanTrack:0.14, tails:true},
- sizes: [48, 32],
+         romanFill:0.75, romanSize:0.25, romanTrack:0.14, romanOpacity:0.45, tails:true},
+ sizes: [48],
  dark: true,
- context: [0.35, 0.40, 0.45, 0.50],
+ context: null,
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
   ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
-  ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
+  ['15', 'size floor', '14 – 40 kanji', 'kanji 32', '番’s counters bind, not the bracket'],
   ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 twice; stopped at 1.9px'],
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
   ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
-  ['32–33', 'roman opacity', '0.20 – 1.00', '0.27 – 0.45 open', 'both grounds drawn'],
+  ['32–34', 'roman opacity', '0.20 – 1.00', '0.45 of the ink', 'light sits under a floor, on purpose'],
  ],
- lede: '<b>WCAG supplies no bar here — it exempts logotypes from contrast minimums outright.</b> So the '+
-  'floor comes from this product instead. `tokens.css`’s faintest ink, `--bn-ink-4`, carries its own '+
-  'note: <i>“this is the floor a word may sit at, never a caption.”</i> BANCHI is a word.'+
-  '<br><br><b>That floor lands at alpha 0.50 on light and 0.45 on dark</b>, solved per channel against '+
-  'the panel each sits on — #ffffff and #14171c. The asymmetry is the same one round 33 measured: the '+
-  'same alpha carries more contrast on the dark ground.'+
-  '<br><br><b>So out of the band you kept, the permissible set is exactly one value, and only on one '+
-  'ground.</b> 0.45 reads 4.09:1 on dark against ink-4’s 4.0, and 3.02:1 on light against a floor of '+
-  '3.6. 0.40 is under on both — 2.61:1 and 3.50:1. Nothing below 0.45 clears anywhere.'+
-  '<br><br><b>0.50 is drawn although it is outside your band, and that is deliberate.</b> It is the '+
-  'first value that clears on BOTH grounds, so it is the only one that lets the lockup carry one number '+
-  'rather than two. Showing it is not a re-opening — if you dislike it, 0.45 with the light theme under '+
-  'the floor is a legitimate call for a logotype, and the note above says why.'
+ lede: '<b>Every parameter in the lockup has now been chosen against alternatives, and this sheet has '+
+  'nothing left to sweep.</b> So it sweeps the one quantity that is not a parameter — how big the thing '+
+  'is drawn — which is why `make docs-audit`’s `lockup params` row now checks <b>all eleven</b> settled '+
+  'values rather than ten. Nothing is exempt any more.'+
+  '<br><br><b>Four values moved and one was confirmed.</b> The padding 0.22 → 0.50, the gap 0.06 → 0.08, '+
+  'the roman’s size 0.36 → 0.25, its opacity 0.62 → 0.45; the arm stayed at 0.32. Two of the four moved '+
+  'by more than a third of their own size, and none of the five had ever been offered against anything '+
+  'before this series.'+
+  '<br><br><b>One parameter did not exist when it started.</b> `romanFill` had to be invented because '+
+  '`frame()`’s width-match solve had never once run — both spans were `display:block`, so it measured the '+
+  'containing block for each and compared a number with itself. Twenty-four rounds were drawn with zero '+
+  'tracking on the roman, filling whatever fraction the type happened to set.'+
+  '<br><br><b>And `romanTrack` is in the table without being an answer.</b> It seeds the solve and is '+
+  'overwritten before anything is painted. It is listed so that nobody re-derives it as a design value, '+
+  'which is exactly what publishing it as settled nearly did.'
 }
 
 const o=document.getElementById('out')
@@ -147,7 +148,7 @@ function optsFor(v){
   if (k==='pad' || k==='gap' || STAMP_KEYS.indexOf(k)>=0) return
   o[k] = ROUND.holds[k]
  })
- if (SWEPT!=='pad' && SWEPT!=='gap' && STAMP_KEYS.indexOf(SWEPT)<0) o[SWEPT] = v
+ if (SWEPT!=='pad' && SWEPT!=='gap' && SWEPT!=='size' && STAMP_KEYS.indexOf(SWEPT)<0) o[SWEPT] = v
  return o
 }
 
@@ -155,14 +156,20 @@ function row(size, values, capFn, theme){
  const s=el('div','strip'+(theme==='dark'?' dk':'')); const made=[]
  values.forEach(function(v){
   const c=el('div','cell')
-  const lk=mk(size, v, theme)
+  /* `size` is the ONE thing that is not a lockup parameter -- it is how big the lockup is drawn,
+     not part of its design -- so sweeping it exempts nothing from the settled table, and the
+     `lockup params` row checks all eleven values rather than ten. That is what makes this the
+     right final state for the sheet: the finished lockup, at every size it will be drawn at,
+     with every parameter asserted. */
+  const drawAt = (SWEPT==='size') ? v : size
+  const lk=mk(drawAt, v, theme)
   c.appendChild(lk)
   const cp=capFn(v)
   const cap=el('div','cap'+(cp.was?' was':''))
   cap.textContent=cp.text
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
-  s.appendChild(c); made.push({lk:lk, v:v, num:num, size:size})})
+  s.appendChild(c); made.push({lk:lk, v:v, num:num, size:drawAt})})
  o.appendChild(s); return made
 }
 
