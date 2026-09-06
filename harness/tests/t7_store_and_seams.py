@@ -14971,6 +14971,117 @@ def check_export_fetch(checks: Checks) -> None:
                     "a box with no hint at all widens, as it always did",
                 )
 
+                # ------------------- THE SECOND DOCUMENT: THE OPERATOR'S OWN LIVE LISTINGS
+                #
+                # D104. `POST /pipeline/live-export` fetches the OPPOSITE of everything above:
+                # `MyInventory: True`, no category, no sets. It is the same transport — one
+                # `_post_export` — so what is worth asserting is the BODY, and on the wire
+                # rather than in the literal, for the reason the catalogue block states one
+                # screen up: a fetch that answers with a valid file proves nothing about what
+                # was asked for, and asking for the wrong document still returns a clean CSV.
+                stub["mode"] = "csv"
+                stub["body"] = whole.read_bytes()
+                stub["posted"] = []
+                answer = pipeline_routes.do_live_export()
+                live_body = json.loads(
+                    urllib.parse.parse_qs(stub["posted"][-1])["model"][0]
+                ) if stub["posted"] else {}
+
+                checks.equal(
+                    (
+                        live_body.get("MyInventory"),
+                        live_body.get("PrintingIds"),
+                        live_body.get("ExcludeListos"),
+                    ),
+                    (True, ["0"], False),
+                    "THE LIVE FETCH'S THREE STANDING FIELDS, ON THE WIRE, AND TWO OF THEM ARE "
+                    "THE CATALOGUE'S INVERTED. `MyInventory` TRUE is the whole of what "
+                    "separates this document from the one asserted above, and it is invisible "
+                    "downstream — a catalogue parses as an export exactly as a live inventory "
+                    "does. `ExcludeListos` FALSE is measured rather than reasoned: the owner's "
+                    "real download carries four rows with a `Photo URL` and all four are LIVE, "
+                    "including a single copy at $7,000, so TRUE here would silently omit the "
+                    "most valuable listing in the store (D104)",
+                )
+                checks.equal(
+                    (
+                        live_body.get("CategoryId"),
+                        live_body.get("SetNameIds"),
+                        live_body.get("RarityIds"),
+                        live_body.get("ConditionIds"),
+                    ),
+                    ("0", ["0"], ["0"], ["0"]),
+                    "AND IT NARROWS BY NOTHING. The owner's real My Pricing download spans six "
+                    "product lines, so a live inventory scoped to one category is a smaller, "
+                    "perfectly parseable file with listings silently missing — `0` is the "
+                    "portal's own all-of-them row, and the empty list is the spelling that "
+                    "answers `System Error`",
+                )
+                checks.ok(
+                    answer["fetched"].startswith(pipeline_routes.LIVE_PREFIX)
+                    and answer["fetched"].endswith(".csv"),
+                    "the file is KEPT and NAMED, so both consumers can act on one reading "
+                    "rather than two downloads taken minutes apart",
+                )
+                checks.ok(
+                    (files.inventory_dir() / pipeline_routes.LIVE_DIR / answer["fetched"]).is_file(),
+                    "and it is on disk under a name `_open_live_export` will accept",
+                )
+                checks.equal(
+                    answer["shortfall"],
+                    None,
+                    "AND IT HAS NOTHING IT COULD NOT BRING, because it narrows by nothing. The "
+                    "field exists for the day somebody adds a narrowing: the file cannot report "
+                    "its own omissions, so a lens that claims to draw a whole live inventory "
+                    "has to be able to say when it cannot",
+                )
+
+                # AND THE SHORTFALL IS NOT DEAD CODE. Narrow one axis and it speaks — which is
+                # the assertion that keeps the field honest rather than decorative.
+                narrowed = dict(tcg_export.LIVE_FILTERS)
+                tcg_export.LIVE_FILTERS["ExcludeListos"] = True
+                try:
+                    checks.ok(
+                        (pipeline_routes._live_shortfall() or "").find("photo") >= 0,
+                        "a narrowed live fetch SAYS what it drops — the guard against the first "
+                        "narrowing being silent forever",
+                    )
+                finally:
+                    tcg_export.LIVE_FILTERS.clear()
+                    tcg_export.LIVE_FILTERS.update(narrowed)
+
+                # THE NAME IS AN ADDRESS AND IS CHECKED LIKE ONE — `_open_markdown`'s rule.
+                for name, code in (
+                    ("../../etc/passwd", "fetched_invalid"),
+                    ("something-else.csv", "fetched_invalid"),
+                    (pipeline_routes.LIVE_PREFIX + "19990101-000000.csv", "no_such_fetch"),
+                ):
+                    try:
+                        pipeline_routes._open_live_export(name)
+                        checks.ok(False, f"a fetched name refuses as `{code}`", "it resolved")
+                    except pipeline_routes.PipelineRefusal as refusal:
+                        checks.equal(refusal.code, code, f"a fetched name refuses as `{code}`")
+
+                # ONE DOCUMENT AT A TIME, which the route enforces so no screen has to.
+                try:
+                    pipeline_routes._live_export_from(
+                        {"fetched": answer["fetched"], "export": {"name": "x.csv", "content": "a,b\n1,2\n"}}
+                    )
+                    checks.ok(False, "a request carrying both documents refuses", "it chose one")
+                except pipeline_routes.PipelineRefusal as refusal:
+                    checks.equal(
+                        refusal.code,
+                        "fetched_and_export",
+                        "A REQUEST CARRYING BOTH A FETCH AND AN UPLOAD REFUSES rather than "
+                        "guessing. Whichever it picked would be the other one half the time, "
+                        "and the two documents are read minutes apart",
+                    )
+                checks.equal(
+                    pipeline_routes._live_export_from({"fetched": answer["fetched"]}).name,
+                    answer["fetched"],
+                    "and a request naming only the fetch resolves to it",
+                )
+
                 # -------------------------------------- THE GAME'S OWN RULE, AND THE OPERATOR
                 checks.equal(
                     (games.export_scope("riftbound"), games.export_scope("pokemon")),

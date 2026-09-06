@@ -9631,6 +9631,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_crop_preview(self._body())
                 )
+            if path == "/pipeline/live-export":
+                # THE OPERATOR'S OWN LIVE LISTINGS, FETCHED (D104). FREE — it starts no child
+                # and can put no number on an invoice — but it READS A SECRET AND OPENS A
+                # SOCKET, which only `POST /pipeline/runs/<name>/export` did before it. The
+                # second document, not a second scope: that route fetches the CATALOGUE at
+                # `MyInventory: False`, and this fetches the opposite. `POST /pipeline/identify`
+                # is still the only route in this server that can spend money.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_live_export())
             if path == "/pipeline/reconcile-live":
                 # THE FOURTH COMMAND, OVER THE WHOLE STORE (D87). Free, and it writes only
                 # when asked — the preview is the default. Not run-scoped: this is the one

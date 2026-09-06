@@ -3624,6 +3624,40 @@ GAMES_MODULE = ROOT / "pipeline" / "games.py"
 # this row stops is the person who has just decided the value should be different — and the
 # only thing that will change their mind is the argument, not a restatement of the number.
 EXPORT_MODULE = ROOT / "server" / "tcg_export.py"
+#: The live-inventory fetch's own three (D104). A SECOND TUPLE FOR A SECOND CONSTANT, because
+#: `LIVE_FILTERS` is a different instruction about a different document — and every word of the
+#: argument below for why the catalogue's three need a blocking row applies here unchanged: all
+#: three are invisible downstream, so a wrong value gives a clean survey, a clean markdown and a
+#: green `make check`, forever.
+LIVE_STANDING = (
+    (
+        "MyInventory",
+        True,
+        "The operator's OWN live listings, which is the whole point of this path and the "
+        "opposite of the catalogue fetch beside it. The owner asked for it on 2026-09-06. With "
+        "this false the markdown lens would draw the catalogue — every card TCGplayer sells — "
+        "as though it were the operator's inventory, and nothing in the file would say so.",
+    ),
+    (
+        "ExcludeListos",
+        False,
+        "FALSE HERE AND TRUE ON THE CATALOGUE, and the disagreement is the point rather than an "
+        "oversight. On the catalogue the flag excludes OTHER sellers' photo listings, which is "
+        "noise to a join; on My Pricing every row is the operator's OWN listing, so True "
+        "excludes theirs. Measured on their real download of 2026-09-01: four rows carry a "
+        "`Photo URL` and all four are LIVE — including C-4654187, Kai'Sa (Signature), a single "
+        "copy at $7,000.00, and C-4619603 at 37 copies. True would make the markdown lens omit "
+        "the most valuable listing in the store, and D64's finding that `Photo URL` is empty in "
+        "every export is what would make that permanent: nothing downstream could notice.",
+    ),
+    (
+        "PrintingIds",
+        ["0"],
+        "All Printings, always — the catalogue fetch's argument, unchanged. A number stocked in "
+        "several finishes must arrive with all of them.",
+    ),
+)
+
 EXPORT_STANDING = (
     (
         "ExcludeListos",
@@ -5399,11 +5433,74 @@ def check_export_request(report: Report) -> None:
                     )
                 )
 
+    live = literals_from_module(EXPORT_MODULE).get("LIVE_FILTERS")
+    if not isinstance(live, dict):
+        findings.append(
+            Finding(
+                where,
+                "no `LIVE_FILTERS` literal could be read. The live-inventory fetch has its own "
+                "three standing instructions (D104) and they are hoisted for this row's sake, "
+                "exactly as the catalogue's are.",
+            )
+        )
+    else:
+        for field, expected, why in LIVE_STANDING:
+            if field not in live:
+                findings.append(
+                    Finding(where, f"`LIVE_FILTERS` no longer names {field}. {why}")
+                )
+            elif live.get(field) != expected:
+                findings.append(
+                    Finding(
+                        where,
+                        f"`LIVE_FILTERS`'s {field} is {live.get(field)!r} and must be "
+                        f"{expected!r}. {why}",
+                    )
+                )
+
+    # THE CROSS-DICT ASSERTION, WHICH NEITHER SINGLE LOOP CAN MAKE. The two constants are
+    # near-identical and describe OPPOSITE documents, so the likeliest future edit is somebody
+    # folding them into one — or making one a copy of the other and then "fixing" a field in the
+    # wrong place. `MyInventory` is the field they must disagree on, and it is the whole of what
+    # separates the catalogue from the operator's own listings.
+    if isinstance(held, dict) and isinstance(live, dict):
+        for field, why in (
+            (
+                "MyInventory",
+                "they describe OPPOSITE documents — the catalogue and the operator's own live "
+                "listings. One of them is now fetching the wrong thing, and nothing downstream "
+                "can tell: a catalogue parses as an export exactly as a live inventory does.",
+            ),
+            (
+                "ExcludeListos",
+                "on the catalogue it excludes OTHER sellers' photo listings and on My Pricing "
+                "it excludes the operator's OWN — four of them in the real 2026-09-01 download, "
+                "including a $7,000 single copy. Agreement means one of the two requests has "
+                "taken the other's instruction.",
+            ),
+        ):
+            if held.get(field) == live.get(field):
+                findings.append(
+                    Finding(
+                        where,
+                        f"`STANDING_FILTERS` and `LIVE_FILTERS` agree on `{field}`, and {why}",
+                    )
+                )
+        if held is live:
+            findings.append(
+                Finding(
+                    where,
+                    "`LIVE_FILTERS` is `STANDING_FILTERS` rather than its own literal. Two "
+                    "instructions in one object is one instruction.",
+                )
+            )
+
     report.add(
         "export request",
         MECHANICAL,
         findings,
-        f"{len(EXPORT_STANDING)} standing filters, each at its instructed value",
+        f"{len(EXPORT_STANDING)} catalogue and {len(LIVE_STANDING)} live standing filters, "
+        f"each at its instructed value",
     )
 
 

@@ -174,6 +174,113 @@ STANDING_FILTERS = {
     "ExcludeListos": True,
 }
 
+# ------------------------------------------------- AND THE SAME THREE FOR THE LIVE INVENTORY
+#
+# A SECOND CONSTANT AND NOT A PARAMETER ON THE FIRST (D104). `STANDING_FILTERS` is the
+# CATALOGUE fetch's instruction — the run path, whose whole job is listing cards that are not
+# listed — and it does not move. What the markdown and the store-wide reconcile want is the
+# opposite document: the operator's own live listings, which is `MyInventory: True`. Making that
+# a parameter of one dict would put the two instructions in one place where a future edit to
+# either reads as an edit to both; two literals, each guarded, cannot be confused.
+#
+# `MyInventory` — TRUE, and this is the whole point of this path. The owner asked for it on
+# 2026-09-06 in those words, which is the authority the comment above says the field needs.
+#
+# `ExcludeListos` — FALSE, AND THIS IS NOT A REPEAL OF THE OWNER'S 2026-08-31 INSTRUCTION. That
+# instruction is above, on `STANDING_FILTERS`, and it does not move: on the CATALOGUE fetch the
+# flag excludes OTHER sellers' photo listings, which is noise to a join. This is a different
+# request about a different document, and the flag's effect on it is the opposite — on My
+# Pricing every row IS the operator's own listing, so `True` excludes THEIRS.
+#
+# MEASURED ON THEIR OWN FILE RATHER THAN READ OFF THE FIELD NAME, which is exactly what the
+# comment above forbids doing. Their My Pricing download of 2026-09-01 carries four rows with a
+# `Photo URL`, and all four are LIVE:
+#
+#     C-4619147    6 copies   $20.49    Paramount War - Booster Pack
+#     C-4669926    3 copies   $27.00    Double Pack Set Vol. 11
+#     C-4654187    1 copy   $7000.00    Kai'Sa, Daughter of the Void (Signature)
+#     C-4619603   37 copies   $11.39    Spiritforged - Booster Pack
+#
+# So `True` here would make the markdown lens silently omit the single most valuable listing in
+# the store, and a 37-copy line beside it. D64's finding that `Photo URL` is empty in all eleven
+# exports is what makes that permanent: nothing downstream could ever notice.
+#
+# THE RULE THIS FOLLOWS, AND IT DECIDES EVERY NARROWING AXIS BELOW: on the live path an all-row
+# the portal REJECTS fails loudly — `System Error` as a 200 carrying HTML, which `_check_body`
+# names `tcg_request_rejected` — while a narrowed value that is wrong fails SILENTLY, as a
+# smaller, perfectly parseable CSV. Loud beats silent every time on a document nothing
+# downstream can audit.
+#
+# `PrintingIds` — All Printings, always. The same argument, unchanged.
+LIVE_FILTERS = {
+    "MyInventory": True,
+    "PrintingIds": ["0"],
+    "ExcludeListos": False,
+}
+
+
+@dataclass(frozen=True)
+class LiveScope:
+    """Everything the operator has listed, across every product line. No narrowing at all.
+
+    A SECOND TYPE BECAUSE `Scope` IS THE WRONG SHAPE, not because two types are tidier.
+    `Scope.category_id` is a single int and its `model()` spreads `STANDING_FILTERS`
+    unconditionally — but the owner's own My Pricing download of 2026-09-01 is 759 rows across
+    SIX product lines (Riftbound 400, Pokemon 314, One Piece 41, YuGiOh 2, Card Sleeves 1,
+    Playmats 1). A live inventory is not scoped to a category, and expressing "all of them" by
+    looping a scalar over the registry's three ids would silently omit the other three.
+
+    D65's ARGUMENT SURVIVES AND IS WHY THIS IS STILL A NAMED SCOPE. That entry's point is that
+    completeness cannot be read off a file's contents, so the fetch names what it asked for and
+    the check downstream becomes "did I get what I asked for". The answer here is simply
+    "everything", which is a scope like any other and is the one this document can be complete
+    within.
+
+    `CategoryId: "0"` IS THE UNMEASURED FIELD AND IT IS THE LOAD-BEARING ONE. `["0"]` is how the
+    portal spells "all of them" for every LIST field — the `ids()` helper below carries the
+    finding that cost the most, that an empty array answers `System Error` — and this is the
+    scalar spelling of the same idea. Nothing in this repo has sent it. What makes it shippable
+    rather than a guess is that its failure is LOUD: a malformed body comes back as HTTP 200
+    carrying an HTML page titled `System Error`, which `_check_body` already names
+    `tcg_request_rejected` with the sentence "the session is fine — this is the export request
+    itself being malformed". A silent narrowing is the failure this project cannot detect; this
+    one announces itself on the first press.
+    """
+
+    def model(self) -> dict:
+        """The request body for "everything I have listed".
+
+        THE ELEVEN TRANSCRIBED FIELDS ARE `Scope.model`'s, VERBATIM, and are duplicated rather
+        than shared on purpose: that body is a capture off the portal's own submit and the next
+        person to re-capture it will paste over all of them. Two independent copies is what makes
+        a re-capture of one visible as a difference from the other; a shared helper would let a
+        paste move both at once, which is exactly what hoisting the standing filters exists to
+        prevent.
+        """
+        return {
+            "PricingType": "Pricing",
+            # "ALL OF THEM", THE SCALAR SPELLING — see the class docstring for why this is the
+            # one unmeasured field and why its failure is loud rather than silent.
+            "CategoryId": "0",
+            "SetNameIds": ["0"],
+            "ConditionIds": ["0"],
+            "RarityIds": ["0"],
+            # ALL LANGUAGES, WHICH IS THE OPPOSITE OF THE RUN PATH'S `["1"]` AND IS THE SAME
+            # RULE AS EVERY OTHER AXIS HERE. `["1"]` is English and is the value proven on the
+            # catalogue fetch — but its failure mode on THIS document is silent: an operator's
+            # non-English listings simply never arrive, and the export carries no Language
+            # column for anything to notice with. `["0"]` is unproven and fails loudly.
+            "LanguageIds": ["0"],
+            "PrintingIds": ["0"],
+            "CompareAgainstPrice": False,
+            "PriceToCompare": 3,
+            "ValueToCompare": 1,
+            "PriceValueToCompare": None,
+            "ExportLowestListingNotMe": True,
+            # SPREAD LAST, for `Scope.model`'s reason exactly.
+            **LIVE_FILTERS,
+        }
+
 
 @dataclass(frozen=True)
 class Scope:
@@ -534,6 +641,19 @@ def match_sets(hints, sets, aliases=None) -> Tuple[Tuple[int, ...], Tuple[str, .
     return tuple(dict.fromkeys(matched)), tuple(dict.fromkeys(missed))
 
 
+def fetch_live(scope: "LiveScope") -> bytes:
+    """The operator's own live listings, as bytes, or a `FetchRefusal` naming what went wrong.
+
+    `fetch` WITH A DIFFERENT BODY, AND THE SPLIT IS THE SCOPE TYPE RATHER THAN A FLAG. Every
+    transport concern below is identical — the POST, Knockout's `postJson` form shape, the one
+    deliberate redirect hop, the status and body checks — so this delegates rather than
+    restating them, and the only difference on the wire is what `model()` returned. A boolean
+    parameter on `fetch` would have put the two standing instructions behind one call site,
+    which is the thing `LIVE_FILTERS`' own comment exists to prevent.
+    """
+    return _post_export(scope.model())
+
+
 def fetch(scope: Scope) -> bytes:
     """The catalog export for `scope`, as bytes, or a `FetchRefusal` naming what went wrong.
 
@@ -552,9 +672,21 @@ def fetch(scope: Scope) -> bytes:
     One deliberate redirect hop, as before: the cookie is not re-sent across a host change,
     because a redirect is a destination somebody else chose.
     """
+    return _post_export(scope.model())
+
+
+def _post_export(model: dict) -> bytes:
+    """One export request, whatever scope built the body. The transport, and nothing else.
+
+    EXTRACTED SO THE LIVE PATH CANNOT DRIFT FROM THE CATALOGUE ONE. The redirect rule below is
+    the part that would rot in a copy: one hop is followed, the cookie is NOT re-sent across a
+    host change because a redirect is a destination somebody else chose, and a chain is refused.
+    A second implementation of that would be a second place to get it wrong, on the one call in
+    this repo that carries the operator's session.
+    """
     url = endpoint()
     cookie = _cookie()
-    payload = urlencode({"model": json.dumps(scope.model())}).encode("utf-8")
+    payload = urlencode({"model": json.dumps(model)}).encode("utf-8")
     status, headers, body = _open(
         url,
         cookie=cookie,

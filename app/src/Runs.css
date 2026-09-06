@@ -886,3 +886,28 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
   font-size: var(--bn-fs-xs);
   white-space: nowrap;
 }
+
+/* WHAT A FETCH COULD NOT BRING (D104) — drawn inside the ok Notice rather than as its own
+   warning, because it is a caveat on a success and not a failure. It is empty today: the live
+   fetch narrows by nothing, and this exists for the day somebody narrows an axis, when the
+   omission would otherwise be silent forever. */
+.runs-md-shortfall {
+  display: block;
+  margin-top: var(--bn-1);
+  color: var(--bn-ink-3);
+}
+
+/* The fetch control above each drop zone. A row so the button and its "or drop one" sit on one
+   line at desk width and stack on a phone, like every other pair on these sheets. */
+.runs-md-row + .runs-md-row { margin-top: var(--bn-2); }
+.livecheck-fetch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bn-2) var(--bn-3);
+  margin-bottom: var(--bn-3);
+}
+.livecheck-hint {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}

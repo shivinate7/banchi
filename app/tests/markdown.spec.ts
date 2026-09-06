@@ -72,6 +72,10 @@ const consoles = (page: Page) => page.locator('.runs-md-console')
  *  empty, which is what every case written before D103 assumed. */
 let HISTORY: unknown[] = []
 
+/** Whether `POST /pipeline/live-export` answers or refuses. `'refuse'` sends the envelope the
+ *  capture server actually sends, so the danger arm is exercised against a real shape. */
+let LIVE_FETCH: 'ok' | 'refuse' | 'narrowed' = 'ok'
+
 async function stub(page: Page): Promise<Wire[]> {
   const wire: Wire[] = []
   await page.route(/\/pipeline\/markdowns$/, async (route) => {
@@ -94,6 +98,38 @@ async function stub(page: Page): Promise<Wire[]> {
         wrote: Boolean(body.write),
         console: SURVEY,
         stamp: body.write ? STAMP : null,
+      }),
+    })
+  })
+  await page.route(/\/pipeline\/live-export$/, async (route) => {
+    wire.push({ path: '/pipeline/live-export', body: route.request().postDataJSON() })
+    if (LIVE_FETCH === 'refuse') {
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'tcg_session_expired',
+            message: 'The TCGplayer session has expired. Sign in and copy the cookie again.',
+          },
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        fetched: 'live-tcgplayer-20260906-120000.csv',
+        at: '2026-09-06T12:00:00.000+00:00',
+        rows: 759,
+        live_rows: 441,
+        live_copies: 1140,
+        shortfall:
+          LIVE_FETCH === 'narrowed'
+            ? 'Listings that carry a photo are not in this file — `ExcludeListos` is on.'
+            : null,
       }),
     })
   })
@@ -645,4 +681,147 @@ test('a markdown with no survey offers its files and not the lens', async ({ pag
      predates the lens too. */
   await expect(page.getByRole('button', { name: 'Hand it back' })).toBeVisible()
   HISTORY = []
+})
+
+/* THE CUT COMES OFF SOMETHING, AND UNTIL D103 THE SCREEN COULD ONLY SAY "the asking price".
+ *
+ * `--basis` was on the wire, validated by `_markdown_flags` against `reprice.BASES`, and
+ * reachable by no control — a route and a wire type that no screen touches is what CLAUDE.md's
+ * hard rule calls not done. `asking` stays the default for D100's reason: `TCG Marketplace
+ * Price` is populated on 441 of 441 live rows of a My Pricing export and blank on 7,787 of
+ * 7,802 of the wide Filtered Export. */
+test('the survey says what the cut comes off, and defaults to the operator’s own price', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await pickExport(page)
+  await expect.poll(() => wire.length).toBe(1)
+  expect((wire[0]?.body as { basis?: string }).basis).toBe('asking')
+
+  await page.getByLabel('Cut comes off').selectOption('market')
+  await page.getByRole('button', { name: /Read it again/ }).click()
+  await expect.poll(() => wire.length).toBe(2)
+  expect((wire[1]?.body as { basis?: string }).basis).toBe('market')
+
+  /* AND THE SAME BYTES, because the basis is a question about one export and re-picking the
+     file would make the two answers about two reads. */
+  expect((wire[1]?.body as { export?: { name?: string } }).export?.name).toBe(
+    (wire[0]?.body as { export?: { name?: string } }).export?.name,
+  )
+})
+
+/* AND A PAST SURVEY SAYS WHICH BASIS IT USED, or two markdowns that differ only by it are two
+ * identical rows. `asking` is left silent — naming the default on every row would be noise on
+ * the ordinary case. */
+test('the history line names a basis only when it is not the default', async ({ page }) => {
+  HISTORY = [
+    {
+      stamp: '20260902-100000',
+      at: '2026-09-02T10:00:00.000+00:00',
+      asked: { days: 7, rule: 'undercut:10', basis: 'market' },
+      source: '/tmp/a.csv',
+      skus: 4,
+      files: ['manifest.json', 'worklist.csv'],
+    },
+    {
+      stamp: '20260902-090000',
+      at: '2026-09-02T09:00:00.000+00:00',
+      asked: { days: 7, rule: 'undercut:10', basis: 'asking' },
+      source: '/tmp/b.csv',
+      skus: 4,
+      files: ['manifest.json', 'worklist.csv'],
+    },
+  ]
+  await open(page)
+  const lines = page.locator('.runs-md-history-asked')
+  await expect(lines.first()).toContainText('10% off of market')
+  await expect(lines.nth(1)).toContainText('10% off')
+  await expect(lines.nth(1)).not.toContainText('of market')
+  HISTORY = []
+})
+
+/* MATCH IS THE OTHER HALF OF THE CLI'S OWN EXCLUSIVE PAIR, and the screen mirrors the exclusion
+ * rather than inventing a third state: `_markdown_flags` reads `rule` first and `percent` only
+ * `elif`, so a request carrying both would silently drop one. `markup` is deliberately absent —
+ * a price above the live one is `RAISED`, which refuses the WHOLE file, so a control whose every
+ * use is refused is worse than no control. */
+test('pricing at the basis exactly sends a rule and no percent, and hides the percent field', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await page.getByLabel('New price is').selectOption('match')
+  /* THE PERCENT FIELD GOES, because it is not a number this survey has a use for. An absence
+     rather than a disabled input, which is this sheet's rule throughout (D33). */
+  await expect(page.getByLabel('Cut, percent')).toHaveCount(0)
+
+  await pickExport(page)
+  await expect.poll(() => wire.length).toBe(1)
+  const body = wire[0]?.body as { rule?: string; percent?: string }
+  expect(body.rule).toBe('match')
+  expect(body.percent).toBeUndefined()
+
+  await page.getByLabel('New price is').selectOption('percent')
+  await expect(page.getByLabel('Cut, percent')).toBeVisible()
+  await page.getByRole('button', { name: /Read it again/ }).click()
+  await expect.poll(() => wire.length).toBe(2)
+  const second = wire[1]?.body as { rule?: string; percent?: string }
+  expect(second.rule).toBeUndefined()
+  expect(second.percent).toBe('10')
+})
+
+/* STEP 1 USED TO HAPPEN ENTIRELY OFF THIS MACHINE (D104).
+ *
+ * The screen could only point at TCGplayer and say "nothing here fetches it for you yet".
+ * `POST /pipeline/live-export` brings the operator's own live listings at `MyInventory: True` —
+ * the opposite document from the run path's catalogue fetch, behind its own guarded constant. */
+test('the live export is fetched in one press, and the survey follows it', async ({ page }) => {
+  const wire = await open(page)
+  await page.getByRole('button', { name: 'Fetch my live listings' }).click()
+
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/live-export').length).toBe(1)
+  /* AND THE SURVEY FOLLOWS IN THE SAME PRESS, naming the file rather than re-uploading it. The
+     fetch is not a thing the operator wants for its own sake; the survey is the answer they
+     came for. */
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/markdowns').length).toBe(1)
+  const survey = wire.find((r) => r.path === '/pipeline/markdowns')?.body as {
+    fetched?: string
+    export?: unknown
+  }
+  expect(survey.fetched).toBe('live-tcgplayer-20260906-120000.csv')
+  /* ONE DOCUMENT AND NOT TWO. The route refuses a request carrying both, so the screen must not
+     be able to build one. */
+  expect(survey.export).toBeUndefined()
+
+  await expect(page.getByText('441 listings live · 1140 copies')).toBeVisible()
+})
+
+/* THE FETCH NARROWS BY NOTHING, SO IT SAYS NOTHING — and the sentence exists for the day
+ * somebody narrows an axis. `ExcludeListos: True` would drop the operator's own photo listings:
+ * four rows in their real download, one a single copy at $7,000. D64 measured `Photo URL` empty
+ * in every catalogue export, so nothing downstream could ever notice. The server decides; the
+ * screen only has to draw it when there is one. */
+test('a fetch that omits nothing says nothing, and one that omits says so', async ({ page }) => {
+  await open(page)
+  await page.getByRole('button', { name: 'Fetch my live listings' }).click()
+  await expect(page.getByText('441 listings live · 1140 copies')).toBeVisible()
+  await expect(page.locator('.runs-md-shortfall')).toHaveCount(0)
+
+  LIVE_FETCH = 'narrowed'
+  await page.getByRole('button', { name: /Read it again|Fetch my live listings/ }).first().click()
+  await expect(page.locator('.runs-md-shortfall')).toContainText('photo')
+  LIVE_FETCH = 'ok'
+})
+
+/* A DEAD COOKIE MUST NOT BE A DEAD END. Every fetch refusal is a sentence with its own code,
+ * and the drop zone below is what it leaves the operator — which is why the zone is not a
+ * fallback that appears on failure but a door that was always open. */
+test('a refused fetch names the reason and leaves the drop zone open', async ({ page }) => {
+  LIVE_FETCH = 'refuse'
+  await open(page)
+  await page.getByRole('button', { name: 'Fetch my live listings' }).click()
+
+  await expect(page.locator('.runs-md .bn-notice-danger')).toContainText('session has expired')
+  await expect(page.locator('.runs-md .bn-notice-danger')).toContainText('tcg_session_expired')
+  await expect(page.locator('.runs-md .runs-drop input[type=file]')).toBeEnabled()
+  LIVE_FETCH = 'ok'
 })
