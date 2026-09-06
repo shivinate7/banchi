@@ -10,6 +10,7 @@ import {
   markdownListings,
   publishMarkdown,
   pushMarkdown,
+  rollbackMarkdown,
   type Failure,
 } from './server'
 import { readUpload } from './csvUpload'
@@ -151,7 +152,7 @@ export function Markdown({
   const [pushed, setPushed] = useState<MarkdownPush['pushed'] | null>(null)
   /** Which of the two outbound presses is in flight. NOT a boolean: both buttons can be on
    *  screen at once and only the one that was pressed may spin. */
-  const [sending, setSending] = useState<'push' | 'publish' | null>(null)
+  const [sending, setSending] = useState<'push' | 'publish' | 'rollback' | null>(null)
 
   /* WHAT WAS PICKED, IN STATE RATHER THAN OFF THE REF BELOW. The drop zone draws the file's
      name and the re-read control only exists once there is a file to re-read; a ref answers
@@ -358,6 +359,26 @@ export function Markdown({
       setSending(null)
     }
   }, [stamp])
+
+  /** Discard the staged upload — the undo for a push, and only before it is published.
+   *
+   *  IT CLEARS `pushed` ON THE WAY BACK, because the server deletes the receipt: leaving it
+   *  would leave step 4 offering to publish rows TCGplayer has been told to forget.
+   */
+  const discard = useCallback(async () => {
+    if (stamp === null) return
+    setSending('rollback')
+    setFailure(null)
+    try {
+      await rollbackMarkdown(stamp)
+      setPushed(null)
+      refresh()
+    } catch (caught) {
+      setFailure(describeFailure(caught))
+    } finally {
+      setSending(null)
+    }
+  }, [refresh, stamp])
 
   /** Move that staged upload live. THE ONE PRESS IN THIS APP A BUYER CAN SEE.
    *
@@ -826,57 +847,73 @@ export function Markdown({
                     </>
                   ) : null}
 
-                  {/* STEP 4 EXISTS ONLY ONCE SOMETHING IS STAGED, which is D33's gate applied a
-                      third time: a press that changes what buyers pay must not be on screen
-                      before the thing it would publish exists. */}
-                  {pushed === null ? null : (
-                    <div className="markdown-publish">
-                      <h3 className="bn-section-title">4 · Go live</h3>
-                      {pushed.published_at ? (
-                        <Notice tone="ok" title="Live at TCGplayer">
-                          {pushed.accepted} price{pushed.accepted === 1 ? '' : 's'} moved live at{' '}
-                          {pushed.published_at}. Read them back with{' '}
-                          <strong>Reconcile the store</strong> on Runs.
-                        </Notice>
-                      ) : (
-                        <>
-                          <Notice tone="warn" title="This changes what buyers pay">
-                            TCGplayer is holding {pushed.accepted} price
-                            {pushed.accepted === 1 ? '' : 's'} in your Staged inventory
-                            {pushed.accepted === pushed.rows ? '' : ` of the ${pushed.rows} sent`}.
-                            Publishing moves those and nothing else. It is the only press in this
-                            app that a buyer can see.
-                          </Notice>
-                          {pushed.messages.length === 0 ? null : (
-                            <LogWell
-                              text={pushed.messages.join('\n')}
-                              label="What TCGplayer said about these rows"
-                              className="markdown-console"
-                              maxHeight={200}
-                            />
-                          )}
-                          <div className="markdown-row">
-                            <Button
-                              variant="danger"
-                              icon="zap"
-                              busy={sending === 'publish'}
-                              disabled={busy}
-                              onClick={publish}
-                            >
-                              Move {pushed.accepted} live
-                            </Button>
-                            <span className="markdown-hint">
-                              There is no undo at TCGplayer. Another markdown is how a price
-                              goes back.
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
                 </>
               )}
             </section>
+          )}
+
+          {/* STEP 4 EXISTS ONLY ONCE SOMETHING IS STAGED, which is D33's gate applied a third
+              time: a press that changes what buyers pay must not be on screen before the thing
+              it would publish exists.
+
+              AND IT SITS OUTSIDE STEP 3's `applied` GUARD, because the receipt outlives this
+              screen. An operator who pushed and then reloaded has run no check this session, so
+              gating step 4 on one would strand rows at TCGplayer with nothing here able to
+              publish or discard them — which is the very hole the receipt on the summary was
+              added to close. It was written inside that guard first, and the reload path is
+              what caught it. */}
+              {pushed === null ? null : (
+                <div className="markdown-publish">
+                  <h3 className="bn-section-title">4 · Go live</h3>
+                  {pushed.published_at ? (
+                    <Notice tone="ok" title="Live at TCGplayer">
+                      {pushed.accepted} price{pushed.accepted === 1 ? '' : 's'} moved live at{' '}
+                      {pushed.published_at}. Read them back with{' '}
+                      <strong>Reconcile the store</strong> on Runs.
+                    </Notice>
+                  ) : (
+                    <>
+                      <Notice tone="warn" title="This changes what buyers pay">
+                        TCGplayer is holding {pushed.accepted} price
+                        {pushed.accepted === 1 ? '' : 's'} in your Staged inventory
+                        {pushed.accepted === pushed.rows ? '' : ` of the ${pushed.rows} sent`}.
+                        Publishing moves those and nothing else. It is the only press in this
+                        app that a buyer can see.
+                      </Notice>
+                      {pushed.messages.length === 0 ? null : (
+                        <LogWell
+                          text={pushed.messages.join('\n')}
+                          label="What TCGplayer said about these rows"
+                          className="markdown-console"
+                          maxHeight={200}
+                        />
+                      )}
+                      <div className="markdown-row">
+                        <Button
+                          variant="danger"
+                          icon="zap"
+                          busy={sending === 'publish'}
+                          disabled={busy}
+                          onClick={publish}
+                        >
+                          Move {pushed.accepted} live
+                        </Button>
+                        <Button
+                          icon="undo"
+                          busy={sending === 'rollback'}
+                          disabled={busy}
+                          onClick={discard}
+                        >
+                          Discard staged
+                        </Button>
+                        <span className="markdown-hint">
+                          Discarding takes them back off TCGplayer. Publishing cannot be
+                          undone there — another markdown is how a live price goes back.
+                        </span>
+                      </div>
+                    </>
+                  )}
+            </div>
           )}
 
           {history.length === 0 ? null : (

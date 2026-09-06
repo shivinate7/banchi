@@ -11134,6 +11134,7 @@ def check_markdown_push(checks: Checks) -> None:
         for route, code, payload in (
             (pipeline_routes.do_markdown_push, "no_import_file", {"confirm": True}),
             (pipeline_routes.do_markdown_publish, "nothing_staged", {"confirm": True}),
+            (pipeline_routes.do_markdown_rollback, "nothing_staged", {"confirm": True}),
             # AN ID ON THE REQUEST CHANGES NOTHING. Same refusal, because the route reads the
             # receipt on disk and never the body.
             (
@@ -11175,6 +11176,16 @@ def check_markdown_push(checks: Checks) -> None:
             checks.ok(False, "a second publish refuses", "it answered instead")
         except pipeline_routes.PipelineRefusal as refusal:
             checks.equal(refusal.code, "already_published", "a second publish refuses by name")
+
+        # AND A ROLLBACK IS REFUSED ONCE IT IS PUBLISHED. TCGplayer no longer holds those rows
+        # staged, so there is nothing to discard — and offering it would imply a live price can
+        # be taken back, which D100 says it cannot.
+        try:
+            pipeline_routes.do_markdown_rollback(directory.name, {"confirm": True})
+            checks.ok(False, "a rollback after publish refuses", "it answered instead")
+        except pipeline_routes.PipelineRefusal as refusal:
+            checks.equal(refusal.code, "already_published",
+                         "a rollback after publish refuses by name")
 
         # THE RECEIPT REACHES THE SCREEN, which is the reload path: without it an operator who
         # pushed and then refreshed would have rows staged and no control able to publish them.
@@ -11239,6 +11250,105 @@ def check_markdown_push(checks: Checks) -> None:
         (tcg_import.INITIALIZE, tcg_import.UPLOAD, tcg_import.CHUNK_SIZE, tcg_import.SCOPE_THIS_UPLOAD),
         ("/admin/pricing/initializeexportcsv", "/admin/pricing/uploadexportcsv", 750, 3),
         "and the endpoints, the chunk size and the pinned scope are the ones read off their bundle",
+    )
+
+
+def check_publish_lag(checks: Checks) -> None:
+    """`reconcile --live` will not settle a SKU this pipeline just published (D106).
+
+    THE DEFECT IS A TIMESTAMP THAT TELLS THE TRUTH ABOUT THE WRONG THING. `Export From Live`
+    is not read-your-writes — measured 2026-09-06, forty seconds after a confirmed publish it
+    still served the pre-publish price — and the reading is dated by the FILE'S mtime, which
+    is when it was fetched. So a stale body arrives carrying a fresh date,
+    `Listing.live_reading` prefers it over the store, and the figure this pipeline just set is
+    overwritten by the one it replaced. Nothing inside the document can reveal that.
+
+    WHAT IS ASSERTED IS THE SELECTION, NOT THE CLOCK. A test that published and then waited
+    would be a test of TCGplayer's convergence time, which is unmeasured and not ours. These
+    assert what `published_recently` picks out of receipts on disk, which is the whole input
+    the reconcile's skip runs on.
+    """
+    checks.note("")
+    checks.note("PUBLISH LAG — the SKUs a reconcile must not settle from the export")
+
+    with isolated_home() as home:
+        root = home / "inventory" / "markdowns"
+
+        def markdown(stamp, sku, published_at, price="1.00"):
+            directory = root / stamp
+            directory.mkdir(parents=True)
+            tcgcsv.write_csv(
+                directory / cmd_reprice.IMPORT,
+                (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+                [{tcgcsv.SKU_COLUMN: sku, tcgcsv.PRICE_COLUMN: price}],
+            )
+            (directory / "push.json").write_text(
+                json.dumps({"upload_id": stamp, "rows": 1, "accepted": 1, "messages": [],
+                            "pushed_at": published_at, "published_at": published_at}),
+                encoding="utf-8",
+            )
+            return directory
+
+        now = datetime(2026, 9, 6, 20, 0, 0, tzinfo=timezone.utc)
+        markdown("20260906-195900", "SKU-JUST-NOW", "2026-09-06T19:59:00+00:00")
+        markdown("20260906-120000", "SKU-HOURS-AGO", "2026-09-06T12:00:00+00:00")
+
+        # PUSHED BUT NEVER PUBLISHED CONTRIBUTES NOTHING, and this is the case most likely to
+        # be broken by a careless edit: staging changes nothing a buyer or an export can see,
+        # so holding its SKUs back would refuse a settlement for no reason at all.
+        staged = root / "20260906-195800"
+        staged.mkdir(parents=True)
+        tcgcsv.write_csv(
+            staged / cmd_reprice.IMPORT,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: "SKU-STAGED-ONLY", tcgcsv.PRICE_COLUMN: "2.00"}],
+        )
+        (staged / "push.json").write_text(
+            json.dumps({"upload_id": "x", "rows": 1, "accepted": 1, "messages": [],
+                        "pushed_at": "2026-09-06T19:58:00+00:00", "published_at": None}),
+            encoding="utf-8",
+        )
+
+        recent = cmd_reprice.published_recently(now=now)
+        checks.equal(
+            sorted(recent),
+            ["SKU-JUST-NOW"],
+            "only a SKU published INSIDE the window is held back — not one published hours "
+            "ago, and not one merely staged",
+        )
+
+        # AN UNREADABLE STAMP IS TREATED AS RECENT. The point of the guard is to refuse a
+        # figure it cannot vouch for, and a receipt it cannot date is exactly that — failing
+        # open here would settle from an export that may well be stale.
+        broken = markdown("20260906-195700", "SKU-BAD-STAMP", "not-a-date")
+        checks.ok(
+            "SKU-BAD-STAMP" in cmd_reprice.published_recently(now=now),
+            "and a receipt whose stamp will not parse is held back rather than settled",
+        )
+        shutil.rmtree(broken)
+
+        # A HALF-DELETED MARKDOWN MUST NOT TAKE THE RECONCILE DOWN. This runs inside a
+        # settlement the operator asked for.
+        gone = markdown("20260906-195600", "SKU-NO-FILE", "2026-09-06T19:59:30+00:00")
+        (gone / cmd_reprice.IMPORT).unlink()
+        checks.equal(
+            sorted(cmd_reprice.published_recently(now=now)),
+            ["SKU-JUST-NOW"],
+            "and a receipt whose import file is gone contributes nothing rather than raising",
+        )
+
+        # THE WINDOW IS A PARAMETER SO THE RULE CAN BE TESTED WITHOUT WAITING ON THE CONSTANT.
+        checks.equal(
+            sorted(cmd_reprice.published_recently(now=now, window_s=24 * 3600)),
+            ["SKU-HOURS-AGO", "SKU-JUST-NOW"],
+            "and widening the window reaches the older publish, so the cut is the window and "
+            "not something else",
+        )
+
+    checks.ok(
+        cmd_reprice.PUBLISH_LAG_S >= 60,
+        "the window is at least a minute — the measured staleness was ~40s, so anything "
+        "shorter would be a guard that does not cover the one reading it was built for",
     )
 
 
@@ -19616,6 +19726,7 @@ def run() -> Result:
     check_markdown(checks)
     check_markdown_lens(checks)
     check_markdown_push(checks)
+    check_publish_lag(checks)
     check_withholding(checks)
     check_pricing_route(checks)
     check_corpus_revision(checks)

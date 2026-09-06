@@ -571,6 +571,9 @@ _MARKDOWN_APPLY_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/apply
 # 2026-09-06's accidental upload was survivable is that those two are not one press.
 _MARKDOWN_PUSH_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/push$")
 _MARKDOWN_PUBLISH_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/publish$")
+# The undo for a push, and only before it is published. Narrower than the portal's own
+# control on purpose: `clearstagedinventory` empties the whole staged channel and takes no id.
+_MARKDOWN_ROLLBACK_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/rollback$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
 # — the document holding the export row is what says what the card is, so the address names a
@@ -9682,6 +9685,16 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(
                     HTTPStatus.OK,
                     pipeline_routes.do_markdown_publish(match.group(1), self._body()),
+                )
+            match = _MARKDOWN_ROLLBACK_RE.match(path)
+            if match:
+                # THE UNDO, and the one outbound write here that makes the store SMALLER
+                # rather than larger. Refuses once the upload has been published: there is
+                # nothing staged to discard then, and a live price goes back the way it came
+                # down — another markdown.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_markdown_rollback(match.group(1), self._body()),
                 )
             match = _MARKDOWN_APPLY_RE.match(path)
             if match:

@@ -1948,6 +1948,21 @@ export async function pushMarkdown(stamp: string): Promise<MarkdownPush> {
 }
 
 /**
+ * Discard this markdown's staged upload at TCGplayer — the undo for a push.
+ *
+ * ONLY BEFORE IT IS PUBLISHED, and the route enforces that rather than this client. Once the
+ * rows are live TCGplayer no longer holds them staged, and a live price goes back the way it
+ * came down: another markdown (D100 — nothing is deleted to change a price).
+ */
+export async function rollbackMarkdown(stamp: string): Promise<{ rolled_back: string; stamp: string }> {
+  return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/rollback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
+  })) as { rolled_back: string; stamp: string }
+}
+
+/**
  * Move this markdown's staged upload LIVE. **This changes what buyers pay.**
  *
  * IT SENDS NO UPLOAD ID. The server reads that off the push receipt on disk, so a replayed or

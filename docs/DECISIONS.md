@@ -5967,6 +5967,22 @@ It also caught what symmetry would have got wrong: **`initializeexportcsv` takes
 
 **What that measurement also caught: `Export From Live` is not read-your-writes.** Roughly forty seconds after a confirmed publish the export still served the OLD price while the grid served the new one. `pkmnscan reconcile --live` reads that export and writes `live` off it (D87), so a reconcile run straight after a publish records the pre-publish price. Nothing guards it, and the export was believed here until the grid contradicted it. That is a defect in the reconcile's timing, not in this path, and it is recorded rather than fixed.
 
+### The lag has a guard, and it is a filter rather than a refusal
+
+`cli/cmd_reprice.py:published_recently` reads the markdown receipts — `push.json` says WHEN, the `import.csv` beside it says WHICH — and `reconcile --live` will not settle a SKU published inside `PUBLISH_LAG_S`. It keeps the store's own figure and **names the SKU in the report**, which is D87's own posture for a reading it will not take, pointed at a second clock.
+
+**It narrows to SKUs rather than blocking the reconcile**, because the rest of the store is not in doubt. And it is computed BEFORE the preview, not just before the write: `_settlement`'s docstring promises the preview "cannot promise a correction the write then refuses", and a skip applied only on the write path would break exactly that, silently, in the output the operator reads first.
+
+**`PUBLISH_LAG_S` is 15 minutes, and that is a choice rather than a reading.** The staleness was measured at ~40s; **when the export actually converges was never measured**, because measuring it costs another live price change. The window is deliberately generous: too long costs a reconcile repeated later, too short writes a wrong number into `live` — the field `cli/resolve.py:_copies_out` treats as a floor that cannot be argued below. The constant carries the experiment that would replace it with a measurement.
+
+**A receipt this cannot date is treated as RECENT, not as old.** The guard exists to refuse a figure it cannot vouch for, and an unparseable stamp is exactly that.
+
+### The rollback is on the screen, and it is narrower than the portal's own
+
+`POST /pipeline/markdowns/<stamp>/rollback` and a **Discard staged** button beside the publish. `rollbackexportcsv` was implemented in the transport and reachable from no button, which by CLAUDE.md's hard rule meant it was not built.
+
+**It is offered only before the upload is published**, because afterwards TCGplayer no longer holds those rows staged and a live price goes back the way it came down — another markdown (D100). And it is `rollbackexportcsv` and never `clearstagedinventory`: the latter takes no id and empties the operator's whole staged channel. A scope that can widen is not something a button should be able to choose, which is `move_to_live`'s rule applied to the undo.
+
 ### What would reopen this
 
-*The first real publish*, which is the measurement this entry is missing. *A rollback control on the screen* — `rollbackexportcsv` is implemented and reachable from no button, which by CLAUDE.md's own hard rule means it is not built; it is deliberately not offered until a push failure has actually been seen. *An operator who wants to publish a subset of one upload*, which TCGplayer's scopes cannot express and would need a second staged upload instead.
+*A measurement of the export's real convergence time*, which retires the guessed window. *An operator who wants to publish a subset of one upload*, which TCGplayer's scopes cannot express and would need a second staged upload instead. *Raises* — `docs/specs/stale-listings.md` §6b — which this path refuses today and the owner has asked for.
