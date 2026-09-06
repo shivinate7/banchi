@@ -103,6 +103,19 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **Live quantity caps at 4 per SKU** (a playset; configurable) regardless of copies owned. This blocks envelope-buster orders, and a price spike sells at most 4 stale-priced copies before repricing — the same rationale behind TCGplayer's own Buylist Max Listing feature.
 
+**"Configurable" became true on 2026-09-06, and it had been a promise with no reader for the whole life of this entry.** The parameter was threaded from the start — `SkuMatch.live_cap`,
+`join(live_cap=…)`, `resolve.load(live_cap=…)` — and **no caller ever passed anything but the module default**: no flag set it, no policy key held it, and `server/pipeline_routes.py` read
+the constant directly in three places while `server/capture_server.py` read it in four. It is
+now `policy.live_cap` in `inventory/prices.json`, store-wide and overridable per run through
+`policy.per_run` like `rule`, `basis`, `sub_threshold` and `threshold` — **which makes it the first writer of the run-level override D86 named as its own reopening condition**, and a lot
+that genuinely wants a different exposure is exactly the case this entry's "configurable" was
+about. The figure itself moved to `pipeline/pricing.py`, which `join` and `corpus` both import
+and neither of which imports the other, so the default and the policy key cannot drift; every
+caller and every document still spells it `join.LIVE_QUANTITY_CAP`. A present-and-unusable
+value (`0`, `"four"`) is refused at read time by `decisions.parse_live_cap` rather than
+clamped — a cap of zero emits nothing for every SKU and would read as a broken pipeline rather
+than as a setting.
+
 Excess copies are backstock at known positions. Refill on later imports as `Add to Quantity = min(cap - live, backstock)`, with live quantities read from Export From Live. Price is per-SKU and shared across copies.
 
 ### Copies are fungible, and `live` is a quantity rather than a set of addresses
@@ -4825,7 +4838,15 @@ writes them apart on purpose, which the command line still permits and no screen
 where it used to partition at $0.40, and every SKU whose market sits between the two moves from the
 listed half to the cheap half on its next join. **That moves cards and not money**: those SKUs go
 out at $0.49 either way, because $0.49 is what the cheap half has been priced at since the
-amendment. The owner's own store is unaffected — it has $0.40 written — and `harness/tests/
+amendment. **This sentence was wrong about the owner's store and stayed wrong for three days (corrected 2026-09-06).** It read *"The owner's own store is unaffected — it has $0.40
+written"*. Measured: `inventory/prices.json` carries `{"basis": "market", "rule": "match",
+"sub_threshold": "floor"}` and **no `threshold` key at all**, so `DEFAULT_CUTOFF` applies and
+that store partitions at **$0.49**. What the entry is right about still holds — this moves
+cards and not money, because the cheap half goes out at $0.49 either way — but the claim that
+a real store had been checked was never true of this one, and nothing read it. (`sub_threshold:
+"floor"` is the form D98 retired; it still parses and becomes a flat figure on its first edit,
+which has not happened because that file has not been written since 2026-09-03.) And
+`harness/tests/
 t7_store_and_seams.py` asserts the shared fallback with the trade written beside it, where the
 assertion that used to promise the opposite stood.
 
@@ -5324,6 +5345,10 @@ All 104 of those sales went through `#/inventory`'s plain sale — the write thi
 **The front end was rebuilt end to end and renamed Banchi — 番地, a lot number, the address of a thing — and nothing behind it moved.** Built 2026-09-02 to 2026-09-03 on `claude/banchi-ui-ux-overhaul`, on the owner's instruction that the product read as a branded, external-facing thing rather than a spreadsheet with buttons, and on their explicit lifting of every rule in this file, in `CLAUDE.md` and in `docs/DESIGN.md` for the duration of the job. 69 tracked files under `app/` changed, +28,718 and -29,709 lines, with fourteen new ones. The name is the argument the product is built on: every card in this store has an address — box, then section, then card (D58) — and this is the thing that knows it.
 
 **The rename is the product's and not the repo's, and the boundary is greppable.** `Banchi` appears in `app/index.html`'s `<title>`, `app/src/App.tsx`, `app/src/kit/Icon.tsx`'s brand mark and `app/src/Gallery.tsx`, and in no file under `server/`, `cli/`, `pipeline/`, `store/`, `identify/`, `geometry/` or `codes/`. The executable is still `./pkmnscan`, the store is still `inventory/store.sqlite` (D88), the checkout is still `pkmnscan`. A name a person reads on a screen and a name a program is invoked by are different facts; only the first one moved. A rename that had reached the CLI would have invalidated every command in `CLAUDE.md` and every path in `docs/map.py` to nobody's benefit.
+
+**AMENDED 2026-09-06, ON THE OWNER'S WORD: THE GITHUB REPOSITORY IS NOW `banchi` TOO.** They renamed `shivinate7/pkmnscan` -> `shivinate7/banchi` deliberately, so the sentence above is half wrong from that date: the rename is the product's AND the GitHub repository's, and not the checkout's, the CLI's, the packages' or the wire's. Everything the paragraph above greps for still holds — `Banchi` appears in no file under `server/`, `cli/`, `pipeline/`, `store/`, `identify/`, `geometry/` or `codes/`, the executable is still `./pkmnscan`, the store is still `inventory/store.sqlite`, and the local checkout is still `~/Developer/pkmnscan`. **The local directory and the remote disagreeing is the finished state, not a half-done rename**, and a session that "tidies" it by renaming the directory has done the thing this entry exists to forbid.
+
+**Nothing had to be changed for it, because the one derived name was already guarded.** GitHub Pages serves a project site at `/<repo>/`, so the demo's asset base moved with the repo; the publish workflow derives that base from the repository name and says why in a comment written before the rename happened — so a rename cannot leave it pointing at the old one. Verified the day of: `shivinate7.github.io/banchi/` answers 200 with `/banchi/`-rooted assets, and the old path 404s. GitHub redirects the old repository name, so old clone URLs and the links in every merged PR still resolve — #172 was opened under `pkmnscan` and #174 under `banchi`, and both still open.
 
 **The plumbing was frozen, and the diff is what says so.** `app/src/server.ts` moved 11 lines and `app/src/types.ts` moved 6 across the whole rebuild, against 1,693 in `App.tsx` alone. Every server call, state machine, keyboard binding and handler was held still while markup, CSS, information architecture and interaction were replaced; the screen agents were denied the wire files outright and told that where a field does not exist on this branch they draw the correct shape against what does, leaving a one-line comment naming the field a merge brings. That freeze is why every settled plumbing decision in this file survives a rebuild this size: the thing that changed is the only thing that was allowed to.
 
@@ -5986,3 +6011,246 @@ It also caught what symmetry would have got wrong: **`initializeexportcsv` takes
 ### What would reopen this
 
 *A measurement of the export's real convergence time*, which retires the guessed window. *An operator who wants to publish a subset of one upload*, which TCGplayer's scopes cannot express and would need a second staged upload instead. *Raises* — `docs/specs/stale-listings.md` §6b — which this path refuses today and the owner has asked for.
+
+## D107 — The rule only ever marks down; the operator may point either way
+
+**A price the operator types goes through in either direction. The automatic rule still cannot propose a raise.** Built 2026-09-06 on the owner's instruction — asked what a raise was *for*, they said the honest thing: *"i just feel like it's a no brainer to have."* That is an argument for symmetry rather than for a scenario, and this entry is scoped to it.
+
+### What was actually wrong
+
+`#/pricing` draws a price field on every live row and lets the operator type into it. `reprice apply` then refused the whole file if any typed price was above the live one — reason `raised`, listed as **fatal** beside a duplicate SKU. So the screen offered a control it would not honour, and the refusal blamed the direction rather than the design.
+
+It was found by a test rather than a review, and by the awkward end of one: **$750 was chosen as a deliberately absurd value precisely because a raise is the SAFE direction to test in** — nobody accidentally buys a $750 common — and the pipeline refused it. The safe direction to experiment in was the one the feature could not do.
+
+### The asymmetry that stays
+
+**`plan` still refuses its own proposal when it is not a markdown** (`NOT_A_MARKDOWN`), and that is not an oversight left standing. The rule is a *markdown* rule: it ranks by staleness, it cuts by a percentage, and every term in it is about stock that is not moving. A rule that could propose upward would need a different trigger — market movement, not age — and that is a different command, not a flag.
+
+**So a price above `was` reaching `read_back` is necessarily one a person typed.** Nothing automatic can produce one. That is what makes letting it through safe, and it is an argument from the code rather than from intent.
+
+### What D100 actually protects, and why direction is not part of it
+
+Three things, none of which depend on which way the price moved:
+
+- **`Add to Quantity` is 0 on every row of every file this path writes.** The quantity is not a variable here; asserted five times, and now a sixth over a raised row.
+- **Nothing is deleted at TCGplayer.** `TCG Marketplace Price` edits the live listing in place.
+- **A duplicate SKU is still fatal**, because it is undefined behaviour in an import (D7). `Application.fatal` now holds that alone.
+
+**D100's "safe to upload by accident" argument survives and points this way.** A file uploaded by mistake that RAISES costs sales until somebody notices; one that LOWERS sells real stock at the wrong price and cannot be recalled. The direction that was refused is the less dangerous of the two.
+
+### A raise is never silent, and the money figure does not net
+
+`Application.raised` and `taken_on` sit beside `lowered` and `given_up`, and both the preview and `receipt.txt` name the count and the amount on their own line, with a `^` on the row. A row pointing up inside a thing called a markdown is the one an operator most needs told about.
+
+**`given_up` counts reductions only.** It answers *"what does pressing this cost me"*, and letting a raise offset a markdown would report a file that cuts $40 and lifts $40 as free — the one reading an operator must not be given about their own money.
+
+### What this amends
+
+**D100's "this path only lowers"**, which was true of the rule and was being enforced against the human. The rule half is unchanged. `RAISED` stays in the vocabulary because receipts written before today carry it and `reason_label` is what renders them — a code is retired as a refusal without being deleted as a word.
+
+### What would reopen this
+
+*A rule that proposes raises* — repricing to market after a spike, which wants a market-movement trigger and is a sibling command rather than a flag on this one; the owner has named no such need yet. *A raise ceiling*, if a typo ever sends a $2 card to $2,000 — TCGplayer's own validator caps at 200,000 and `server/tcg_import.py` enforces that, but nothing here asks "is this raise plausible". *An operator who wants the sheet renamed*, since "Mark down what is not selling" is now the primary case rather than the only one.
+
+## D108 — The dock app is the page Chrome already renders, and the manifest is what makes it one
+
+**Banchi goes in the dock as an installed web app on the engine it already runs on. Nothing is wrapped, nothing is bundled, and the capture server stays a launch agent.** Investigated 2026-09-06 from the owner asking for "a proper app in the Mac dock rather than a URL in a browser tab".
+
+### What "feels real" decomposes into, and what already answered each
+
+Five things, and four of them were already true or one click away:
+
+- **Its own dock icon, its own ⌘-Tab entry.** Chrome's *Install page as app* writes a real bundle to `~/Applications/Chrome Apps.localized/` with its own `CFBundleIdentifier`, its own `CFBundleName` and its own `app.icns`. Verified by inspection of `My Hue.app`, a Chrome-installed app already on this Mac — not from documentation.
+- **Its own window, no browser chrome.** Measured on this machine in a throwaway profile: an app-mode window reports `display-mode: standalone`, `outerWidth === innerWidth` (no side chrome at all) and a 32px frame, which is the title bar and nothing else.
+- **It remembers its size.** Measured: resized to 1512x780, Chrome quit, relaunched — 1512x780 came back. Position is remembered too, clamped to the screen.
+- **The camera.** Unchanged, because the engine is unchanged. This is the whole argument and it is in the next section.
+- **Always live.** `make launch-agent` already does this and D53 argued the shape. Nothing here touches it.
+
+### The camera is why this is not an open question
+
+**`app/src/useCamera.ts` asks for 3840x2160 `ideal` over a Cam Link with `deviceId: {exact}`, and the rig has only ever been proven on Chromium.** An installed web app is the same Chromium, the same profile and the same origin, so there is nothing to re-prove: `http://localhost:5173` is a secure context, the permission grant lives in the profile's content settings, and the installed bundle points at that same profile — `My Hue.app`'s `CrAppModeUserDataDir` names the default profile's `Web Applications` directory, which is what makes the grant carry. Measured in a *fresh* profile the state is `prompt`, which is the same statement from the other side: the grant is per profile, and the owner's profile already has it.
+
+**Every other host re-opens a question this one never asks.** `MIN_WIDTH`/`MIN_HEIGHT` is 1280x720 and it is a hard floor, so a host that could not clear 720p would fail loudly — but a host that settled on 1920x1080 would pass the floor and be **four times worse than the rig can produce, silently**. That is the failure `useCamera.ts`'s own header is written against, and it is the reason engine changes are not a free variable here.
+
+### Rejected: Safari's Add to Dock
+
+It produces the same thing — a real bundle, own icon, own window — and it is one click, so it was the closest competitor rather than an also-ran. **It is WebKit.** Two unknowns ride on that and neither is worth carrying for a dock icon that Chrome gives for free: this app has never been rendered in Safari at all (`make design-check` and every spec run on Chromium), and the Cam Link's 4K mode under WebKit's `getUserMedia` is unmeasured — the silent-1080p case above. Cheap to try later as a *second* app; not the one to depend on.
+
+### Rejected: Tauri and Electron
+
+- **Tauri is WebKit** (`WKWebView`), so it inherits Safari's unknowns *and* adds a Rust toolchain this machine does not have — `cargo` and `rustc` are both absent — to a repo whose stated invariant is that the capture server must never need `make venv`.
+- **Electron is Chromium**, so the camera would be fine, and that is the only thing it gets right. It is 150-250MB, a second build pipeline, and a wrapper large enough to be tempted into owning the server — see below. It buys a dock icon that already costs nothing.
+
+**Neither was built and neither should be without a reason this entry does not have.** What would reopen it: wanting the app when Chrome is uninstalled, wanting a signed artifact to hand to a second person, or the page needing something a browser will not give it.
+
+### The server stays a launch agent, and a wrapper owning it would be D53's own defect
+
+**A wrapper that also starts the capture server is a second answer to a solved problem, and this repo has already measured what that costs.** D53 records it: `make launch-agent` bootstrapped a second supervisor whose capture child could not bind, gave up after five retries, and overwrote `supervisor.pid` with its own pid — *"Two supervisors: one serving, one supervising nothing, and the pidfile naming the wrong one."* A wrapper process holding a third opinion about who owns `:8000` would reproduce that with a GUI in front of it. The dock app is a **client**. It opens a URL; the launch agent keeps the URL answering.
+
+**What that leaves honest: if the supervisor is down, the dock icon opens Chrome's error page.** The window is the app's, the error is the browser's, and there is nothing in the product to say so. That is the one place this shape is visibly a web app, and it is accepted rather than unnoticed — `KeepAlive` makes it rare and D53's fast-failure cap makes it possible.
+
+### What actually changed in the repo
+
+**The manifest, which was an icon manifest and is now also an install manifest.** It was written so `apple-touch-icon` had a raster to point at; being installable was never its job, and it was wrong for it in one way that no check could see.
+
+**Every URL in it was site-absolute, and that is measurably broken at any base but `/`.** Measured against the published demo on 2026-09-06: `https://shivinate7.github.io/pkmnscan/manifest.webmanifest` answers 200, and inside it `"/icon-192.png"` resolves to `https://shivinate7.github.io/icon-192.png` — **404**, while the file it means is served one directory down under the demo base — and `start_url: "/"` resolves to a 404 as well. Vite rebases the `<link rel="manifest">` address and copies `app/public/` **verbatim**, so this is the one file in that directory that has to carry its own base and did not. Relative URLs (`.`, `icon-192.png`) resolve against the manifest's own address and are therefore correct at both: at the root they are byte-for-byte what the absolute forms meant, and under the demo base they are what the absolute forms failed to mean. Verified under a simulated base directory: `start_url`, `scope` and all three icons 200.
+
+**`launch_handler: {client_mode: "focus-existing"}`** is the line that is about the dock rather than about correctness. Clicking a dock icon focuses the window that is open; without it a second press opens a second window, which is the tell that separates an app from a shortcut. `focus-existing` and not `navigate-existing` because a press mid-review should return to the review, not to Home.
+
+**`id`** decouples the app's identity from `start_url`, so changing where it opens later does not orphan an installed copy. **`scope`** is the default made explicit, and correct under a base for the same reason `start_url` is.
+
+**The colors were considered and left alone.** `background_color` is `#0c0e12`, which is the dark ground, while the app's default theme is light — so a light-theme launch flashes dark for the moment before first paint. A manifest holds one value and cannot be media-queried, so changing it trades that flash for the same flash in the other theme. `app/index.html` already carries two `<meta name="theme-color">` entries, one per scheme, which is the accurate statement in the one place that can make it.
+
+### What is NOT done, and is a spec question rather than an oversight
+
+**The icon is edge-to-edge and macOS app icons are not.** Chrome will build `app.icns` from `icon-512.png`, which is the mark's superellipse tile filling the frame; Apple's icon grid insets the artwork and uses its own corner curve, so Banchi will read slightly larger in the dock than its neighbors. **This is not fixed here on purpose.** `docs/specs/logo.md` is the mark's store of record (D102), nothing in `app/` may hand-draw it, and the padding and corner geometry a macOS icon wants are a locked-geometry question for that spec — not a value to re-derive in a manifest. `scripts/build-mark.mjs --icons` writes 180, 192 and 512; a 1024 with the Apple grid applied would be the change, and it belongs in the spec's own section.
+
+### Amended 2026-09-06 — the icon was built, and the light/dark question is section 12's
+
+**The macOS grid was the one thing this entry left undone, and the owner asked for it same day.**
+`docs/specs/logo.md` section 17 now locks it: **824pt of artwork on a 1024pt canvas**,
+which is not a convention this project adopted but what the neighbors measurably already are —
+Safari, Mail and Calculator all read **exactly 80.47%** solid off their shipped `.icns` on this
+Mac, and the mark read 100%. That is 24% wider and 55% more area than everything beside it.
+
+**The whole manifest set is inset, not only the largest**, because Chrome builds the installed
+app's `.icns` by resizing that set and a set disagreeing with itself would pad the dock icon at
+one size and not the next. `favicon.svg` left the icon list for the same reason — `sizes: "any"`
+made a full-bleed entry a candidate at every size — and is still the tab icon by `<link
+rel="icon">`. `icon-180.png` is untouched: iOS masks a full-bleed square itself.
+
+**Nothing redraws the mark.** The inset is applied by drawing it smaller on a transparent
+canvas; section 3's geometry is locked and `make docs-audit`'s new `mac icon grid` row
+reconciles `MAC_GRID` against section 17 in both directions, plus the manifest's set against the
+generator's. Proved by falsification before it was trusted: drifting the constant to 800/1024
+fails it, and putting `favicon.svg` back in the icon list fails it.
+
+**A dark-mode dock icon was asked about and is refused twice over.** macOS 26 does support
+per-appearance app icons, but they are an Icon Composer `.icon` asset in a native bundle and
+Chrome writes a plain `.icns`; a manifest icon takes no media query either.
+**The design half had already ruled** — section 12 derived a light ground and rejected it, *"an object, not an ink
+color: an app icon on a phone home screen does not invert when the phone does"* — so this is
+section 12's to reopen, on a sheet, and the platform limit is downstream of that rather than a
+reason to revisit it.
+
+**Still not done, and now written down rather than noticed: the shadow.** Every system icon
+measured carries a drop shadow out to 87.5% and the mark carries none, so it sits flatter on the
+dock's shelf. Section 17 names what would settle it — a sweep at 128, 64 and 32px against the
+same three icons — rather than a value typed into a generator.
+
+### What would reopen this
+
+*A second person needing the app*, which wants something signed and installable rather than a click in one profile. *Chrome going away* on this machine. *The page needing a capability a browser withholds* — a real filesystem, a background process, a global hotkey. *The demo being meant to install*, which it is not: the manifest is correct there now, but a demo with no server behind it is a page to look at.
+
+## D109 — A price is a fact about a listing, and the store remembers listings it never photographed
+
+**Built 2026-09-06, on the owner's instruction, after four agents were set against the question and the measurement settled it.** The operator asked whether pricing was being hampered by its
+coupling to inventory and runs — *"i feel maybe we're hampering banchi's pricing capability by
+tying it to only our inventory/runs"* — and, separately, whether Banchi could act as a courier
+for prices it did not originate: *"frankly if banchi could be a courier it would be nice."*
+
+**The measurement, on the owner's own live export of 2026-09-06** (759 rows, 387 live):
+
+| refused as | SKUs | copies | asking value | share |
+|---|---|---|---|---|
+| `too_young` | 184 | 398 | $304.94 | 2.4% |
+| **offered** | 100 | 363 | $268.79 | 2.1% |
+| `at_floor` | 52 | 135 | $49.11 | 0.4% |
+| **`not_this_store`** | **28** | **82** | **$12,153.95** | **94.5%** |
+| `sold_recently` | 20 | 31 | $69.10 | 0.5% |
+| `held` | 3 | 6 | $12.86 | 0.1% |
+
+**232 of 387 live SKUs — 60% of them, carrying 97.4% of the asking value — were refused on a fact that came out of the card table rather than out of a price.** The rule reached 2.1% of
+the operator's own book.
+
+### What was already decoupled, and what was not
+
+The ANSWER was never coupled. `pipeline/corpus.py` is SKU-keyed, and its own header says
+*"NOTHING HERE READS THE STORE OR THE CATALOG."* D86 moved the pricing answer out of run
+directories precisely because a price is a property of the SKU and not of the drawer a
+photograph was taken in. What stayed coupled was every path that REACHED that answer.
+
+**Two refusals did the damage, and they are different mistakes.**
+
+`NOT_THIS_STORE` was **membership** — `if sku not in owned_since: refuse`, fired third, before
+asking, market, basis or rule were consulted at all. D103 characterised those rows as
+*"Card Sleeves, Playmats, a YuGiOh row"*, and that reading was true when it was written and
+false by 2026-09-06: the set now holds a $7,000 Kai'Sa, a Surging Sparks Booster Box Case
+asking **$155 below market on a $2,000 item**, and a Bard, Mercurial asking **218% above**
+market and not selling. Two live money problems, drawn on the operator's screen and
+untouchable.
+
+`TOO_YOUNG` was **the wrong clock**. D100 ranked staleness on how long the CARD had been
+OWNED, because `Listing` had no first-listed stamp and `live_as_of` was null on all 443
+records — and every report named the substitution in its own header, honestly. But the
+operator's oldest capture is 2026-08-23, so at any sane window the term was measuring **when this project got a camera**, not how long anything had been listed.
+
+### The ruling
+
+**A price is a fact about a listing, and a card record is not a licence to have one.** What a
+photograph buys is a position and an image; neither is consulted to decide what a card costs.
+So membership stops being a refusal and becomes drawn evidence (`Candidate.held_here`), and
+`UNPRICEABLE_CODES` narrows to `SOLD_OUT` alone — a fact about the LISTING, which is what that
+table is for. There is no live listing for a price to edit when nothing is live.
+
+**And the store remembers its whole live book, not just the part it photographed.**
+`store/master.py:Listing` gains two fields:
+
+- **`first_seen_live`** — the earliest export observed holding the SKU. MONOTONE: earliest
+  wins, nothing overwrites it, and a reading with no parseable stamp writes nothing. This is
+  the real term D100's proxy was standing in for, and it is available for a SKU no card here
+  carries as readily as for one photographed in a box.
+- **`priced_at`** — when this store last set a price. **The stamp only, never the figure.**
+
+`cli/cmd_reconcile.py` now WRITES the rows it previously only reported. Measured before this
+landed: **0 of 443 listing records had no card behind them, while the export carried 28 live SKUs that did.** The store had no memory of its own live book beyond what a camera had seen —
+so nothing could date a listing, nothing stopped a rule marking the same one down on every
+pass, and a copy selling was invisible.
+
+### Why the figure is not stored, which is the courier's whole design
+
+Once a price is published it is live at TCGplayer, and the next export reads it straight back
+as `asking`. **Keeping a copy here would be a second money truth able to disagree with the first on the one field a buyer can see.** What the export cannot report is whether THIS store
+made the change — which is exactly what the markdown ratchet needs so a rule cannot cut the
+same card every time the screen is opened. So Banchi records that it acted, and TCGplayer
+remains the price of record.
+
+This is also why the corpus is not seeded from the export, which was the tempting version.
+`corpus.stamp_answers` is diff-based, so seeding 341 readings would re-date all of them and
+the next `reprice list` would refuse every one as `priced_recently`; the only escape is
+`--again`, which is global. The ratchet would have two settings — refuses everything, or
+protects nothing — and would silently stop meaning *"this store decided a price recently"* and
+start meaning *"TCGplayer's cell changed recently."* Nothing would fail. The report would just
+be wrong in words.
+
+### What did NOT move, and this is the load-bearing half
+
+**The live cap stays coupled to positions, and none of its arithmetic changed.**
+`pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` bounded by
+`len(uncommitted_positions)`, and no export column carries how many copies are in a drawer.
+So **this widens what may be RE-PRICED and never what may be LISTED**: `pipeline/reprice.py`
+writes `ADD_TO_QUANTITY = 0` as a module constant, `check_quantities_zero` asserts it over the
+worklist and the import bytes, and `server/tcg_import.py:_check` refuses the whole file on a
+non-zero quantity. Three guards, unchanged. The road from *I own this card* to *it is for sale*
+still runs through a photograph.
+
+**The screen stops offering what the pipeline will not honour.** `GET …/table` has shipped
+`unpriceable` since D103 with the comment *"so the row can refuse the field rather than let the
+operator type a price the apply will throw away"* — and **nothing in `app/src` ever read it**.
+A locked row drew a live input, `pushable` counted it, the corpus write landed, and only the
+receipt named the refusal. That is D101's defect verbatim, and it is fixed here rather than
+left standing on a narrower set.
+
+**And the lens opens empty.** `PricingSource.proposes` is true for a run and false for a lens,
+for the same reason `repartition` splits: what an untouched row MEANS differs. A run's rows are
+not listed yet, so the rule's price is the answer until overridden. A lens's rows are already
+live at a price somebody chose, and the rule speaks about 243 of 387 at a 7-day window — a
+filled field would turn one bulk press into 243 live price changes, which is the envelope
+arriving pre-signed. The figure is drawn as a placeholder: one keystroke or one preset away,
+and nothing moves that the operator did not move.
+
+**What would reopen this**: an operator who wants a price they typed here to be authoritative
+over what TCGplayer reports — a genuine want, and the point at which the figure would have to
+be stored beside the stamp and arbitrated. D87's "newer wins" does not generalise to it: `live`
+is a quantity both parties observe, and an asking price is an instruction of ours as executed
+by them, which are not two readings of one fact.

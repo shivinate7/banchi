@@ -10405,7 +10405,7 @@ def check_live_reconcile(checks: Checks) -> None:
             "`cli/resolve.py:_copies_out` already grants `Total Quantity` as a floor",
         )
         checks.equal(
-            {sku: entry.pushed for sku, entry in after.items()},
+            {sku: entry.pushed for sku, entry in after.items() if sku in pushed},
             pushed,
             "AND `pushed` IS READ AND NEVER REWRITTEN. It is the CUMULATIVE count of copies "
             "ever written into an import file — an import file holds the last delta only "
@@ -10477,14 +10477,34 @@ def check_live_reconcile(checks: Checks) -> None:
             "which physical copy sold is deliberately unrecorded, and a command that picked "
             "one from a quantity would be inventing the address D7 refuses to invent",
         )
+        # INVERTED 2026-09-06, AND THE RULE IT PROTECTED IS ASSERTED HARDER THAN BEFORE.
+        # This read "the stranger SKU gained no listing record — reporting it is the whole of
+        # what this command may do about a listing it did not make". That left the store with
+        # no memory of any listing it had not photographed: measured on the owner's store, 0
+        # of 443 listing records had no card behind them while the export carried 28 live SKUs
+        # that did — so nothing could say how long one had been listed, nothing stopped a rule
+        # marking the same one down every pass, and a copy selling was invisible.
+        #
+        # WHAT MUST NEVER HAPPEN IS THE CLAIM, NOT THE RECORD. `pushed` is the cumulative
+        # count of what THIS pipeline sent; inventing one for a listing it did not make is the
+        # defect the old assertion was really about, and it is now checked directly rather
+        # than by the absence of the whole row.
+        stranger = Store().read().inventory.listings.get("1234567")
         checks.ok(
-            "1234567" not in json.dumps(
-                {k: v.to_json() for k, v in after.items()}
-                if hasattr(next(iter(after.values())), "to_json")
-                else {k: v.pushed for k, v in after.items()}
-            ),
-            "and the stranger SKU gained no listing record — reporting it is the whole of "
-            "what this command may do about a listing it did not make",
+            stranger is not None,
+            "the stranger SKU GAINED a listing record — a live listing this store did not "
+            "make is still a listing it has to be able to date, ratchet and watch sell",
+        )
+        checks.equal(
+            (stranger.pushed if stranger else None, stranger.staged if stranger else None),
+            (0, 0),
+            "and `pushed` and `staged` stay 0 on it — this pipeline sent none of it, and a "
+            "cumulative record that claimed otherwise is the one thing this may not write",
+        )
+        checks.ok(
+            bool(stranger and stranger.live > 0 and stranger.first_seen_live),
+            "while `live` and the first sighting ARE written: both are observations of what "
+            "TCGplayer holds, which is exactly what the export is evidence of",
         )
 
 
@@ -10583,10 +10603,25 @@ def check_markdown(checks: Checks) -> None:
             not (files.inventory_dir() / cmd_reprice.DIRNAME).exists(),
             "and the preview created no directory at all, not an empty one",
         )
+        # THE SUBSTITUTION IS STILL NAMED — and the assertion moved from "the proxy paragraph
+        # is present" to "the report says WHICH CLOCK IT USED", because printing the proxy
+        # paragraph unconditionally became a lie of its own once `Listing.first_seen_live`
+        # gave some rows a real listing age. D100's rule cuts both ways: a substitution nobody
+        # is told about is a lie, and so is one claimed where it is not happening. This
+        # fixture's store has no sightings, so every row falls back and the sentence is owed.
         checks.ok(
-            "age is OWNERSHIP, not listing age" in said,
-            "THE PROXY IS ON THE REPORT'S OWN HEADER. The store cannot say how long a listing "
-            "has been live, and a substitution the operator is not told about is a lie",
+            "fall back to OWNERSHIP" in said and "never the age itself" in said,
+            "THE PROXY IS NAMED ON THE REPORT'S OWN HEADER, for the rows that actually use "
+            "it. The store cannot say how long these listings have been live, and a "
+            "substitution the operator is not told about is a lie",
+            said,
+        )
+        checks.ok(
+            "dated by FIRST SIGHTING" not in said,
+            "AND THE REPORT DOES NOT CLAIM A SIGHTING IT DOES NOT HAVE. No reconcile has run "
+            "over this store, so no row has a listing age and none may be reported as having "
+            "one — the same rule, pointed the other way",
+            said,
         )
         checks.ok(
             f"[{reprice.AT_FLOOR}]" in said,
@@ -10696,16 +10731,35 @@ def check_markdown(checks: Checks) -> None:
             return rows
 
         code, said = apply_edited(hand_back("20200101-000001", raised))
+        # THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACES (D107). It used to read "a
+        # raised price refuses the whole file — this path only lowers". The owner asked for
+        # raises, and what was retired is the REFUSAL, not the care: the rule still cannot
+        # propose one (`plan` refuses `NOT_A_MARKDOWN`), so a price above `was` is one a person
+        # typed, and the file says so on its face rather than passing quietly.
+        written = (files.inventory_dir() / cmd_reprice.DIRNAME / "20200101-000001"
+                   / cmd_reprice.IMPORT)
         checks.ok(
-            code == 1 and f"[{reprice.RAISED}]" in said,
-            "A RAISED PRICE REFUSES THE WHOLE FILE, not the row. This path only lowers, and a "
-            "file that quietly dropped the one row that would have raised a price would be a "
-            "press that did something other than what the operator read",
+            code == 0 and written.exists(),
+            "AN OPERATOR'S RAISE GOES THROUGH — the screen offers a price field and this is "
+            "what makes it one the pipeline will honour in both directions",
         )
         checks.ok(
-            not (files.inventory_dir() / cmd_reprice.DIRNAME / "20200101-000001"
-                 / cmd_reprice.IMPORT).exists(),
-            "and it wrote nothing",
+            "RAISED" in said or "raised" in said.lower(),
+            "and the report SAYS SO. A row pointing up inside a thing called a markdown is the "
+            "one an operator most needs told about",
+        )
+        # THE MONEY FIGURE DOES NOT NET, which is the part a careless implementation gets
+        # wrong: `given_up` answers "what does pressing this cost me", and a raise offsetting a
+        # markdown would report a file that cuts $40 and lifts $40 as free.
+        sent = tcgcsv.read_export(written).rows
+        checks.ok(
+            any(row[tcgcsv.PRICE_COLUMN] == "99.99" for row in sent),
+            "and the raised price is what reaches the upload, unrounded and unmodified",
+        )
+        checks.ok(
+            all(row[tcgcsv.QUANTITY_COLUMN] == "0" for row in sent),
+            "AND EVERY ROW STILL CARRIES `Add to Quantity` 0 — D100's invariant is about "
+            "quantity and is untouched by which way the price moved",
         )
 
         def duplicated(rows):
@@ -19713,6 +19767,171 @@ def check_shipping_stamps(checks: Checks) -> None:
         )
 
 
+def check_pricing_reach(checks: Checks) -> None:
+    """A price is a fact about a listing, and the store remembers listings it never saw (D109).
+
+    THE FIVE PROPERTIES THIS FEATURE RESTS ON, and every one of them replaced something that
+    was true until 2026-09-06. The measurement that drove it is in D109: 232 of 387 live SKUs
+    refused on a card-table fact, carrying 97.4% of the operator's asking value.
+    """
+    from pipeline import corpus as corpus_mod, decisions as decisions_mod, reprice, pricing
+
+    # -------------------------------------------------- the sighting is monotone
+    entry = master.Listing(sku="X")
+    checks.equal(
+        (entry.first_seen_live, entry.priced_at),
+        (None, None),
+        "a fresh listing has seen nothing and priced nothing — absent is not a date",
+    )
+    entry.sight("2026-09-06T00:00:00.000+00:00")
+    entry.sight("2026-09-07T00:00:00.000+00:00")
+    checks.equal(
+        entry.first_seen_live,
+        "2026-09-06T00:00:00.000+00:00",
+        "THE FIRST SIGHTING IS MONOTONE — a LATER reading never moves it. This is the whole "
+        "difference from `observe_live`, which arbitrates a quantity and takes the NEWER "
+        "reading: an age settles on the oldest evidence or it is not an age",
+    )
+    entry.sight("2026-09-01T00:00:00.000+00:00")
+    checks.equal(
+        entry.first_seen_live,
+        "2026-09-01T00:00:00.000+00:00",
+        "and an EARLIER reading does move it — a second export can only sharpen the answer",
+    )
+    before = entry.first_seen_live
+    entry.sight(None)
+    checks.equal(
+        entry.first_seen_live,
+        before,
+        "a reading with no stamp writes nothing. `None` is not an early date, and a sighting "
+        "that cannot be placed in time is not evidence about age",
+    )
+
+    # -------------------------------------------------- the stamp, never the figure
+    entry.price_set("2026-09-06T12:00:00.000+00:00")
+    checks.equal(
+        entry.priced_at,
+        "2026-09-06T12:00:00.000+00:00",
+        "`price_set` records WHEN this store set a price",
+    )
+    checks.ok(
+        not any(
+            "price" in name and name not in ("priced_at",)
+            for name in vars(entry)
+        ),
+        "AND NOWHERE DOES IT RECORD WHAT THE PRICE WAS. The figure is live at TCGplayer and "
+        "comes back on the next export as `asking`; a copy here would be a second money "
+        "truth able to disagree with the first on the one field a buyer can see (D109)",
+    )
+
+    # -------------------------------------------------- membership is not a refusal
+    checks.equal(
+        tuple(reprice.UNPRICEABLE_CODES),
+        (reprice.SOLD_OUT,),
+        "THE ONLY UNPRICEABLE CODE IS `sold_out`, which is a fact about the LISTING — there "
+        "is nothing live for a price to edit. `not_this_store` was in this tuple until "
+        "2026-09-06 and refused 94.5% of the owner's live book by asking value (D109)",
+    )
+
+    # -------------------------------------------------- the sighting beats the proxy
+    row = {
+        tcgcsv.SKU_COLUMN: "5550001", tcgcsv.PRODUCT_LINE_COLUMN: "Pokemon",
+        tcgcsv.NAME_COLUMN: "Stranger", tcgcsv.CONDITION_COLUMN: "Near Mint",
+        tcgcsv.MARKET_PRICE_COLUMN: "10.00", tcgcsv.PRICE_COLUMN: "20.00",
+        tcgcsv.LIVE_QUANTITY_COLUMN: "2",
+    }
+    old = "2026-01-01T00:00:00.000+00:00"
+    cuts = pricing.Rule.parse(f"{pricing.RULE_UNDERCUT}:10")
+    never_held = reprice.plan(
+        [row], owned_since={}, listed_since={"5550001": old}, days=7, rule=cuts
+    )
+    checks.equal(
+        [c.sku for c in never_held.rows],
+        ["5550001"],
+        "A SKU NO CARD HERE EVER CARRIED IS PRICED, dated by its own first sighting. This "
+        "returned zero rows and one `not_this_store` refusal until 2026-09-06 — the row the "
+        "$7,000 Kai'Sa and a $2,000 box case asking under market were both sitting in",
+    )
+    checks.equal(
+        never_held.dated.get("sighting"),
+        1,
+        "and the report can say WHICH CLOCK dated it, so the proxy paragraph is printed only "
+        "where the proxy is actually used (D100's rule, pointed both ways)",
+    )
+    undatable = reprice.plan([row], owned_since={}, days=7, rule=cuts)
+    checks.equal(
+        [c.skip for c in undatable.skipped.get(reprice.TOO_YOUNG, [])],
+        [reprice.TOO_YOUNG],
+        "WITH NEITHER CLOCK IT IS `too_young`, not priced on a guess. Membership stopped "
+        "being a refusal; being undatable did not",
+    )
+
+    # -------------------------------------------------- the cap is configurable (D7)
+    book = corpus_mod.Corpus.parse(
+        {"policy": {"live_cap": 6, "per_run": {"r1": {"live_cap": 2}}}, "skus": {}}
+    )
+    checks.equal(
+        (book.policy_for()["live_cap"], book.policy_for("r1")["live_cap"],
+         book.policy_for("other")["live_cap"]),
+        (6, 2, 6),
+        "THE LIVE CAP IS STORE-WIDE WITH A PER-RUN OVERRIDE (D7, whose 'configurable' was a "
+        "promise nothing read until 2026-09-06). This is also the first writer of the "
+        "run-level override D86 named as its own reopening condition",
+    )
+    checks.equal(
+        corpus_mod.Corpus.parse({"skus": {}}).policy_for()["live_cap"],
+        pricing.LIVE_QUANTITY_CAP,
+        "a store that has never set one reads D7's playset of four",
+    )
+    for bad in ("four", 0, -1):
+        checks.raises(
+            decisions_mod.MalformedDecisions,
+            lambda bad=bad: decisions_mod.parse_live_cap(bad),
+            f"a present-and-unusable cap ({bad!r}) is REFUSED rather than clamped — a cap of "
+            f"zero emits nothing for every SKU and would read as a broken pipeline",
+        )
+
+    # -------------------------------------------------- the channel is an allow-list
+    mixed = corpus_mod.Corpus(
+        answers={
+            "A": corpus_mod.Answer(value="1.00", channel="price"),
+            "B": corpus_mod.Answer(value=None, channel="unknown"),
+            "C": corpus_mod.Answer(value="9.99", channel="observed"),
+        }
+    )
+    scoped = mixed.scoped_to({"A", "B", "C"})
+    checks.equal(
+        sorted(scoped.overrides),
+        ["A"],
+        "AN UNRECOGNISED CHANNEL DOES NOT REACH `overrides`. This was a deny-list until "
+        "2026-09-06 — `unknown if channel == 'unknown' else prices` — so every value but one "
+        "landed in the table `prices_for` consults FIRST, beating the rule, the market and "
+        "the policy for every future copy out of every future box",
+    )
+    checks.equal(
+        sorted(scoped.no_market_data),
+        ["B", "C"],
+        "it falls to `no_market_data` instead, which `decisions.blocking` reads as unanswered "
+        "and refuses the emit over — the safe direction is the one that STOPS, not the one "
+        "that prices (the portal spec's own rule 4: never a deny-list)",
+    )
+
+    # -------------------------------------------------- money is not printed in exponents
+    checks.equal(
+        [corpus_mod._token(v) for v in ("7000.00", "750.00", "0.4900")],
+        ["$7000", "$750", "$0.49"],
+        "AND MONEY RENDERS AS DIGITS. `Decimal.normalize()` folds `0.50` and `0.5` into one "
+        "answer, which is the point — and folds `7000.00` into `7E+3`, which is what the "
+        "operator was shown for the two highest-value figures this repo has handled",
+    )
+    checks.ok(
+        corpus_mod._token("0.50") == corpus_mod._token("0.5")
+        and corpus_mod._token("7000.00") == corpus_mod._token("7000"),
+        "while the FOLDING the comparison depends on is untouched — `stamp_answers` dates an "
+        "answer by whether its token moved, so breaking this would re-date the whole corpus",
+    )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -19723,6 +19942,7 @@ def run() -> Result:
     check_merged_emit_cap(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
+    check_pricing_reach(checks)
     check_markdown(checks)
     check_markdown_lens(checks)
     check_markdown_push(checks)

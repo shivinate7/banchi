@@ -1733,7 +1733,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             "roster": [],
             "skipped": [],
             "asked": list(wanted),
-            "live_cap": join.LIVE_QUANTITY_CAP,
+            "live_cap": corpus.live_cap_for(),
             "threshold": None,
             "floor": None,
         }
@@ -1876,7 +1876,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         out_now = newest.get("copies_out")
         if out_now is None:
             out_now = newest.get("live_before") or 0
-        room = max(0, join.LIVE_QUANTITY_CAP - int(out_now))
+        room = max(0, corpus.live_cap_for() - int(out_now))
         row["claimed_add"] = claimed
         row["add_to_quantity"] = min(claimed, room, len(row.get("positions") or []))
         row["over_cap"] = claimed > row["add_to_quantity"]
@@ -1918,7 +1918,7 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # question each run had to be asked separately, and offered it as a LABEL because D9
         # forbade defaulting it. There is one answer now — the corpus's policy, with a default
         # (D9 amended) — so nothing has to be remembered and no screen offers anything.
-        "live_cap": join.LIVE_QUANTITY_CAP,
+        "live_cap": corpus.live_cap_for(),
     }
 
 

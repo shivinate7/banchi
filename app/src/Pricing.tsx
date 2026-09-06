@@ -241,7 +241,7 @@ const LIVE_SECTIONS: SectionSpec[] = [
     bucket: 'listable',
     title: 'Live at TCGplayer',
     icon: 'tag',
-    note: () => 'Every listing this export reported live. Type a lower price on any of them; nothing is sent until you press.',
+    note: () => 'Every listing this export reported live. Type a price on any of them; nothing is sent until you press.',
   },
 ]
 
@@ -816,6 +816,11 @@ export function Pricing() {
    *  beside the store-wide reconcile on kinship of IMPLEMENTATION (both read one export), which
    *  is not kinship of work. */
   const [mdOpen, setMdOpen] = useState(false)
+  /* WHETHER THIS OPENING SHOULD FETCH ON ITS OWN. The header button opens the sheet to be
+     worked through; the marketplace band opens it to answer one question — "price what is
+     live" — and waiting for a second press to start the download is the whole distance
+     between a door and a signpost. */
+  const [mdFetch, setMdFetch] = useState(false)
   const [push, setPush] = useState<'idle' | 'checking' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
@@ -928,7 +933,25 @@ export function Pricing() {
     void (async () => {
       try {
         const rows = await getRuns()
-        if (live) setRuns(rows)
+        if (!live) return
+        setRuns(rows)
+        /* THE PUBLISHED DEMO PICKS A RUN, because two of them turn off the two things this
+           screen is most worth showing. `run` below is `loaded.length === 1 ? … : null` — a
+           price history and a trend strip are per-RUN routes — so with every run loaded the
+           `t` hold opens a panel it can never fill and "Load trends" is disabled. That is
+           correct for an operator, who wants all their unpriced work in one list and knows
+           to narrow; it is a dead end for somebody who arrived from a link and will never
+           open the Runs dropdown.
+
+           So the demo starts narrowed and the viewer can WIDEN — the cross-run "2 runs · 2
+           boxes · one file" story is one click away in the picker, and the rich per-row view
+           is what they meet first. Only when the hash names no run, so a shared
+           `#/pricing?run=…` link still wins. */
+        if (__BN_DEMO__ && runsInHash().length === 0) {
+          const joined = rows.filter((row) => row.joined)
+          const first = joined[0]
+          if (joined.length > 1 && first !== undefined) setPicked(new Set([first.run]))
+        }
       } catch (err) {
         if (live) setFailure(describeFailure(err))
       }
@@ -1218,11 +1241,15 @@ export function Pricing() {
     const out: { sku: string; price: string }[] = []
     if (stamp === null) return out
     for (const row of rows) {
+      // A LOCKED ROW IS NOT PUSHABLE AND MUST NOT BE COUNTED. `read_back` refuses it
+      // server-side, so counting it here made "N prices to push" a number the apply would
+      // not honour — and the operator read that number before pressing.
+      if (source.locked(row.sku) !== null) continue
       const answer = answers[row.sku]
       if (typeof answer === 'string' && answer.trim() !== '') out.push({ sku: row.sku, price: answer.trim() })
     }
     return out
-  }, [stamp, rows, answers])
+  }, [stamp, rows, answers, source])
 
   /* THE LENS'S PRESS, SEQUENCED THE WAY THE EMIT PRESS IS — and here it is not merely tidy:
      `reprice apply` reads `inventory/prices.json` off disk and refuses the whole file against a
@@ -1914,7 +1941,10 @@ export function Pricing() {
     return row === undefined ? null : runBoxLabel(row)
   }, [stamp, sheet, run, detail, runs])
 
-  const closeMarkdown = useCallback(() => setMdOpen(false), [])
+  const closeMarkdown = useCallback(() => {
+    setMdOpen(false)
+    setMdFetch(false)
+  }, [])
   /** Take the digest a subprocess write produced, so the next keystroke is not refused for it. */
   const adoptRevision = useCallback((next: string) => {
     revision.current = next
@@ -2208,6 +2238,7 @@ export function Pricing() {
   const markdownSheet = (
     <Markdown
       open={mdOpen}
+      autoFetch={mdFetch}
       onClose={closeMarkdown}
       revision={revision.current || undefined}
       onCorpusWritten={adoptRevision}
@@ -2262,14 +2293,32 @@ export function Pricing() {
             }
           />
         ) : joined.length === 0 ? (
+          /* TWO DOORS, AND THE LIVE ONE LEADS. This offered "Go to Runs" alone — the screen
+             where prices are decided sending the operator away from their own live listings
+             because none of those came out of a camera here. On the owner's store that was
+             387 live SKUs behind a signpost, while the lens that prices them existed and was
+             reachable only from a query parameter nobody types (D103's own admission). The
+             run door is unchanged and second, because a joined run is the narrower answer. */
           <EmptyState
-            icon="play"
-            title="No joined runs yet"
-            body="Identify and join a box on Runs first. Pricing opens on whatever that join leaves to answer."
+            icon="tag"
+            title="Nothing joined — price what is live instead"
+            body="Read your live TCGplayer listings and price them here: the same worklist, the same charts and presets, over the book you already have up. Or join a box on Runs to price cards you have just photographed."
             actions={
-              <Button variant="primary" icon="play" onClick={() => (window.location.hash = '#/runs')}>
-                Go to Runs
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  icon="trendDown"
+                  onClick={() => {
+                    setMdFetch(true)
+                    setMdOpen(true)
+                  }}
+                >
+                  Price my live listings
+                </Button>
+                <Button icon="play" onClick={() => (window.location.hash = '#/runs')}>
+                  Go to Runs
+                </Button>
+              </>
             }
           />
         ) : picked.size > 0 ? (
@@ -2661,6 +2710,10 @@ export function Pricing() {
                 const standing = answerFor(sku)
                 const withheld = isWithheld(standing)
                 const suggestion = suggestionFor(sku)
+                /* WHY NO PRICE MAY BE PUSHED FOR THIS ROW, or null. Drawn instead of the
+                   field, because `read_back` refuses it server-side and a screen that takes
+                   the price anyway writes a corpus answer the apply then throws away. */
+                const lockedWhy = source.locked(sku.sku)
                 const why = withheld && standing !== 'unlisted' && standing.note ? standing.note : null
                 const first = sku.positions[0] ?? null
                 const boxes = [...new Set(sku.positions.map((place) => place.box))].sort((a, b) => a - b)
@@ -2768,8 +2821,24 @@ export function Pricing() {
                       ))}
                     </div>
 
-                    <div className="pricing-price" data-answer={withheld ? 'held' : typeof standing === 'string' ? 'typed' : 'suggested'}>
-                      {withheld ? (
+                    <div
+                      className="pricing-price"
+                      data-answer={
+                        lockedWhy !== null
+                          ? 'locked'
+                          : withheld
+                            ? 'held'
+                            : typeof standing === 'string'
+                              ? 'typed'
+                              : 'suggested'
+                      }
+                    >
+                      {lockedWhy !== null ? (
+                        <span className="pricing-locked" title={lockedWhy}>
+                          <Icon name="lock" size={13} />
+                          {lockedWhy}
+                        </span>
+                      ) : withheld ? (
                         <span className="pricing-held">
                           <Icon name="lock" size={13} />
                           Holding
@@ -2783,9 +2852,32 @@ export function Pricing() {
                             className="pricing-input"
                             type="text"
                             inputMode="decimal"
-                            placeholder={sku.bucket === 'no_market_data' ? '—' : undefined}
+                            placeholder={
+                              sku.bucket === 'no_market_data'
+                                ? '—'
+                                : source.proposes
+                                  ? undefined
+                                  : suggestion || undefined
+                            }
                             aria-label={`Price for ${sku.name}`}
-                            defaultValue={typeof standing === 'string' ? standing : suggestion}
+                            /* THE LENS OPENS EMPTY AND THE RUN OPENS FILLED, and the
+                               difference is what the press MEANS on each. A run's rows are
+                               not listed yet: the rule's figure is the answer unless the
+                               operator says otherwise, and an untouched row going out at it
+                               is the point of the whole worklist. A lens's rows are already
+                               live at a price somebody chose, and the rule speaks about 243
+                               of the owner's 387 at a default window — so a filled field
+                               there means a bulk press moves every one of them, which is the
+                               envelope arriving pre-signed. Drawn as a PLACEHOLDER instead:
+                               the suggestion is visible, one keystroke or one preset takes
+                               it, and nothing moves that the operator did not move. */
+                            defaultValue={
+                              typeof standing === 'string'
+                                ? standing
+                                : source.proposes
+                                  ? suggestion
+                                  : ''
+                            }
                             ref={(node) => {
                               if (node) inputs.current.set(sku.sku, node)
                               else inputs.current.delete(sku.sku)
@@ -3597,7 +3689,7 @@ function MarkdownPanel({
           {typed === 0 ? (
             <>
               <strong>Nothing typed yet.</strong> Every row here is a listing TCGplayer is holding
-              right now. Type a lower price on any of them — nothing leaves this machine until you
+              right now. Type a price on any of them — nothing leaves this machine until you
               press.
             </>
           ) : (
@@ -3610,12 +3702,17 @@ function MarkdownPanel({
           )}
         </p>
       ) : (
+        /* A RAISE IS DRAWN, NOT REFUSED (D107). This said "this path only lowers, and one
+           raised row refuses the whole upload" — true until the operator asked for raises, and
+           the refusal it described is gone. What is left is worth saying anyway: the rule only
+           ever proposes cuts, so every row here is one a person typed, and inside a screen
+           called a markdown that is the row most worth a second look. */
         <p className="pricing-verdict-says">
           <strong>
-            {raises} row{raises === 1 ? '' : 's'} above the live price.
+            {raises} row{raises === 1 ? '' : 's'} priced above the live price.
           </strong>{' '}
-          This path only lowers, and one raised row refuses the whole upload — not just that row.
-          Bring them back down or clear them.
+          The rule only ever proposes a cut, so these are prices you typed. They will be sent as
+          typed and named as raises on the receipt.
         </p>
       )}
 
@@ -3639,7 +3736,7 @@ function MarkdownPanel({
 
       <p className="pricing-verdict-fine">
         Apply can still refuse for a reason this screen cannot see — the floor, a duplicate, or a
-        price that has not moved.
+        price that has not moved. A raise is no longer one of them.
       </p>
     </section>
   )
@@ -3856,7 +3953,7 @@ function fieldState(
       if (now > was) {
         return {
           text: 'Above the live price',
-          title: `Listed at $${was.toFixed(2)}. This path only lowers, and one raised row refuses the whole upload.`,
+          title: `Listed at $${was.toFixed(2)}. Above it is a raise — the rule never proposes one, so it is sent as typed and named on the receipt (D107).`,
           tone: 'warn',
         }
       }

@@ -713,6 +713,23 @@ class Listing:
     # whose `at` IS the settlement time. The two are told apart at the parse and nowhere
     # else: absent is legacy, null is unread.
     live_as_of: Optional[str] = None
+    # THE FIRST MOMENT THIS SKU WAS SEEN LIVE AT TCGPLAYER, and the only field here that is
+    # MONOTONE — earliest wins, and nothing overwrites it. It exists because D100's staleness
+    # ranked on how long the CARD had been OWNED, `Listing` having no first-listed stamp, and
+    # every report had to name the substitution in its own header. Measured on the owner's
+    # store 2026-09-06: 184 of 387 live SKUs were refused `too_young` against an oldest
+    # capture of 2026-08-23 — the window was measuring when this project got a camera.
+    # Two dated readings are enough to give it a true value, for a SKU no card here carries
+    # as much as for one photographed in a box, which is why it lives beside `live` rather
+    # than on `Card`. None means never seen live, or seen only before this field existed.
+    first_seen_live: Optional[str] = None
+    # WHEN THIS STORE LAST SET A PRICE FOR THIS SKU — not what the price was. The figure
+    # round-trips through TCGplayer's own export (`asking`), so storing it here would be a
+    # second money truth that can disagree with the first; the stamp is the part the export
+    # cannot tell us. It is what stops `reprice`'s rule compounding a markdown week over
+    # week, and it is the non-held SKU's counterpart to `pipeline/corpus.py:stamp_answers`,
+    # which dates an answer only for a card this store holds.
+    priced_at: Optional[str] = None
 
     @classmethod
     def from_record(cls, record: dict) -> "Listing":
@@ -813,6 +830,44 @@ class Listing:
         self.live_as_of = as_of
         self.at = now()
         return ADOPTED
+
+    def sight(self, as_of: Optional[str]) -> bool:
+        """Record that this SKU was live at `as_of`. Monotone: the EARLIEST wins.
+
+        SEPARATE FROM `observe_live` ON PURPOSE, and the separation is the whole design.
+        `observe_live` arbitrates a QUANTITY — two readings of one number, newer wins — and
+        returns `UNCHANGED` without touching anything when the figure has not moved, which
+        is what keeps `reconcile --live`'s second pass a no-op. A first sighting is the
+        opposite kind of fact: it is settled by the OLDEST reading, and it has to be
+        recordable on exactly the pass where the quantity did not move, because a SKU that
+        has sat at 4 copies since before this field existed is the one whose age nothing
+        else can establish. Folding it into `observe_live` would have made it unreachable in
+        that case or made `UNCHANGED` a lie in every other.
+
+        Returns whether anything was written, so the caller can count and report. A reading
+        with no parseable stamp writes nothing: `None` is not an early date, and a sighting
+        that cannot be placed in time is not evidence about age.
+        """
+        if not as_of:
+            return False
+        if self.first_seen_live is not None and not newer_stamp(self.first_seen_live, as_of):
+            return False
+        self.first_seen_live = as_of
+        self.at = now()
+        return True
+
+    def price_set(self, at: Optional[str] = None) -> None:
+        """Record that this store set a price for this SKU. Stamp only — never the figure.
+
+        THE FIGURE IS NOT STORED AND THAT IS THE POINT. Once a price is published it is live
+        at TCGplayer, and the next export reads it straight back as `asking`; keeping a copy
+        here would be a second money truth able to disagree with the export on the one field
+        a buyer can see. What the export cannot report is whether THIS store made the change,
+        which is what `reprice`'s ratchet needs so a rule cannot mark the same card down
+        every time the screen is opened.
+        """
+        self.priced_at = at or now()
+        self.at = now()
 
     def set(self, stage: str, value: int) -> int:
         """Set one stage absolutely, floored at zero. Returns the new value.

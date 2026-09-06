@@ -668,6 +668,70 @@ and does nothing for a process launchd starts, which reads no profile at all.
 It sets nothing this file does not already describe — the variable above is still what the
 server reads, still extends rather than replaces, and still cannot be widened to `*`.
 
+### 6.4b — Is the LAN URL still good? (`make lan-check`)
+
+**The question this answers is the owner's, and it has no answer anywhere else in the repo.**
+The address is reached from a phone, the parts that hold it up sit in two different places,
+and the way it breaks does not look like breakage. `make lan-check` runs the whole chain from
+this machine and says.
+
+**Six things hold `http://pkmnscan.lan:5173` up. Two of them are not this repo's** — D43 is
+explicit that the owner's DNS is theirs and nothing here touches it:
+
+| Where | What | If it is wrong |
+|---|---|---|
+| UniFi | a DHCP reservation pinning this Mac to an address | the name resolves to an address this Mac no longer holds |
+| UniFi | a local DNS record mapping `pkmnscan.lan` to it | the name does not resolve at all |
+| here | `app/vite.config.ts`'s `allowedHosts: ['.lan', '.local']` | "Blocked request. This host is not allowed." |
+| here | `app/src/server.ts` composing the capture base from `location.hostname` | the phone calls itself and nothing answers |
+| here | `PKMNSCAN_LAN_NAME` in `.env` | **writes 403 and reads do not** — see below |
+| here | `PKMNSCAN_ALLOWED_ORIGINS`, composed from it by `scripts/serve.py` | the same |
+
+**The failure is silent, and that is the whole reason this section exists.** Reads are ungated
+and writes are origin-checked (6.4 above). Lose the LAN name — a fresh clone, a rewritten
+`.env`, a `.env` copied from an `.env.example` that did not list it — and the app opened at
+`pkmnscan.lan` still renders every screen and still draws all 1,625 cards, while capture, undo,
+mark-sold, retire, the mid-box delete and the claim editor all answer 403 `origin_not_allowed`.
+**So "I opened it and it looked fine" is not evidence.** The only way to know is to press
+something that writes, which is why the check presses one.
+
+**It writes nothing to press it.** The origin gate runs in `_dispatch`, ahead of every handler
+and therefore ahead of the body being read — so `POST /capture` with no body is refused by the
+gate as `origin_not_allowed` when the origin is unknown and by `_body()` as `body_required`
+when it is known, and `body_required` is raised before the store is opened, let alone locked.
+Those two answers are the experiment: the same request, one header different. A sixth row sends
+a deliberately foreign origin as the control, because if that one can write too then the fifth
+row proved nothing.
+
+**What a browser hits is not what `curl` hits, and the difference is the whole phone story.**
+`curl` sends no preflight, so it reaches the origin gate and reads the 403 — whose message
+names the remedy. A browser never gets that far. Measured on the rig 2026-09-06: an origin the
+server does not know is answered `Access-Control-Allow-Methods: GET, OPTIONS`, so a POST fails
+the preflight and **the browser refuses to send the request at all**. `fetch` then rejects with
+a bare `TypeError` carrying no reason, and the 403 and its message are never delivered to the
+page.
+
+**That used to be reported as `unreachable` — "It may not be running — start it with `make
+server`".** So in the one failure this section exists for, the phone told the operator to
+restart a server that was running, while the shell's own status dot said `Server online` off
+the same ungated read. `app/src/server.ts` had predicted it in a comment since step 7a and
+shipped it anyway. It now probes `GET /status` on that path — a simple request, so no
+preflight, and ungated, so it answers whenever the server is up at all — and raises
+`origin_blocked` naming the address as the thing being refused. `make lan-check` asks the
+preflight question too, because a check doing only the `curl` half would pass on a rig where
+every write from the phone is blocked before it leaves the handset.
+
+**What it still does not prove: that the PHONE resolves the name.** Every row runs from this
+Mac, so a phone on a guest VLAN, or with Private DNS or a VPN on, can fail while all of this
+passes. Closing that needs something the phone runs, and nothing here does. Until then a green
+run means *this Mac* reaches the URL and the origin is allowed, which is the half that breaks
+silently; the phone's half fails loudly, in the address bar.
+
+**It is not in `make check`, and D18 is not why** — nothing here writes. It is out because
+`check` answers from the tree alone: a row that resolves DNS and expects a server to be up
+would go red on a train and in every worktree, and a check that fails for reasons unrelated to
+the commit is one people learn to ignore. Run it on the rig, when you want to know.
+
 ### 6.4a — Shutdown, and why it counts requests rather than threads
 
 **`make up` restarts this process whenever a watched Python file changes** (D53), so shutdown

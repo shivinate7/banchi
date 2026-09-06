@@ -206,15 +206,38 @@ def _card_facts(inventory):
         if captured and (sku not in oldest or str(captured) < oldest[sku]):
             oldest[sku] = str(captured)
         elif sku not in oldest:
-            # A card with no capture stamp still proves the SKU is this store's. The key has
-            # to exist or `plan` reads the SKU as `not_this_store`; the value stays None and
-            # `_before` then refuses it as `too_young`, which is the honest answer.
+            # A card with no capture stamp still proves the SKU is this store's. The key is
+            # what sets `Candidate.held_here`, which is drawn evidence rather than a gate
+            # since D109 — it was a terminal `not_this_store` refusal until then. The value
+            # stays None, and with no sighting either `_before` refuses it as `too_young`,
+            # which is the honest answer for a row nothing can date.
             oldest.setdefault(sku, None)
         if getattr(card, "state", None) == master.SOLD:
             at = getattr(card, "state_at", None)
             if at and (sku not in sold or str(at) > sold[sku]):
                 sold[sku] = str(at)
     return oldest, sold
+
+
+def _listing_facts(inventory):
+    """Per SKU: the first sighting live, and when this store last set a price.
+
+    THE LISTING RECORDS AND NEVER THE CARDS, which is the whole reason this is a second
+    function rather than more of `_card_facts`. Every fact here is about what TCGplayer
+    holds and what was done to it; `Listing` carries them for SKUs no card in this store has
+    ever carried, which is precisely the set `_card_facts` cannot see and the set the
+    membership gate used to refuse. A store whose reconcile has never run returns two empty
+    maps and every caller falls back to the proxy, unchanged.
+    """
+    seen, priced = {}, {}
+    for sku, listing in inventory.listings.items():
+        first = getattr(listing, "first_seen_live", None)
+        if first:
+            seen[str(sku)] = str(first)
+        at = getattr(listing, "priced_at", None)
+        if at:
+            priced[str(sku)] = str(at)
+    return seen, priced
 
 
 def _money(value) -> str:
@@ -236,7 +259,8 @@ def _say_plan(plan, say, source, export, live_rows) -> None:
     say(f"live export      {source['path']}")
     say(f"                 {source['mtime']}, sha256 {source['sha256'][:12]}")
     say(f"                 {len(export.rows)} row(s), {live_rows} live at TCGplayer")
-    say(f"window           {asked['days']} day(s) — no sale here and owned since before "
+    dated = getattr(plan, "dated", {}) or {}
+    say(f"window           {asked['days']} day(s) — no sale here and listed since before "
         f"{str(asked['cut_off'])[:19]}")
     say(f"rule             {asked['rule']} off the {asked['basis']} price, "
         f"floored at {_money(Decimal(str(asked['floor'])))}")
@@ -244,13 +268,30 @@ def _say_plan(plan, say, source, export, live_rows) -> None:
         say(f"                 and only where the asking price is more than "
             f"{Decimal(asked['above_market']).normalize()}% above TCG Market Price")
 
-    # THE PROXY, ON EVERY REPORT, WHERE THE OPERATOR READS IT. D100: a substitution nobody is
-    # told about is a lie, and this one is the weak term in the whole predicate.
-    say("")
-    say("age is OWNERSHIP, not listing age. This store cannot say how long a listing has")
-    say("been live — `Listing` has no first-listed stamp and `live_as_of` is unset on every")
-    say("record — so what is measured is the oldest capture of any card carrying the SKU.")
-    say("Read it as a floor on the listing's age, never as the age itself.")
+    # WHICH CLOCK DATED WHICH ROWS, ON EVERY REPORT, WHERE THE OPERATOR READS IT. D100's rule
+    # is that a substitution nobody is told about is a lie. It printed the proxy paragraph
+    # unconditionally, which was right while `Listing` had no first-listed stamp and is a lie
+    # of its own now that some rows carry one — so the report counts and says.
+    proxied = int(dated.get("ownership", 0))
+    sighted = int(dated.get("sighting", 0))
+    undatable = int(dated.get("neither", 0))
+    if sighted or proxied or undatable:
+        say("")
+        if sighted:
+            say(f"age              {sighted} row(s) dated by FIRST SIGHTING — when an export was "
+                f"first seen")
+            say("                 holding the SKU, which is the listing's own age.")
+        if proxied:
+            say(f"                 {proxied} row(s) fall back to OWNERSHIP — the oldest capture "
+                f"of any card")
+            say("                 carrying the SKU. A floor on the listing's age, never the age "
+                "itself;")
+            say("                 `pkmnscan reconcile --live --write` gives those rows a real "
+                "one.")
+        if undatable:
+            say(f"                 {undatable} row(s) can be dated by neither and are reported "
+                f"`too_young`")
+            say("                 rather than priced on a guess.")
 
     say("")
     say(f"would mark down  {len(plan.rows)} SKU(s), {plan.copies} copy(ies)")
@@ -318,6 +359,16 @@ def _surveyed(row, standing: str) -> dict:
         "cut": _cash(row.cut),
         "given_up": _cash(row.given_up),
         "owned_since": row.owned_since,
+        # BOTH CLOCKS, NOT THE ONE THAT WON. The screen draws the age and has to be able to
+        # say which it is looking at — a sighting is the listing's own age, an ownership
+        # stamp is a floor on it, and a row carrying only the second must not be captioned as
+        # though it carried the first.
+        "listed_since": row.listed_since,
+        # WHETHER ANY CARD HERE EVER CARRIED THIS SKU. Drawn as evidence beside the row and
+        # never a gate: it stopped being a refusal on 2026-09-06. The screen uses it to
+        # explain why a row has no thumbnail and no copies, which is a different sentence
+        # from having none left.
+        "held_here": row.held_here,
         "last_sold": row.last_sold,
         "priced_at": row.priced_at,
         "row": row.row,
@@ -431,6 +482,7 @@ def _list(args, say) -> int:
     source = runs.describe_source(path)
     snapshot = Store().read()
     owned_since, last_sold = _card_facts(snapshot.inventory)
+    listed_since, listing_priced_at = _listing_facts(snapshot.inventory)
 
     try:
         book = corpus.Corpus.read()
@@ -449,10 +501,20 @@ def _list(args, say) -> int:
         # as `priced_recently` and be refused a markdown for the wrong reason.
         if answer.at and answer.channel == "price" and not answer.is_hold
     }
+    # THE LISTING'S OWN STAMP FILLS IN WHERE THE CORPUS HAS NOTHING TO SAY. A SKU no card
+    # here carries gets no corpus answer (D103's refusal, and the reason `prices.json` never
+    # became a second inventory), so before `Listing.priced_at` existed the ratchet was blind
+    # on exactly the rows the membership gate used to hide — and a rule that cannot tell it
+    # already marked a card down is one that marks it down again on every pass. The corpus
+    # wins where both have a stamp: it is the answer this store DECIDED, and the listing's is
+    # the record that a press happened.
+    for sku, stamp in listing_priced_at.items():
+        priced_at.setdefault(sku, stamp)
 
     plan = reprice.plan(
         export.rows,
         owned_since=owned_since,
+        listed_since=listed_since,
         last_sold=last_sold,
         priced_at={} if args.again else priced_at,
         held=held,
@@ -618,10 +680,18 @@ def _apply(args, say) -> int:
     say(f"would upload     {len(application.edits)} SKU(s), {application.copies} copy(ies)")
     if application.edits:
         say(f"                 giving up {_money(application.given_up)} of asking value")
+        # A RAISE IS SAID OUT LOUD, ON ITS OWN LINE, AND NEVER NETTED INTO THE FIGURE ABOVE
+        # (D107). This command is called a markdown; a row inside it pointing the other way is
+        # the one an operator most needs told, and `given_up` deliberately does not offset.
+        if application.raised:
+            say(f"                 {len(application.raised)} of them RAISED, adding "
+                f"{_money(application.taken_on)} — the rule never proposes a raise, so these "
+                f"are prices you typed")
         say("")
         say("  copies  sku         was       now   card")
         for edit in application.edits[:SHOWN]:
-            say(f"  {edit.live:>6}  {edit.sku:<10}  {edit.was:>6.2f}  {edit.now:>6.2f}   "
+            arrow = "^" if (edit.cut or 0) < 0 else " "
+            say(f"  {edit.live:>6}  {edit.sku:<10}  {edit.was:>6.2f}  {edit.now:>6.2f} {arrow} "
                 f"{edit.name[:44]}")
         if len(application.edits) > SHOWN:
             say(f"  ... and {len(application.edits) - SHOWN} more")
@@ -733,10 +803,13 @@ def _apply(args, say) -> int:
         f"import           {target}",
         f"rows             {len(rows)} SKU(s), {application.copies} copy(ies)",
         f"given up         {_money(application.given_up)} of asking value",
+        f"raised           {len(application.raised)} SKU(s), adding "
+        f"{_money(application.taken_on)}",
         "add to quantity  0 on every row — this file changes prices and no quantity",
         "",
     ] + [
-        f"  {edit.sku:<10} {edit.was} -> {edit.now}  x{edit.live}  {edit.name}"
+        f"  {edit.sku:<10} {edit.was} -> {edit.now}"
+        f"{'  RAISED' if (edit.cut or 0) < 0 else ''}  x{edit.live}  {edit.name}"
         for edit in application.edits
     ]
     (path.parent / RECEIPT).write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -747,7 +820,7 @@ def _apply(args, say) -> int:
     say(f"                 {len(application.edits)} answer(s) into {corpus.FILENAME}")
     say("")
     say("Upload import.csv to TCGplayer through My Pricing. It carries `Add to Quantity` 0 on")
-    say("every row, so it lowers prices and cannot add, remove or delete a single copy.")
+    say("every row, so it changes prices and cannot add, remove or delete a single copy.")
     return 0
 
 

@@ -47,6 +47,20 @@ from typing import Optional
 from pipeline import tcgcsv
 
 THRESHOLD = Decimal("0.40")
+
+# THE LIVE CAP'S DEFAULT, HERE BECAUSE BOTH `join` AND `corpus` IMPORT THIS MODULE AND
+# NEITHER IMPORTS THE OTHER. D7: "Live quantity caps at 4 per SKU (a playset; CONFIGURABLE)
+# regardless of copies owned" — it blocks an envelope-buster order, and it bounds how many
+# copies a price spike can sell at a stale price. `pipeline/join.py` re-exports it under the
+# name every caller and 218 lines of documentation already use, so this is where the figure
+# lives and `join.LIVE_QUANTITY_CAP` is still how it is spelled.
+#
+# CONFIGURABLE SINCE 2026-09-06, WHICH D7 PROMISED AND NOTHING BUILT. The parameter was
+# threaded through `SkuMatch`, `join` and `resolve.load` from the start and no caller ever
+# passed anything but this default: no flag set it, no policy key held it, and
+# `server/pipeline_routes.py` read the module constant directly in three places.
+LIVE_QUANTITY_CAP = 4
+
 FLOOR = Decimal("0.40")
 
 CENT = Decimal("0.01")

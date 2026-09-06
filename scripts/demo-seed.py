@@ -392,23 +392,42 @@ def build_store(force: bool) -> dict:
                     break
 
         # ------------------------------------------------------------------- listings
-        # One row per SKU, holding QUANTITIES rather than addresses (D7 amended). `live` is
-        # a READING of what TCGplayer holds and carries the moment it was taken (D87), so
-        # every row written here gets a `live_as_of` — a row without one reads as "never
-        # read", and the demo's whole point is that it has been.
+        # One row per SKU, holding QUANTITIES rather than addresses (D7 amended). `live` is a
+        # READING of what TCGplayer holds and carries the moment it was taken (D87).
+        #
+        # A FRESHLY JOINED RUN IS NOT LISTED YET, AND THE FIRST VERSION OF THIS GOT IT
+        # BACKWARDS. It wrote `live = min(on_hand, 4)` for every SKU in the store, so every
+        # row on `#/pricing` came back `at_cap` — `room = LIVE_QUANTITY_CAP - live` was zero,
+        # `add_to_quantity` was zero, and the screen correctly reported that every copy was
+        # "already listed or has left the box". The import file would have added nothing, the
+        # trend walk skips capped rows so "Load trends" had one row to ask about, and the
+        # whole point of the pricing screen was missing from the demo of it.
+        #
+        # The honest state after `identify` and `join` and before `emit` is: these cards are
+        # on hand and NOT listed. So the run boxes get no listing row at all unless a copy
+        # has sold — a sale proves the SKU was listed once — and the boxes carrying no run
+        # hold the older, already-listed stock, kept under the cap so they have room too.
+        RUN_BOXES = {spec["box"] for spec in BOXES if spec["pool"] == "priceable"}
         by_sku: Dict[str, List[Card]] = {}
         for card, _row in placed:
             if card.sku and card.state in ("identified", "sold"):
                 by_sku.setdefault(card.sku, []).append(card)
 
         for sku, cards in by_sku.items():
+            sold = [c for c in cards if c.state == "sold"]
             on_hand = [c for c in cards if c.state == "identified"]
-            if not on_hand:
+            if not sold and not on_hand:
                 continue
-            pushed = len(cards)
-            # The live cap is 4 (D7). More copies than that on hand is the ordinary case in
-            # bulk, and the remainder waiting as backstock is what the cap arithmetic is for.
-            live = min(len(on_hand), 4)
+            fresh = any(int(c.box) in RUN_BOXES for c in cards) and not sold
+            if fresh:
+                # Never listed. `join` will report it as room for every copy on hand, which
+                # is what gives `#/pricing` something to answer.
+                continue
+            pushed = len(sold) + len(on_hand)
+            # UNDER THE CAP ON PURPOSE. At 4 there is no room and the row is inert; at 1 or 2
+            # the screen shows a partly-listed SKU, which is both the commoner real state and
+            # the one where the cap arithmetic is legible.
+            live = min(len(on_hand), 2)
             inventory.listings[sku] = Listing(
                 sku=sku,
                 condition=cards[0].condition,

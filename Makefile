@@ -69,6 +69,8 @@ help:
 	@echo "  make sigil-check   a bare \`#\` on a screen is a COUNT, never a store key (D92)."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
+	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
+	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
 	@echo "                    merge-selftest + port-agreement + set-hint-agreement +"
 	@echo "                    screen-freshness + sigil-check +"
@@ -456,6 +458,26 @@ screen-freshness:
 icloud-sweep:
 	@python3 scripts/icloud-sweep.py $(ARGS)
 
+# IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
+# `http://pkmnscan.lan:5173`, and nothing in this repo knows that name — the DHCP reservation
+# and the DNS record are theirs, on their UniFi (D43). What this checks is the four things on
+# THIS side that have to agree with it, ending with a real write, because the failure worth
+# catching is silent: reads are ungated and writes are origin-checked, so a missing
+# `PKMNSCAN_LAN_NAME` leaves every screen rendering and every write answering 403.
+#
+# A SEPARATE `.PHONY` LINE, and that is deliberate rather than sloppy: the single line at the
+# top of this file is one line that every branch adding a target edits, which makes it the
+# most conflict-prone line in the Makefile. `phony_gaps` unions every `.PHONY:` it finds, so
+# a second one is read exactly the same and merges without a fight.
+#
+# NOT IN `check`, and not for D18's reason — nothing here writes. It is out because `check`
+# answers from the tree alone, and a row that resolves DNS and expects a server to be up would
+# go red on a train and in every worktree. A check that fails for reasons unrelated to the
+# commit is one people learn to ignore.
+.PHONY: lan-check
+lan-check:
+	@python3 scripts/lan-check.py
+
 # BOTH SERVERS, DETACHED, AND THE CAPTURE SERVER RESTARTS ITSELF WHEN YOU EDIT PYTHON.
 # `make dev` and `make server` below are untouched and still work; this is additive.
 #
@@ -630,8 +652,20 @@ typecheck:
 # /<repo>/, and a bundle built for / 404s every asset there — a failure that shows up only
 # once it is published. Override it for a user site or a custom domain:
 #     make demo-static DEMO_BASE=/
+#
+# DERIVED FROM THE REMOTE, NOT WRITTEN DOWN, and it earned that on 2026-09-06: this line
+# read `/pkmnscan/` and the repository was renamed to `banchi`, so a hand-run build pointed
+# at a path that now 404s. `demo.yml` took the derived route from the start — "so a rename
+# cannot leave it pointing at the old one" — and the published demo followed the rename by
+# itself while this default did not. A name spelled in two places agrees until the day one
+# moves, which is the same argument D43 makes about the port.
+#
+# The fallback is a literal because there is nowhere else to read one from: a tarball with
+# no `.git`, or a clone with no `origin`. It is the current name, so it is right until the
+# next rename and wrong in exactly the way this comment describes — override it there.
 DEMO_HOME ?= demo
-DEMO_BASE ?= /pkmnscan/
+DEMO_REPO := $(shell n=$$(basename -s .git "$$(git config --get remote.origin.url 2>/dev/null)" 2>/dev/null); [ -n "$$n" ] && echo "$$n" || echo banchi)
+DEMO_BASE ?= /$(DEMO_REPO)/
 
 # Curate real card photographs, and their real identifications, into `demo-assets/`.
 #

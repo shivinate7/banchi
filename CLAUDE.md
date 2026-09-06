@@ -13,17 +13,33 @@ card), and the app is named after that idea.
 **Everything under the app keeps the name it has always had.** Renaming any of it is a
 defect, not a follow-up:
 
-- the repository and its directory, and the CLI `./pkmnscan` with every subcommand
+- the checkout's own directory (`~/Developer/pkmnscan`), and the CLI `./pkmnscan` with
+  every subcommand
 - the Python packages — `server/ store/ pipeline/ identify/ geometry/ codes/ cli/`
 - the store on disk (`inventory/store.sqlite`), `PKMNSCAN_HOME`, and every route on the wire
 - `PKMNSCAN_MAIN=off`, the git hooks' escape hatch, printed in every refusal
 - the harness, the fixtures, `docs/`, and `make` itself
 
-The rename is a front-end fact and it reaches exactly these places: `app/index.html`'s title
-and meta, the brand block in `app/src/App.tsx`'s sidebar, the document title per screen,
-the `banchi.*` keys in `localStorage`, and the copy on every screen. **Nothing on the wire
-changed.** A session that "finishes" the rename by touching `server/` or `store/` has moved
-the store of record for a word.
+**THE GITHUB REPOSITORY IS THE ONE EXCEPTION, AND IT IS THE OWNER'S OWN CHANGE.** It was
+renamed `shivinate7/pkmnscan` -> `shivinate7/banchi` on 2026-09-06, deliberately, and this
+list named the repository among the things that keep the old name until that day. **The
+LOCAL directory is not renamed** and neither is anything else above: `git remote -v` points
+at `banchi.git`, `~/Developer/pkmnscan` is still the checkout, and the two disagreeing is
+correct rather than half-finished. GitHub redirects the old name, so an old clone URL and
+every link in a merged PR still resolve.
+
+**It reached one derived thing and one only, and that was already guarded**: GitHub Pages
+serves a project site at `/<repo>/`, so the demo moved to `shivinate7.github.io/banchi/`.
+`.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name for exactly this
+reason, in a comment written before the rename happened, and the published demo followed it
+by itself. The Makefile's default is a fallback for a hand-run build and is stale by design
+rather than by oversight — override it, or let CI derive it.
+
+The rest of the rename is a front-end fact and it reaches exactly these places:
+`app/index.html`'s title and meta, the brand block in `app/src/App.tsx`'s sidebar, the
+document title per screen, the `banchi.*` keys in `localStorage`, and the copy on every
+screen. **Nothing on the wire changed.** A session that "finishes" the rename by touching
+`server/` or `store/` has moved the store of record for a word.
 
 **The gating system is retired as of 2026-08-23.** Gate A passed 2026-07-26; Gate B passed
 2026-08-22 with 53 real cards end to end — the first numbers this project has about cards
@@ -79,6 +95,14 @@ make up             # BOTH servers, detached, and the capture server RELOADS ITS
                     #   quietly moved would serve a DIFFERENT store (D43).
 make launch-agent   # start at login, so the link is always live. MAIN TREE ONLY — it refuses
                     #   in a worktree, whose plist would outlive the worktree. ARGS=--remove.
+                    #   THE DOCK APP IS A CLIENT OF THIS AND NEVER A SECOND COPY OF IT (D108):
+                    #   Chrome's `Install page as app` over http://localhost:5173 writes a real
+                    #   bundle with its own icon, window and ⌘-Tab entry, on the same engine and
+                    #   the same profile — so the camera grant and the rig's 4K carry unchanged.
+                    #   A wrapper that also started the server would be D53's two-supervisor
+                    #   defect with a GUI in front of it. There is no `make` target: the install
+                    #   is one press in Chrome, once, and `app/public/manifest.webmanifest` is
+                    #   the part of it that lives here.
 make dev            # Vite app. :5173 in the main tree, its own port in a worktree. Blocks.
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
@@ -158,6 +182,19 @@ make audit-self-test # the checker checks itself. In `check`, never in the git h
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
+make lan-check      # IS THE OWNER'S LAN URL STILL GOOD? `http://pkmnscan.lan:5173`, from
+                    #   the phone. Two of the six things holding it up are on their UniFi and
+                    #   this repo does not touch them (D43); the other four are here.
+                    #   IT PRESSES A WRITE, because that is the only row that can tell:
+                    #   reads are ungated and writes are origin-checked, so a
+                    #   `PKMNSCAN_LAN_NAME` missing from `.env` leaves every screen rendering
+                    #   and the whole inventory drawing while capture, undo, mark-sold and the
+                    #   claim editor all answer 403. Looking at the app proves nothing.
+                    #   Writes NOTHING to press it: the origin gate runs ahead of the body
+                    #   reader, so a bodiless POST separates the two refusals without opening
+                    #   the store. Reaches the network, so it is deliberately NOT in
+                    #   `make check`, which answers from the tree alone — and D18 is not why,
+                    #   since nothing here writes.
 make merge-selftest # the merge wrapper's local half, against a throwaway origin, clone and
                     #   worktree. Its FOOTGUN case is the one that matters: main checked out
                     #   nowhere while another tree sits on a branch BEHIND its upstream, where
@@ -211,6 +248,15 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   written `live`: 405 of 443 SKUs read 0 while carrying
                                    #   pushed copies, so the cap arithmetic saw 93 live copies
                                    #   where there were 1,079.
+                                   #   IT NOW RECORDS SKUS TCGPLAYER HOLDS THAT THIS STORE
+                                   #   NEVER SENT (D109), where it used to name them and drop
+                                   #   them: `live` and a first sighting are written, `pushed`
+                                   #   and `staged` stay 0 because this pipeline sent none of
+                                   #   it. Before this, 0 of 443 listing records had no card
+                                   #   behind them while the export carried 28 live SKUs that
+                                   #   did — so nothing could date a listing, nothing stopped
+                                   #   a rule marking the same one down every pass, and a copy
+                                   #   selling was invisible.
                                    #   It moves QUANTITIES and marks no card sold (D7).
                                    #   A reading OLDER than the store's own `live_as_of` is
                                    #   kept, not written, and named in the report — the
@@ -313,6 +359,14 @@ sentence**, and see "the census" below for what enforces that.
                               at `#/pricing?markdown=<stamp>` — the operator's whole LIVE
                               inventory out of a My Pricing export, where staleness is a filter
                               rather than a gate and the press writes a price-only `import.csv`.
+                              THE LIVE BOOK IS A ONE-PRESS DOOR (D109): with no joined runs this
+                              screen used to offer only "Go to Runs" — sending the operator away
+                              from 387 live listings because none came out of a camera here. It
+                              leads with "Price my live listings", which opens the sheet with the
+                              fetch already running. A listing this store never photographed is
+                              PRICEABLE there; only a sold-out row is locked, and the lens's
+                              field opens EMPTY with the rule's figure as a placeholder, so a
+                              bulk press moves only what was touched.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
                               read an export, write a worklist, price it without changing screen
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
@@ -567,7 +621,11 @@ A screen is not finished because it compiles.
   inline is one the next person disables without reading, so the exemptions are few and each
   one says why beside the key.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
-  by SKU with `Add to Quantity` = copy count, capped at 4 live.
+  by SKU with `Add to Quantity` = copy count, capped at the live cap. **That cap is
+  `policy.live_cap` in `inventory/prices.json` as of 2026-09-06** — store-wide, overridable
+  per run through `policy.per_run`, defaulting to D7's playset of four. It was a promise D7
+  made and nothing built: the parameter was threaded through `SkuMatch`, `join` and
+  `resolve.load` from the start and no caller ever passed anything but the module default.
 - **The pipeline is reachable from a screen as of 2026-08-24** (D33), **and lives on `#/runs`
   since 2026-08-29** (D39). Not folded (D33, amended): a free preflight, a two-step money gate
   with no typing, the three free steps, every command's stdout verbatim, and the import CSVs as
@@ -1009,6 +1067,9 @@ D103 Staleness is a filter and not a gate, the record holds every live row, and 
 D104 The live export is fetched, and the second standing instruction is a second constant
 D105 The markdown lives where prices are decided, and one file may not have two unguarded writers
 D106 The push and the publish are two presses, and the second one is the only thing here a buyer can see
+D107 The rule only ever marks down; the operator may point either way
+D108 The dock app is the page Chrome already renders, and the manifest is what makes it one
+D109 A price is a fact about a listing, and the store remembers listings it never photographed
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
