@@ -84,6 +84,55 @@ make server         # Python capture server. :8000 in the main tree, its own por
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
+make demo           # seed a demo store and record the wire into a fixture bundle.
+                    #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE
+                    #   `fetch` (`server.ts:request`) and addresses every photograph through
+                    #   one `photoUrl`, so a demo differs from the real thing in TWO
+                    #   FUNCTIONS. A fork would duplicate 38,705 lines to carry none of the
+                    #   difference, and would diverge the same week — 134 commits landed in
+                    #   the three days before this was built. What differs is DATA.
+                    #   REAL: the catalogue (every card is a `fixtures/` row) and the whole
+                    #   pipeline after `identify` — both runs are JOINED FOR REAL against
+                    #   the real exports, so `pricing.json` is the pipeline's own arithmetic.
+                    #   The seed fakes only `identify`, the one step that costs money, by
+                    #   writing the `identifications.json` a run leaves behind — a hand-made
+                    #   one is a case `cli/resolve.py` names as supported.
+                    #   INVENTED: which card is in which box, what sold, what shipped. No
+                    #   real store is read; `inventory/` has never been in git.
+                    #   SYNTHETIC: the photographs, drawn by `demo-seed.py:card_image`.
+                    #   Neither real card art nor a picture of the owner's desk belongs in
+                    #   something published to strangers.
+make demo-seed      # the store alone. Deterministic from one seeded RNG, so an unchanged
+                    #   tree rebuilds byte-identically and CI does not churn the repo.
+                    #   REFUSES with PKMNSCAN_HOME unset — that default is a real store.
+make demo-record    # the bundle alone. Spawns ITS OWN capture server on its own port and
+                    #   stops it again, so it never touches `make up` — which on the main
+                    #   checkout is the owner's live process over their real inventory.
+make demo-static    # the two above, then a static build to `dist-demo/`. VITE_DEMO=1 is a
+                    #   BUILD-TIME constant: an ordinary build carries neither the demo
+                    #   module nor its ~470 KB bundle, and a runtime flag was refused
+                    #   because a UI answering from the wrong store is D43's whole subject.
+                    #   DEMO_BASE=<path> is where it will be served from — GitHub Pages puts
+                    #   a project site under `/<repo>/`, and a bundle built for `/` 404s
+                    #   every asset there while working perfectly on localhost.
+make demo-preview   # serve `dist-demo/` exactly as a static host would, base path and all.
+make demo-freshness # whether the bundle still matches the wire it recorded. ON NO GATE:
+                    #   nothing derived is committed and CI rebuilds it from source on every
+                    #   push (`.github/workflows/demo.yml`), so the published copy cannot be
+                    #   stale. What is left is a local preview serving a recording that
+                    #   predates your last edit.
+                    #   WRITES ARE REAL, WITHIN REASON. The sale, the review answer, the
+                    #   stand-down, the price, the hold, the rename and the divider all
+                    #   write to a mutable copy of the recording — a demo where every button
+                    #   is inert argues against the product. What CANNOT exist on a static
+                    #   page is refused BY NAME with the reason on it: identification is a
+                    #   paid Batch API call, the export fetch and the order sync need a
+                    #   signed-in TCGplayer session, capture needs a camera and a disk.
+                    #   NO API KEY REACHES A PUBLISHED PAGE and none is asked for. Vite
+                    #   inlines only `VITE_`-prefixed variables and no secret in
+                    #   `.env.example` carries that prefix, so a public build cannot leak
+                    #   one — a property of a naming convention, which is why CI asserts it
+                    #   over the built artefact rather than trusting it.
 make lint           # eslint over app/ (guards a bug earned, see app/eslint.config.js) plus ruff over
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
