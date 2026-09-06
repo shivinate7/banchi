@@ -42,30 +42,34 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 6,
- title: 'the corner radius, unpinned at last',
+ n: 7,
+ title: 'the corner radius, halved',
  sweeping: 'rr',                       /* the key in `used` that must MOVE */
  unit: '× the stroke',
- values: [1.0, 1.85, 2.8, 4.07, 5.5, 7.0],
- notes: {1.85:'the recovered rule', 4.07:'what you have been seeing'},
+ values: [1.85, 2.6, 3.4, 4.3, 5.5],
+ notes: {1.85:'the recovered rule', 4.3:'near what you had been seeing'},
  /* every one of these must be IDENTICAL across every specimen, and equal to what is declared */
  holds: {pad:0.22, gap:0.06, stroke:0.050, arm:0.32, tip:0.07, tl:0.45, tails:true},
  sizes: [96, 40, 22],
+ /* round · variable · offered · taken · what it cost */
  history: [
-  ['1', '0.045 – 0.140', '0.045 – 0.085', 'reached my floor'],
-  ['2', '0.018 – 0.085', '0.026 – 0.045', 'opened downward; 0.065 and 0.085 now passed over'],
-  ['3', '0.026 – 0.045', '0.036 – 0.045', 'reached my ceiling'],
-  ['4', '0.036 – 0.056', '0.045 and 0.050', 'opened upward; filled the 0.045→0.065 hole'],
-  ['5', 'forced pair', '0.050', 'settled — holds 1px to kanji 20'],
+  ['1', 'stroke', '0.045 – 0.140', '0.045 – 0.085', 'reached my floor'],
+  ['2', 'stroke', '0.018 – 0.085', '0.026 – 0.045', 'opened downward; 0.065 and 0.085 now passed over'],
+  ['3', 'stroke', '0.026 – 0.045', '0.036 – 0.045', 'reached my ceiling'],
+  ['4', 'stroke', '0.036 – 0.056', '0.045 and 0.050', 'opened upward; filled the 0.045→0.065 hole'],
+  ['5', 'stroke', 'forced pair', '0.050', 'settled — holds 1px to kanji 20'],
+  ['6', 'radius', '1.0 – 7.0 ×', '1.85 – 5.5 ×', 'both ends failed — 1.0 “far too square”'],
  ],
- lede: 'The stroke is settled at <b>0.050</b> and held from here. This round moves the corner radius, '+
-  'pinned since round 1 so the stroke could move alone. <b>What you have been looking at is not the '+
-  'rule:</b> the recovered code says <code>1.85 × stroke</code>, but it was pinned at '+
-  '<code>1.85 × 0.110</code> — the old stroke’s value — which at 0.050 is '+
-  '<b>4.07 ×</b>. Every specimen across five rounds carried a corner more than twice the rule’s. '+
-  '<br><br><b>Both ends are meant to fail.</b> At 1.0× the corner is barely a corner; at 7.0× the '+
-  'arc eats the straight arms. §5 records that trade for the icon — the derived radius '+
-  '<i>“ate the straight arm”</i>.'
+ lede: 'Round 6 is the first round where <b>both ends failed on the first offer</b> — 1.0× read as far '+
+  'too square and 7.0× was passed over — so the range was right and the band is interior. §7 rule 4: '+
+  'halve it.'+
+  '<br><br><b>1.85× is the recovered rule</b> and it survived; <b>4.3×</b> is near the 4.07× you had '+
+  'unknowingly been judging for five rounds, and it survived too. The band is a factor of three wide, '+
+  'which is why this halves rather than picks.'+
+  '<br><br><b>What to look for:</b> §5 records the trade for the icon — the derived radius '+
+  '<i>“ate the straight arm”</i> and 8 was taken <i>“to give the arms visible length”</i>. The question '+
+  'here is the same one: how much straight arm is left, and at what point does the bracket stop reading '+
+  'as two arms meeting and start reading as an arc.'
 }
 
 const o=document.getElementById('out')
@@ -79,8 +83,8 @@ document.getElementById('lede').innerHTML = ROUND.lede +
 
 ;(function(){
  const t=el('table','hist')
- t.innerHTML='<tr><th>round</th><th>offered</th><th>taken</th><th></th></tr>' +
-  ROUND.history.map(function(r){return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td><b>'+r[2]+'</b></td><td style="color:#8b93a0">'+r[3]+'</td></tr>'}).join('')
+ t.innerHTML='<tr><th>round</th><th>variable</th><th>offered</th><th>taken</th><th></th></tr>' +
+  ROUND.history.map(function(r){return '<tr><td>'+r[0]+'</td><td style="color:#8b93a0">'+r[1]+'</td><td>'+r[2]+'</td><td><b>'+r[3]+'</b></td><td style="color:#8b93a0">'+r[4]+'</td></tr>'}).join('')
  document.getElementById('hist').appendChild(t)})()
 
 function row(size){
