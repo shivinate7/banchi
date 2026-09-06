@@ -47,38 +47,37 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 21,
- title: 'the line gap — the last value in the set that nobody in this series ever chose',
+ n: 22,
+ title: 'the line gap halved — and its low end is bracketed by geometry rather than by taste',
  sweeping: 'gap',
  unit: ' of the kanji size',
- values: [0.00, 0.06, 0.14, 0.24, 0.38],
- notes: {0.00:'no gap at all — the roman hangs off the kanji',
-         0.06:'the inherited value: 2.9px at the sidebar size'},
- rejected: {},
+ values: [0.00, 0.06, 0.12, 0.18, 0.23],
+ notes: {0.00:'zero — and you kept it, which is a claim about the design',
+         0.06:'the inherited value, still in the band'},
+ rejected: {0.24:'out of the band — round 21', 0.38:'the roman had come loose — round 21'},
  holds: {pad:0.50, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
  sizes: [48, 32],
- context: [0.00, 0.06, 0.14, 0.24],
+ context: [0.00, 0.08, 0.16, 0.23],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
   ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
-  ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 fired twice more; stopped at 1.9px'],
+  ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 twice; stopped at 1.9px'],
+  ['21', 'line gap', '0.00 – 0.38', '0 – below 0.24', 'the low end is zero and zero was kept'],
  ],
- lede: '<b>Padding settled at 0.50 over five rounds, so the gap is the last value in the set that '+
-  'nobody in this series ever chose.</b> Like the padding it came off the recovered pass at 0.06 and has '+
-  'been the ground under twenty rounds since — twenty drawings of a relationship no one was asked about.'+
-  '<br><br><b>It is the space between 番地 and BANCHI, as a fraction of the kanji size.</b> At 0.06 that '+
-  'is <b>2.9px</b> at the sidebar size, which is tight enough that the roman reads as hanging off the '+
-  'kanji rather than sitting under it — whether that is right is exactly the question.'+
-  '<br><br><b>Both ends are meant to fail.</b> 0.00 is no gap at all. 0.38 puts 18px between the two '+
-  'lines, far enough that the bracket is holding two things rather than one. And this round starts wide '+
-  'on purpose: the padding needed five rounds because the first two were anchored, and the fix for that '+
-  'is a range too wide to anchor rather than a careful one.'+
-  '<br><br><b>The padding is held at its new value, and that is asserted.</b> Building this round with '+
-  '0.22 still in the holds — the value the spec no longer carries — failed `make docs-audit`\'s `lockup '+
-  'params` row, which named both numbers and which file is the store of record.'
+ lede: '<b>0.24 failed and 0.00 was kept, so the band is 0 – 0.24 and this round halves it.</b> Rule 5 '+
+  'normally forbids a range whose end the answer chose, and this is the one shape where it cannot apply: '+
+  '<b>there is nothing below zero to offer.</b> The low end is bracketed by geometry rather than by taste '+
+  '— the same way the size floor was bounded by 番’s counters closing rather than by anyone’s preference.'+
+  '<br><br><b>That zero survived is itself a finding, not a formality.</b> It says the roman is allowed to '+
+  'sit hard under the kanji with no air between them, reading as one block rather than two lines. If that '+
+  'is what you want, the answer is 0 and the gap stops being a parameter at all — which would be the '+
+  'cleanest possible outcome for a value nobody ever chose.'+
+  '<br><br><b>The step is 0.06, which is 2.9px at the sidebar size.</b> One more halving after this is '+
+  '1.4px, so the same floor that stopped the padding is about two rounds away here. The caption under '+
+  'each specimen prints its own gap from the one before it.'
 }
 
 const o=document.getElementById('out')
