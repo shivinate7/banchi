@@ -786,7 +786,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `rrMul` | 4.0 | rounds 6–10, closed on the JND |
 | `tip` | 0.15 | round 13 |
 | `tl` | 0.70 | rounds 11–12 |
-| `romanSize` | 0.36 | carried; round 26 |
+| `romanSize` | 0.25 | rounds 28–31 |
 | `romanFill` | 0.75 | rounds 25–27 |
 | `romanTrack` | 0.14 | a SEED, not an answer — see below |
 | `romanOpacity` | 0.62 | carried from the recovered pass |
@@ -811,6 +811,43 @@ this file that **no drawing on any sheet has ever used** — the same defect as 
 value the picture beside it does not have, one level further back. The drawing now records
 `romanTrackSolved`, the tracking that actually reached it, and **it cannot be swept**: it is
 derived, and §7 rule 6 has nothing to hold constant while it moves.
+
+### The roman's size, settled over four rounds — and the last one changed the instrument
+
+**0.25 of the kanji — a quarter.** It replaces the 0.36 carried from the recovered pass, which
+is the largest move any value in this series has made.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 28 | 0.24 – 0.48 | 0.24 – below 0.36 | the low end was not bracketed |
+| 29 | 0.14 – 0.34 | 0.19 – below 0.34 | both ends failed |
+| 30 | 0.20 – 0.33 | 0.23 – 0.27, undecided | the step reached 1.1px at the floor |
+| 31 | 0.23 – 0.27, **at true pixels** | 0.25 | the rounding was the whole difference |
+
+**With `romanFill` settled first, this sweep asks about weight rather than length.** Every
+specimen occupies the same 77px, because the solve holds it there — so what moves is the roman's
+presence against the kanji. Round 25 deferred the size for exactly this reason: a size judged
+against a moving width is judged against nothing (§7 rule 6).
+
+**Round 31 is where the method had to change rather than stop.** The step was 0.01, which is
+0.32px of type at kanji 32 — and a sheet cannot ask anyone to choose between two drawings a third
+of a pixel apart. **Drawing them larger is the wrong fix**, and §9's small row is this project's
+own record of making it: shot at `deviceScaleFactor: 2`, its "28px" tiles carried 56 real pixels,
+in the one row whose whole job was to demonstrate a failure. So `sheets/pixels.mjs` does the
+opposite — it renders at `deviceScaleFactor: 1`, which is what a 1× display gets, and magnifies
+the resulting **bitmap** with smoothing off. **At this step the screen's rounding is the entire
+difference**, and that is the only form of the question with an answer: at the floor, 0.23 and
+0.24 lose the counters of B and C, 0.26 and 0.27 hold their stems, and 0.25 is the crossover.
+
+**One crop per specimen, stacked.** A magnified row of five is six thousand pixels wide, and any
+client that receives it scales it back to fit — which undoes the magnification exactly and leaves
+an image that looks like evidence and is not.
+
+**Two failure modes bound this variable and they are at opposite ends.** Below, legibility, and it
+binds at the floor size first: a 0.14 roman is 4.5px at kanji 32. Above, the fill — held at 0.75,
+so past about 0.43 the type's natural width exceeds the target and the solve tracks **negative**,
+crowding the letters. The sheet prints the solved tracking and flags a negative one in the
+rejection red.
 
 ### The roman's run, settled over three rounds — and the parameter did not exist when they started
 

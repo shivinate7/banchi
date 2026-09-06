@@ -47,17 +47,18 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 31,
- title: 'the roman’s size between 0.23 and 0.27 — below a pixel, so the instrument changes',
- sweeping: 'romanSize',
- unit: '× the kanji',
- values: [0.23, 0.24, 0.25, 0.26, 0.27],
- notes: {0.25:'a quarter — the midpoint, and the only round number in the band'},
- rejected: {0.14:'4.5px at the floor — round 29', 0.34:'out above — round 29'},
+ n: 32,
+ title: 'the roman’s opacity — the last parameter, and the only one with a measurable floor',
+ sweeping: 'romanOpacity',
+ unit: ' of the ink',
+ values: [0.35, 0.48, 0.62, 0.78, 1.00],
+ notes: {0.62:'the carried value — the last number in the set nobody has chosen',
+         1.00:'full ink: the roman stops deferring to the kanji'},
+ rejected: {},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
-         romanFill:0.75, romanTrack:0.14, romanOpacity:0.62, tails:true},
+         romanFill:0.75, romanSize:0.25, romanTrack:0.14, tails:true},
  sizes: [48, 32],
- context: [0.23, 0.25, 0.27],
+ context: [0.35, 0.48, 0.62, 0.78],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -68,23 +69,22 @@ const ROUND = {
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
-  ['28–30', 'roman size', '0.14 – 0.48', '0.23 – 0.27, undecided', 'the step reached 1.1px at the floor'],
+  ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
  ],
- lede: '<b>The step here is 0.01, which is 0.48px of type at kanji 48 and 0.32px at the floor.</b> I said '+
-  'round 30 was the last one, and about the STEP that was right — a sheet cannot ask you to choose between '+
-  'two drawings a third of a pixel apart. But the question is real, so the instrument changes rather than '+
-  'the answer being refused.'+
-  '<br><br><b>Drawing it larger would be the wrong fix, and this project has already made it once.</b> '+
-  'Scaling the vector shows a rendering no screen produces; §9’s small row was shot at deviceScaleFactor 2, '+
-  'so its “28px” tiles carried 56 real pixels — in the one row whose whole job was to demonstrate a '+
-  'failure.'+
-  '<br><br><b>So the accompanying image is the opposite of that.</b> The floor row is rendered at '+
-  'deviceScaleFactor 1 — literally what a 1× display gets — and the resulting BITMAP is magnified with '+
-  'smoothing off. What you are looking at there is the rounding your screen actually performs: whether '+
-  '0.23 and 0.24 land on the same 7px of type or on different ones. At this step that rounding is the '+
-  'entire difference, and it is the only version of this question that has an answer.'+
-  '<br><br><b>0.25 is a quarter</b>, the one round number in the band, and it is the midpoint. If the '+
-  'magnified row reads flat, that is where this lands.'
+ lede: '<b>0.25 — a quarter, and the crossover in the magnified raster.</b> It is the largest move any '+
+  'value in this series has made: the carried 0.36 is nearly half again as big.'+
+  '<br><br><b>This is the last parameter, and it is the only one in the set with a floor that can be '+
+  'measured rather than judged.</b> An opacity has a contrast ratio — the roman is one ink on one ground, '+
+  'so the effective colour is a straight composite and the WCAG figure follows. Every caption prints it, '+
+  'and anything under 4.5:1 is flagged in the same red as a rejection. `docs/DESIGN.md` floors contrast '+
+  'at 7:1 for the Fulfiller’s screen and <b>nothing had ever measured it here</b>.'+
+  '<br><br><b>That measurement does not decide the value, and it should not.</b> A wordmark is not body '+
+  'text and 4.5:1 is not a law here — but a number the eye cannot supply belongs on the sheet beside the '+
+  'thing the eye can. The roman at 0.25 of the kanji is 8px at the floor, which is where a thin ink stops '+
+  'being restraint and starts being a rendering problem.'+
+  '<br><br><b>Both ends are meant to fail.</b> At 0.35 the roman is a watermark; at 1.00 it stops '+
+  'deferring to the kanji and the lockup reads as two words of equal weight rather than a name and its '+
+  'romanisation.'
 }
 
 const o=document.getElementById('out')
@@ -257,6 +257,19 @@ document.fonts.ready.then(function(){
    + (SWEPT!=='pad' ? '<br><span style="color:#b6bcc5">pad '+(r.size*ROUND.holds.pad).toFixed(1)+'px, held</span>' : '')
    /* the SOLVED tracking, on the rounds that touch the roman -- it is the number that reached the
       drawing, and the seed beside it in `holds` is not */
+   /* AN OPACITY HAS A CONTRAST RATIO, and it is the one thing about this variable that is not a
+      matter of taste. The roman is one ink on one ground, so the effective colour is a straight
+      composite and the WCAG ratio follows from it. Printed because `docs/DESIGN.md` floors
+      contrast elsewhere in this product at 7:1 and nothing had ever measured it here. */
+   + (SWEPT==='romanOpacity' ? (function(){
+       const a=r.v, L=function(c){c/=255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+       const mix=function(f,b){return f*a+b*(1-a)}
+       const rr=mix(0x0f,255), gg=mix(0x12,255), bb=mix(0x17,255)
+       const lum=0.2126*L(rr)+0.7152*L(gg)+0.0722*L(bb)
+       const ratio=(1.05)/(lum+0.05)
+       const col = ratio<4.5 ? '#c2410c' : '#6b7280'
+       return '<br><span style="color:'+col+'">contrast '+ratio.toFixed(1)+':1'+(ratio<4.5?' — under 4.5':'')+'</span>'
+     })() : '')
    + (SWEPT.indexOf('roman')===0
       ? '<br><span style="color:#6b7280">roman '+r.lk.dataset.romanW+'px of '+r.lk.dataset.kanjiW+'px</span>'
       + '<br><span style="color:'+(+r.lk.dataset.romanTrackSolved<0?'#c2410c':'#b6bcc5')+'">tracking '
