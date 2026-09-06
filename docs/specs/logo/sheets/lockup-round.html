@@ -22,34 +22,27 @@
  svg,img{display:block}
 </style>
 <div class="wrap">
-<h1>the lockup — round 5 · the forced pair, and the tiebreak is a measurement</h1>
+<h1>the lockup — round 6 · the corner radius, unpinned at last</h1>
 <div class="sub">
-<b>The sweep has converged.</b> R1 0.045&ndash;0.085 &rarr; R2 0.026&ndash;0.045 &rarr; R3
-0.036&ndash;0.045 &rarr; R4 <b>0.045 and 0.050</b>. Both are interior this time &mdash; 0.036 and 0.040
-below them, 0.056 above &mdash; so the range was finally right and there is nothing left to widen.
+<b>The stroke is settled at 0.050</b> and is held fixed from here. This round moves the corner radius,
+which has been pinned since round 1 so the stroke could move alone.
 <br><br>
-<b>They are 0.005 apart, which is a fifth of a pixel at kanji 40.</b> Another bisection would offer 0.047
-at a tenth of a pixel, and &sect;7 rule 7 calls that noise dressed as diligence. So this is a forced pair
-at a size where half a pixel is actually visible, and not another round.
+<b>What you have been looking at is not the rule.</b> The recovered code sets the radius at
+<code>1.85 &times; stroke</code>. It was pinned at <code>1.85 &times; 0.110</code> &mdash; the old
+stroke&rsquo;s value &mdash; and at the settled stroke that works out to <b>4.07 &times;</b>. So every
+specimen across five rounds carried a corner more than twice what the rule gives. The radius is not
+merely unswept; as it stands it is wrong.
 <br><br>
-<b>The tiebreak is not taste.</b> The stroke is a fraction of the kanji size, so it shrinks with the
-lockup, and the two differ in exactly where the bracket stops being a whole pixel:
+<b>Both ends are meant to fail.</b> At 1.0&times; the corner is barely a corner and the bracket reads as a
+square angle; at 7.0&times; the arc eats the straight arms and there is nothing left to read as an arm.
+&sect;5 already records this trade for the icon &mdash; the derived 9.945 radius <i>&ldquo;ate the straight
+arm&rdquo;</i> and 8 was taken instead <i>&ldquo;to give the arms visible length&rdquo;</i>.
 <br><br>
-<table style="border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:8px">
-<tr><th style="padding:4px 12px;text-align:left;color:#8b93a0">stroke</th><th style="padding:4px 12px">kanji 96</th><th style="padding:4px 12px">kanji 40</th><th style="padding:4px 12px">kanji 26</th><th style="padding:4px 12px">kanji 22</th><th style="padding:4px 12px">kanji 20</th><th style="padding:4px 12px;color:#c2410c">1px at kanji</th></tr>
-<tr><td style="padding:4px 12px">0.045</td><td style="padding:4px 12px;text-align:right">4.32</td><td style="padding:4px 12px;text-align:right">1.80</td><td style="padding:4px 12px;text-align:right">1.17</td><td style="padding:4px 12px;text-align:right;color:#c2410c">0.99</td><td style="padding:4px 12px;text-align:right;color:#c2410c">0.90</td><td style="padding:4px 12px;text-align:right;color:#c2410c">22.2</td></tr>
-<tr><td style="padding:4px 12px">0.050</td><td style="padding:4px 12px;text-align:right">4.80</td><td style="padding:4px 12px;text-align:right">2.00</td><td style="padding:4px 12px;text-align:right">1.30</td><td style="padding:4px 12px;text-align:right">1.10</td><td style="padding:4px 12px;text-align:right">1.00</td><td style="padding:4px 12px;text-align:right">20.0</td></tr>
-</table>
-<br>
-<b>0.050 holds a whole pixel down to kanji 20; 0.045 gives out at 22.</b> That is a small difference and it
-is the only one that is not a matter of preference, so unless your eye prefers 0.045 at the big size, the
-recommendation is <b>0.050</b>.
+<b>The radius is capped at half the shorter side, and the cap is printed.</b> The taper clamp already
+taught this sheet that a bound which binds silently turns a sweep into a row of identical specimens.
 <br><br>
-<b>One thing you are NOT looking at yet.</b> The corner radius has been pinned all sweep at
-<code>1.85 &times; 0.110</code> &mdash; the OLD stroke&rsquo;s value &mdash; so it could stay still while the
-stroke moved. Restoring the coupled rule at 0.050 would shrink it by more than half. Every specimen here
-still carries the old, oversized corner; that is the next round and it will change the shape more than the
-last two rounds did.
+<b>Same holds:</b> pad 0.22, gap 0.06, roman 0.36&times; width-matched, caps, kanji tracking 0.07em, roman
+at 62% opacity, arm 0.32, stroke 0.050, tail tip 0.07, ramp 0.45.
 </div>
 <div id="out"></div></div>
 <script>
@@ -103,7 +96,10 @@ function frame(el, opt){
  /* The radius normally follows the stroke (1.85x), which is what keeps the bracket self-similar at
     any weight. `rrAbs` pins it instead, so a STROKE sweep moves one thing rather than two --
     section 7 rule 6. Nothing but a sweep should pass it. */
- const rr=Math.min(opt.rrAbs===undefined ? sw*1.85 : opt.rrAbs, Math.min(W,H)/2-.1)
+ const rrWant = opt.rrAbs!==undefined ? opt.rrAbs : sw*(opt.rrMul===undefined ? 1.85 : opt.rrMul)
+ const rrCap  = Math.min(W,H)/2-.1
+ const rr=Math.min(rrWant, rrCap)
+ el.dataset.rr = rr.toFixed(2) + (rr < rrWant-1e-6 ? ' CLAMPED from '+rrWant.toFixed(2) : '')
  const aX=Math.max(W*arm, rr+2), aY=Math.max(H*arm, rr+2)
  let body
  if(opt.tails===false){
@@ -125,6 +121,7 @@ function frame(el, opt){
   body=one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g>'
  }
  el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+body+'</svg>')
+ el.dataset.geom = body.length + ':' + body.slice(0, 400)   /* a fingerprint of what was actually drawn */
  return h}
 
 
@@ -148,8 +145,9 @@ function kanjiStem(size){
 }
 
 const HOLD = {pad:0.22, gap:0.06, tip:0.07, tl:0.45, arm:0.32}
-const VALUES = [0.045, 0.050]        /* the forced pair — section 7 rule 1 */
-const REJECTED = [0.040, 0.056]      /* the nearest loser on each side, re-shown */
+const STROKE = 0.050                 /* settled, round 5 */
+const VALUES = [1.0, 1.85, 2.8, 4.07, 5.5, 7.0]   /* multiples of the stroke */
+const REJECTED = []
 const KEPT = []
 const INCUMBENT = null
 
@@ -162,7 +160,8 @@ function row(size, dark){
   c.appendChild(lk)
   const kept = KEPT.indexOf(v) >= 0
   const cap=el('div','cap'+(kept?' was':''))
-  cap.textContent=v.toFixed(3)+(v===0.050?' — holds 1px to kanji 20':' — gives out at kanji 22')
+  cap.textContent=v.toFixed(2)+'\u00d7'
+   + (v===1.85?' — the recovered rule':'') + (v===4.07?' — what you have been seeing':'')
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
   s.appendChild(c); made.push([lk,v,num,size])})
@@ -180,8 +179,8 @@ o.appendChild(el('h2',null,'kanji 22 on the app’s own dark page — a light st
 const B=row(22,true)
 
 /* the two that were offered and lost, re-shown so the pick is a choice rather than a default */
-o.appendChild(el('h2',null,'re-shown — the two this band already rejected'))
-const R=(function(){
+const R=(function(){ if(!REJECTED.length) return []
+ o.appendChild(el('h2',null,'re-shown'))
  const s2=el('div','strip'); const made=[]
  REJECTED.forEach(function(v){
   const c=el('div','cell')
@@ -192,18 +191,38 @@ const R=(function(){
   s2.appendChild(c); made.push([lk,v,num,40])})
  o.appendChild(s2); return made})()
 
+/* A SWEEP WHOSE SPECIMENS ARE IDENTICAL IS NOT A SWEEP, and this file has now come within one
+   render of shipping one twice -- once when the taper ramp clamped, and once when `frame()` in this
+   copy did not know the option the round was sweeping and silently drew the same bracket six times.
+   Section 6 records the original: "three images approved as different were the same image." So the
+   drawn geometry is fingerprinted and any two specimens in a row that match are called out ON the
+   sheet, where they cannot be missed, rather than left for the eye to catch. */
+function assertDistinct(group, label){
+ const seen={}, dupes=[]
+ group.forEach(function(r){
+  const g=r[0].dataset.geom||''
+  if(seen[g]!==undefined) dupes.push(seen[g]+' and '+r[1]); else seen[g]=r[1]})
+ if(dupes.length){
+  const w=el('div','sub')
+  w.style.cssText='background:#fee2e2;border:2px solid #c2410c;border-radius:10px;padding:10px 14px;color:#7f1d1d;font-weight:600'
+  w.innerHTML='&#9888; '+label+': identical specimens drawn for '+dupes.join(', ')
+   +' &mdash; this row is not a sweep. The variable being swept is not reaching the drawing.'
+  o.insertBefore(w, o.firstChild)}
+}
+
 document.fonts.ready.then(function(){
  const stem={96:kanjiStem(96), 40:kanjiStem(40), 22:kanjiStem(22)}
  ;[Z,A,C,B,R].forEach(function(g){ g.forEach(function(r){
   const lk=r[0], v=r[1], num=r[2], size=r[3]
   /* radius still pinned, at the same absolute value round 1 used, so the two rounds are comparable */
-  frame(lk, {stroke:v, arm:HOLD.arm, tip:HOLD.tip, tl:HOLD.tl, rrAbs:size*0.110*1.85})
-  const st = stem[size]
-  const px = size*v
-  num.innerHTML = px.toFixed(2)+'px<br><span style="color:#6b7280">'
-   + (st ? (px/st).toFixed(2)+'\u00d7 stem' : '')
-   + (px < 1 ? ' &middot; <span style="color:#c2410c">sub-pixel</span>' : '') + '</span>'
+  frame(lk, {stroke:STROKE, arm:HOLD.arm, tip:HOLD.tip, tl:HOLD.tl, rrMul:v})
+  const rr = lk.dataset.rr || ''
+  num.innerHTML = 'radius '+rr.split(' ')[0]+'px<br><span style="color:'
+   + (rr.indexOf('CLAMPED')>=0?'#c2410c':'#6b7280')+'">'
+   + (rr.indexOf('CLAMPED')>=0 ? rr.slice(rr.indexOf('CLAMPED')) : 'stroke '+(size*STROKE).toFixed(2)+'px')
+   + '</span>'
  })})
+ assertDistinct(Z, 'kanji 96'); assertDistinct(A, 'kanji 40'); assertDistinct(C, 'kanji 22')
  window.__sheetReady = true
 })
 </script>
