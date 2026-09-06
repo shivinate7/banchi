@@ -68,6 +68,10 @@ const importPress = (page: Page) => page.getByRole('button', { name: /Write the 
 /** Both consoles are `LogWell`s and carry this class; the survey's is the first. */
 const consoles = (page: Page) => page.locator('.runs-md-console')
 
+/** Markdowns this store has already written, for the cases about the history list. Default is
+ *  empty, which is what every case written before D103 assumed. */
+let HISTORY: unknown[] = []
+
 async function stub(page: Page): Promise<Wire[]> {
   const wire: Wire[] = []
   await page.route(/\/pipeline\/markdowns$/, async (route) => {
@@ -75,7 +79,7 @@ async function stub(page: Page): Promise<Wire[]> {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ markdowns: [] }),
+        body: JSON.stringify({ markdowns: HISTORY }),
       })
       return
     }
@@ -95,7 +99,10 @@ async function stub(page: Page): Promise<Wire[]> {
   })
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     const body = route.request().postDataJSON()
-    wire.push({ path: '/apply', body })
+    /* THE STAMP IS IN THE PATH AND NOWHERE ELSE, so the record keeps it. A hand-back judged
+       against another markdown's manifest is the failure D103's resume exists to prevent, and
+       a record that flattened this to `/apply` could not tell the two apart. */
+    wire.push({ path: new URL(route.request().url()).pathname, body })
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -123,9 +130,56 @@ async function stub(page: Page): Promise<Wire[]> {
 
 async function open(page: Page): Promise<Wire[]> {
   const wire = await stub(page)
+  await stubTheLens(page)
   await opener(page).click()
   await expect(sheet(page)).toBeVisible()
   return wire
+}
+
+/** What `#/pricing?markdown=<stamp>` reads on arrival — the destination of this sheet's own
+ *  door (D103).
+ *
+ *  STUBBED HERE RATHER THAN THE DOOR CASE ASSERTING LESS. `shell.ts`'s seal records every
+ *  unstubbed read and fails the test that made it, which is exactly right: pressing a button
+ *  that leaves for a screen is a claim about where it lands, and a case that stopped at "the
+ *  button exists" would not catch a door wired to the wrong stamp — the one failure that would
+ *  open somebody else's survey.
+ *
+ *  DELIBERATELY THIN. This file is about the sheet; `pricing-markdown.spec.ts` owns what the
+ *  lens draws. All these have to do is let the destination mount without leaking. */
+async function stubTheLens(page: Page) {
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/table$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        stamp: STAMP,
+        at: '2026-09-06T00:00:00.000+00:00',
+        asked: {},
+        counts: { considered: 0, offered: 0, deferred: 0, refused: 0 },
+        source: {},
+        skus: [],
+        says: {},
+        unpriceable: [],
+        floor: '0.40',
+      }),
+    }),
+  )
+  await page.route(/\/pricing$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: {
+          version: 1,
+          policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' }, threshold: '0.49' },
+          skus: {},
+        },
+        path: '/tmp/prices.json',
+        revision: 'rev-1',
+      }),
+    }),
+  )
 }
 
 async function pickExport(page: Page) {
@@ -249,6 +303,21 @@ test('the worklist press sends the same bytes the preview read', async ({ page }
   /* AND THE FILE IS OFFERED, because a worklist the operator cannot open is not a worklist.
      `CLAUDE.md`'s hard rule ends at the thing a human can reach. */
   await expect(page.getByRole('link', { name: 'worklist.csv' })).toBeVisible()
+
+  /* AND SO IS THE LENS, WHICH IS THE PRESS THE OWNER ACTUALLY ASKED FOR (D103). It shipped for
+     a day reachable ONLY by typing `#/pricing?markdown=<stamp>` into the address bar — every
+     mechanical check green over a screen no human could open, which is `docs/GATES.md` step 7
+     verbatim and the reason CLAUDE.md's hard rule is a rule rather than a check.
+
+     THE HASH IS ASSERTED AND NOT JUST THE BUTTON, because a control that navigates to the
+     wrong stamp is worse than none: it would open somebody else's survey. */
+  const toLens = page.getByRole('button', { name: 'Price these on the pricing screen' })
+  await expect(toLens).toBeVisible()
+  await toLens.click()
+  await expect.poll(() => new URL(page.url()).hash).toBe(`#/pricing?markdown=${STAMP}`)
+  /* AND THE SHEET CLOSES ON THE WAY OUT. A modal left standing over the screen it just sent
+     the operator to is a scrim between them and the rows they came to price. */
+  await expect(sheet(page)).toHaveCount(0)
 })
 
 test('the upload step appears only after a worklist exists, and previews before it writes', async ({
@@ -268,7 +337,7 @@ test('the upload step appears only after a worklist exists, and previews before 
   await expect(importPress(page)).toHaveCount(0)
   await checkPress(page).click()
   await expect.poll(() => wire.length).toBe(3)
-  expect(wire[2]?.path).toBe('/apply')
+  expect(wire[2]?.path).toContain('/apply')
   expect(wire[2]?.body.write).toBe(false)
 
   /* AND ONLY THEN THE PRESS THAT WRITES THE FILE THAT GOES TO TCGPLAYER. */
@@ -291,7 +360,7 @@ test('an edited worklist handed back is what the apply is asked about', async ({
   /* SENDING NO `worklist` MEANS "the one you wrote"; sending one means this one. Both are
      real flows and the difference is one field, so the field is asserted rather than assumed
      — and picking it previews, exactly as picking the export does. */
-  expect(wire[2]?.path).toBe('/apply')
+  expect(wire[2]?.path).toContain('/apply')
   expect(wire[2]?.body.write).toBe(false)
   expect((wire[2]?.body.worklist as { name?: string } | undefined)?.name).toBe('worklist.csv')
 })
@@ -453,7 +522,7 @@ test('a write that comes back refused also keeps the press that runs it again', 
   let refuse = false
   await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
     const body = route.request().postDataJSON()
-    wire.push({ path: '/apply', body })
+    wire.push({ path: new URL(route.request().url()).pathname, body })
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -501,3 +570,79 @@ test('both consoles refuse to shrink, not just the one that is a direct child', 
   for (const well of wells) expect(well.shrink).toBe('0')
 })
 
+/* A MARKDOWN IS DURABLE STATE, AND THE SHEET'S OWN FLOW LEAVES THE MACHINE IN THE MIDDLE OF IT.
+ *
+ * Step 2 hands the operator a CSV to edit in a spreadsheet. Nothing says that finishes today —
+ * and until D103 the only way back in was to re-pick the export and survey again, which mints a
+ * NEW stamp. The file they had spent an evening editing would then be judged against a manifest
+ * that was not its own. The history list drew that worklist as a download, beside a sheet that
+ * could not take it back. */
+test('a markdown written on an earlier day can be handed back, at the step it was left at', async ({
+  page,
+}) => {
+  HISTORY = [
+    {
+      stamp: '20260901-120000',
+      at: '2026-09-01T12:00:00.000+00:00',
+      asked: { days: 7, rule: 'undercut:10', above_market: null, limit: 40 },
+      source: '/tmp/my-pricing.csv',
+      skus: 12,
+      files: ['manifest.json', 'report.txt', 'survey.json', 'worklist.csv'],
+    },
+  ]
+  const wire = await open(page)
+  await expect(page.locator('.runs-md-history-row')).toHaveCount(1)
+
+  /* WHAT IT ASKED FOR, so two markdowns are not two identical rows. Both fields were already on
+     the wire and drawn nowhere: the operator could see THAT they had run four surveys and
+     nothing about which was which. */
+  await expect(page.locator('.runs-md-history-asked')).toContainText('7 days')
+  await expect(page.locator('.runs-md-history-asked')).toContainText('10% off')
+  await expect(page.locator('.runs-md-history-asked')).toContainText('top 40')
+
+  /* AND THE REPORT IS OFFERED. It has been written by every `--write` since D100 and dropped by
+     this list's own filter — the one artefact that says WHY a row is in the worklist, and states
+     the ownership-age substitution the whole window rests on. */
+  await expect(page.getByRole('link', { name: 'report.txt' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Hand it back' }).click()
+
+  /* IT LANDS AT STEP 3, not at step 1. The upload control is the one for the worklist, and no
+     survey console is drawn — nothing above it describes a sitting that already ended. */
+  await expect(page.getByRole('button', { name: /^Check it$/ })).toBeVisible()
+  await expect(consoles(page)).toHaveCount(0)
+
+  /* AND THE PRESS GOES TO THAT STAMP. A hand-back judged against another markdown's manifest is
+     the exact failure re-surveying caused, so this is the assertion the whole case exists for. */
+  await page.locator('.runs-md .runs-filebtn input[type=file]').setInputFiles({
+    name: 'worklist.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('TCGplayer Id,TCG Marketplace Price\n8936515,1.50\n'),
+  })
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  expect(wire.find((row) => row.path.includes('/apply'))?.path).toContain('20260901-120000')
+
+  HISTORY = []
+})
+
+/* A MARKDOWN THAT PREDATES THE LENS HAS NO SURVEY, and an offer that leads to a refusal is
+ * worse than no offer: `GET .../table` answers `survey_not_written` for it. */
+test('a markdown with no survey offers its files and not the lens', async ({ page }) => {
+  HISTORY = [
+    {
+      stamp: '20260830-090000',
+      at: '2026-08-30T09:00:00.000+00:00',
+      asked: { days: 7, rule: 'undercut:10' },
+      source: '/tmp/old.csv',
+      skus: 3,
+      files: ['manifest.json', 'report.txt', 'worklist.csv'],
+    },
+  ]
+  await open(page)
+  await expect(page.locator('.runs-md-history-row')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Price these' })).toHaveCount(0)
+  /* But it can still be handed back — the manifest is what `apply` judges against, and that
+     predates the lens too. */
+  await expect(page.getByRole('button', { name: 'Hand it back' })).toBeVisible()
+  HISTORY = []
+})

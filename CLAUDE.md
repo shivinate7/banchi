@@ -222,7 +222,9 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   UI a run is priced in — charts, presets, holds, the
                                    #   keyboard walk. `--write` writes that directory even when
                                    #   the rule proposes nothing, because the lens is reached BY
-                                   #   a stamp.
+                                   #   a stamp. TWO DOORS REACH IT and neither is a URL you type:
+                                   #   the worklist step's primary press, and a `Price these`
+                                   #   button on every history row that has a survey.
 ```
 
 ## The front end
