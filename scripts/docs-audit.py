@@ -6911,8 +6911,54 @@ def check_logo_parity(report: Report) -> None:
 
 
 LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
+SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
+MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
 
 _LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
+
+
+def check_rail_mark(report: Report) -> None:
+    """The sidebar mockup's rail bracket is the mark the app actually ships.
+
+    IT WAS AN INVENTION, and drew four things wrong at once — stroke 11.0 against the mark's
+    4.2, radius 14.6 against 8, an inset of 5.5 against 22.6, and a taper §11 had removed from
+    the small cut on a measurement. It had been re-derived from the DISPLAY cut's unit rescaled
+    into the wrong box, in the one sheet the sidebar's size is decided from.
+
+    The fix copies two constants out of the generated file, which is itself the defect this
+    project keeps finding — a value typed a second time. So this row reconciles them. Provably
+    wrong when it fires: both sides are literals.
+    """
+    if not exists(SIDEBAR_MORPH) or not exists(MARK_GEOMETRY):
+        return
+    sheet, gen = read(SIDEBAR_MORPH), read(MARK_GEOMETRY)
+    want_path = re.search(r"SMALL_BRACKET = '([^']+)'", gen)
+    want_stroke = re.search(r"SMALL_STROKE = ([\d.]+)", gen)
+    got_path = re.search(r"MARK_SMALL_BRACKET = '([^']+)'", sheet)
+    got_stroke = re.search(r"MARK_SMALL_STROKE = ([\d.]+)", sheet)
+    if not (want_path and want_stroke):
+        report.add("rail mark", MECHANICAL, [Finding(
+            rel(MARK_GEOMETRY),
+            "SMALL_BRACKET or SMALL_STROKE is gone from the generated mark. The sidebar mockup "
+            "copies both; with them missing this row compares nothing, which is worse than failing.",
+        )], "")
+        return
+    problems = []
+    if not got_path or got_path.group(1) != want_path.group(1):
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            "the rail's bracket path is not the mark's. `markGeometry.ts` is generated from "
+            "`small-cut.html` and is what every surface below 64px draws (D102); a sheet that "
+            "re-derives it is drawing a mark the product does not contain.",
+        ))
+    if not got_stroke or abs(float(got_stroke.group(1)) - float(want_stroke.group(1))) > 1e-9:
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            f"the rail's stroke is {got_stroke.group(1) if got_stroke else 'absent'} and the "
+            f"mark's is {want_stroke.group(1)}.",
+        ))
+    report.add("rail mark", MECHANICAL, problems,
+               "the rail bracket is the shipped mark, path and stroke")
 
 
 def check_lockup_params(report: Report) -> None:
@@ -10123,6 +10169,7 @@ def audit(staged_only: bool) -> Report:
     check_motion_params(report)
     check_logo_parity(report)
     check_lockup_params(report)
+    check_rail_mark(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)
