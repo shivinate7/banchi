@@ -54,19 +54,19 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 33,
- title: 'the roman’s opacity, downward — because 0.35 was my floor and you kept it',
+ n: 34,
+ title: 'the permissible opacities — against this product’s own floor for a word, not against WCAG',
  sweeping: 'romanOpacity',
  unit: ' of the ink',
- values: [0.20, 0.27, 0.35, 0.45, 0.58],
- notes: {0.20:'about 1.5:1 — the roman is barely on the page',
-         0.35:'my low end last round, and inside your band'},
- rejected: {0.78:'out above — round 32', 1.00:'the roman stopped deferring — round 32'},
+ values: [0.35, 0.40, 0.45, 0.50],
+ notes: {0.45:'clears the floor on DARK (4.09:1 against ink-4’s 4.0) — under it on light',
+         0.50:'clears on BOTH — and it is outside the band you kept'},
+ rejected: {0.27:'1.84:1 on light — the word never reaches a mid grey', 0.58:'out above — round 32'},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
          romanFill:0.75, romanSize:0.25, romanTrack:0.14, tails:true},
  sizes: [48, 32],
  dark: true,
- context: [0.20, 0.27, 0.35, 0.45],
+ context: [0.35, 0.40, 0.45, 0.50],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -78,20 +78,21 @@ const ROUND = {
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
   ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
-  ['32', 'roman opacity', '0.35 – 1.00', '0.35 – 0.62', 'the LOW end was not bracketed'],
+  ['32–33', 'roman opacity', '0.20 – 1.00', '0.27 – 0.45 open', 'both grounds drawn'],
  ],
- lede: '<b>0.35 was the lightest ink I offered and you kept it, so nothing below it has been tested.</b> '+
-  'Rule 5, for the fourth time. This round runs down to <b>0.20</b> — about 1.5:1, where the roman is '+
-  'barely on the page.'+
-  '<br><br><b>Your band runs 2.3:1 to 5.3:1, and this product floors contrast at 7:1 elsewhere.</b> Said '+
-  'once and not argued: that floor is `docs/DESIGN.md`’s, it is written for the Fulfiller reading card '+
-  'numbers at arm’s length, and a romanisation sitting under a kanji it repeats is not that. The figure '+
-  'is on every caption so the choice is informed rather than made for you.'+
-  '<br><br><b>The magnified row is the one to look at, and it is what a thin ink actually costs.</b> At '+
-  'the floor size the roman is 8px, and 8px of light grey is not a lighter version of 8px of dark grey — '+
-  'it is the same letterforms with fewer pixels carrying them, because antialiasing spends its range on '+
-  'the difference between ink and ground. The stems of B, N and H either survive that or they do not, and '+
-  'nothing but a true-pixel raster will tell you which.'
+ lede: '<b>WCAG supplies no bar here — it exempts logotypes from contrast minimums outright.</b> So the '+
+  'floor comes from this product instead. `tokens.css`’s faintest ink, `--bn-ink-4`, carries its own '+
+  'note: <i>“this is the floor a word may sit at, never a caption.”</i> BANCHI is a word.'+
+  '<br><br><b>That floor lands at alpha 0.50 on light and 0.45 on dark</b>, solved per channel against '+
+  'the panel each sits on — #ffffff and #14171c. The asymmetry is the same one round 33 measured: the '+
+  'same alpha carries more contrast on the dark ground.'+
+  '<br><br><b>So out of the band you kept, the permissible set is exactly one value, and only on one '+
+  'ground.</b> 0.45 reads 4.09:1 on dark against ink-4’s 4.0, and 3.02:1 on light against a floor of '+
+  '3.6. 0.40 is under on both — 2.61:1 and 3.50:1. Nothing below 0.45 clears anywhere.'+
+  '<br><br><b>0.50 is drawn although it is outside your band, and that is deliberate.</b> It is the '+
+  'first value that clears on BOTH grounds, so it is the only one that lets the lockup carry one number '+
+  'rather than two. Showing it is not a re-opening — if you dislike it, 0.45 with the light theme under '+
+  'the floor is a legitimate call for a logotype, and the note above says why.'
 }
 
 const o=document.getElementById('out')
