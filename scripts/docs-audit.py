@@ -6751,6 +6751,84 @@ def check_logo_parity(report: Report) -> None:
                if not findings else f"{len(findings)} disagreements with section 9")
 
 
+
+LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
+
+_LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
+
+
+def check_lockup_params(report: Report) -> None:
+    """The lockup sheet's declared holds and docs/specs/logo.md's settled table agree.
+
+    A PARAMETER SETTLED IN A ROUND AND THEN TYPED A SECOND TIME IS HOW THAT SHEET ALREADY WENT
+    WRONG, twice, in the same row: a hand-written caption said a value had been rejected in a
+    round it had not been. The sheet fixed its own half by deriving every label from one
+    `ROUND` object. This row is the other half — the object and the spec are two copies of the
+    same decision, and nothing was comparing them.
+
+    The sheet asserts, on every render, that the values it DECLARES as held were the values it
+    actually DREW. That is a different claim from this one and neither covers the other: the
+    sheet cannot see the spec, and this row cannot see a drawing.
+
+    Provably wrong when it fires — both sides are literals.
+    """
+    if not exists(LOGO_SPEC) or not exists(LOCKUP_ROUND):
+        return
+
+    spec_section = read(LOGO_SPEC)
+    marker = "### The settled values, and the one place they live"
+    if marker not in spec_section:
+        report.add("lockup params", MECHANICAL, [Finding(
+            rel(LOGO_SPEC),
+            "the settled-values table is gone. This row compares it against the sheet's holds; "
+            "with it missing the row is not comparing anything, which is worse than failing.",
+        )], "")
+        return
+    tail = spec_section[spec_section.index(marker):]
+    tail = tail[: tail.index("\n### ", 10)] if "\n### " in tail[10:] else tail
+    published = {k: float(v) for k, v in _LOCKUP_SPEC_ROW.findall(tail)}
+
+    block = re.search(r"holds:\s*\{([^}]*)\}", read(LOCKUP_ROUND))
+    if block is None or not published:
+        report.add("lockup params", MECHANICAL, [Finding(
+            rel(LOCKUP_ROUND),
+            "no `holds: {...}` in the round sheet, or no rows in the spec table. Say so here "
+            "rather than passing.",
+        )], "")
+        return
+    declared = {
+        k: float(v)
+        for k, v in re.findall(r"(\w+)\s*:\s*([0-9.]+)", block.group(1))
+    }
+
+    findings: List[Finding] = []
+    for key in sorted(set(published) - set(declared)):
+        findings.append(Finding(
+            rel(LOCKUP_ROUND),
+            f"docs/specs/logo.md settles `{key}` at {published[key]} and the sheet does not hold "
+            f"it. A settled parameter the sheet does not pin is one the next round can move "
+            f"without anybody noticing.",
+        ))
+    for key in sorted(set(declared) - set(published)):
+        findings.append(Finding(
+            rel(LOGO_SPEC),
+            f"the sheet holds `{key}` at {declared[key]} and the settled table does not list it. "
+            f"Every value a round holds fixed is a decision, even an inherited one.",
+        ))
+    for key in sorted(set(declared) & set(published)):
+        if abs(declared[key] - published[key]) > 1e-9:
+            findings.append(Finding(
+                f"{rel(LOCKUP_ROUND)} -> {key}",
+                f"held at {declared[key]} in the sheet and settled at {published[key]} in "
+                f"docs/specs/logo.md. The spec is the store of record; move the sheet, or move "
+                f"the spec first and say which round moved it.",
+            ))
+
+    report.add("lockup params", MECHANICAL, findings,
+               f"{len(published)} settled values against the sheet's holds"
+               if not findings else f"{len(findings)} disagreements")
+
+
 # ------------------------------------------------------------------ views opsec (D24)
 
 VIEWS_MANIFEST = ROOT / "scripts" / "views.txt"
@@ -9643,6 +9721,7 @@ def audit(staged_only: bool) -> Report:
     check_supervisor_self_watch(report)
     check_motion_params(report)
     check_logo_parity(report)
+    check_lockup_params(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)

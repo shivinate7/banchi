@@ -770,6 +770,26 @@ Recovered from the generator rather than from memory:
 roman read as subordinate at a size that would otherwise compete, and it was recovered from the
 generator; nobody had written it down.
 
+### The settled values, and the one place they live
+
+**This table is the store of record for the lockup's parameters, and `make docs-audit`'s
+`lockup params` row reconciles it against `sheets/lockup-round.html`'s declared holds in both
+directions.** A value settled in a round and then typed a second time somewhere else is how the
+two caption bugs in that sheet happened, twice, in the same row.
+
+| key | value | settled |
+| --- | --- | --- |
+| `pad` | 0.22 | carried from the recovered pass |
+| `gap` | 0.06 | carried from the recovered pass |
+| `stroke` | 0.050 | rounds 1–5 |
+| `arm` | 0.32 | carried; §3's lockup row |
+| `tip` | 0.07 | not yet swept |
+| `tl` | 0.45 | not yet swept |
+
+**A key in this table is not the same as a key that has been argued.** `tip` and `tl` are here
+because the sheet holds them, not because anyone chose them — they are the next two rounds, and
+the column says so.
+
 ### The stroke, settled over five rounds
 
 **`0.11` was the recovered value and it is wrong once the bracket is tapered.** The owner's first
