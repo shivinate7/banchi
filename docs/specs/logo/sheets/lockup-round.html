@@ -42,32 +42,31 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 12,
- title: 'the tail, out to the geometric ceiling',
- sweeping: 'tl',
- unit: ' of the arm',
- values: [0.38, 0.49, 0.60, 0.70, 0.80],
- notes: {0.80:'the largest that still draws something new'},
- rejected: {0.15:'a nick at the tip — eliminated', 0.30:'eliminated'},
- holds: {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tip:0.07, tails:true},
+ n: 13,
+ title: 'the tip — how wide the tail ends',
+ sweeping: 'tip',
+ unit: ' of the stroke',
+ values: [0, 0.07, 0.15, 0.25, 0.40],
+ notes: {0:'a true point', 0.07:'what everything so far was drawn at', 0.40:'nearly untapered'},
+ rejected: {},
+ holds: {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tails:true},
  sizes: [96, 40, 22],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050', 'settled; rule 5 fired twice'],
-  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND, measured at under 1.4% per pixel'],
-  ['11', 'tail ramp', '0.15 – 0.75', 'above 0.30 – 0.75', 'reached my ceiling'],
+  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND, measured'],
+  ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'settled; the clamp measured at 0.82'],
  ],
- lede: '<b>0.75 landed on my top edge — rule 5 for the fourth time in this sweep — but this is the one '+
-  'round where the edge turns out to be real.</b> §6 records that the taper routine clamps the ramp at '+
-  'half the path length, and that above the clamp <i>“every value rendered identically while being '+
-  'presented as a sweep.”</i> That entry never says where the clamp is. <b>Measured on this geometry: '+
-  'it binds at 0.82.</b> 0.80 is the largest fraction that still draws something new; from 0.82 up, every '+
-  'value is the same bracket at ramp 63.0px.'+
-  '<br><br><b>So this round spans the entire remaining possibility.</b> There is no opening upward to be '+
-  'done, because there is nothing above — and 0.82 is not a value I chose, it is where the arm runs out '+
-  'of room. At that setting the taper runs from the tip to the midpoint of both arms and the bracket has '+
-  'no constant-width section left at all.'+
-  '<br><br><b>What to look for:</b> where the bracket stops reading as a wire with tapered ends and '+
-  'starts reading as a crescent — a shape whose width is its subject rather than its finish.'
+ lede: '<b>The ramp is settled at 0.70 and held.</b> This round is the last parameter of the bracket '+
+  'itself: how wide the tail is where it ends, as a fraction of the stroke.'+
+  '<br><br><b>A measurement that reframes the round.</b> Everything in this whole sweep has been drawn '+
+  'at tip 0.07 — and 0.07 of the stroke is <b>sub-pixel at every size the lockup is ever drawn</b>: '+
+  '0.34px at kanji 96, 0.14px at kanji 40, 0.08px at kanji 22. The tail has effectively been ending in '+
+  'a point this entire time, and the difference between 0.07 and a true 0 has never been visible on any '+
+  'sheet you have seen. So the real question is not whether 0.07 is right; it is <b>whether the tail '+
+  'should end in a point at all, or in a width you can see.</b>'+
+  '<br><br><b>Both ends are meant to fail.</b> 0 is a mathematical point — a taper to nothing, which can '+
+  'read as a hair that dissolves. 0.40 is 1.92px at kanji 96, approaching the untapered bracket you '+
+  'rejected on sight when the tails first went on. Each specimen prints its tip in real pixels.'
 }
 
 const o=document.getElementById('out')
@@ -160,12 +159,12 @@ const rejected = (function(){
 
 document.fonts.ready.then(function(){
  groups.concat(rejected.length?[rejected]:[]).forEach(function(g){ g.forEach(function(r){
-  frame(r.lk, {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tip:ROUND.holds.tip,
-               rrMul:ROUND.holds.rrMul, tl:r.v})
-  const ramp=(r.lk.dataset.ramp||'')
-  r.num.innerHTML = (ramp ? 'ramp '+ramp.split(' ')[0]+'px' : '')
-   + '<br><span style="color:'+(ramp.indexOf('CLAMPED')>=0?'#c2410c':'#6b7280')+'">'
-   + (ramp.indexOf('CLAMPED')>=0 ? ramp.slice(ramp.indexOf('CLAMPED')) : 'tip '+(r.size*ROUND.holds.stroke*ROUND.holds.tip).toFixed(2)+'px wide')
+  frame(r.lk, {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
+               rrMul:ROUND.holds.rrMul, tip:r.v})
+  const tipPx = r.size*ROUND.holds.stroke*r.v
+  r.num.innerHTML = 'tip '+tipPx.toFixed(3)+'px'
+   + '<br><span style="color:'+(tipPx>0 && tipPx<1 ? '#c2410c' : '#6b7280')+'">'
+   + (r.v===0 ? 'a true point' : tipPx<1 ? 'sub-pixel' : 'a visible width')
    + '</span>'
  })})
  check(groups)

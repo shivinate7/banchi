@@ -785,7 +785,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `arm` | 0.32 | carried; §3's lockup row |
 | `rrMul` | 4.0 | rounds 6–10, closed on the JND |
 | `tip` | 0.07 | not yet swept |
-| `tl` | 0.45 | not yet swept |
+| `tl` | 0.70 | rounds 11–12 |
 
 **A key in this table is not the same as a key that has been argued.** `tip` and `tl` are here
 because the sheet holds them, not because anyone chose them — they are the next two rounds, and
@@ -858,6 +858,20 @@ sat at the top of the row with nothing above it and a coarse step below; the fir
 times as "shown a second time it failed". The sharper statement is that **a row's endpoints are weak
 evidence regardless of how many times they are shown**, and the fix is to crowd them rather than to
 re-show them.
+
+### The tail's ramp, settled at 0.70 — and the clamp finally has a number
+
+| round | offered | taken |
+| --- | --- | --- |
+| 11 | 0.15 – 0.75 of the arm | above 0.30 – 0.75 — reached my ceiling |
+| 12 | 0.38 – 0.80 | **0.70** |
+
+**Round 11's ceiling was mine; round 12's was the geometry's.** §6 records that the taper routine
+clamps the ramp at half the path and that above the clamp every value renders identically — and never
+says where the clamp is, so each session has rediscovered it by walking into it. **On the settled
+geometry it binds at `tl` 0.82**, reaching 63.0px at kanji 96; **0.80 is the largest fraction that
+still draws something new.** Round 12 therefore spanned the entire remaining possibility, and 0.70 is
+interior to it.
 
 ### The tails
 
