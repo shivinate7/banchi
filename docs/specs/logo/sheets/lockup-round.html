@@ -47,39 +47,38 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 20,
- title: 'the padding halved to a step the eye may not have — the last round this variable can honestly ask',
- sweeping: 'pad',
+ n: 21,
+ title: 'the line gap — the last value in the set that nobody in this series ever chose',
+ sweeping: 'gap',
  unit: ' of the kanji size',
- values: [0.42, 0.46, 0.50, 0.54, 0.58],
- notes: {0.50:'the midpoint, and where this lands if the row reads flat'},
- rejected: {0.40:'below the band — round 19', 0.60:'above it — round 19', 1.25:'and it does not fit the column'},
- holds: {gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
+ values: [0.00, 0.06, 0.14, 0.24, 0.38],
+ notes: {0.00:'no gap at all — the roman hangs off the kanji',
+         0.06:'the inherited value: 2.9px at the sidebar size'},
+ rejected: {},
+ holds: {pad:0.50, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
  sizes: [48, 32],
- context: [0.42, 0.50, 0.58],
+ context: [0.00, 0.06, 0.14, 0.24],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
   ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
-  ['16', 'padding', '0.10 – 0.36', '0.22 – 0.36 kept', 'top end NOT bracketed'],
-  ['17', 'padding', '0.22 – 0.52', 'above 0.28 – 0.52', 'top end NOT bracketed AGAIN'],
-  ['18', 'padding', '0.34 – 1.25', '0.34 – below 0.72', 'both ends failed at last'],
-  ['19', 'padding', '0.30 – 0.70', 'above 0.40 – below 0.60', 'both ends failed again'],
+  ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 fired twice more; stopped at 1.9px'],
  ],
- lede: '<b>0.40 and 0.60 both failed, so the band is 0.20 wide and this round halves it.</b> The step is '+
-  '0.04, which at the sidebar size is <b>1.9px of padding between neighbours</b> — the caption under each '+
-  'specimen prints its own gap from the one before it, so you can see how small a difference you are '+
-  'being asked about rather than take my word for it.'+
-  '<br><br><b>This is the last round this variable can honestly ask.</b> Halving again puts the step near '+
-  'one pixel, and a sheet that asks you to choose between two drawings a pixel apart is not measuring '+
-  'the design, it is measuring the monitor. §7 rule 7 says "about the same" is a result — if this row '+
-  'reads flat, say so, the answer is <b>0.50</b>, and I stop.'+
-  '<br><br><b>What the row is worth looking at for is not the padding.</b> At this width the thing that '+
-  'actually changes is how much of the sidebar the brand block eats: 110px of column height at 0.42 '+
-  'against 130px at 0.58, above a nav that starts right underneath it. The context row is where that '+
-  'shows.'
+ lede: '<b>Padding settled at 0.50 over five rounds, so the gap is the last value in the set that '+
+  'nobody in this series ever chose.</b> Like the padding it came off the recovered pass at 0.06 and has '+
+  'been the ground under twenty rounds since — twenty drawings of a relationship no one was asked about.'+
+  '<br><br><b>It is the space between 番地 and BANCHI, as a fraction of the kanji size.</b> At 0.06 that '+
+  'is <b>2.9px</b> at the sidebar size, which is tight enough that the roman reads as hanging off the '+
+  'kanji rather than sitting under it — whether that is right is exactly the question.'+
+  '<br><br><b>Both ends are meant to fail.</b> 0.00 is no gap at all. 0.38 puts 18px between the two '+
+  'lines, far enough that the bracket is holding two things rather than one. And this round starts wide '+
+  'on purpose: the padding needed five rounds because the first two were anchored, and the fix for that '+
+  'is a range too wide to anchor rather than a careful one.'+
+  '<br><br><b>The padding is held at its new value, and that is asserted.</b> Building this round with '+
+  '0.22 still in the holds — the value the spec no longer carries — failed `make docs-audit`\'s `lockup '+
+  'params` row, which named both numbers and which file is the store of record.'
 }
 
 const o=document.getElementById('out')
@@ -215,14 +214,21 @@ document.fonts.ready.then(function(){
  const all = groups.concat(context.length?[context]:[]).concat(rejected.length?[rejected]:[])
  all.forEach(function(g){ g.forEach(function(r,i){
   frame(r.lk, optsFor(r.v))
-  const pad = r.size*(SWEPT==='pad' ? r.v : ROUND.holds.pad)
-  /* the gap from the neighbour, because a round is only worth asking while the step is bigger than
-     the eye's; printing it is how this sheet says when to stop rather than bisecting forever */
+  /* The figure under a specimen has to be the quantity being SWEPT. Round 20 added a delta and
+     computed it from `pad`; on the first round that swept something else every cell printed
+     "Δ 0.0px" -- a confidently wrong number, which is worse than none, and the third caption in
+     this sheet's history to describe a drawing other than the one above it. `pxOf` is keyed off
+     SWEPT so a caption cannot report a variable the round is not asking about. */
+  const pxOf = function(size, v){
+   return (SWEPT==='pad'||SWEPT==='gap'||SWEPT==='stroke') ? size*v : null
+  }
+  const px = pxOf(r.size, r.v)
   const prev = g[i-1]
-  const step = prev ? pad - prev.size*(SWEPT==='pad' ? prev.v : ROUND.holds.pad) : null
+  const step = (prev && px!==null) ? px - pxOf(prev.size, prev.v) : null
   r.num.innerHTML = 'block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
-   + '<br><span style="color:#6b7280">pad '+pad.toFixed(1)+'px each side</span>'
+   + (px!==null ? '<br><span style="color:#6b7280">'+SWEPT+' '+px.toFixed(1)+'px</span>' : '')
    + (step!==null ? '<br><span style="color:#9aa1ab">Δ '+step.toFixed(1)+'px from the last</span>' : '')
+   + (SWEPT!=='pad' ? '<br><span style="color:#b6bcc5">pad '+(r.size*ROUND.holds.pad).toFixed(1)+'px, held</span>' : '')
  })})
  check(all)
  window.__sheetReady = true
