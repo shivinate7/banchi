@@ -47,18 +47,19 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 28,
- title: 'the roman’s size — now that its width is fixed, this is weight rather than length',
+ n: 29,
+ title: 'the roman’s size, downward — because 0.24 was my floor and you kept it',
  sweeping: 'romanSize',
  unit: '× the kanji',
- values: [0.24, 0.30, 0.36, 0.42, 0.48],
- notes: {0.36:'the carried value, and the one this whole set was drawn at',
-         0.48:'past the natural width — the letters have to tighten to fit'},
- rejected: {},
+ values: [0.14, 0.19, 0.24, 0.29, 0.34],
+ notes: {0.14:'6.7px at the sidebar size and 4.5px at the floor — legibility, not taste',
+         0.24:'my low end last round, and inside your band'},
+ rejected: {0.36:'out above — round 28', 0.42:'out above — round 28',
+            0.48:'and it could not fit without tightening'},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
          romanFill:0.75, romanTrack:0.14, romanOpacity:0.62, tails:true},
  sizes: [48, 32],
- context: [0.24, 0.30, 0.36, 0.42],
+ context: [0.14, 0.19, 0.24, 0.29],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -69,18 +70,20 @@ const ROUND = {
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
+  ['28', 'roman size', '0.24 – 0.48', '0.24 – below 0.36', 'the LOW end was not bracketed'],
  ],
- lede: '<b>0.75 — three quarters, and it won a row the incumbent was not in.</b> That is the answer to the '+
-  'question round 26 could not settle: 0.775 was <i>near</i>-optimal and not optimal, 2.6px away at the '+
-  'sidebar size. A control that is never removed cannot tell you whether a value is good or merely '+
-  'familiar.'+
-  '<br><br><b>With the width fixed, the size sweep asks a different question than it would have.</b> Every '+
-  'specimen below occupies the same 77px of width — the solve sees to that — so what moves is the roman’s '+
-  '<i>weight and presence</i> against the kanji, not its length. This is precisely why round 25 deferred '+
-  'it: run first, then size, because a size judged against a moving width is judged against nothing.'+
-  '<br><br><b>The upper end fails by arithmetic rather than by eye, and the caption says so.</b> Past '+
-  'roughly 0.43 the type’s natural width exceeds the 0.75 target, so the solve tracks NEGATIVE and the '+
-  'letters crowd. 0.48 is there to show it, flagged in the same red as a rejection.'
+ lede: '<b>0.24 was the smallest size I offered and you kept it, so nothing below it has been tested.</b> '+
+  'That is rule 5 for the third time in this series — and unlike the line gap, where zero was a floor '+
+  'geometry imposed, there is real room underneath here. This round runs down to <b>0.14</b>.'+
+  '<br><br><b>The failure at the bottom is legibility, and it arrives at the FLOOR size first.</b> At '+
+  'kanji 48 a 0.14 roman is 6.7px; at kanji 32 — the size §11 settled as the smallest this lockup may be '+
+  'drawn — it is <b>4.5px</b>. Both rows are below, and the floor row is the one that decides: a value '+
+  'that only works at the large size is not a value this lockup can hold.'+
+  '<br><br><b>There is a second failure mode down there and it is worth watching for.</b> The fill is '+
+  'held at 0.75, so the smaller the roman gets the harder the solve has to track it out to still occupy '+
+  '77px — 8.6px of letter-spacing at 0.14, against 2.0px at 0.36. Past some point the word stops reading '+
+  'as a word and becomes six spaced letters. The caption prints the tracking, so you can see which of the '+
+  'two is biting.'
 }
 
 const o=document.getElementById('out')
