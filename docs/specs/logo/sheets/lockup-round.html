@@ -42,34 +42,67 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 14,
- title: 'the bracket, settled — every parameter of it now has a round behind it',
- sweeping: 'size',                     /* nothing is being swept; the specimens vary only in size */
+ n: 15,
+ title: 'the size floor — where the lockup stops working, and which part gives out first',
+ sweeping: 'size',
  unit: 'px kanji',
- values: [160, 96, 64, 40, 28],
- notes: {96:'a README header', 40:'a sidebar', 28:'near the floor'},
+ values: [40, 32, 26, 22, 18, 14],
+ notes: {22:'a sidebar', 14:'expected to be gone'},
  rejected: {},
  holds: {pad:0.22, gap:0.06, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
  sizes: [0],
  history: [
-  ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice; settled on a sub-pixel tiebreak'],
-  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND, measured at under 1.4%/px'],
-  ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'the clamp measured at 0.82 — a geometric ceiling'],
-  ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'both ends failed first time; decided on terminate-vs-dissolve'],
+  ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
+  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
+  ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
+  ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
  ],
- lede: '<b>The bracket is finished.</b> Fourteen rounds, four parameters, every one of them with an '+
-  'offered range and a taken band behind it rather than a value someone typed. Nothing below is a sweep '+
-  '— this is the settled bracket at the sizes it would actually be drawn.'+
-  '<br><br><b>The tip went to 0.15 on a criterion rather than an eye</b>, because you were right that '+
-  'the pair is meaningless to look at: a bisection would have stepped by a tenth of a pixel. The '+
-  'criterion is whether the taper terminates or dissolves — a sub-pixel end fades into antialiasing, a '+
-  'whole-pixel end stops. 0.15 reaches 1px at kanji 133, which a README header reaches; 0.07 needs '+
-  'kanji 286, which nothing does.'+
-  '<br><br><b>And the argument that settled the radius was deliberately not reused.</b> The radius was '+
-  'pinned at 19.54px while five rounds were judged against it, so it had to stay near that. The tip was '+
-  '0.34px through all thirteen rounds and drove none of them. Consistency binds a parameter that was '+
-  'visible; it does not bind one that was invisible, and applying it to both would have been a rule '+
-  'spreading past its own argument.'
+ lede: '<b>THIS SHEET IS SHOT AT deviceScaleFactor 1 AND MAGNIFIED BY PIXEL.</b> Every other round was '+
+  'shot at 2, which is right for reading a sheet and wrong for judging a floor — §9\'s small row was '+
+  'shot at 2 and so showed twice the detail a 1× display gets, in the one row whose whole job was to '+
+  'demonstrate a failure. What you are looking at is the actual pixel grid, blown up whole.'+
+  '<br><br><b>A floor is not one number, because three different things give out and they give out at '+
+  'different sizes.</b> The bracket goes sub-pixel; the roman becomes unreadable; the kanji strokes '+
+  'merge. The floor is whichever fails first, and each is measured under its specimen rather than '+
+  'guessed at.'+
+  '<br><br><b>番 has 12 strokes and 地 has 6</b>, so they do not fail together either — the denser glyph '+
+  'closes up first. The figure printed is the <b>tenth percentile</b> of 番&rsquo;s interior whites, '+
+  'measured off the rendered glyph: the point at which a tenth of its counters have stopped being '+
+  'resolvable. The minimum was tried first and is useless — it is a single near-tangent between two '+
+  'strokes and reads 0.02–0.07px at every size, which measures antialiasing rather than legibility.'+
+  '<br><br><b>Each figure turns orange below its own threshold</b> — counters and bracket below 1px, '+
+  'roman below 8px — so the row shows not just where the lockup fails but <b>which part fails first</b>.'
+}
+
+/* The tightest interior white in 番 at a given size. Rasterise the glyph, scan every row, take the
+   SMALLEST run of white with ink on both sides. That is the counter that closes first, and it is what
+   decides whether a dense kanji still reads or turns into a block. 番 has 12 strokes and 地 has 6, so
+   they do not fail together and the denser one is the one worth measuring. */
+function tightestWhite(size){
+ /* Rasterise at a FIXED high resolution and scale the result down, rather than at a multiple of
+    the target size. The first version drew 番 at 3x the target, where its tightest counter is
+    already a single pixel, so the measurement saturated and reported 0.33px at four different
+    sizes — a number that does not move is not a measurement. */
+ const S=600, c=document.createElement('canvas')
+ c.width=S; c.height=S
+ const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,S,S)
+ x.fillStyle='#000'; x.font=(S*0.92).toFixed(1)+'px "Hiragino Sans"'; x.textBaseline='middle'
+ x.fillText('番', S*0.04, S/2)
+ const d=x.getImageData(0,0,S,S).data, runs=[]
+ for(let y=0;y<S;y++){
+  let run=0, seenInk=false
+  for(let px=0;px<S;px++){
+   const dark=d[(y*S+px)*4]<128
+   if(dark){ if(seenInk && run>0) runs.push(run); run=0; seenInk=true }
+   else if(seenInk) run++
+  }}
+ /* THE TENTH PERCENTILE, NOT THE MINIMUM. The minimum is a single near-tangent between two strokes
+    and comes out at 0.02–0.07px at every size — a number that small is measuring an antialiasing
+    artefact, not legibility. The median is the typical counter and stays comfortable everywhere.
+    The p10 is the one that moves through the interesting range: it is where a tenth of 番's
+    counters have stopped being resolvable, which is when a dense glyph starts filling in. */
+ runs.sort(function(a,b){return a-b})
+ return runs.length ? runs[Math.floor(runs.length*0.10)]*size/S : 0
 }
 
 const o=document.getElementById('out')
@@ -142,7 +175,7 @@ function check(groups){
 }
 
 const groups = [(function(){
- o.appendChild(el('h2',null,'the settled bracket, at the sizes it would be drawn'))
+ o.appendChild(el('h2',null,'at true size — this is the pixel grid, magnified whole'))
  const s2=el('div','strip'); const made=[]
  ROUND.values.forEach(function(sz){
   const c=el('div','cell')
@@ -175,10 +208,15 @@ document.fonts.ready.then(function(){
  groups.concat(rejected.length?[rejected]:[]).forEach(function(g){ g.forEach(function(r){
   frame(r.lk, {stroke:ROUND.holds.stroke, arm:ROUND.holds.arm, tl:ROUND.holds.tl,
                rrMul:ROUND.holds.rrMul, tip:ROUND.holds.tip})
-  const sw=r.size*ROUND.holds.stroke, tipPx=sw*ROUND.holds.tip
-  r.num.innerHTML = 'stroke '+sw.toFixed(2)+'px · tip '+tipPx.toFixed(2)+'px'
-   + '<br><span style="color:#6b7280">radius '+(r.lk.dataset.rr||'').split(' ')[0]+'px'
-   + ' · ramp '+(r.lk.dataset.ramp||'').split(' ')[0]+'px</span>'
+  const sw = r.size*ROUND.holds.stroke
+  const roman = r.size*0.36
+  const white = tightestWhite(r.size)
+  const bad = function(v, floor){ return v < floor ? 'color:#c2410c;font-weight:700' : 'color:#6b7280' }
+  r.num.innerHTML =
+     'block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
+   + '<br><span style="'+bad(white,1)+'">番 counters '+white.toFixed(2)+'px</span>'
+   + '<br><span style="'+bad(roman,8)+'">roman '+roman.toFixed(1)+'px</span>'
+   + '<br><span style="'+bad(sw,1)+'">bracket '+sw.toFixed(2)+'px</span>'
  })})
  check(groups)
  window.__sheetReady = true

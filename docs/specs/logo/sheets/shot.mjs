@@ -12,9 +12,12 @@ const here = dirname(fileURLToPath(import.meta.url))
 const playwright = resolve(here, '../../../../app/node_modules/playwright/index.mjs')
 const { chromium } = await import(pathToFileURL(playwright).href)
 
-const [, , src, out, w, h] = process.argv
+const [, , src, out, w, h, dsf] = process.argv
+// deviceScaleFactor defaults to 2, which is right for reading a sheet and WRONG for judging a floor:
+// section 9's small row was shot at 2 and so showed twice the detail a 1x display gets, in the one
+// row whose whole job was to demonstrate a failure. Pass 1 to see what a 1x screen actually renders.
 const b = await chromium.launch()
-const p = await b.newPage({ viewport: { width: +w, height: +h }, deviceScaleFactor: 2 })
+const p = await b.newPage({ viewport: { width: +w, height: +h }, deviceScaleFactor: dsf ? +dsf : 2 })
 await p.goto('file://' + src)
 
 // A sheet that rasterizes into a canvas is not finished when load fires. Such a sheet sets
