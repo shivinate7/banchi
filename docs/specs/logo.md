@@ -1291,6 +1291,28 @@ lockup that reads as visibly unbalanced.
 An 85% outline overlap is not a shape match. **Substituting is a design change to a LOCKED row,
 not a like-for-like swap**, and it is the owner's call rather than a session's.
 
+### DECIDED 2026-09-06: IBM Plex Sans JP 400, and the weight is the correction
+
+**The owner chose the OFL face on seeing it drawn**, weight-matched, at the sizes the lockup
+ships. Free, re-runnable on any machine, and subset to 番地 it is about 1.1KB.
+
+**The weight in that table is not the weight this uses, and that mattered.** §14 scores every
+candidate against **Hiragino W6**, because it was written when the lockup was a display asset.
+`.go` sets no `font-weight`, so all thirty-five of §13's rounds drew Hiragino at **regular** —
+and the first comparison sheet put Plex **700** beside it, which compares a semibold with a book
+weight and reads the difference as a typeface difference. Weight-matched, **Plex JP 400** is what
+sits beside it.
+
+**The geometry does not move at all, which was measured rather than hoped.** At kanji 100, 番地 is
+214.00px advance / 199px ink in Hiragino and 214.81 / 200 in Plex 400. Re-rendering §13's settled
+lockup on the new face at 32, 40, 48, 64 and 80 gives **byte-identical block dimensions at every
+size** — 102 × 75, 128 × 93, 153 × 112, 204 × 149, 255 × 186. Nothing that is a fraction of the
+kanji's box changed, because a full-width em is a full-width em.
+
+**So what the swap can still cost is optical, and only two values are exposed to it**: `romanSize`
+and `romanOpacity`, both judged as the roman's weight against the kanji's. §15's gate is discharged
+by re-offering exactly those two, one round each. Sheet: `logo/sheets/lockup-face.html`.
+
 ### The question underneath, which is not about type at all
 
 **Every `Logo` call site in this product is 44px or below, and this lockup is not drawn below

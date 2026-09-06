@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8"><title>Banchi — the lockup, round by round</title>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400&family=Manrope:wght@700&display=swap" rel="stylesheet">
 <style>
  *{box-sizing:border-box}
  body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
@@ -27,7 +27,7 @@
  .num{font:500 9px ui-monospace,monospace;color:#15803d;text-align:center;line-height:1.5}
  .lk{position:relative;display:inline-block}
  .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
- .go{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;line-height:1;display:block}
+ .go{font-family:'IBM Plex Sans JP',sans-serif;font-weight:400;line-height:1;display:block}
  .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
  table.hist{border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:10px;margin:0 0 10px}
  table.hist td,table.hist th{padding:4px 14px;text-align:left;border-bottom:1px solid #eef1f4}
@@ -54,46 +54,41 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 35,
- title: 'the finished lockup, at every size it will be drawn — and nothing left under test',
- sweeping: 'size',
- unit: 'px kanji',
- values: [32, 40, 48, 64, 80],
- notes: {32:'the floor — §11’s smallest permitted draw', 48:'the sidebar candidate'},
+ n: 36,
+ title: 'the roman’s size, re-offered on the shipping face — a same-or-different check, not a sweep',
+ sweeping: 'romanSize',
+ unit: '× the kanji',
+ values: [0.22, 0.235, 0.25, 0.265, 0.28],
+ notes: {0.25:'the settled value, decided at true pixels against a font that cannot ship'},
  rejected: {},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
-         romanFill:0.75, romanSize:0.25, romanTrack:0.14, romanOpacity:0.45, tails:true},
- sizes: [48],
+         romanFill:0.75, romanTrack:0.14, romanOpacity:0.45, tails:true},
+ sizes: [48, 32],
  dark: true,
  context: null,
  history: [
-  ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
-  ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
-  ['11–12', 'tail ramp', '0.15 – 0.80 of the arm', '0.70', 'clamp measured at 0.82'],
-  ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
-  ['15', 'size floor', '14 – 40 kanji', 'kanji 32', '番’s counters bind, not the bracket'],
   ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 twice; stopped at 1.9px'],
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
   ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
   ['32–34', 'roman opacity', '0.20 – 1.00', '0.45 of the ink', 'light sits under a floor, on purpose'],
+  ['35', 'nothing', '—', 'the finished lockup, 32 – 80px', 'all eleven values asserted'],
  ],
- lede: '<b>Every parameter in the lockup has now been chosen against alternatives, and this sheet has '+
-  'nothing left to sweep.</b> So it sweeps the one quantity that is not a parameter — how big the thing '+
-  'is drawn — which is why `make docs-audit`’s `lockup params` row now checks <b>all eleven</b> settled '+
-  'values rather than ten. Nothing is exempt any more.'+
-  '<br><br><b>Four values moved and one was confirmed.</b> The padding 0.22 → 0.50, the gap 0.06 → 0.08, '+
-  'the roman’s size 0.36 → 0.25, its opacity 0.62 → 0.45; the arm stayed at 0.32. Two of the four moved '+
-  'by more than a third of their own size, and none of the five had ever been offered against anything '+
-  'before this series.'+
-  '<br><br><b>One parameter did not exist when it started.</b> `romanFill` had to be invented because '+
-  '`frame()`’s width-match solve had never once run — both spans were `display:block`, so it measured the '+
-  'containing block for each and compared a number with itself. Twenty-four rounds were drawn with zero '+
-  'tracking on the roman, filling whatever fraction the type happened to set.'+
-  '<br><br><b>And `romanTrack` is in the table without being an answer.</b> It seeds the solve and is '+
-  'overwritten before anything is painted. It is listed so that nobody re-derives it as a design value, '+
-  'which is exactly what publishing it as settled nearly did.'
+ lede: '<b>The face is decided: IBM Plex Sans JP 400, and every sheet from here draws it.</b> The two '+
+  'recovered sheets keep Hiragino because they are records of a pass already judged, and changing their '+
+  'face would rewrite what was approved.'+
+  '<br><br><b>Nine of the eleven values need no second look, and that is measured rather than assumed.</b> '+
+  'Re-rendering §13’s settled lockup on the new face gives <b>byte-identical block dimensions at every '+
+  'size</b> — 102 × 75, 128 × 93, 153 × 112, 204 × 149, 255 × 186. Anything that is a fraction of the '+
+  'kanji’s box could not move, because a full-width em is a full-width em, and 番地 measures 214.00px in '+
+  'Hiragino against 214.81 in Plex.'+
+  '<br><br><b>Two values were judged optically rather than geometrically</b>, and those are the gate §15 '+
+  'named: the roman’s size and its opacity, both chosen as a weight against the kanji’s. Plex 400 is not '+
+  'Hiragino regular’s weight, so both get re-offered — <b>one round each, and this is not a fresh '+
+  'sweep.</b> It is a same-or-different check around a settled value, so the band is deliberately narrow: '+
+  'if 0.25 still reads best, it stands with a second face behind it, which is a stronger claim than it '+
+  'had this morning.'
 }
 
 const o=document.getElementById('out')
