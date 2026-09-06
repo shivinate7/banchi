@@ -193,6 +193,13 @@ records what that replaces: a run whose timestamps came from a server started be
 that was written for it. `make down` stops both; `make launch-agent` starts them at login, from
 the main checkout only.
 
+**And it goes in the dock from there** (D108). With the servers up, open `http://localhost:5173`
+in Chrome and use *Install page as app* — you get a real bundle with the Banchi mark, its own
+window, its own ⌘-Tab entry and a remembered size, on the same engine and the same profile, so
+the camera permission and the rig's 4K carry over untouched. It is a **client**: the launch agent
+is still what keeps the link answering, and nothing about the dock app owns a server. There is no
+`make` target because there is nothing to automate — the install is one press, once.
+
 `make dev` and `make server` still run the two halves in the foreground, one terminal each, and
 neither watches anything — use them when you want a server you are looking at. Running either
 beside `make up` fails loudly rather than quietly moving to another port, because a server that

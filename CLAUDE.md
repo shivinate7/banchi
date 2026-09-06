@@ -79,6 +79,14 @@ make up             # BOTH servers, detached, and the capture server RELOADS ITS
                     #   quietly moved would serve a DIFFERENT store (D43).
 make launch-agent   # start at login, so the link is always live. MAIN TREE ONLY — it refuses
                     #   in a worktree, whose plist would outlive the worktree. ARGS=--remove.
+                    #   THE DOCK APP IS A CLIENT OF THIS AND NEVER A SECOND COPY OF IT (D108):
+                    #   Chrome's `Install page as app` over http://localhost:5173 writes a real
+                    #   bundle with its own icon, window and ⌘-Tab entry, on the same engine and
+                    #   the same profile — so the camera grant and the rig's 4K carry unchanged.
+                    #   A wrapper that also started the server would be D53's two-supervisor
+                    #   defect with a GUI in front of it. There is no `make` target: the install
+                    #   is one press in Chrome, once, and `app/public/manifest.webmanifest` is
+                    #   the part of it that lives here.
 make dev            # Vite app. :5173 in the main tree, its own port in a worktree. Blocks.
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
@@ -1010,6 +1018,7 @@ D104 The live export is fetched, and the second standing instruction is a second
 D105 The markdown lives where prices are decided, and one file may not have two unguarded writers
 D106 The push and the publish are two presses, and the second one is the only thing here a buyer can see
 D107 The rule only ever marks down; the operator may point either way
+D108 The dock app is the page Chrome already renders, and the manifest is what makes it one
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
