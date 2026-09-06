@@ -448,6 +448,50 @@ const GAMES = {
       unverified: false,
       catalogued: true,
     },
+    /* THE SECOND GAME IS HERE BECAUSE THE PRODUCT CLAIM BELONGS TO IT AND TO NOTHING ELSE.
+       `ClaimEditor` draws the product row only while the picked game equals `product_game`
+       — `codes/products.py:GAME`, which is `pokemon_code` — so a one-game fixture could
+       never reach the row D101 added, and did not: the row shipped with no case over it.
+       Same shape as the entry above, transcribed from `pipeline/games.py`. */
+    {
+      key: 'pokemon_code',
+      display: 'Pokémon code cards',
+      product_line: 'Pokemon',
+      rarities: ['Code Card'],
+      finishes: ['normal'],
+      condition_by_finish: { normal: 'Near Mint' },
+      finish_by_rarity: { 'Code Card': ['normal'] },
+      located: false,
+      join_key: 'name_only',
+      prompt: 'pokemon_code_v1',
+      crop_bands: [],
+      card_aspect: 0.716,
+      unverified: false,
+      catalogued: true,
+    },
+  ],
+  /* `product_game` AND `products` ARE NOT OPTIONAL ON THIS WIRE, AND THIS FIXTURE OMITTED
+     BOTH. `capture_server.py:do_games` has served them beside the registry since C10, and
+     `types.ts:GameRegistry` declares both required — so `ClaimEditor` reads
+     `registry.products` straight into state and calls `.find` on it every render.
+
+     WHAT THE OMISSION COST: `undefined.find` threw inside the claims editor, the route's
+     error boundary swallowed the whole screen, and the four box-claim cases below timed
+     out for thirty seconds each on `locator.check` with `element was detached from the
+     DOM` — a sentence that names neither the crash nor the field. `the walk keeps a floor`
+     and `the re-shoot lives inside Correct claims` failed the same way, the second only
+     sometimes, because it asserts before `GET /games` has resolved and the crash is one
+     render later. Six cases, one absent key.
+
+     `redeem_limit` and `premium` are carried even though this file reads neither: the
+     fixture's job is to be the shape the route sends, and a projection here is the same
+     class of lie as the omission it replaces. */
+  product_game: 'pokemon_code',
+  products: [
+    { key: 'booster', display: 'Booster pack', premium: false, redeem_limit: 400 },
+    { key: 'etb', display: 'Elite Trainer Box', premium: true, redeem_limit: 4 },
+    { key: 'pc_etb', display: 'Pokémon Center ETB', premium: true, redeem_limit: 4 },
+    { key: 'other', display: 'Other / unsure', premium: false, redeem_limit: 4 },
   ],
 }
 
@@ -766,6 +810,61 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(GAMES) })
   })
 
+  /* THE SHELL'S OWN TWO READS, WHICH THIS FILE HAD NEVER STUBBED AND WHICH THEREFORE WENT TO
+     THE CAPTURE SERVER. Every other handler here carries the sentence about why: an unstubbed
+     read is a request to whatever is listening on this checkout's capture port, and in the main
+     tree that is the owner's real server over their real store, kept alive at login by
+     `make launch-agent`. These two escaped it because neither belongs to the screen — `/status`
+     is `App.tsx:useServerPresence`, outside every route boundary, and `/orders` is the walk's
+     claims read, which swallows its own failure.
+
+     BOTH ANSWERS WERE WRONG IN BOTH DIRECTIONS, WHICH IS WHY THIS IS NOT A TIDY-UP. Answered by
+     the owner's server, the walk drew THEIR open orders' claims over this fixture's seven cards.
+     Unanswered — a worktree, whose capture port has nothing on it (D43), or the main tree while
+     `make design-check`'s own browsers had the server wedged — `useServerPresence` went
+     `offline` and the shell drew its 44px banner above the view. That banner is what failed
+     `the box lives in the walk's column` (the search field at y=166 against
+     docs/DESIGN.md's 150px first-content floor, 122 without it) and `a walk-to scrolls the
+     walk` (the walked-to row pushed below the fold). Neither assertion was wrong and neither
+     number moved: the screen under them was the offline one, which no operator with a working
+     server ever sees.
+
+     `cards` MATCHES THE FIXTURE rather than being a constant: the sidebar renders it, and a
+     count that disagreed with the walk beside it is the same class of lie this stub is fixing.
+     The shape is `ServerStatus`, which `nav.spec.ts` records getting wrong once already —
+     `status.cards` is read straight into `Sidebar`, which sits outside every route boundary, so
+     a missing key takes the whole shell down a beat after the screen renders. */
+  await page.route(/\/status$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captures_root: 'captures',
+        store: 'inventory/store.sqlite',
+        store_exists: true,
+        cards: Object.keys(store.cards).length,
+        states: {},
+        queues: { review: 1, parked: 0 },
+        next_index: {},
+      }),
+    })
+  })
+
+  /* No open order wants anything here. D63's ledger is `orders.spec.ts`'s subject; what this
+     file needs from it is the honest empty answer, so no card in the walk carries a claim it
+     would have to draw. */
+  await page.route(/\/orders$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        summary: 'no orders',
+        orders: [],
+        resolution: { orders: [], counts: {} },
+      }),
+    })
+  })
+
   /* THE BOX ROW IS OVERRIDABLE, and D34's release is why. That control draws only when the
      row reports `listed > 0`, which is a state the default fixture is deliberately not in —
      most boxes never are. A parameter rather than a second `page.route` in the test, because
@@ -871,6 +970,26 @@ async function open(
      stronger wait anyway: it proves the inventory read landed AND that the walk grouped it,
      where a row only proves the first. */
   await expect(page.locator('.browse-sectfold').first()).toBeVisible()
+
+  /* TWO INVARIANTS OVER THE SHELL, ASSERTED ONCE HERE FOR EVERY CASE IN THE FILE, because
+     both of the failures they name were invisible at the point they were caused and loud
+     somewhere else entirely.
+
+     THE BANNER: a 44px strip above the view whenever `/status` does not answer. It shifts
+     every geometry measurement below it, so a floor asserted under it is asserted against a
+     screen the operator does not have. It failed two cases here as a bare number and nothing
+     said the word "offline".
+
+     THE CRASH PAGE: `RouteBoundary` swallows a throw and renders in the view's place, so the
+     control a case is reaching for is simply not there. Playwright reports that as
+     `element was detached from the DOM` after a thirty-second `locator.check` timeout — six
+     cases here, all of them naming a switch, none of them naming `undefined.find` in
+     `ClaimEditor`. Asserted on the HEADING and not on `.no-such-view`, which the 404 view
+     shares.
+
+     Both are cheap, both run before any case's first assertion, and both fail by name. */
+  await expect(page.locator('.bn-banner')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'This screen stopped.' })).toHaveCount(0)
   return wire
 }
 
@@ -2241,6 +2360,83 @@ test('untapping the last finish clears the claim rather than sending an empty li
      all, identical to the null this field has always allowed. */
   const put = wire.find((sent) => sent.method === 'PUT')
   expect(put?.body).toEqual({ variant: null })
+})
+
+test('the product row is drawn for the game that claims products, and for no other', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Set claims/ }).click()
+
+  /* THE NEGATIVE FIRST. `codes/products.py:GAME` says ONE game claims a product, `GET /games`
+     serves that key as `product_game`, and `ClaimEditor` compares the picked game against it.
+     The fixture's default is `pokemon`, which is not it, so the row is not drawn at all —
+     nothing greyed, nothing disabled. The five rows around it are. */
+  await expect(page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })).toHaveCount(0)
+  await expect(page.locator('.boxops-claim-row', { hasText: 'FINISH' })).toHaveCount(1)
+
+  await page.getByRole('combobox', { name: 'Game' }).selectOption('pokemon_code')
+
+  const row = page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })
+  await expect(row).toHaveCount(1)
+
+  /* AND THE VOCABULARY IS THE REGISTRY'S, WHICH IS THE HALF THAT WAS ABSENT. `productList`
+     comes from `GET /games`'s `products`, and a fixture that omitted the key put `undefined`
+     into state and threw on the first render after the fetch resolved — taking the whole
+     screen down behind the route boundary and timing out four cases above this one on a
+     switch none of them could reach. A case that reads a product's display name cannot pass
+     against that shape. */
+  await expect(row.locator('option')).toHaveText([
+    'No claim',
+    'Booster pack',
+    'Elite Trainer Box',
+    'Pokémon Center ETB',
+    'Other / unsure',
+  ])
+
+  /* The premium lane is drawn off the registry's own flag rather than off the key's spelling —
+     `codes/products.py`'s own header records a throwaway classifier putting four $0.06 blisters
+     in the premium tier on the word "premium" alone. */
+  await row.getByRole('combobox', { name: 'Product' }).selectOption('booster')
+  await expect(row.locator('.bn-pill')).toHaveText('Bulk')
+  await row.getByRole('combobox', { name: 'Product' }).selectOption('pc_etb')
+  await expect(row.locator('.bn-pill')).toHaveText('Premium')
+
+  await row.getByRole('switch').check()
+  await page.locator('.boxops-claim-row', { hasText: 'GAME' }).getByRole('switch').check()
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+
+  const put = wire.find((sent) => sent.method === 'PUT')
+  expect(put?.body).toEqual({ game: 'pokemon_code', product: 'pc_etb' })
+})
+
+test('a product claim armed against the code game leaves with it, rather than riding a game that has no products', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await openBoxOps(page)
+  await page.getByRole('button', { name: /^Set claims/ }).click()
+
+  /* THE RULE `ClaimEditor` STATES AND NOTHING ASSERTED: a row that is not drawn is not armed.
+     Arm Product against the code game, change the game back, and without the disarming effect
+     the row is gone from the screen while its claim is still in the patch — a write nobody can
+     see they asked for, over every card in the box. */
+  await page.getByRole('combobox', { name: 'Game' }).selectOption('pokemon_code')
+  await page.locator('.boxops-claim-row', { hasText: 'PRODUCT' }).getByRole('switch').check()
+  await page.locator('.boxops-claim-row', { hasText: 'PRODUCT' }).getByRole('combobox', { name: 'Product' }).selectOption('booster')
+
+  await page.getByRole('combobox', { name: 'Game' }).selectOption('pokemon')
+  await expect(page.locator('.boxops-claim-row', { hasText: 'PRODUCT' })).toHaveCount(0)
+
+  /* Something still has to be armed or the editor refuses and sends nothing, so the note row
+     carries the apply — and the assertion is that `product` is not beside it. */
+  await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
+  await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('textbox', { name: 'Note' }).fill('mixed')
+  await page.getByRole('button', { name: /^Apply to/ }).click()
+
+  const put = wire.find((sent) => sent.method === 'PUT')
+  expect(put?.body).toEqual({ note: 'mixed' })
 })
 
 // ---------------------------------------------------------------- the destructive controls

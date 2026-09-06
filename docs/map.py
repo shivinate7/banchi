@@ -3871,8 +3871,23 @@ COMPONENTS = [
                         "labels in draw order, so the row it holds to the no-border rule is a "
                         "row it can name. THE MOVE'S OWN WRITE IS STILL UNASSERTED HERE — the "
                         "FOUR WRITES above are the four this file sends; D83 shipped its "
-                        "control with no file under app/tests/ touched.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D45", "D49", "D55", "D57", "D58", "D67", "D68", "D71", "D83", "D89", "D92"],
+                        "control with no file under app/tests/ touched. AND THE SHELL'S OWN "
+                        "TWO READS ARE STUBBED SINCE 2026-09-05, which they had never been: "
+                        "`/status` and `/orders` belong to no screen, so a file that stubs "
+                        "everything its own screen asks for missed both and sent them to "
+                        "whatever answers this checkout's capture port — the owner's real "
+                        "store in the main tree, nothing at all in a worktree, and in that "
+                        "second case the shell's 44px offline banner on top of the view. That "
+                        "banner is what failed the 150px first-content floor and the walk-to's "
+                        "in-viewport row; `open` asserts now that it is absent and that no "
+                        "route boundary is showing its crash page, so the next omission fails "
+                        "by name rather than as a pixel count. AND THE PRODUCT ROW HAS TWO "
+                        "CASES FROM THE SAME DAY (D101): the claim reached this editor with no "
+                        "browser case over it, and the `GET /games` fixture omitted `products` "
+                        "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
+                        "the screen behind its error boundary, and six cases here spending "
+                        "thirty seconds each on a switch that had been detached.",
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
@@ -3901,8 +3916,17 @@ COMPONENTS = [
                         "fixed centred inset; the old ones asserted `50% 50%` and an element "
                         "on screen at rest, both wrong by design now) — an answer that stays reversible past "
                         "the twenty seconds the old clock allowed, the single column below "
-                        "900px, and D24's pooled card drawing no photograph here. Every route "
-                        "is stubbed and no write is ever issued. Run by `make design-check`.",
+                        "900px, and D24's pooled card drawing no photograph here. Run by "
+                        "`make design-check`. EVERY ROUTE IS STUBBED AND NO WRITE IS EVER "
+                        "ISSUED — true as of 2026-09-05 and not before. That sentence stood "
+                        "here while `/status` went unstubbed to the capture port, and the "
+                        "shell's 44px offline banner is what ran the document 88px past a "
+                        "900px viewport and failed `answering a card costs no scrolling` — "
+                        "twice its own height, because `.bn-view` is `min-height: 100%` of a "
+                        "`.bn-shell-main` the banner has already made taller. The case's own "
+                        "comment attributes that 88 to the font swap and `settleFonts` was "
+                        "added for it; that call fixed a different real red and not this one. "
+                        "`open` asserts the banner is absent now, so the claim has a reader.",
                 # D32 and D35 arrived with the rewritten loupe cases: the aim-is-never-a-
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's

@@ -1070,3 +1070,51 @@ re-derives" from "long because it measured a lot" — a citation-density heurist
 the kind of guess D16 keeps off a blocking row — or a ruling that some entries are allowed to be long
 and should say so in their own first line.
 
+## 13 — Nine design-check specs send reads to whatever answers the capture port
+
+**`app/tests/*.spec.ts` stub the routes their own SCREEN calls, and the SHELL's reads belong to no
+screen.** `App.tsx:useServerPresence(chrome)` polls `GET /status` on mount and every 15s for every
+route that renders chrome, which is every route but the Fulfiller's. Nine specs navigate the shell
+and register no handler for it: `cursor`, `gallery`, `live-reconcile`, `markdown`, `motion-live`,
+`pricing`, `pull-confirm`, `run-panel`, `shipping`. Six do stub it — `capture-claims`,
+`capture-undo`, `nav`, `orders`, and, since 2026-09-05, `inventory` and `review`.
+
+**Two of them leak more than the shell's poll.** Measured 2026-09-05 by standing a logging server
+on this worktree's capture port and running each spec against it: `gallery.spec.ts` sends
+`GET /status`, `GET /orders` and `GET /photo/<box>/<index>`, and `cursor.spec.ts` sends those plus
+`GET /boxes`, `GET /inventory`, `GET /pipeline/pricing` and `GET /pipeline/runs`. `cursor.spec.ts`
+is the sweep CLAUDE.md points at as the one that reads the nav strip rather than a hand-typed list
+of hashes; what it does not do is stub the screens it walks through.
+
+**What it costs, in both directions, and neither is hypothetical.** Unanswered — a worktree, whose
+capture port has nothing on it (D43) — the shell draws its 44px offline banner above the view, and
+every absolute measurement below it moves by 44px. Answered, which in the main checkout means the
+owner's real capture server over their real store kept alive at login by `make launch-agent`, the
+screen under test draws THEIR data: `#/gallery`'s component sheet asks for a real card photograph
+by box and index, and `cursor.spec.ts` reads the real inventory and the real run list. **So a
+design floor's verdict depends on a process outside the test**, which is the same shape as the
+shared dev server D43 fixed and the reason that port is per-checkout at all.
+
+**Two specs were fixed rather than recorded, because for them the 44px flipped an assertion.**
+`inventory.spec.ts` failed `the box lives in the walk's column` (search field at y=166 against
+docs/DESIGN.md's 150px first-content floor; 122 with the banner gone) and `a walk-to scrolls the
+walk` (the walked-to row below the fold). `review.spec.ts` failed `answering a card costs no
+scrolling` by 88px, twice the banner's own height: `.bn-view` is `min-height: 100%` of a
+`.bn-shell-main` the banner has already made taller, so the strip costs its height and the view
+then keeps a whole viewport beside it. Measured with the fonts settled — that case's own comment
+attributes the same 88 to the font swap, observed once under parallel load. Both now
+stub `/status`, and both assert in their `open` helper that the banner is absent, so the next
+omission fails by name.
+
+**The other nine are recorded and not fixed, and the reason is that the leak has no current
+consequence for them.** None asserts an absolute Y against a viewport floor: `markdown`, `pricing`
+and `pull-confirm` take bounding boxes, and all of them read a height, a width or a centre point,
+none of which a banner above the view changes. The traffic is wrong and the verdicts are not.
+
+**What would close this.** A shared `shell.ts` under `app/tests/` holding the `/status` stub in
+`ServerStatus` shape, imported by every spec that navigates a chromed route — and, better, a
+catch-all registered FIRST in each `open` (Playwright matches handlers newest-first, so a
+first-registered handler is the last resort) that FAILS the test on any request reaching the
+capture port. That is what found this: a spec cannot leak a read past a handler whose only job is
+to refuse one. It is nine files of edits with a run apiece to prove nothing else moved, which is
+why it is here rather than in that commit.
