@@ -1573,56 +1573,56 @@ and the mark reads 1.
 
 **The rail draws the EMPTY SLOT — the brackets with the card taken out — and not the tile mark**
 (corrected 2026-09-06, on the operator's report). This section shipped with `Logo` in that slot on
-the reasoning that §16 settled the lockup's size and metal, not the rail's drawing, and that
-`sheets/sidebar-morph.html`'s bare brackets were a sheet's idea rather than a decision. **That was
-over-cautious and §1 had already answered it**: *"with the card removed the same brackets become
-an empty slot, which is the in-product mark."* The sheet was not proposing something; it was
-drawing what §1 says. What actually shipped read as the favicon sitting above a nav, where the
-lockup is the name inside its address and the rail should be the address with the name taken out.
+the reasoning that §16 settled the lockup's size and metal, not the rail's drawing. **That was
+over-cautious and §1 had already answered it**: *"with the card removed the same brackets become an
+empty slot, which is the in-product mark."* What shipped read as the favicon sitting above a nav.
 
-`app/src/kit/RailMark.tsx` draws it, and draws nothing of its own: `SMALL_BRACKET` and
-`SMALL_STROKE` come straight from the generated `markGeometry.ts`, so it is `Logo`'s own wire with
-two elements omitted rather than a second mark that agrees today. `make docs-audit`'s `rail mark`
-row gained a third direction for exactly that — it now fails if the component stops importing them
-or grows a path literal, which is the invention this row was written for, one file further along.
+**And it is not a second component. It is this drawing, morphed** (corrected again the same day, on
+the operator's report that the lockup *disappeared* and the brackets *appeared*). The first fix
+mounted a `RailMark` beside the lockup and crossfaded them; that component is deleted.
 
-**Having no ground is why it cannot take the chrome flat.** `bluesteel`'s four bracket stops run
-`#FFFFFF` to `#8FA4B8` — bright on the mark's dark tile, invisible on a light sidebar. So it takes
-this section's own switch, flat `--bn-ink` on light and the chrome on dark, and the lockup and the
-rail mark are one object in one metal in both themes.
+### The morph this section said was impossible
 
-**And that switch had shipped wrong.** `.bn-lockup-bracket` carried the three-state pattern —
-`@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) … }` — which is correct
-for a stylesheet that reads the system preference itself and **wrong for this product**, which
-resolves it in JS: `applyTheme` stamps `data-theme="dark"` for dark and *removes* the attribute for
-light, and `tokens.css` carries no media block at all. So the rule fired in a state the rest of the
-app cannot enter. Measured in the running app on a system-dark machine with the theme set to light:
-body `rgb(244,245,248)`, kanji `rgb(15,18,23)`, bracket `url("#_r_0_m")` — a near-white frame
-around near-black type. Both *resting* themes were correct, which is why nothing caught it; the
-defect needs the system preference and the stored choice to disagree, and every check in this repo
-ran with them agreeing. `brand.spec.ts` sets `colorScheme: 'dark'` on that one test now, and
-reaches the light half by *removing* the attribute rather than stamping `light`, which no code path
-in this product does.
+**What §16 recorded:** *"a ~600-point filled taper against a 52-byte stroked wire … paths that
+shape cannot interpolate"*, and therefore a 40ms rest between two drawings, *"because showing a
+tapered outline beside a stroked wire invites the eye to compare two objects the design insists are
+one."*
 
-**A true morph is not available, and the reason is this section's own correction.** The filmstrip
-in that sheet interpolated real geometry only because *both* ends were `taperParts` outlines at the
-same point count; the rail end was the invented bracket. Now that the rail draws the actual mark,
-the two ends are categorically different objects — a ~600-point filled taper against a 52-byte
-stroked wire, untapered because §11 removed the taper on a measurement. Paths that shape cannot
-interpolate, and rebuilding a morphable rail bracket would mean drawing something that is not the
-shipped mark.
+**The claim is true of how the two are EXPRESSED and false of what they are.** Both are one L: a
+vertical leg, a rounded elbow, a horizontal leg. `taperParts` in `sheets/lockup-core.js` is that L
+parametrically, at a fixed 301 centreline samples — and **the mark's small cut is the same call
+with `tip = 1`**, because `tip` is the width at the free end and §11 removed the taper and changed
+nothing else. One sampler emits both ends at identical topology, and a point-wise lerp between them
+is exact. The reasoning that closed this off compared two *files* and concluded something about two
+*shapes*.
 
-**What the collapse does instead is one switch and one clock.** `--bn-brand-open` is 1 open and 0
-railed; both rail conditions set that and nothing else. Every delay is a position inside the 320ms
-the column already spends, so the gesture does not get slower, it gets legible: BANCHI leaves
-first, then 番地 and the frame, a 40ms rest, and the mark lands last. Expanding reverses it.
-**The 40ms rest is why there is no cross-fade** — showing a tapered outline beside a stroked wire
-invites the eye to compare two objects the design insists are one.
+**Nothing about what the rail draws changed, and that is asserted rather than argued.**
+`build-lockup.mjs` renders its untapered end against `markGeometry.ts`'s shipped stroked wire and
+refuses to write if they differ by more than 2% of inked pixels at 10x. Measured: **0.30%**, which
+is the antialiased boundary. The rail is still the mark's own wire (D102, §1), reached by a path
+that can be interpolated instead of by a second component.
 
-**And `base.css` crushes transition DURATION while leaving DELAY alone.** Without an override a
-reduced-motion user would get the name snapping out, **200ms of an empty brand row**, then the mark
-snapping in — a hole rather than an instant swap. Every delay is a variable so the fix is five
-values and no `!important`.
+**The clock is the box.** The morph reads the slot's own animating width and derives its progress
+from it. So it cannot drift from the panel it sits in, it holds no copy of `--bn-ease` — retuning
+that token retunes this — and `prefers-reduced-motion` is honoured with no branch at all: `base.css`
+crushes the width transition, the width jumps, and the morph lands in the same frame. The
+five-delay reduced-motion override this section used to need is down to two, and the one it needed
+most — the 200ms hole where the name had gone and the mark had not arrived — cannot exist, because
+there is no arrival.
+
+**The type is drawn in, not switched off.** Filmed against two alternatives at
+0/40/80/120/160/220/320ms: on a pure opacity fade the name is a ghost by 40ms and gone by 80, so the
+eye reads a switch and then a separate frame animation. Scaling it toward the frame's own centre, on
+the slower duration, keeps it faintly legible at 80ms *inside* a frame that has already closed a
+long way — which is the sentence the gesture is making. The overlap is the point.
+
+**A defect this hid, and how.** `base.css` gives every svg `max-width: 100%` — right everywhere
+else and fatal here: the slot closes 128px → 32px, the svg was capped with it, and **the whole
+viewBox rescaled underneath the morph**, landing the bracket at a quarter of the mark (4.73px wide
+against 18.87). Both resting states still looked plausible; it took a magnified filmstrip to see.
+`app/tests/brand.spec.ts` now derives the ink box the mark's wire must occupy at 32px — reading
+`markGeometry.ts` off disk rather than retyping its numbers — and measures the settled bracket
+against it to half a pixel.
 
 ### The brand IS the collapse control
 

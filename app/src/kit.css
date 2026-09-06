@@ -932,12 +932,4 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 /* `[data-theme='light']` is never stamped by the app, only by a light island nested inside
    Gallery.tsx's dark one. It is kept for that, and there is deliberately no media query. */
 
-/* THE RAIL MARK IS THE SAME BRACKET IN THE SAME METAL, and takes the same switch. The property
-   is `stroke`, not `fill`: the small cut is a constant-width wire where the lockup's frame is a
-   filled taper. Without this it would paint `bluesteel`'s near-white chrome on a light sidebar —
-   the drawing has no tile of its own to sit on, which is the whole point of it. */
-.bn-rail-mark { display: block; }
-.bn-rail-mark-arm { stroke: var(--bn-ink); }
-[data-theme='dark'] .bn-rail-mark-arm { stroke: var(--bn-lockup-metal); }
-[data-theme='light'] .bn-rail-mark-arm { stroke: var(--bn-ink); }
 

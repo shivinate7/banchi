@@ -18,15 +18,15 @@
    button's. Sizes read it through `calc`; opacities read it directly.
    ONE CLOCK: the shell's column already slides over --bn-t-slow, and every delay below is a
    position inside that same 320ms rather than time added to it. The gesture does not get slower,
-   it gets legible.
+   it gets legible. The FRAME is not among them — it morphs, and `Lockup` drives that off this
+   slot's own animating width, so the one thing that had to stay in step with the panel is read
+   from the panel rather than timed alongside it.
    THE ASYMMETRY IS FREE. The open state declares the RETURN trip's delays and the rail state the
    OUTBOUND trip's, so one pair of rules gives two choreographies: collapsing is subtractive — the
    name leaves, then the frame closes on the empty slot — and expanding is additive. BANCHI moves
    first out and last in, which states in time the subordination section 13 settled in tone. */
 .bn-shell {
   --bn-brand-open: 1;
-  --bn-brand-mark-delay: 0ms;
-  --bn-brand-bracket-delay: 160ms;
   --bn-brand-kanji-delay: 180ms;
   --bn-brand-roman-delay: 200ms;
 }
@@ -34,18 +34,19 @@
   --bn-brand-open: 0;
   --bn-brand-roman-delay: 0ms;
   --bn-brand-kanji-delay: 40ms;
-  --bn-brand-bracket-delay: 40ms;
-  --bn-brand-mark-delay: 200ms;
 }
 
 /* base.css crushes transition DURATION to 0.01ms and does not touch DELAY. Left alone, a
-   reduced-motion collapse would snap the name out, hold an EMPTY brand row for 200ms, then snap
-   the mark in — a visible hole rather than an instant swap. Every delay is a variable precisely so
-   this is five values and no `!important`. */
+   reduced-motion collapse would snap the name out and then hold the frame's own delay before it
+   moved. Every delay is a variable precisely so this is two values and no `!important`.
+   IT USED TO BE FIVE, AND ONE OF THEM MATTERED MORE THAN THE REST: with two drawings crossfading,
+   the mark's 200ms arrival delay left an EMPTY brand row for a fifth of a second. That cannot
+   exist now — the frame is one continuous path and there is no arrival to delay. The morph itself
+   needs nothing here at all: it reads the slot's width, base.css crushes that transition, the
+   width jumps, and it lands in the same frame. */
 @media (prefers-reduced-motion: reduce) {
   .bn-shell, .bn-shell[data-rail='true'] {
     --bn-brand-roman-delay: 0ms; --bn-brand-kanji-delay: 0ms;
-    --bn-brand-bracket-delay: 0ms; --bn-brand-mark-delay: 0ms;
   }
 }
 .bn-shell-main { min-width: 0; position: relative; }
@@ -121,45 +122,45 @@
    would take their clicks. Opacity 0 hides a thing; it does not get it out of the way. */
 .bn-brand-slot > * { position: absolute; top: 50%; left: 50%; translate: -50% -50%; pointer-events: none; }
 
-/* the lockup RECEDES 4% rather than dissolving; the type inside does not translate, because a
-   scaling parent plus a translating child is two blurs stacked on a 10px roman */
-.bn-brand-lockup {
-  scale: calc(0.96 + 0.04 * var(--bn-brand-open));
-  transition: scale var(--bn-t-fast) var(--bn-ease) var(--bn-brand-bracket-delay);
-}
-.bn-brand-lockup .bn-lockup-bracket {
-  opacity: var(--bn-brand-open);
-  transition: opacity var(--bn-t-fast) var(--bn-ease) var(--bn-brand-bracket-delay);
+/* THE COLLAPSE IS ONE MORPH ON ONE DRAWING (logo.md section 16, corrected). The bracket's path
+   interpolates from the lockup's tapered frame to the mark's own wire — `Lockup` drives it off
+   this slot's animating width, so there is no second clock here and no easing to keep in step.
+   What is left for CSS is the TYPE, which cannot morph into anything and should not try: it
+   leaves first and arrives last, so the gesture reads as the name being taken out of its address
+   rather than as two pictures trading places.
+   The frame no longer recedes 4% and the mark no longer springs in from 6%; both were hiding a
+   crossfade that does not happen any more. */
+/* THE DRAWING KEEPS ITS OWN SIZE WHILE ITS BOX CLOSES, and without this the morph is silently
+   wrong. `base.css` gives every svg `max-width: 100%`, which is right everywhere else and fatal
+   here: the slot goes 128px -> 32px, the svg gets capped with it, and the whole viewBox rescales
+   by 0.25 UNDER the morph — so the bracket that should land exactly on the mark landed at a
+   quarter of it. Both resting states still looked plausible, which is why this needed a
+   magnified filmstrip to see at all. */
+.bn-brand-lockup { max-width: none; flex: none; }
+
+/* THE TYPE IS DRAWN IN, not switched off. Filmed against two alternatives at 0/40/80/120/160/
+   220/320ms: on a pure opacity fade the name is a ghost by 40ms and gone by 80, so the eye reads
+   a switch and then a separate frame animation. Scaling it toward the frame's own centre on the
+   slower duration keeps it faintly legible at 80ms INSIDE a frame that has already closed a long
+   way — which is the sentence the gesture is making. The overlap is the point, not a compromise.
+   `view-box` rather than `fill-box`: the origin is the block's centre, which is where the frame
+   converges, and not each glyph run's own middle. */
+.bn-brand-lockup .bn-lockup-kanji,
+.bn-brand-lockup .bn-lockup-roman {
+  transform-box: view-box;
+  transform-origin: 159.5px 116.5px;
+  scale: calc(0.82 + 0.18 * var(--bn-brand-open));
 }
 .bn-brand-lockup .bn-lockup-kanji {
   opacity: var(--bn-brand-open);
-  transition: opacity var(--bn-t-fast) var(--bn-ease) var(--bn-brand-kanji-delay);
+  transition: opacity var(--bn-t) var(--bn-ease) var(--bn-brand-kanji-delay),
+              scale var(--bn-t) var(--bn-ease) var(--bn-brand-kanji-delay);
 }
 .bn-brand-lockup .bn-lockup-roman {
   opacity: calc(var(--bn-lockup-roman-opacity) * var(--bn-brand-open));
-  transition: opacity var(--bn-t-fast) var(--bn-ease) var(--bn-brand-roman-delay);
+  transition: opacity var(--bn-t) var(--bn-ease) var(--bn-brand-roman-delay),
+              scale var(--bn-t) var(--bn-ease) var(--bn-brand-roman-delay);
 }
-/* the mark ARRIVES, from 6% out on the spring, and it is the last thing that moves */
-.bn-brand-mark {
-  opacity: calc(1 - var(--bn-brand-open));
-  scale: calc(1 + 0.06 * var(--bn-brand-open));
-  transition: opacity var(--bn-t-fast) var(--bn-ease-out) var(--bn-brand-mark-delay),
-              scale var(--bn-t-fast) var(--bn-ease-spring) var(--bn-brand-mark-delay);
-}
-
-/* THE CHEVRON IS A HINT, NOT THE CONTROL. The control is the whole 128 x 93 brand row; this only
-   says which way it goes, so it is quiet until the row is under the cursor — the same reveal the
-   22px collapse button used, on a target that is actually hittable this time.
-   It is GONE in the rail rather than faded: 64px less 2 x --bn-2 leaves 48, the mark takes 32,
-   and there is no honest room for a second glyph. The whole mark is the expand target there. */
-.bn-brand-chevron {
-  margin-left: auto;
-  flex: none;
-  color: var(--bn-ink-3);
-  opacity: 0;
-  transition: opacity var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
-}
-.bn-brand:hover .bn-brand-chevron, .bn-brand:focus-visible .bn-brand-chevron { opacity: 1; color: var(--bn-ink); }
 
 .bn-brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
 .bn-brand-name {
@@ -310,7 +311,6 @@
     grid-template-columns: var(--bn-rail-w) minmax(0, 1fr);
     --bn-brand-open: 0;
     --bn-brand-roman-delay: 0ms; --bn-brand-kanji-delay: 40ms;
-    --bn-brand-bracket-delay: 40ms; --bn-brand-mark-delay: 200ms;
   }
   .bn-side { padding: var(--bn-3) var(--bn-2); }
   /* the spine, again — see the rail block above. This breakpoint has no `data-rail` at all. */
