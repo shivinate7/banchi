@@ -2602,10 +2602,10 @@ export type MarkdownAnswer = {
 
 /** What one live-export fetch brought back (D104).
  *
- *  `shortfall` IS A SENTENCE AND NOT A COUNT, and that is the honest shape. `ExcludeListos` is
- *  the owner's standing instruction and it excludes their own photo listings; D64 measured
- *  `Photo URL` empty in all eleven exports, filtered AND unfiltered, so the file cannot say how
- *  many are missing and neither can this. Null when nothing is excluded. */
+ *  THERE IS NO `shortfall` FIELD AND THERE CANNOT BE ONE. `Export From Live` takes no scope —
+ *  no category, no set, no condition, no photo filter — so there is nothing it could have left
+ *  out. The first build of this path guessed a FILTERED request and owed such a field; the
+ *  measured one does not. An empty answer is refused outright rather than reported. */
 export type LiveExportFetched = {
   ok: boolean
   /** The name this server kept it under. What `fetched` on the next request names. */
@@ -2615,7 +2615,6 @@ export type LiveExportFetched = {
   /** Rows TCGplayer reported live — `Total Quantity > 0` — and the copies across them. */
   live_rows: number
   live_copies: number
-  shortfall: string | null
 }
 
 /** One live listing the survey saw (D103).

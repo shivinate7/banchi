@@ -3624,37 +3624,30 @@ GAMES_MODULE = ROOT / "pipeline" / "games.py"
 # this row stops is the person who has just decided the value should be different — and the
 # only thing that will change their mind is the argument, not a restatement of the number.
 EXPORT_MODULE = ROOT / "server" / "tcg_export.py"
-#: The live-inventory fetch's own three (D104). A SECOND TUPLE FOR A SECOND CONSTANT, because
-#: `LIVE_FILTERS` is a different instruction about a different document — and every word of the
-#: argument below for why the catalogue's three need a blocking row applies here unchanged: all
-#: three are invisible downstream, so a wrong value gives a clean survey, a clean markdown and a
-#: green `make check`, forever.
-LIVE_STANDING = (
+#: The live-inventory download's two query parameters (D104), MEASURED off the portal's own
+#: `Export From Live` button rather than designed. That request is a GET with no scope: no
+#: category, no sets, no conditions, no `MyInventory`, no `ExcludeListos`.
+#:
+#: WHY A BLOCKING ROW OVER TWO PARAMETERS. The first build of this path GUESSED a filtered POST
+#: with `CategoryId: "0"`, on the reasoning that `"0"` is the portal's all-row everywhere else.
+#: It is not — the category select is the one field on that form with no `0=All` option — and
+#: the portal answered with a valid CSV header and ZERO rows. So on this endpoint a wrong
+#: request is not refused, it is answered emptily, and the only thing standing between that and
+#: a store-wide `live: 0` is this row plus `fetch_live`'s own empty-export refusal.
+LIVE_QUERY_EXPECTED = (
     (
-        "MyInventory",
-        True,
-        "The operator's OWN live listings, which is the whole point of this path and the "
-        "opposite of the catalogue fetch beside it. The owner asked for it on 2026-09-06. With "
-        "this false the markdown lens would draw the catalogue — every card TCGplayer sells — "
-        "as though it were the operator's inventory, and nothing in the file would say so.",
+        "type",
+        "Pricing",
+        "The LIVE tab rather than Staged. `Export From Staged` is the same endpoint with the "
+        "other value and is a different document — D87 reconciles the store against the live "
+        "one, so this value decides what `live` means for every SKU.",
     ),
     (
-        "ExcludeListos",
-        False,
-        "FALSE HERE AND TRUE ON THE CATALOGUE, and the disagreement is the point rather than an "
-        "oversight. On the catalogue the flag excludes OTHER sellers' photo listings, which is "
-        "noise to a join; on My Pricing every row is the operator's OWN listing, so True "
-        "excludes theirs. Measured on their real download of 2026-09-01: four rows carry a "
-        "`Photo URL` and all four are LIVE — including C-4654187, Kai'Sa (Signature), a single "
-        "copy at $7,000.00, and C-4619603 at 37 copies. True would make the markdown lens omit "
-        "the most valuable listing in the store, and D64's finding that `Photo URL` is empty in "
-        "every export is what would make that permanent: nothing downstream could notice.",
-    ),
-    (
-        "PrintingIds",
-        ["0"],
-        "All Printings, always — the catalogue fetch's argument, unchanged. A number stocked in "
-        "several finishes must arrive with all of them.",
+        "exportLowestListingNotMe",
+        "true",
+        "The portal's own default, checked on that form as 'If me, show next lowest'. It "
+        "changes the `TCG Low Price` column this pipeline reads and prices against, so it is "
+        "transcription that MATTERS rather than transcription that does not.",
     ),
 )
 
@@ -5433,74 +5426,62 @@ def check_export_request(report: Report) -> None:
                     )
                 )
 
-    live = literals_from_module(EXPORT_MODULE).get("LIVE_FILTERS")
+    live = literals_from_module(EXPORT_MODULE).get("LIVE_QUERY")
     if not isinstance(live, dict):
         findings.append(
             Finding(
                 where,
-                "no `LIVE_FILTERS` literal could be read. The live-inventory fetch has its own "
-                "three standing instructions (D104) and they are hoisted for this row's sake, "
-                "exactly as the catalogue's are.",
+                "no `LIVE_QUERY` literal could be read. The live-inventory download's two query "
+                "parameters are hoisted for this row's sake (D104), exactly as the catalogue "
+                "request's three fields are.",
             )
         )
     else:
-        for field, expected, why in LIVE_STANDING:
+        for field, expected, why in LIVE_QUERY_EXPECTED:
             if field not in live:
                 findings.append(
-                    Finding(where, f"`LIVE_FILTERS` no longer names {field}. {why}")
+                    Finding(where, f"`LIVE_QUERY` no longer names {field}. {why}")
                 )
             elif live.get(field) != expected:
                 findings.append(
                     Finding(
                         where,
-                        f"`LIVE_FILTERS`'s {field} is {live.get(field)!r} and must be "
+                        f"`LIVE_QUERY`'s {field} is {live.get(field)!r} and must be "
                         f"{expected!r}. {why}",
                     )
                 )
 
-    # THE CROSS-DICT ASSERTION, WHICH NEITHER SINGLE LOOP CAN MAKE. The two constants are
-    # near-identical and describe OPPOSITE documents, so the likeliest future edit is somebody
-    # folding them into one — or making one a copy of the other and then "fixing" a field in the
-    # wrong place. `MyInventory` is the field they must disagree on, and it is the whole of what
-    # separates the catalogue from the operator's own listings.
-    if isinstance(held, dict) and isinstance(live, dict):
-        for field, why in (
-            (
-                "MyInventory",
-                "they describe OPPOSITE documents — the catalogue and the operator's own live "
-                "listings. One of them is now fetching the wrong thing, and nothing downstream "
-                "can tell: a catalogue parses as an export exactly as a live inventory does.",
-            ),
-            (
-                "ExcludeListos",
-                "on the catalogue it excludes OTHER sellers' photo listings and on My Pricing "
-                "it excludes the operator's OWN — four of them in the real 2026-09-01 download, "
-                "including a $7,000 single copy. Agreement means one of the two requests has "
-                "taken the other's instruction.",
-            ),
-        ):
-            if held.get(field) == live.get(field):
-                findings.append(
-                    Finding(
-                        where,
-                        f"`STANDING_FILTERS` and `LIVE_FILTERS` agree on `{field}`, and {why}",
-                    )
-                )
-        if held is live:
-            findings.append(
-                Finding(
-                    where,
-                    "`LIVE_FILTERS` is `STANDING_FILTERS` rather than its own literal. Two "
-                    "instructions in one object is one instruction.",
-                )
+    # THE TWO REQUESTS MUST STAY TWO REQUESTS. They are different endpoints, different methods
+    # and different documents — a POST of a filtered model against `downloadexportcsv`, and a
+    # GET of everything against `DownloadMyExportCSV`. The likeliest future edit is somebody
+    # noticing they both "fetch an export" and routing one through the other, which would make
+    # the live path scoped again and silently empty (D104's measurement).
+    source = read(EXPORT_MODULE)
+    if "def fetch_live()" not in source:
+        findings.append(
+            Finding(
+                where,
+                "`fetch_live` no longer takes no arguments. It has no scope BECAUSE the live "
+                "download has none — a parameter here is a scope creeping back onto a request "
+                "the portal answers emptily when it is scoped wrong.",
             )
+        )
+    if "tcg_export_empty" not in source:
+        findings.append(
+            Finding(
+                where,
+                "`fetch_live` no longer refuses an empty export. That refusal is the only thing "
+                "between a wrong request and a store-wide `live: 0`: this endpoint answers a "
+                "request it cannot satisfy with a valid header and zero rows, measured.",
+            )
+        )
 
     report.add(
         "export request",
         MECHANICAL,
         findings,
-        f"{len(EXPORT_STANDING)} catalogue and {len(LIVE_STANDING)} live standing filters, "
-        f"each at its instructed value",
+        f"{len(EXPORT_STANDING)} catalogue filters and {len(LIVE_QUERY_EXPECTED)} live query "
+        f"parameters, each at its measured value",
     )
 
 

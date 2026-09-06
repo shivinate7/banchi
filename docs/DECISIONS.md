@@ -5848,7 +5848,9 @@ The file is kept under `inventory/.live/` and named, and `POST /pipeline/markdow
 
 ### What is not known
 
-**No live fetch has ever been made.** The harness drives the whole path against a fake portal and asserts the body on the wire — `MyInventory` true, `ExcludeListos` false, every narrowing axis `0`, the file kept and named — but a fake portal cannot say whether the real one accepts `CategoryId: "0"` or `LanguageIds: ["0"]`. **Two unmeasured values on one press makes a `tcg_request_rejected` harder to attribute**; if it refuses, bisect by trying `LanguageIds: ["1"]` — the proven value — with `CategoryId: "0"` before concluding the category is the problem. Both belong in `docs/specs/stale-listings.md` §6 beside the three that were already owed.
+**The fetch is measured and works.** 2026-09-06, against the owner's account: 128,700 bytes, **759 rows across six product lines, 388 live rows, 1,021 live copies, 4 photo rows** — the same content as the download they took by hand the same day. That was the first press, and it answers what this entry originally recorded as owed.
+
+**What is still unknown is everything downstream of it.** No file this pipeline writes has been uploaded to TCGplayer; `docs/specs/stale-listings.md` §6's three questions are untouched by this work.
 
 **A fetched file's mtime is its FETCH time**, and `Listing.observe_live` arbitrates readings by that. A response TCGplayer served from a cache is therefore dated fresher than the reading it contains. `do_pipeline_export` carries the identical exposure today; this doubles it onto a store-wide surface. Named, not solved.
 

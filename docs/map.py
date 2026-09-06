@@ -1326,8 +1326,8 @@ COMPONENTS = [
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
                                 "D18", "D22", "D23", "D24", "D26", "D31", "D39", "D49", "D50",
                                 "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72",
-                                "D75", "D76", "D80", "D81", "D83", "D84", "D90", "D92", "D96",
-                                "D101", "D102", "D104"],
+                                "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90", "D92",
+                                "D96", "D101", "D102", "D104"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1906,7 +1906,7 @@ COMPONENTS = [
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
                 "governed_by": ["D3", "D8", "D9", "D11", "D16", "D24", "D33", "D53", "D64",
-                                "D65", "D69", "D76", "D104"],
+                                "D65", "D69", "D76", "D87", "D104"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "

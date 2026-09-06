@@ -74,7 +74,7 @@ let HISTORY: unknown[] = []
 
 /** Whether `POST /pipeline/live-export` answers or refuses. `'refuse'` sends the envelope the
  *  capture server actually sends, so the danger arm is exercised against a real shape. */
-let LIVE_FETCH: 'ok' | 'refuse' | 'narrowed' = 'ok'
+let LIVE_FETCH: 'ok' | 'refuse' = 'ok'
 
 async function stub(page: Page): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -126,10 +126,6 @@ async function stub(page: Page): Promise<Wire[]> {
         rows: 759,
         live_rows: 441,
         live_copies: 1140,
-        shortfall:
-          LIVE_FETCH === 'narrowed'
-            ? 'Listings that carry a photo are not in this file — `ExcludeListos` is on.'
-            : null,
       }),
     })
   })
@@ -795,21 +791,17 @@ test('the live export is fetched in one press, and the survey follows it', async
   await expect(page.getByText('441 listings live · 1140 copies')).toBeVisible()
 })
 
-/* THE FETCH NARROWS BY NOTHING, SO IT SAYS NOTHING — and the sentence exists for the day
- * somebody narrows an axis. `ExcludeListos: True` would drop the operator's own photo listings:
- * four rows in their real download, one a single copy at $7,000. D64 measured `Photo URL` empty
- * in every catalogue export, so nothing downstream could ever notice. The server decides; the
- * screen only has to draw it when there is one. */
-test('a fetch that omits nothing says nothing, and one that omits says so', async ({ page }) => {
+/* THE REQUEST TAKES NO SCOPE, SO THERE IS NOTHING IT COULD HAVE LEFT OUT (D104).
+ *
+ * `Export From Live` is a GET with two query parameters and no category, no sets, no
+ * conditions. The first build of this path guessed a FILTERED request and owed a "what I could
+ * not bring" caveat; the measured one does not have one to owe. An answer with no rows is
+ * refused by the server rather than drawn here as an empty inventory. */
+test('the fetch reports every product line and offers no caveat', async ({ page }) => {
   await open(page)
   await page.getByRole('button', { name: 'Fetch my live listings' }).click()
   await expect(page.getByText('441 listings live · 1140 copies')).toBeVisible()
-  await expect(page.locator('.runs-md-shortfall')).toHaveCount(0)
-
-  LIVE_FETCH = 'narrowed'
-  await page.getByRole('button', { name: /Read it again|Fetch my live listings/ }).first().click()
-  await expect(page.locator('.runs-md-shortfall')).toContainText('photo')
-  LIVE_FETCH = 'ok'
+  await expect(page.getByText('across every product line')).toBeVisible()
 })
 
 /* A DEAD COOKIE MUST NOT BE A DEAD END. Every fetch refusal is a sentence with its own code,
