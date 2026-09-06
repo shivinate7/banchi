@@ -1,6 +1,6 @@
 # The seller portal's own API, as read off its bundle
 
-**Status: MAPPED. Partly measured, mostly not. Nothing here is built except what
+**Status: MAPPED. The whole staged-upload-and-publish chain is measured; the rest is not. Nothing here is built except what
 `server/tcg_export.py` and `server/tcg_import.py` already call.**
 
 This file exists because the map is worth more than the one feature that produced it. It was
@@ -40,7 +40,7 @@ contract carries it — initialize, upload, finalize **and rollback**.
 | `/admin/pricing/uploadexportcsv` | `{data[], stagedPricingUploadId, fileName, type}` → `{SuccessfulProductCount, Messages}` | adds a chunk — **their client fires all chunks in parallel** | **measured** |
 | `/admin/pricing/finalizeexportcsv` | `{stagedPricingUploadId, productCount, type}` | closes it | **measured** |
 | `/admin/pricing/rollbackexportcsv` | `{stagedPricingUploadId, type}` | undoes one staged upload — the per-upload counterpart to `clearstagedinventory` | read, unexercised |
-| `/admin/pricing/movetolive` | `{searchModel, scope, connectionId, stagedPricingUploadId, type}` | **publishes staged prices** | read, unexercised |
+| `/admin/pricing/movetolive` | `{searchModel, scope, connectionId, stagedPricingUploadId, type}` | **publishes staged prices** | **measured** — $23.22 to $750.00 and back, 2026-09-06 |
 | `/admin/pricing/productsearch` | search model | the catalog grid's own query | read, unexercised |
 | `/admin/pricing/bulkpricematch` | — | their bulk repricer | read, unexercised |
 | `/admin/pricing/updateinventory` | — | edits inventory | read, unexercised |

@@ -1903,8 +1903,8 @@ COMPONENTS = [
                                       "a transaction is opened, so a bad file is a refusal "
                                       "with nothing sent. THE PUSH IS MEASURED; movetolive is "
                                       "read and has never been called from here.",
-                               "governed_by": ["D13", "D16", "D64", "D100", "D103", "D104",
-                                               "D106"],
+                               "governed_by": ["D13", "D16", "D64", "D87", "D100", "D103",
+                                               "D104", "D106"],
                                "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "

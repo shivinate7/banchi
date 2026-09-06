@@ -32,11 +32,16 @@ not be the same one.
 
 THE PAYLOAD SHAPE WAS READ OFF THE PORTAL'S OWN BUNDLE, NOT GUESSED. Every field below comes
 from `PricingStagedPrice` in `admin/scripts/pricing/main-built.js`, which is the constructor
-their importer runs over each CSV row. Three of the four endpoints have also been observed on
-the wire against the owner's account on 2026-09-06 — `initializeexportcsv`, `uploadexportcsv`
-and `finalizeexportcsv`, in that order, for a real 100-row file that TCGplayer accepted.
-`movetolive` and `rollbackexportcsv` are read but, at the time of writing, unexercised, and
-`docs/specs/stale-listings.md` §6 says which is which.
+their importer runs over each CSV row. FOUR OF THE FIVE HAVE BEEN RUN AGAINST THE OWNER'S REAL
+ACCOUNT on 2026-09-06: `initializeexportcsv`, `uploadexportcsv` and `finalizeexportcsv` for a
+100-row file TCGplayer accepted, and then the whole chain plus `movetolive` for a single row —
+Vilemaw, $23.22 to $750.00 and back, confirmed on the portal's own Live grid. `rollbackexportcsv`
+is the one still only read. `docs/specs/stale-listings.md` §6 carries the timeline.
+
+WHAT THAT RUN ALSO MEASURED, and it is not about this module: `Export From Live` is NOT
+read-your-writes. Forty seconds after a confirmed publish it still served the pre-publish price
+while the grid served the new one — so `pkmnscan reconcile --live`, which writes `live` off that
+export (D87), records the old price if it runs straight after a publish. Nothing guards it.
 
 JQUERY'S DEEP FORM ENCODING IS THE WIRE FORMAT, AND IT IS NOT JSON. `$.post` with a nested
 array serialises to `data[0][ProductConditionId]=...&data[0][MyPrice]=...`, and the observed
