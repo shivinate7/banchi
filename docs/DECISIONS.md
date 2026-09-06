@@ -1340,15 +1340,30 @@ The owner reopened it in those words. The paragraph this replaces named `.review
 
 `637e2e4` was authored on one session's branch and fast-forwarded into main while three others were working on branches cut from it; `f5dcc2b` was pushed straight to `origin/main` during the session that wrote this entry. `origin/main`'s reflog is five consecutive `update by push`. Nothing in the repo had ever said a session may not do that, and nothing checked.
 
-### Branch protection is not available here
+### Branch protection was not available here, and is now on (amended 2026-09-06)
 
-Measured rather than assumed — both surfaces answer 403:
+**AMENDED 2026-09-06: the owner upgraded to GitHub Pro and protection is now on.**
+A pull request is required, force pushes and deletions are refused, and `enforce_admins` is
+true so it binds the owner as well. `required_approving_review_count` is **0** — GitHub
+refuses a self-approval, so requiring one on a solo repo would mean nothing could ever be
+merged. `required_status_checks` is null because nothing runs on a PR yet, and
+`required_linear_history` is false because this repo merges with merge commits.
+
+**The hooks stay, and the paragraph below is why.**
+This entry already argued that a remote gate would have caught one of the two incidents and
+been silent through the other; that argument is unchanged, and it is now the reason the two
+guards are complementary rather than one superseding the other. Nothing about `make merge`,
+the two local hooks or `PKMNSCAN_MAIN=off` changes.
+
+What follows is the measurement as it stood when this entry was written.
+
+Measured rather than assumed — both surfaces answered 403:
 
     GET repos/shivinate7/pkmnscan/rulesets                   403
     GET repos/shivinate7/pkmnscan/branches/main/protection   403
     "Upgrade to GitHub Pro or make this repository public to enable this feature."
 
-Free plan, private repo. Going public is not an option: `CLAUDE.md`'s opsec rule makes a live unredeemed code card a bearer instrument, and this tree carries the enforcement for it. So the server-side gate costs a subscription, and the owner chose the local guard.
+Free plan, private repo. Going public is not an option: `CLAUDE.md`'s opsec rule makes a live unredeemed code card a bearer instrument, and this tree carries the enforcement for it. So the server-side gate costs a subscription, and the owner chose the local guard. **They later bought it** — see the amendment above; the repo stayed private, which is what Pro buys and what going public would have cost.
 
 **It would not have closed this on its own**, which matters if the plan ever changes. Branch protection bites at `git push`. Both incidents moved main **locally** first, by which point every session cut from main is already on a different history. A gate at the remote would have caught the second and been silent through the first.
 

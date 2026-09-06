@@ -823,9 +823,21 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
 
   **Why it is a hook and not a line in this file**: it already was a line nobody had written,
   and main moved under three live worktrees twice on 2026-08-29 — once by a local
-  fast-forward, once by a direct push. GitHub's own branch protection is unavailable here (403,
-  private repo on the free plan), so this is the substitute and not a belt-and-braces addition
-  to it. A refusal is not a bug report: it means put the work on a branch.
+  fast-forward, once by a direct push. A refusal is not a bug report: it means put the work
+  on a branch.
+
+  **GITHUB'S OWN BRANCH PROTECTION IS ON AS OF 2026-09-06, and the hooks did not become
+  redundant** (D42 amended). It was unavailable when D42 was written — 403, free plan,
+  private repo — and the owner's upgrade to Pro turned it on: a PR is required, force-push
+  and deletion are refused, and `enforce_admins` is true, so it binds the owner too. The
+  escape hatch is now a deliberate settings change rather than an env var.
+
+  **The two guards catch different halves, which D42 predicted in as many words.** Branch
+  protection bites at `git push` — it would have caught the second incident and been SILENT
+  through the first, because a local fast-forward moves `refs/heads/main` without touching the
+  remote, and every session cut from main is already on a different history by then. The
+  `reference-transaction` hook is the only thing that sees that. So: the remote gate is real
+  now and the local one is still the only cover for the local half.
 ## Working agreement
 
 - Run `make harness` before you tell me something works. Show me the output, not a claim.
