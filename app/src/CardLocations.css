@@ -230,17 +230,20 @@
 }
 .card-locations-owner .card-locations-claim:hover { text-decoration: none; transform: translateY(-1px); }
 
-@container copies (min-width: 760px) {
-  .card-locations-owner .card-locations-row {
-    grid-template-columns: minmax(0, 1.2fr) minmax(160px, 1fr) auto auto;
-    grid-template-areas: 'place bar state action';
-    column-gap: var(--bn-5);
-  }
-  .card-locations-owner .card-locations-row.is-nobar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-areas: 'place state action';
-  }
-}
+/* THERE IS NO `min-width: 760px` BAND, AND ITS DELETION IS THE MEASUREMENT (2026-09-05).
+   One used to sit here: `'place bar state action'`, the position bar lifted up into the row.
+   It never once rendered. `.inventory-detail` is the ONLY element in this app that opens the
+   `copies` container, and it measures 608px at a 1440 viewport and 756px at both 1920 AND
+   2560 — it stops growing because `.bn-page` caps at 1600, `.browse-body` takes 1536 as
+   `300px + 1fr`, and `.browse-band`'s `minmax(220px, 34%) minmax(0, 1fr)` leaves the pane
+   756.164px from there on. Four pixels short, at every window a person can open.
+
+   It was deleted rather than retuned, on the owner's call, and only after both layouts were
+   RENDERED side by side: forced to 820px the bar is squeezed into a narrow middle column with
+   its two captions stacked above and below it, while the band that actually ships gives the
+   bar the full width of the row. The unreachable design was the worse one, so lowering the
+   threshold would have put a downgrade on screen at 1920+. Every other breakpoint in this
+   file carries a measurement in its comment; this was the only one that carried none. */
 
 .card-locations-owner .card-locations-place {
   grid-area: place;

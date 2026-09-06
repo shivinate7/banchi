@@ -490,7 +490,7 @@ the sheet is rendered in a context resembling the one it ships in. `copies` was 
 someone looked; `pane` (`BoxBrowse.css`) and `pricing` (`Pricing.css`) are two more named
 containers, and whether any specimen of theirs is on this sheet at all has not been asked.
 
-### One of the four `copies` bands cannot fire in the product, and it misses by four pixels
+### ~~One of the four `copies` bands cannot fire in the product, and it misses by four pixels~~ — CLOSED 2026-09-05
 
 **Found while checking the fix above, and NOT fixed — the remedy is a design decision.**
 `CardLocations.css:233` opens `@container copies (min-width: 760px)`, the widest layout, where
@@ -506,12 +506,21 @@ The product's copies pane is in the NARROW band at 1440 (608px), which is the CS
 claim — *"most of the time, because the pane is one column of a three-column screen"* — measured
 rather than asserted for the first time here.
 
-**Three remedies and none of them is a session's to pick.** Lower the threshold to something the
-pane reaches; widen the page or the band so it does; or delete the rule and the layout it
-describes. The first two change what the screen looks like at desktop widths and the third
-throws away a design somebody drew, so this is recorded and left. What a session must NOT do is
-retune the number quietly: every breakpoint in that file carries a measurement in its comment,
-and 760 is the only one with nothing behind it.
+**Three remedies, and the owner picked the third after seeing both layouts rendered.** The rule
+is DELETED, and a comment carrying these measurements stands where it was.
+
+**The renders are why, and they reversed the recommendation.** Forced to 820px the unreachable
+layout squeezes the position bar into a narrow middle column between the address and the two
+controls, with `#40 of 250 · 16% in` above it and `Section 2 · card 15 of 25 slots` below it, all
+inside that column. The band that actually ships gives the bar the full width of the row. **The
+design nobody had ever seen was the worse one**, so lowering the threshold would have put a
+downgrade on screen at 1920 and up — which is what the first draft of this entry was leaning
+toward before anyone looked. Deleting it loses nothing that was ever on screen and removes the
+only breakpoint in that file with no measurement behind it.
+
+**What a session must still NOT do is retune a number here quietly.** The three surviving bands
+— 479, 619 and 470 — each carry their measurement in a comment, and the pane's 608-to-756 range
+is now written down beside them.
 
 ---
 
