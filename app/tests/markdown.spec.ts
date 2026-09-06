@@ -30,7 +30,10 @@ import { sealEveryTest } from './shell'
  * what lets these cases assert what the screen WOULD have sent.
  */
 
-const VIEW = '/#/runs'
+/* THE SHEET LIVES ON `#/pricing` NOW (D105) — it decides a price, and that is the screen
+   where prices are decided. D100 put it on `#/runs` because it reads the same export as the
+   store-wide reconcile, which is kinship of implementation rather than of work. */
+const VIEW = '/#/pricing'
 const STAMP = '20260903-221500'
 
 type Wire = { path: string; body: Record<string, unknown> }
@@ -66,7 +69,7 @@ const checkPress = (page: Page) => page.getByRole('button', { name: /^Check it$/
 const importPress = (page: Page) => page.getByRole('button', { name: /Write the import CSV/ })
 
 /** Both consoles are `LogWell`s and carry this class; the survey's is the first. */
-const consoles = (page: Page) => page.locator('.runs-md-console')
+const consoles = (page: Page) => page.locator('.markdown-console')
 
 /** Markdowns this store has already written, for the cases about the history list. Default is
  *  empty, which is what every case written before D103 assumed. */
@@ -75,6 +78,13 @@ let HISTORY: unknown[] = []
 /** Whether `POST /pipeline/live-export` answers or refuses. `'refuse'` sends the envelope the
  *  capture server actually sends, so the danger arm is exercised against a real shape. */
 let LIVE_FETCH: 'ok' | 'refuse' = 'ok'
+
+/** The HOST screen's own reads, kept apart from `wire` (D105).
+ *
+ *  `wire` is the sheet's traffic and half this file indexes it positionally — `wire[0]` is the
+ *  preview, `wire[1]` the write. Folding the pricing screen's mount reads into it renumbers
+ *  every one of those. This is the screen underneath, and only the key-guard case reads it. */
+let HOST_READS: string[] = []
 
 async function stub(page: Page): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -147,20 +157,55 @@ async function stub(page: Page): Promise<Wire[]> {
       }),
     })
   })
-  /* THE REST OF THE SCREEN, ANSWERED EMPTY. This file is about one sheet; a box list is what
-     the run picker draws and neither reaches nor is reached by it. */
+  /* THE REST OF THE SCREEN, ANSWERED EMPTY. This file is about one sheet; what the host screen
+     draws around it belongs to `pricing.spec.ts`. A store with no joined runs is deliberate —
+     it puts the sheet in the empty-state branch, which is where an operator who has photographed
+     nothing will look for it, and proves the door exists there too. */
   await page.route(/\/boxes$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"boxes":[]}' }),
   )
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs":[]}' }),
   )
+  await page.route(/\/pipeline\/pricing/, async (route) => {
+    /* RECORDED, because a reload is exactly what this call being made twice LOOKS like — and
+       the key-guard case below has nothing else to watch. */
+    HOST_READS.push(new URL(route.request().url()).pathname)
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        runs: [], roster: [], skus: [], written_at: {}, skipped: [], asked: [],
+        live_cap: 4, threshold: null, floor: null,
+      }),
+    })
+  })
+  /* REGISTERED LAST AND SO MATCHED FIRST — Playwright walks newest-first, and this pattern
+     also matches `/pipeline/pricing` when no run is picked (no query, so `$` still anchors).
+     Both are recorded by pathname rather than by which handler caught them. */
+  await page.route(/\/pricing$/, async (route) => {
+    HOST_READS.push(new URL(route.request().url()).pathname)
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: {
+          version: 1,
+          policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' }, threshold: '0.49' },
+          skus: {},
+        },
+        path: '/tmp/prices.json',
+        revision: 'rev-1',
+      }),
+    })
+  })
   await page.goto(VIEW)
   await settleFonts(page)
   return wire
 }
 
 async function open(page: Page): Promise<Wire[]> {
+  HOST_READS = []
   const wire = await stub(page)
   await stubTheLens(page)
   await opener(page).click()
@@ -215,7 +260,7 @@ async function stubTheLens(page: Page) {
 }
 
 async function pickExport(page: Page) {
-  await page.locator('.runs-md .runs-drop input[type=file]').setInputFiles({
+  await page.locator('.markdown .runs-drop input[type=file]').setInputFiles({
     name: 'TCGplayer__MyPricing.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from('TCGplayer Id,Total Quantity\n8936515,4\n'),
@@ -223,7 +268,7 @@ async function pickExport(page: Page) {
 }
 
 async function pickWorklist(page: Page) {
-  await page.locator('.runs-md .runs-filebtn input[type=file]').setInputFiles({
+  await page.locator('.markdown .runs-filebtn input[type=file]').setInputFiles({
     name: 'worklist.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from('TCGplayer Id,TCG Marketplace Price\n8936515,0.44\n'),
@@ -235,15 +280,50 @@ async function pickWorklist(page: Page) {
    case in the file, which is what `make docs-audit`'s `spec seal` row checks. */
 sealEveryTest()
 
-test('the markdown is reachable from the pipeline screen', async ({ page }) => {
+test('the markdown is reachable from the screen where prices are decided', async ({ page }) => {
   await open(page)
 
-  /* ON `#/runs` AND NOT ON A ROUTE OF ITS OWN (D100) — a judgement now rather than the nav
-     measurement it started as, and `App.tsx`'s ROUTES table carries this session's own
-     re-measurement of what a tenth link would cost the sidebar. It is a sibling of the
-     store-wide reconcile because both read the same file. */
+  /* ON `#/pricing` (D105), AND STILL NOT ON A ROUTE OF ITS OWN. D100 put it on `#/runs` beside
+     the store-wide reconcile because both read the same My Pricing export — kinship of
+     IMPLEMENTATION. The owner's objection was that it is not kinship of work: `#/runs` is the
+     pipeline over a box just photographed, and a markdown decides a PRICE over inventory
+     already listed. */
   await expect(sheet(page)).toContainText('My Pricing')
-  await expect(page.getByRole('button', { name: 'Reconcile the whole store' })).toBeVisible()
+
+  /* AND THE RECONCILE DID NOT COME WITH IT — an absence, and the half of D105 that is easy to
+     lose. It writes `live` onto the store's own record, which is a fact about inventory and is
+     settled where the other inventory facts are. Two sheets moving together would have been
+     the co-location argument surviving the objection to it. */
+  await expect(page.getByRole('button', { name: 'Reconcile the whole store' })).toHaveCount(0)
+
+  /* THE DOOR IS THIS SCREEN'S HEADER, in a store with no joined runs — the empty-state branch,
+     which is where an operator who has photographed nothing will look for it. */
+  await page.keyboard.press('Escape')
+  await expect(opener(page)).toBeVisible()
+})
+
+/* THE SHEET IS AN OPEN SURFACE, AND THIS SCREEN'S UNMODIFIED KEYS ENUMERATE THOSE BY NAME.
+ *
+ * `R` reloads and held-`T` peeks a price history, and neither yielded to a surface that did not
+ * exist when they were written. The harmful one is `R`: typed into the sheet's "Cut, percent"
+ * field it would have discarded an in-flight survey out from under the operator. */
+test('the host screen’s bare keys yield to the sheet', async ({ page }) => {
+  const wire = await open(page)
+  await pickExport(page)
+  await expect.poll(() => wire.length).toBe(1)
+
+  /* THE HOST'S OWN READ, ONCE, ON MOUNT. Anything after this is the reload firing. */
+  const before = HOST_READS.length
+  expect(before).toBeGreaterThan(0)
+
+  await page.keyboard.press('r')
+  await page.waitForTimeout(600)
+
+  await expect(sheet(page)).toBeVisible()
+  /* NO RELOAD. `R` would call `load()`, which re-reads the worklist and the corpus and would
+     throw away the survey this sheet is holding — the operator's export is bytes the SCREEN
+     holds, so a reload behind the scrim loses the thing they just waited for. */
+  expect(HOST_READS.length).toBe(before)
 })
 
 test('the sheet is not open until it is asked for, and Escape puts it away', async ({ page }) => {
@@ -267,7 +347,7 @@ test('focus lands in the sheet and Tab keeps it there', async ({ page }) => {
      open, Tab and Shift-Tab stay inside, and it goes back to the opener on close. Asserted
      because the sheet is portalled to <body> — in the DOM it is a SIBLING of the page, so
      nothing about its position keeps a Tab from walking straight into the nav behind it. */
-  const inside = () => page.evaluate(() => document.activeElement?.closest('.runs-md') !== null)
+  const inside = () => page.evaluate(() => document.activeElement?.closest('.markdown') !== null)
   expect(await inside()).toBe(true)
   for (let i = 0; i < 12; i += 1) await page.keyboard.press('Tab')
   expect(await inside()).toBe(true)
@@ -288,7 +368,7 @@ test('the sheet states the two things the operator must not get wrong', async ({
   /* THE PROXY, WHERE IT IS ACTED ON. The store cannot say how long a listing has been live —
      `Listing` has no first-listed stamp — so what is ranked is how long the card has been
      owned. A screen that stopped saying so would be one that quietly started lying. */
-  await expect(page.locator('.runs-md-caveat')).toContainText('owned')
+  await expect(page.locator('.markdown-caveat')).toContainText('owned')
 })
 
 test('picking the export previews, and the preview asks for no write', async ({ page }) => {
@@ -482,12 +562,12 @@ test('Escape leaves a sheet alone while it is mid-request, and closes it once th
   await pickExport(page)
 
   /* IN FLIGHT, SAID BY THE ONE CONTROL THAT CANNOT BE BUSY FOR ANOTHER REASON. This read
-     `.runs-md .bn-btn[disabled], .runs-md [aria-busy="true"]` and took `.first()`, which is any
+     `.markdown .bn-btn[disabled], .markdown [aria-busy="true"]` and took `.first()`, which is any
      disabled button in the sheet — and two of the six here disable for reasons that are NOT the
      request: the worklist press on `!survey.ok` and the import press on `!applied.ok`. A refusal
      with nothing in flight would have satisfied it. The drop zone's own input is disabled by
      `busy` alone, so it is the honest witness. */
-  await expect(page.locator('.runs-md .runs-drop input[type=file]')).toBeDisabled()
+  await expect(page.locator('.markdown .runs-drop input[type=file]')).toBeDisabled()
   await page.keyboard.press('Escape')
   await expect(sheet(page)).toBeVisible()
 
@@ -537,7 +617,7 @@ test('a check that comes back refused keeps the press that runs it again', async
  * A flex item whose own `overflow` is not `visible` has an automatic minimum size of ZERO, and
  * `.runslog` sets `overflow: hidden` — so in a column that overflows it is squeezed flat with
  * every line of stdout still in the DOM, which nothing that reads text can tell. `Runs.css` had
- * `.runs-md-body > *`, a DIRECT-CHILD selector: the survey's console sits in a fragment and is
+ * `.markdown-body > *`, a DIRECT-CHILD selector: the survey's console sits in a fragment and is
  * therefore a child of the body, and the apply's sits one `<div>` deeper. Measured in the check
  * state before this: the survey's was `flex: 0 0 auto` and the apply's `0 1 auto`.
  *
@@ -592,7 +672,7 @@ test('both consoles refuse to shrink, not just the one that is a direct child', 
   await expect(page.getByText('What the check printed')).toBeVisible()
 
   const wells = await page.evaluate(() =>
-    [...document.querySelectorAll('.runs-md-body .runslog')].map((node) => ({
+    [...document.querySelectorAll('.markdown-body .runslog')].map((node) => ({
       label: node.querySelector('.runslog-label')?.textContent ?? '?',
       shrink: getComputedStyle(node).flexShrink,
     })),
@@ -623,14 +703,14 @@ test('a markdown written on an earlier day can be handed back, at the step it wa
     },
   ]
   const wire = await open(page)
-  await expect(page.locator('.runs-md-history-row')).toHaveCount(1)
+  await expect(page.locator('.markdown-history-row')).toHaveCount(1)
 
   /* WHAT IT ASKED FOR, so two markdowns are not two identical rows. Both fields were already on
      the wire and drawn nowhere: the operator could see THAT they had run four surveys and
      nothing about which was which. */
-  await expect(page.locator('.runs-md-history-asked')).toContainText('7 days')
-  await expect(page.locator('.runs-md-history-asked')).toContainText('10% off')
-  await expect(page.locator('.runs-md-history-asked')).toContainText('top 40')
+  await expect(page.locator('.markdown-history-asked')).toContainText('7 days')
+  await expect(page.locator('.markdown-history-asked')).toContainText('10% off')
+  await expect(page.locator('.markdown-history-asked')).toContainText('top 40')
 
   /* AND THE REPORT IS OFFERED. It has been written by every `--write` since D100 and dropped by
      this list's own filter — the one artefact that says WHY a row is in the worklist, and states
@@ -646,7 +726,7 @@ test('a markdown written on an earlier day can be handed back, at the step it wa
 
   /* AND THE PRESS GOES TO THAT STAMP. A hand-back judged against another markdown's manifest is
      the exact failure re-surveying caused, so this is the assertion the whole case exists for. */
-  await page.locator('.runs-md .runs-filebtn input[type=file]').setInputFiles({
+  await page.locator('.markdown .runs-filebtn input[type=file]').setInputFiles({
     name: 'worklist.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from('TCGplayer Id,TCG Marketplace Price\n8936515,1.50\n'),
@@ -671,7 +751,7 @@ test('a markdown with no survey offers its files and not the lens', async ({ pag
     },
   ]
   await open(page)
-  await expect(page.locator('.runs-md-history-row')).toHaveCount(1)
+  await expect(page.locator('.markdown-history-row')).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Price these' })).toHaveCount(0)
   /* But it can still be handed back — the manifest is what `apply` judges against, and that
      predates the lens too. */
@@ -729,7 +809,7 @@ test('the history line names a basis only when it is not the default', async ({ 
     },
   ]
   await open(page)
-  const lines = page.locator('.runs-md-history-asked')
+  const lines = page.locator('.markdown-history-asked')
   await expect(lines.first()).toContainText('10% off of market')
   await expect(lines.nth(1)).toContainText('10% off')
   await expect(lines.nth(1)).not.toContainText('of market')
@@ -812,8 +892,8 @@ test('a refused fetch names the reason and leaves the drop zone open', async ({ 
   await open(page)
   await page.getByRole('button', { name: 'Fetch my live listings' }).click()
 
-  await expect(page.locator('.runs-md .bn-notice-danger')).toContainText('session has expired')
-  await expect(page.locator('.runs-md .bn-notice-danger')).toContainText('tcg_session_expired')
-  await expect(page.locator('.runs-md .runs-drop input[type=file]')).toBeEnabled()
+  await expect(page.locator('.markdown .bn-notice-danger')).toContainText('session has expired')
+  await expect(page.locator('.markdown .bn-notice-danger')).toContainText('tcg_session_expired')
+  await expect(page.locator('.markdown .runs-drop input[type=file]')).toBeEnabled()
   LIVE_FETCH = 'ok'
 })

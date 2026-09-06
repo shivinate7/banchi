@@ -17,7 +17,7 @@ import { toast } from './kit/toast'
 import { DropZone, FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
-import './Runs.css'
+import './Markdown.css'
 
 /* THE STALE-LISTING MARKDOWN (D100), as a sheet off the Runs header — the second one, beside
  * the store-wide reconcile it is a sibling of.
@@ -99,7 +99,26 @@ function askedWords(entry: MarkdownSummary): string {
   return [day, parts.join(' · ')].filter((part) => part !== null && part !== '').join(' — ')
 }
 
-export function Markdown({ open, onClose }: { readonly open: boolean; readonly onClose: () => void }) {
+export function Markdown({
+  open,
+  onClose,
+  revision,
+  onCorpusWritten,
+}: {
+  readonly open: boolean
+  readonly onClose: () => void
+  /** The corpus digest the screen this sheet is mounted on last read (D105).
+   *
+   *  IT TRAVELS BECAUSE THE SHEET NOW SHARES A TAB WITH A SCREEN THAT WRITES THE SAME FILE.
+   *  Step 3 runs `reprice apply --write`, which writes `inventory/prices.json` from a
+   *  subprocess — the hazard D103 built the guard for, and while this sheet lived on `#/runs`
+   *  there was no pricing screen mounted beside it to be clobbered. There is now. Undefined
+   *  means "the host read no revision", which the route allows and the terminal user relies on. */
+  readonly revision?: string
+  /** Hand the digest back after a write, so the host adopts it rather than being refused
+   *  `corpus_moved` on its next keystroke for a write this sheet made on its behalf. */
+  readonly onCorpusWritten?: (next: string) => void
+}) {
   const [days, setDays] = useState('7')
   const [percent, setPercent] = useState('10')
   const [aboveMarket, setAboveMarket] = useState('')
@@ -261,9 +280,13 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
       try {
         const answer = await applyMarkdown(stamp, {
           worklist: edited.current ?? undefined,
+          revision,
           write,
         })
         setApplied(answer)
+        /* THE HOST ADOPTS THE NEW DIGEST WHETHER OR NOT A FILE WAS WRITTEN, because `apply`
+           writes the corpus for every accepted row and `wrote` is only about `import.csv`. */
+        if (answer.revision && onCorpusWritten) onCorpusWritten(answer.revision)
         if (answer.wrote) {
           setWroteImport(true)
           refresh()
@@ -279,7 +302,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
         setBusy(false)
       }
     },
-    [refresh, stamp],
+    [refresh, stamp, revision, onCorpusWritten],
   )
 
   /* Picking an export starts over: a survey about one file and a worklist written from
@@ -391,17 +414,17 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
       {open ? <div className="bn-scrim" onClick={onClose} /> : null}
       <aside
         ref={sheet}
-        className="bn-sheet runs-md"
+        className="bn-sheet markdown"
         hidden={!open}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="runs-md-head"
+        aria-labelledby="markdown-head"
         tabIndex={-1}
       >
-        <header className="runs-md-top">
-          <div className="runs-md-heading">
+        <header className="markdown-top">
+          <div className="markdown-heading">
             <span className="bn-eyebrow">Store-wide · free</span>
-            <h2 className="runs-md-head" id="runs-md-head">
+            <h2 className="markdown-head" id="markdown-head">
               Mark down what is not selling
             </h2>
           </div>
@@ -410,14 +433,14 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
           </Button>
         </header>
 
-        <div className="runs-md-body">
-          <p className="runs-md-says">
+        <div className="markdown-body">
+          <p className="markdown-says">
             One live export — TCGplayer&rsquo;s <strong>My Pricing</strong> — read for the listings
             TCGplayer says are live, that no copy has sold from here inside the window, and that this
             store has held for longer than the window. It reports what each would be re-priced to,
             writes a worklist you can edit, and turns that back into an import CSV you upload.
           </p>
-          <p className="runs-md-says">
+          <p className="markdown-says">
             <strong>Nothing is ever deleted at TCGplayer to lower a price.</strong> The upload edits
             the live listing in place, and every row of every file written here carries{' '}
             <code className="bn-code">Add to Quantity</code> of 0 — so uploading one of them twice
@@ -425,7 +448,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
             <code className="bn-code">emit</code>.
           </p>
 
-          <p className="runs-md-caveat">
+          <p className="markdown-caveat">
             <Icon name="clock" size={14} />
             <span>
               The age this ranks on is how long the card has been <strong>owned</strong>, not how long
@@ -433,11 +456,11 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
             </span>
           </p>
 
-          <section className="runs-md-step" aria-labelledby="runs-md-ask">
-            <h3 className="bn-section-title" id="runs-md-ask">
+          <section className="markdown-step" aria-labelledby="markdown-ask">
+            <h3 className="bn-section-title" id="markdown-ask">
               1 · What counts as stale
             </h3>
-            <div className="runs-md-fields">
+            <div className="markdown-fields">
               <label className="bn-field">
                 <span className="bn-field-label">Window, days</span>
                 <input
@@ -529,7 +552,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                 THE DROP ZONE STAYS AND IS NOT A FALLBACK. An operator with a download already in
                 hand should not have to fetch again, and a dead cookie must not be a dead end:
                 every refusal here is a sentence, and the zone below is what it leaves them. */}
-            <div className="runs-md-row">
+            <div className="markdown-row">
               <Button
                 variant="primary"
                 icon="download"
@@ -539,10 +562,10 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
               >
                 {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
               </Button>
-              <span className="runs-md-hint">
+              <span className="markdown-hint">
                 or drop a{' '}
                 <a
-                  className="runs-md-out"
+                  className="markdown-out"
                   href="https://store.tcgplayer.com/admin/pricing"
                   target="_blank"
                   rel="noreferrer noopener"
@@ -586,7 +609,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
           </section>
 
           {busy && survey === null ? (
-            <p className="runs-md-status" role="status">
+            <p className="markdown-status" role="status">
               <span className="bn-dot bn-dot-accent" /> Reading the export against the store…
             </p>
           ) : null}
@@ -599,25 +622,25 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
 
           {survey === null ? null : (
             <>
-              {/* `runs-md-console` IS A TEST SELECTOR AND NOT A STYLE HOOK, and the difference cost
+              {/* `markdown-console` IS A TEST SELECTOR AND NOT A STYLE HOOK, and the difference cost
                   a session once. `LogWell` puts `className` on the inner `<pre>` rather than on the
                   `.runslog` root, so a layout rule written against this class sets `flex` on
                   something that is not a flex item of this column and changes nothing at all. The
-                  rule that keeps both consoles from being squeezed flat is on `.runslog` in
-                  `Runs.css`, and says so there. */}
+                  rule that keeps both consoles from being squeezed flat is `.markdown-body
+                  .runslog` in `Markdown.css`, and says so there. */}
               <LogWell
                 text={survey.console}
                 label={stamp === null ? 'What the survey printed' : 'What the worklist write printed'}
-                className="runs-md-console"
+                className="markdown-console"
                 maxHeight={420}
               />
 
-              <section className="runs-md-step" aria-labelledby="runs-md-worklist">
-                <h3 className="bn-section-title" id="runs-md-worklist">
+              <section className="markdown-step" aria-labelledby="markdown-worklist">
+                <h3 className="bn-section-title" id="markdown-worklist">
                   2 · The worklist
                 </h3>
                 {stamp === null ? (
-                  <p className="runs-md-says">
+                  <p className="markdown-says">
                     The press below writes the rows above into a CSV on this machine. It is uploaded
                     nowhere and it changes no price anywhere until you say so.
                   </p>
@@ -639,7 +662,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
 
                         IT LEAVES THE SHEET, so it closes it on the way out rather than leaving a
                         modal standing over the screen the operator has just been sent to. */}
-                    <div className="runs-md-row">
+                    <div className="markdown-row">
                       <Button
                         variant="primary"
                         icon="tag"
@@ -654,7 +677,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                         <Icon name="download" size={16} />
                         {WORKLIST}
                       </a>
-                      <span className="bn-mono runs-md-stamp">{stamp}</span>
+                      <span className="bn-mono markdown-stamp">{stamp}</span>
                     </div>
                   </>
                 )}
@@ -663,18 +686,18 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
           )}
 
           {stamp === null ? null : (
-            <section className="runs-md-step" aria-labelledby="runs-md-apply">
-              <h3 className="bn-section-title" id="runs-md-apply">
+            <section className="markdown-step" aria-labelledby="markdown-apply">
+              <h3 className="bn-section-title" id="markdown-apply">
                 3 · The upload
               </h3>
-              <div className="runs-md-row">
+              <div className="markdown-row">
                 <FileButton
                   label={worklistName ?? 'Hand the worklist back'}
                   icon="upload"
                   disabled={busy}
                   onFiles={takeWorklist}
                 />
-                <span className="runs-md-hint">
+                <span className="markdown-hint">
                   {survey === null
                     ? 'Leaving it means the worklist already in this markdown, unedited.'
                     : 'Optional — leaving it means \u201cthe one you wrote\u201d.'}
@@ -686,7 +709,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                   <LogWell
                     text={applied.console}
                     label={wroteImport ? 'What the write printed' : 'What the check printed'}
-                    className="runs-md-console"
+                    className="markdown-console"
                     maxHeight={420}
                   />
                   {wroteImport ? (
@@ -695,7 +718,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                         Upload this through TCGplayer&rsquo;s My Pricing. It carries{' '}
                         <code className="bn-code">Add to Quantity</code> of 0 on every row.
                       </Notice>
-                      <div className="runs-md-row">
+                      <div className="markdown-row">
                         <a className="bn-btn" href={markdownFileUrl(stamp, IMPORT)} download={IMPORT}>
                           <Icon name="download" size={16} />
                           {IMPORT}
@@ -709,17 +732,17 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
           )}
 
           {history.length === 0 ? null : (
-            <section className="runs-md-step" aria-labelledby="runs-md-history">
-              <h3 className="bn-section-title" id="runs-md-history">
+            <section className="markdown-step" aria-labelledby="markdown-history">
+              <h3 className="bn-section-title" id="markdown-history">
                 Earlier markdowns
               </h3>
               {/* WHAT THE DIRECTORY HOLDS, not a flag: whether the upload was ever written is
                   answered by `import.csv` being listed rather than by a boolean that could be
                   true of a file somebody deleted. */}
-              <ul className="bn-list runs-md-history">
+              <ul className="bn-list markdown-history">
                 {history.map((entry) => (
                   <li
-                    className="bn-list-row runs-md-history-row"
+                    className="bn-list-row markdown-history-row"
                     key={entry.stamp}
                     /* WHICH EXPORT IT WAS READ FROM, on hover rather than on the row. It is the
                        fact that settles "is this the same download I am holding" and it is a
@@ -727,7 +750,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                        narrow sheet to answer a question nobody asks twice. */
                     title={entry.source === null ? undefined : `read from ${entry.source}`}
                   >
-                    <span className="bn-mono runs-md-stamp">{entry.stamp}</span>
+                    <span className="bn-mono markdown-stamp">{entry.stamp}</span>
                     <span className="bn-muted bn-tnum">
                       {entry.skus} SKU{entry.skus === 1 ? '' : 's'}
                     </span>
@@ -735,8 +758,8 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                         were already on the wire and drawn nowhere, which made a list of stamps
                         a list of identical rows: the operator could see THAT they had run four
                         surveys and nothing about which was which. */}
-                    <span className="bn-muted runs-md-history-asked">{askedWords(entry)}</span>
-                    <span className="runs-md-history-files">
+                    <span className="bn-muted markdown-history-asked">{askedWords(entry)}</span>
+                    <span className="markdown-history-files">
                       {/* A MARKDOWN IS DURABLE STATE, NOT A ONE-SHOT — `inventory/markdowns/<stamp>/`
                           keeps its survey, and `reprice apply` will judge a worklist against it
                           weeks later. So yesterday's markdown reopens in the lens on the same terms
@@ -802,7 +825,7 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
           )}
         </div>
 
-        <footer className="runs-md-foot">
+        <footer className="markdown-foot">
           <Button variant="ghost" onClick={onClose}>
             {wroteImport ? 'Done' : 'Not now'}
           </Button>

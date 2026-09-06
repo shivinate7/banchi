@@ -99,9 +99,10 @@
 /* THE THUMB LIFT LIVES HERE BECAUSE IT HAS TO WIN. A `@media` block does not raise specificity,
    so a phone height written before the 28px above at the same specificity loses to it — and one
    was, at the top of this file, from the day it was written. Every `LogWell` in the product drew a
-   28px fold toggle on a phone against CLAUDE.md's 40, and the sheet-scoped `.runs-md` copy of this
-   rule was the only one that ever took effect. That copy is deleted; this is unscoped, so it
-   reaches the reconcile sheet, the composer and the run panel too. */
+   28px fold toggle on a phone against CLAUDE.md's 40, and a sheet-scoped copy of this rule was the
+   only one that ever took effect. That copy is deleted; this is unscoped, so it reaches the
+   reconcile sheet, the composer, the run panel — and the markdown sheet, which took its own
+   stylesheet to `#/pricing` (D105) but still renders a `LogWell` styled from here. */
 @media (max-width: 767px) {
   .runslog-toggle { height: 40px; }
   .runslog-head .bn-btn-sm { --btn-h: 40px; }
@@ -313,172 +314,6 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
   .runs-composer-body { padding: var(--bn-4); }
   .runs-composer-foot { flex-wrap: wrap; padding-left: var(--bn-4); padding-right: var(--bn-4); }
   .runs-composer-note { flex-basis: 100%; white-space: normal; order: -1; }
-}
-
-/* ---- the stale-listing markdown sheet (D100) ----------------------------------
-   THE KIT HAS THE SHEET AND NOT ITS CHROME. `.bn-sheet` is the fixed panel, the phone's
-   bottom-rise and the leave animation; a scrolling body between a fixed head and a fixed
-   foot is not a kit primitive, so this is the composer's own chrome above, re-stated for a
-   sheet — which is the second time and therefore the last before it is worth promoting.
-   Deliberately NOT a second stylesheet: this modal is a part of the runs screen, and the
-   composer, the log well and the file controls all style themselves here. */
-.runs-md {
-  width: min(560px, 100vw);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.runs-md[hidden] { display: none; }
-.runs-md:focus { outline: none; }
-.runs-md-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--bn-3);
-  padding: var(--bn-5) var(--bn-4) var(--bn-4) var(--bn-6);
-  padding-top: calc(var(--bn-5) + env(safe-area-inset-top));
-  border-bottom: 1px solid var(--bn-line);
-  flex: none;
-}
-.runs-md-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.runs-md-head {
-  margin: 0;
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-2xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-.runs-md-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-4);
-  padding: var(--bn-5) var(--bn-6);
-}
-/* THE SCROLLING COLUMN MUST NOT SHRINK WHAT IS IN IT. A flex item whose own `overflow` is not
-   `visible` has an automatic minimum size of ZERO, and `.runslog` sets `overflow: hidden` — so
-   in a column that overflows, the console is squeezed flat instead of the body scrolling.
-   Measured before this line: the survey's `LogWell` rendered 512px wide and 0px tall, with
-   every line of stdout present in the DOM. Nothing that reads text could tell. */
-.runs-md-body > * { flex: none; }
-/* AND THE ONE THAT IS NOT A DIRECT CHILD. The rule above is `>`, so it reached the survey's
-   console — which sits in a fragment and is therefore a child of the body — and never reached the
-   apply's, which is one `<div>` deeper. Measured in the check state: the survey's well computed
-   `flex: 0 0 auto` and the apply's `0 1 auto`, shrinkable, which is the whole defect the line
-   above was written against.
-
-   ON `.runslog` AND NOT ON `.runs-md-console`, which is the class both call sites already pass and
-   which looks like the obvious hook. `LogWell` puts that class on the inner `<pre>`, not on the
-   well — so a rule on it sets `flex` on an element that is not a flex item of this column and
-   changes nothing. The well is what has to refuse to shrink, and it is what carries `overflow:
-   hidden` and therefore the automatic minimum size of zero. */
-.runs-md-body .runslog { flex: none; }
-.runs-md-says {
-  margin: 0;
-  font-size: var(--bn-fs-base);
-  line-height: 1.55;
-  color: var(--bn-ink-2);
-}
-.runs-md-says strong { color: var(--bn-ink); }
-
-/* THE PROXY, SAID WHERE IT IS ACTED ON. What is ranked is how long the card has been OWNED,
-   because `Listing` has no first-listed stamp. Quiet like the reconcile's own age line: it is
-   a caveat on a number, never a refusal. */
-.runs-md-caveat {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--bn-2);
-  margin: calc(var(--bn-3) * -1) 0 0;
-  padding: var(--bn-3);
-  border-radius: var(--bn-r);
-  background: var(--bn-surface-2);
-  font-size: var(--bn-fs-md);
-  line-height: 1.5;
-  color: var(--bn-ink-3);
-}
-.runs-md-caveat .bn-icon { flex: none; margin-top: 2px; color: var(--bn-ink-4); }
-.runs-md-caveat strong { color: var(--bn-ink); font-weight: 650; }
-
-/* One step of the three. The rule above each is the seam the eye needs on a column this
-   long; the first carries the head straight after the caveat and needs none. */
-.runs-md-step {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-3);
-  padding-top: var(--bn-4);
-  border-top: 1px solid var(--bn-line);
-}
-.runs-md-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--bn-3);
-}
-.runs-md-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--bn-2) var(--bn-3); }
-.runs-md-hint { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-/* A machine string, so it never breaks mid-token: at 390 the row was splitting a stamp across
-   two lines, which reads as two stamps. */
-.runs-md-stamp { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
-.runs-md-status {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-2);
-  margin: 0;
-  font-size: var(--bn-fs-md);
-  color: var(--bn-ink-3);
-}
-/* TWO LINES AT EVERY WIDTH — the meta, then the controls (D103). It was one line with the
-   controls pushed right by `margin-left: auto`, which was fine at two downloads and is not at
-   four: the sheet is ~420px, the meta takes most of it, and the controls wrapped ONE PER LINE
-   into the sliver that was left, making every history row five lines tall. Given a full line of
-   their own they sit in a row and the entry is two. */
-.runs-md-history-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--bn-1) var(--bn-3);
-  font-size: var(--bn-fs-md);
-}
-.runs-md-history-files {
-  flex-basis: 100%;
-  display: flex;
-  align-items: center;
-  gap: var(--bn-1);
-  flex-wrap: wrap;
-}
-.runs-md-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--bn-2);
-  padding: var(--bn-3) var(--bn-6);
-  padding-bottom: calc(var(--bn-3) + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--bn-line);
-  background: var(--bn-surface);
-  flex: none;
-}
-@media (max-width: 767px) {
-  .runs-md-top { padding-left: var(--bn-4); }
-  .runs-md-top .bn-btn-icon,
-  .runs-md-foot .bn-btn,
-  .runs-md-step .bn-btn,
-  .runs-md-step a.bn-btn { --btn-h: 40px; }
-  .runs-md-body,
-  .runs-md-foot { padding-left: var(--bn-4); padding-right: var(--bn-4); }
-  /* ONE THUMB TARGET THIS SHEET STILL INHERITS SHORT, and it is a kit gap of the kind named
-     beside `.bn-btn-sm` up there: `.bn-check`'s label measured 19.5px at 390 against CLAUDE.md's
-     40. The other two were the log well's fold toggle at 28px and its Copy at 36px, and they were
-     a rule-order defect in this very file rather than a kit gap — a phone lift written before the
-     base rules at the same specificity, dead on arrival. They are fixed at their own sites now
-     (see `.runslog-toggle`), so every `LogWell` in the product gets them and not only this one. */
-  /* The log well's toggle and its Copy are lifted at their own sites now, unscoped, so every
-     `LogWell` gets them rather than only this sheet's. The check is still somebody else's. */
-  .runs-md .bn-check { min-height: 40px; }
-  /* One column: two number fields side by side at 390 leave neither a readable label. */
-  .runs-md-fields { grid-template-columns: minmax(0, 1fr); }
-  /* The files drop to their own line rather than squeezing the stamp beside them. */
 }
 
 /* the handoff line inside its notice */
@@ -866,40 +701,9 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
 .runs-receipt-run { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
 .runs-receipt-fine { text-align: center; }
 
-/* THE ONE LINK ON THIS SHEET THAT LEAVES THE PRODUCT (D103) — the operator's own TCGplayer My
-   Pricing page, because step 1 of this flow happens off this machine and the screen used to say
-   nothing about where. A SCREEN-PREFIXED CLASS AND NOT A KIT PRIMITIVE: the kit has no inline
-   link component, this is the only inline link in the app, and CLAUDE.md's rule is to build one
-   here and say so rather than make a fourth hand-rolled thing look like a fifth kit part. Every
-   value is a token. */
-.runs-md-out {
-  color: var(--bn-accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  border-radius: var(--bn-r-xs);
-}
-.runs-md-out:hover { color: var(--bn-accent-hover); }
-.runs-md-out:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: 2px; }
-
-/* What a past markdown asked for, beside its stamp — muted, so the row's controls lead. */
-.runs-md-history-asked {
-  font-size: var(--bn-fs-xs);
-  white-space: nowrap;
-}
-
-/* WHAT A FETCH COULD NOT BRING (D104) — drawn inside the ok Notice rather than as its own
-   warning, because it is a caveat on a success and not a failure. It is empty today: the live
-   fetch narrows by nothing, and this exists for the day somebody narrows an axis, when the
-   omission would otherwise be silent forever. */
-.runs-md-shortfall {
-  display: block;
-  margin-top: var(--bn-1);
-  color: var(--bn-ink-3);
-}
-
-/* The fetch control above each drop zone. A row so the button and its "or drop one" sit on one
-   line at desk width and stack on a phone, like every other pair on these sheets. */
-.runs-md-row + .runs-md-row { margin-top: var(--bn-2); }
+/* The fetch control above the reconcile's drop zone. A row so the button and its "or drop one"
+   sit on one line at desk width and stack on a phone, like every other pair on these sheets.
+   Its twin is `.markdown-row` in `Markdown.css`, which left with the sheet (D105). */
 .livecheck-fetch {
   display: flex;
   flex-wrap: wrap;

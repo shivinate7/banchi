@@ -2365,7 +2365,10 @@ COMPONENTS = [
                                     "the order routes were ADDED and not their place in the "
                                     "table, which is why `route census` checks the counts and "
                                     "deliberately not these.",
-                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27", "D28", "D31", "D33", "D39", "D49", "D51", "D53", "D57", "D61", "D63", "D66", "D69", "D70", "D94", "D95", "D100"]},
+                            "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
+                                            "D28", "D31", "D33", "D39", "D49", "D51", "D53",
+                                            "D57", "D61", "D63", "D66", "D69", "D70", "D94",
+                                            "D95", "D100", "D105"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -3061,7 +3064,7 @@ COMPONENTS = [
                                      "No fill on the selected chip — the solid accent is reserved "
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
-                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104"]},
+                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104", "D105"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -3125,25 +3128,46 @@ COMPONENTS = [
                                          "more here — a survey about one file and a worklist "
                                          "written from another would make the numbers on screen "
                                          "about something else. Both consoles are RunsLog wells "
-                                         "and neither is summarised (D33). BESIDE THE RECONCILE "
-                                         "AND NOT ON A ROUTE, which App.tsx's ROUTES table "
-                                         "records as a judgement rather than the nav measurement "
-                                         "D100 argued from: that measurement was over the "
-                                         "horizontal strip D95 deleted, and a tenth sidebar link "
-                                         "would now fit. Says two things in its own words that no "
+                                         "and neither is summarised (D33). MOUNTED INSIDE "
+                                         "#/pricing SINCE D105 AND STILL NOT ON A ROUTE. D100 "
+                                         "put it beside the store-wide reconcile because both "
+                                         "read one export — kinship of IMPLEMENTATION; a "
+                                         "markdown decides a PRICE, so it lives where prices are "
+                                         "decided, and its own step-2 press now LANDS rather "
+                                         "than navigating, because App.tsx keys the view on the "
+                                         "hash minus its query. It takes `revision` and hands "
+                                         "back `onCorpusWritten` for that move's one real cost: "
+                                         "step 3 writes inventory/prices.json from a subprocess "
+                                         "and now shares a tab with the screen holding the "
+                                         "digest, which is exactly the hazard D103 built the "
+                                         "guard for. Says two things in its own words that no "
                                          "spec can say for it — that nothing is deleted at "
                                          "TCGplayer to lower a price, and that the age it ranks "
                                          "on is OWNERSHIP age.",
                                  "governed_by": ["D7", "D9", "D13", "D33", "D49", "D64", "D86",
-                                                 "D87", "D94", "D95", "D100", "D103", "D104"],
+                                                 "D87", "D94", "D95", "D100", "D103", "D104",
+                                                 "D105"],
                                  # `app/tests/markdown.spec.ts` is the check the hard rule says
                                  # does not otherwise exist — it runs under `make design-check`,
                                  # not at turn end, so it is named here in prose rather than in
-                                 # `tested_by`. It has NO stylesheet of its own on purpose: the
-                                 # PR this came from carried a 253-line one written against the
-                                 # legacy alias variables, and the chrome lives in Runs.css with
-                                 # the composer's, in `--bn-*` only.
+                                 # `tested_by`.
                                  },
+            "src/Markdown.css": {"does": "the sheet's own chrome, and the prefix names the "
+                                         "COMPONENT rather than a screen (D105). It was "
+                                         "`.runs-md-*` inside Runs.css until 2026-09-06, which "
+                                         "left this component importing another screen's "
+                                         "stylesheet and forty class names asserting a host it "
+                                         "no longer has. The kit has the sheet and NOT its "
+                                         "chrome: `.bn-sheet` is the fixed panel and the phone's "
+                                         "bottom-rise, and a scrolling body between a fixed head "
+                                         "and a fixed foot is not a kit primitive — this is the "
+                                         "runs composer's chrome re-stated for a sheet, the "
+                                         "second time and so the last before it is worth "
+                                         "promoting. One rule was dropped rather than moved: "
+                                         "`.runs-md-shortfall`, whose comment said it awaited a "
+                                         "narrowing axis while app/src/types.ts says the field "
+                                         "it draws cannot exist. `--bn-*` only.",
+                                 "governed_by": ["D50", "D94", "D100", "D103", "D105"]},
             "src/runsOverlay.ts": {"does": "dialog focus for the three runs overlays — the composer, "
                                            "the store-wide reconcile and the markdown sheet: focus lands "
                                            "inside on open, Tab and Shift-Tab stay inside, focus "
@@ -3190,7 +3214,7 @@ COMPONENTS = [
                                                 "D33", "D35", "D37", "D39", "D41", "D48",
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
-                                                "D99", "D100", "D103"]},
+                                                "D99", "D100", "D103", "D101", "D105"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -3209,7 +3233,7 @@ COMPONENTS = [
                                         "control and nothing has to win a stacking order.",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85",
-                                                "D86", "D103"]},
+                                                "D86", "D103", "D105"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -3884,7 +3908,7 @@ COMPONENTS = [
                         "arrow belongs to the screens, a held Cmd in a text field belongs to the "
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
-                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100"],
+                "governed_by": ["D5", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D100", "D105"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -3989,7 +4013,7 @@ COMPONENTS = [
                         "than disabled, D33's shape applied twice on one screen. Two routes are "
                         "intercepted and their bodies read; no real request is made and no store "
                         "is touched.",
-                "governed_by": ["D7", "D9", "D33", "D64", "D86", "D100", "D103", "D104"],
+                "governed_by": ["D7", "D9", "D33", "D64", "D86", "D100", "D103", "D104", "D105"],
                 "note": "ONE OF ITS CASES IS A GEOMETRY ASSERTION AND IT WAS WRITTEN FROM A "
                         "DEFECT. The survey console rendered 512px wide and 0px TALL — "
                         "`.runslog` sets `overflow: hidden`, which makes a flex item's automatic "

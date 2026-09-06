@@ -53,6 +53,7 @@ import { FLAT_KEY, owed, subThresholdSkus, type OwedReason } from './readiness'
 import { PriceHistoryPanel, RANGE_LABEL, type HistoryRead } from './PriceHistory'
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { RunFiles } from './RunFiles'
+import { Markdown } from './Markdown'
 import { LogWell } from './RunsLog'
 import { runBoxLabel } from './runScope'
 import {
@@ -810,6 +811,11 @@ export function Pricing() {
   /** The lens's press, as a state machine rather than a call — for the emit press's reason:
    *  `reprice apply` reads `inventory/prices.json` OFF DISK, so it must not run while a save
    *  is still in flight. `checking`/`writing` park until the autosave is quiet. */
+  /** Whether the markdown sheet is open (D105). It lives HERE now rather than on `#/runs`,
+   *  because a markdown decides a price and this is where prices are decided — D100 placed it
+   *  beside the store-wide reconcile on kinship of IMPLEMENTATION (both read one export), which
+   *  is not kinship of work. */
+  const [mdOpen, setMdOpen] = useState(false)
   const [push, setPush] = useState<'idle' | 'checking' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
@@ -1800,7 +1806,11 @@ export function Pricing() {
       if (event.key.toLowerCase() !== 't' || event.repeat) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (heldSku.current !== null) return
-      if (holdFor !== null) return
+      /* AND WHILE THE MARKDOWN SHEET IS OPEN (D105). This screen's unmodified keys enumerate
+         the open surfaces they yield to BY NAME, and the sheet is a new one: a `t` typed into
+         its "Cut, percent" field would otherwise pull a price history for whichever row the
+         pointer happened to be over, behind the scrim. */
+      if (holdFor !== null || mdOpen) return
       if (isEditableTarget(event.target) && !isPriceField(event.target)) return
       const aim = hovered.current ?? focusedSku()
       const row = aim === null ? undefined : rows.find((one) => one.sku === aim)
@@ -1820,7 +1830,7 @@ export function Pricing() {
       window.removeEventListener('keyup', up)
       window.removeEventListener('blur', release)
     }
-  }, [focusedSku, holdFor, isPriceField, readHistory, rows])
+  }, [focusedSku, holdFor, mdOpen, isPriceField, readHistory, rows])
 
   const onKey = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>, sku: PricingSku) => {
@@ -1904,6 +1914,11 @@ export function Pricing() {
     return row === undefined ? null : runBoxLabel(row)
   }, [stamp, sheet, run, detail, runs])
 
+  const closeMarkdown = useCallback(() => setMdOpen(false), [])
+  /** Take the digest a subprocess write produced, so the next keystroke is not refused for it. */
+  const adoptRevision = useCallback((next: string) => {
+    revision.current = next
+  }, [])
   const closePicker = useCallback(() => setRunsOpen(false), [])
   useDismiss(pickerRef, runsOpen, closePicker)
 
@@ -1935,26 +1950,26 @@ export function Pricing() {
   useEffect(() => {
     if (pinned === null && photoFor === null) return
     const key = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || holdFor !== null || filesOpen || runsOpen || isPriceField(event.target)) return
+      if (event.key !== 'Escape' || holdFor !== null || filesOpen || runsOpen || mdOpen || isPriceField(event.target)) return
       closeDrawer()
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [pinned, photoFor, holdFor, filesOpen, runsOpen, isPriceField, closeDrawer])
+  }, [pinned, photoFor, holdFor, filesOpen, runsOpen, mdOpen, isPriceField, closeDrawer])
 
   /* R reloads, as it does on Review — outside a field, outside a panel, and never on a phone. */
   useEffect(() => {
     if (phone) return
     const key = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== 'r' || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return
-      if (holdFor !== null || filesOpen || runsOpen || loading) return
+      if (holdFor !== null || filesOpen || runsOpen || mdOpen || loading) return
       if (isEditableTarget(event.target)) return
       event.preventDefault()
       void load(picked, stamp)
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [phone, holdFor, filesOpen, runsOpen, loading, load, picked, stamp])
+  }, [phone, holdFor, filesOpen, runsOpen, mdOpen, loading, load, picked, stamp])
 
   const activePreset = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis) ?? null
   /* NO INVENTED FIGURES. The floor is the store's own and a screen that cannot read it says
@@ -2135,6 +2150,17 @@ export function Pricing() {
           <Icon name={saving ? 'refresh' : dirty ? 'clock' : 'check'} size={12} />
           {saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved'}
         </span>
+        {/* THE DOOR, WHERE THE WORK IS (D105). It was a header button on `#/runs`; the owner's
+            objection was that a markdown is about inventory ALREADY LISTED and this is the
+            screen that decides prices — D100 placed it beside the store-wide reconcile on
+            kinship of implementation (both read one export), which is not kinship of work.
+            Its own step-2 press writes `#/pricing?markdown=<stamp>`, which now lands on the
+            screen the operator is standing on rather than navigating anywhere: `App.tsx` keys
+            the view on the hash MINUS its query. */}
+        <Button icon="trendDown" onClick={() => setMdOpen(true)} aria-label="Mark down stale listings">
+          <span className="pricing-hide-sm">Mark down stale</span>
+          <span className="pricing-only-sm">Mark down</span>
+        </Button>
         <div className="pricing-runs-anchor" ref={pickerRef}>
           <Button
             icon="layers"
@@ -2175,6 +2201,19 @@ export function Pricing() {
     </header>
   )
 
+  /* THE SHEET, MOUNTED BESIDE THE CHROME SO IT EXISTS IN EVERY STATE OF THIS SCREEN — including
+     the early-return empty states, which is where an operator with no joined runs will look for
+     it. It carries this screen's corpus digest and hands back the one its write produced: two
+     writers of `inventory/prices.json` now share a tab, and only one of them had the guard. */
+  const markdownSheet = (
+    <Markdown
+      open={mdOpen}
+      onClose={closeMarkdown}
+      revision={revision.current || undefined}
+      onCorpusWritten={adoptRevision}
+    />
+  )
+
   /* THE EMPTY STATES: the fetch failed, nothing is joined, the narrowing matched nothing, or
      every open run has been answered — and, on a lens, an export TCGplayer returned nothing
      live in. THE GUARD IS ABOUT ROWS AND NOT ABOUT `work`, because a markdown has no `runs`
@@ -2184,6 +2223,7 @@ export function Pricing() {
     return (
       <main className="pricing bn-page">
         {chrome}
+        {markdownSheet}
         {loading ? (
           <SkeletonRows count={6} />
         ) : failure !== null ? (
@@ -2211,10 +2251,13 @@ export function Pricing() {
           <EmptyState
             icon="tag"
             title="Nothing live in that export"
-            body="This markdown surveyed no live listings — every row TCGplayer returned was sold out. Download a fresh My Pricing export and read it again on Runs."
+            body="This markdown surveyed no live listings — every row TCGplayer returned was sold out. Fetch a fresh export and read it again."
             actions={
-              <Button variant="primary" icon="play" onClick={() => (window.location.hash = '#/runs')}>
-                Go to Runs
+              /* THE DOOR IS HERE NOW (D105). This sent the operator to `#/runs` for a sheet
+                 that is no longer on it — a screen naming a destination that cannot perform
+                 the act it names, which is the defect D101 is about. */
+              <Button variant="primary" icon="trendDown" onClick={() => setMdOpen(true)}>
+                Read a fresh export
               </Button>
             }
           />
@@ -2264,6 +2307,7 @@ export function Pricing() {
   return (
     <main className="pricing bn-page" data-drawer={historySku !== null || (photoSku !== null && photoFor !== null) ? 'open' : undefined}>
       {chrome}
+      {markdownSheet}
 
       <div className="pricing-body" data-trends={trendRun === null ? 'off' : 'on'}>
         {(work?.skipped ?? []).length === 0 ? null : (
