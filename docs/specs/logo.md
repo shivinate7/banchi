@@ -789,7 +789,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `romanSize` | 0.25 | rounds 28–31 |
 | `romanFill` | 0.75 | rounds 25–27 |
 | `romanTrack` | 0.14 | a SEED, not an answer — see below |
-| `romanOpacity` | 0.62 | carried from the recovered pass |
+| `romanOpacity` | 0.45 | rounds 32–34, with a stated exception |
 
 **A key in this table is not the same as a key that has been argued.** The `settled` column says
 which is which, and it is the only place that says it — a value carried from the recovered pass
@@ -811,6 +811,43 @@ this file that **no drawing on any sheet has ever used** — the same defect as 
 value the picture beside it does not have, one level further back. The drawing now records
 `romanTrackSolved`, the tracking that actually reached it, and **it cannot be swept**: it is
 derived, and §7 rule 6 has nothing to hold constant while it moves.
+
+### The roman's opacity, settled over three rounds — and the light theme sits under a floor on purpose
+
+**0.45 of the ink.** It replaces the 0.62 carried from the recovered pass.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 32 | 0.35 – 1.00 | 0.35 – 0.62 | the low end was not bracketed |
+| 33 | 0.20 – 0.58, **both grounds** | 0.27 – 0.45 | the grounds are not mirrors |
+| 34 | 0.35 – 0.50, against a floor | 0.45 | one value clears, on one ground |
+
+**An opacity is the only parameter in this set whose failure can be measured rather than judged**,
+and two measurements were built for it. The caption prints the WCAG ratio against the specimen's
+own ground. `sheets/ink.mjs` counts, at the floor size and at `deviceScaleFactor: 1`, how many
+pixels the letterforms reach at each of six distances from that ground.
+
+**The two grounds are not mirrors, and the figures say by how much.** The same alpha carries about
+a quarter more contrast on dark — 0.35 reads 2.98:1 there against 2.27:1 on white. Light gives
+sharper peaks and fewer pixels; dark gives lower peaks and broader coverage, because antialiasing
+a light stem onto a dark ground spreads outward rather than thinning.
+
+**The bar is this product's, because WCAG declines to supply one** — it exempts logotypes from
+contrast minimums outright, so citing 4.5:1 would be borrowing authority the standard withholds.
+`tokens.css`'s faintest ink, `--bn-ink-4`, carries its own note: *"this is the floor a word may
+sit at, never a caption."* Solved per channel against the panel each theme draws on — `#ffffff`
+and `#14171c` — **that floor is alpha 0.50 on light and 0.45 on dark.**
+
+**So the light theme sits under its own floor, and that is a decision rather than an oversight.**
+0.45 reads 4.09:1 on dark, clearing 4.0; and 3.02:1 on light, under 3.6. 0.50 was drawn and would
+have cleared both — the owner chose 0.45 with the cost named. Two things make it defensible: the
+roman repeats information the kanji already carries, and ink-4's note was written for interface
+text rather than for a logotype's second line. **A later session finding the light theme under
+that floor should read this paragraph before "fixing" it.**
+
+**The reopening condition is a theme-dependent opacity**, which was considered and rejected here:
+dark could take a lower value on the same argument, and two numbers is where a mark starts
+becoming two marks.
 
 ### The roman's size, settled over four rounds — and the last one changed the instrument
 
