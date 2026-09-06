@@ -47,18 +47,17 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 30,
- title: 'the roman’s size, halved — and the floor size is where the step runs out first',
+ n: 31,
+ title: 'the roman’s size between 0.23 and 0.27 — below a pixel, so the instrument changes',
  sweeping: 'romanSize',
  unit: '× the kanji',
- values: [0.20, 0.23, 0.265, 0.30, 0.33],
- notes: {0.265:'the midpoint, and where this lands if the row reads flat'},
- rejected: {0.14:'4.5px at the floor — round 29', 0.34:'out above — round 29',
-            0.48:'and it could not fit without tightening'},
+ values: [0.23, 0.24, 0.25, 0.26, 0.27],
+ notes: {0.25:'a quarter — the midpoint, and the only round number in the band'},
+ rejected: {0.14:'4.5px at the floor — round 29', 0.34:'out above — round 29'},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
          romanFill:0.75, romanTrack:0.14, romanOpacity:0.62, tails:true},
  sizes: [48, 32],
- context: [0.20, 0.23, 0.265, 0.30],
+ context: [0.23, 0.25, 0.27],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -69,20 +68,23 @@ const ROUND = {
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
-  ['28–29', 'roman size', '0.14 – 0.48', '0.19 – below 0.34', 'both ends failed at last'],
+  ['28–30', 'roman size', '0.14 – 0.48', '0.23 – 0.27, undecided', 'the step reached 1.1px at the floor'],
  ],
- lede: '<b>0.14 failed below and 0.34 above, so the band is bracketed and this halves it.</b> The step is '+
-  '0.032, and here that means two different things at the two sizes: <b>1.6px of type at kanji 48, and '+
-  '1.1px at the floor.</b>'+
-  '<br><br><b>Which makes the floor the binding row again, and for a new reason.</b> Everywhere else in '+
-  'this series the two rows asked the same question at two scales; here the smaller row runs out of '+
-  'resolution first, so it is the one that decides when to stop rather than the one that decides the '+
-  'value. At 1.1px this is the last round I will offer on the roman’s size — the next halving is half a '+
-  'pixel at the size the lockup is actually smallest, and that is not a question a sheet can ask.'+
-  '<br><br><b>0.36 is nowhere in this row, and it is worth noticing how far it has gone.</b> The value '+
-  'carried from the recovered pass was rejected in round 28 and is now two rounds outside the band. It is '+
-  'the third carried value to move once it was finally offered against something, after the stroke and '+
-  'the padding — and the second to move by more than a third of its own size.'
+ lede: '<b>The step here is 0.01, which is 0.48px of type at kanji 48 and 0.32px at the floor.</b> I said '+
+  'round 30 was the last one, and about the STEP that was right — a sheet cannot ask you to choose between '+
+  'two drawings a third of a pixel apart. But the question is real, so the instrument changes rather than '+
+  'the answer being refused.'+
+  '<br><br><b>Drawing it larger would be the wrong fix, and this project has already made it once.</b> '+
+  'Scaling the vector shows a rendering no screen produces; §9’s small row was shot at deviceScaleFactor 2, '+
+  'so its “28px” tiles carried 56 real pixels — in the one row whose whole job was to demonstrate a '+
+  'failure.'+
+  '<br><br><b>So the accompanying image is the opposite of that.</b> The floor row is rendered at '+
+  'deviceScaleFactor 1 — literally what a 1× display gets — and the resulting BITMAP is magnified with '+
+  'smoothing off. What you are looking at there is the rounding your screen actually performs: whether '+
+  '0.23 and 0.24 land on the same 7px of type or on different ones. At this step that rounding is the '+
+  'entire difference, and it is the only version of this question that has an answer.'+
+  '<br><br><b>0.25 is a quarter</b>, the one round number in the band, and it is the midpoint. If the '+
+  'magnified row reads flat, that is where this lands.'
 }
 
 const o=document.getElementById('out')
