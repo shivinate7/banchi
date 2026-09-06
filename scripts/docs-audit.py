@@ -6788,7 +6788,13 @@ def check_lockup_params(report: Report) -> None:
     tail = tail[: tail.index("\n### ", 10)] if "\n### " in tail[10:] else tail
     published = {k: float(v) for k, v in _LOCKUP_SPEC_ROW.findall(tail)}
 
-    block = re.search(r"holds:\s*\{([^}]*)\}", read(LOCKUP_ROUND))
+    sheet = read(LOCKUP_ROUND)
+    # THE KEY THE ROUND IS SWEEPING CANNOT ALSO BE HELD, and the first version of this row did not
+    # know that: it fired the moment a settled parameter came up for its own round. A settled value
+    # must be pinned OR be the one under test, and "under test" is a state the sheet declares.
+    sweeping = re.search(r"sweeping:\s*'(\w+)'", sheet)
+    sweeping = sweeping.group(1) if sweeping else ""
+    block = re.search(r"holds:\s*\{([^}]*)\}", sheet)
     if block is None or not published:
         report.add("lockup params", MECHANICAL, [Finding(
             rel(LOCKUP_ROUND),
@@ -6802,12 +6808,12 @@ def check_lockup_params(report: Report) -> None:
     }
 
     findings: List[Finding] = []
-    for key in sorted(set(published) - set(declared)):
+    for key in sorted(set(published) - set(declared) - {sweeping}):
         findings.append(Finding(
             rel(LOCKUP_ROUND),
-            f"docs/specs/logo.md settles `{key}` at {published[key]} and the sheet does not hold "
-            f"it. A settled parameter the sheet does not pin is one the next round can move "
-            f"without anybody noticing.",
+            f"docs/specs/logo.md settles `{key}` at {published[key]} and the sheet neither holds "
+            f"it nor is sweeping it. A settled parameter that is neither pinned nor under test is "
+            f"one the next round can move without anybody noticing.",
         ))
     for key in sorted(set(declared) - set(published)):
         findings.append(Finding(
@@ -6826,6 +6832,7 @@ def check_lockup_params(report: Report) -> None:
 
     report.add("lockup params", MECHANICAL, findings,
                f"{len(published)} settled values against the sheet's holds"
+               + (f", `{sweeping}` under test" if sweeping in published else "")
                if not findings else f"{len(findings)} disagreements")
 
 

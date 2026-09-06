@@ -95,6 +95,7 @@ function frame(el, opt){
  el.dataset.geom = body.length + ':' + body.slice(0, 400)
  el.dataset.used = JSON.stringify({
   stroke: +(sw/size).toFixed(4), arm: +arm.toFixed(4), rr: +rr.toFixed(2),
+  rrMul: +(rr/sw).toFixed(3),
   tip: opt.tip===undefined?0.07:opt.tip, tl: opt.tl===undefined?0.45:opt.tl,
   tails: opt.tails!==false, size: size,
   gap: +(el.dataset.gap||0), pad: +(el.dataset.pad||0)})

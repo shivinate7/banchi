@@ -783,6 +783,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `gap` | 0.06 | carried from the recovered pass |
 | `stroke` | 0.050 | rounds 1–5 |
 | `arm` | 0.32 | carried; §3's lockup row |
+| `rrMul` | 4.0 | rounds 6–10, closed on the JND |
 | `tip` | 0.07 | not yet swept |
 | `tl` | 0.45 | not yet swept |
 
@@ -823,6 +824,40 @@ whole sweep so the stroke could move alone (§7 rule 6). At the settled stroke t
 stroke**, where the recovered rule says 1.85 ×. Every specimen judged across those five rounds carries a
 corner more than twice the rule's — so the radius is not merely unswept, it is currently *wrong*, and it
 is the next round.
+
+### The corner radius, settled over five rounds — and it is 0.20 of the kanji size
+
+**`1.85 × stroke` was the recovered rule and it is eliminated.** Rounds 6 to 10 swept the radius as a
+multiple of the stroke, and the multiple the original pass shipped lost in round 7.
+
+| round | offered | taken |
+| --- | --- | --- |
+| 6 | 1.0 – 7.0 × | 1.85 – 5.5 × — both ends failed, 1.0 "far too square" |
+| 7 | 1.85 – 5.5 × | 2.6 – 5.5 × — the recovered rule out |
+| 8 | 2.6 – 6.2 × | 3.3 – 5.5 × — both ends failed |
+| 9 | 3.3 – 5.5 × | 3.85 – under 5.5 × — 5.5 out after surviving three rounds |
+| 10 | 3.85 – 4.95 × | **all five alike — the JND** |
+
+**Round 10 ended on §7 rule 7 and the claim is measured rather than reported.** Rendered at true size
+and differenced pixel for pixel, adjacent specimens at kanji 40 differ by a mean of **0.7 to 3.5 out of
+255** — under 1.4% — with the deviation confined to a few dozen pixels at each corner. "About the same"
+is a result, and here it is a number.
+
+**The pick is `4.0 × the stroke`, which is `0.20` of the kanji size, and the reason is not aesthetic.**
+The radius sat pinned at `1.85 × 0.110` through rounds 1 to 5 so the stroke could move alone; at the
+settled stroke that pin is **4.07 ×**. Every judgement about the stroke was therefore made against a
+corner of 4.07. Picking anything far from it would mean the stroke was chosen against a corner that
+does not ship. 4.0 is **0.34px from the pin at kanji 96** — a tenth of the difference the JND
+measurement already calls invisible — and it is a round number in both expressions: 4.0 × the stroke,
+0.20 of the kanji size.
+
+**A finding this sweep produced twice, by accident, and which belongs in §7.** A value at the END of a
+row is not being tested the way an interior one is. 5.5 × was accepted in rounds 6, 7 and 8 while it
+sat at the top of the row with nothing above it and a coarse step below; the first time it had 4.95 and
+4.4 pressed against it, it lost. §6 records the same shape for the sheen and §3 for the ground, both
+times as "shown a second time it failed". The sharper statement is that **a row's endpoints are weak
+evidence regardless of how many times they are shown**, and the fix is to crowd them rather than to
+re-show them.
 
 ### The tails
 
