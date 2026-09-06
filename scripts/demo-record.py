@@ -151,7 +151,7 @@ class Server:
 # ---------------------------------------------------------------------------- the sweep
 
 
-def parameter_space(home: Path) -> Dict[str, List[str]]:
+def parameter_space(home: Path) -> Dict[str, object]:
     """Every value the client could put in a path, read off the store itself.
 
     Read from the store rather than listed here, so a seed that grows a fifth box is swept
@@ -179,6 +179,7 @@ def parameter_space(home: Path) -> Dict[str, List[str]]:
     skus = sorted({c.sku for c in snapshot.inventory.cards.values() if c.sku})
     numbers = sorted({c.number for c in snapshot.inventory.cards.values() if c.number})[:8]
     return {
+        "home": home,
         "boxes": boxes,
         "cards": cards,
         "games": games,
@@ -251,7 +252,65 @@ def sweep(server: Server, space: Dict[str, List[str]]):
         take("/pipeline/runs/%s" % quoted)
         take("/pipeline/runs/%s/scope" % quoted)
 
+    # THE WORKLIST, SCOPED EVERY WAY THE SCREEN CAN SCOPE IT. `#/pricing`'s Runs dropdown
+    # asks `/pipeline/pricing?run=…&run=…`, repeated rather than comma-joined, and the bare
+    # path is only the default. Recording the bare one alone left the dropdown dead.
+    #
+    # AND THE SINGLE-RUN FORMS ARE WHAT MAKE THE `t` HOLD WORK AT ALL. `Pricing.tsx` reads
+    # `run = loaded.length === 1 ? loaded[0] : null`, because a price history is a per-RUN
+    # route — so with two runs loaded there is no run to ask about and the panel opens onto
+    # skeletons it can never fill. That is the app's own behaviour and not the demo's; what
+    # the demo owes is that narrowing to one run actually works.
+    for name in names:
+        take("/pipeline/pricing?run=%s" % urllib.parse.quote(name))
+    if len(names) > 1:
+        both = "&".join("run=%s" % urllib.parse.quote(n) for n in names)
+        take("/pipeline/pricing?%s" % both)
+
+    # ---------------------------------------------------------------- price history
+    # D62's reading, per SKU: hold `t` over a row on `#/pricing` and this is what appears.
+    # Recorded for EVERY SKU in each run's pricing table, because the hold follows the
+    # pointer and a sample would answer for the sampled rows and refuse the rest.
+    #
+    # THE ONE PART OF THIS SWEEP THAT TOUCHES A THIRD PARTY, and it is fetched at BUILD time
+    # rather than tracked. `pipeline/pricehistory.py` reads two public mirrors and caches
+    # under `<home>/.cache/market`; measured over this demo's two runs, that cache is 5.1 MB
+    # across 140 files, which is more than the recording it produces and would go out of date
+    # the day it was committed. Fetching here costs ~45s on a cold cache, spends nothing, and
+    # gives the published page a CURRENT reading rather than a frozen one.
+    #
+    # BEST EFFORT, BY CONSTRUCTION. `take` records 200s only, so a mirror having a bad day
+    # costs this demo its trend strip and nothing else — the screens already draw the absence
+    # (the panel says the reading is unavailable). A publish must not fail because somebody
+    # else's host is down.
+    for name in names:
+        quoted = urllib.parse.quote(name)
+        skus = _run_skus(Path(str(space["home"])), name)
+        for sku in skus:
+            take("/pipeline/runs/%s/history?sku=%s" % (quoted, urllib.parse.quote(sku)))
+        # The strip the "Load trends" button draws, over every SKU at once — one request in
+        # the app, so one recording here, with the SKUs in the order the client sends them.
+        if skus:
+            query = "&".join("sku=%s" % urllib.parse.quote(s) for s in skus)
+            take("/pipeline/runs/%s/trends?%s" % (quoted, query))
+
     return recorded, skipped
+
+
+def _run_skus(home: Path, run: str) -> List[str]:
+    """Every SKU in one run's pricing table, in the order the table holds them."""
+    table = home / "runs" / run / "pricing.json"
+    if not table.is_file():
+        return []
+    try:
+        payload = json.loads(table.read_text())
+    except ValueError:
+        return []
+    out = []
+    for entry in payload.get("skus") or []:
+        if isinstance(entry, dict) and entry.get("sku"):
+            out.append(str(entry["sku"]))
+    return out
 
 
 # -------------------------------------------------------------------------- photographs
@@ -333,6 +392,12 @@ def main() -> int:
     print("  bundle  %s" % BUNDLE.relative_to(REPO_ROOT))
     print("  photos  %s" % PHOTO_OUT.relative_to(REPO_ROOT))
     print("  wire    %s" % payload["wire"])
+    histories = sum(1 for path in recorded if "/history?" in path)
+    trends = sum(1 for path in recorded if "/trends?" in path)
+    print("  history %d SKU reading(s), %d trend strip(s)" % (histories, trends))
+    if histories == 0:
+        print("          NONE — the mirrors answered nothing. The demo will draw the")
+        print("          'no reading' state, which is honest; re-run to try again.")
     if skipped:
         print("  %d path(s) answered no GET and were not recorded:" % len(skipped))
         shapes = sorted({"".join("N" if ch.isdigit() else ch for ch in entry) for entry in skipped})

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -92,7 +92,9 @@ help:
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
-	@echo "  make demo-seed    the store alone — real catalogue rows, drawn photographs."
+	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
+	@echo "                    store: SOURCE=<checkout>. Refuses any photo carrying a QR."
+	@echo "  make demo-seed    the store alone, built on the curated photographs."
 	@echo "  make demo-record  the bundle alone — sweep every GET the client can build."
 	@echo "  make demo-static  the two above, then a static build to dist-demo/."
 	@echo "                    DEMO_BASE=<path> is where it will be served from."
@@ -631,6 +633,27 @@ typecheck:
 DEMO_HOME ?= demo
 DEMO_BASE ?= /pkmnscan/
 
+# Curate real card photographs, and their real identifications, into `demo-assets/`.
+#
+# SEPARATE FROM THE SEED AND RUN RARELY, because it is the only step here that reads a real
+# store and the only one whose output is TRACKED. Everything else is derived and rebuilt on
+# every push; this is a deliberate act of publishing somebody's photographs, so it happens
+# when a person asks for it and never as a side effect of a build.
+#
+# It refuses any photograph a QR decodes out of — a live code card is a bearer instrument
+# and its whole identity IS that QR (D70) — and checks at full resolution, before the
+# downscale, because a 1 cm symbol at 360px is a smear no decoder can read.
+DEMO_PHOTO_COUNT ?= 132
+DEMO_PHOTO_JOINABLE ?= 92
+
+demo-photos:
+	@[ -n "$(SOURCE)" ] || { \
+		echo "SOURCE=<checkout> is required — the store whose photographs to curate."; \
+		echo "  e.g. make demo-photos SOURCE=~/Developer/pkmnscan"; \
+		exit 1; }
+	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
+	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
+
 demo-seed:
 	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force
 # THE JOIN IS THE REAL ONE, and that is the point of doing it here rather than writing a
@@ -640,7 +663,7 @@ demo-seed:
 # Everything downstream then runs for real against the real fixture exports: the catalogue
 # lookup, the variant ladder, the cap arithmetic and `pricing.json` are the pipeline's own
 # output, not a fixture pretending to be one. Both are free and re-runnable.
-	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box1 	  --export fixtures/sv09_export_untouched.csv > /dev/null
+	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box1 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
 	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box3 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
 	@echo "  joined 2 runs against the real fixture exports"
 

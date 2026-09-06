@@ -39,6 +39,7 @@ import csv
 import json
 import os
 import random
+import shutil
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -66,35 +67,42 @@ def stamp(days_ago: float = 0.0) -> str:
 
 # --------------------------------------------------------------------------- catalogue
 
+ASSETS = REPO_ROOT / "demo-assets"
+MANIFEST = ASSETS / "cards.json"
+
 
 class Row:
-    """One export row, reduced to what a card record needs."""
+    """One curated card: a real photograph and the identification that photograph got.
+
+    THE PICTURE AND THE CAPTION ARE THE SAME CARD, which is why this reads a manifest rather
+    than sampling an export. The demo drew its own cards until 2026-09-06 and could caption
+    them anything; real photography cannot. A Heimerdinger captioned `Komala` costs a viewer
+    their trust in everything else on the screen, so `scripts/demo-photos.py` carries the
+    identification across with the image and this reads both together.
+    """
 
     __slots__ = ("sku", "name", "number", "printed_total", "condition", "rarity",
-                 "market", "set_name", "game", "printed")
+                 "market", "set_name", "game", "printed", "photo", "priceable")
 
-    def __init__(self, record: dict, game: str) -> None:
-        self.sku = record["TCGplayer Id"]
-        self.name = record["Product Name"]
-        self.number = record["Number"]
-        self.condition = record["Condition"]
-        self.rarity = record["Rarity"]
-        self.set_name = record["Set Name"]
-        self.game = game
-        self.market = record["TCG Market Price"]
-        # THE EXPORT'S `Number` IS THE WHOLE STRING; A CARD RECORD HOLDS THE TWO HALVES.
-        # `app/src/cardNumber.ts:collectorNumber` composes `number/printed_total` (D67), so a
-        # record carrying the full `013/159` in `number` renders `013/159/159`. Measured:
-        # the home screen's hero drew `009/298/298` before this split. One Piece and
-        # Riftbound promos carry no denominator at all and keep the identifier verbatim,
-        # which is `pipeline/games.py`'s per-game rule and why this is a split rather than
-        # a strip.
-        self.printed = self.number
-        if "/" in self.number:
-            head, self.printed_total = self.number.split("/", 1)
-            self.number = head
-        else:
-            self.printed_total = None
+    def __init__(self, entry: dict) -> None:
+        self.photo = entry["photo"]
+        self.sku = entry["sku"]
+        self.name = entry["name"]
+        # Already the two halves a card record holds — `demo-photos.py` copies them straight
+        # off the store, where `identify` wrote them. `cardNumber.ts:collectorNumber`
+        # composes them for display (D67); nothing here recomposes.
+        self.number = entry["number"]
+        self.printed_total = entry["printed_total"]
+        self.game = entry["game"]
+        self.condition = entry["condition"] or "Near Mint"
+        self.rarity = entry.get("rarity") or ""
+        self.market = entry.get("market") or ""
+        self.set_name = entry.get("set_name") or ""
+        self.priceable = bool(entry.get("priceable"))
+        self.printed = (
+            "%s/%s" % (self.number, self.printed_total)
+            if self.printed_total else (self.number or "")
+        )
 
     @property
     def price(self) -> float:
@@ -104,162 +112,73 @@ class Row:
             return 0.0
 
 
-def read_rows(path: Path, game: str) -> List[Row]:
-    """Real singles out of a real export.
+def export_variants() -> Dict[str, List[dict]]:
+    """Every vendored export row, grouped by Product Name.
 
-    A real CSV reader, never `split(",")` — product names carry commas and apostrophes
-    (`Billy & O'Nare`), which is CLAUDE.md's rule and the skill's.
+    WHAT THE REVIEW QUEUE OFFERS AS CANDIDATES. A queued card is one the ladder could not
+    settle, and what it is choosing BETWEEN is a set of export rows — the same card at
+    different conditions and finishes, which is where D3's ambiguity actually lives
+    (`Near Mint`, `Near Mint Holofoil`, `Near Mint Reverse Holofoil`). Read here rather than
+    from the curated manifest because that holds ONE row per card by construction, so it has
+    no siblings to offer and the queue would draw a single-candidate question.
+
+    Grouped by name and NEVER JOINED ON IT. CLAUDE.md forbids the name as a join key because
+    the column inconsistently embeds numbers; this is not a join, it is "which rows would a
+    human be shown", and the number is checked below before any of them is offered.
     """
-    rows: List[Row] = []
-    with path.open(newline="", encoding="utf-8-sig") as handle:
-        for record in csv.DictReader(handle):
-            number = (record.get("Number") or "").strip()
-            condition = (record.get("Condition") or "").strip()
-            market = (record.get("TCG Market Price") or "").strip()
-            # Sealed product carries no Number and an `Unopened` condition — 450 of
-            # Riftbound's rows are exactly that. A box of cards holds singles.
-            if not number or not condition or condition == "Unopened":
-                continue
-            if not market:
-                continue
-            rows.append(Row(record, game))
-    return rows
+    grouped: Dict[str, List[dict]] = {}
+    for name in ("sv09_export_untouched.csv", "onepiece_export_untouched.csv",
+                 "riftbound_export_untouched.csv"):
+        path = FIXTURES / name
+        with path.open(newline="", encoding="utf-8-sig") as handle:
+            for record in csv.DictReader(handle):
+                if not (record.get("Number") or "").strip():
+                    continue
+                grouped.setdefault(record["Product Name"], []).append(record)
+    return grouped
 
 
-def catalogue() -> Dict[str, List[Row]]:
-    return {
-        "pokemon": read_rows(FIXTURES / "sv09_export_untouched.csv", "pokemon"),
-        "one_piece": read_rows(FIXTURES / "onepiece_export_untouched.csv", "one_piece"),
-        "riftbound": read_rows(FIXTURES / "riftbound_export_untouched.csv", "riftbound"),
-    }
+def catalogue() -> Tuple[List[Row], List[Row]]:
+    """The curated set, split by whether a vendored export can price it.
+
+    TWO POOLS BECAUSE A RUN NEEDS THE FIRST ONE. A run is joined against `fixtures/`, so a
+    card no vendored export carries queues as `no_catalog_row` and prices at nothing.
+    Measured on the owner's store: 1,010 of their Riftbound cards are in the vendored
+    Riftbound export and 0 of their 542 Pokemon are — theirs are Mega Evolution, the fixture
+    is SV09. So the boxes carrying a RUN are built from `priceable`, and the boxes that carry
+    none are free to use the rest: the inventory walk, the sale, the orders and the
+    Fulfiller's screen need no export at all, and only join, emit and pricing do.
+    """
+    if not MANIFEST.is_file():
+        raise SystemExit(
+            "no curated photographs at %s — run `make demo-photos SOURCE=<checkout>` "
+            "first. It reads a store's real photographs, refuses any carrying a decodable "
+            "QR, and writes the tracked set this seed builds from."
+            % MANIFEST.relative_to(REPO_ROOT)
+        )
+    entries = json.loads(MANIFEST.read_text())
+    rows = [Row(entry) for entry in entries]
+    return (
+        [r for r in rows if r.priceable],
+        [r for r in rows if not r.priceable],
+    )
 
 
 # ------------------------------------------------------------------------ photographs
 
-# Sized for a static bundle rather than for the rig. The real camera asks for 3840x2160
-# (`app/src/useCamera.ts`); a demo ships ~120 of these over the wire to somebody on a
-# phone, so they are drawn at the size the review screen actually paints them and no
-# larger. Measured: ~14 KB each at quality 72, so the whole set is under 2 MB.
-PHOTO_W, PHOTO_H = 360, 480
-PHOTO_QUALITY = 72
 
-# Per-game plate colours. Not the card's real art — a flat plate that reads as "a card of
-# this game" at thumbnail size, which is the only job these images have.
-PLATES = {
-    "pokemon": ((208, 176, 68), (150, 116, 32)),
-    "one_piece": ((176, 74, 62), (116, 42, 36)),
-    "riftbound": ((70, 104, 168), (38, 60, 112)),
-}
-STAGE = (28, 28, 32)
+def write_photo(path: Path, row: "Row") -> None:
+    """The curated photograph, into the store's own layout.
 
-
-def _font(size: int):
-    from PIL import ImageFont
-
-    # DejaVu ships with Pillow. A named system font would make the bundle depend on which
-    # machine built it, which is the one property a reproducible seed cannot have.
-    try:
-        return ImageFont.truetype("DejaVuSans.ttf", size)
-    except OSError:
-        try:
-            return ImageFont.truetype(
-                "/System/Library/Fonts/Supplemental/DejaVuSans.ttf", size
-            )
-        except OSError:
-            return ImageFont.load_default()
-
-
-def card_image(row: "Row", rng: random.Random):
-    """A drawn card on a dark stand — what the capture rig's frame looks like in outline.
-
-    Deliberately NOT a real photograph and NOT real card art. Two reasons, both hard: the
-    illustration on a real card belongs to its publisher, and a real photograph of this
-    rig is a picture of the owner's desk and their stock. Neither belongs in something
-    published to strangers. What a viewer needs from this image is that a card is there,
-    roughly where the crop expects it, with the name legible — that is all the review
-    screen asks of it, and a drawn plate delivers it.
+    COPIED, NOT DRAWN. Until 2026-09-06 this rendered a card plate with Pillow — safe, and
+    it looked exactly like what it was. The owner's ruling: *"i'd rather it show real
+    photography... just take some random pics of mine that i made -- that's not a copyright
+    issue."* So the picture is theirs, of their own card, on their own rig, and it was
+    cleared of carrying a decodable QR before it was ever written to a tracked path
+    (`scripts/demo-photos.py`).
     """
-    from PIL import Image, ImageDraw, ImageFilter
-
-    image = Image.new("RGB", (PHOTO_W, PHOTO_H), STAGE)
-    draw = ImageDraw.Draw(image)
-
-    # The stand: a soft pool of light behind where the card sits, so the frame reads as a
-    # photograph rather than as a diagram.
-    glow = Image.new("L", (PHOTO_W, PHOTO_H), 0)
-    ImageDraw.Draw(glow).ellipse((-40, PHOTO_H // 4, PHOTO_W + 40, PHOTO_H), fill=76)
-    glow = glow.filter(ImageFilter.GaussianBlur(48))
-    image.paste(Image.new("RGB", (PHOTO_W, PHOTO_H), (80, 84, 99)), (0, 0), glow)
-
-    # The card. Inset with a little jitter, because a hand puts it down slightly
-    # differently every time and a grid of pixel-identical crops looks like a mock.
-    jx, jy = rng.randint(-6, 6), rng.randint(-5, 5)
-    left, top = 46 + jx, 40 + jy
-    right, bottom = PHOTO_W - 46 + jx, PHOTO_H - 52 + jy
-
-    shadow = Image.new("L", (PHOTO_W, PHOTO_H), 0)
-    ImageDraw.Draw(shadow).rounded_rectangle(
-        (left + 2, top + 8, right + 2, bottom + 10), radius=14, fill=150
-    )
-    image.paste(
-        Image.new("RGB", (PHOTO_W, PHOTO_H), (8, 8, 11)),
-        (0, 0),
-        shadow.filter(ImageFilter.GaussianBlur(9)),
-    )
-    draw.rounded_rectangle((left, top, right, bottom), radius=14, fill=(247, 245, 240))
-
-    face, deep = PLATES.get(row.game, PLATES["pokemon"])
-    inner = (left + 12, top + 12, right - 12, bottom - 74)
-
-    # The art plate, as a vertical wash. Two flat rectangles read as a print error.
-    plate = Image.new("RGB", (inner[2] - inner[0], inner[3] - inner[1]))
-    pd = ImageDraw.Draw(plate)
-    for step in range(plate.height):
-        blend = step / max(plate.height - 1, 1)
-        pd.line(
-            [(0, step), (plate.width, step)],
-            fill=tuple(int(face[c] + (deep[c] - face[c]) * blend) for c in range(3)),
-        )
-
-    # A diagonal specular band — the sheen a real card throws back at a camera under a
-    # desk lamp. This is what stops the plate reading as a colour swatch, and it is the
-    # single cheapest thing that makes the frame look photographed.
-    sheen = Image.new("L", (plate.width, plate.height), 0)
-    sd = ImageDraw.Draw(sheen)
-    span = plate.width + plate.height
-    for offset in range(-plate.height, plate.width, 3):
-        distance = abs(offset - span * 0.22) / (plate.width * 0.55)
-        strength = int(max(0.0, 1.0 - distance) * 74)
-        if strength:
-            sd.line([(offset, 0), (offset + plate.height, plate.height)],
-                    fill=strength, width=3)
-    plate.paste(
-        Image.new("RGB", plate.size, (255, 255, 255)),
-        (0, 0),
-        sheen.filter(ImageFilter.GaussianBlur(11)),
-    )
-    image.paste(plate, (inner[0], inner[1]))
-    draw.rounded_rectangle(inner, radius=8, outline=(255, 255, 255, 60), width=1)
-
-    # A rarity pip, bottom-right of the plate. Small, but it is the kind of mark a real
-    # card carries and its absence is what makes a drawn one look like a placeholder.
-    pip = (inner[2] - 26, inner[3] - 26, inner[2] - 10, inner[3] - 10)
-    draw.ellipse(pip, fill=(250, 248, 242), outline=(0, 0, 0), width=1)
-
-    name = row.name if len(row.name) <= 26 else row.name[:25] + "\u2026"
-    draw.text((left + 16, bottom - 62), name, font=_font(19), fill=(24, 24, 28))
-    draw.text(
-        (left + 16, bottom - 34),
-        "%s  \u00b7  %s" % (row.printed, row.rarity),
-        font=_font(14),
-        fill=(96, 96, 104),
-    )
-    return image
-
-
-def write_photo(path: Path, row: "Row", rng: random.Random) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    card_image(row, rng).save(path, format="JPEG", quality=PHOTO_QUALITY, optimize=True)
+    shutil.copyfile(ASSETS / "photos" / row.photo, path)
 
 
 # ------------------------------------------------------------------------------- boxes
@@ -268,49 +187,44 @@ def write_photo(path: Path, row: "Row", rng: random.Random) -> None:
 # is present somewhere — an open box with dividers, a sealed one with a frozen capacity, a
 # mixed box with NO dividers (D10's undeclared box, which renders as one section), and a
 # box holding the departed. A demo where every box is the same box teaches nothing.
+# The shape of the demo store. Four boxes, chosen so every case a screen has to draw is
+# present somewhere — an open box with dividers, a sealed one with a frozen capacity, a
+# mixed box with NO dividers (D10's undeclared box, which renders as one section), and a
+# box holding the departed. A demo where every box is the same box teaches nothing.
+#
+# `pool` IS LOAD-BEARING, NOT DECORATION. `priceable` means every card in it is one a
+# vendored export can price, which is what a RUN needs — boxes 1 and 3 are joined for real
+# against `fixtures/`, so their cards must be findable there. Boxes 2 and 4 carry no run and
+# are free to hold the owner's Pokemon, which no vendored export covers: the inventory walk,
+# the sale, the orders and the Fulfiller's screen ask nothing of an export.
 BOXES = (
     {
-        "box": 1,
-        "name": "SV Bulk A",
-        "game": "pokemon",
-        "count": 42,
+        "box": 1, "name": "RB Origins", "pool": "priceable", "count": 42,
         "sections": [1, 15, 29],
-        "section_names": {"1": "Commons", "15": "Uncommons", "29": "Holos"},
-        "state": "open",
-        "created": 24.0,
+        "section_names": {"1": "Commons", "15": "Uncommons", "29": "Signatures"},
+        "state": "open", "created": 24.0,
     },
     {
-        "box": 2,
-        "name": "One Piece Commons",
-        "game": "one_piece",
-        "count": 28,
+        "box": 2, "name": "MEG Bulk", "pool": "other", "count": 28,
         "sections": [1, 16],
-        "section_names": {"1": "OP15", "16": "Promos"},
-        "state": "open",
-        "created": 17.0,
+        "section_names": {"1": "Commons", "16": "Holos"},
+        "state": "open", "created": 17.0,
     },
     {
-        "box": 3,
-        "name": "RB Epics",
-        "game": "riftbound",
-        "count": 34,
+        "box": 3, "name": "RB Epics", "pool": "priceable", "count": 34,
         "sections": [1, 12, 24],
-        "section_names": {"1": "Origins", "12": "Legacy", "24": "Signatures"},
-        "state": "closed",
-        "created": 31.0,
+        "section_names": {"1": "Origins", "12": "Legacy", "24": "Epics"},
+        "state": "closed", "created": 31.0,
     },
     {
         # No dividers on purpose: D10 amended, an undeclared box renders as ONE section and
         # `card` is the index. Somebody looking at this demo should see that case, because
-        # it is what every box looks like before anybody divides one.
-        "box": 4,
-        "name": "Mixed Singles",
-        "game": None,
-        "count": 18,
-        "sections": [],
-        "section_names": {},
-        "state": "open",
-        "created": 9.0,
+        # it is what every box looks like before anybody divides one. Mixed pools too — a
+        # real "everything else" drawer holds more than one game, and D21 makes game a
+        # per-card claim rather than a mode.
+        "box": 4, "name": "Mixed Singles", "pool": "mixed", "count": 18,
+        "sections": [], "section_names": {},
+        "state": "open", "created": 9.0,
     },
 )
 
@@ -329,35 +243,26 @@ REASONS = (
 )
 
 
-def pick_rows(rows: List[Row], count: int, rng: random.Random) -> List[Row]:
-    """`count` distinct SKUs, biased toward the cheap end.
+def pick_rows(pool: List[Row], count: int, taken: set) -> List[Row]:
+    """`count` unused cards off `pool`, in order.
 
-    Real bulk is mostly worth pennies — the Gate B run's whole review queue was $0.04 to
-    $0.40 — and a demo drawn uniformly from the export would show a drawer of chase cards
-    and misrepresent both the pricing screen and the sub-threshold split. So: mostly cheap,
-    with a few worth real money, which is what a box of bulk actually holds.
+    NO PRICE BANDING, and the previous version's is deleted rather than kept. That code
+    over-sampled the cheap end to imitate what real bulk looks like — which was right while
+    the cards were drawn at random from a 10,078-row export. These are the owner's ACTUAL
+    cards, sampled from their actual store, so the distribution is already the real one and
+    a second opinion about it would make the demo less true rather than more.
+
+    `taken` threads across boxes so no card is placed twice.
     """
-    cheap = [r for r in rows if 0 < r.price < 1.0]
-    mid = [r for r in rows if 1.0 <= r.price < 8.0]
-    dear = [r for r in rows if r.price >= 8.0]
-
-    want_dear = max(1, count // 14)
-    want_mid = max(2, count // 5)
-    want_cheap = count - want_dear - want_mid
-
-    chosen: List[Row] = []
-    for pool, want in ((cheap, want_cheap), (mid, want_mid), (dear, want_dear)):
-        if not pool:
+    picked = []
+    for row in pool:
+        if len(picked) >= count:
+            break
+        if row.photo in taken:
             continue
-        chosen.extend(rng.sample(pool, min(want, len(pool))))
-
-    # Top up from anywhere if a pool was too thin to fill its share.
-    if len(chosen) < count:
-        rest = [r for r in rows if r not in chosen]
-        chosen.extend(rng.sample(rest, min(count - len(chosen), len(rest))))
-
-    rng.shuffle(chosen)
-    return chosen[:count]
+        taken.add(row.photo)
+        picked.append(row)
+    return picked
 
 
 # ------------------------------------------------------------------------------ states
@@ -383,7 +288,8 @@ def state_for(position: int, count: int, rng: random.Random) -> str:
 def build_store(force: bool) -> dict:
     """Write the whole demo store. Returns a summary for the caller to print."""
     rng = random.Random(SEED)
-    pools = catalogue()
+    priceable, other = catalogue()
+    taken: set = set()
     store = Store()
     home = store_files.home()
 
@@ -418,17 +324,14 @@ def build_store(force: bool) -> dict:
             )
             counts["boxes"] += 1
 
-            # Box 4 is deliberately mixed — a real "everything else" drawer holds more than
-            # one game, and D21 makes game a per-card claim rather than a mode.
-            if spec["game"] is None:
-                rows: List[Row] = []
-                per = spec["count"] // 3 + 1
-                for game in ("pokemon", "one_piece", "riftbound"):
-                    rows.extend(pick_rows(pools[game], per, rng))
+            if spec["pool"] == "mixed":
+                half = spec["count"] // 2
+                rows = pick_rows(priceable, half, taken)
+                rows += pick_rows(other, spec["count"] - len(rows), taken)
                 rng.shuffle(rows)
-                rows = rows[: spec["count"]]
             else:
-                rows = pick_rows(pools[spec["game"]], spec["count"], rng)
+                source = priceable if spec["pool"] == "priceable" else other
+                rows = pick_rows(source, spec["count"], taken)
 
             age = spec["created"]
             for offset, row in enumerate(rows):
@@ -472,7 +375,6 @@ def build_store(force: bool) -> dict:
                 write_photo(
                     home / "captures" / "cards" / ("box%d" % number) / ("%04d.jpg" % index),
                     row,
-                    rng,
                 )
                 counts["photos"] += 1
 
@@ -525,21 +427,25 @@ def build_store(force: bool) -> dict:
         review_pool = [
             (card, row) for card, row in placed if card.state == "captured"
         ][:9]
+        variants = export_variants()
         for offset, (card, row) in enumerate(review_pool):
+            # The export's own rows for this card — its real conditions and finishes, at
+            # their real prices. Matched on the printed number as well as the name, so a
+            # shared name across sets cannot put another card's row in front of a human.
             siblings = [
-                r for r in pools[row.game]
-                if r.name == row.name and r.sku != row.sku
-            ][:2]
+                record for record in variants.get(row.name or "", [])
+                if (record.get("Number") or "").strip() == row.printed
+            ][:3]
             candidates = [
                 {
-                    "sku": alt.sku,
-                    "name": alt.name,
-                    "number": alt.number,
-                    "condition": alt.condition,
-                    "market": alt.market,
-                    "rarity": alt.rarity,
+                    "sku": record["TCGplayer Id"],
+                    "name": record["Product Name"],
+                    "number": record["Number"],
+                    "condition": record["Condition"],
+                    "market": record["TCG Market Price"],
+                    "rarity": record["Rarity"],
                 }
-                for alt in ([row] + siblings)
+                for record in siblings
             ]
             # REAL CODES, out of `app/src/reasons.ts:REASON_LABELS`. A code that map has no
             # entry for renders as a raw enum on screen — which is what an invented
@@ -563,7 +469,13 @@ def build_store(force: bool) -> dict:
                     reason=reason,
                     candidates=candidates,
                     first_seen=stamp(3.0),
-                    market=row.market,
+                    # `or None`, NEVER the empty string. `QueueEntry.price` does
+                    # `Decimal(self.market)` for anything non-None, and `Decimal("")` raises
+                    # `InvalidOperation` — which surfaced as a traceback out of
+                    # `queue_summary` in the middle of a join, nowhere near this line. A
+                    # card no vendored export prices has no market, and None is how the
+                    # queue spells that.
+                    market=row.market or None,
                 )
             )
             counts["review"] += 1

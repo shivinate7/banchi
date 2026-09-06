@@ -1074,7 +1074,7 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D92"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -1703,6 +1703,22 @@ COMPONENTS = [
             },
 
             # ---- the published demo. Seed, record, publish; none of it gates anything ----
+            "demo-photos.py": {
+                "does": "curates the owner's own card photographs, and the identification each "
+                        "one actually got, into the tracked `demo-assets/` the demo is built "
+                        "from. THE ONE SCRIPT THAT PUTS A PRIVATE PHOTOGRAPH ON A PATH HEADED "
+                        "FOR A PUBLIC HOST, so it refuses any candidate a QR decodes out of at "
+                        "full resolution — a positive test on the image rather than a promise "
+                        "about the store's labels — and refuses outright if the decoder cannot "
+                        "be loaded. Selects for the join: `--joinable` keeps cards whose SKU a "
+                        "vendored export carries, because a run is joined against those.",
+                # D70 is why the QR is the test: a code card's whole identity IS its QR, so a
+                # clean decode is a real answer about the image. D24 is what makes it matter —
+                # a live code is pooled, bearer inventory. D25 is the per-game split that
+                # decides which cards a run can be built over, and D67 the two halves of the
+                # number this copies across so the caption matches the picture.
+                "governed_by": ["D24", "D25", "D67", "D70"],
+            },
             "demo-seed.py": {
                 "does": "writes a demo store — real catalogue rows out of fixtures/, invented "
                         "positions, drawn card photographs, a corpus with three deliberate "
@@ -1716,8 +1732,9 @@ COMPONENTS = [
                 # a first version wrote a top-level `answers` map that `Corpus.parse` kept as
                 # `unknown` and no reader ever saw. D25 is the per-game number split, which
                 # the export carries whole and a card record carries in halves.
-                "governed_by": ["D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
-                                "D43", "D46", "D49", "D67", "D78", "D83", "D86", "D87"],
+                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
+                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86",
+                                "D87"],
             },
             "demo-record.py": {
                 "does": "spawns its own capture server over the demo store on its own port, "
@@ -1728,7 +1745,7 @@ COMPONENTS = [
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D76"],
+                "governed_by": ["D13", "D43", "D52", "D62", "D76"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "

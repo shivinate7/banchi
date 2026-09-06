@@ -9,10 +9,15 @@
 # thing that gets published is always built from the thing it describes.
 #
 # WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. The seed reads
-# `fixtures/` — real TCGplayer exports, no personal data — and draws its own card images; it
-# never touches a real store, and `inventory/` has never been in git for that reason. The
-# recorder scrubs machine-local absolute paths and REFUSES to write a bundle if any survive
-# (`scripts/demo_scrub.py:audit`), so a `/Users/<name>/` cannot reach the page even by accident.
+# `fixtures/` — real TCGplayer exports, no personal data — and `demo-assets/`, a TRACKED set
+# of the owner's own card photographs that they have said to publish. Every one of those was
+# cleared by `scripts/demo-photos.py` before it reached a tracked path: refused if any QR
+# decoded out of it at full resolution, because a live code card is a bearer instrument and
+# its whole identity is that QR (D70). This job re-runs none of that — it consumes what is
+# committed — and it never touches a real store, which is why `inventory/` has never been in
+# git. The recorder scrubs machine-local absolute paths and REFUSES to write a bundle if any
+# survive (`scripts/demo_scrub.py:audit`), so a `/Users/<name>/` cannot reach the page even
+# by accident.
 #
 # IT PUBLISHES AND NOTHING ELSE. No gate, no commit, no branch move — D42 keeps main moving by
 # pull request only, and a workflow that pushed would be a second way. It reads the repo and
@@ -85,6 +90,11 @@ jobs:
           pip install -r requirements.txt
           npm ci --prefix app
 
+      # The record step makes outbound requests to two public price mirrors — D62's reading,
+      # the thing a `t` hold shows on #/pricing. Fetched here rather than tracked: the cache
+      # is 5.1 MB across 140 files, larger than the recording it produces, and would be stale
+      # the day it was committed. It is best-effort — the recorder keeps 200s only, so a
+      # mirror having a bad day costs the trend strip and never the publish.
       - name: Seed, record and build
         # DEMO_BASE must match where Pages serves this. A project site lives at
         # /<repo>/, and a bundle built for / 404s every asset there while working
