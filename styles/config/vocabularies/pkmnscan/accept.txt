@@ -512,3 +512,7 @@ superellipse
 logotype
 logotypes
 webfont
+semibold
+letterform
+letterforms
+antialiaser

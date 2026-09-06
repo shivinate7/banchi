@@ -1321,7 +1321,7 @@ worth an owner's attention only when nothing else can answer, and here something
   lose their counters at the floor size. Re-measured on Plex 400 at `deviceScaleFactor: 1`: same
   crossover.
 - **`romanOpacity` 0.45** was picked against a floor derived from `--bn-ink-4`, and **a contrast
-  ratio is a property of the composite colour and the ground, not of the letterform.** Re-measured
+  ratio is a property of the composite color and the ground, not of the letterform.** Re-measured
   on Plex: 4.09:1 on dark and 3.02:1 on light, identical to the figures §13 recorded.
 
 **Both criteria are face-independent, so both survive the substitution intact** — which is a
