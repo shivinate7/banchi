@@ -151,13 +151,18 @@ function frame(el, opt){
     claims some variables are held and one is swept; without these two the claim is prose. With
     them the sheet can assert the held ones were identical, the swept one moved, and no two
     specimens in a row are the same picture. */
- /* THE FINGERPRINT IS THE WHOLE DRAWING, NOT THE BRACKET. It was the SVG body alone, which was
-    enough while every swept variable moved the bracket -- and round 25 sweeps one that moves only
-    the TYPE, so five distinct specimens fingerprinted identically and the round sheet correctly
-    called itself not-a-sweep. The type's solved state belongs in here for the same reason the
-    bracket's does: a specimen is the lockup. */
+ /* THE FINGERPRINT IS EVERYTHING THAT DETERMINES THE PIXELS, and it has had to be widened twice
+    because it was written as a list of what happened to vary at the time.
+      It was the SVG body alone -- enough while every swept variable moved the bracket. Round 25
+    swept one that moves only the TYPE'S GEOMETRY, and five distinct specimens fingerprinted
+    identically. Round 32 sweeps one that moves neither -- an OPACITY changes no coordinate at all
+    -- and they fingerprinted identically again.
+      So the rule is stated rather than the symptom patched: anything that can change what is
+    painted belongs here, whether or not any round has swept it yet. Geometry, type metrics, ink.
+    The round sheet's first assertion is only as good as this string. */
  el.dataset.geom = body.length + ':' + body.slice(0, 400) +
-   '|type ' + el.dataset.romanW + '/' + el.dataset.kanjiW + '/' + ls.toFixed(3)
+   '|type ' + el.dataset.romanW + '/' + el.dataset.kanjiW + '/' + ls.toFixed(3) +
+   '|ink ' + el.dataset.romanOpacity + '/' + col
  el.dataset.used = JSON.stringify({
   stroke: +(sw/size).toFixed(4), arm: +arm.toFixed(4), rr: +rr.toFixed(2),
   rrMul: +(rr/sw).toFixed(3),
