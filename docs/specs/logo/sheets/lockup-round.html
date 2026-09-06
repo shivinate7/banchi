@@ -47,18 +47,18 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 26,
- title: 'the roman’s run, halved — and the incumbent kept in the row as a reference',
+ n: 27,
+ title: 'the roman’s run, last round — and the incumbent is deliberately not in it',
  sweeping: 'romanFill',
  unit: '× the kanji’s width',
- values: [0.66, 0.72, 0.775, 0.83, 0.87],
- notes: {0.775:'the incumbent — the accident you have been judging against'},
+ values: [0.68, 0.715, 0.75, 0.785, 0.82],
+ notes: {0.75:'below the incumbent', 0.785:'above it — 0.775 falls between these two'},
  rejected: {0.62:'the letters had begun to tighten — round 25', 0.88:'too near flush — round 25',
-            1.00:'flush right, the match the code always claimed'},
+            0.66:'out below — round 26', 0.83:'out above — round 26'},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
          romanSize:0.36, romanTrack:0.14, romanOpacity:0.62, tails:true},
  sizes: [48, 32],
- context: [0.66, 0.72, 0.775, 0.83],
+ context: [0.68, 0.75, 0.785, 0.82],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -69,18 +69,18 @@ const ROUND = {
   ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25', 'roman run', '0.62 – 1.00', '0.62 – 0.88 open', 'both ends failed on the FIRST pass'],
+  ['26', 'roman run', '0.66 – 0.87', '0.66 – 0.83 open', 'the incumbent survived a forced choice'],
  ],
- lede: '<b>0.62 and 0.88 both failed on the first pass, which no other variable in this series managed.</b> '+
-  'The stroke and the padding each took two rounds to bracket; this one arrived boxed in, so round 26 is a '+
-  'straight halving rather than another widening.'+
-  '<br><br><b>0.775 is in the row on purpose, and it is not a candidate so much as a control.</b> It is the '+
-  'relationship every earlier round was drawn against, so it is the one specimen here you have genuine '+
-  'twenty-five-round familiarity with — and familiarity is exactly what a forced choice has to overcome to '+
-  'mean anything. If it wins, it wins having been offered against four alternatives instead of none, which '+
-  'is the whole difference between the value it was this morning and the value it would become.'+
-  '<br><br><b>The step is about 5px of roman width at the sidebar size</b>, well clear of the floor that '+
-  'stopped the padding and the gap. There is room for one more round after this one before the question '+
-  'stops being answerable.'
+ lede: '<b>0.775 is not in this row, and that is the point of the round.</b> It has now sat in two '+
+  'consecutive rows and been inside the kept band both times — which is what a good value does, and also '+
+  'what a familiar one does, and nothing so far separates those two explanations. It falls between 0.75 '+
+  'and 0.785 here. If your eye goes to one of those, the incumbent was near-optimal and this closes. If it '+
+  'goes somewhere else, twenty-five rounds of familiarity were doing work a forced choice could not see.'+
+  '<br><br><b>An even 0.035 step — 3.6px of roman width at the sidebar size.</b> Ends sit just inside the '+
+  'two rejections from round 26.'+
+  '<br><br><b>This is the last round for the roman’s run, as promised in round 26.</b> Whatever band comes '+
+  'back, the answer is its midpoint. Then the roman’s SIZE, which round 25 deferred because fill had to be '+
+  'stable first — and after that the opacity, and the set is finished.'
 }
 
 const o=document.getElementById('out')
