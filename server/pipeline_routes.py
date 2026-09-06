@@ -11,8 +11,11 @@ BOTH HALVES ARE NOW FALSE OF THIS MODULE OUTRIGHT (D64). `POST /pipeline/runs/<n
 reads the TCGplayer session cookie out of `.env` and fetches the operator's own Filtered
 Export from `store.tcgplayer.com` — a secret, and a socket, in the file that used to be able
 to say it had neither. What replaces THAT promise is stated where the call lives
-(`server/tcg_export.py`) and is short: one host, one method, one route, and it cannot cause a
-charge. The route that can is still `POST /pipeline/identify` and is still named for it.
+(`server/tcg_export.py`) and is short: one host, three routes, all of them reads, and it
+cannot cause a charge. This sentence said *one method, one route* until 2026-09-06, having
+been copied from that file's own bullet on the day D65 made it false there; the count lives
+in one place now and `make docs-audit`'s `transport promise` row is what keeps it there. The
+route that can spend is still `POST /pipeline/identify` and is still named for it.
 
 The owner asked for exactly this: *"how do i get api calls/pushing from our localhost
 server so that i can actually push runs at box/section/whatever-level i want, get data

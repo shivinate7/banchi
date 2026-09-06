@@ -16,20 +16,52 @@ exactly the technicality-narrowing D16 exists to catch, so the promise is replac
 
 WHAT REPLACES IT, since a guarantee deleted and not replaced is a regression:
 
-  - **One host, one method, one route.** `GET` against `store.tcgplayer.com`, and nothing
-    else is reachable from here. The URL is a constant with an override that refuses to
-    carry the cookie anywhere but https or loopback.
-  - **It cannot cause a charge.** The Filtered Export is a download of the operator's own
-    Pricing tab. `POST /pipeline/identify` is still the only route in this server that can
-    put a number on an invoice, and this one is beside `join` — free and re-runnable.
+  - **One host, two methods, three routes**, each one a constant in this file:
+
+        POST /admin/pricing/downloadexportcsv      the catalogue export, scoped (D65)
+        GET  /Admin/Pricing/DownloadMyExportCSV    the live inventory, unscoped (D104)
+        GET  /admin/pricing/getjsonfilters         one category's filter vocabulary
+
+    All three are `store.tcgplayer.com`, and nothing else is reachable from here. The
+    URLs are constants — `DEFAULT_URL`, `LIVE_URL`, `FILTERS_URL` — rather than anything
+    a request can name, with one override that refuses to carry the cookie anywhere but
+    https or loopback, and which the other two follow by SWAPPING THE LAST SEGMENT rather
+    than taking it verbatim, so a test that redirects the download cannot leave a second
+    request pointed at TCGplayer with the operator's session attached. One redirect hop is
+    followed, deliberately, and the cookie is not re-sent across a host change: a redirect
+    is a destination somebody else chose.
+
+    IT SAID "ONE HOST, ONE METHOD, ONE ROUTE" UNTIL 2026-09-06, AND IT WAS TRUE FOR ABOUT
+    A DAY. It was written on 2026-08-30 over a single GET, and D65 landed the same day —
+    the download became a POST against a different route, and the filter vocabulary
+    became a second real call rather than the probe it appears as in the measurement
+    table below. D104 then added the live download on 2026-09-06. Three route changes,
+    two methods, and the promise above them did not move once. **That is not ordinary doc
+    drift on this file**: this is the module that reads a bearer credential, these four
+    bullets are the REPLACEMENT for a guarantee deleted rather than qualified, and a
+    replacement nobody maintains is the qualification arriving late. `make docs-audit`'s
+    `transport promise` row reads this block against the constants and the request
+    construction now, in both directions, so the next route cannot land quietly either.
+  - **It cannot cause a charge.** All three routes READ: two of them download the
+    operator's own Pricing tab and the third reads a filter list. Nothing here writes
+    anything at TCGplayer — no listing, no price, no quantity — and the POST is a POST
+    because that is the verb the portal's own Export Filtered CSV button sends, not
+    because anything is being submitted. `POST /pipeline/identify` is still the only route
+    in this server that can put a number on an invoice, and these are beside `join` — free
+    and re-runnable.
   - **The secret never leaves this module.** It is read at call time, it is put in one
     header, and it is in no return value, no refusal message, no log line and no run
     directory. `CLAUDE.md`'s opsec rule for code cards is the same rule: a bearer instrument
     does not go in a file anyone else reads.
-  - **Every anticipated failure has its own code**, because `docs/specs/capture-server.md`
-    requires one and because the three that matter here — an expired session, a WAF block
-    and a login page served as a 200 — are indistinguishable to a caller that only sees
-    "the fetch failed".
+  - **Every anticipated failure has its own code** — thirteen of them, all `tcg_*` —
+    because `docs/specs/capture-server.md` requires one and because the three that matter
+    here — an expired session, a WAF block and a login page served as a 200 — are
+    indistinguishable to a caller that only sees "the fetch failed". **The login page and
+    the redirect share `tcg_session_expired` on purpose**, because they are one failure
+    found two ways; what does NOT share it is `tcg_request_rejected`, and that separation
+    was a defect before it was a code — see `_check_body`, where reading every HTML body
+    as a login page reported this module's own malformed request as the operator's
+    credential going stale.
 
 WHY THIS EXISTS. `runs -> join` is otherwise autonomous: `identify` spawns detached (D33),
 `join`, `emit` and `reconcile` are free and re-runnable, and the queues, the pricing table
@@ -280,7 +312,13 @@ class Scope:
 
 
 class FetchRefusal(Exception):
-    """A refusal with its own code. `server/pipeline_routes.py` converts it to a 4xx.
+    """A refusal with its own code, carried out of this module in place of the reason.
+
+    `server/pipeline_routes.py` converts it to a 502 on the two download routes — the
+    failure is at TCGplayer or in the credential this machine holds for it, which is a
+    gateway answer and not a bad request — and `GET /pipeline/games/<game>/sets` carries
+    the code out on a 200 instead, because a filter list that cannot be fetched is a
+    missing convenience mid-capture rather than a failed capture.
 
     A private exception rather than `capture_server.BadRequest` or `PipelineRefusal`,
     because importing either would make this module depend on a file that imports it. The
