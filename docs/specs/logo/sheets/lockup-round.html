@@ -47,18 +47,18 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 32,
- title: 'the roman’s opacity — the last parameter, and the only one with a measurable floor',
+ n: 33,
+ title: 'the roman’s opacity, downward — because 0.35 was my floor and you kept it',
  sweeping: 'romanOpacity',
  unit: ' of the ink',
- values: [0.35, 0.48, 0.62, 0.78, 1.00],
- notes: {0.62:'the carried value — the last number in the set nobody has chosen',
-         1.00:'full ink: the roman stops deferring to the kanji'},
- rejected: {},
+ values: [0.20, 0.27, 0.35, 0.45, 0.58],
+ notes: {0.20:'about 1.5:1 — the roman is barely on the page',
+         0.35:'my low end last round, and inside your band'},
+ rejected: {0.78:'out above — round 32', 1.00:'the roman stopped deferring — round 32'},
  holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
          romanFill:0.75, romanSize:0.25, romanTrack:0.14, tails:true},
  sizes: [48, 32],
- context: [0.35, 0.48, 0.62, 0.78],
+ context: [0.20, 0.27, 0.35, 0.45],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -70,21 +70,20 @@ const ROUND = {
   ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
   ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
   ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
+  ['32', 'roman opacity', '0.35 – 1.00', '0.35 – 0.62', 'the LOW end was not bracketed'],
  ],
- lede: '<b>0.25 — a quarter, and the crossover in the magnified raster.</b> It is the largest move any '+
-  'value in this series has made: the carried 0.36 is nearly half again as big.'+
-  '<br><br><b>This is the last parameter, and it is the only one in the set with a floor that can be '+
-  'measured rather than judged.</b> An opacity has a contrast ratio — the roman is one ink on one ground, '+
-  'so the effective colour is a straight composite and the WCAG figure follows. Every caption prints it, '+
-  'and anything under 4.5:1 is flagged in the same red as a rejection. `docs/DESIGN.md` floors contrast '+
-  'at 7:1 for the Fulfiller’s screen and <b>nothing had ever measured it here</b>.'+
-  '<br><br><b>That measurement does not decide the value, and it should not.</b> A wordmark is not body '+
-  'text and 4.5:1 is not a law here — but a number the eye cannot supply belongs on the sheet beside the '+
-  'thing the eye can. The roman at 0.25 of the kanji is 8px at the floor, which is where a thin ink stops '+
-  'being restraint and starts being a rendering problem.'+
-  '<br><br><b>Both ends are meant to fail.</b> At 0.35 the roman is a watermark; at 1.00 it stops '+
-  'deferring to the kanji and the lockup reads as two words of equal weight rather than a name and its '+
-  'romanisation.'
+ lede: '<b>0.35 was the lightest ink I offered and you kept it, so nothing below it has been tested.</b> '+
+  'Rule 5, for the fourth time. This round runs down to <b>0.20</b> — about 1.5:1, where the roman is '+
+  'barely on the page.'+
+  '<br><br><b>Your band runs 2.3:1 to 5.3:1, and this product floors contrast at 7:1 elsewhere.</b> Said '+
+  'once and not argued: that floor is `docs/DESIGN.md`’s, it is written for the Fulfiller reading card '+
+  'numbers at arm’s length, and a romanisation sitting under a kanji it repeats is not that. The figure '+
+  'is on every caption so the choice is informed rather than made for you.'+
+  '<br><br><b>The magnified row is the one to look at, and it is what a thin ink actually costs.</b> At '+
+  'the floor size the roman is 8px, and 8px of light grey is not a lighter version of 8px of dark grey — '+
+  'it is the same letterforms with fewer pixels carrying them, because antialiasing spends its range on '+
+  'the difference between ink and ground. The stems of B, N and H either survive that or they do not, and '+
+  'nothing but a true-pixel raster will tell you which.'
 }
 
 const o=document.getElementById('out')
