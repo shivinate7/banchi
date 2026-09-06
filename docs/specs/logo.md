@@ -734,7 +734,55 @@ a light tile is a real drawing that a person could prefer, and its stops are on 
 not chosen, once, by one person, on one day. `logo/sheets/light-ground.html` §7 puts it back on
 screen.
 
-## 13. The lockup, drawn — and the font it cannot ship with
+## 13. The lockup — recovered, and given tails
+
+**THIS PASS WAS LOST AND HAS BEEN RECOVERED, WHICH IS THE THING TO READ FIRST.** The lockup was
+drawn on `claude/logo-state-of-record`, judged over eleven sheets in one session, and **never
+committed** — that branch carries three files under `logo/` and none of them is a lockup. §4 of
+this file already records the lesson it repeats: *"the generators are committed now because they
+were lost once already. Every sheet this design has been judged on was built in a session
+scratchpad and thrown away with it."* The rule was written and then not applied to the next
+thing drawn.
+
+It survived only because a temporary directory had not been cleaned. `sheets/lockup-tight.html`
+is that sheet, committed verbatim, and `sheets/lockup-tails.html` continues it.
+
+**A session that draws a pass and does not commit its generator has not done the work**, however
+good the render is. The render goes to the owner and the parameters go nowhere.
+
+### What was approved, written down
+
+Recovered from the generator rather than from memory:
+
+| what | value |
+| --- | --- |
+| Kanji | Hiragino Sans, `letter-spacing: .07em` |
+| Roman | Manrope 700 at **0.36×** the kanji, tracked by iteration until its measured width equals the kanji's, then pulled back by the trailing unit |
+| Roman opacity | **0.62** — the roman is subordinate by tone, not only by size |
+| Case | all caps |
+| Padding | fractions of the kanji size; `0.28` and `0.22` are the two kept |
+| Line gap | `0.06` of the kanji size |
+| Bracket stroke | `0.11` of the kanji size |
+| Bracket arm | `0.32` |
+| Bracket corner radius | **`1.85 × stroke`** — a value §3 never names |
+
+**The roman's 0.62 opacity is not in §3's table and is doing real work.** It is what makes the
+roman read as subordinate at a size that would otherwise compete, and it was recovered from the
+generator; nobody had written it down.
+
+### The tails
+
+The brackets were plain stroked paths with round caps. They carry the icon's tapered outline now,
+off the same `taperParts` the sheet already used for the icon — asked for on 2026-09-05.
+
+**§6's taper clamp came back in the sweep that added them.** `taperParts` clamps the ramp at half
+the path, so a ramp fraction above that renders identically while being presented as a sweep —
+*"three images approved as different were the same image."* At pad 0.22 the clamp binds at 0.80.
+The sheet prints the ramp actually used under every specimen and marks a clamped one in orange,
+so the defect is visible rather than silent. **A sweep whose top end is clamped is not a sweep,
+and the only defence that has ever worked here is printing the number.**
+
+## 14. The lockup's font — what it cannot ship with, and what it can
 
 **Drawn 2026-09-05, on the owner's instruction to take the lockup next.** Sheet:
 `logo/sheets/lockup.html`. Re-render:
