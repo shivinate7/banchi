@@ -5948,7 +5948,9 @@ It also caught what symmetry would have got wrong: **`initializeexportcsv` takes
 
 **The push is measured**, end to end, on the owner's account: three POSTs, a 100-row file, `Validated 100 records`, `100 products were successfully imported`, and 0 live rows changed.
 
-**The publish is not.** `movetolive` has been read and never called from here. The button exists, the route exists, the harness proves every gate that fires before the socket opens — and the first real press is still owed. `docs/specs/stale-listings.md` §6 is where its answer goes.
+**And so is the publish, as of 19:25 UTC the same day.** On the owner's explicit instruction, Vilemaw (Riftbound, Epic, Near Mint Foil, 4 live) went **$23.22 → $750.00 → $23.22** through this repo's own routes: `push` accepted 1 of 1, `publish` answered `Update: [Vilemaw / Marketplace]` with zero errors, the portal's Live grid showed $750.00, and the revert put it back. The spec's §6 carries the timeline.
+
+**What that measurement also caught: `Export From Live` is not read-your-writes.** Roughly forty seconds after a confirmed publish the export still served the OLD price while the grid served the new one. `pkmnscan reconcile --live` reads that export and writes `live` off it (D87), so a reconcile run straight after a publish records the pre-publish price. Nothing guards it, and the export was believed here until the grid contradicted it. That is a defect in the reconcile's timing, not in this path, and it is recorded rather than fixed.
 
 ### What would reopen this
 

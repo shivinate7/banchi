@@ -495,9 +495,31 @@ already observed and judged, and proves the guard fires on a harmless write BEFO
 at a real file. The upload's own safety net is what made this recoverable rather than costly:
 `Import To Staged` is not a live write, which is exactly what question 3 was asking.
 
-**What is still unmeasured is the half that carries money.** No `Move To Live` has ever been
-pressed from here, so nothing in this repo has changed a price a buyer can see. §9 records the
-contract for it, read from the bundle rather than exercised.
+**THE PUBLISH IS MEASURED TOO, AS OF 2026-09-06 19:25 UTC.** On the owner's explicit
+instruction, a real round trip ran through this repo's own routes against their live store:
+
+| | |
+|---|---|
+| 19:24:49 | `POST .../push` — staged, `upload_id 16810824`, **1 of 1 accepted**, no messages |
+| 19:25:32 | `POST .../publish` — `Update: [{ProductConditionId: 9189317, ProductName: "Vilemaw", ChannelName: "Marketplace"}]`, **0 errors, 0 warnings** |
+| ~19:26 | `Export From Live` still reported **23.2200** — the PRE-publish price |
+| ~19:28 | the seller portal's own Live grid reported **750.00**, quantity 4 |
+| 19:32:25 | the revert published; the grid reported **23.22** again |
+
+Vilemaw (Riftbound, Unleashed, Epic, Near Mint Foil, 4 live) went $23.22 → $750.00 → $23.22,
+and every press was this repo's. **The form encoding is right**: the ~36 bytes per row this
+implementation sends less than the browser — their `isPriceValid` computed — changed nothing,
+and TCGplayer accepted 1 of 1.
+
+**AND `Export From Live` IS NOT READ-YOUR-WRITES.** Roughly forty seconds after a confirmed
+publish, the export still served the old price while the portal's own grid served the new one.
+That is a measured lag on the document `pkmnscan reconcile --live` reads, so **a reconcile run
+immediately after a publish will write the pre-publish price into the store's `live` field**
+(D87). Nothing guards against that today. It is not a hypothetical: it happened in this very
+sequence, and the export was believed until the grid contradicted it.
+
+**$750 is a RAISE and could not go through `reprice apply`** — see §6b. The file was pushed
+directly to the route, which is why this measurement says nothing about the apply guard.
 
 ## 6b. This path cannot raise a price, and the owner wants it to
 
