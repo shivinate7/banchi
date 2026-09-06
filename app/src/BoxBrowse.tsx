@@ -551,6 +551,10 @@ export function BoxBrowse({
   const [opened, setOpened] = useState<readonly string[]>([])
 
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
+  /* Whether the registry read above has come back, either way. `boxRecords` cannot answer this
+     itself — `[]` is both "not yet" and "no boxes" — and the shelf effect needs to tell those
+     apart to know whether a box the hash asked for is genuinely absent or merely not here yet. */
+  const [boxesAnswered, setBoxesAnswered] = useState(false)
   /* Every SKU's listing record, off the same read as the cards. Read for `at` — how old the
      live figures are — and never for a second copy of the counts. */
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -716,6 +720,13 @@ export function BoxBrowse({
       .catch(() => {
         // Deliberately nothing: the walk is whole without this.
       })
+      .finally(() => {
+        /* ANSWERED, NOT SUCCEEDED, AND `finally` FOR EXACTLY THAT REASON. The shelf effect
+           below holds the hash's box until this flips, so a `catch` that left it false would
+           hold a stale request open for the life of the screen — and this call is allowed to
+           fail silently, so that is a real path and not a hypothetical. */
+        if (live) setBoxesAnswered(true)
+      })
     return () => {
       live = false
     }
@@ -744,17 +755,36 @@ export function BoxBrowse({
   /* The shelf follows the filter; the hash's box is honoured once, on the first pick. The ref
      is read and cleared in the effect body and never inside the updater: React runs an updater
      twice under StrictMode, and a ref consumed on the first pass left the second landing on
-     box 1 with the hash still reading `?box=3`. */
+     box 1 with the hash still reading `?box=3`.
+
+     HELD UNTIL THE REGISTRY HAS ANSWERED, AND THAT IS THE WHOLE FIX (2026-09-05). `shelves` is
+     built from the ROWS first and the registry second, and the two arrive on separate reads. A
+     box with no LOCATED rows — every box of code cards, because D24 pools them — is therefore
+     absent from the first `shelves` this effect sees. The ref was consumed and cleared there,
+     `shelves.includes(askedFor)` was false, and the walk landed on box 1; when the registry
+     landed a tick later and the box joined the list, there was nothing left to honour.
+
+     The effect of that was to break the one link that uses this deep form on a box of codes:
+     `#/codes`'s "Fix on Inventory" aims at the box holding the unclaimed codes, which by
+     construction has no located rows, so it always arrived at box 1 — whose claim editor draws
+     no Product row at all, because box 1 is Pokemon. Measured against `?box=3`, a box with real
+     rows, which worked and hid it.
+
+     So the ref is cleared only when it has been HONOURED or when the registry has ANSWERED and
+     cannot honour it. That bounds the window: while it is open a live request outranks `prev`,
+     which is what lets the late-arriving box win the shelf it was asked for; once closed the
+     rule is the old one and a stale hash can never yank a walk somebody has moved. */
   useEffect(() => {
     if (shelves.length === 0) return
     const askedFor = wanted.current
-    wanted.current = null
+    const honourable = askedFor !== null && shelves.includes(askedFor)
+    if (honourable || boxesAnswered) wanted.current = null
     setShelf((prev) => {
+      if (honourable) return askedFor
       if (prev !== null && shelves.includes(prev)) return prev
-      if (askedFor !== null && shelves.includes(askedFor)) return askedFor
       return shelves[0] ?? null
     })
-  }, [shelves])
+  }, [shelves, boxesAnswered])
 
   /* The selection follows the filter. When nothing matches it is left alone. */
   useEffect(() => {

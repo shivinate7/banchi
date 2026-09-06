@@ -259,3 +259,23 @@
 .kit-marks-tight { gap: var(--bn-4); }
 .kit-mark { display: flex; flex-direction: column; align-items: center; gap: var(--bn-2); }
 .kit-mark-name { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-weight: 500; }
+
+/* THE COPIES SPECIMEN IS A QUERY CONTAINER, BECAUSE THE SCREEN IT COMES FROM IS ONE.
+   `CardLocations.css` answers to `@container copies` in four places — the whole narrow
+   layout, where the address takes its own line and the state and action drop beneath it,
+   which that file's own comment calls "most of the time". `Inventory.css` establishes that
+   container on `.inventory-detail`, the pane beside the photograph, and it was the ONLY
+   place establishing it. So this sheet drew the component with all four rules dead: at 390
+   the address collapsed to one word a line and the box's name clipped to `M…`, a shape no
+   screen in the product can produce. A specimen that renders a layout the product never
+   renders is the same defect `app/tests/gallery.spec.ts` was written for, one level down —
+   the row was on the page, and it was the wrong row.
+
+   Owner only, and deliberately: every `@container copies` rule is scoped to
+   `.card-locations-owner`, and the Fulfiller's skin establishes no such container in the
+   product either. Naming one here would invent a context that view does not have. */
+.kit-copies {
+  min-width: 0;
+  container-type: inline-size;
+  container-name: copies;
+}
