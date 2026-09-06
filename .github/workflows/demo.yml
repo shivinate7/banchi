@@ -40,6 +40,12 @@ on:
       - 'geometry/**'
       - 'codes/**'
       - 'fixtures/**'
+      # THE CURATED PHOTOGRAPHS AND THEIR IDENTIFICATIONS, missing from this list until
+      # 2026-09-06. They are the one INPUT to the demo that is tracked rather than derived,
+      # so `make demo-photos` followed by a merge changed what the demo should show and
+      # rebuilt nothing — the published page would have kept the old set until some
+      # unrelated edit to `app/` happened to wake this workflow up.
+      - 'demo-assets/**'
       - 'scripts/demo-*'
       - 'scripts/demo_*'
       - 'Makefile'
