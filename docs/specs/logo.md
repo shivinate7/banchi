@@ -780,7 +780,7 @@ two caption bugs in that sheet happened, twice, in the same row.
 | key | value | settled |
 | --- | --- | --- |
 | `pad` | 0.50 | rounds 16–20, closed on the pixel floor |
-| `gap` | 0.06 | carried from the recovered pass |
+| `gap` | 0.08 | rounds 21–23, answered in the column |
 | `stroke` | 0.050 | rounds 1–5 |
 | `arm` | 0.32 | carried; §3's lockup row |
 | `rrMul` | 4.0 | rounds 6–10, closed on the JND |
@@ -790,6 +790,38 @@ two caption bugs in that sheet happened, twice, in the same row.
 **A key in this table is not the same as a key that has been argued.** `tip` and `tl` are here
 because the sheet holds them, not because anyone chose them — they are the next two rounds, and
 the column says so.
+
+### The line gap, settled over three rounds — and the first answer that came from the column
+
+**0.08 of the kanji size**, between 番地 and BANCHI. It replaces the 0.06 carried from the
+recovered pass, the second and last value this series inherited rather than chose.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 21 | 0.00 – 0.38 | 0 – below 0.24 | zero survived, and zero is a floor |
+| 22 | 0.00 – 0.23 | 0.08 picked | picked off the **context** row |
+| 23 | 0.02 – 0.14 | 0.05 – below 0.11 | the step reached 1.4px |
+
+**Rule 5's one legitimate exception is recorded here rather than left to look like a lapse.**
+Round 21 ended with 0.00 — the smallest value offered — inside the kept band, which normally
+means the range anchored the answer and the sweep must be reopened wider. It cannot be, because
+**there is nothing below zero to offer.** The low end is bracketed by geometry rather than by
+taste, the same way §11's size floor was bounded by 番's counters closing rather than by anyone's
+preference. Two of the padding's five rounds were spent on genuinely unbracketed ends; this is
+not one of those, and a later session should not read it as one.
+
+**That zero was kept is a finding.** The roman is allowed to sit hard under the kanji, reading as
+one block rather than two lines. It lost to 0.08, but only by a round.
+
+**0.08 came off the context row, and no other answer in this series did.** It was not among the
+sweep row's values at all — it was drawn only inside the 212px sidebar column, which had been
+added in round 18 on the argument that air always reads calmer with nothing to be calm against.
+That is the evidence for the row, and the rule it earns: **where the two rows disagree, the
+column wins.**
+
+**The stop is the same measured one the padding used.** Round 23's step was 1.4px at the sidebar
+size — finer than the 1.9px that closed the padding — and 0.08 is the midpoint of the final
+0.05 – 0.11 bracket, taken under §7 rule 7 rather than split into a twenty-fourth round.
 
 ### The padding, settled over five rounds — and rule 5 fired twice more
 

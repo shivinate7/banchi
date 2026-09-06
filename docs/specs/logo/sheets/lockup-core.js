@@ -67,7 +67,17 @@ function frame(el, opt){
  /* the cap is printed rather than applied silently -- the taper clamp already taught this file
     that a bound which binds without saying so turns a sweep into repeated specimens */
  el.dataset.rr = rr.toFixed(2) + (rr < rrWant-1e-6 ? ' CLAMPED from '+rrWant.toFixed(2) : '')
- const aX=Math.max(W*arm, rr+2), aY=Math.max(H*arm, rr+2)
+ /* THE ARM HAS A FLOOR TOO, AND IT WAS THE ONE BOUND IN THIS FILE THAT BOUND SILENTLY. The
+    radius prints its cap and the ramp prints its clamp, both because a bound that binds without
+    saying so has already turned a sweep into repeated specimens once. The arm's `rr+2` floor was
+    written with neither, and on this geometry it engages below arm ≈ 0.076 -- so an arm sweep
+    reaching into that region would have drawn identical brackets under distinct labels, which is
+    exactly section 6's defect and exactly what the round sheet's clamp assertion exists to catch.
+    Recorded here so it can be. */
+ const aXw=W*arm, aYw=H*arm, aFloor=rr+2
+ const aX=Math.max(aXw, aFloor), aY=Math.max(aYw, aFloor)
+ el.dataset.armpx = aX.toFixed(2)+'/'+aY.toFixed(2) +
+   ((aXw<aFloor-1e-6||aYw<aFloor-1e-6) ? ' CLAMPED from '+aXw.toFixed(2)+'/'+aYw.toFixed(2) : '')
  let body
  if(opt.tails===false){
   const TL='M'+i.toFixed(2)+' '+(i+aY).toFixed(2)+'V'+(i+rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+rr).toFixed(2)+' '+i.toFixed(2)+'H'+(i+aX).toFixed(2)
