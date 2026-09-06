@@ -2436,11 +2436,24 @@ COMPONENTS = [
                                       "readers every screen shares: a thrown thing as an "
                                       "owner-side screen draws it, and the position label as "
                                       "the server rendered it.",
-                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13", "D19", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D37", "D43", "D46", "D48", "D49", "D52", "D53", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D68", "D69", "D70", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D90", "D91", "D92", "D100"]},
+                              "governed_by": ["D3", "D4", "D5", "D6", "D7", "D8", "D10", "D13",
+                                              "D19", "D21", "D22", "D23", "D24", "D26", "D28",
+                                              "D29", "D30", "D32", "D33", "D34", "D37", "D43",
+                                              "D46", "D48", "D49", "D52", "D53", "D58", "D59",
+                                              "D61", "D62", "D63", "D64", "D65", "D68", "D69",
+                                              "D70", "D73", "D76", "D79", "D83", "D86", "D87",
+                                              "D89", "D90", "D91", "D92", "D100", "D103"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
-                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11", "D16", "D20", "D21", "D22", "D23", "D24", "D26", "D28", "D29", "D30", "D32", "D33", "D34", "D36", "D37", "D39", "D45", "D46", "D48", "D49", "D52", "D53", "D54", "D56", "D58", "D59", "D61", "D62", "D63", "D64", "D65", "D67", "D69", "D73", "D76", "D79", "D83", "D86", "D87", "D89", "D91", "D92", "D93", "D100"]},
+                             "governed_by": ["D3", "D4", "D6", "D7", "D8", "D9", "D10", "D11",
+                                             "D16", "D20", "D21", "D22", "D23", "D24", "D26",
+                                             "D28", "D29", "D30", "D32", "D33", "D34", "D36",
+                                             "D37", "D39", "D45", "D46", "D48", "D49", "D52",
+                                             "D53", "D54", "D56", "D58", "D59", "D61", "D62",
+                                             "D63", "D64", "D65", "D67", "D69", "D73", "D76",
+                                             "D79", "D83", "D86", "D87", "D89", "D91", "D92",
+                                             "D93", "D100", "D103"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme and the rail — and nothing else",
                                     "governed_by": ["D13", "D27", "D94", "D95"],
@@ -3156,7 +3169,11 @@ COMPONENTS = [
                                 # and never card-scoped; D28 is the list-must-not-move rule its
                                 # invariant row height exists to honour; D39 is the picker-not-a-
                                 # handoff argument; D49 is the screen.
-                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28", "D33", "D35", "D37", "D39", "D41", "D48", "D49", "D51", "D54", "D56", "D58", "D59", "D62", "D78", "D79", "D85", "D86", "D89", "D99"]},
+                                "governed_by": ["D4", "D5", "D7", "D9", "D22", "D26", "D28",
+                                                "D33", "D35", "D37", "D39", "D41", "D48",
+                                                "D49", "D51", "D54", "D56", "D58", "D59",
+                                                "D62", "D78", "D79", "D85", "D86", "D89",
+                                                "D99", "D100", "D103"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -3173,7 +3190,9 @@ COMPONENTS = [
                                         "the same button width the grid reads, and both fixed "
                                         "panels start after it, so no panel is ever over a row "
                                         "control and nothing has to win a stacking order.",
-                                "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50", "D54", "D56", "D62", "D78", "D79", "D85", "D86"]},
+                                "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
+                                                "D54", "D56", "D62", "D78", "D79", "D85",
+                                                "D86", "D103"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -3506,6 +3525,30 @@ COMPONENTS = [
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
                                 "governed_by": ["D10", "D20", "D56"]},
+            "src/pricingSource.ts": {"does": "WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY "
+                                             "BE ASKED ABOUT THEM (D103). One type, two "
+                                             "builders, the hash parsing, and the adapter that "
+                                             "projects a `MarkdownSku` into what the row draws — "
+                                             "no JSX, which is `runScope.ts`'s and "
+                                             "`readiness.ts`'s posture. The screen had ONE source "
+                                             "and one derived sentinel for it (`run`, null at "
+                                             "zero or two-plus runs) gating four separate "
+                                             "capabilities; a markdown can take a reading and can "
+                                             "never take an emit, which a single sentinel cannot "
+                                             "express. So the screen asks about the ROW — "
+                                             "`source.history === null`, `source.copies` — and "
+                                             "exactly two call sites ask which door it was, the "
+                                             "landing deck and the ship bar, where the two modes "
+                                             "genuinely are different objects. `SECTIONS` and "
+                                             "`PRESETS` stay in `Pricing.tsx` and are passed in: "
+                                             "docs-audit's `pricing presets` row reads that file "
+                                             "by path. `markdownInHash` is why the lens costs no "
+                                             "ROUTES row — `#/pricing?markdown=<stamp>`, on a "
+                                             "router that strips `?…`, so eleven routes stays "
+                                             "eleven and three mechanical counts do not move.",
+                                     # D103 is the entry; D86 is the one answer file the write
+                                     # path is keyed by; D62 is the press the trends scoping keeps.
+                                     "governed_by": ["D28", "D62", "D86", "D100", "D103"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
                                           "`pkmnscan.run-scope`, D27's carve-out. NOT CLEARED BY "
@@ -3872,6 +3915,23 @@ COMPONENTS = [
                                                "harness test — it starts a browser; "
                                                "`make design-check` runs it.",
                                        "governed_by": ["D16", "D61", "D63", "D66", "D69"]},
+            "tests/pricing-markdown.spec.ts": {"does": "`#/pricing` AS A LENS OVER LIVE "
+                                               "TCGPLAYER LISTINGS (D103), in its own file so "
+                                               "that `tests/pricing.spec.ts` could stay "
+                                               "UNEDITED through every commit of that work — "
+                                               "which is the only thing that proves the second "
+                                               "source cost the run path nothing. The strongest "
+                                               "cases are absences: no quantity cell and no "
+                                               "thumbnail EXIST in the DOM, and the write press "
+                                               "does not exist until a check has answered. It "
+                                               "also pins what the press SENDS — `edits` "
+                                               "carrying only the rows a hand priced, no "
+                                               "`worklist`, and the corpus revision — because "
+                                               "on this path that is the file that moves money "
+                                               "at a marketplace, and it pins that the trends "
+                                               "press is scoped to the filter rather than to "
+                                               "the whole survey (D62). Not a harness test.",
+                                               "governed_by": ["D62", "D100", "D103"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "

@@ -2284,7 +2284,17 @@ def _survey(directory: Path) -> Dict[str, dict]:
             "survey_unreadable",
             f"{cmd_reprice.SURVEY} could not be read: {exc}. Re-run `reprice list --write`.",
         ) from None
-    return {str(row.get("sku") or ""): row for row in rows if row.get("sku")}
+    # PROJECTED SO BOTH DOCUMENTS ANSWER `_history_for_entry` IN ONE SHAPE. A run's
+    # `pricing.json` entry nests the export's own figures under `snap`; a survey row carries
+    # `market` at the top because that is `Candidate`'s word for it. The panel draws
+    # `snap.market` — the export's price, BESIDE the reading and never mixed into it — so
+    # without this a live listing's own asking market read as "the export carries no price for
+    # this card", which is a false sentence over a row the export priced.
+    return {
+        str(row.get("sku") or ""): {**row, "snap": {"market": row.get("market")}}
+        for row in rows
+        if row.get("sku")
+    }
 
 
 def _survey_row(directory: Path, sku: str) -> dict:

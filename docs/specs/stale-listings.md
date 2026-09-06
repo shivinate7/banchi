@@ -1,7 +1,7 @@
 # Stale listings, and the markdown that pushes them back
 
-**STATUS, 2026-09-04: SPECIFIED and BUILT. NOT VALIDATED.** The two commands, the four routes,
-the screen and the harness block all exist and are green, and every number below was measured
+**STATUS, 2026-09-06: SPECIFIED and BUILT. NOT VALIDATED.** The two commands, the seven routes,
+the sheet, the lens on `#/pricing` (D103) and the harness blocks all exist and are green, and every number below was measured
 from `fixtures/`, from the twelve exports recorded into run directories, from the owner's real
 My Pricing download of 2026-09-01, or from the store as it stood on 2026-09-03. **No file this
 feature writes has ever been uploaded to TCGplayer.** §6 says exactly which claim that leaves
@@ -14,8 +14,11 @@ routes and the harness block came across unchanged, and the screen was rebuilt a
 routes, §3's predicate and §2's byte contract are the same ones T7 asserts. §5 records what
 changed about the placement argument and why the pixel measurement in it is now history.
 
-Governed by D100. The decision entry carries the argument; this file carries the numbers, what
-was given up, and what would reopen it.
+Governed by D100, and by **D103**, which made the markdown a LENS on `#/pricing` rather than only
+a sheet on `#/runs`: the record widened to every live row, the offer did not, and the two defects
+that surfaced on the way — an answer nothing dated, and a corpus written from a subprocess with no
+stale-write guard — are fixed there. The decision entries carry the argument; this file carries the
+numbers, what was given up, and what would reopen it.
 
 ---
 
@@ -33,8 +36,12 @@ writes **`import.csv`**, which is the file they upload to TCGplayer through My P
 
 ```
 ./pkmnscan reprice list  <my-pricing.csv> [--days N] [--percent P] [--write]
-./pkmnscan reprice apply <worklist.csv> [--write]
+./pkmnscan reprice apply <worklist.csv> [--corpus-revision <digest>] [--write]
 ```
+
+**Or the whole thing on a screen** (D103): `--write` also leaves a `survey.json` holding every
+live row with its verdict, and `#/pricing?markdown=<stamp>` prices them in the same UI a joined
+run is priced in — the charts included. §5 has the shape and what it cost.
 
 Both halves preview by default. Nothing in this repo talks to TCGplayer on this path; the
 upload is a manual step. Reachable on `#/runs`, from a header button beside the store-wide
@@ -210,13 +217,26 @@ about this feature.
 
 At `--days 7 --percent 10`: 109 SKUs, 394 copies, asking value **$193.06 → $173.36**.
 
-## 5. The three files, and why the worklist is not the upload
+## 5. The four files, and why the worklist is not the upload
 
 | file | what it is |
 |---|---|
 | `worklist.csv` | the stale rows in export shape, price already proposed. What the operator edits. |
-| `manifest.json` | what the export said per SKU — **including the row's own bytes**. |
+| `manifest.json` | what the **offer** said per SKU — **including the row's own bytes**. |
+| `survey.json` | **every live row the export carried**, with its verdict and its own bytes (D103). What `#/pricing`'s lens draws. |
 | `import.csv` | what `apply --write` produces. The file that goes to TCGplayer. |
+
+**`survey.json` is a fourth file and not a wider manifest**, for two measured reasons. `_apply`
+builds the upload's bytes out of `manifest["skus"]`, so leaving that key alone is what keeps the
+money path provably untouched — every existing assertion in `check_markdown` runs over
+byte-identical inputs. And `server/pipeline_routes.py:_markdown_summary` parses the manifest for
+**every stamp** to answer `GET /pipeline/markdowns`: at ~700 bytes a row a wide manifest is
+~530KB on the owner's export, so thirty markdowns would mean parsing 16MB to draw a list.
+
+**`--write` now produces the directory even when the plan proposes nothing**, with a header-only
+worklist. The lens is reached BY a stamp, and on this store `--days 10` selects zero rows because
+the oldest capture is nine days old — so the most ordinary way to ask for the whole table used to
+produce nothing to address.
 
 They live in `inventory/markdowns/<stamp>/`, under `inventory/` and never under `runs/`: a run
 directory is one box's immutable input and is declared disposable, and a markdown is store-wide
@@ -237,6 +257,26 @@ no quantity. That is the property the shape was chosen for.
 seventeenth column would break the round-trip the previous paragraph depends on. The reasoning
 is in `report.txt` beside it. If the operator asks for the reasons in the spreadsheet, that
 reopens the file's shape.
+
+### And it opens on `#/pricing` as a lens (D103)
+
+**`#/pricing?markdown=<stamp>` draws every live listing the survey saw** — the operator's whole
+live inventory, in the screen they already price new inventory in: the rule strip and presets,
+**Load trends**, `PriceHistoryPanel`'s daily and weekly series, snap-to-column, holds, the 10-deep
+undo, the keyboard walk. **Staleness is a filter over it**, defaulting to *All*, because the gate
+on this store selects 109 of 441 rows at seven days and **none at ten**.
+
+**No `ROUTES` row.** The hash router strips `?…` and that screen already addressed itself this way
+for `?run=`, so eleven routes stays eleven and the three mechanical counts do not move.
+
+**The press is `edits`**, not a CSV the browser wrote: `app/package.json` carries two runtime
+dependencies and PapaParse is not one, so the pairs go as JSON and `do_markdown_apply` materialises
+them with `tcgcsv.write_csv`. T7 asserts the resulting `import.csv` is byte-identical to the
+worklist path's.
+
+**The raise cliff is drawn on the row.** `read_back` refuses the whole file over one raised price,
+so `fieldState` says *"Above the live price"* at the keystroke rather than letting it be discovered
+by a refusal after the press.
 
 ### It opens on `#/runs`, and the measurement that decided that is history
 
@@ -358,11 +398,12 @@ one thing that *cannot* go wrong this way is the quantity: no file on this path 
 |---|---|
 | decision | `pipeline/reprice.py` — pure, no I/O, no `store` import, no network |
 | command | `cli/cmd_reprice.py`, wired in `cli/__main__.py` |
-| routes | `GET/POST /pipeline/markdowns`, `POST /pipeline/markdowns/<stamp>/apply`, `GET /pipeline/markdowns/<stamp>/file` |
+| routes | `GET/POST /pipeline/markdowns`, `POST /pipeline/markdowns/<stamp>/apply` (a `worklist` upload **or** `edits`, plus an optional `revision`), `GET /pipeline/markdowns/<stamp>/file`, and D103's three: `GET .../table`, `GET .../history?sku=`, `GET .../trends?sku=` |
+| lens | `app/src/pricingSource.ts` — the source seam and the adapter; `#/pricing?markdown=<stamp>` |
 | screen | `app/src/Markdown.tsx` — a sheet on `#/runs`, opened from `app/src/Runs.tsx`'s header beside the store-wide reconcile. No stylesheet of its own: the chrome is in `app/src/Runs.css` beside the composer's, and the primitives are the kit's |
 | output | `inventory/markdowns/<stamp>/` — `worklist.csv`, `report.txt`, `manifest.json`, then `import.csv`, `receipt.txt` |
 | answers | `inventory/prices.json`, via `pipeline/corpus.py` |
-| harness | `check_markdown` in `harness/tests/t7_store_and_seams.py` |
+| harness | `check_markdown` and `check_markdown_lens` in `harness/tests/t7_store_and_seams.py`, plus the markdown arms of `check_history_route` and `check_corpus_revision` |
 | screen tests | `app/tests/markdown.spec.ts`, run by `make design-check` and never at turn end |
 
 ## 9. What would reopen this
