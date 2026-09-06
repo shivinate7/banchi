@@ -192,10 +192,10 @@ test('the report is the command stdout, verbatim, and no row is summarised', asy
  * `Runs.css` lifted it to 36px in a phone block near the top of the file and set its 28px base
  * height further down at the SAME specificity — so the base won inside the media query too, and
  * the lift was dead from the day it was written. The only rule that ever took effect was a
- * `.runs-md`-scoped 40px copy, which reached the markdown sheet and nothing else: not this sheet,
+ * `.markdown`-scoped 40px copy, which reached the markdown sheet and nothing else: not this sheet,
  * not the identify composer, not the run panel. `CLAUDE.md`'s floor is 40px on a coarse pointer.
  *
- * THIS SHEET IS THE ASSERTION BECAUSE IT IS NOT THAT SHEET. A case inside `.runs-md` would have
+ * THIS SHEET IS THE ASSERTION BECAUSE IT IS NOT THAT SHEET. A case inside `.markdown` would have
  * passed against the defect for as long as the scoped copy existed, which is exactly how the
  * defect survived — the one place anybody looked was the one place it did not apply. */
 test('the log well fold toggle is a thumb target on a phone, outside the markdown sheet too', async ({
@@ -212,7 +212,7 @@ test('the log well fold toggle is a thumb target on a phone, outside the markdow
     const well = document.querySelector('.livecheck .runslog') as HTMLElement
     const toggle = well.querySelector('.runslog-toggle') as HTMLElement
     return {
-      insideMarkdownSheet: well.closest('.runs-md') !== null,
+      insideMarkdownSheet: well.closest('.markdown') !== null,
       toggle: +toggle.getBoundingClientRect().height.toFixed(1),
     }
   })

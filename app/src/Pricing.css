@@ -1338,3 +1338,14 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   border-bottom: 2px solid var(--bn-accent);
   box-shadow: 0 2px 0 0 var(--bn-accent-tint-2);
 }
+
+/* THE SHORT LABEL ON A NARROW HEADER (D105) — `Runs.css`'s pair, brought over with the sheet
+   whose door needs it. Two spans and not `text-overflow`, because a truncated "Mark down sta…"
+   is a worse sentence than "Mark down"; the accessible name on the button is the long one
+   either way, so a screen reader hears the same thing at every width. */
+@media (max-width: 767px) {
+  .pricing-hide-sm { display: none; }
+}
+@media (min-width: 768px) {
+  .pricing-only-sm { display: none; }
+}

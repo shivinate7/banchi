@@ -211,12 +211,21 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   user. It exists because this command writes the corpus
                                    #   from a subprocess and `emit` never did, so a `#/pricing`
                                    #   tab open during an apply had its next keystroke refused
-                                   #   for a write it had just made (D103).
-                                   #   Reachable on `#/runs`, from a header button beside the
-                                   #   store-wide reconcile — a modal and not a route, which
-                                   #   D100's own §5 now records as a choice rather than the
-                                   #   nav measurement it started as. AND ON `#/pricing` AS A
-                                   #   LENS (D103): `reprice list --write` leaves a
+                                   #   for a write it had just made (D103). THE SHEET IS NOW
+                                   #   MOUNTED INSIDE THAT TAB (D105), so the digest travels as
+                                   #   a prop and the host adopts what the apply produced.
+                                   #   Reachable on `#/pricing`, from a header button — a modal
+                                   #   and not a route, which D100's own §5 records as a choice
+                                   #   rather than the nav measurement it started as. It sat on
+                                   #   `#/runs` beside the store-wide reconcile until 2026-09-06
+                                   #   because both read one export, which is kinship of
+                                   #   IMPLEMENTATION; a markdown decides a PRICE, so it lives
+                                   #   where prices are decided (D105). The reconcile did NOT
+                                   #   move: it writes `live` onto the store's own records,
+                                   #   which is a fact about inventory.
+                                   #   AND ON `#/pricing` AS A LENS (D103), which is the same
+                                   #   screen and no longer a second one:
+                                   #   `reprice list --write` leaves a
                                    #   `survey.json` holding every live row with its verdict,
                                    #   and `#/pricing?markdown=<stamp>` prices them in the same
                                    #   UI a run is priced in — charts, presets, holds, the
@@ -254,7 +263,9 @@ sentence**, and see "the census" below for what enforces that.
                               D49's deliberate holds. TWO SOURCES (D103): the joined runs, and —
                               at `#/pricing?markdown=<stamp>` — the operator's whole LIVE
                               inventory out of a My Pricing export, where staleness is a filter
-                              rather than a gate and the press writes a price-only `import.csv`
+                              rather than a gate and the press writes a price-only `import.csv`.
+                              THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
+                              read an export, write a worklist, price it without changing screen
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
                               many of them sit in one box, pulled one copy at a time
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
@@ -935,6 +946,7 @@ D101 A claim a screen names is a claim a screen can fix, and the derived tuple o
 D102 The mark is an illustration with its own palette, and the spec is its store of record
 D103 Staleness is a filter and not a gate, the record holds every live row, and the file that leaves the machine stays narrow
 D104 The live export is fetched, and the second standing instruction is a second constant
+D105 The markdown lives where prices are decided, and one file may not have two unguarded writers
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

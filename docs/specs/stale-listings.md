@@ -10,12 +10,13 @@ unmeasured and what press would measure it.
 **The screen was re-drawn for Banchi and the backend was not.** This work was written against
 the shell D94–D95 replaced and landed here in two halves: the commands, the pipeline module, the
 routes and the harness block came across unchanged, and the screen was rebuilt against
-`app/src/kit/` as a modal on `#/runs` rather than restyled. Nothing on the wire moved — §8's
+`app/src/kit/` as a modal rather than restyled. Nothing on the wire moved — §8's
 routes, §3's predicate and §2's byte contract are the same ones T7 asserts. §5 records what
 changed about the placement argument and why the pixel measurement in it is now history.
 
-Governed by D100, and by **D103**, which made the markdown a LENS on `#/pricing` rather than only
-a sheet on `#/runs`: the record widened to every live row, the offer did not, and the two defects
+Governed by D100, by **D103**, which made the markdown a LENS on `#/pricing` rather than only a
+sheet somewhere else, and by **D105**, which moved the sheet onto that same screen: the record
+widened to every live row, the offer did not, and the two defects
 that surfaced on the way — an answer nothing dated, and a corpus written from a subprocess with no
 stale-write guard — are fixed there. The decision entries carry the argument; this file carries the
 numbers, what was given up, and what would reopen it.
@@ -44,8 +45,8 @@ live row with its verdict, and `#/pricing?markdown=<stamp>` prices them in the s
 run is priced in — the charts included. §5 has the shape and what it cost.
 
 Both halves preview by default. Nothing in this repo talks to TCGplayer on this path; the
-upload is a manual step. Reachable on `#/runs`, from a header button beside the store-wide
-reconcile — see §5 for why it opens there and not on a route of its own.
+upload is a manual step. Reachable on `#/pricing`, from a header button — see §5 for why it
+opens there and not on a route of its own.
 
 ## 2. Nothing is deleted at TCGplayer, and the evidence is in this repo
 
@@ -304,8 +305,9 @@ substitution, which D100 names as the cost of the CSV having no reason column.
 
 **And the palette could not find any of this.** ⌘K matches a route's `keywords` by substring, and
 neither Runs' nor Pricing's contained *stale*, *markdown*, *reprice* or *live listings* — the
-feature was reachable only by already standing on `#/runs` and scanning the header. Both routes
-carry those words now.
+feature was reachable only by already standing on the host screen and scanning the header. Both
+routes carry those words now — and since D105 the sheet and its lens are on one of them, so the
+words on `#/runs` are the reconcile's.
 
 **The basis and the rule are on the sheet** (the owner reopened §9's condition on 2026-09-06).
 *New price is* — **A percentage under** or **Exactly** — and *Cut comes off* — **Your asking
@@ -355,7 +357,7 @@ worklist path's.
 so `fieldState` says *"Above the live price"* at the keystroke rather than letting it be discovered
 by a refusal after the press.
 
-### It opens on `#/runs`, and the measurement that decided that is history
+### It opens on `#/pricing`, and the measurement that decided against a route is history
 
 D49's precedent says a worklist the operator sits in earns a route, and this is one. `#/markdown`
 was built and then measured out against the shell of the time: **the horizontal nav strip needed
@@ -370,15 +372,31 @@ horizontal line, so the arithmetic above constrains nothing here any more. Re-me
 browser on 2026-09-04, at the owner's 1440x900: nine links, each 36px tall and 211px wide, in
 four groups on a 2px gap, running y=68 to y=537 with the sidebar foot ending at y=704 — **196px
 of slack, against the 38px a tenth link would cost**, and on a phone a nav route that is not one
-of the four tabs goes in the More drawer at no width cost at all. **A row would fit.** The
-placement did not
-change with it: this opens as a modal on `#/runs` from a header button beside the store-wide
-reconcile, a structural sibling of `app/src/LiveReconcile.tsx`, because both read the same live
-export and the order is the order of the work. What was a forced choice is a deliberate one.
+of the four tabs goes in the More drawer at no width cost at all. **A row would fit.** What was
+a forced choice is a deliberate one, and it survived being re-argued: the lens already has an
+address — `#/pricing?markdown=<stamp>`, which can be bookmarked, is in the palette and is
+reachable by chord — so a
+second pricing route would be two screens for one job.
 
-**What that costs is a hash of its own**: no link, no bookmark, no chord, and it opens over a
-screen whose first two thirds are about one run. `app/src/App.tsx`'s ROUTES table carries the
-argument where the row would have gone.
+**The HOST moved on 2026-09-06 (D105), and the modal did not become a route.** It opened on
+`#/runs` beside the store-wide reconcile until then, "because both read the same live export and
+the order is the order of the work". The owner's objection was one sentence — *"that's kinda
+dumb, this should just live in pricing"* — and the flaw in that argument is nameable: reading one
+file is kinship of **implementation**. `#/runs` is the pipeline over a box just photographed; a
+markdown decides a **price** over inventory already listed, and this product has a screen where
+prices are decided.
+
+**The sheet's own step-2 press stopped being a screen change.** `app/src/App.tsx` renders the
+view under `key={path}` where `path` is the hash **minus its query**, so `#/pricing` and
+`#/pricing?markdown=<stamp>` are one key: the press closes the sheet, writes the hash, and
+`Pricing.tsx`'s `hashchange` listener picks the stamp up. The rows appear under the operator on
+the screen they are standing on.
+
+**`LiveReconcile` stayed on `#/runs`**, and the split is the point rather than an inconsistency:
+it writes `live` onto the store's own listing records (D87), which is a fact about inventory,
+settled where the other inventory facts are. Each sheet went to the screen owning the kind of
+fact it writes. `app/src/App.tsx`'s ROUTES table carries the argument where the row would have
+gone.
 
 ### Prices are compared as `Decimal`, never as text
 
@@ -482,7 +500,7 @@ one thing that *cannot* go wrong this way is the quantity: no file on this path 
 | command | `cli/cmd_reprice.py`, wired in `cli/__main__.py` |
 | routes | `GET/POST /pipeline/markdowns`, `POST /pipeline/markdowns/<stamp>/apply` (a `worklist` upload **or** `edits`, plus an optional `revision`), `GET /pipeline/markdowns/<stamp>/file`, and D103's three: `GET .../table`, `GET .../history?sku=`, `GET .../trends?sku=` |
 | lens | `app/src/pricingSource.ts` — the source seam and the adapter; `#/pricing?markdown=<stamp>` |
-| screen | `app/src/Markdown.tsx` — a sheet on `#/runs`, opened from `app/src/Runs.tsx`'s header beside the store-wide reconcile. No stylesheet of its own: the chrome is in `app/src/Runs.css` beside the composer's, and the primitives are the kit's |
+| screen | `app/src/Markdown.tsx` — a sheet mounted inside `#/pricing` (D105), opened from `app/src/Pricing.tsx`'s header. `app/src/Markdown.css` is its chrome, `.markdown-*`; the primitives are the kit's. It takes `revision` and hands back `onCorpusWritten`, because step 3 writes `inventory/prices.json` from a subprocess and now shares a tab with the screen holding the digest |
 | output | `inventory/markdowns/<stamp>/` — `worklist.csv`, `report.txt`, `manifest.json`, then `import.csv`, `receipt.txt` |
 | answers | `inventory/prices.json`, via `pipeline/corpus.py` |
 | harness | `check_markdown` and `check_markdown_lens` in `harness/tests/t7_store_and_seams.py`, plus the markdown arms of `check_history_route` and `check_corpus_revision` |
