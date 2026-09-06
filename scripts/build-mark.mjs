@@ -37,6 +37,9 @@ const { SQ, taperParts, strokeBody, CW, CH } = new Function(
 // below fail rather than the app quietly taking the sheet's word.
 const ARM = 0.38, CORNER = 8, GAP = 11.5, CARD_R = 1.9
 const DISPLAY = { stroke: 1.7, tip: 0.07, taperLen: 0.3 }
+// Apple's macOS icon grid, section 17: 824pt of artwork on a 1024pt canvas. Mirrored in
+// docs/specs/logo.md and reconciled by `make docs-audit`'s `mac icon grid` row.
+const MAC_GRID = 824 / 1024
 const SMALL = { stroke: 4.2 }   // section 11, candidate C: no taper, flat prism
 
 const EW = CW + 2 * GAP, EH = CH + 2 * GAP
@@ -230,8 +233,21 @@ console.log(`  display bracket ${display.body.length} bytes · small bracket ${s
 // owner's word: the pre-commit image guard refuses any .png outside captures/ and has no
 // PKMNSCAN_*=off hatch, so `--no-verify` is the only way past it and it disarms every other
 // guard at the same time. Stage nothing but the images and say so in the message.
+//
+// TWO SETS, AND THE DIFFERENCE IS APPLE'S ICON GRID (logo.md section 17). A macOS app icon does
+// not fill its canvas: on a 1024pt canvas the artwork is 824pt centred, and every icon in the
+// dock obeys that so they optically align. The mark is a superellipse TILE that fills its frame,
+// so shipped full-bleed it renders about a quarter wider and half again the area of its
+// neighbours. Chrome builds the installed app's `.icns` by resizing the manifest icons, so the
+// whole manifest set is inset — not just the largest — because a set that disagreed with itself
+// would pad the dock icon at one size and not at the next.
+//
+// `icon-180.png` is NOT in that set. It is the `apple-touch-icon`, and iOS applies its own mask
+// to a full-bleed square; insetting it would put the mark in a box inside a box.
 if (process.argv.includes('--icons')) {
-  const SIZES = [180, 192, 512]   // apple-touch-icon, and the manifest's two
+  const TOUCH = [180]                // apple-touch-icon — iOS masks it, so it stays full bleed
+  const APP = [192, 512, 1024]       // the manifest set, and what Chrome's .icns is built from
+  const SIZES = [...TOUCH, ...APP]
   const { chromium } = await import(
     pathToFileURL(resolve(ROOT, 'app/node_modules/playwright/index.mjs')).href
   )
@@ -243,9 +259,14 @@ if (process.argv.includes('--icons')) {
     // The DISPLAY cut: every one of these is 180px or more, which is the cut section 3 locks
     // for 64px and up. Rasterizing the favicon instead would ship the small cut four times
     // past the largest size it was ever swept at.
+    // The inset is applied by DRAWING SMALLER on a full-size transparent canvas rather than by
+    // padding the SVG, so the mark's own geometry is untouched — section 3 locks it and nothing
+    // here may redraw it.
+    const inset = APP.includes(size)
     await page.setContent(
-      `<style>html,body{margin:0;background:transparent}svg{display:block}</style>`
-      + markSvg('display', size),
+      `<style>html,body{margin:0;background:transparent;width:100%;height:100%}`
+      + `body{display:grid;place-items:center}svg{display:block}</style>`
+      + markSvg('display', inset ? Math.round(size * MAC_GRID) : size),
     )
     await page.waitForTimeout(200)
     await page.screenshot({

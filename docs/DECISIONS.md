@@ -6080,6 +6080,39 @@ It produces the same thing — a real bundle, own icon, own window — and it is
 
 **The icon is edge-to-edge and macOS app icons are not.** Chrome will build `app.icns` from `icon-512.png`, which is the mark's superellipse tile filling the frame; Apple's icon grid insets the artwork and uses its own corner curve, so Banchi will read slightly larger in the dock than its neighbors. **This is not fixed here on purpose.** `docs/specs/logo.md` is the mark's store of record (D102), nothing in `app/` may hand-draw it, and the padding and corner geometry a macOS icon wants are a locked-geometry question for that spec — not a value to re-derive in a manifest. `scripts/build-mark.mjs --icons` writes 180, 192 and 512; a 1024 with the Apple grid applied would be the change, and it belongs in the spec's own section.
 
+### Amended 2026-09-06 — the icon was built, and the light/dark question is section 12's
+
+**The macOS grid was the one thing this entry left undone, and the owner asked for it same day.**
+`docs/specs/logo.md` section 17 now locks it: **824pt of artwork on a 1024pt canvas**,
+which is not a convention this project adopted but what the neighbors measurably already are —
+Safari, Mail and Calculator all read **exactly 80.47%** solid off their shipped `.icns` on this
+Mac, and the mark read 100%. That is 24% wider and 55% more area than everything beside it.
+
+**The whole manifest set is inset, not only the largest**, because Chrome builds the installed
+app's `.icns` by resizing that set and a set disagreeing with itself would pad the dock icon at
+one size and not the next. `favicon.svg` left the icon list for the same reason — `sizes: "any"`
+made a full-bleed entry a candidate at every size — and is still the tab icon by `<link
+rel="icon">`. `icon-180.png` is untouched: iOS masks a full-bleed square itself.
+
+**Nothing redraws the mark.** The inset is applied by drawing it smaller on a transparent
+canvas; section 3's geometry is locked and `make docs-audit`'s new `mac icon grid` row
+reconciles `MAC_GRID` against section 17 in both directions, plus the manifest's set against the
+generator's. Proved by falsification before it was trusted: drifting the constant to 800/1024
+fails it, and putting `favicon.svg` back in the icon list fails it.
+
+**A dark-mode dock icon was asked about and is refused twice over.** macOS 26 does support
+per-appearance app icons, but they are an Icon Composer `.icon` asset in a native bundle and
+Chrome writes a plain `.icns`; a manifest icon takes no media query either.
+**The design half had already ruled** — section 12 derived a light ground and rejected it, *"an object, not an ink
+color: an app icon on a phone home screen does not invert when the phone does"* — so this is
+section 12's to reopen, on a sheet, and the platform limit is downstream of that rather than a
+reason to revisit it.
+
+**Still not done, and now written down rather than noticed: the shadow.** Every system icon
+measured carries a drop shadow out to 87.5% and the mark carries none, so it sits flatter on the
+dock's shelf. Section 17 names what would settle it — a sweep at 128, 64 and 32px against the
+same three icons — rather than a value typed into a generator.
+
 ### What would reopen this
 
 *A second person needing the app*, which wants something signed and installable rather than a click in one profile. *Chrome going away* on this machine. *The page needing a capability a browser withholds* — a real filesystem, a background process, a global hotkey. *The demo being meant to install*, which it is not: the manifest is correct there now, but a demo with no server behind it is a page to look at.
