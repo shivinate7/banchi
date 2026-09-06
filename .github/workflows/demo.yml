@@ -107,28 +107,39 @@ jobs:
         # against what is ACTUALLY about to be uploaded, because the check that matters is
         # the one standing over the artefact rather than over an earlier copy of it.
         #
-        # THE SECOND SCAN IS FOR SECRETS, and it guards a property rather than a suspicion.
-        # Vite inlines only `VITE_`-prefixed variables, and not one secret in `.env.example`
-        # carries that prefix — ANTHROPIC_API_KEY, POKEMONTCG_API_KEY,
-        # TCGPLAYER_STORE_COOKIE and PKMNSCAN_TCG_SELLER_KEY are all read server-side by
-        # Python. So a public build cannot inline one today. That is a property of a naming
-        # convention, which is exactly the kind of thing that holds until somebody adds a
-        # variable without knowing the rule — and the cost of it failing is a live key on a
-        # public page. `.env` is the whole guard on this repo (that file says so), so this
-        # is the second one, on the one path that makes something public.
+        # THE SECOND SCAN LOOKS FOR SECRET VALUES, NOT SECRET NAMES, and the difference is
+        # not academic: the first version of it matched the bare strings `ANTHROPIC_API_KEY`
+        # and `TCGPLAYER_STORE_COOKIE`, and the very first run of this workflow BLOCKED THE
+        # PUBLISH on a recorded server refusal reading "No TCGPLAYER_STORE_COOKIE in .env, so
+        # there is no session to fetch the export with." That sentence is the server saying a
+        # credential is ABSENT — the opposite of a leak — and it reached the bundle because
+        # PR #160 improved that refusal to name the variable it wants. A guard that fires on
+        # the word for a secret will keep firing on documentation, refusals and help text,
+        # and a guard that cries wolf is one somebody eventually switches off.
+        #
+        # So each pattern below is a VALUE shape. A real Anthropic key carries its `sk-ant-`
+        # prefix and a long body; a real session cookie is an assignment with something after
+        # the `=`. Naming the variable proves nothing either way, and is now allowed.
+        #
+        # It PRINTS WHAT IT MATCHED. The first failure said only that something was found,
+        # which meant the only way to tell a leak from a false positive was to reproduce the
+        # build by hand. A guard that blocks a publish owes the reader the evidence.
         run: |
           fail=0
           if grep -rlE '/(Users|home)/[a-z]' dist-demo/ 2>/dev/null; then
             echo "::error::a machine-local path reached the built demo — not publishing"
+            grep -rohE '/(Users|home)/[a-z][^"]{0,60}' dist-demo/ 2>/dev/null | sort -u | head -5
             fail=1
           fi
-          if grep -rlE 'sk-ant-|TCGAuthTicket|ANTHROPIC_API_KEY|TCGPLAYER_STORE_COOKIE' \
-               dist-demo/ 2>/dev/null; then
-            echo "::error::a secret-shaped string reached the built demo — not publishing"
+          # sk-ant-…  a real key body, not the prefix alone.
+          # TCGAuthTicket=…  an assignment carrying a value, not the cookie's name.
+          if grep -rohE 'sk-ant-[A-Za-z0-9_-]{16,}|TCGAuthTicket[A-Za-z_]*=[A-Za-z0-9%._-]{8,}' \
+               dist-demo/ 2>/dev/null | head -5 | grep .; then
+            echo "::error::a secret VALUE reached the built demo — not publishing"
             fail=1
           fi
           [ "$fail" -eq 0 ] || exit 1
-          echo "clean: no machine-local paths and no secret-shaped strings in dist-demo/"
+          echo "clean: no machine-local paths and no secret values in dist-demo/"
 
       - uses: actions/upload-pages-artifact@v3
         with:
