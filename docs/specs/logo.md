@@ -782,14 +782,34 @@ two caption bugs in that sheet happened, twice, in the same row.
 | `pad` | 0.50 | rounds 16–20, closed on the pixel floor |
 | `gap` | 0.08 | rounds 21–23, answered in the column |
 | `stroke` | 0.050 | rounds 1–5 |
-| `arm` | 0.32 | carried; §3's lockup row |
+| `arm` | 0.32 | round 24 — carried, and CONFIRMED rather than moved |
 | `rrMul` | 4.0 | rounds 6–10, closed on the JND |
 | `tip` | 0.15 | round 13 |
 | `tl` | 0.70 | rounds 11–12 |
+| `romanSize` | 0.36 | round 25 |
+| `romanTrack` | 0.14 | a SEED, not an answer — see below |
+| `romanOpacity` | 0.62 | carried from the recovered pass |
 
-**A key in this table is not the same as a key that has been argued.** `tip` and `tl` are here
-because the sheet holds them, not because anyone chose them — they are the next two rounds, and
-the column says so.
+**A key in this table is not the same as a key that has been argued.** The `settled` column says
+which is which, and it is the only place that says it — a value carried from the recovered pass
+and a value chosen against four alternatives look identical once they are both just numbers.
+
+**The three `roman*` keys were literals in `sheets/lockup-core.js` until round 25, and that is
+why they are last.** Everything else here has been reconciled against this table on every commit
+since the `lockup params` row landed; those three were typed into the markup, so they could not
+be swept, could not be declared as held, could not be asserted against the drawing, and could
+not disagree with this file in any way anything would notice. **A parameter that is not a
+parameter is outside every guard this project has**, which is the general form of it.
+
+**`romanTrack` is in this table and is not a settled value, and that distinction was found by
+publishing it as one.** `frame()` runs a thirty-iteration solve that width-matches the roman to
+the kanji by rewriting `letter-spacing`, which is the recovered pass's whole reason for existing.
+So the 0.14em is a *seed*: it changes how many iterations the solve takes and nothing else, and
+it is overwritten before anything is drawn. Published as settled it would have been a number in
+this file that **no drawing on any sheet has ever used** — the same defect as a caption naming a
+value the picture beside it does not have, one level further back. The drawing now records
+`romanTrackSolved`, the tracking that actually reached it, and **it cannot be swept**: it is
+derived, and §7 rule 6 has nothing to hold constant while it moves.
 
 ### The line gap, settled over three rounds — and the first answer that came from the column
 

@@ -32,13 +32,25 @@ function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
    'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
   caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
 let n=0
-function stamp(size,gap,pd,col){
+/* THE ROMAN'S THREE NUMBERS WERE LITERALS IN THIS LINE, and that is why nothing guarded them.
+   `pad`, `gap`, `stroke`, `arm`, `rrMul`, `tip` and `tl` are all parameters, all published in
+   the spec's settled table, and all reconciled against it by `make docs-audit`'s `lockup params`
+   row. The roman's size ratio, tracking and opacity were typed into the markup instead -- so
+   they could not be swept, could not be held, could not be asserted, and could not disagree
+   with the spec in a way anything would notice. They are options now, with the recovered
+   pass's values as defaults, so they answer to the same machinery as everything else. */
+function stamp(size,gap,pd,col,o){
+ o=o||{}
+ const rs = o.romanSize===undefined ? 0.36 : o.romanSize
+ const rt = o.romanTrack===undefined ? 0.14 : o.romanTrack
+ const ro = o.romanOpacity===undefined ? 0.62 : o.romanOpacity
  const el=document.createElement('div');el.className='lk'
  el.style.padding=(size*pd).toFixed(2)+'px '+(size*pd*1.05).toFixed(2)+'px'
  el.innerHTML='<div style="color:'+(col||'#0f1217')+'">'+
   '<span class="go k" style="font-size:'+size+'px;letter-spacing:.07em">番地</span>'+
-  '<span class="rom r" style="font-size:'+(size*0.36).toFixed(2)+'px;letter-spacing:.14em;margin-top:'+(size*gap).toFixed(2)+'px;opacity:.62">BANCHI</span></div>'
- Object.assign(el.dataset,{size:size,col:col||'#0f1217',gap:gap,pad:pd});return el}
+  '<span class="rom r" style="font-size:'+(size*rs).toFixed(2)+'px;letter-spacing:'+rt+'em;margin-top:'+(size*gap).toFixed(2)+'px;opacity:'+ro+'">BANCHI</span></div>'
+ Object.assign(el.dataset,{size:size,col:col||'#0f1217',gap:gap,pad:pd,
+   romanSize:rs,romanTrack:rt,romanOpacity:ro});return el}
 
 /* The frame, with tails. Everything above the bracket is the recovered code untouched: the
    iterative width-match on the roman, the 0.11 stroke, the 0.32 arm, the 1.85x radius. What
@@ -49,12 +61,34 @@ function frame(el, opt){
  opt = opt || {}
  if(el.querySelector('svg')) return 0
  const k=el.querySelector('.k'), r=el.querySelector('.r')
- const kw=k.getBoundingClientRect().width, nn=r.textContent.length
+ /* MEASURE THE TEXT, NOT THE BOX. `.go` and `.rom` are both `display:block`, so
+    `getBoundingClientRect().width` on either returns the CONTAINING BLOCK's width -- the same
+    number for both, always. `kw - rw` was therefore identically zero, the loop exited on its
+    first iteration having written `letter-spacing: 0px`, and that assignment DESTROYED the
+    0.14em seed before anything was drawn. The width-match this file has credited to the
+    recovered pass since it was written has never matched anything, and every lockup in every
+    round has carried zero tracking on the roman.
+    A Range measures the inline content regardless of the box's display, which is the whole
+    reason to use one here. */
+ const textW = function(node){
+  const g=document.createRange(); g.selectNodeContents(node)
+  return g.getBoundingClientRect().width
+ }
+ const kw=textW(k), nn=r.textContent.length
  let ls=0
- for(let i=0;i<30;i++){const rw=r.getBoundingClientRect().width
-  ls+=(kw-rw)/nn; r.style.letterSpacing=ls.toFixed(3)+'px'
-  if(Math.abs(kw-r.getBoundingClientRect().width)<0.2) break}
+ if(opt.widthMatch!==false){
+  for(let i=0;i<30;i++){const rw=textW(r)
+   ls+=(kw-rw)/nn; r.style.letterSpacing=ls.toFixed(3)+'px'
+   if(Math.abs(kw-textW(r))<0.2) break}
+ }
  r.style.marginRight=(-ls).toFixed(3)+'px'
+ /* THE SOLVED TRACKING, WHICH IS THE ONLY ONE THAT REACHES THE DRAWING. The loop above overwrites
+    whatever `romanTrack` asked for -- it width-matches the roman to the kanji, which is the
+    recovered pass's whole reason for existing. So `romanTrack` is a SEED for the solve and never
+    an answer: it changes how many iterations run and nothing else, and publishing it as a settled
+    value would have put a number in the spec that no drawing on any sheet has ever used. Recorded
+    as a fraction of the kanji size so it is comparable across sizes. */
+ el.dataset.romanTrackSolved = (ls/(+el.dataset.size)).toFixed(4)
  const size=+el.dataset.size, col=el.dataset.col
  const sw=size*(opt.stroke===undefined?0.11:opt.stroke), arm=opt.arm===undefined?0.32:opt.arm
  const w=el.offsetWidth, h=el.offsetHeight, i=sw/2, W=w-sw, H=h-sw
@@ -108,5 +142,12 @@ function frame(el, opt){
   rrMul: +(rr/sw).toFixed(3),
   tip: opt.tip===undefined?0.07:opt.tip, tl: opt.tl===undefined?0.45:opt.tl,
   tails: opt.tails!==false, size: size,
-  gap: +(el.dataset.gap||0), pad: +(el.dataset.pad||0)})
+  gap: +(el.dataset.gap||0), pad: +(el.dataset.pad||0),
+  romanSize: +(el.dataset.romanSize||0),
+  /* BOTH: what was ASKED for and what was SOLVED. Recording only the seed publishes a number no
+     drawing used; recording only the solve loses the sheet's ability to assert the seed was held
+     constant across a row. They are different facts and the round sheet needs each. */
+  romanTrack: +(el.dataset.romanTrack||0),
+  romanTrackSolved: +(el.dataset.romanTrackSolved||0),
+  romanOpacity: +(el.dataset.romanOpacity||0)})
  return h}
