@@ -1224,6 +1224,18 @@ visible edge on both sides by half that unit. **The match is on INK**, and the s
 both up with their measured ink boxes drawn so the choice is a forced pair rather than an
 assertion.
 
+### AMENDED 2026-09-06: the match is on the ADVANCE, and the code was always right
+
+**The table above says the match is on ink, and `sheets/lockup-core.js` has always solved against
+the advance.** §15 found the disagreement and left it open; this closes it in the code's favour,
+because **every one of §13's thirty-seven rounds judged the advance-matched drawing.** Moving the
+solve to ink now would silently change a value the owner approved against a picture that would no
+longer exist — and `romanFill` would have to be restated as 0.807 of the ink for the same drawing.
+
+So `romanFill` **0.75 is 0.75 of the advance**, and the paragraph below stands as the argument for
+what the difference IS rather than as a rule the code breaks. Re-opening it means re-offering the
+round, not swapping the definition.
+
 **Nothing is positioned by line box.** Hiragino's font box is 88 up / 12 down on a 100 em;
 Manrope's is 92 up / 23 down — 115 units on the same em. Stacking the two by their line boxes
 puts the optical center in the wrong place by construction.
@@ -1416,14 +1428,43 @@ verbatim: change §13's table, re-run the script.
 
 | artifact | note |
 | --- | --- |
-| `scripts/build-lockup.mjs` | reads §13's settled table and `sheets/lockup-core.js`; writes the geometry, the baked tracking and the subset font's path |
+| `scripts/build-lockup.mjs` | reads §13's settled table and `sheets/lockup-core.js`; writes the outlines, the baked tracking and the block |
 | `app/src/kit/lockupGeometry.ts` | generated, never hand-edited |
-| `app/public/fonts/…` | the chosen face **subset to 番地 only** — measured at ~1.1KB for IBM Plex Sans JP, OFL |
-| `app/src/kit/Lockup.tsx` | `Lockup({size, className})`; BANCHI uses `--bn-font-display`, already in the app |
+| `app/src/kit/Lockup.tsx` | `Lockup({size, className, decorative})` |
 
-**The accessibility contract is the opposite of the mark's.** `Logo` is `aria-hidden` because it
-sits beside the word "Banchi". **The lockup *is* that word**, so it carries `role="img"` and an
-accessible name — and the sidebar has no other text to fall back on once the wordmark is gone.
+**BUILT 2026-09-06, and the font row is gone: the type is OUTLINED and no font ships.** The plan
+above called for the chosen face subset to 番地 and served as a webfont. That has a silent
+failure — if the file does not arrive, the browser draws a fallback CJK face at letter-spacing
+solved for IBM Plex, and nothing reports it. Outlines cannot fail that way, they render
+identically on every rasterizer, and they make the lockup **the same kind of artifact as the
+mark**, which already ships path data rather than text.
+
+**The fonts are read at build time and never committed.** `@ibm/plex-sans-jp` and
+`@fontsource/manrope`, both OFL-1.1, both devDependencies. Outlines are artwork rather than font
+software, so §14's whole license argument is satisfied by not shipping a font at all.
+
+**The generator carries a check `build-mark.mjs` does not have**, because outlining is the one
+step that can silently change a drawing thirty-seven rounds approved: it renders the generated
+paths against the live text they replace and refuses to write when more than 8% of inked pixels
+differ. **That ceiling is measured, not chosen** — the residual on the settled parameters is
+**6.2%**, and rendering the difference shows a one-pixel outline around each glyph and nothing on
+the bracket. The woff is Plex's *hinted* build, so the browser snaps stems to the pixel grid where
+a vector path does not; that is the same property that makes outlines more consistent across
+rasterizers, showing up here as the cost of the comparison. A real error is not subtle at this
+threshold — the first version of the check, which matched an outline's bounding box against a
+`Range`'s **line** box, read 69%.
+
+**The accessibility contract is the opposite of the mark's — and then inverts again inside a link,
+which this section did not anticipate.** `Logo` is `aria-hidden` because it
+sits beside the word "Banchi". **The lockup *is* that word**, so standing alone it carries
+`role="img"` and an
+accessible name.
+
+**Inside the sidebar's brand link it must NOT.** That anchor already carries
+`aria-label="Banchi home"`, and a named child there announces *"Banchi Banchi home"* — so the one
+call site that replaces the wordmark passes `decorative` and both drawings are `aria-hidden`. The
+a11y tree is then identical either side of the collapse, which is the right outcome and not one
+this section saw coming when it wrote the rule.
 
 **Never a `border-radius`**, for the same reason as the mark.
 
@@ -1521,3 +1562,58 @@ would have made one drawing into two. This varies the ink and not the drawing.
 **No sheet owns these hexes.** `opt.bracketStops` in `sheets/lockup-core.js` takes a palette and
 never names one; `make docs-audit`'s `lockup bracket` row reconciles the sheet's four stops
 against `markPalettes.ts`, and its `rail mark` row does the same for the bracket path and stroke.
+
+### BUILT 2026-09-06 — and the collapse turned out to be a defect before it was a design
+
+**The sidebar mounts both drawings and CSS chooses.** A JSX branch on `rail` would be wrong at
+768–1023px, where `App.css` rails the shell by media query and `data-rail` is inert — a stylesheet
+reads the same condition the layout does. Verified at 820: the lockup's three parts read opacity 0
+and the mark reads 1.
+
+**The rail keeps the full mark.** §16 settled the lockup's size and its metal, not the rail's
+drawing, and `sheets/sidebar-morph.html`'s bare brackets are a sheet's idea rather than a decision
+— that sheet has already been wrong about the rail three times.
+
+**A true morph is not available, and the reason is this section's own correction.** The filmstrip
+in that sheet interpolated real geometry only because *both* ends were `taperParts` outlines at the
+same point count; the rail end was the invented bracket. Now that the rail draws the actual mark,
+the two ends are categorically different objects — a ~600-point filled taper against a 52-byte
+stroked wire, untapered because §11 removed the taper on a measurement. Paths that shape cannot
+interpolate, and rebuilding a morphable rail bracket would mean drawing something that is not the
+shipped mark.
+
+**What the collapse does instead is one switch and one clock.** `--bn-brand-open` is 1 open and 0
+railed; both rail conditions set that and nothing else. Every delay is a position inside the 320ms
+the column already spends, so the gesture does not get slower, it gets legible: BANCHI leaves
+first, then 番地 and the frame, a 40ms rest, and the mark lands last. Expanding reverses it.
+**The 40ms rest is why there is no cross-fade** — showing a tapered outline beside a stroked wire
+invites the eye to compare two objects the design insists are one.
+
+**And `base.css` crushes transition DURATION while leaving DELAY alone.** Without an override a
+reduced-motion user would get the name snapping out, **200ms of an empty brand row**, then the mark
+snapping in — a hole rather than an instant swap. Every delay is a variable so the fix is five
+values and no `!important`.
+
+### The defect the choreography found, which had nothing to do with the lockup
+
+**The rail's rules centred their children** — `justify-content: center` on the brand and
+`margin: 0 auto` on every nav link — and both resolve against a width that is *animating*. Measured
+at 1440 on ⌘.: the mark's centre went **36 → 114.8 → 31.5** and every nav icon did the same. The
+sidebar threw itself 79px right and slid back, on every collapse, in the shipped product.
+
+The sidebar has a spine at **x ≈ 32** and the collapse is meant to delete everything to the right
+of it while nothing travels. That held at both resting states and failed at every frame between,
+which is why no check could see it: a screenshot proves nothing and neither does an assertion on
+either end. `app/tests/brand.spec.ts` now samples **mid-transition** and asserts a *corridor*
+rather than a curve, so it survives anyone retuning `--bn-ease`.
+
+### Still open: the phone
+
+**The phone top bar is 52px and the lockup at its floor is 102 × 75.** It is 23px taller than the
+whole bar, and §11's floor is a measurement rather than a preference. So the bar keeps the mark at
+26 beside a "Banchi" title, unchanged.
+
+The three ways out, none of them free: **grow the bar to ~91px**, which costs 39px on the device
+where vertical space is scarcest and breaks its match with the 52px tab bar; **design a horizontal
+lockup**, which is a new artifact needing its own rounds; or **leave it**, which is what ships.
+Recorded as a decision deferred rather than a surface nobody looked at.
