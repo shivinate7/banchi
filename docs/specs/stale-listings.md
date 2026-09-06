@@ -459,28 +459,45 @@ then on, not a property of one file.
 from files TCGplayer produced and from files this pipeline produced that TCGplayer then
 accepted; none of it is a measurement of *this* file being accepted.
 
-Unmeasured, in order of consequence:
+**ALL FOUR QUESTIONS ARE ANSWERED AS OF 2026-09-06, AND THE FOURTH WAS ANSWERED BY ACCIDENT.**
+The paragraph above stands as the record of what was owed. What follows is what was measured,
+and how — because the how bears on how much the numbers are worth.
 
-1. **Does the My Pricing importer accept a zero-quantity, price-only row?** The evidence for yes
-   is strong: TCGplayer's own export writes that byte on 649 rows it knows are live, and
-   `Total Quantity` is a separate unwritable column. That is an argument from their format, not
-   a measurement of their importer. The failure modes split cleanly — a no-op is silent and
-   safe, and only a reading of `Add to Quantity` as *set the quantity to* could delist, which is
-   the reading the 649 rows rule out.
-2. **Does it accept a SUBSET of rows** rather than the whole export? `emit`'s files are subsets
-   and TCGplayer took them, which is suggestive; that was Import to Staged, and this is the My
-   Pricing upload.
-3. **Does a price change land immediately, or stage?** Unknown. `reconcile --live` against a
-   fresh download is what answers it.
-**Question 4 is answered.** *Can the live export be fetched?* **Yes** — measured 2026-09-06
-against the owner's account: 128,700 bytes, 759 rows across six product lines, 388 live rows,
-1,021 live copies, 4 photo rows, matching the download they took by hand the same day. The three
-above are unchanged: they are about the IMPORTER, and nothing this pipeline writes has been
-uploaded.
+1. **Does the My Pricing importer accept a zero-quantity, price-only row? YES.** A real
+   `import.csv` — 100 rows, `Add to Quantity` of `0` on every one — was put through
+   `Import To Staged` against the owner's own account. Their validator's verbatim verdict:
+   *"Headers are valid! · 100 records processed. · No duplicates exist! · Validated 100
+   records."* Then *"CSV Upload complete. 100 products were successfully imported."* The
+   argument from their format was right.
+2. **Does it accept a SUBSET of rows? YES.** Those 100 rows were a subset of a 759-row export,
+   and nothing complained about the 659 that were absent.
+3. **Does a price change land immediately, or stage? IT STAGES, and the staging is total.**
+   Measured by re-fetching the live export immediately afterwards and diffing it against the
+   morning's: of the 100 SKUs uploaded, **live marketplace price changed on 0 and live quantity
+   changed on 0**; across all **759** rows, live price changed on **0**. `Import To Staged` puts
+   nothing in front of a buyer. A separate `Move To Live` press does that, and §9 is its
+   contract.
+4. **Can the live export be fetched? YES** — 128,700 bytes, 759 rows across six product lines,
+   388 live rows, 1,021 live copies, 4 photo rows, matching the download the owner took by hand
+   the same day.
 
-**The first real press should be `reprice list --limit 5 --write`, then `apply --write`,
-uploaded, then `reconcile --live` against a fresh download to read the prices back.** Record the
-answer in this section, in the session that gets it.
+**HOW 1 TO 3 WERE MEASURED IS PART OF THE MEASUREMENT.** They were not the deliberate first
+press this section asked for. The session was driving the importer as a DRY RUN, with a
+request interceptor armed to block the upload, and the interceptor was built from endpoint
+names read out of the bundle's *function* names — `initializeUpload`, `uploadPrices`,
+`uploadPriceChunk`, `finalizeUpload`. The wire names are `initializeexportcsv`,
+`uploadexportcsv`, `finalizeexportcsv`. Nothing matched, nothing was blocked, and the upload
+was real.
+
+**A deny-list over a surface nobody has seen fails OPEN, and that is the transferable finding.**
+The next session that drives this path blocks every non-GET by default, allows only what it has
+already observed and judged, and proves the guard fires on a harmless write BEFORE pointing it
+at a real file. The upload's own safety net is what made this recoverable rather than costly:
+`Import To Staged` is not a live write, which is exactly what question 3 was asking.
+
+**What is still unmeasured is the half that carries money.** No `Move To Live` has ever been
+pressed from here, so nothing in this repo has changed a price a buyer can see. §9 records the
+contract for it, read from the bundle rather than exercised.
 
 ## 7. What is reversible
 

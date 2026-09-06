@@ -219,6 +219,7 @@ from server import (  # noqa: E402
     ports,
     shipping_routes,
     tcg_export,
+    tcg_import,
 )
 from store import db, files, master, queues  # noqa: E402
 # `orders` is already `pipeline.orders` above. The store's ledger is a DIFFERENT module
@@ -11105,6 +11106,142 @@ def check_markdown_lens(checks: Checks) -> None:
                 checks.equal(refusal.code, code, f"the route refuses `{code}` by name")
 
 
+def check_markdown_push(checks: Checks) -> None:
+    """The two routes that reach TCGplayer, at every gate that fires BEFORE the socket opens.
+
+    NOTHING HERE TOUCHES THE NETWORK, AND THAT IS THE POINT OF WHAT IT COVERS. Every assertion
+    is a refusal raised before `server/tcg_import.py` would open a connection — a missing file,
+    a missing `confirm`, nothing staged, an already-published upload — so the gates that decide
+    whether a request happens at all are proved without one happening.
+
+    THE PAYLOAD GATES ARE WORTH MORE THAN THEY LOOK. `confirm` is what stands between a
+    reloaded tab replaying a POST and a real push, and `published_at` is what stands between a
+    double-press and a second move of rows TCGplayer no longer holds staged. Both are cheap to
+    delete by accident and neither has any other reader.
+
+    AND THE PUBLISH ROUTE MUST NOT READ AN UPLOAD ID OFF THE REQUEST, which is asserted by
+    handing it one and watching it refuse anyway: `scope` is pinned to "this upload" in the
+    transport, so the id IS the scope, and a client-supplied one would let a mistyped body
+    publish an upload this markdown never made.
+    """
+    checks.note("")
+    checks.note("MARKDOWN PUSH — the gates that fire before anything reaches TCGplayer")
+
+    with isolated_home() as home:
+        directory = home / "inventory" / "markdowns" / "20260906-120000"
+        directory.mkdir(parents=True)
+
+        for route, code, payload in (
+            (pipeline_routes.do_markdown_push, "no_import_file", {"confirm": True}),
+            (pipeline_routes.do_markdown_publish, "nothing_staged", {"confirm": True}),
+            # AN ID ON THE REQUEST CHANGES NOTHING. Same refusal, because the route reads the
+            # receipt on disk and never the body.
+            (
+                pipeline_routes.do_markdown_publish,
+                "nothing_staged",
+                {"confirm": True, "upload_id": "42", "stagedPricingUploadId": "42"},
+            ),
+        ):
+            try:
+                route(directory.name, payload)
+                checks.ok(False, f"the route refuses `{code}`", "it answered instead")
+            except pipeline_routes.PipelineRefusal as refusal:
+                checks.equal(refusal.code, code, f"the route refuses `{code}` by name")
+
+        # WITH A FILE PRESENT, `confirm` IS THE ONLY THING LEFT — so this is what says the
+        # unconfirmed request stops here rather than at the socket.
+        (directory / cmd_reprice.IMPORT).write_text("TCGplayer Id\n1\n", encoding="utf-8")
+        try:
+            pipeline_routes.do_markdown_push(directory.name, {})
+            checks.ok(False, "an unconfirmed push refuses", "it answered instead")
+        except pipeline_routes.PipelineRefusal as refusal:
+            checks.equal(refusal.code, "confirm_required", "an unconfirmed push refuses by name")
+
+        # A PUBLISHED UPLOAD IS LATCHED. The receipt is the record and the route reads it, so a
+        # second press over the same upload is refused rather than sent.
+        pipeline_routes._write_push(
+            directory,
+            {
+                "upload_id": "abc",
+                "rows": 1,
+                "accepted": 1,
+                "messages": [],
+                "pushed_at": "2026-09-06T12:00:00+00:00",
+                "published_at": "2026-09-06T12:05:00+00:00",
+            },
+        )
+        try:
+            pipeline_routes.do_markdown_publish(directory.name, {"confirm": True})
+            checks.ok(False, "a second publish refuses", "it answered instead")
+        except pipeline_routes.PipelineRefusal as refusal:
+            checks.equal(refusal.code, "already_published", "a second publish refuses by name")
+
+        # THE RECEIPT REACHES THE SCREEN, which is the reload path: without it an operator who
+        # pushed and then refreshed would have rows staged and no control able to publish them.
+        summary = pipeline_routes._markdown_summary(directory.name)
+        checks.equal(
+            (summary.get("pushed") or {}).get("upload_id"),
+            "abc",
+            "and the markdown summary carries the push receipt, so a reload finds it",
+        )
+
+    # THE TRANSPORT'S OWN GATES, over rows rather than routes. `_check` runs before a
+    # transaction is opened, so a bad file is a refusal with nothing sent rather than a
+    # half-written staged upload.
+    checks.note("")
+    checks.note("MARKDOWN PUSH — what the transport refuses to send")
+    good = {
+        "Id": 0,
+        "ProductConditionId": "123",
+        "CategoryName": "Pokemon",
+        "SetName": "S",
+        "ProductName": "P",
+        "ConditionName": "Near Mint",
+        "AddToQuantity": "0",
+        "MyPrice": "1.00",
+        "ProOnlineStoreReserveQuantity": "",
+        "ProOnlineStorePrice": "",
+        "Number": "1/1",
+    }
+    for code, mutate in (
+        ("tcg_import_empty", None),
+        ("tcg_import_no_sku", {"ProductConditionId": ""}),
+        ("tcg_import_bad_price", {"MyPrice": "nope"}),
+        ("tcg_import_bad_price", {"MyPrice": "0"}),
+        ("tcg_import_bad_price", {"MyPrice": "200001"}),
+        ("tcg_import_bad_quantity", {"AddToQuantity": "x"}),
+        # D100's invariant, asserted a fifth time and at the last possible moment: nothing on
+        # this path may move a copy, so a row that would is refused at the wire rather than
+        # relied upon to have been filtered upstream.
+        ("tcg_import_moves_quantity", {"AddToQuantity": "1"}),
+    ):
+        rows = [] if mutate is None else [dict(good, **mutate)]
+        try:
+            tcg_import._check(rows)
+            checks.ok(False, f"the transport refuses `{code}`", "it accepted instead")
+        except tcg_import.FetchRefusal as refusal:
+            checks.equal(refusal.code, code, f"the transport refuses `{code}` by name")
+
+    tcg_import._check([good])
+    checks.ok(True, "and a well-formed zero-quantity row passes every one of them")
+
+    # THE WIRE FORMAT IS jQUERY'S DEEP FORM ENCODING AND NOT JSON, which is what their server
+    # reads: `data[0][MyPrice]`. `urlencode` alone would stringify the whole list into one
+    # value and the server would see no rows at all.
+    body = tcg_import._form({"data": [good], "type": "Pricing"}).decode("utf-8")
+    checks.ok(
+        "data%5B0%5D%5BMyPrice%5D=1.00" in body and "type=Pricing" in body,
+        "the row goes on the wire as `data[0][MyPrice]`, which is what their importer reads",
+    )
+    # LOWERCASE ON INITIALIZE, camelCase ON UPLOAD. Their bundle really does spell it both
+    # ways, and matching by symmetry instead of by reading would break the upload silently.
+    checks.equal(
+        (tcg_import.INITIALIZE, tcg_import.UPLOAD, tcg_import.CHUNK_SIZE, tcg_import.SCOPE_THIS_UPLOAD),
+        ("/admin/pricing/initializeexportcsv", "/admin/pricing/uploadexportcsv", 750, 3),
+        "and the endpoints, the chunk size and the pinned scope are the ones read off their bundle",
+    )
+
+
 def check_merged_emit_cap(checks: Checks) -> None:
     """Two runs, one SKU, one cap — the arithmetic a merged file has to re-derive (D86).
 
@@ -19478,6 +19615,7 @@ def run() -> Result:
     check_live_reconcile(checks)
     check_markdown(checks)
     check_markdown_lens(checks)
+    check_markdown_push(checks)
     check_withholding(checks)
     check_pricing_route(checks)
     check_corpus_revision(checks)

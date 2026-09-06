@@ -2600,6 +2600,47 @@ export type MarkdownAnswer = {
   revision?: string
 }
 
+/** What a push into TCGplayer's STAGED inventory reported back.
+ *
+ *  `upload_id` IS THE ADDRESS OF THE THING, not a receipt number. It is what a publish scopes
+ *  to and what a rollback would undo, so a push that could not report one is a push that can
+ *  neither be finished nor reversed — the server refuses rather than returning a partial.
+ *
+ *  `accepted` IS TCGPLAYER'S COUNT AND `rows` IS OURS, and they are kept apart on purpose: a
+ *  file whose rows they silently declined would otherwise read as a success. `messages` is
+ *  whatever they said about the rows they would not take, verbatim. */
+export type MarkdownPush = {
+  pushed: {
+    upload_id: string
+    /** How many rows this repo sent. */
+    rows: number
+    /** How many TCGplayer said it took. A gap is the thing to look at. */
+    accepted: number
+    messages: string[]
+    pushed_at?: string
+    published_at?: string | null
+  }
+  stamp: string
+}
+
+/** What moving a staged upload live reported back. **This is the one that changes prices.**
+ *
+ *  `published_at` IS THE LATCH. The route refuses a second publish of the same upload, because
+ *  TCGplayer no longer holds those rows staged and a second move would be over rows nobody
+ *  here can describe. */
+export type MarkdownPublish = {
+  published: {
+    upload_id: string
+    rows: number
+    accepted: number
+    messages: string[]
+    pushed_at?: string
+    published_at: string
+    result?: unknown
+  }
+  stamp: string
+}
+
 /** What one live-export fetch brought back (D104).
  *
  *  THERE IS NO `shortfall` FIELD AND THERE CANNOT BE ONE. `Export From Live` takes no scope —
@@ -2692,4 +2733,10 @@ export type MarkdownSummary = {
   source: string | null
   skus: number
   files: string[]
+  /** What TCGplayer is holding staged for this markdown, or null for nothing sent.
+   *
+   *  IT IS ON THE SUMMARY SO A RELOAD HAS A WAY BACK. The push is a server write, and without
+   *  it on the list an operator who pushed and then reloaded would have rows staged at
+   *  TCGplayer with no control in this app able to publish them. */
+  pushed?: MarkdownPush['pushed'] | null
 }

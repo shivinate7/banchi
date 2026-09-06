@@ -61,6 +61,10 @@
     POST   /pipeline/markdowns             which live listings are not selling, and what each
                                            would be re-priced to. FREE; `write` makes the
                                            worklist and uploads it nowhere
+    POST   /pipeline/markdowns/<stamp>/push    that import file into TCGplayer's STAGED copy,
+                                               which no buyer can see
+    POST   /pipeline/markdowns/<stamp>/publish move that staged upload LIVE — the one route
+                                               here that changes what a buyer pays
     POST   /pipeline/markdowns/<stamp>/apply   the edited worklist back; `write` produces the
                                            price-only import CSV. Every row it writes carries
                                            `Add to Quantity` 0, so it cannot move a quantity
@@ -560,6 +564,13 @@ _RUN_STEP_RE = re.compile(r"^/pipeline/runs/([A-Za-z0-9._-]+)/([a-z]+)$")
 # path reads first, for whoever is following this list rather than the regex engine.
 _MARKDOWN_FILE_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/file$")
 _MARKDOWN_APPLY_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/apply$")
+# THE TWO THAT REACH TCGPLAYER AND CHANGE SOMETHING THERE. Separate patterns and separate
+# handlers, never one route taking "which": `push` changes the operator's own staged copy,
+# which no buyer can see, and `publish` changes what a buyer pays. A single route with a mode
+# flag is one typo away from doing the second when it meant the first, and the whole reason
+# 2026-09-06's accidental upload was survivable is that those two are not one press.
+_MARKDOWN_PUSH_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/push$")
+_MARKDOWN_PUBLISH_RE = re.compile(r"^/pipeline/markdowns/([0-9]{8}-[0-9]{6})/publish$")
 # The lens (D103): every live listing this survey saw, and the two readings over one of them.
 # Structural siblings of the run-scoped pair below, for the reason `_history_for_entry` gives
 # — the document holding the export row is what says what the card is, so the address names a
@@ -9653,6 +9664,24 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # 0, so no file on this path can add, remove or delete a copy.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_markdown_list(self._body())
+                )
+            match = _MARKDOWN_PUSH_RE.match(path)
+            if match:
+                # INTO STAGED, WHICH NO BUYER CAN SEE. Refuses without `confirm`, and pushes
+                # the FILE on disk rather than re-deriving rows from the corpus — what is
+                # uploaded has to be what the operator can open and diff.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_markdown_push(match.group(1), self._body()),
+                )
+            match = _MARKDOWN_PUBLISH_RE.match(path)
+            if match:
+                # **THE ONLY ROUTE IN THIS SERVER THAT CHANGES WHAT A BUYER PAYS.** It takes no
+                # upload id: that is read off the push receipt on disk, so a replayed or
+                # mistyped body cannot publish an upload this markdown never made.
+                return self._json(
+                    HTTPStatus.OK,
+                    pipeline_routes.do_markdown_publish(match.group(1), self._body()),
                 )
             match = _MARKDOWN_APPLY_RE.match(path)
             if match:

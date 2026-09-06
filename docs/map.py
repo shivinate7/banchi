@@ -1877,6 +1877,35 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104"],
                 "tested_by": ["T7"],
             },
+            "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
+                                      "place in this repo that can change a price a buyer "
+                                      "sees (D106). Four endpoints read off TCGplayer's own "
+                                      "652KB bundle and adversarially verified: "
+                                      "initializeexportcsv (lowercase `filename`), "
+                                      "uploadexportcsv (camelCase `fileName` — their bundle "
+                                      "really does spell it both ways), finalizeexportcsv, "
+                                      "rollbackexportcsv, then movetolive. NOT IN "
+                                      "tcg_export.py because that module's docstring promises "
+                                      "in writing that it CANNOT CAUSE A CHARGE, and a write "
+                                      "beside it would falsify that or narrow it to a "
+                                      "technicality. Its own promises instead: two explicit "
+                                      "operations, a move scoped to ONE upload by a CONSTANT "
+                                      "and never a parameter, a failed push rolled back, and "
+                                      "no response body in any refusal message. The transport "
+                                      "is BORROWED from tcg_export._open rather than copied — "
+                                      "D104's rule, because the redirect discipline is the "
+                                      "part that rots in a duplicate. `_form` reproduces "
+                                      "jQuery's deep encoding (`data[0][MyPrice]`), which is "
+                                      "what their server reads and what urlencode alone "
+                                      "cannot express. `_check` runs their own validators — "
+                                      "price 0.01-200000, integer quantity — plus D100's "
+                                      "invariant that AddToQuantity is 0 on every row, before "
+                                      "a transaction is opened, so a bad file is a refusal "
+                                      "with nothing sent. THE PUSH IS MEASURED; movetolive is "
+                                      "read and has never been called from here.",
+                               "governed_by": ["D13", "D16", "D64", "D100", "D103", "D104",
+                                               "D106"],
+                               "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
                         "allowed to make them — one of TWO such modules since D69 gave "
