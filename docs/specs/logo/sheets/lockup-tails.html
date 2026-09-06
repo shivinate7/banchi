@@ -1,0 +1,180 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the lockup, with tails</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 16px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:22px 0 9px}
+ .strip{display:flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .was{color:#c2410c;font-weight:700}
+ .num{font:500 9px ui-monospace,monospace;color:#15803d}
+ .lk{position:relative;display:inline-block}
+ .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
+ .go{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;line-height:1;display:block}
+ .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
+ .mx{display:grid;gap:16px 22px;background:#fff;border-radius:14px;padding:20px 24px;align-items:center;justify-items:center}
+ .hd{font:600 9px system-ui;color:#8b93a0;letter-spacing:.06em;text-transform:uppercase}
+ svg,img{display:block}
+</style>
+<div class="wrap">
+<h1>the lockup — the recovered pass, with tails</h1>
+<div class="sub">
+<b>This sheet was lost and has been recovered.</b> The pass it continues was built in a session
+scratchpad on <code>claude/logo-state-of-record</code> and never committed — exactly the failure
+&sect;4 of <code>docs/specs/logo.md</code> already records: <i>&ldquo;the generators are committed now
+because they were lost once already.&rdquo;</i> It was recovered from
+<code>/private/tmp/.../scratchpad/tight.html</code>, and both it and this one are committed now.
+<br><br>
+<b>The lockup is unchanged from what was approved</b> &mdash; padding and gap as fractions of the kanji
+size, roman at 0.36&times; width-matched by iteration, caps, kanji tracking 0.07em, roman at 62%
+opacity. The one change is the brackets: they were plain stroked paths with round caps, and they
+have <b>tails</b> now &mdash; the icon&rsquo;s own tapered construction, off the same
+<code>taperParts</code> this sheet already carried for the icon.
+</div>
+<div id="out"></div></div>
+<script>
+window.__sheetReady = false
+const SQ=(function(){const a=50,N=220,p=[]
+ for(let i=0;i<=N;i++){const t=i/N*2*Math.PI,ct=Math.cos(t),st=Math.sin(t)
+  p.push((a+a*Math.sign(ct)*Math.pow(Math.abs(ct),.4)).toFixed(2)+' '+(a+a*Math.sign(st)*Math.pow(Math.abs(st),.4)).toFixed(2))}
+ return 'M'+p.join('L')+'Z'})()
+function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
+ const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=300,pts=[]
+ const tl=Math.min(tlf*Math.max(aX,aY),L/2)
+ for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
+  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
+  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
+  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
+  const dE=Math.min(s,L-s);const f=dE<tl?tip+(1-tip)*(dE/tl):1
+  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
+ const q=function(v){return v.toFixed(3)}
+ const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
+ const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
+ return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
+   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
+  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+let n=0
+function stamp(size,gap,pd,col){
+ const el=document.createElement('div');el.className='lk'
+ el.style.padding=(size*pd).toFixed(2)+'px '+(size*pd*1.05).toFixed(2)+'px'
+ el.innerHTML='<div style="color:'+(col||'#0f1217')+'">'+
+  '<span class="go k" style="font-size:'+size+'px;letter-spacing:.07em">番地</span>'+
+  '<span class="rom r" style="font-size:'+(size*0.36).toFixed(2)+'px;letter-spacing:.14em;margin-top:'+(size*gap).toFixed(2)+'px;opacity:.62">BANCHI</span></div>'
+ Object.assign(el.dataset,{size:size,col:col||'#0f1217'});return el}
+
+/* The frame, with tails. Everything above the bracket is the recovered code untouched: the
+   iterative width-match on the roman, the 0.11 stroke, the 0.32 arm, the 1.85x radius. What
+   changed is that the two paths are no longer stroked -- they are the icon's tapered OUTLINE,
+   so the arms thin toward their free ends the way the mark's do. `tip` is the width at the tip
+   as a fraction of the stroke; `tlf` is how much of the arm the ramp takes. */
+function frame(el, opt){
+ opt = opt || {}
+ if(el.querySelector('svg')) return 0
+ const k=el.querySelector('.k'), r=el.querySelector('.r')
+ const kw=k.getBoundingClientRect().width, nn=r.textContent.length
+ let ls=0
+ for(let i=0;i<30;i++){const rw=r.getBoundingClientRect().width
+  ls+=(kw-rw)/nn; r.style.letterSpacing=ls.toFixed(3)+'px'
+  if(Math.abs(kw-r.getBoundingClientRect().width)<0.2) break}
+ r.style.marginRight=(-ls).toFixed(3)+'px'
+ const size=+el.dataset.size, col=el.dataset.col
+ const sw=size*(opt.stroke===undefined?0.11:opt.stroke), arm=opt.arm===undefined?0.32:opt.arm
+ const w=el.offsetWidth, h=el.offsetHeight, i=sw/2, W=w-sw, H=h-sw
+ /* The radius normally follows the stroke (1.85x), which is what keeps the bracket self-similar at
+    any weight. `rrAbs` pins it instead, so a STROKE sweep moves one thing rather than two --
+    section 7 rule 6. Nothing but a sweep should pass it. */
+ const rrWant = opt.rrAbs!==undefined ? opt.rrAbs : sw*(opt.rrMul===undefined ? 1.85 : opt.rrMul)
+ const rrCap  = Math.min(W,H)/2-.1
+ const rr=Math.min(rrWant, rrCap)
+ /* the cap is printed rather than applied silently -- the taper clamp already taught this file
+    that a bound which binds without saying so turns a sweep into repeated specimens */
+ el.dataset.rr = rr.toFixed(2) + (rr < rrWant-1e-6 ? ' CLAMPED from '+rrWant.toFixed(2) : '')
+ const aX=Math.max(W*arm, rr+2), aY=Math.max(H*arm, rr+2)
+ let body
+ if(opt.tails===false){
+  const TL='M'+i.toFixed(2)+' '+(i+aY).toFixed(2)+'V'+(i+rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+rr).toFixed(2)+' '+i.toFixed(2)+'H'+(i+aX).toFixed(2)
+  const BR='M'+(i+W).toFixed(2)+' '+(i+H-aY).toFixed(2)+'V'+(i+H-rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+W-rr).toFixed(2)+' '+(i+H).toFixed(2)+'H'+(i+W-aX).toFixed(2)
+  body=[TL,BR].map(function(d){return '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+sw.toFixed(2)+'" stroke-linecap="round"/>'}).join('')
+ }else{
+  const tlf = opt.tl===undefined?0.45:opt.tl
+  /* SECTION 6's RECORDED DEFECT, GUARDED. taperParts clamps the ramp at half the path length, so
+     every tlf above that renders identically while being presented as a sweep -- "three images
+     approved as different were the same image". The clamp point is computed and printed here so a
+     clamped specimen cannot pose as a distinct one. */
+  const _L1=Math.max(aY-rr,0), _L2=rr*Math.PI/2, _L3=Math.max(aX-rr,0), _L=_L1+_L2+_L3
+  const _req=tlf*Math.max(aX,aY), _used=Math.min(_req,_L/2)
+  el.dataset.ramp = _used.toFixed(1)+(_used<_req-1e-6 ? ' CLAMPED from '+_req.toFixed(1) : '')
+  const p=taperParts(i, i, aX, aY, rr, sw, opt.tip===undefined?0.07:opt.tip, tlf)
+  const one='<path d="'+p.body+'" fill="'+col+'"/>'+p.caps.map(function(c){
+    return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="'+col+'"/>':''}).join('')
+  body=one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g>'
+ }
+ el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+body+'</svg>')
+ return h}
+
+const o=document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+function head2(t,note){o.appendChild(el('h2',null,t));if(note)o.appendChild(el('div','sub',note))}
+function sec(items, dark){
+ const s=el('div','strip'); if(dark)s.style.background='#0c0e12'
+ const made=[]
+ items.forEach(function(it){
+  const c=el('div','cell')
+  const lk=stamp(it.size||34, it.gap===undefined?0.06:it.gap, it.pad===undefined?0.16:it.pad, dark?'#eef0f4':'#0f1217')
+  c.appendChild(lk); made.push([lk,it])
+  const cap=el('div','cap'+(it.was?' was':'')); cap.textContent=it.cap; c.appendChild(cap)
+  const num=el('div','num'); num.dataset.for='1'; c.appendChild(num); made[made.length-1].push(num)
+  s.appendChild(c)})
+ o.appendChild(s)
+ return made}
+
+const pending=[]
+function build(items, dark){ pending.push([sec(items, dark)]) }
+
+/* ---- 1 · the one change ---------------------------------------------------------------------- */
+head2('1 · tails, against the pass they were added to',
+ 'The approved settings, unchanged: pad 0.16, gap 0.06, roman 0.36x width-matched, caps, kanji tracking 0.07. '+
+ 'Only the bracket construction moves.')
+build([{cap:'no tails — as approved', pad:0.16, gap:0.06, size:34, tails:false, was:true},
+       {cap:'tails · tip 0.07', pad:0.16, gap:0.06, size:34},
+       {cap:'tails · tip 0.20', pad:0.16, gap:0.06, size:34, tip:0.20},
+       {cap:'tails · tip 0', pad:0.16, gap:0.06, size:34, tip:0}])
+
+/* ---- 2 · padding, continued -------------------------------------------------------------------- */
+head2('2 · padding, continued — 0.28 and 0.22 were the two you kept',
+ 'Both carried forward with tails on, and bracketed past each end so the pick stays interior.')
+build([{cap:'0.34', pad:0.34, size:34},{cap:'0.28 — kept', pad:0.28, size:34, was:true},
+       {cap:'0.25', pad:0.25, size:34},{cap:'0.22 — kept', pad:0.22, size:34, was:true},
+       {cap:'0.16', pad:0.16, size:34},{cap:'0.11', pad:0.11, size:34}])
+
+/* ---- 3 · the tail itself ------------------------------------------------------------------------ */
+head2('3 · how long the tail runs, at pad 0.22',
+ 'The ramp as a fraction of the arm. <b>The routine clamps it at half the path length</b>, which is '+
+ '&sect;6&rsquo;s recorded defect &mdash; <i>&ldquo;every value above that rendered identically while being '+
+ 'presented as a sweep; three images approved as different were the same image.&rdquo;</i> The ramp actually '+
+ 'used is printed under each, and a clamped one says so in orange rather than passing as a distinct specimen.')
+build([{cap:'0.15', pad:0.22, size:34, tl:0.15},{cap:'0.30', pad:0.22, size:34, tl:0.30},
+       {cap:'0.45', pad:0.22, size:34, tl:0.45},{cap:'0.65', pad:0.22, size:34, tl:0.65},
+       {cap:'0.90', pad:0.22, size:34, tl:0.90}])
+
+/* ---- 4 · at size, both grounds ------------------------------------------------------------------ */
+head2('4 · at size — pad 0.22, gap 0.06, tails tip 0.07', 'Light, then the app’s own dark page.')
+build([{cap:'56px', pad:0.22, size:56},{cap:'34px', pad:0.22, size:34},
+       {cap:'24px', pad:0.22, size:24},{cap:'18px', pad:0.22, size:18}])
+build([{cap:'56px', pad:0.22, size:56},{cap:'34px', pad:0.22, size:34},
+       {cap:'24px', pad:0.22, size:24},{cap:'18px', pad:0.22, size:18}], true)
+
+document.fonts.ready.then(function(){
+ pending.forEach(function(g){ g[0].forEach(function(row){
+  const h = frame(row[0], row[1])
+  row[2].innerHTML = h.toFixed(1)+'px'
+   + (row[0].dataset.ramp ? '<br><span style="color:'+(row[0].dataset.ramp.indexOf('CLAMPED')>=0?'#c2410c':'#6b7280')+'">ramp '+row[0].dataset.ramp+'</span>' : '')
+ })})
+ window.__sheetReady = true
+})
+</script>

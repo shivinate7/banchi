@@ -2015,6 +2015,14 @@ export type TcgSets = {
   sets: { name: string; id: string }[]
   aliases?: Record<string, string>
   reason: string | null
+  /** The transport's own remedial sentence, and the FLOOR under an unlabelled `reason` rather
+   *  than what the operator normally reads. `server/tcg_export.py` writes a sentence for each
+   *  of its refusals — which `.env` value to replace, which knob to set — and this route was
+   *  the one of four that used to keep the code and discard it. The screen still writes its
+   *  own copy in the operator's terms (`hintReason`); this is what a code that map does not
+   *  yet name falls back to, in place of the raw string it used to print. Null on success and
+   *  on `no_category`, which is a fact about `pipeline/games.py` and not about the portal. */
+  message: string | null
 }
 
 export type ExportFetched = {
@@ -2600,6 +2608,47 @@ export type MarkdownAnswer = {
   revision?: string
 }
 
+/** What a push into TCGplayer's STAGED inventory reported back.
+ *
+ *  `upload_id` IS THE ADDRESS OF THE THING, not a receipt number. It is what a publish scopes
+ *  to and what a rollback would undo, so a push that could not report one is a push that can
+ *  neither be finished nor reversed — the server refuses rather than returning a partial.
+ *
+ *  `accepted` IS TCGPLAYER'S COUNT AND `rows` IS OURS, and they are kept apart on purpose: a
+ *  file whose rows they silently declined would otherwise read as a success. `messages` is
+ *  whatever they said about the rows they would not take, verbatim. */
+export type MarkdownPush = {
+  pushed: {
+    upload_id: string
+    /** How many rows this repo sent. */
+    rows: number
+    /** How many TCGplayer said it took. A gap is the thing to look at. */
+    accepted: number
+    messages: string[]
+    pushed_at?: string
+    published_at?: string | null
+  }
+  stamp: string
+}
+
+/** What moving a staged upload live reported back. **This is the one that changes prices.**
+ *
+ *  `published_at` IS THE LATCH. The route refuses a second publish of the same upload, because
+ *  TCGplayer no longer holds those rows staged and a second move would be over rows nobody
+ *  here can describe. */
+export type MarkdownPublish = {
+  published: {
+    upload_id: string
+    rows: number
+    accepted: number
+    messages: string[]
+    pushed_at?: string
+    published_at: string
+    result?: unknown
+  }
+  stamp: string
+}
+
 /** What one live-export fetch brought back (D104).
  *
  *  THERE IS NO `shortfall` FIELD AND THERE CANNOT BE ONE. `Export From Live` takes no scope —
@@ -2692,4 +2741,10 @@ export type MarkdownSummary = {
   source: string | null
   skus: number
   files: string[]
+  /** What TCGplayer is holding staged for this markdown, or null for nothing sent.
+   *
+   *  IT IS ON THE SUMMARY SO A RELOAD HAS A WAY BACK. The push is a server write, and without
+   *  it on the list an operator who pushed and then reloaded would have rows staged at
+   *  TCGplayer with no control in this app able to publish them. */
+  pushed?: MarkdownPush['pushed'] | null
 }

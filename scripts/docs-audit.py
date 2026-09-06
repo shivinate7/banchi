@@ -70,6 +70,7 @@ import tempfile
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -3373,6 +3374,15 @@ def literals_from_module(path: Path) -> Dict[str, object]:
     return out
 
 
+# Files whose bytes are not prose. `cited_decisions` reads every mapped file looking for `D<n>`
+# and a compressed image will eventually contain those three bytes by chance — icon-180.png
+# "cited" D31 and icon-512.png "cited" D2 on the day they were added.
+BINARY_SUFFIXES = frozenset({
+    ".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".avif", ".pdf",
+    ".ico", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".sqlite",
+})
+
+
 def cited_decisions(path: Path) -> Set[str]:
     """Every decision id a file cites, suppressions excluded.
 
@@ -3384,7 +3394,17 @@ def cited_decisions(path: Path) -> Set[str]:
     commits the moment the third digit came into reach — measured, on the first full run
     after the widen, and the reason `without_noqa` is applied here and not only to the
     citation scan.
+
+    A BINARY FILE CITES NOTHING, and reading one as text is how it comes to. The map gained
+    entries for `app/public/icon-*.png` on 2026-09-05 and this reader found `D31` in one and
+    `D2` in another — byte sequences inside compressed image data, matched by a regular
+    expression that had no reason to expect anything but source. The finding is MECHANICAL, so
+    it blocked the commit, and the remedy it names is to add a decision id to `governed_by`
+    that the file does not cite and nobody chose. A citation is a thing a person wrote; a file
+    with no text to read has written none.
     """
+    if path.suffix.lower() in BINARY_SUFFIXES:
+        return set()
     lines = (without_noqa(line) for line in read(path).splitlines())
     return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
 
@@ -3677,6 +3697,95 @@ EXPORT_STANDING = (
         "rather than a loud miss.",
     ),
 )
+
+# ---------------------------------------------- the transport promise, read off its own file
+#
+# `server/tcg_export.py` opens with FOUR BULLETS that are, in its own words, the REPLACEMENT
+# for a guarantee it deleted rather than qualified — the file that reads the operator's
+# `TCGPLAYER_STORE_COOKIE` saying in prose what it is allowed to do with it. The first bullet
+# is a count of hosts, methods and routes, and it is the one thing in that block a machine can
+# settle: the constants are in the same file, and so is the request construction.
+#
+# IT WAS WRONG FOR A WEEK AND NOTHING COULD SAY SO. Written 2026-08-30 over a single GET, it
+# read `One host, one method, one route` until 2026-09-06 — through D65 turning the download
+# into a POST against a different route and promoting the filter list from a probe to a real
+# call the same day, and through D104 adding the live download six days later. Three route
+# changes and a second method under a sentence that never moved, and `server/pipeline_routes.py`
+# had copied the sentence besides.
+#
+# WHY MECHANICAL RATHER THAN A QUESTION. Nothing here is a judgement. The host of a `https://`
+# constant is a fact, the path of one is a fact, and whether a `_open` call carries a body is a
+# fact — `_open` builds `method="POST" if data else "GET"`, so the keyword IS the method. A
+# finding is a route or a method the code can reach and the promise does not name, or the
+# reverse, and either one is provably wrong in the sense D16 asks for.
+TRANSPORT_PROMISE_MODULE = ROOT / "server" / "tcg_export.py"
+
+#: The one function every outbound request in that module goes through. Named here because the
+#: whole reading hangs off it: a second opener would make this row describe half the traffic.
+TRANSPORT_OPENER = "_open"
+
+#: The headline the bullet leads with, whose three numbers are what this row settles. Anchored
+#: on the bold run so a rewording is REPORTED rather than silently uncovered — `check census`'s
+#: hard-won half, and the failure mode that matters most here: a promise this row stops
+#: watching is a promise back in the state it spent a week in.
+_TRANSPORT_HEADLINE_RE = re.compile(
+    r"\*\*(\w+) hosts?, (\w+) methods?, (\w+) routes?\*\*", re.I
+)
+
+#: The routes the bullet tabulates, one `METHOD /path` per line. Indented under the headline
+#: as a block, which is how the file writes a captured request everywhere else.
+_TRANSPORT_ROUTE_RE = re.compile(r"^\s{4,}(GET|POST|PUT|PATCH|DELETE)\s+(/\S*)", re.M)
+
+#: Number words, because the headline is prose and this repo writes counts in prose. Only as
+#: far as anything here could plausibly reach; a count past it is reported rather than guessed.
+_TRANSPORT_NUMBERS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+# ------------------------------------------- the set list's refusals, against the screen's map
+#
+# `GET /pipeline/games/<game>/sets` is the one refusal path in this repo that answers 200 and
+# hands the CODE to a screen to re-word. That is argued and right — the operator is mid-capture
+# and a failed autocomplete is not a failed capture — but it makes `CaptureScreen.tsx`'s
+# `hintReason` the place a transport refusal becomes a sentence, and nothing checked that it
+# covered the refusals that can arrive.
+#
+# IT COVERED TWO OF NINE. Measured 2026-09-06: `tcg_export.filters` can raise nine distinct
+# codes and the map named `tcg_session_expired` and `tcg_cookie_missing`, so a WAF block at the
+# rig read `Set list unavailable (tcg_blocked)` — a raw machine string on screen, which
+# docs/DESIGN.md's register rule forbids, with the module's own remedy (set the user agent in
+# `.env`) discarded one function above it.
+#
+# THE ROUTE CARRIES `message` NOW AND THAT IS THE FLOOR, NOT THIS ROW'S SUBJECT. A fallback
+# that is routinely what the operator reads is a fallback nobody widens the map for, which is
+# how the two-of-nine state lasted; this row is what keeps the net out from under the screen.
+HINT_REASON_SCREEN = ROOT / "app" / "src" / "CaptureScreen.tsx"
+
+#: The transport function the set-list route calls, and the root of the walk. Every refusal
+#: reachable from it — through the endpoint accessors, the cookie read, the opener and the
+#: status reader — is a code that can land on the capture screen.
+HINT_REASON_ROOT = "filters"
+
+#: The screen's map, read as the codes it compares against. Anchored on the function so a
+#: rewrite that moves the comparisons elsewhere is REPORTED rather than silently uncovered.
+_HINT_REASON_FN_RE = re.compile(r"function hintReason\([^)]*\)[^{]*\{(.*?)\n\}", re.S)
+_HINT_REASON_CODE_RE = re.compile(r"code === '([a-z_]+)'")
+
+#: Codes the map may name that no transport refusal produces, each with the reason it is there.
+#: Declared rather than inferred: a map allowed to name anything is a map this row cannot read
+#: in the second direction, and the dead branch is the finding that direction exists for.
+HINT_REASON_NON_TRANSPORT = {
+    "no_category": (
+        "the route's own, raised before anything is fetched — this game carries no "
+        "`tcgplayer_category_id` in pipeline/games.py, which is a fact about the registry "
+        "rather than about the portal."
+    ),
+    "unreachable": (
+        "the CLIENT's own, invented in `loadSets`'s catch when the request never reached the "
+        "capture server. No server sends it, and the operator cannot tell it from "
+        "`tcg_unreachable`, which is why the screen labels them together."
+    ),
+}
 FIXTURES_DIR = ROOT / "fixtures"
 
 # Opt-in extra exports, colon-separated, absolute or repo-relative. For the operator who
@@ -5369,6 +5478,418 @@ def check_pricing_presets(report: Report) -> None:
     )
 
 
+def _transport_url_constants(tree: ast.AST) -> Dict[str, str]:
+    """Module-level `NAME = "https://..."` assignments. The routes, as the code holds them."""
+    out: Dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        value = node.value
+        if not (isinstance(value, ast.Constant) and isinstance(value.value, str)):
+            continue
+        if not value.value.startswith(("http://", "https://")):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                out[target.id] = value.value
+    return out
+
+
+def _carries_a_url(value: ast.AST, accessors: Dict[str, str]) -> bool:
+    """Whether an assignment's right-hand side is a URL being BUILT rather than one being USED.
+
+    THE DISTINCTION IS THE WHOLE ACCURACY OF THE ROW, and getting it wrong was measured on the
+    first run: `following = _check_status(status, headers, url)` MENTIONS the download's URL,
+    so a reader that propagated through any expression containing it decided the redirect hop
+    was a fourth route — `GET /admin/pricing/downloadexportcsv`, a request this file cannot
+    make. A promise checked against a route that does not exist fails a commit for nothing,
+    which is how a row gets switched off.
+
+    So a string expression carries the URL forward — a name, an f-string, a concatenation, a
+    literal, a call to one of the endpoint accessors — and a call to anything else does not.
+    An accessor is a function that returns one of the constants; nothing here reads a name.
+    """
+    if isinstance(value, ast.Call):
+        return isinstance(value.func, ast.Name) and value.func.id in accessors
+    return isinstance(value, (ast.Name, ast.JoinedStr, ast.BinOp, ast.Constant))
+
+
+def _transport_requests(tree: ast.AST, urls: Dict[str, str]) -> Set[Tuple[str, str]]:
+    """(constant name, METHOD) for every request the module can issue against its own routes.
+
+    THE METHOD IS THE KEYWORD, WHICH IS WHY THIS IS A FACT AND NOT A READING. `_open` builds
+    `method="POST" if data else "GET"` and there is no other opener in the file, so a call site
+    that passes `data=` is a POST and one that does not is a GET. Nothing is inferred from a
+    function's name.
+
+    ATTRIBUTION IS BY THE URL A CALL WAS HANDED, walked back through the accessors — `endpoint`,
+    `live_endpoint`, `_filters_endpoint` are just functions that return one of the constants, so
+    a local assigned from one of them carries that constant, and so does a local assigned from
+    such a local (`url = f"{url}?..."` keeps what `url` already meant).
+
+    A REDIRECT HOP IS DELIBERATELY NOT A ROUTE. The second `_open` in each fetch is handed
+    `following`, a Location the portal chose, and this module never names it — one hop is
+    followed and the cookie does not cross a host change, which is the bullet's own sentence.
+    Counting it would make the promise answer for somebody else's server.
+    """
+    accessors: Dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        for sub in ast.walk(node):
+            if (
+                isinstance(sub, ast.Return)
+                and isinstance(sub.value, ast.Name)
+                and sub.value.id in urls
+            ):
+                accessors[node.name] = sub.value.id
+
+    pairs: Set[Tuple[str, str]] = set()
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        carries: Dict[str, str] = {}
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Assign) and _carries_a_url(sub.value, accessors):
+                reached = set()
+                for inner in ast.walk(sub.value):
+                    if isinstance(inner, ast.Name):
+                        if inner.id in urls:
+                            reached.add(inner.id)
+                        elif inner.id in carries:
+                            reached.add(carries[inner.id])
+                    elif (
+                        isinstance(inner, ast.Call)
+                        and isinstance(inner.func, ast.Name)
+                        and inner.func.id in accessors
+                    ):
+                        reached.add(accessors[inner.func.id])
+                if len(reached) == 1:
+                    for target in sub.targets:
+                        if isinstance(target, ast.Name):
+                            carries[target.id] = next(iter(reached))
+            if not (
+                isinstance(sub, ast.Call)
+                and isinstance(sub.func, ast.Name)
+                and sub.func.id == TRANSPORT_OPENER
+            ):
+                continue
+            first = sub.args[0] if sub.args else None
+            named = None
+            if isinstance(first, ast.Name):
+                named = carries.get(first.id) or (first.id if first.id in urls else None)
+            elif isinstance(first, ast.Call) and isinstance(first.func, ast.Name):
+                named = accessors.get(first.func.id)
+            if named is None:
+                continue
+            body = next((kw for kw in sub.keywords if kw.arg == "data"), None)
+            empty = body is not None and isinstance(body.value, ast.Constant) and body.value.value is None
+            pairs.add((named, "GET" if body is None or empty else "POST"))
+    return pairs
+
+
+def _refusals_reachable(tree: ast.AST, root: str) -> Optional[Set[str]]:
+    """Every `FetchRefusal` code raisable from `root`, following calls within the module.
+
+    A CLOSURE OVER THE CALL GRAPH, not a grep of the file and not a read of one function.
+    `filters` raises two of the nine itself; the other seven come out of `_cookie`, `_open`,
+    `_check_status` and the endpoint accessors. A reader that stopped at the function the route
+    names would have reported two — which is exactly the number the screen already labelled,
+    so it would have blessed the defect it was written to find. Measured by removing the
+    recursion: seven codes flip to unreachable.
+
+    Returns None when `root` is not defined, which is a finding rather than an empty answer: an
+    empty set reads as "nothing can go wrong", and the difference between that and "this reader
+    has lost its subject" is the whole value of the row.
+    """
+    bodies = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    if root not in bodies:
+        return None
+    seen: Set[str] = set()
+    codes: Set[str] = set()
+    pending = [root]
+    while pending:
+        name = pending.pop()
+        if name in seen or name not in bodies:
+            continue
+        seen.add(name)
+        for node in ast.walk(bodies[name]):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if node.func.id == "FetchRefusal":
+                first = node.args[0] if node.args else None
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    codes.add(first.value)
+            elif node.func.id in bodies:
+                pending.append(node.func.id)
+    return codes
+
+
+def check_hint_reasons(report: Report) -> None:
+    """The capture screen's refusal labels, against the refusals its route can send.
+
+    **THE ONE PLACE A TRANSPORT REFUSAL BECOMES A SENTENCE ON A SCREEN.** Three of the four
+    call sites into `server/tcg_export.py` answer 502 carrying the module's own remedial
+    sentence. The fourth — `GET /pipeline/games/<game>/sets` — answers 200 and hands the CODE
+    to `CaptureScreen.tsx` to re-word, because the operator is mid-capture and a failed
+    autocomplete is not a failed capture. That is argued and it is right. What it means is that
+    `hintReason` is the copy for nine refusals, and nothing read it.
+
+    **IT NAMED TWO OF THE NINE.** Measured 2026-09-06. The other seven fell to the map's
+    unknown-code tail and printed as `Set list unavailable (tcg_blocked)`. The tail is argued
+    and correct — `docs/DESIGN.md` shows reason codes beside names, so what the operator saw
+    stays greppable — and a session widening the map wrote over that argument before putting
+    it back. THE DEFECT IS THE SEVEN, NOT THE TAIL: a floor is not where nine tenths of a map
+    should land. Nothing could say so — the route was green, the screen typechecked, and the
+    only way to see it was to make TCGplayer refuse a real client.
+
+    **MECHANICAL, and the reachability is the part that makes it so.** The codes are string
+    literals in `FetchRefusal(...)` calls and the map is a run of `code === '...'` comparisons;
+    both are read with a parser, and the reachable set is closed over the module's own call
+    graph rather than taken from the one function the route names — see `_refusals_reachable`
+    for what that difference measured.
+
+    **BOTH DIRECTIONS.** A reachable code the map does not name is an operator reading a
+    fallback. A code the map names that nothing can raise is a dead branch, and dead branches
+    are how a map stops being readable as the answer to "what can happen here"; those are
+    permitted only through `HINT_REASON_NON_TRANSPORT`, which carries the reason for each.
+
+    **THE ROUTE CARRIES `message` NOW, AND THIS ROW IS WHY THAT IS NOT THE FIX.** A fallback
+    that is routinely what the operator reads is a fallback nobody ever widens the map for —
+    which is how two-of-nine survived. The transport's sentence sits between the map and the
+    bare code, and it names `.env`, which this screen deliberately does not; the map is what
+    the screen owes.
+    """
+    findings: List[Finding] = []
+    module = rel(TRANSPORT_PROMISE_MODULE)
+    screen = rel(HINT_REASON_SCREEN)
+
+    for path in (TRANSPORT_PROMISE_MODULE, HINT_REASON_SCREEN):
+        if not exists(path):
+            report.add("hint reasons", MECHANICAL, [Finding(rel(path), "does not exist")])
+            return
+
+    try:
+        tree = ast.parse(read(TRANSPORT_PROMISE_MODULE))
+    except SyntaxError as exc:
+        report.add("hint reasons", MECHANICAL, [Finding(module, f"cannot be parsed.\n{exc}")])
+        return
+
+    reachable = _refusals_reachable(tree, HINT_REASON_ROOT)
+    if reachable is None:
+        report.add("hint reasons", MECHANICAL, [Finding(module, (
+            f"defines no `{HINT_REASON_ROOT}`, which is the call the set-list route makes and "
+            f"the root this row walks from.\n  Re-point `HINT_REASON_ROOT`, or drop the row — "
+            f"a reader with no subject reports nothing and\n  blesses whatever the screen "
+            f"happens to say."
+        ))], "")
+        return
+
+    block = _HINT_REASON_FN_RE.search(read(HINT_REASON_SCREEN))
+    if block is None:
+        report.add("hint reasons", MECHANICAL, [Finding(screen, (
+            "defines no `hintReason` this row can read. It is the copy for every refusal the "
+            "set-list route can send;\n  either it was renamed, or it was restructured past "
+            "the pattern watching it. A check that quietly\n  stops covering a screen's copy "
+            "is worse than no check."
+        ))], "")
+        return
+
+    named = set(_HINT_REASON_CODE_RE.findall(block.group(1)))
+
+    for code in sorted(reachable - named):
+        findings.append(Finding(screen, (
+            f"does not name `{code}`, which `{module}:{HINT_REASON_ROOT}` can raise and the "
+            f"set-list route sends\n  straight to this screen. Unnamed, the operator reads the "
+            f"transport's own sentence — written for the\n  pipeline's reader, not for "
+            f"somebody holding a card over a stand. Give it a clause in the rig's register."
+        )))
+
+    for code in sorted(named - reachable - set(HINT_REASON_NON_TRANSPORT)):
+        findings.append(Finding(screen, (
+            f"names `{code}` and nothing reachable from `{module}:{HINT_REASON_ROOT}` raises "
+            f"it, so that branch is dead.\n  Strike it, or record it in "
+            f"`HINT_REASON_NON_TRANSPORT` with where it does come from — a map that may name\n"
+            f"  anything cannot be read as the answer to what can happen here."
+        )))
+
+    for code, why in sorted(HINT_REASON_NON_TRANSPORT.items()):
+        if code not in named:
+            findings.append(Finding(screen, (
+                f"no longer names `{code}`, which is declared as a code this map covers: {why}\n"
+                f"  Either the screen stopped labelling it — and it now falls through — or the "
+                f"declaration is stale."
+            )))
+
+    report.add(
+        "hint reasons",
+        MECHANICAL,
+        findings,
+        f"{len(reachable)} refusals reachable from {HINT_REASON_ROOT}(), "
+        f"{len(named)} labelled by the screen",
+    )
+
+
+def check_transport_promise(report: Report) -> None:
+    """`server/tcg_export.py`'s first bullet, against the constants and calls beneath it.
+
+    **THE FILE THIS ROW WATCHES IS THE ONE THAT READS THE BEARER CREDENTIAL**, and its opening
+    four bullets are not description — the module says so itself. `server/capture_server.py`
+    promised for months that this process "holds no API key and makes no outbound call"; this
+    file broke the second half literally, and rather than narrow the promise to a technicality
+    it deleted it and wrote four replacement bullets. A replacement nobody maintains is the
+    narrowing arriving late, which is D16's whole subject.
+
+    **AND THE FIRST BULLET HAD ALREADY DONE IT.** `One host, one method, one route` was written
+    on 2026-08-30 over a single GET and was true that morning. D65 landed the same day: the
+    download became a POST against `/admin/pricing/downloadexportcsv`, and the filter list went
+    from a line in the auth measurement table to a call the module makes. D104 added the live
+    download on 2026-09-06. Three routes, two methods, and the sentence above them never moved
+    — nor did `server/pipeline_routes.py`'s copy of it, which is the shape a claim takes once
+    it has a second home and no reader.
+
+    **MECHANICAL, because none of it is a judgement.** The host of a `https://` constant, the
+    path of one, and whether an `_open` call carries a body are three facts in one file, and
+    `_open` builds `method="POST" if data else "GET"` so the keyword is the method. A finding is
+    a (method, route) pair the code can issue and the bullet does not tabulate, or one the
+    bullet tabulates and the code cannot issue. Both directions: an unlisted route is the drift
+    that happened, and a listed-but-unreachable one is the promise describing a file that has
+    moved on.
+
+    **IT REFUSES TO GO QUIET**, which `check census` paid for and this row inherits. A headline
+    reworded past the pattern, a table that yields no routes, or a module with no attributable
+    request is REPORTED rather than passed — a promise this row stops reading is a promise back
+    in exactly the state it spent a week in, and green.
+
+    **WHAT IT DOES NOT CHECK.** The other three bullets. "It cannot cause a charge", "the secret
+    never leaves this module" and "every anticipated failure has its own code" are arguments
+    about what the code does NOT do, and a check that claimed to settle those would be asserting
+    the absence of something rather than the presence of it — the vacuous green docs/DEBTS.md
+    opens by warning about. They are verified by reading, and the reading is recorded in the
+    bullets themselves.
+    """
+    findings: List[Finding] = []
+    where = rel(TRANSPORT_PROMISE_MODULE)
+    if not exists(TRANSPORT_PROMISE_MODULE):
+        report.add("transport promise", MECHANICAL, [Finding(where, "does not exist")])
+        return
+
+    try:
+        tree = ast.parse(read(TRANSPORT_PROMISE_MODULE))
+    except SyntaxError as exc:
+        report.add(
+            "transport promise",
+            MECHANICAL,
+            [Finding(where, f"cannot be parsed, so neither its promise nor its calls can be "
+                            f"read.\n{exc}")],
+        )
+        return
+
+    promise = ast.get_docstring(tree) or ""
+    headline = _TRANSPORT_HEADLINE_RE.search(promise)
+    if headline is None:
+        report.add(
+            "transport promise",
+            MECHANICAL,
+            [Finding(where, (
+                "its module docstring no longer opens with a `**N hosts, N methods, N routes**"
+                "` headline, so the promise over the credential this file reads is watched by\n"
+                "  nothing. Either the bullet was deleted, or it was reworded past the pattern.\n"
+                "  Re-point `_TRANSPORT_HEADLINE_RE`, or take the row out deliberately — a check\n"
+                "  whose subject has left is worse than no check."
+            ))],
+            "",
+        )
+        return
+
+    tail = promise[headline.end():]
+    cut = tail.find("\n  - **")
+    bullet = tail if cut < 0 else tail[:cut]
+
+    urls = _transport_url_constants(tree)
+    issued = _transport_requests(tree, urls)
+    reachable = {(method, urlparse(urls[name]).path) for name, method in issued}
+    hosts = {urlparse(value).netloc for value in urls.values()}
+    tabulated = {(method.upper(), route) for method, route in _TRANSPORT_ROUTE_RE.findall(bullet)}
+
+    if not urls:
+        findings.append(Finding(where, (
+            "declares no module-level `https://` URL constant. The bullet promises the routes "
+            "are constants rather than\n  anything a request can name; there is nothing here "
+            "for that to be true of."
+        )))
+    if not issued:
+        findings.append(Finding(where, (
+            f"no `{TRANSPORT_OPENER}` call could be attributed to one of its URL constants, so "
+            f"this row cannot say what the\n  module reaches. Either every request moved out of "
+            f"`{TRANSPORT_OPENER}`, or the accessors stopped returning\n  the constants — and "
+            f"either way the promise above them is unread."
+        )))
+    if not tabulated:
+        findings.append(Finding(where, (
+            "its first bullet tabulates no `METHOD /path` lines. The headline counts routes and "
+            "nothing names them,\n  which is the state that let `one method, one route` stand "
+            "over three of each for a week."
+        )))
+
+    for method, route in sorted(reachable - tabulated):
+        findings.append(Finding(where, (
+            f"reaches `{method} {route}` and the promise does not name it. This is the module "
+            f"that carries the operator's\n  session cookie; a route it can open and its own "
+            f"header does not list is the narrowing D16 exists to catch."
+        )))
+    for method, route in sorted(tabulated - reachable):
+        findings.append(Finding(where, (
+            f"promises `{method} {route}` and no call in this file can issue it. A promise that "
+            f"describes a file which has\n  moved on is read as current by the next session; "
+            f"strike it, or restore the call."
+        )))
+
+    if len(hosts) > 1:
+        findings.append(Finding(where, (
+            "names more than one host — " + ", ".join(sorted("`%s`" % h for h in hosts)) + ". "
+            "The bullet says one, and `server/order_transport.py`\n  exists precisely because "
+            "the second host got its own module rather than a second URL in this one."
+        )))
+    for host in sorted(hosts):
+        if host and host not in bullet:
+            findings.append(Finding(where, (
+                f"opens sockets to `{host}` and its first bullet does not say so. The host is "
+                f"the one thing a reader\n  checks before trusting where the cookie goes."
+            )))
+
+    claimed = [_TRANSPORT_NUMBERS.get(word.lower()) for word in headline.groups()]
+    actual = [len(hosts), len({method for method, _ in reachable}), len(reachable)]
+    for word, count, real, noun in zip(headline.groups(), claimed, actual, ("host", "method", "route")):
+        if count is None:
+            findings.append(Finding(where, (
+                f"counts `{word}` {noun}s in its headline and this row cannot read that as a "
+                f"number. Write it as a word\n  up to ten, or widen `_TRANSPORT_NUMBERS` — an "
+                f"unreadable count is an unchecked one."
+            )))
+        elif count != real:
+            findings.append(Finding(where, (
+                f"says `{word}` {noun}{'' if count == 1 else 's'} and the code reaches {real}. "
+                f"Recount from the constants and the\n  `{TRANSPORT_OPENER}` calls; never "
+                f"adjust the word to end a build."
+            )))
+
+    for name in sorted(urls):
+        if name not in bullet:
+            findings.append(Finding(where, (
+                f"binds `{name}` to a URL and its first bullet does not name the constant. The "
+                f"bullet lists them so a\n  fourth cannot arrive as an ordinary assignment."
+            )))
+
+    report.add(
+        "transport promise",
+        MECHANICAL,
+        findings,
+        f"{len(hosts)} host, {len({m for m, _ in reachable})} methods, {len(reachable)} routes, "
+        f"as promised and as called",
+    )
+
+
 def check_export_request(report: Report) -> None:
     """The three fields of the export request that are DECISIONS, pinned to their values.
 
@@ -6751,6 +7272,8 @@ def check_raw_color(report: Report) -> None:
 
 LOGO_SPEC = ROOT / "docs" / "specs" / "logo.md"
 MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
+LOCKUP_GEOMETRY = ROOT / "app" / "src" / "kit" / "lockupGeometry.ts"
+LOCKUP_TSX = ROOT / "app" / "src" / "kit" / "Lockup.tsx"
 
 # Section 9's rows, as they are written: | mark | prism | ground | bracket | card base |
 # THE BRACKET LEGEND, WHICH SECTION 9 PUBLISHES AND THIS ROW READ FOR THE FIRST TIME ON
@@ -6888,6 +7411,220 @@ def check_logo_parity(report: Report) -> None:
                f"{len(published)} locked marks, every prism, ground, bracket and base "
                f"against section 9 ({sum(len(m['prism']) + len(m['ground']) + len(m['bracket']) + 1 for m in published.values())} hexes)"
                if not findings else f"{len(findings)} disagreements with section 9")
+
+
+
+LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
+SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
+MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
+MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
+
+_LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
+
+
+def check_lockup_bracket(report: Report) -> None:
+    """The lockup's dark bracket is a LOCKED palette, not a colour the sheet owns.
+
+    §16 settles the dark theme's bracket as the chrome gradient `markPalettes.ts` already gives
+    `bluesteel` — the default mark's own bracket — so the lockup and the mark are one object in
+    one metal. That means four hexes are written in a sheet as well as in the generated file,
+    which is the defect this work keeps finding, so this row reconciles them.
+
+    `raw color` cannot see either side: its scope is `app/src/*.css`, and these are a `.ts` and
+    an `.html`. Provably wrong when it fires — both sides are literals.
+    """
+    if not exists(SIDEBAR_MORPH) or not exists(MARK_PALETTES):
+        return
+    sheet, gen = read(SIDEBAR_MORPH), read(MARK_PALETTES)
+    # the component reads the palette rather than naming hexes; if it ever stops, say so here
+    if exists(LOCKUP_TSX):
+        tsx = read(LOCKUP_TSX)
+        if "MARKS.bluesteel.bracket" not in tsx and re.search(r"#[0-9A-Fa-f]{6}", tsx):
+            report.add("lockup bracket", MECHANICAL, [Finding(
+                rel(LOCKUP_TSX),
+                "the lockup names a color of its own instead of reading "
+                "`MARKS.bluesteel.bracket`. §16 settles the dark bracket as the MARK's metal so "
+                "the two are one object; `markPalettes.ts` is the only file in app/ outside "
+                "tokens.css allowed to name a hex, and `raw color` cannot see a .tsx.",
+            )], "")
+            return
+    m = re.search(r"bluesteel:\s*\{.*?bracket:\s*\[([^\]]+)\]", gen, re.S)
+    if not m:
+        report.add("lockup bracket", MECHANICAL, [Finding(
+            rel(MARK_PALETTES),
+            "`bluesteel`'s bracket is gone from the generated palettes. §16 draws the lockup's "
+            "dark bracket from it; with it missing this row compares nothing.",
+        )], "")
+        return
+    want = re.findall(r"#[0-9A-Fa-f]{6}", m.group(1))
+    got_block = re.search(r"const DARK_BRACKET = \[(.*?)\]\n", sheet, re.S)
+    got = re.findall(r"#[0-9A-Fa-f]{6}", got_block.group(1)) if got_block else []
+    problems = []
+    if [c.upper() for c in got] != [c.upper() for c in want]:
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            f"the lockup's dark bracket is {' '.join(got) or 'absent'} and `bluesteel`'s is "
+            f"{' '.join(want)}. §16 settles them as the same metal so the lockup and the mark "
+            f"are one object; a sheet that drifts from the palette makes them two.",
+        ))
+    report.add("lockup bracket", MECHANICAL, problems,
+               f"{len(want)} stops against `bluesteel`'s locked bracket")
+
+
+def check_rail_mark(report: Report) -> None:
+    """The sidebar mockup's rail bracket is the mark the app actually ships.
+
+    IT WAS AN INVENTION, and drew four things wrong at once — stroke 11.0 against the mark's
+    4.2, radius 14.6 against 8, an inset of 5.5 against 22.6, and a taper §11 had removed from
+    the small cut on a measurement. It had been re-derived from the DISPLAY cut's unit rescaled
+    into the wrong box, in the one sheet the sidebar's size is decided from.
+
+    The fix copies two constants out of the generated file, which is itself the defect this
+    project keeps finding — a value typed a second time. So this row reconciles them. Provably
+    wrong when it fires: both sides are literals.
+    """
+    if not exists(SIDEBAR_MORPH) or not exists(MARK_GEOMETRY):
+        return
+    sheet, gen = read(SIDEBAR_MORPH), read(MARK_GEOMETRY)
+    want_path = re.search(r"SMALL_BRACKET = '([^']+)'", gen)
+    want_stroke = re.search(r"SMALL_STROKE = ([\d.]+)", gen)
+    got_path = re.search(r"MARK_SMALL_BRACKET = '([^']+)'", sheet)
+    got_stroke = re.search(r"MARK_SMALL_STROKE = ([\d.]+)", sheet)
+    if not (want_path and want_stroke):
+        report.add("rail mark", MECHANICAL, [Finding(
+            rel(MARK_GEOMETRY),
+            "SMALL_BRACKET or SMALL_STROKE is gone from the generated mark. The sidebar mockup "
+            "copies both; with them missing this row compares nothing, which is worse than failing.",
+        )], "")
+        return
+    problems = []
+    if not got_path or got_path.group(1) != want_path.group(1):
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            "the rail's bracket path is not the mark's. `markGeometry.ts` is generated from "
+            "`small-cut.html` and is what every surface below 64px draws (D102); a sheet that "
+            "re-derives it is drawing a mark the product does not contain.",
+        ))
+    if not got_stroke or abs(float(got_stroke.group(1)) - float(want_stroke.group(1))) > 1e-9:
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            f"the rail's stroke is {got_stroke.group(1) if got_stroke else 'absent'} and the "
+            f"mark's is {want_stroke.group(1)}.",
+        ))
+    report.add("rail mark", MECHANICAL, problems,
+               "the rail bracket is the shipped mark, path and stroke")
+
+
+def check_lockup_params(report: Report) -> None:
+    """The lockup sheet's declared holds and docs/specs/logo.md's settled table agree.
+
+    A PARAMETER SETTLED IN A ROUND AND THEN TYPED A SECOND TIME IS HOW THAT SHEET ALREADY WENT
+    WRONG, twice, in the same row: a hand-written caption said a value had been rejected in a
+    round it had not been. The sheet fixed its own half by deriving every label from one
+    `ROUND` object. This row is the other half — the object and the spec are two copies of the
+    same decision, and nothing was comparing them.
+
+    The sheet asserts, on every render, that the values it DECLARES as held were the values it
+    actually DREW. That is a different claim from this one and neither covers the other: the
+    sheet cannot see the spec, and this row cannot see a drawing.
+
+    Provably wrong when it fires — both sides are literals.
+    """
+    if not exists(LOGO_SPEC) or not exists(LOCKUP_ROUND):
+        return
+
+    spec_section = read(LOGO_SPEC)
+    marker = "### The settled values, and the one place they live"
+    if marker not in spec_section:
+        report.add("lockup params", MECHANICAL, [Finding(
+            rel(LOGO_SPEC),
+            "the settled-values table is gone. This row compares it against the sheet's holds; "
+            "with it missing the row is not comparing anything, which is worse than failing.",
+        )], "")
+        return
+    tail = spec_section[spec_section.index(marker):]
+    tail = tail[: tail.index("\n### ", 10)] if "\n### " in tail[10:] else tail
+    published = {k: float(v) for k, v in _LOCKUP_SPEC_ROW.findall(tail)}
+
+    sheet = read(LOCKUP_ROUND)
+    # THE KEY THE ROUND IS SWEEPING CANNOT ALSO BE HELD, and the first version of this row did not
+    # know that: it fired the moment a settled parameter came up for its own round. A settled value
+    # must be pinned OR be the one under test, and "under test" is a state the sheet declares.
+    sweeping = re.search(r"sweeping:\s*'(\w+)'", sheet)
+    sweeping = sweeping.group(1) if sweeping else ""
+    block = re.search(r"holds:\s*\{([^}]*)\}", sheet)
+    if block is None or not published:
+        report.add("lockup params", MECHANICAL, [Finding(
+            rel(LOCKUP_ROUND),
+            "no `holds: {...}` in the round sheet, or no rows in the spec table. Say so here "
+            "rather than passing.",
+        )], "")
+        return
+    declared = {
+        k: float(v)
+        for k, v in re.findall(r"(\w+)\s*:\s*([0-9.]+)", block.group(1))
+    }
+
+    findings: List[Finding] = []
+    for key in sorted(set(published) - set(declared) - {sweeping}):
+        findings.append(Finding(
+            rel(LOCKUP_ROUND),
+            f"docs/specs/logo.md settles `{key}` at {published[key]} and the sheet neither holds "
+            f"it nor is sweeping it. A settled parameter that is neither pinned nor under test is "
+            f"one the next round can move without anybody noticing.",
+        ))
+    for key in sorted(set(declared) - set(published)):
+        findings.append(Finding(
+            rel(LOGO_SPEC),
+            f"the sheet holds `{key}` at {declared[key]} and the settled table does not list it. "
+            f"Every value a round holds fixed is a decision, even an inherited one.",
+        ))
+    for key in sorted(set(declared) & set(published)):
+        if abs(declared[key] - published[key]) > 1e-9:
+            findings.append(Finding(
+                f"{rel(LOCKUP_ROUND)} -> {key}",
+                f"held at {declared[key]} in the sheet and settled at {published[key]} in "
+                f"docs/specs/logo.md. The spec is the store of record; move the sheet, or move "
+                f"the spec first and say which round moved it.",
+            ))
+
+    # THE GENERATED FILE IS THE THIRD COPY, and §15 asked for it by name: "once a generated file
+    # exists it must reconcile both directions against that too, exactly as `logo parity` does
+    # for `markPalettes.ts`". Without this row the app could draw a lockup the spec does not
+    # describe and every other check would stay green — which is what `logo parity` exists for.
+    if exists(LOCKUP_GEOMETRY):
+        gen = read(LOCKUP_GEOMETRY)
+        block = re.search(r"export const PARAMS = \{(.*?)\} as const", gen, re.S)
+        if block is None:
+            findings.append(Finding(
+                rel(LOCKUP_GEOMETRY),
+                "no `PARAMS` in the generated geometry. The app draws from this file; with the "
+                "block missing nothing reconciles what it draws against the spec that settled it.",
+            ))
+        else:
+            built = {k: float(v) for k, v in
+                     re.findall(r"(\w+)\s*:\s*([0-9.]+)", block.group(1))}
+            for key in sorted(set(published) & set(built)):
+                if abs(built[key] - published[key]) > 1e-9:
+                    findings.append(Finding(
+                        f"{rel(LOCKUP_GEOMETRY)} -> {key}",
+                        f"generated at {built[key]} and settled at {published[key]} in "
+                        f"docs/specs/logo.md. Re-run `node scripts/build-lockup.mjs`, or move the "
+                        f"spec first and say which round moved it.",
+                    ))
+            for key in sorted(set(published) - set(built)):
+                findings.append(Finding(
+                    rel(LOCKUP_GEOMETRY),
+                    f"docs/specs/logo.md settles `{key}` and the generated geometry does not "
+                    f"carry it. A settled value the app never receives is one the drawing can "
+                    f"ignore.",
+                ))
+
+    report.add("lockup params", MECHANICAL, findings,
+               f"{len(published)} settled values against the sheet's holds"
+               + (" and the generated geometry" if exists(LOCKUP_GEOMETRY) else "")
+               + (f", `{sweeping}` under test" if sweeping in published else "")
+               if not findings else f"{len(findings)} disagreements")
 
 
 # ------------------------------------------------------------------ views opsec (D24)
@@ -10018,10 +10755,15 @@ def audit(staged_only: bool) -> Report:
     check_supervisor_self_watch(report)
     check_motion_params(report)
     check_logo_parity(report)
+    check_lockup_params(report)
+    check_rail_mark(report)
+    check_lockup_bracket(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)
     check_export_request(report)
+    check_transport_promise(report)
+    check_hint_reasons(report)
     check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)

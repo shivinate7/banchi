@@ -260,6 +260,7 @@ export function Stat({ value, label, className }: { readonly value: ReactNode; r
 }
 
 /* ---- Logo --------------------------------------------------------------------------------------- */
+export { Lockup } from './Lockup'
 export type { LogoVariant }
 export { VARIANTS } from './markPalettes'
 

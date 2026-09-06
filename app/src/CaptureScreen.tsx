@@ -151,18 +151,55 @@ type BoxOption = {
   sealed: boolean
 }
 
-/* Why the set suggestions are missing, in the operator's terms (D65).
+/** Why the set suggestions are missing, in the operator's terms (D65).
  *
- * Sentences, not file paths: the session lives in `.env`, and that is a fact for the person
- * setting the rig up rather than the one at the lens. Each case is stated plainly and no
- * more — the field still works — and an unknown code is kept on the end because
- * `docs/DESIGN.md` shows reason codes beside names, so what you saw stays greppable. */
-function hintReason(code: string | null): string {
+ *  SENTENCES, NOT FILE PATHS. The session lives in `.env`, and that is a fact for the person
+ *  setting the rig up rather than the one at the lens. Each case is stated plainly and no
+ *  more — the field still works — and the code is kept on the end of anything unnamed
+ *  because `docs/DESIGN.md` shows reason codes beside names, so what you saw stays greppable.
+ *  **THAT RULE IS OLDER THAN THIS COMMENT AND IT SURVIVED A SESSION WRITING OVER IT**: the
+ *  build that widened this map first wrote `set PKMNSCAN_TCG_USER_AGENT in .env` into two of
+ *  these clauses, which is the remedy for the person at the keyboard and noise to the person
+ *  holding a card over a stand. It says what is wrong; where the knob is lives one layer down.
+ *
+ *  EVERY CODE `server/tcg_export.py:filters` CAN RAISE IS NAMED HERE, and until 2026-09-06
+ *  two of the nine were. The other seven fell to the unknown-code tail — which is a designed
+ *  fallback and not a defect, but it is the FLOOR, and seven of nine landing on the floor
+ *  means the map had stopped being the answer. `make docs-audit`'s `hint reasons` row
+ *  reconciles this map against the codes that route can send, in both directions, so a tenth
+ *  cannot arrive unlabelled and a branch cannot go dead unnoticed.
+ *
+ *  `message` IS UNDER THE FLOOR AND ABOVE THE BARE CODE. The route carries the transport's
+ *  own sentence now, so a code this map has not caught up with reads as words rather than as
+ *  a token — with the code still beside it, because greppable is the rule above. It is not
+ *  what the operator normally reads and it must not become that: a sentence written for the
+ *  pipeline's reader names `.env` and this screen does not.
+ *
+ *  THE REGISTER IS THE RIG'S. Each clause ends mid-sentence — the caller appends *"The hint
+ *  is stored exactly as typed"* — and none of them asks the operator to stop capturing. That
+ *  is the whole shape of this failure: the hint field still works, typed by hand, and the
+ *  autocomplete is what is missing. */
+function hintReason(code: string | null, message?: string | null): string {
   if (!code) return ''
+  // The session — the likeliest of these by far, and the only ones the old map named.
   if (code === 'tcg_session_expired') return 'The TCGplayer session has expired — sign in again'
   if (code === 'tcg_cookie_missing') return 'No TCGplayer session'
+  if (code === 'tcg_cookie_malformed') return 'The stored TCGplayer session is not a whole one'
+  // The portal, or the way out to it. None of it is fixed at the lens, so none of it carries a
+  // verb the operator cannot perform here: they say what is wrong and stop.
+  if (code === 'tcg_blocked') return 'TCGplayer refused this client'
+  if (code === 'tcg_unavailable') return 'TCGplayer is down — the set list will come back'
+  if (code === 'tcg_unreachable' || code === 'unreachable') return 'TCGplayer could not be reached'
+  if (code === 'tcg_unexpected_response') return 'TCGplayer answered with something unreadable'
+  if (code === 'tcg_filters_unreadable') return 'TCGplayer changed the shape of its set list'
+  // This machine's own, and deliberately not naming the variable — see the rule above.
+  if (code === 'tcg_url_invalid') return 'The set list is pointed somewhere the session may not go'
   if (code === 'no_category') return 'No TCGplayer category for this game'
-  return `Set list unavailable (${code})`
+  // THE FLOOR, and reaching it means `hint reasons` is already failing a commit. The
+  // transport's sentence beats the bare token; the token stays beside it either way.
+  return message
+    ? `${message.trim().replace(/\.$/, '')} (${code})`
+    : `Set list unavailable (${code})`
 }
 
 function hintMetaText(verdict: HintVerdict): string {
@@ -646,7 +683,12 @@ export function CaptureScreen() {
   const [tcgSets, setTcgSets] = useState<
     Record<
       string,
-      { sets: SetOption[]; aliases: Record<string, string>; reason: string | null }
+      {
+        sets: SetOption[]
+        aliases: Record<string, string>
+        reason: string | null
+        message: string | null
+      }
     >
   >({})
   /* THE NAMES AND THE ALIAS TABLE ARE KEPT APART, where this used to concatenate them into
@@ -665,13 +707,18 @@ export function CaptureScreen() {
               sets: answer.sets.map((row: { name: string }) => ({ name: row.name })),
               aliases: answer.aliases ?? {},
               reason: answer.reason,
+              message: answer.message ?? null,
             },
           })),
         )
         .catch(() =>
           setTcgSets((prev) => ({
             ...prev,
-            [forGame]: { sets: [], aliases: {}, reason: 'unreachable' },
+            // THE ONE CODE THE SERVER NEVER SENDS. The request itself failed — the capture
+            // server is down or the page is offline — so there is no transport sentence to
+            // carry, and `hintReason` names this string beside `tcg_unreachable` because the
+            // operator cannot tell the two apart and does not need to.
+            [forGame]: { sets: [], aliases: {}, reason: 'unreachable', message: null },
           })),
         )
     },
@@ -2812,7 +2859,8 @@ export function CaptureScreen() {
               </form>
               {hintVocabulary === undefined ? null : hintVocabulary.reason ? (
                 <p className="capture-opennote">
-                  {hintReason(hintVocabulary.reason)}. The hint is stored exactly as typed.
+                  {hintReason(hintVocabulary.reason, hintVocabulary.message)}. The hint is
+                  stored exactly as typed.
                 </p>
               ) : (
                 <p className={hintAlert ? 'capture-opennote capture-note-alert' : 'capture-opennote'}>

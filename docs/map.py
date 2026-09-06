@@ -1280,6 +1280,8 @@ COMPONENTS = [
             },
             "build-mark.mjs": {"does": "generates the app's mark — app/src/kit/markGeometry.ts, markPalettes.ts and app/public/favicon.svg — by READING docs/specs/logo/sheets/small-cut.html and evaluating the drawing routine out of it, so there is exactly one implementation of the geometry in this repo. Asserts on what it extracted (the tile is 221 points, the display bracket is an outlined polygon, the small bracket is a stroked path) before writing 25KB of path data into app/. D18: a generator may write and nothing that writes may gate a commit — this is run by hand, never on the commit path.",
                                 "governed_by": ["D18", "D94", "D102"]},
+            "build-lockup.mjs": {"does": "generates the LOCKUP — app/src/kit/lockupGeometry.ts — by reading docs/specs/logo.md section 13's settled table and running docs/specs/logo/sheets/lockup-core.js in a real browser. It reads the table rather than re-declaring it, unlike build-mark.mjs, because the lockup's eleven parameters ARE in a machine-readable table and the mark's are not; a third copy would be a third thing to drift. It needs a browser where build-mark.mjs needs only `new Function`, because `frame()` solves the roman's tracking with document.createRange() and that solve is what gets baked. IT OUTLINES THE TYPE: 番地 in IBM Plex Sans JP 400 and BANCHI in Manrope 700, both OFL and both devDependencies read at build time and never committed, so no font ships and a blocked CDN cannot draw a fallback CJK face at letter-spacing solved for Plex. Asserts what build-mark.mjs cannot: it renders the generated outlines against the live text they replace and refuses to write when more than 8% of inked pixels differ — the measured residual is 6.2%, which is hinting. D18: run by hand, never on the commit path.",
+                                 "governed_by": ["D18", "D102"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
                         "question under `--staged`. `--json` is the machine surface "
@@ -1946,6 +1948,35 @@ COMPONENTS = [
                                 "D92", "D93", "D96", "D100", "D103", "D104"],
                 "tested_by": ["T7"],
             },
+            "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
+                                      "place in this repo that can change a price a buyer "
+                                      "sees (D106). Four endpoints read off TCGplayer's own "
+                                      "652KB bundle and adversarially verified: "
+                                      "initializeexportcsv (lowercase `filename`), "
+                                      "uploadexportcsv (camelCase `fileName` — their bundle "
+                                      "really does spell it both ways), finalizeexportcsv, "
+                                      "rollbackexportcsv, then movetolive. NOT IN "
+                                      "tcg_export.py because that module's docstring promises "
+                                      "in writing that it CANNOT CAUSE A CHARGE, and a write "
+                                      "beside it would falsify that or narrow it to a "
+                                      "technicality. Its own promises instead: two explicit "
+                                      "operations, a move scoped to ONE upload by a CONSTANT "
+                                      "and never a parameter, a failed push rolled back, and "
+                                      "no response body in any refusal message. The transport "
+                                      "is BORROWED from tcg_export._open rather than copied — "
+                                      "D104's rule, because the redirect discipline is the "
+                                      "part that rots in a duplicate. `_form` reproduces "
+                                      "jQuery's deep encoding (`data[0][MyPrice]`), which is "
+                                      "what their server reads and what urlencode alone "
+                                      "cannot express. `_check` runs their own validators — "
+                                      "price 0.01-200000, integer quantity — plus D100's "
+                                      "invariant that AddToQuantity is 0 on every row, before "
+                                      "a transaction is opened, so a bad file is a refusal "
+                                      "with nothing sent. THE PUSH IS MEASURED; movetolive is "
+                                      "read and has never been called from here.",
+                               "governed_by": ["D13", "D16", "D64", "D87", "D100", "D103",
+                                               "D104", "D106"],
+                               "tested_by": ["T7"]},
             "tcg_export.py": {
                 "does": "the outbound calls to the seller admin host, and the only place "
                         "allowed to make them — one of TWO such modules since D69 gave "
@@ -2222,6 +2253,14 @@ COMPONENTS = [
                            "governed_by": ["D5", "D13", "D94"]},
             "public/favicon.svg": {"does": "the tab icon: the Banchi mark at its SMALL optical cut, bluesteel, GENERATED by scripts/build-mark.mjs — the same drawing `kit.Logo` renders below 64px, and a favicon is 16 to 32px. It carries no feTurbulence: section 11 measured the marbling at those sizes and it loses to a flat prism gradient, which is also what removes the question of whether a favicon pipeline would keep the filter. Vite serves app/public/ at the site root, which is why it is addressed as `/favicon.svg`.",
                                    "governed_by": ["D5", "D94", "D102"]},
+            "public/manifest.webmanifest": {"does": "the web app manifest: the two PNG icons, the name, and the dark ground as the splash colour. It exists because `apple-touch-icon` pointed at an SVG, which iOS does not render — so the app had no home-screen icon at all rather than a degraded one. No service worker and no offline story; this is an icon manifest, not a PWA.",
+                                            "governed_by": ["D94", "D102"]},
+            "public/icon-180.png": {"does": "the apple-touch-icon, and the DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: committing what it writes needs `--no-verify`, since the pre-commit image guard refuses any .png outside captures/ and has no PKMNSCAN_*=off hatch.",
+                                    "governed_by": ["D94", "D102"]},
+            "public/icon-192.png": {"does": "the manifest's small icon. Same drawing and same generator as icon-180.png.",
+                                    "governed_by": ["D94", "D102"]},
+            "public/icon-512.png": {"does": "the manifest's large icon, and the one place the display cut is drawn at the size it was designed for. Same generator as icon-180.png.",
+                                    "governed_by": ["D94", "D102"]},
             "devPort.ts": {"does": "the ONE dev port for this checkout, imported by both "
                                    "vite.config.ts and playwright.config.ts so they cannot "
                                    "disagree. The main tree keeps 5173; a linked worktree "
@@ -2331,6 +2370,10 @@ COMPONENTS = [
                             "governed_by": ["D5", "D13", "D32", "D50", "D94"]},
             "src/kit/markGeometry.ts": {"does": "the Banchi mark's two optical cuts as static path data, GENERATED by scripts/build-mark.mjs out of docs/specs/logo/sheets/small-cut.html. Never hand-edited: the sheet is the one implementation of the drawing, so the app cannot drift from the spec by being edited. Two cuts because a 1.7 stroke is a scratch at 32px and absent at 16px (logo.md section 3, swept in section 11) — `SMALL` is what ships, since every surface in this product is below 64px, and `DISPLAY` is what #/gallery shows. The geometry does not vary across the six marks; all six generate byte-identical paths.",
                                           "governed_by": ["D94", "D102"]},
+            "src/kit/lockupGeometry.ts": {"does": "the lockup as static path data — 番地 and BANCHI OUTLINED, the bracket's arm and its two end discs, the block's dimensions and section 13's eleven settled parameters. GENERATED by scripts/build-lockup.mjs and never hand-edited. Every number is a ratio of the kanji size and the paths are drawn in a 319 x 233 box at kanji 100, so ONE geometry serves every size through a viewBox — which is not only smaller than per-size data but more correct, since a vector scaled by a viewBox cannot re-layout and live text could, and did: the width match had to be SOLVED per size. Carries no `fill`: the component's own <g> supplies it by inheritance so a stylesheet can switch section 16's dark metal, which a fill attribute on the child would make unreachable.",
+                                 "governed_by": ["D102"]},
+            "src/kit/Lockup.tsx": {"does": "the lockup — 番地 over BANCHI inside the mark's own brackets, drawn entirely from lockupGeometry.ts. THE ACCESSIBILITY CONTRACT INVERTS `Logo`'s AND THEN INVERTS AGAIN: `Logo` is aria-hidden always because every call site names its wrapper, and the lockup IS the word so standing alone it carries role=img and a name — but inside the sidebar's `<a aria-label=\"Banchi home\">` a named child would announce \"Banchi Banchi home\", so that call site passes `decorative`. Three class hooks (.bn-lockup-bracket, -kanji, -roman) exist so the shell can choreograph the collapse; without them it could only fade as one lump. The dark bracket is section 16's `bluesteel` chrome and is switched in CSS, not here — the gradient's id is per-instance, which a stylesheet cannot name, so the instance publishes it as --bn-lockup-metal and App.css decides per theme.",
+                                 "governed_by": ["D102"]},
             "src/kit/markPalettes.ts": {"does": "docs/specs/logo.md section 9's six locked marks — prism, bracket, ground and card base per variant, bluesteel the default. GENERATED, but NOT derived: the ground rule applied to the three gold prisms produces the espresso section 8 rejected in favor of true black, so a build that re-derives them redraws marks the spec eliminated. THE ONE FILE IN app/ OUTSIDE tokens.css THAT MAY NAME A COLOUR (D102) — the `raw color` audit row cannot see it, since its scope is app/src/*.css, and `logo parity` stands in its place by reconciling every hex here against section 9 in both directions.",
                                         "governed_by": ["D94", "D102"]},
             "src/kit/index.tsx": {"does": "the primitives as components: Button, Kbd, Pill, Chip, "

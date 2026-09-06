@@ -279,3 +279,16 @@
   container-type: inline-size;
   container-name: copies;
 }
+
+/* the lockup's dark specimen: a stage ground, because section 16's metal only exists on dark and
+   a light-theme reader must still be able to see what it settles */
+.kit-lockup-dark {
+  /* THE ISLAND HAS TO CARRY ITS OWN INK. `tokens.css`'s dark block is `:root[data-theme='dark']`,
+     so a nested `data-theme` flips this file's bracket rule and NOT the tokens — the type kept the
+     light theme's near-black and vanished on the stage ground. The stage tokens exist for exactly
+     this: a surface that is dark in both themes because the subject demands it. */
+  --bn-ink: var(--bn-stage-ink);
+  background: var(--bn-stage-bg);
+  border-radius: var(--bn-r-lg);
+  padding: var(--bn-5);
+}

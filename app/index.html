@@ -8,8 +8,15 @@
     <meta name="description" content="Banchi — every card has an address." />
     <meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)" />
+    <!-- Two cuts of one mark, chosen by size — docs/specs/logo.md section 3, and the same rule
+         `kit.Logo` applies. The tab icon is 16 to 32px and takes the SMALL cut; a touch icon is
+         180px and up, which is the DISPLAY cut's range, so it carries the taper and the foil.
+         All four are generated: `node scripts/build-mark.mjs --icons`. -->
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <!-- iOS does not render an SVG here. It pointed at favicon.svg until 2026-09-05, which
+         meant no home-screen icon at all rather than a fallback. -->
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Theme before paint: a stored choice wins, otherwise the system's. -->
     <script>

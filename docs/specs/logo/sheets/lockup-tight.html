@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — tighter still</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 16px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:22px 0 9px}
+ .strip{display:flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .was{color:#c2410c;font-weight:700}
+ .num{font:500 9px ui-monospace,monospace;color:#15803d}
+ .lk{position:relative;display:inline-block}
+ .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
+ .go{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;line-height:1;display:block}
+ .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
+ .mx{display:grid;gap:16px 22px;background:#fff;border-radius:14px;padding:20px 24px;align-items:center;justify-items:center}
+ .hd{font:600 9px system-ui;color:#8b93a0;letter-spacing:.06em;text-transform:uppercase}
+ svg,img{display:block}
+</style>
+<div class="wrap">
+<h1>tighter still — past every floor again</h1>
+<div class="sub">Orange marks the previous minimum. Green is the measured block height.</div>
+<div id="out"></div></div>
+<script>
+const SQ=(function(){const a=50,N=220,p=[]
+ for(let i=0;i<=N;i++){const t=i/N*2*Math.PI,ct=Math.cos(t),st=Math.sin(t)
+  p.push((a+a*Math.sign(ct)*Math.pow(Math.abs(ct),.4)).toFixed(2)+' '+(a+a*Math.sign(st)*Math.pow(Math.abs(st),.4)).toFixed(2))}
+ return 'M'+p.join('L')+'Z'})()
+const EX=25.766,EY=19.410,EW=48.468,EH=61.180
+function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
+ const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=300,pts=[]
+ const tl=Math.min(tlf*Math.max(aX,aY),L/2)
+ for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
+  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
+  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
+  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
+  const dE=Math.min(s,L-s);const f=dE<tl?tip+(1-tip)*(dE/tl):1
+  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
+ const q=function(v){return v.toFixed(3)}
+ const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
+ const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
+ return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
+   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
+  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+let n=0
+function icon(px,o){o=o||{}
+ const w=o.w||1.8,arm=o.arm||.38,r=8,tip=o.tip===undefined?.07:o.tip,tl=.7,id='w'+(n++)
+ const aX=EW*arm,aY=EH*arm
+ const p=taperParts(EX,EY,aX,aY,r,w,tip,tl)
+ const one='<path d="'+p.body+'" fill="url(#'+id+'c)"/>'+p.caps.map(function(c){
+   return c[2]>0.02?'<circle cx="'+c[0].toFixed(3)+'" cy="'+c[1].toFixed(3)+'" r="'+c[2].toFixed(3)+'" fill="url(#'+id+'c)"/>':''}).join('')
+ return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+
+ '<defs><linearGradient id="'+id+'b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E232B"/><stop offset="1" stop-color="#080B0F"/></linearGradient>'+
+ '<linearGradient id="'+id+'c" x1=".75" y1=".067" x2=".25" y2=".933"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".33" stop-color="#B8C8D8"/><stop offset=".67" stop-color="#F2F8FF"/><stop offset="1" stop-color="#8FA4B8"/></linearGradient>'+
+ '<linearGradient id="'+id+'p" x1=".671" y1=".030" x2=".329" y2=".970"><stop offset="0" stop-color="#E4EEF8"/><stop offset=".25" stop-color="#B0C8E0"/><stop offset=".5" stop-color="#7F9FC0"/><stop offset=".75" stop-color="#F2F8FF"/><stop offset="1" stop-color="#6086AC"/></linearGradient>'+
+ '<filter id="'+id+'f" x="-25%" y="-25%" width="150%" height="150%"><feTurbulence type="fractalNoise" baseFrequency="0.035 0.09" numOctaves="4" seed="29" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="26" xChannelSelector="R" yChannelSelector="G"/></filter>'+
+ '<clipPath id="'+id+'k"><rect x="34.109" y="27.753" width="31.782" height="44.495" rx="1.602"/></clipPath>'+
+ '<clipPath id="'+id+'s"><path d="'+SQ+'"/></clipPath></defs>'+
+ '<path d="'+SQ+'" fill="url(#'+id+'b)"/>'+
+ '<g clip-path="url(#'+id+'s)"><rect width="100" height="34" fill="#fff" opacity=".08"/></g>'+
+ one+'<g transform="rotate(180 50 50)">'+one+'</g>'+
+ '<rect x="34.109" y="27.753" width="31.782" height="44.495" rx="1.602" fill="#5A6E80"/>'+
+ '<g clip-path="url(#'+id+'k)" opacity=".72" filter="url(#'+id+'f)"><rect x="20.1" y="13.75" width="59.8" height="72.5" fill="url(#'+id+'p)"/></g></svg>'}
+function stamp(size,gap,pd,col){
+ const el=document.createElement('div');el.className='lk'
+ el.style.padding=(size*pd).toFixed(2)+'px '+(size*pd*1.05).toFixed(2)+'px'
+ el.innerHTML='<div style="color:'+(col||'#0f1217')+'">'+
+  '<span class="go k" style="font-size:'+size+'px;letter-spacing:.07em">番地</span>'+
+  '<span class="rom r" style="font-size:'+(size*0.36).toFixed(2)+'px;letter-spacing:.14em;margin-top:'+(size*gap).toFixed(2)+'px;opacity:.62">BANCHI</span></div>'
+ Object.assign(el.dataset,{size:size,col:col||'#0f1217'});return el}
+function frame(el){
+ if(el.querySelector('svg'))return 0
+ const k=el.querySelector('.k'),r=el.querySelector('.r')
+ const kw=k.getBoundingClientRect().width,nn=r.textContent.length
+ let ls=0
+ for(let i=0;i<30;i++){const rw=r.getBoundingClientRect().width
+  ls+=(kw-rw)/nn;r.style.letterSpacing=ls.toFixed(3)+'px'
+  if(Math.abs(kw-r.getBoundingClientRect().width)<0.2)break}
+ r.style.marginRight=(-ls).toFixed(3)+'px'
+ const size=+el.dataset.size,col=el.dataset.col,sw=size*0.11,arm=0.32
+ const w=el.offsetWidth,h=el.offsetHeight,i=sw/2,W=w-sw,H=h-sw
+ const rr=Math.min(sw*1.85,Math.min(W,H)/2-.1)
+ const aX=Math.max(W*arm,rr+2),aY=Math.max(H*arm,rr+2)
+ const TL='M'+i.toFixed(2)+' '+(i+aY).toFixed(2)+'V'+(i+rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+rr).toFixed(2)+' '+i.toFixed(2)+'H'+(i+aX).toFixed(2)
+ const BR='M'+(i+W).toFixed(2)+' '+(i+H-aY).toFixed(2)+'V'+(i+H-rr).toFixed(2)+'A'+rr.toFixed(2)+' '+rr.toFixed(2)+' 0 0 1 '+(i+W-rr).toFixed(2)+' '+(i+H).toFixed(2)+'H'+(i+W-aX).toFixed(2)
+ el.insertAdjacentHTML('beforeend','<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+
+  [TL,BR].map(function(d){return '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+sw.toFixed(2)+'" stroke-linecap="round"/>'}).join('')+'</svg>')
+ return h}
+const o=document.getElementById('out')
+function lkSec(title,items){
+ const h=document.createElement('h2');h.textContent=title;o.appendChild(h)
+ const s=document.createElement('div');s.className='strip'
+ items.forEach(function(it){const c=document.createElement('div');c.className='cell'
+  const el=it[1];c.appendChild(el)
+  const t=document.createElement('div');t.className='cap'+(it[2]?' was':'');t.textContent=it[0];c.appendChild(t)
+  const nn=document.createElement('div');nn.className='num';c.appendChild(nn);el.dataset.report='1'
+  s.appendChild(c)})
+ o.appendChild(s)}
+function iSec(title,items){
+ const h=document.createElement('h2');h.textContent=title;o.appendChild(h)
+ const s=document.createElement('div');s.className='strip'
+ items.forEach(function(it){const c=document.createElement('div');c.className='cell'
+  c.insertAdjacentHTML('beforeend',it[1])
+  const t=document.createElement('div');t.className='cap'+(it[2]?' was':'');t.textContent=it[0];c.appendChild(t);s.appendChild(c)})
+ o.appendChild(s)}
+lkSec('1 · gap, below .09 — at 34px, padding held at .34',
+ [[.09,1],[.06,0],[.03,0],[.00,0],[-.03,0]].map(function(p){
+  return ['gap '+p[0]+(p[1]?' · was the min':''), stamp(34,p[0],.34), p[1]]}))
+lkSec('2 · padding — the parameter actually controlling the block',
+ [[.34,1],[.28,0],[.22,0],[.16,0],[.11,0]].map(function(p){
+  return ['pad '+p[0]+(p[1]?' · was fixed here':''), stamp(34,.13,p[0]), p[1]]}))
+;(function(){const h=document.createElement('h2');h.textContent='3 · padding × gap, at the tight end';o.appendChild(h)
+ const g=document.createElement('div');g.className='mx'
+ g.style.gridTemplateColumns='auto repeat(3,1fr)'
+ g.insertAdjacentHTML('beforeend','<div></div>'+[.13,.06,0].map(function(x){return '<div class="hd">gap '+x+'</div>'}).join(''))
+ ;[.28,.22,.16].forEach(function(pd){
+  g.insertAdjacentHTML('beforeend','<div class="hd">pad '+pd+'</div>')
+  ;[.13,.06,0].forEach(function(gp){const c=document.createElement('div')
+   const el=stamp(34,gp,pd);c.appendChild(el);g.appendChild(c)})})
+ o.appendChild(g)})()
+iSec('4 · the icon, w 2.2 gone — 1.5 to 2.0 × tip 0 / .07 / .13',
+ [[1.5,0],[1.5,.07],[1.5,.13],[1.7,0],[1.7,.07],[1.7,.13],[1.9,0],[1.9,.07],[1.9,.13]]
+  .map(function(p){return ['w '+p[0]+' tip '+p[1], icon(92,{w:p[0],tip:p[1]})]}))
+iSec('5 · arm, below .38',
+ [[.38,1],[.34,0],[.30,0],[.26,0]].map(function(p){
+  return ['arm '+p[0]+(p[1]?' · was the min':''), icon(110,{arm:p[0],w:1.8,tip:.07}), p[1]]}))
+iSec('6 · shipping sizes, w 1.7 tip .07 arm .38',
+ [96,64,44,32].map(function(px){return [px+'px', icon(px,{w:1.7,tip:.07,arm:.38})]}))
+document.querySelectorAll('.lk').forEach(function(el){
+ const h=frame(el)
+ if(el.dataset.report){const nn=el.parentElement.querySelector('.num');if(nn)nn.textContent=h.toFixed(1)+'px'}})
+</script>

@@ -10,11 +10,52 @@
   transition: grid-template-columns var(--bn-t-slow) var(--bn-ease);
 }
 .bn-shell[data-rail='true'] { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+
+/* ---- the brand's collapse: ONE SWITCH, ONE CLOCK ------------------------------------------- */
+
+/* `--bn-brand-open` is 1 open and 0 railed, and the two rail conditions set THAT and nothing
+   else — so the 768-1023px media rail, which has no `data-rail` at all, cannot drift from the
+   button's. Sizes read it through `calc`; opacities read it directly.
+   ONE CLOCK: the shell's column already slides over --bn-t-slow, and every delay below is a
+   position inside that same 320ms rather than time added to it. The gesture does not get slower,
+   it gets legible.
+   THE ASYMMETRY IS FREE. The open state declares the RETURN trip's delays and the rail state the
+   OUTBOUND trip's, so one pair of rules gives two choreographies: collapsing is subtractive — the
+   name leaves, then the frame closes on the empty slot — and expanding is additive. BANCHI moves
+   first out and last in, which states in time the subordination section 13 settled in tone. */
+.bn-shell {
+  --bn-brand-open: 1;
+  --bn-brand-mark-delay: 0ms;
+  --bn-brand-bracket-delay: 160ms;
+  --bn-brand-kanji-delay: 180ms;
+  --bn-brand-roman-delay: 200ms;
+}
+.bn-shell[data-rail='true'] {
+  --bn-brand-open: 0;
+  --bn-brand-roman-delay: 0ms;
+  --bn-brand-kanji-delay: 40ms;
+  --bn-brand-bracket-delay: 40ms;
+  --bn-brand-mark-delay: 200ms;
+}
+
+/* base.css crushes transition DURATION to 0.01ms and does not touch DELAY. Left alone, a
+   reduced-motion collapse would snap the name out, hold an EMPTY brand row for 200ms, then snap
+   the mark in — a visible hole rather than an instant swap. Every delay is a variable precisely so
+   this is five values and no `!important`. */
+@media (prefers-reduced-motion: reduce) {
+  .bn-shell, .bn-shell[data-rail='true'] {
+    --bn-brand-roman-delay: 0ms; --bn-brand-kanji-delay: 0ms;
+    --bn-brand-bracket-delay: 0ms; --bn-brand-mark-delay: 0ms;
+  }
+}
 .bn-shell-main { min-width: 0; position: relative; }
 .bn-view { min-height: 100%; }
 
 /* ---- sidebar ------------------------------------------------------------- */
 .bn-side {
+  /* the rail cuts this 12px -> 8px, which snapped every child sideways in the frame the column
+     began easing. On the column's own clock instead, so the whole panel closes as one thing. */
+  transition: padding var(--bn-t-slow) var(--bn-ease);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -41,6 +82,51 @@
   min-height: 48px;
 }
 .bn-brand:hover { text-decoration: none; background: var(--bn-surface-3); }
+/* The slot is the only thing here that animates LAYOUT, and it is why the nav below does not
+   lurch: the brand row goes 109px -> 48px when the lockup gives way to the mark, and without this
+   every nav row, group label and the footer would jump 61px in the frame the column started a
+   320ms ease. That is the two-speed defect base.css already documents for the theme flip. */
+.bn-brand-slot {
+  position: relative;
+  flex: none;
+  width: calc(var(--bn-rail-mark) + var(--bn-brand-open) * (var(--bn-lockup-w) - var(--bn-rail-mark)));
+  height: calc(var(--bn-rail-mark) + var(--bn-brand-open) * (var(--bn-lockup-h) - var(--bn-rail-mark)));
+  transition: width var(--bn-t-slow) var(--bn-ease), height var(--bn-t-slow) var(--bn-ease);
+}
+/* Both drawings sit on the slot's centre, because the centre is the one thing that survives the
+   swap. They cannot morph — a ~600-point tapered outline and a 4-command stroked wire are
+   different constructions — so the slot carries the identity across a 40ms rest instead. */
+/* `pointer-events: none` is not cosmetic. The lockup keeps its own 128 x 93 box whatever the
+   slot is, so in the 64px rail the INVISIBLE one still lies across the first two nav rows and
+   would take their clicks. Opacity 0 hides a thing; it does not get it out of the way. */
+.bn-brand-slot > * { position: absolute; top: 50%; left: 50%; translate: -50% -50%; pointer-events: none; }
+
+/* the lockup RECEDES 4% rather than dissolving; the type inside does not translate, because a
+   scaling parent plus a translating child is two blurs stacked on a 10px roman */
+.bn-brand-lockup {
+  scale: calc(0.96 + 0.04 * var(--bn-brand-open));
+  transition: scale var(--bn-t-fast) var(--bn-ease) var(--bn-brand-bracket-delay);
+}
+.bn-brand-lockup .bn-lockup-bracket {
+  opacity: var(--bn-brand-open);
+  transition: opacity var(--bn-t-fast) var(--bn-ease) var(--bn-brand-bracket-delay);
+}
+.bn-brand-lockup .bn-lockup-kanji {
+  opacity: var(--bn-brand-open);
+  transition: opacity var(--bn-t-fast) var(--bn-ease) var(--bn-brand-kanji-delay);
+}
+.bn-brand-lockup .bn-lockup-roman {
+  opacity: calc(var(--bn-lockup-roman-opacity) * var(--bn-brand-open));
+  transition: opacity var(--bn-t-fast) var(--bn-ease) var(--bn-brand-roman-delay);
+}
+/* the mark ARRIVES, from 6% out on the spring, and it is the last thing that moves */
+.bn-brand-mark {
+  opacity: calc(1 - var(--bn-brand-open));
+  scale: calc(1 + 0.06 * var(--bn-brand-open));
+  transition: opacity var(--bn-t-fast) var(--bn-ease-out) var(--bn-brand-mark-delay),
+              scale var(--bn-t-fast) var(--bn-ease-spring) var(--bn-brand-mark-delay);
+}
+
 .bn-brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
 .bn-brand-name {
   font-family: var(--bn-font-display);
@@ -121,16 +207,26 @@
 .bn-nav[data-armed='true'] .bn-nav-link .bn-kbd { color: var(--bn-accent); border-color: var(--bn-accent); }
 .bn-nav-badge { margin-left: auto; }
 
-/* Rail (collapsed) */
+/* Rail (collapsed)
+
+   NOTHING IN HERE MAY CENTRE ITSELF IN THE SIDEBAR'S OWN WIDTH. `justify-content: center` and
+   `margin: 0 auto` resolve against a width that is ANIMATING for 320ms, so at frame 0 every
+   centred child jumped to the middle of a still-open column and slid back. Measured at 1440 on
+   ⌘.: the mark's centre went 36 -> 114.8 -> 31.5 and the nav icons went 33 -> 114.8 -> 32. A
+   rubber-band on every row, in the shipped product, and invisible in a screenshot because it only
+   exists between two resting states that are both correct.
+   The sidebar has a spine at x = 32 and the collapse is meant to delete everything to the right of
+   it while nothing travels. These rules pin to that spine instead: a left offset the animating
+   width cannot reach into. Same resting positions, to the pixel. */
 .bn-shell[data-rail='true'] .bn-side { padding: var(--bn-3) var(--bn-2); }
-.bn-shell[data-rail='true'] .bn-side .bn-brand { justify-content: center; padding: var(--bn-2) 0; }
+.bn-shell[data-rail='true'] .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
 .bn-shell[data-rail='true'] .bn-side .bn-brand-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link .bn-kbd,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-badge,
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot-text { display: none; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
-.bn-shell[data-rail='true'] .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; margin: 0 auto; }
+.bn-shell[data-rail='true'] .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; margin: 0; }
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot { align-items: center; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn { width: 40px; padding: 0; }
@@ -186,13 +282,20 @@
 /* ---- mobile top bar + sheet ------------------------------------------------ */
 .bn-topbar { display: none; }
 @media (min-width: 768px) and (max-width: 1023px) {
-  .bn-shell, .bn-shell[data-rail='true'] { grid-template-columns: var(--bn-rail-w) minmax(0, 1fr); }
+  /* the same switch, not a duplicated choreography — this breakpoint has no `data-rail` */
+  .bn-shell, .bn-shell[data-rail='true'] {
+    grid-template-columns: var(--bn-rail-w) minmax(0, 1fr);
+    --bn-brand-open: 0;
+    --bn-brand-roman-delay: 0ms; --bn-brand-kanji-delay: 40ms;
+    --bn-brand-bracket-delay: 40ms; --bn-brand-mark-delay: 200ms;
+  }
   .bn-side { padding: var(--bn-3) var(--bn-2); }
   .bn-side-collapse { display: none; }
-  .bn-side .bn-brand { justify-content: center; padding: var(--bn-2) 0; }
+  /* the spine, again — see the rail block above. This breakpoint has no `data-rail` at all. */
+  .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
   .bn-side .bn-brand-text, .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge, .bn-side .bn-side-foot-text { display: none; }
   .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
-  .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0 auto; }
+  .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0; }
   .bn-side .bn-nav-link[aria-current='page']::before { left: -8px; }
   .bn-side .bn-side-foot { align-items: center; }
   .bn-side .bn-side-foot .bn-btn { width: 44px; height: 44px; padding: 0; }
@@ -577,4 +680,11 @@
      eighteen lines long. */
   .app-keys-rows { gap: 9px var(--bn-3); }
   .app-keys-foot-end { display: none; }
+}
+
+
+/* A phone has no rail, and `Drawer` mounts INSIDE .bn-shell — so without this a user who collapsed
+   on desktop would inherit a railed switch into the mobile drawer's own brand row. */
+@media (max-width: 767px) {
+  .bn-shell, .bn-shell[data-rail='true'] { --bn-brand-open: 1; }
 }

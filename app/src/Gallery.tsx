@@ -6,7 +6,7 @@ import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
-import { Button, EmptyState, Icon, Kbd, Logo, Notice, Pill, Segmented, Stat, VARIANTS as LOGO_VARIANTS, type ButtonSize, type ButtonVariant, type IconName, type PillTone } from './kit'
+import { Button, EmptyState, Icon, Kbd, Lockup, Logo, Notice, Pill, Segmented, Stat, VARIANTS as LOGO_VARIANTS, type ButtonSize, type ButtonVariant, type IconName, type PillTone } from './kit'
 import { MARKS } from './kit/markPalettes'
 import { ICON_NAMES } from './kit/Icon'
 import './Gallery.css'
@@ -395,7 +395,7 @@ export function Gallery() {
             <Spec
               label="At the sizes it is drawn"
               wide
-              note={<>26 is the phone bar, 30 the drawer, 32 the sidebar and its rail, 40 both crash pages, 44 the puller&rsquo;s header. The mark is fixed dark in both themes on purpose &mdash; a light ground was derived and lost its silhouette (section 12).</>}
+              note={<>26 is the phone bar, 30 the drawer, 32 the sidebar&rsquo;s RAIL &mdash; the open sidebar draws the lockup now (section 16) &mdash; 40 both crash pages, 44 the puller&rsquo;s header. The mark is fixed dark in both themes on purpose &mdash; a light ground was derived and lost its silhouette (section 12).</>}
             >
               <div className="kit-marks kit-marks-tight">
                 {[16, 26, 30, 32, 40, 44, 64].map((px) => (
@@ -404,6 +404,42 @@ export function Gallery() {
                     <span className="kit-mark-name">{px}px</span>
                   </span>
                 ))}
+              </div>
+            </Spec>
+          </Section>
+
+          {/* ITS OWN SECTION, NOT A FOURTH SPEC INSIDE `mark`. Two tests in brand.spec.ts query
+              `[data-kit-section="mark"] svg[width="56"|"96"]` and count feTurbulence and the set
+              of stop-colors; a lockup inside that subtree at either width breaks both. */}
+          <Section
+            id="lockup"
+            title="The lockup"
+            lede="番地 over BANCHI inside the mark&rsquo;s own brackets — the expanded form, and the only place the product spells its name in two scripts. Every parameter was settled by forced choice over thirty-seven rounds (section 13); nothing here is drawn by hand."
+          >
+            <Spec
+              label="At the sizes it is drawn"
+              wide
+              note={<>The sidebar draws it at kanji 40 &mdash; a 128&times;93 block in 212px (section 16). Below kanji 32 it is not drawn at all: 番&rsquo;s counters close before the bracket does (section 11). The type is OUTLINED, so no font ships and it cannot fall back to another face.</>}
+            >
+              <div className="kit-marks">
+                {[32, 40, 56].map((px) => (
+                  <span key={px} className="kit-mark">
+                    <Lockup size={px} />
+                    <span className="kit-mark-name">kanji {px}</span>
+                  </span>
+                ))}
+              </div>
+            </Spec>
+            <Spec
+              label="On the dark ground"
+              wide
+              note={<>Section 16 gives the bracket <Code>bluesteel</Code>&rsquo;s own four-stop chrome on dark, so the lockup and the rail mark are one object in one metal; on light it is flat ink. The roman sits at 0.45 of the ink &mdash; under this product&rsquo;s own floor for a word, argued in section 13 rather than overlooked.</>}
+            >
+              {/* a real dark island rather than a dark rectangle: `data-theme` flips the tokens
+                  AND the bracket's fill, so this shows the treatment rather than a light lockup
+                  sitting on a dark ground */}
+              <div className="kit-marks kit-lockup-dark" data-theme="dark">
+                <span className="kit-mark"><Lockup size={40} /></span>
               </div>
             </Spec>
           </Section>

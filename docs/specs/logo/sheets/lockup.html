@@ -1,0 +1,359 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the lockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px;max-width:1560px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 18px;max-width:1060px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:26px 0 6px}
+ .note{font:400 11px system-ui;color:#8a919b;margin:0 0 10px;max-width:1060px}
+ .note b{color:#c2410c}
+ .strip{background:#fff;border-radius:14px;padding:22px 26px;display:flex;gap:26px;flex-wrap:wrap;align-items:flex-end}
+ .strip.dark{background:#0c0e12}
+ .strip.dark .cap{color:#8892a0}.strip.dark .num{color:#69727e}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+ .cap{font:600 10px system-ui;color:#5c636e;text-align:center}
+ .num{font:500 8.5px ui-monospace,monospace;color:#79808b;text-align:center;line-height:1.55}
+ .pick{background:#fffaf0;box-shadow:inset 0 0 0 2px #e0836a;border-radius:10px;padding:12px 10px}
+ .strip.dark .pick{background:#1a1410;box-shadow:inset 0 0 0 2px #7a4030}
+ svg{display:block}
+ table{border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:10px}
+ td,th{padding:5px 12px;text-align:right;border-bottom:1px solid #eef1f4}
+ th{text-align:left;color:#8a919b;font-weight:600}
+ td:first-child{text-align:left;color:#5c636e}
+</style>
+<div class="wrap">
+<h1>the lockup — 番地 over BANCHI</h1>
+<div class="sub">
+Section 3 has specified this since it was written and <b>nothing has ever drawn it</b>. The table there is four
+LOCKED values, two RANGED, and one instruction — <i>"tracked until it is exactly as wide as 番地"</i> — that has
+two different answers depending on what "as wide as" is measured on.
+<br><br>
+<b>Everything here is positioned by INK, never by line box.</b> Hiragino's font box is 88 up / 12 down on a
+100 em; Manrope's is 92 up / 23 down — 115 units on the same em. Stacking the two by their line boxes puts
+the optical centre in the wrong place by design, so every measurement below is
+<code>actualBoundingBox</code> taken from this machine's own fonts at render time and printed under the
+specimen it produced.
+</div>
+<div id="out"></div></div>
+<script>
+window.__sheetReady = false
+
+/* ---- measurement -----------------------------------------------------------------------------
+   Taken here rather than hard-coded, because the whole point is that the two faces disagree about
+   where their ink is. `advance` is what CSS lays out; `ink` is what the eye sees, and section 3's
+   "exactly as wide as 番地" does not say which one it means. Section 1 puts both up. */
+const KANJI = '番地', ROMAN = 'BANCHI'
+const KFACE = '"Hiragino Sans"', RFACE = 'Manrope'
+const c = document.createElement('canvas').getContext('2d')
+
+function measure(text, font){
+ c.font = font
+ const t = c.measureText(text)
+ return {advance:t.width, left:-t.actualBoundingBoxLeft, right:t.actualBoundingBoxRight,
+  ink:t.actualBoundingBoxRight+t.actualBoundingBoxLeft,
+  asc:t.actualBoundingBoxAscent, desc:t.actualBoundingBoxDescent,
+  height:t.actualBoundingBoxAscent+t.actualBoundingBoxDescent}
+}
+/* CSS letter-spacing is applied after EVERY glyph including the last, so the advance carries one
+   trailing unit of air the ink does not. That is the 7.7% the two answers differ by. */
+function tracked(text, font, em, track){
+ const m = measure(text, font)
+ const n = [...text].length
+ return {advance:m.advance + n*track*em, ink:m.ink + (n-1)*track*em,
+  left:m.left, asc:m.asc, desc:m.desc, height:m.height, per:track*em, n:n}
+}
+
+const K = 100                     // the kanji size everything is a fraction of
+const KTRACK = 0.07               // LOCKED
+const km = tracked(KANJI, `${K}px ${KFACE}`, K, KTRACK)
+
+/* The roman is tracked until it matches the kanji. Solve for the tracking that does it. */
+function romanFor(basis, ratio){
+ const size = K*ratio
+ const m = measure(ROMAN, `700 ${size}px ${RFACE}`)
+ const n = [...ROMAN].length
+ const target = basis === 'ink' ? km.ink : km.advance
+ // ink grows by (n-1) units, advance by n
+ const track = basis === 'ink' ? (target - m.ink)/(n-1) : (target - m.advance)/n
+ return {size, track, em:track/size, m, n,
+  ink:m.ink + (n-1)*track, advance:m.advance + n*track}
+}
+
+/* ---- the drawing ------------------------------------------------------------------------------ */
+/* THE BRACKET IS THE ICON'S, TAPERED. Lifted byte-identical from small-cut.html, which lifted it
+   from locked-set.html -- the same routine all eleven sheets carry. The first version of this
+   sheet drew a plain stroked path with round caps, which is the SMALL cut's construction and the
+   one the stale banchi-icon.svg used; a lockup is a 150px-and-up artifact, which is squarely the
+   DISPLAY cut's range, so it gets the variable-width taper and the end discs. Caught by the owner
+   on sight, 2026-09-05. */
+function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
+ const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=320,pts=[]
+ const tl=Math.max(tlf*Math.max(aX,aY),0.0001)
+ for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
+  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
+  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
+  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
+  const f=tip+(1-tip)*Math.min(Math.min(1,s/tl),Math.min(1,(L-s)/tl))
+  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
+ const q=function(v){return v.toFixed(3)}
+ const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
+ const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
+ return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
+   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
+  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+
+
+/* The untapered form is kept ONLY so the sheet can show what was wrong -- section 7's re-show
+   rule. It is never the answer. */
+function strokeBody(x, y, w, h, armF, r){
+ const aX = w*armF, aY = h*armF
+ const f = v => v.toFixed(2)
+ return `M${f(x)} ${f(y+aY)}V${f(y+r)}A${f(r)} ${f(r)} 0 0 1 ${f(x+r)} ${f(y)}H${f(x+aX)}`
+}
+
+function lockup(o){
+ o = o || {}
+ const basis = o.basis || 'ink'
+ const ratio = o.ratio === undefined ? 0.36 : o.ratio
+ const pad   = o.pad   === undefined ? 0.25 : o.pad      // of the kanji size
+ const gap   = o.gap   === undefined ? 0.03 : o.gap      // of the kanji size
+ /* 0.06 of the kanji size, NOT section 3's 0.11. Once the bracket is tapered, 0.11 draws a
+    crescent -- section 7's cross shows it. Section 3's 0.11 is the stroke-to-CONTENT-WIDTH answer
+    (the icon's is 0.0535 of its card's width; 0.11/2.0 = 0.055, near-identical) and the
+    stroke-to-FRAME-HEIGHT answer is 0.043 (the icon's is 0.0252 of its frame). The two agree for
+    the icon and disagree by 2.5x here, because the icon's frame is portrait and the lockup's is
+    landscape. The eye picks the frame answer. */
+ const stroke= (o.stroke === undefined ? 0.06 : o.stroke) * K
+ const arm   = o.arm   === undefined ? 0.32 : o.arm             // LOCKED
+ const rMul  = o.rMul  === undefined ? 2.2  : o.rMul            // HELD — nothing specifies it
+ const ink   = o.showInk
+ const R = romanFor(basis, ratio)
+
+ // The block, laid out by INK. Both lines are centred on the wider one's ink.
+ const blockW = Math.max(km.ink, R.ink)
+ const kx = (blockW - km.ink)/2, rx = (blockW - R.ink)/2
+ const kTop = 0
+ const rTop = km.height + gap*K
+ const blockH = rTop + R.m.height
+
+ const P = pad*K
+ const bx = -P, by = -P, bw = blockW + 2*P, bh = blockH + 2*P
+ const r = Math.min(rMul*stroke, Math.min(bw, bh)*arm*0.9)
+ const col = o.stroke0||'#0f1217'
+ let one
+ if(o.untapered){
+  one = `<path d="${strokeBody(bx, by, bw, bh, arm, r)}" fill="none" stroke="${col}" stroke-width="${stroke.toFixed(2)}" stroke-linecap="round"/>`
+ }else{
+  const tp = taperParts(bx, by, bw*arm, bh*arm, r, stroke, o.tip===undefined?0.07:o.tip, o.tl===undefined?0.3:o.tl)
+  one = `<path d="${tp.body}" fill="${col}"/>` + tp.caps.map(function(c){
+    return c[2]>0.02?`<circle cx="${c[0].toFixed(2)}" cy="${c[1].toFixed(2)}" r="${c[2].toFixed(2)}" fill="${col}"/>`:''}).join('')
+ }
+
+ const M = stroke                       // margin so the round caps are not clipped
+ const vb = `${(bx-M).toFixed(2)} ${(by-M).toFixed(2)} ${(bw+2*M).toFixed(2)} ${(bh+2*M).toFixed(2)}`
+ const cx = bx + bw/2, cy = by + bh/2
+ const guides = ink ? `
+  <rect x="${kx}" y="${kTop}" width="${km.ink}" height="${km.height}" fill="none" stroke="#e0836a" stroke-width="1" stroke-dasharray="3 3"/>
+  <rect x="${rx}" y="${rTop}" width="${R.ink}" height="${R.m.height}" fill="none" stroke="#3d5af1" stroke-width="1" stroke-dasharray="3 3"/>` : ''
+ return {
+  svg:`<svg viewBox="${vb}" width="${o.px||300}" xmlns="http://www.w3.org/2000/svg">${guides}
+   <text x="${(kx - km.left).toFixed(2)}" y="${(kTop + km.asc).toFixed(2)}" font-family=${JSON.stringify(KFACE.replace(/"/g,''))} font-size="${K}" letter-spacing="${(KTRACK*K).toFixed(3)}" fill="${o.ink0||'#0f1217'}">${KANJI}</text>
+   <text x="${(rx - R.m.left).toFixed(2)}" y="${(rTop + R.m.asc).toFixed(2)}" font-family="Manrope" font-weight="700" font-size="${R.size.toFixed(2)}" letter-spacing="${R.track.toFixed(3)}" fill="${o.ink0||'#0f1217'}">${ROMAN}</text>
+   ${one}<g transform="rotate(180 ${cx.toFixed(2)} ${cy.toFixed(2)})">${one}</g></svg>`,
+  R, blockW, blockH, bw, bh}
+}
+
+/* ---- the sheet -------------------------------------------------------------------------------- */
+const out = document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+function head(t,note){out.appendChild(el('h2',null,t));if(note)out.appendChild(el('div','note',note))}
+function strip(dark){const s=el('div','strip'+(dark?' dark':''));out.appendChild(s);return s}
+function cell(s,o,cap,num,pick){
+ const d=el('div','cell'+(pick?' pick':''))
+ const L=lockup(o); d.insertAdjacentHTML('beforeend',L.svg)
+ d.appendChild(el('div','cap',cap)); if(num)d.appendChild(el('div','num',num))
+ s.appendChild(d); return L}
+
+document.fonts.ready.then(function(){
+ /* ---- 0 · the measurement ------------------------------------------------------------------- */
+ head('0 · what this machine’s fonts actually measure',
+  'Section 7: <b>print the measurement</b>. Every number below is at kanji size 100, so each is also a '+
+  'fraction of the em. The two rows that matter are <code>advance</code> and <code>ink</code> for 番地 '+
+  'tracked — they differ by one trailing tracking unit, and section 3 does not say which one '+
+  '“exactly as wide” means.')
+ ;(function(){
+  const t=document.createElement('table')
+  const r=(a,b,c2)=>{const tr=document.createElement('tr')
+   ;[a,b,c2].forEach(function(v,i){const td=document.createElement(i?'td':'th');td.textContent=v;tr.appendChild(td)})
+   t.appendChild(tr)}
+  r('','番地 (Hiragino, 0.07em)','BANCHI (Manrope 700, 0.36)')
+  const R = romanFor('ink', 0.36)
+  r('advance', km.advance.toFixed(2), R.advance.toFixed(2))
+  r('ink width', km.ink.toFixed(2), R.ink.toFixed(2))
+  r('ink height', km.height.toFixed(2), R.m.height.toFixed(2))
+  r('ascent', km.asc.toFixed(2), R.m.asc.toFixed(2))
+  r('tracking solved', (KTRACK*K).toFixed(2)+' (locked)', R.track.toFixed(2)+' = '+R.em.toFixed(3)+'em')
+  const s=el('div','strip'); s.appendChild(t); out.appendChild(s)})()
+
+ /* ---- 1 · the basis ------------------------------------------------------------------------- */
+ head('1 · the forced choice section 3 left open: ink, or advance?',
+  '“Tracked until it is exactly as wide as 番地.” Matched on <b>ink</b>, the two lines’ visible '+
+  'edges align. Matched on <b>advance</b>, the roman is one trailing tracking unit wider than the kanji '+
+  'looks — and since that unit is empty air after the last glyph, the roman overhangs on both sides. '+
+  'Dashed boxes are the measured ink of each line.')
+ ;(function(){const s=strip()
+  ;['ink','advance'].forEach(function(b){
+   const L=lockup({basis:b, showInk:true, px:330})
+   const d=el('div','cell'+(b==='ink'?' pick':'')); d.insertAdjacentHTML('beforeend',L.svg)
+   d.appendChild(el('div','cap','matched on '+b))
+   d.appendChild(el('div','num','roman tracking '+L.R.em.toFixed(3)+'em<br>roman ink '+L.R.ink.toFixed(1)+' vs kanji ink '+km.ink.toFixed(1)))
+   s.appendChild(d)})})()
+
+ /* ---- 2 · the roman size --------------------------------------------------------------------- */
+ head('2 · the roman size, against the locked 0.36',
+  'Section 3 locks 0.36x the kanji. Bracketed so both ends fail — section 7 rule 2: at 0.24 the roman '+
+  'needs so much tracking to reach the kanji’s width that it stops being a word, and at 0.52 it stops '+
+  'being subordinate and competes with the kanji. The tracking each one needs is printed, because that is '+
+  'the quantity that actually breaks.')
+ ;(function(){const s=strip()
+  ;[0.24,0.30,0.36,0.42,0.52].forEach(function(v){
+   const L=lockup({ratio:v, px:250})
+   const d=el('div','cell'+(v===0.36?' pick':'')); d.insertAdjacentHTML('beforeend',L.svg)
+   d.appendChild(el('div','cap',v.toFixed(2)+(v===0.36?' — §3':'')))
+   d.appendChild(el('div','num','tracking '+L.R.em.toFixed(3)+'em'))
+   s.appendChild(d)})})()
+
+ /* ---- 3 · padding, the 4x lever --------------------------------------------------------------- */
+ head('3 · padding — the lever that is four times the other one',
+  'Section 3: RANGED 0.22–0.28, and “three rounds were spent tuning the wrong parameter” because '+
+  'padding moves the block four times as far as the line gap does. Bracketed past both ends of that range.')
+ ;(function(){const s=strip()
+  ;[0.16,0.22,0.25,0.28,0.36].forEach(function(v){
+   const L=lockup({pad:v, px:250})
+   const d=el('div','cell'+(v===0.25?' pick':'')); d.insertAdjacentHTML('beforeend',L.svg)
+   d.appendChild(el('div','cap',v.toFixed(2)+(v>=0.22&&v<=0.28?' — in range':'')))
+   d.appendChild(el('div','num','box '+L.bw.toFixed(0)+' × '+L.bh.toFixed(0)))
+   s.appendChild(d)})})()
+
+ /* ---- 4 · the line gap ------------------------------------------------------------------------ */
+ head('4 · the line gap — RANGED 0.09 to −0.03, and it is the weak lever',
+  'Shown at the same scale as section 3 so the two levers can be compared honestly. If this row reads as '+
+  '“about the same”, that is a result — section 7 rule 7 — and the gap should be set once '+
+  'and never swept again.')
+ ;(function(){const s=strip()
+  ;[-0.03,0.0,0.045,0.09,0.16].forEach(function(v){
+   const L=lockup({gap:v, px:250})
+   const d=el('div','cell'+(v>=-0.03&&v<=0.09?' pick':'')); d.insertAdjacentHTML('beforeend',L.svg)
+   d.appendChild(el('div','cap',v.toFixed(3)+(v>=-0.03&&v<=0.09?' — in range':'')))
+   d.appendChild(el('div','num','box '+L.bw.toFixed(0)+' × '+L.bh.toFixed(0)))
+   s.appendChild(d)})})()
+
+ /* ---- 5 · the corner radius, which nothing specifies ------------------------------------------ */
+ head('5 · the bracket corner radius — a HELD value section 3 never names',
+  'The icon’s radius is 8 in a 100 box and section 5 records that it left its derivation deliberately. '+
+  'The lockup’s box is a different shape entirely, so the icon’s number cannot simply travel. This is '+
+  'the sheet’s own HELD value and it is named rather than buried — section 3’s four unexamined HELDs '+
+  'are what that tagging exists to prevent.')
+ ;(function(){const s=strip()
+  ;[1.0,1.6,2.2,3.0,4.2].forEach(function(v){
+   const L=lockup({rMul:v, px:250})
+   const d=el('div','cell'+(v===2.2?' pick':'')); d.insertAdjacentHTML('beforeend',L.svg)
+   d.appendChild(el('div','cap',v.toFixed(1)+'× stroke'))
+   d.appendChild(el('div','num','r = '+(v*0.11*K).toFixed(1)))
+   s.appendChild(d)})})()
+
+ /* ---- 6 · dark, and at size ------------------------------------------------------------------- */
+ head('6 · dark mode, and the sizes a lockup is actually used at',
+  'Section 3 locks a dark-mode stroke of <b>×0.93</b>, because a light stroke on a dark ground optically '+
+  'thickens. Both are shown; if the correction is right the two strokes should read as the same weight.')
+ ;(function(){
+  const light=strip(false)
+  ;[420,260,150,96].forEach(function(px){
+   const d=el('div','cell'); d.insertAdjacentHTML('beforeend',lockup({px:px}).svg)
+   d.appendChild(el('div','cap',px+'px wide')); light.appendChild(d)})
+  const dark=strip(true)
+  ;[420,260,150,96].forEach(function(px){
+   const d=el('div','cell')
+   d.insertAdjacentHTML('beforeend',lockup({px:px, ink0:'#eef0f4', stroke0:'#eef0f4', stroke:0.11*0.93}).svg)
+   d.appendChild(el('div','cap',px+'px · stroke ×0.93')); dark.appendChild(d)})})()
+
+
+ /* ---- 7 · the bracket weight, crossed with the taper -------------------------------------- */
+ head('7 · the bracket, tapered — stroke crossed with taper length',
+  'The first render of this sheet drew the bracket as a plain stroked path, which is the SMALL '+
+  'cut’s construction. Corrected to the icon’s tapered outline, §3’s locked 0.11 reads as a '+
+  '<b>claw</b> rather than the icon’s wire — and the arithmetic says why. The icon’s stroke is '+
+  '0.0252 of its frame height and 0.0535 of its content width; those two invariants agree for the '+
+  'icon because its frame is portrait (0.812), and they disagree by 2.5x for the lockup because its '+
+  'frame is landscape (1.463). §3’s 0.11 is the content-width answer almost exactly (0.106). The '+
+  'frame-height answer is <b>0.043</b>. Crossed with taper length because they interact — a long '+
+  'ramp on a heavy stroke is what makes the crescent — which is §7 rule 6’s named exception.')
+ ;(function(){
+  const STROKES=[0.043,0.06,0.08,0.11,0.14], TLS=[0.15,0.30,0.50]
+  TLS.forEach(function(tl){
+   out.appendChild(el('div','note','taper length '+tl.toFixed(2)+' of the arm'+(tl===0.30?' — the icon’s':'')))
+   const s2=strip()
+   STROKES.forEach(function(w){
+    const d=el('div','cell'+(w===0.11?' pick':''))
+    const L=lockup({stroke:w, tl:tl, px:225}); d.insertAdjacentHTML('beforeend',L.svg)
+    d.appendChild(el('div','cap',w.toFixed(3)+(w===0.11?' — §3':w===0.043?' — frame-matched':'')))
+    d.appendChild(el('div','num','stroke '+(w*100).toFixed(1)+'  ·  '+(w/0.0252/1.7*100*0.0252).toFixed(2)+'x icon'))
+    s2.appendChild(d)})})})()
+
+ out.appendChild(el('div','note','And the construction that was wrong, kept per §7’s re-show rule: '+
+  'the untapered stroked path this sheet drew first, beside the tapered one at the same weight.'))
+ ;(function(){const s2=strip()
+  ;[[true,'untapered — the small cut’s construction, wrong here'],[false,'tapered — the icon’s']].forEach(function(c){
+   const d=el('div','cell'+(c[0]?'':' pick')); d.insertAdjacentHTML('beforeend',lockup({untapered:c[0], px:300}).svg)
+   d.appendChild(el('div','cap',c[1])); s2.appendChild(d)})})()
+
+
+ /* ---- 8 · the rail --------------------------------------------------------------------------- */
+ head('8 · the rail — bare brackets, and whether they survive being 44px',
+  'The sidebar is 236px open and 64px closed, so the lockup collapses to something about 44px. '+
+  '<b>The bare brackets are what §1 says the mark is</b> — “with the card removed the same brackets '+
+  'become an empty slot, which is the in-product mark.” The question is only whether they read at '+
+  'that size, and the answer is a weight. Rasterised at true size and magnified by PIXEL, per §11: '+
+  'scaling the vector would flatter it.')
+ ;(function(){
+  const jobs2=[]
+  function railRaster(px, zoom, stroke){
+   const c=document.createElement('canvas')
+   c.width=px*zoom; c.height=px*zoom
+   c.style.width=(px*zoom)+'px'; c.style.height=(px*zoom)+'px'; c.style.imageRendering='pixelated'
+   /* a square frame, the rail's own proportion, with nothing inside it */
+   const S=100, P=8, bw=S-2*P, bh=S-2*P
+   /* The corner radius is a proportion of the FRAME, not a multiple of the stroke. Tying it to
+      the stroke made the heavy end a crescent with no straight arm left -- at 0.20 the radius was
+      44 units in a 100 box. The icon's is 8 in a 54.8-wide frame, so 0.146. */
+   const tp=taperParts(P,P,bw*0.32,bh*0.32,bw*0.146,stroke*S,0.07,0.3)
+   const one='<path d="'+tp.body+'" fill="#eef0f4"/>'+tp.caps.map(function(cc){
+     return cc[2]>0.02?'<circle cx="'+cc[0].toFixed(2)+'" cy="'+cc[1].toFixed(2)+'" r="'+cc[2].toFixed(2)+'" fill="#eef0f4"/>':''}).join('')
+   const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+one+'<g transform="rotate(180 50 50)">'+one+'</g></svg>'
+   jobs2.push(new Promise(function(res){
+    const img=new Image()
+    img.onload=function(){const a=document.createElement('canvas');a.width=px;a.height=px
+     const ac=a.getContext('2d'); ac.fillStyle='#0c0e12'; ac.fillRect(0,0,px,px); ac.drawImage(img,0,0,px,px)
+     const g=c.getContext('2d'); g.imageSmoothingEnabled=false; g.drawImage(a,0,0,px*zoom,px*zoom); res()}
+    img.onerror=function(){res()}
+    img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)}))
+   return c}
+  ;[[44,4],[64,3]].forEach(function(pair){
+   out.appendChild(el('div','note','at '+pair[0]+'px, magnified x'+pair[1]+' — the actual pixel grid'))
+   const s2=strip(true)
+   ;[0.05,0.08,0.11,0.15,0.20].forEach(function(w){
+    const d=el('div','cell'+(w===0.11?' pick':''))
+    d.appendChild(railRaster(pair[0],pair[1],w))
+    d.appendChild(el('div','cap',w.toFixed(2)+' of the frame'))
+    d.appendChild(el('div','num','stroke '+(w*100).toFixed(0)+' in a 100 box'))
+    s2.appendChild(d)})})
+  Promise.all(jobs2).then(function(){})})()
+
+ window.__sheetReady = true
+})
+</script>

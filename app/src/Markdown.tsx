@@ -8,10 +8,18 @@ import {
   fetchLiveExport,
   markdownFileUrl,
   markdownListings,
+  publishMarkdown,
+  pushMarkdown,
   type Failure,
 } from './server'
 import { readUpload } from './csvUpload'
-import type { CsvUpload, LiveExportFetched, MarkdownAnswer, MarkdownSummary } from './types'
+import type {
+  CsvUpload,
+  LiveExportFetched,
+  MarkdownAnswer,
+  MarkdownPush,
+  MarkdownSummary,
+} from './types'
 import { Button, Icon, Notice } from './kit'
 import { toast } from './kit/toast'
 import { DropZone, FileButton } from './RunsDrop'
@@ -19,28 +27,30 @@ import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
 import './Markdown.css'
 
-/* THE STALE-LISTING MARKDOWN (D100), as a sheet off the Runs header — the second one, beside
- * the store-wide reconcile it is a sibling of.
+/* THE STALE-LISTING MARKDOWN (D100), as a sheet mounted inside `#/pricing` (D105).
  *
- * A SHEET AND NOT A ROUTE, WHICH IS NOW A JUDGEMENT RATHER THAN A CAPACITY REFUSAL. D100 was
+ * A SHEET AND NOT A ROUTE, WHICH IS A JUDGEMENT RATHER THAN A CAPACITY REFUSAL. D100 was
  * argued against a shell that drew its nav as one horizontal strip and could not hold an
  * eleventh link at 1,440px; D95 replaced that with a sidebar, and `App.tsx`'s ROUTES table
- * carries this session's own re-measurement of what a tenth link would cost there. The reason
- * it stays here is the one that was always the better half of D100's argument: this and the
- * store-wide reconcile read the SAME FILE — TCGplayer's My Pricing export — and the order is
- * the order of the work. Settle what TCGplayer holds, then decide about the part of it that
- * is not moving.
+ * carries the re-measurement of what a tenth link would cost there. It would fit. What keeps
+ * this a sheet is that the lens already has an address — `#/pricing?markdown=<stamp>` — so a
+ * second pricing route would be two screens for one job.
  *
- * THREE STEPS, AND EACH PRESS IS ABSENT UNTIL THE ONE BEFORE IT HAS ANSWERED. D33's rule for
- * the control that spends, applied to the one that publishes prices: a button that exists
- * before there is anything to read is a button pressed before anything was read. The footer
- * carries whichever of the three is next, which is `LiveReconcile`'s footer generalised — it
- * has one step and this has three.
+ * FOUR STEPS, AND EACH PRESS IS ABSENT UNTIL THE ONE BEFORE IT HAS ANSWERED. D33's rule for
+ * the control that spends, applied twice more: a button that exists before there is anything
+ * to read is a button pressed before anything was read.
  *
- *   1. Upload the My Pricing export. Free, writes nothing, reports what would move.
+ *   1. Read the My Pricing export — fetched, or dropped. Free, writes nothing, reports what
+ *      would move.
  *   2. Write the worklist. A file, on this machine, uploaded nowhere.
  *   3. Hand the worklist back — edited in a spreadsheet, or untouched — and write the import
- *      CSV. That is the file the operator uploads to TCGplayer.
+ *      CSV, then send it to TCGplayer's STAGED inventory, which no buyer can see.
+ *   4. Move that staged upload LIVE. **The only press in this product a buyer can see.**
+ *
+ * STEPS 3 AND 4 ARE TWO PRESSES AND MUST STAY TWO. On 2026-09-06 a session drove TCGplayer's
+ * own importer as a dry run with a guard that failed open, and pushed 100 real rows by
+ * accident; the only reason that cost nothing is that staging is not publishing. Collapsing
+ * these into one button would spend that margin.
  *
  * THE STDOUT IS THE RECEIPT (D33), and it is in a `LogWell` rather than a bare `<pre>` so it
  * folds, counts its lines and copies. Summarising the command's report here would be a second
@@ -133,6 +143,16 @@ export function Markdown({
   const [wroteImport, setWroteImport] = useState(false)
   const [history, setHistory] = useState<MarkdownSummary[]>([])
 
+  /** What TCGplayer is holding staged for THIS markdown, or null for nothing yet.
+   *
+   *  IT CARRIES `published_at` RATHER THAN A SECOND BOOLEAN, because the receipt on the server
+   *  is the same shape and a screen that kept its own flag could disagree with it after a
+   *  reload. Null / staged / published is one value with three readings. */
+  const [pushed, setPushed] = useState<MarkdownPush['pushed'] | null>(null)
+  /** Which of the two outbound presses is in flight. NOT a boolean: both buttons can be on
+   *  screen at once and only the one that was pressed may spin. */
+  const [sending, setSending] = useState<'push' | 'publish' | null>(null)
+
   /* WHAT WAS PICKED, IN STATE RATHER THAN OFF THE REF BELOW. The drop zone draws the file's
      name and the re-read control only exists once there is a file to re-read; a ref answers
      neither question, because writing one renders nothing. */
@@ -178,6 +198,20 @@ export function Markdown({
       .then((answer) => setHistory(answer.markdowns))
       .catch(() => setHistory([]))
   }, [])
+
+  /* WHAT TCGPLAYER IS HOLDING, RESTORED FROM THE SERVER'S OWN RECEIPT.
+   *
+   * A PUSH IS A SERVER WRITE AND THIS IS ITS WAY BACK. Without it, an operator who pushed and
+   * then reloaded — or reopened the sheet — would have rows staged at TCGplayer and no control
+   * here able to publish them, which is precisely the state `make screen-freshness` exists to
+   * refuse. The list is the source and this screen never keeps its own copy: `published_at` is
+   * what the publish route latches on, so a local flag that disagreed would offer a second
+   * move of rows already moved. */
+  useEffect(() => {
+    if (stamp === null) return
+    const row = history.find((entry) => entry.stamp === stamp)
+    if (row !== undefined) setPushed(row.pushed ?? null)
+  }, [history, stamp])
 
   /* GATED ON `open`, BECAUSE THIS SHEET IS ALWAYS MOUNTED. `Runs.tsx` renders it
      unconditionally and hides it with `hidden={!open}`, so an ungated effect fired
@@ -305,6 +339,46 @@ export function Markdown({
     [refresh, stamp, revision, onCorpusWritten],
   )
 
+  /** Send `import.csv` to TCGplayer's staged inventory.
+   *
+   *  NO OPTIMISM. `pushed` is set from what the server reports and never from what was asked
+   *  for: TCGplayer answers with its OWN count of rows it took, and a screen that assumed the
+   *  file's row count would say "12 staged" over an upload it had accepted 9 of.
+   */
+  const push = useCallback(async () => {
+    if (stamp === null) return
+    setSending('push')
+    setFailure(null)
+    try {
+      const answer = await pushMarkdown(stamp)
+      setPushed(answer.pushed)
+    } catch (caught) {
+      setFailure(describeFailure(caught))
+    } finally {
+      setSending(null)
+    }
+  }, [stamp])
+
+  /** Move that staged upload live. THE ONE PRESS IN THIS APP A BUYER CAN SEE.
+   *
+   *  IT SENDS NO UPLOAD ID — the server reads it off its own receipt, so what publishes is
+   *  what this markdown staged and cannot be steered from here.
+   */
+  const publish = useCallback(async () => {
+    if (stamp === null) return
+    setSending('publish')
+    setFailure(null)
+    try {
+      const answer = await publishMarkdown(stamp)
+      setPushed(answer.published)
+      refresh()
+    } catch (caught) {
+      setFailure(describeFailure(caught))
+    } finally {
+      setSending(null)
+    }
+  }, [refresh, stamp])
+
   /* Picking an export starts over: a survey about one file and a worklist written from
      another is the straddle this whole sheet is arranged to prevent. */
   const takeExport = useCallback(
@@ -315,6 +389,10 @@ export function Markdown({
       setApplied(null)
       setStamp(null)
       setWroteImport(false)
+      /* AND WHAT WAS STAGED, because `pushed` is about ONE markdown's upload and picking a new
+         export starts a different one. Left standing, step 4 would offer to publish the
+         previous markdown's rows under this one's heading. */
+      setPushed(null)
       setFailure(null)
       setExportName(file.name)
       /* ONE DOCUMENT AT A TIME. The route refuses a request carrying both, so the screen must
@@ -714,18 +792,88 @@ export function Markdown({
                   />
                   {wroteImport ? (
                     <>
-                      <Notice tone="ok" title="Ready to upload">
-                        Upload this through TCGplayer&rsquo;s My Pricing. It carries{' '}
-                        <code className="bn-code">Add to Quantity</code> of 0 on every row.
+                      {/* THE DOWNLOAD STAYS, AND IT IS NOT A FALLBACK. The file is the evidence
+                          for what the push sent, and an operator who would rather upload it by
+                          hand through My Pricing should not have to undo a button to do it —
+                          the same argument D104 makes for keeping the upload door open beside
+                          the fetch. */}
+                      <Notice tone="ok" title="Ready to send">
+                        This carries <code className="bn-code">Add to Quantity</code> of 0 on
+                        every row, so it changes prices and cannot move a single copy.
                       </Notice>
                       <div className="markdown-row">
                         <a className="bn-btn" href={markdownFileUrl(stamp, IMPORT)} download={IMPORT}>
                           <Icon name="download" size={16} />
                           {IMPORT}
                         </a>
+                        {pushed === null ? (
+                          <Button
+                            variant="primary"
+                            icon="upload"
+                            busy={sending === 'push'}
+                            disabled={busy}
+                            onClick={push}
+                          >
+                            Push to staged
+                          </Button>
+                        ) : null}
+                        <span className="markdown-hint">
+                          {pushed === null
+                            ? 'Staged is your own copy of the store — no buyer sees it.'
+                            : null}
+                        </span>
                       </div>
                     </>
                   ) : null}
+
+                  {/* STEP 4 EXISTS ONLY ONCE SOMETHING IS STAGED, which is D33's gate applied a
+                      third time: a press that changes what buyers pay must not be on screen
+                      before the thing it would publish exists. */}
+                  {pushed === null ? null : (
+                    <div className="markdown-publish">
+                      <h3 className="bn-section-title">4 · Go live</h3>
+                      {pushed.published_at ? (
+                        <Notice tone="ok" title="Live at TCGplayer">
+                          {pushed.accepted} price{pushed.accepted === 1 ? '' : 's'} moved live at{' '}
+                          {pushed.published_at}. Read them back with{' '}
+                          <strong>Reconcile the store</strong> on Runs.
+                        </Notice>
+                      ) : (
+                        <>
+                          <Notice tone="warn" title="This changes what buyers pay">
+                            TCGplayer is holding {pushed.accepted} price
+                            {pushed.accepted === 1 ? '' : 's'} in your Staged inventory
+                            {pushed.accepted === pushed.rows ? '' : ` of the ${pushed.rows} sent`}.
+                            Publishing moves those and nothing else. It is the only press in this
+                            app that a buyer can see.
+                          </Notice>
+                          {pushed.messages.length === 0 ? null : (
+                            <LogWell
+                              text={pushed.messages.join('\n')}
+                              label="What TCGplayer said about these rows"
+                              className="markdown-console"
+                              maxHeight={200}
+                            />
+                          )}
+                          <div className="markdown-row">
+                            <Button
+                              variant="danger"
+                              icon="zap"
+                              busy={sending === 'publish'}
+                              disabled={busy}
+                              onClick={publish}
+                            >
+                              Move {pushed.accepted} live
+                            </Button>
+                            <span className="markdown-hint">
+                              There is no undo at TCGplayer. Another markdown is how a price
+                              goes back.
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </section>

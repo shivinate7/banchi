@@ -11,8 +11,11 @@ BOTH HALVES ARE NOW FALSE OF THIS MODULE OUTRIGHT (D64). `POST /pipeline/runs/<n
 reads the TCGplayer session cookie out of `.env` and fetches the operator's own Filtered
 Export from `store.tcgplayer.com` — a secret, and a socket, in the file that used to be able
 to say it had neither. What replaces THAT promise is stated where the call lives
-(`server/tcg_export.py`) and is short: one host, one method, one route, and it cannot cause a
-charge. The route that can is still `POST /pipeline/identify` and is still named for it.
+(`server/tcg_export.py`) and is short: one host, three routes, all of them reads, and it
+cannot cause a charge. This sentence said *one method, one route* until 2026-09-06, having
+been copied from that file's own bullet on the day D65 made it false there; the count lives
+in one place now and `make docs-audit`'s `transport promise` row is what keeps it there. The
+route that can spend is still `POST /pipeline/identify` and is still named for it.
 
 The owner asked for exactly this: *"how do i get api calls/pushing from our localhost
 server so that i can actually push runs at box/section/whatever-level i want, get data
@@ -120,6 +123,7 @@ from pipeline import corpus, decisions, games as game_registry, join, reprice, t
 # got a matter of where in the function you were standing.
 from pipeline import pricing as pricing_mod  # noqa: E402
 from server import tcg_export  # noqa: E402
+from server import tcg_import  # noqa: E402
 # STDLIB-ONLY AT MODULE SCOPE, LIKE EVERY OTHER IMPORT HERE. `pipeline/pricehistory.py`
 # reaches `json`, `time`, `urllib`, `dataclasses`, `datetime`, `decimal` and `pathlib`
 # and nothing else — verified under bare `/usr/bin/python3`, which is what the Makefile
@@ -2016,6 +2020,13 @@ def _markdown_summary(stamp: str) -> dict:
         "files": [
             row["name"] for row in _artefacts(directory)
         ],
+        # WHAT TCGPLAYER IS HOLDING FOR THIS MARKDOWN, so a reload has a way back to it. The
+        # push receipt is a server write, and CLAUDE.md's rule is that every server write has
+        # a way back — without this, an operator who pushed and then reloaded would have rows
+        # staged at TCGplayer and no control in this app that could publish them. Read off
+        # disk on every list, never cached: `published_at` is what the publish route latches
+        # on, and a stale copy of it would offer a second move of rows already moved.
+        "pushed": _read_push(directory),
     }
 
 
@@ -2530,6 +2541,134 @@ def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
     target = directory / filename
     kind = "text/csv" if target.suffix == ".csv" else "text/plain; charset=utf-8"
     return target.read_bytes(), kind
+
+
+# ------------------------------------------------------------- the push to TCGplayer
+
+
+def do_markdown_push(stamp: str, payload: dict) -> dict:
+    """`POST /pipeline/markdowns/<stamp>/push` — the import file, into TCGplayer's STAGED.
+
+    THIS IS THE SECOND ROUTE IN THIS SERVER THAT REACHES THE OUTSIDE WORLD AND CHANGES
+    SOMETHING THERE, and the first one that is not a download. `POST /pipeline/identify` can
+    spend money (D33) and is named for it; this one can change what the operator's storefront
+    holds, so it is named for that and lives here beside its sibling rather than being folded
+    into `apply`.
+
+    NOTHING A BUYER CAN SEE CHANGES. Staged is the operator's own working copy — measured
+    2026-09-06, a 100-row push moved 0 of 759 live prices and 0 live quantities. Publishing is
+    `do_markdown_publish` below, and it is a separate press on purpose: the whole reason that
+    day's accidental upload was survivable is that these two are not one button.
+
+    IT PUSHES THE FILE, NOT THE STORE. `import.csv` is what the operator can open, download and
+    diff, so it is what goes; re-deriving the rows from the corpus here would mean the thing
+    uploaded is not the thing on screen.
+    """
+    directory = _open_markdown(stamp)
+    target = directory / cmd_reprice.IMPORT
+    if not target.exists():
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "no_import_file",
+            f"Markdown {stamp} has no {cmd_reprice.IMPORT} to push. Answer step 3 first — "
+            f"`reprice apply --write` is what writes it.",
+        )
+    if not bool(payload.get("confirm")):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "A push to TCGplayer is not a preview. Send `confirm` once the operator has "
+            "pressed it; nothing was sent.",
+        )
+    rows = tcg_import.rows_from_csv(target.read_text(encoding="utf-8"))
+    try:
+        pushed = tcg_import.push_to_staged(rows, filename=cmd_reprice.IMPORT)
+    except tcg_import.FetchRefusal as refusal:
+        raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, refusal.code, refusal.message) from None
+    _record_push(directory, pushed)
+    return {"pushed": pushed.as_dict(), "stamp": stamp}
+
+
+def do_markdown_publish(stamp: str, payload: dict) -> dict:
+    """`POST /pipeline/markdowns/<stamp>/publish` — move THIS upload's staged prices to live.
+
+    **THIS CHANGES WHAT BUYERS PAY.** It is the only route in this server that does, and the
+    refusals below are shaped by that rather than by symmetry with its neighbours.
+
+    THE UPLOAD ID COMES OFF DISK AND NEVER OFF THE REQUEST. A client-supplied id would let a
+    mistyped or replayed body publish an upload this markdown never made — and `scope` is
+    fixed at "this upload" in `server/tcg_import.py` for the same reason, so the id IS the
+    scope. `push.json` is written by the push above and is the only place this is read from.
+    """
+    directory = _open_markdown(stamp)
+    record = _read_push(directory)
+    if record is None:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "nothing_staged",
+            f"Markdown {stamp} has not been pushed to TCGplayer, so there is no staged upload "
+            f"to publish. Push it first; nothing was sent.",
+        )
+    if record.get("published_at"):
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "already_published",
+            f"That upload was already moved to live at {record['published_at']}. Publishing it "
+            f"again would be a second move of rows TCGplayer no longer holds staged; nothing "
+            f"was sent.",
+        )
+    if not bool(payload.get("confirm")):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "confirm_required",
+            "Moving prices to live is not a preview. Send `confirm` once the operator has "
+            "pressed it; nothing was sent.",
+        )
+    try:
+        answer = tcg_import.move_to_live(str(record["upload_id"]))
+    except tcg_import.FetchRefusal as refusal:
+        raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, refusal.code, refusal.message) from None
+    record["published_at"] = _now_iso()
+    record["result"] = answer
+    _write_push(directory, record)
+    return {"published": record, "stamp": stamp}
+
+
+PUSH_RECORD = "push.json"
+
+
+def _now_iso() -> str:
+    """UTC, to the second. The same stamp shape every other receipt in this module writes."""
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _record_push(directory: Path, pushed: "tcg_import.StagedUpload") -> None:
+    """The receipt for a push, beside the file that was pushed.
+
+    IT LIVES IN THE MARKDOWN DIRECTORY because that is what the run directory already is: the
+    immutable record of one operation. The upload id is what `publish` scopes to and what a
+    rollback would need, so losing it would leave a staged upload nothing here can name.
+    """
+    record = pushed.as_dict()
+    record["pushed_at"] = _now_iso()
+    record["published_at"] = None
+    _write_push(directory, record)
+
+
+def _write_push(directory: Path, record: dict) -> None:
+    (directory / PUSH_RECORD).write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _read_push(directory: Path) -> Optional[dict]:
+    target = directory / PUSH_RECORD
+    if not target.exists():
+        return None
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
 
 
 # ------------------------------------------------------------------ the pricing corpus
@@ -3413,7 +3552,11 @@ def do_tcg_sets(game: str) -> dict:
     entry = game_registry.get(game) or {}
     category = entry.get("tcgplayer_category_id")
     if not category:
-        return {"game": game, "sets": [], "reason": "no_category"}
+        # NOT A TRANSPORT REFUSAL AND SO NOT A TRANSPORT SENTENCE. Nothing was fetched:
+        # this game carries no `tcgplayer_category_id`, which is a fact about
+        # `pipeline/games.py` rather than about the portal, and the screen says so in
+        # its own words. The key is present and null for the one-shape rule above.
+        return {"game": game, "sets": [], "reason": "no_category", "message": None}
     category = int(category)
     if category not in _SETS_CACHE:
         try:
@@ -3422,7 +3565,24 @@ def do_tcg_sets(game: str) -> dict:
             # NOT AN ERROR TO THE SCREEN. The operator is mid-capture; a refusal here is a
             # missing convenience, not a failed capture, and the reason is carried so the
             # screen can say why the list is empty rather than pretending the game has no sets.
-            return {"game": game, "sets": [], "reason": caught.code}
+            #
+            # AND THE SENTENCE TRAVELS WITH IT, WHICH IT DID NOT UNTIL 2026-09-06. This was
+            # the one refusal path of four that kept the code and dropped `message` — the
+            # other three (`do_pipeline_export`, `do_live_export`, `do_run_scope`) all carry
+            # it — and it is the one whose consumer re-labels from a map. `hintReason` named
+            # two of the NINE codes `tcg_export.filters` can raise, so seven fell to that
+            # map's unknown-code tail.
+            #
+            # THE TAIL IS A DESIGN AND THE MAP IS THE FIX. `CaptureScreen.tsx` argues the
+            # bare code deliberately — docs/DESIGN.md shows reason codes beside names, so
+            # what the operator saw stays greppable — and that argument is older than this
+            # comment. What was wrong was seven of nine landing on it. The map is wide now,
+            # `make docs-audit`'s `hint reasons` row keeps it wide, and this key is the layer
+            # between the two: words instead of a bare token for a code the map has not
+            # caught up with. NOT what the operator normally reads, and the screen must not
+            # let it become that — the sentences below name `.env`, and that screen does
+            # not.
+            return {"game": game, "sets": [], "reason": caught.code, "message": caught.message}
         _SETS_CACHE[category] = [
             {"name": str(row.get("Text") or ""), "id": str(row.get("Value") or "")}
             for row in (vocabulary.get("Sets") or [])
@@ -3436,6 +3596,9 @@ def do_tcg_sets(game: str) -> dict:
         # either. A hint stored as an alias still resolves — `match_sets` folds it first.
         "aliases": {str(k): str(v) for k, v in aliases.items()},
         "reason": None,
+        # ALWAYS PRESENT, NULL ON SUCCESS, so the client reads one shape rather than probing
+        # for a key. `previous` in the export receipt is the same rule.
+        "message": None,
     }
 
 
