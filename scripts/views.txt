@@ -16,12 +16,28 @@
 #
 # THE GALLERY WAS THE EXCEPTION IN THIS SENTENCE UNTIL 2026-09-06, AND IT WAS NOT ONE. It is
 # the kit sheet, so nothing on it fetches DATA — but `Gallery.tsx`'s `CardLocations` specimens
-# carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the component draws a photo by
+# carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the component drew a photo by
 # calling `photoUrl(box, index)`. Rendered here with the main tree's server up, the component
-# sheet therefore shows FOUR REAL CARDS out of boxes 3, 4 and 7, and shows different ones as
-# those boxes change. The shell polls `/status` over it besides. Found by sealing the capture
-# port in `app/tests/shell.ts`, which stubs both for the specs; nothing stubs anything here,
-# so this line is a warning rather than a fix.
+# sheet therefore showed FOUR REAL CARDS out of boxes 3, 4 and 7, and showed different ones as
+# those boxes changed. Found by sealing the capture port in `app/tests/shell.ts`, which stubs
+# both for the specs; nothing stubs anything here, so this paragraph was a warning rather than
+# a fix.
+#
+# IT IS A FIX NOW, AND THE ACCOUNT ABOVE IS KEPT BECAUSE THE RENDERS TAKEN BEFORE IT ARE STILL
+# ON SOMEBODY'S DISK. `app/src/Gallery.tsx` hands its Fulfiller specimen a bundled data URI
+# through `CardLocations`'s `photoSrc` seam, which no screen in the product passes: the four
+# images are a drawing that says SPECIMEN across it, the store is not asked, and this render is
+# the same bytes in every checkout on every day — which is what the comparison loop
+# docs/DESIGN.md calls mandatory needs. The four fixtures KEPT `has_photo: true`, deliberately;
+# turning them off would have closed the leak by deleting the photo-bearing row from the one
+# page whose job is drawing every row, and `app/tests/gallery.spec.ts` refuses that trade. That
+# spec now counts four specimen images and two missing-photo sentences and reads every `src`
+# back off the DOM, because `stubStore` answering `/photo` means a leak here cannot be caught by
+# the seal alone.
+#
+# WHAT IS STILL TRUE OF THIS LINE: the SHELL polls `/status` over every view in this file, the
+# gallery included, and draws its 44px offline banner when nothing answers. That is chrome
+# rather than content and it is the same on all nine renders.
 
 # The hash route is load-bearing, not decoration. The gallery answered at '/' while it was
 # the whole app at step 6; step 7a mounted the capture screen there. Dropping the '#/gallery'

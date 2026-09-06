@@ -144,3 +144,68 @@ test('the copies specimen answers to its own width, as the screen does', async (
   const areas = await row.evaluate((el) => getComputedStyle(el).gridTemplateAreas)
   expect(areas).toBe('"place place" "state action" "bar bar"')
 })
+
+/* THE SHEET'S IMAGERY IS THE SHEET'S, AND UNTIL 2026-09-06 IT WAS THE OWNER'S STORE'S.
+ *
+ * `Gallery.tsx`'s fixture gives four copies `has_photo: true`, and `CardLocations`'s Fulfiller
+ * skin drew each one as `photoUrl(box, index)` — `GET /photo/<box>/<index>` on the capture port.
+ * So the kit sheet showed whatever was in box 3 slot 40, box 7 slot 12, box 4 slot 1 and box 3
+ * slot 31 of whichever store was up, and showed different cards as those boxes changed. The
+ * page whose entire purpose is being compared against a reference was the one page whose
+ * contents nobody could reproduce, and a pooled capture's photograph is a live code card (D24)
+ * that `make screenshot` would have written into `captures/ui/`.
+ *
+ * WHY THE SEAL ALONE DOES NOT PROVE THIS. `app/tests/shell.ts`'s `stubStore` answers
+ * `/photo/<box>/<index>` with an inline SVG, so the catch-all never fires for it and every case
+ * above went green over a component that was asking. Reading the `src` back off the DOM is the
+ * assertion that survives the stub — and the check it makes is the one that matters, since a
+ * screenshot run has no Playwright in it at all. (Proof of the other half, once, by hand:
+ * delete that stub and the whole file still passes, because nothing asks any more.)
+ *
+ * WHY THIS IS NOT SATISFIED BY `has_photo: false` ON THE FOUR. That is the one-line version and
+ * it deletes the photo-bearing shell from the sheet, which is the trade this entire file exists
+ * to refuse for the departed and pooled rows. So the count is asserted in both directions: four
+ * images and two missing-photo sentences, the two shells the skin can draw.
+ *
+ * OBSERVED RED BEFORE IT WAS KEPT. Mutation: drop `photoSrc` from the fulfiller specimen in
+ * `Gallery.tsx`. `src` reverts to the capture origin, the `data:` assertion reports
+ * `http://localhost:<capture>/photo/3/40`, and `naturalWidth` goes to whatever the stub served.
+ */
+const PHOTO = '.card-locations-fulfiller .card-locations-photo'
+
+test('every photograph on the sheet is its own specimen, not a stored capture', async ({
+  page,
+}) => {
+  const photos = page.locator(PHOTO)
+
+  /* FOUR, BECAUSE FOUR FIXTURE COPIES CARRY `has_photo: true`. A count rather than a
+     `toBeVisible` so that buying a closed sheet by emptying the fixture fails here. */
+  await expect(photos).toHaveCount(4)
+
+  /* AND THE OTHER SHELL IS STILL DRAWN BESIDE IT — the two copies with no photograph. Both
+     states are on the page or neither is specified. */
+  await expect(
+    page.locator('.card-locations-fulfiller .card-locations-copy').filter({
+      hasText: 'The photo is missing.',
+    }),
+  ).toHaveCount(2)
+
+  /* NOTHING ADDRESSES THE PHOTO SERVICE. `/photo/` is the literal `server.ts:photoUrl` mints,
+     and the same shape `scripts/docs-audit.py`'s `views opsec` row refuses in the manifest. */
+  const sources = await photos.evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLImageElement).getAttribute('src') ?? ''),
+  )
+  expect(sources).toHaveLength(4)
+  for (const src of sources) {
+    expect(src.startsWith('data:image/svg+xml')).toBe(true)
+    expect(src).not.toContain('/photo/')
+  }
+
+  /* AND THE SPECIMEN ACTUALLY DECODED. A bundled image that fails to parse draws a broken
+     shell, `onError` moves the copy into `missing`, and the sheet silently becomes the
+     no-photograph page this case just refused — with every assertion above still green. */
+  const natural = await photos.evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLImageElement).naturalWidth),
+  )
+  for (const width of natural) expect(width).toBeGreaterThan(0)
+})
