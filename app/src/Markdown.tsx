@@ -50,6 +50,40 @@ import './Runs.css'
 
 const WORKLIST = 'worklist.csv'
 const IMPORT = 'import.csv'
+/** `cli/cmd_reprice.py:SURVEY` — every live row the export carried, and the lens's whole input. */
+const SURVEY = 'survey.json'
+/** `cli/cmd_reprice.py:REPORT` — the survey's own stdout, including the sentence about the
+ *  proxy the window ranks on. Written since D100 and offered by nothing until D103. */
+const REPORT = 'report.txt'
+
+/** What a past markdown asked for, in a phrase — `7 days · 10% · top 40`.
+ *
+ *  READ OFF `asked`, WHICH IS `Plan.asked` VERBATIM. Every figure here was recorded by the
+ *  command that ran; nothing is re-derived, so a row cannot describe a survey it did not run.
+ *  Absent keys are simply left out rather than defaulted — a markdown written before a flag
+ *  existed did not ask for that flag's default, it asked for nothing.
+ */
+function askedWords(entry: MarkdownSummary): string {
+  const asked = entry.asked ?? {}
+  const parts: string[] = []
+  const days = asked.days
+  if (typeof days === 'number') parts.push(`${days} day${days === 1 ? '' : 's'}`)
+  const rule = asked.rule
+  if (typeof rule === 'string' && rule !== '') {
+    const pct = /^undercut:(.+)$/.exec(rule)
+    parts.push(pct === null ? rule : `${pct[1]}% off`)
+  }
+  const above = asked.above_market
+  if (above !== null && above !== undefined && `${above}` !== '') parts.push(`>${above}% over market`)
+  const limit = asked.limit
+  if (typeof limit === 'number') parts.push(`top ${limit}`)
+  const when = entry.at === null ? null : new Date(entry.at)
+  const day =
+    when === null || Number.isNaN(when.getTime())
+      ? null
+      : when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return [day, parts.join(' · ')].filter((part) => part !== null && part !== '').join(' — ')
+}
 
 export function Markdown({ open, onClose }: { readonly open: boolean; readonly onClose: () => void }) {
   const [days, setDays] = useState('7')
@@ -209,6 +243,35 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
     [apply],
   )
 
+  /** Pick up a markdown written on an earlier day, at step 3 — the hand-back.
+   *
+   *  THE SHEET'S OWN DOCUMENTED FLOW LEAVES THE MACHINE IN THE MIDDLE OF IT: download the
+   *  worklist, edit it in a spreadsheet, hand it back. A spreadsheet is not a thing anybody
+   *  finishes in one sitting, and until this the ONLY way back in was to re-pick the export and
+   *  re-survey — which mints a NEW stamp, so the file the operator had spent an evening editing
+   *  was judged against a manifest that was not its own, or refused outright. The history list
+   *  drew the worklist as a download beside a sheet that could not accept it back.
+   *
+   *  IT CLEARS EVERY ANSWER AND NOT THE STAMP. `survey`, `applied`, `wroteImport` and the two
+   *  file names all describe the sitting that just ended; carrying one over would show a
+   *  console about another markdown above the rows of this one. `nextPress` then reads
+   *  `stamp !== null && applied === null` and lands on `check`, which is exactly step 3.
+   *
+   *  THE EXPORT IS NOT RE-READ AND MUST NOT BE. `apply` takes the stamp and the handed-back
+   *  bytes; the manifest on disk is what judges them, and that is the whole point of the
+   *  markdown directory being durable state. */
+  const resume = useCallback((at: string) => {
+    setStamp(at)
+    setSurvey(null)
+    setApplied(null)
+    setWroteImport(false)
+    setWorklistName(null)
+    setExportName(null)
+    setFailure(null)
+    held.current = null
+    edited.current = null
+  }, [])
+
   /* Focus lands inside on open, stays inside under Tab, and returns to the opener on close;
      Escape closes. The same hook the composer and the store-wide reconcile use. */
   /* `busy` is the hold: Escape does nothing while a survey, a worklist write, a check or an
@@ -342,6 +405,26 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
               <span>Mark down again inside the window</span>
             </label>
 
+            {/* WHERE THE FILE COMES FROM, because the first step of this flow is off this
+                machine and the screen said nothing about it — the operator was navigating from
+                memory. A LINK AND NOT A FETCH: `server/tcg_export.py` can already download an
+                export, but only at `MyInventory: False` — the CATALOG scope — and its own
+                comment forbids flipping that without the owner. Fetching the live inventory is
+                a real feature and is named as one in `docs/specs/stale-listings.md` §9; this is
+                the sentence that stops the screen pretending step 1 does not exist. */}
+            <p className="runs-md-says">
+              The file comes from TCGplayer:{' '}
+              <a
+                className="runs-md-out"
+                href="https://store.tcgplayer.com/admin/pricing"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                My Pricing
+              </a>{' '}
+              → Export, all printings. Nothing here fetches it for you yet.
+            </p>
+
             <DropZone
               title="Drop the My Pricing export here"
               hint="or click to choose the .csv"
@@ -404,11 +487,32 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                 ) : (
                   <>
                     <Notice tone="ok" title="Written, and uploaded nowhere">
-                      Edit its <code className="bn-code">TCG Marketplace Price</code> column, or hand it
-                      straight back — a price is already proposed on every row. Only the SKU and the
-                      price are read back; every other byte comes from the export.
+                      Price them on the pricing screen — the charts, the presets and the holds are
+                      all there — or edit the spreadsheet's{' '}
+                      <code className="bn-code">TCG Marketplace Price</code> column and hand it back.
+                      Only the SKU and the price are ever read out of it; every other byte comes from
+                      the export.
                     </Notice>
+                    {/* THE DOOR TO THE LENS, AND IT IS THE PRIMARY PRESS (D103). The screen it
+                        opens is the thing the owner actually asked for — *"the same pricing sorta
+                        setup I get when I'm first listing prices ... instead it gives me an excel"*
+                        — and it shipped for a day reachable ONLY by typing the URL, which is
+                        CLAUDE.md's hard rule broken exactly as `docs/GATES.md` step 7 records it:
+                        every mechanical check green over a screen no human could open.
+
+                        IT LEAVES THE SHEET, so it closes it on the way out rather than leaving a
+                        modal standing over the screen the operator has just been sent to. */}
                     <div className="runs-md-row">
+                      <Button
+                        variant="primary"
+                        icon="tag"
+                        onClick={() => {
+                          onClose()
+                          window.location.hash = `#/pricing?markdown=${stamp}`
+                        }}
+                      >
+                        Price these on the pricing screen
+                      </Button>
                       <a className="bn-btn" href={markdownFileUrl(stamp, WORKLIST)} download={WORKLIST}>
                         <Icon name="download" size={16} />
                         {WORKLIST}
@@ -434,7 +538,9 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                   onFiles={takeWorklist}
                 />
                 <span className="runs-md-hint">
-                  Optional — leaving it means &ldquo;the one you wrote&rdquo;.
+                  {survey === null
+                    ? 'Leaving it means the worklist already in this markdown, unedited.'
+                    : 'Optional — leaving it means \u201cthe one you wrote\u201d.'}
                 </span>
               </div>
 
@@ -475,14 +581,71 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
                   true of a file somebody deleted. */}
               <ul className="bn-list runs-md-history">
                 {history.map((entry) => (
-                  <li className="bn-list-row runs-md-history-row" key={entry.stamp}>
+                  <li
+                    className="bn-list-row runs-md-history-row"
+                    key={entry.stamp}
+                    /* WHICH EXPORT IT WAS READ FROM, on hover rather than on the row. It is the
+                       fact that settles "is this the same download I am holding" and it is a
+                       long absolute path — drawn inline it would push the four controls off a
+                       narrow sheet to answer a question nobody asks twice. */
+                    title={entry.source === null ? undefined : `read from ${entry.source}`}
+                  >
                     <span className="bn-mono runs-md-stamp">{entry.stamp}</span>
                     <span className="bn-muted bn-tnum">
                       {entry.skus} SKU{entry.skus === 1 ? '' : 's'}
                     </span>
+                    {/* WHAT THIS ONE ASKED FOR, so two markdowns can be told apart. Both fields
+                        were already on the wire and drawn nowhere, which made a list of stamps
+                        a list of identical rows: the operator could see THAT they had run four
+                        surveys and nothing about which was which. */}
+                    <span className="bn-muted runs-md-history-asked">{askedWords(entry)}</span>
                     <span className="runs-md-history-files">
+                      {/* A MARKDOWN IS DURABLE STATE, NOT A ONE-SHOT — `inventory/markdowns/<stamp>/`
+                          keeps its survey, and `reprice apply` will judge a worklist against it
+                          weeks later. So yesterday's markdown reopens in the lens on the same terms
+                          as the one just written; without this the history was a download shelf and
+                          the only way back into a past survey was to type its URL.
+
+                          GATED ON THE SURVEY BEING THERE. Every markdown written before D103 has no
+                          `survey.json`, and the lens would refuse it with `survey_not_written` — an
+                          offer that leads to a refusal is worse than no offer, so those rows keep
+                          their downloads and nothing else. */}
+                      {!entry.files.includes(SURVEY) ? null : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon="tag"
+                          onClick={() => {
+                            onClose()
+                            window.location.hash = `#/pricing?markdown=${entry.stamp}`
+                          }}
+                        >
+                          Price these
+                        </Button>
+                      )}
+                      {/* THE WAY BACK INTO A SITTING THAT LEFT THE MACHINE. A worklist is
+                          downloaded to be edited in a spreadsheet, and nothing says that
+                          finishes today — see `resume` for what re-surveying instead would
+                          have cost. Offered only where there IS a worklist to hand back. */}
+                      {!entry.files.includes(WORKLIST) ? null : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon="upload"
+                          onClick={() => resume(entry.stamp)}
+                        >
+                          Hand it back
+                        </Button>
+                      )}
                       {entry.files
-                        .filter((name) => name === WORKLIST || name === IMPORT)
+                        /* THE REPORT JOINS THE TWO CSVs. It was written by every `--write`
+                           since D100, matched `_DOWNLOADABLE`, and was listed by `_artefacts`
+                           — and this filter dropped it, so the one artefact that says WHY a
+                           row is in the worklist, and states the ownership-age substitution
+                           the whole window rests on, was unreachable from the screen that
+                           made it. D100 names the missing reason column as a cost of the
+                           CSV's shape and points at this file for it. */
+                        .filter((name) => name === WORKLIST || name === IMPORT || name === REPORT)
                         .map((name) => (
                           <a
                             className="bn-btn bn-btn-sm bn-btn-ghost"

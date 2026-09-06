@@ -3055,7 +3055,7 @@ COMPONENTS = [
                                      "No fill on the selected chip — the solid accent is reserved "
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
-                             "governed_by": ["D5", "D33", "D38", "D39", "D100"]},
+                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -3128,7 +3128,8 @@ COMPONENTS = [
                                          "spec can say for it — that nothing is deleted at "
                                          "TCGplayer to lower a price, and that the age it ranks "
                                          "on is OWNERSHIP age.",
-                                 "governed_by": ["D7", "D9", "D13", "D33", "D49", "D86", "D87", "D94", "D95", "D100"],
+                                 "governed_by": ["D7", "D9", "D13", "D33", "D49", "D86", "D87",
+                                                 "D94", "D95", "D100", "D103"],
                                  # `app/tests/markdown.spec.ts` is the check the hard rule says
                                  # does not otherwise exist — it runs under `make design-check`,
                                  # not at turn end, so it is named here in prose rather than in
@@ -3982,7 +3983,7 @@ COMPONENTS = [
                         "than disabled, D33's shape applied twice on one screen. Two routes are "
                         "intercepted and their bodies read; no real request is made and no store "
                         "is touched.",
-                "governed_by": ["D7", "D9", "D33", "D86", "D100"],
+                "governed_by": ["D7", "D9", "D33", "D86", "D100", "D103"],
                 "note": "ONE OF ITS CASES IS A GEOMETRY ASSERTION AND IT WAS WRITTEN FROM A "
                         "DEFECT. The survey console rendered 512px wide and 0px TALL — "
                         "`.runslog` sets `overflow: hidden`, which makes a flex item's automatic "

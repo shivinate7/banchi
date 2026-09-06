@@ -269,6 +269,52 @@ on this store selects 109 of 441 rows at seven days and **none at ten**.
 **No `ROUTES` row.** The hash router strips `?…` and that screen already addressed itself this way
 for `?run=`, so eleven routes stays eleven and the three mechanical counts do not move.
 
+**And it has two doors, because for one day it had none.** The lens shipped reachable only by
+typing its URL — every mechanical check green over a screen no human could open, which is
+`docs/GATES.md` step 7 verbatim and exactly what `CLAUDE.md`'s hard rule exists to catch. It is
+the PRIMARY press on the sheet's worklist step (*"Price these on the pricing screen"*, beside the
+spreadsheet download rather than instead of it), and a **Price these** button on every history row
+whose directory holds a `survey.json` — a markdown is durable state, so yesterday's reopens on the
+same terms. Rows written before D103 have no survey and keep their downloads and nothing else: an
+offer that leads to a refusal is worse than no offer. Both doors close the sheet on the way out,
+and `app/tests/markdown.spec.ts` asserts the STAMP in the hash, not merely that a button exists —
+a door wired to the wrong stamp would open somebody else's survey.
+
+### And the history list stopped being a download shelf
+
+A reachability audit run against the merged feature found four more things a human could not do
+from a screen. Three were fixed; the fourth is a recorded deferral.
+
+**A markdown written on an earlier day could not be handed back** — the blocking one. The sheet's
+own documented flow puts a CSV in a spreadsheet, and nothing says that finishes today; the only
+way back in was to re-pick the export and survey again, which **mints a new stamp**, so the file
+the operator had spent an evening editing would be judged against a manifest that was not its
+own. **Hand it back** on the history row resumes at step 3 against the original stamp, clearing
+every answer from the sitting that ended and none of the state on disk.
+
+**Two markdowns were two identical rows.** `at` and `asked` were on the wire and drawn nowhere,
+so the list said *that* four surveys had run and nothing about which was which. The row now reads
+`Sep 6 — 7 days · 10% off · top 40`, off `Plan.asked` verbatim; the export it was read from is on
+the row's hover.
+
+**`report.txt` was written and never offered.** Every `--write` since D100 has produced it, it
+matched `_DOWNLOADABLE`, and `_artefacts` listed it — the history's own filter dropped it. It is
+the one artefact that says *why* a row is in the worklist and states the ownership-age
+substitution, which D100 names as the cost of the CSV having no reason column.
+
+**And the palette could not find any of this.** ⌘K matches a route's `keywords` by substring, and
+neither Runs' nor Pricing's contained *stale*, *markdown*, *reprice* or *live listings* — the
+feature was reachable only by already standing on `#/runs` and scanning the header. Both routes
+carry those words now.
+
+**Not fixed, and argued rather than missed:** the sheet still offers `--percent` and not `--rule`
+or `--basis`. §9 has carried that as a reopening condition since D100, and the per-row form on
+`#/pricing` is what serves the want. And step 1 — fetching the export — still happens at
+TCGplayer: `server/tcg_export.py` can download one, but only at `MyInventory: False`, the
+*catalogue* scope, and its own comment forbids flipping that without the owner. What the screen
+gained is a link to My Pricing and a sentence saying it does not fetch for you, so the operator
+is not navigating from memory.
+
 **The press is `edits`**, not a CSV the browser wrote: `app/package.json` carries two runtime
 dependencies and PapaParse is not one, so the pairs go as JSON and `do_markdown_apply` materialises
 them with `tcgcsv.write_csv`. T7 asserts the resulting `import.csv` is byte-identical to the
