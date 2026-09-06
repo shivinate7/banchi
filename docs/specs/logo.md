@@ -1460,11 +1460,12 @@ sits beside the word "Banchi". **The lockup *is* that word**, so standing alone 
 `role="img"` and an
 accessible name.
 
-**Inside the sidebar's brand link it must NOT.** That anchor already carries
-`aria-label="Banchi home"`, and a named child there announces *"Banchi Banchi home"* — so the one
-call site that replaces the wordmark passes `decorative` and both drawings are `aria-hidden`. The
-a11y tree is then identical either side of the collapse, which is the right outcome and not one
-this section saw coming when it wrote the rule.
+**Inside the sidebar's brand it must NOT.** That element already carries its own accessible name
+— since §16's correction it is a `<button>` labelled *"Collapse the sidebar"*, and an `<a>`
+labelled *"Banchi home"* at the tablet breakpoint — and a named child announces the name over it.
+So the one call site that replaces the wordmark passes `decorative` and both drawings are
+`aria-hidden`. The a11y tree is then identical either side of the collapse, which is the right
+outcome and not one this section saw coming when it wrote the rule.
 
 **Never a `border-radius`**, for the same reason as the mark.
 
@@ -1570,9 +1571,38 @@ against `markPalettes.ts`, and its `rail mark` row does the same for the bracket
 reads the same condition the layout does. Verified at 820: the lockup's three parts read opacity 0
 and the mark reads 1.
 
-**The rail keeps the full mark.** §16 settled the lockup's size and its metal, not the rail's
-drawing, and `sheets/sidebar-morph.html`'s bare brackets are a sheet's idea rather than a decision
-— that sheet has already been wrong about the rail three times.
+**The rail draws the EMPTY SLOT — the brackets with the card taken out — and not the tile mark**
+(corrected 2026-09-06, on the operator's report). This section shipped with `Logo` in that slot on
+the reasoning that §16 settled the lockup's size and metal, not the rail's drawing, and that
+`sheets/sidebar-morph.html`'s bare brackets were a sheet's idea rather than a decision. **That was
+over-cautious and §1 had already answered it**: *"with the card removed the same brackets become
+an empty slot, which is the in-product mark."* The sheet was not proposing something; it was
+drawing what §1 says. What actually shipped read as the favicon sitting above a nav, where the
+lockup is the name inside its address and the rail should be the address with the name taken out.
+
+`app/src/kit/RailMark.tsx` draws it, and draws nothing of its own: `SMALL_BRACKET` and
+`SMALL_STROKE` come straight from the generated `markGeometry.ts`, so it is `Logo`'s own wire with
+two elements omitted rather than a second mark that agrees today. `make docs-audit`'s `rail mark`
+row gained a third direction for exactly that — it now fails if the component stops importing them
+or grows a path literal, which is the invention this row was written for, one file further along.
+
+**Having no ground is why it cannot take the chrome flat.** `bluesteel`'s four bracket stops run
+`#FFFFFF` to `#8FA4B8` — bright on the mark's dark tile, invisible on a light sidebar. So it takes
+this section's own switch, flat `--bn-ink` on light and the chrome on dark, and the lockup and the
+rail mark are one object in one metal in both themes.
+
+**And that switch had shipped wrong.** `.bn-lockup-bracket` carried the three-state pattern —
+`@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) … }` — which is correct
+for a stylesheet that reads the system preference itself and **wrong for this product**, which
+resolves it in JS: `applyTheme` stamps `data-theme="dark"` for dark and *removes* the attribute for
+light, and `tokens.css` carries no media block at all. So the rule fired in a state the rest of the
+app cannot enter. Measured in the running app on a system-dark machine with the theme set to light:
+body `rgb(244,245,248)`, kanji `rgb(15,18,23)`, bracket `url("#_r_0_m")` — a near-white frame
+around near-black type. Both *resting* themes were correct, which is why nothing caught it; the
+defect needs the system preference and the stored choice to disagree, and every check in this repo
+ran with them agreeing. `brand.spec.ts` sets `colorScheme: 'dark'` on that one test now, and
+reaches the light half by *removing* the attribute rather than stamping `light`, which no code path
+in this product does.
 
 **A true morph is not available, and the reason is this section's own correction.** The filmstrip
 in that sheet interpolated real geometry only because *both* ends were `taperParts` outlines at the
@@ -1594,6 +1624,27 @@ reduced-motion user would get the name snapping out, **200ms of an empty brand r
 snapping in — a hole rather than an instant swap. Every delay is a variable so the fix is five
 values and no `!important`.
 
+### The brand IS the collapse control
+
+**Settled 2026-09-06, on the operator's instruction** — *"frankly, it should be the logo collapses
+and opens the sidebar."* It replaces a 22px circular chevron pinned to the sidebar's right edge,
+and the reason it replaces it rather than joining it is that the chevron was **mostly not
+clickable**: `.bn-side` is `overflow: hidden` and the button sat at `right: -1px` with
+`translateX(50%)`, so its outer half was CLIPPED by the panel it hung off, and whatever occupied
+the content column at y = 18 — the offline banner, for instance — covered much of what was left.
+Measured with probes at 50%, 65% and 85% of its own box: all three missed. About 11px of a 22px
+control was real, on the affordance the whole gesture depends on.
+
+So it moves onto the thing that is already 128 × 93. Nothing is lost by the brand no longer being
+a link — Home is a nav item with its own key — and the chevron survives as a **hint** rather than
+the control: quiet until the row is hovered, and gone entirely in the rail, where 64px less two
+gutters leaves 48 and the mark takes 32.
+
+**At 768–1023px it stays a link.** That breakpoint rails the shell by media query and ignores
+`data-rail`, so a toggle there would set state the layout does not read and appear to do nothing,
+which is worse than not offering one. `App` resolves that width with a `matchMedia` hook and passes
+no handler, and the element renders as the anchor it was.
+
 ### The defect the choreography found, which had nothing to do with the lockup
 
 **The rail's rules centred their children** — `justify-content: center` on the brand and
@@ -1606,6 +1657,24 @@ of it while nothing travels. That held at both resting states and failed at ever
 which is why no check could see it: a screenshot proves nothing and neither does an assertion on
 either end. `app/tests/brand.spec.ts` now samples **mid-transition** and asserts a *corridor*
 rather than a curve, so it survives anyone retuning `--bn-ease`.
+
+**It then found two more of the same defect after that fix landed**, which is the argument for
+keeping the test rather than treating it as a one-off:
+
+- **The padding was given a transition and should not have been.** `.bn-side` cuts its gutter
+  12px → 8px in the rail, and easing that was meant to keep the panel closing as one thing. But a
+  railed nav link is a 48px box at `padding-left`, so its icon's centre *is* `padding-left + 24`:
+  easing the padding dragged it **33 → 35.9 → 32**, three pixels right of both resting positions.
+  It snaps now, and what that costs is 4px of gutter moving instantly under a column that eases,
+  in a strip where nothing is drawn at rest.
+- **The footer was never looked at.** It still centred its buttons against the animating column
+  (`align-items: center`, the same shape as the nav's old `margin: 0 auto`) and measured
+  **37 → 103.8 → 20.5**. Its buttons went 40px → 48px at the same time, to match `.bn-nav-link`:
+  at 40 they rested at x = 20.5, eleven pixels left of every icon above them.
+
+**And three samples was a flaky test, not a weaker one.** The padding overshoot lived in the first
+~80ms, so the test failed one run in three and passed the other two on identical code. Eight
+samples across the 320ms.
 
 ### Still open: the phone
 

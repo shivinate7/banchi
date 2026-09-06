@@ -261,6 +261,7 @@ export function Stat({ value, label, className }: { readonly value: ReactNode; r
 
 /* ---- Logo --------------------------------------------------------------------------------------- */
 export { Lockup } from './Lockup'
+export { RailMark } from './RailMark'
 export type { LogoVariant }
 export { VARIANTS } from './markPalettes'
 
