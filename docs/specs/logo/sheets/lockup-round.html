@@ -47,17 +47,17 @@ window.__sheetReady = false
    bugs in this sheet were both a hand-written label disagreeing with the round it described.
    =========================================================================================== */
 const ROUND = {
- n: 23,
- title: 'the line gap around 0.08 — the value you picked in the column, not on the sheet',
- sweeping: 'gap',
- unit: ' of the kanji size',
- values: [0.02, 0.05, 0.08, 0.11, 0.14],
- notes: {0.08:'your pick — and it came off the sidebar row, not this one',
-         0.06:'the inherited value'},
- rejected: {0.24:'out of the band — round 21', 0.38:'the roman had come loose — round 21'},
- holds: {pad:0.50, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15, tails:true},
+ n: 24,
+ title: 'the bracket arm — carried since the recovered pass, and the one bound that was never recorded',
+ sweeping: 'arm',
+ unit: ' of the block',
+ values: [0.12, 0.22, 0.32, 0.46, 0.62],
+ notes: {0.32:'the carried value — §3’s lockup row, never offered against anything',
+         0.62:'the arms nearly close the frame'},
+ rejected: {},
+ holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, tl:0.70, tip:0.15, tails:true},
  sizes: [48, 32],
- context: [0.02, 0.05, 0.08, 0.11, 0.14],
+ context: [0.12, 0.22, 0.32, 0.46],
  history: [
   ['1–5', 'stroke', '0.018 – 0.140', '0.050 of the kanji', 'rule 5 fired twice'],
   ['6–10', 'radius', '1.0 – 7.0 ×', '4.0 × = 0.20 of the kanji', 'settled on the JND'],
@@ -65,19 +65,20 @@ const ROUND = {
   ['13', 'tip', '0 – 0.40 of the stroke', '0.15', 'decided on terminate-vs-dissolve'],
   ['15', 'size floor', '14 – 40 kanji', 'kanji 32 — 83 × 59px', '番’s counters bind, not the bracket'],
   ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 twice; stopped at 1.9px'],
-  ['21', 'line gap', '0.00 – 0.38', '0 – below 0.24', 'the low end is zero, and zero was kept'],
-  ['22', 'line gap', '0.00 – 0.23', '0.08 picked', 'picked off the CONTEXT row'],
+  ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
  ],
- lede: '<b>0.08 was not on the sweep row — it was on the sidebar row.</b> Worth saying plainly, because it '+
-  'is the first answer in twenty-three rounds that came from a specimen drawn in the column it has to live '+
-  'in rather than from one drawn alone on white. That row was added in round 18 on the argument that air '+
-  'always reads calmer with nothing to be calm against; this is the round that argument paid for.'+
-  '<br><br><b>So this round is centred on 0.08 and drawn in both places, at the same five values.</b> If '+
-  'the two rows disagree again, the column wins — it is the one that is true.'+
-  '<br><br><b>The step is 0.03, which is 1.4px at the sidebar size, and that is the floor.</b> The padding '+
-  'stopped at 1.9px; this is finer than that already. <b>This is the last round for the gap.</b> Whatever '+
-  'band comes back, the answer is its midpoint and I will not offer a twenty-fourth — a sheet asking you '+
-  'to separate two drawings a pixel apart is measuring the display, not the design.'
+ lede: '<b>The gap settled at 0.08 — the midpoint of 0.05 – 0.11, taken rather than split, because the '+
+  'step was already 1.4px.</b> That closes both values this series inherited. Everything in the settled '+
+  'table has now been chosen here except one: <b>the arm</b>, carried from §3\'s lockup row and never '+
+  'offered against anything.'+
+  '<br><br><b>It is how far each bracket leg runs, as a fraction of the block.</b> At 0.12 the corners are '+
+  'ticks; at 0.62 the two legs nearly close into a full frame and the thing stops being a bracket.'+
+  '<br><br><b>The arm had a floor that was never recorded, and this is the round that would have walked '+
+  'into it.</b> `max(W*arm, rr+2)` engages below about 0.076 on this geometry — the radius prints its cap '+
+  'and the ramp prints its clamp, both because a silent bound has already turned a sweep into repeated '+
+  'specimens once in this project. The arm had neither, so the low end of an arm sweep would have drawn '+
+  'identical brackets under distinct labels and the assertion built to catch exactly that would have said '+
+  'nothing. It is recorded now and the check reads all three.'
 }
 
 const o=document.getElementById('out')
@@ -155,11 +156,13 @@ function check(groups){
    if(new Set(got).size !== 1) problems.push('kanji '+size+': `'+k+'` was declared held but took '+new Set(got).size+' values: '+got.join(', '))
    else if(got[0] !== ROUND.holds[k]) problems.push('kanji '+size+': `'+k+'` declared '+ROUND.holds[k]+' but drawn at '+got[0])})
   /* 4 — nothing clamped without saying so */
-  /* BOTH clamps. This checked only the radius until round 12, which sweeps the ramp -- so the
-     assertion could not see the very bound the round was walking toward. A guard that watches one
-     of two bounds is the taper clamp all over again, one level up. */
+  /* ALL THREE clamps. This checked only the radius until round 12, which sweeps the ramp -- so the
+     assertion could not see the very bound the round was walking toward. The arm's floor was added
+     for round 24 for the same reason and one step earlier: it binds below arm ~= 0.076 and, unlike
+     the other two, it was not recorded at all, so a guard that had been extended once would still
+     have missed it. A guard that watches some of the bounds is the taper clamp all over again. */
   g.forEach(function(r){
-   ;[['radius','rr'],['ramp','ramp']].forEach(function(pair){
+   ;[['radius','rr'],['ramp','ramp'],['arm','armpx']].forEach(function(pair){
     const v=r.lk.dataset[pair[1]]||''
     if(v.indexOf('CLAMPED')>=0) problems.push('kanji '+size+': '+r.v+' hit the '+pair[0]+' cap — '+v)})})
   proved.push('kanji '+size)})
