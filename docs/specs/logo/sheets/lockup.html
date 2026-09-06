@@ -122,7 +122,13 @@ function lockup(o){
  const ratio = o.ratio === undefined ? 0.36 : o.ratio
  const pad   = o.pad   === undefined ? 0.25 : o.pad      // of the kanji size
  const gap   = o.gap   === undefined ? 0.03 : o.gap      // of the kanji size
- const stroke= (o.stroke === undefined ? 0.11 : o.stroke) * K   // LOCKED 0.11 of kanji size
+ /* 0.06 of the kanji size, NOT section 3's 0.11. Once the bracket is tapered, 0.11 draws a
+    crescent -- section 7's cross shows it. Section 3's 0.11 is the stroke-to-CONTENT-WIDTH answer
+    (the icon's is 0.0535 of its card's width; 0.11/2.0 = 0.055, near-identical) and the
+    stroke-to-FRAME-HEIGHT answer is 0.043 (the icon's is 0.0252 of its frame). The two agree for
+    the icon and disagree by 2.5x here, because the icon's frame is portrait and the lockup's is
+    landscape. The eye picks the frame answer. */
+ const stroke= (o.stroke === undefined ? 0.06 : o.stroke) * K
  const arm   = o.arm   === undefined ? 0.32 : o.arm             // LOCKED
  const rMul  = o.rMul  === undefined ? 2.2  : o.rMul            // HELD — nothing specifies it
  const ink   = o.showInk
@@ -305,6 +311,48 @@ document.fonts.ready.then(function(){
   ;[[true,'untapered — the small cut’s construction, wrong here'],[false,'tapered — the icon’s']].forEach(function(c){
    const d=el('div','cell'+(c[0]?'':' pick')); d.insertAdjacentHTML('beforeend',lockup({untapered:c[0], px:300}).svg)
    d.appendChild(el('div','cap',c[1])); s2.appendChild(d)})})()
+
+
+ /* ---- 8 · the rail --------------------------------------------------------------------------- */
+ head('8 · the rail — bare brackets, and whether they survive being 44px',
+  'The sidebar is 236px open and 64px closed, so the lockup collapses to something about 44px. '+
+  '<b>The bare brackets are what §1 says the mark is</b> — “with the card removed the same brackets '+
+  'become an empty slot, which is the in-product mark.” The question is only whether they read at '+
+  'that size, and the answer is a weight. Rasterised at true size and magnified by PIXEL, per §11: '+
+  'scaling the vector would flatter it.')
+ ;(function(){
+  const jobs2=[]
+  function railRaster(px, zoom, stroke){
+   const c=document.createElement('canvas')
+   c.width=px*zoom; c.height=px*zoom
+   c.style.width=(px*zoom)+'px'; c.style.height=(px*zoom)+'px'; c.style.imageRendering='pixelated'
+   /* a square frame, the rail's own proportion, with nothing inside it */
+   const S=100, P=8, bw=S-2*P, bh=S-2*P
+   /* The corner radius is a proportion of the FRAME, not a multiple of the stroke. Tying it to
+      the stroke made the heavy end a crescent with no straight arm left -- at 0.20 the radius was
+      44 units in a 100 box. The icon's is 8 in a 54.8-wide frame, so 0.146. */
+   const tp=taperParts(P,P,bw*0.32,bh*0.32,bw*0.146,stroke*S,0.07,0.3)
+   const one='<path d="'+tp.body+'" fill="#eef0f4"/>'+tp.caps.map(function(cc){
+     return cc[2]>0.02?'<circle cx="'+cc[0].toFixed(2)+'" cy="'+cc[1].toFixed(2)+'" r="'+cc[2].toFixed(2)+'" fill="#eef0f4"/>':''}).join('')
+   const svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+one+'<g transform="rotate(180 50 50)">'+one+'</g></svg>'
+   jobs2.push(new Promise(function(res){
+    const img=new Image()
+    img.onload=function(){const a=document.createElement('canvas');a.width=px;a.height=px
+     const ac=a.getContext('2d'); ac.fillStyle='#0c0e12'; ac.fillRect(0,0,px,px); ac.drawImage(img,0,0,px,px)
+     const g=c.getContext('2d'); g.imageSmoothingEnabled=false; g.drawImage(a,0,0,px*zoom,px*zoom); res()}
+    img.onerror=function(){res()}
+    img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)}))
+   return c}
+  ;[[44,4],[64,3]].forEach(function(pair){
+   out.appendChild(el('div','note','at '+pair[0]+'px, magnified x'+pair[1]+' — the actual pixel grid'))
+   const s2=strip(true)
+   ;[0.05,0.08,0.11,0.15,0.20].forEach(function(w){
+    const d=el('div','cell'+(w===0.11?' pick':''))
+    d.appendChild(railRaster(pair[0],pair[1],w))
+    d.appendChild(el('div','cap',w.toFixed(2)+' of the frame'))
+    d.appendChild(el('div','num','stroke '+(w*100).toFixed(0)+' in a 100 box'))
+    s2.appendChild(d)})})
+  Promise.all(jobs2).then(function(){})})()
 
  window.__sheetReady = true
 })
