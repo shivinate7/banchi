@@ -115,6 +115,34 @@ def request(
         return None, "", {}
 
 
+def preflight(url: str, origin: str, method: str = "POST") -> Tuple[Optional[int], List[str]]:
+    """What a BROWSER asks before it sends a write, and the methods it is told it may use.
+
+    THIS IS THE ROW THAT SPEAKS FOR THE PHONE, and it is not the same question as the one
+    below it. `curl` sends no preflight, so it reaches the origin gate and reads a 403 with a
+    message naming the remedy. A browser never gets that far: an origin the server does not
+    know is answered `Access-Control-Allow-Methods: GET, OPTIONS`, POST is not among them, and
+    the browser refuses to send the request at all. `fetch` then rejects with a bare TypeError
+    carrying no reason — so the 403 and its message are never seen by the page.
+
+    A check that only did the `curl` half would therefore pass on a rig where every write from
+    the phone is blocked before it leaves the handset.
+    """
+    req = urllib.request.Request(url, method="OPTIONS")
+    req.add_header("Origin", origin)
+    req.add_header("Access-Control-Request-Method", method)
+    req.add_header("Access-Control-Request-Headers", "Content-Type")
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            allow = response.headers.get("Access-Control-Allow-Methods", "")
+            return response.status, [m.strip().upper() for m in allow.split(",") if m.strip()]
+    except urllib.error.HTTPError as exc:
+        allow = exc.headers.get("Access-Control-Allow-Methods", "") if exc.headers else ""
+        return exc.code, [m.strip().upper() for m in allow.split(",") if m.strip()]
+    except (urllib.error.URLError, OSError, ValueError):
+        return None, []
+
+
 def error_code(body: str) -> str:
     try:
         return json.loads(body).get("error", {}).get("code", "")
@@ -232,8 +260,35 @@ def check() -> List[Result]:
             )
         )
 
-        # 5 — THE ONE THAT MATTERS. Everything above passes while writes 403.
+        # 5 — THE PREFLIGHT, which is what the phone actually runs into. See `preflight`.
         origin = f"http://{name}:{dev}"
+        status, allowed = preflight(f"http://{name}:{capture}/capture", origin)
+        if status is None:
+            results.append(Result(f"browser preflight from {origin}", None, "no answer"))
+        elif "POST" in allowed:
+            results.append(
+                Result(
+                    f"browser preflight from {origin}",
+                    True,
+                    f"may send {', '.join(allowed)}",
+                )
+            )
+        else:
+            results.append(
+                Result(
+                    f"browser preflight from {origin}",
+                    False,
+                    f"may send only {', '.join(allowed) or '(nothing)'} — a browser will "
+                    f"block every write before sending it",
+                    "This is the phone's symptom and it does not look like this one. The "
+                    "page gets a bare network error, so the app reports the capture server "
+                    "as DOWN when it is up and answering. Restarting it fixes nothing: the "
+                    "cause is the origin, so check PKMNSCAN_LAN_NAME in .env.",
+                )
+            )
+
+        # 6 — THE WRITE ITSELF, without a preflight, which is how curl reaches the gate and
+        # reads the refusal a browser is never shown.
         status, body, _ = request(
             f"http://{name}:{capture}/capture", origin=origin, method="POST"
         )

@@ -703,6 +703,30 @@ Those two answers are the experiment: the same request, one header different. A 
 a deliberately foreign origin as the control, because if that one can write too then the fifth
 row proved nothing.
 
+**What a browser hits is not what `curl` hits, and the difference is the whole phone story.**
+`curl` sends no preflight, so it reaches the origin gate and reads the 403 — whose message
+names the remedy. A browser never gets that far. Measured on the rig 2026-09-06: an origin the
+server does not know is answered `Access-Control-Allow-Methods: GET, OPTIONS`, so a POST fails
+the preflight and **the browser refuses to send the request at all**. `fetch` then rejects with
+a bare `TypeError` carrying no reason, and the 403 and its message are never delivered to the
+page.
+
+**That used to be reported as `unreachable` — "It may not be running — start it with `make
+server`".** So in the one failure this section exists for, the phone told the operator to
+restart a server that was running, while the shell's own status dot said `Server online` off
+the same ungated read. `app/src/server.ts` had predicted it in a comment since step 7a and
+shipped it anyway. It now probes `GET /status` on that path — a simple request, so no
+preflight, and ungated, so it answers whenever the server is up at all — and raises
+`origin_blocked` naming the address as the thing being refused. `make lan-check` asks the
+preflight question too, because a check doing only the `curl` half would pass on a rig where
+every write from the phone is blocked before it leaves the handset.
+
+**What it still does not prove: that the PHONE resolves the name.** Every row runs from this
+Mac, so a phone on a guest VLAN, or with Private DNS or a VPN on, can fail while all of this
+passes. Closing that needs something the phone runs, and nothing here does. Until then a green
+run means *this Mac* reaches the URL and the origin is allowed, which is the half that breaks
+silently; the phone's half fails loudly, in the address bar.
+
 **It is not in `make check`, and D18 is not why** — nothing here writes. It is out because
 `check` answers from the tree alone: a row that resolves DNS and expects a server to be up
 would go red on a train and in every worktree, and a check that fails for reasons unrelated to
