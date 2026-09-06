@@ -90,6 +90,7 @@ rule the Makefile uses — one rule about which Python runs, stated in places th
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import json
 import os
@@ -2153,14 +2154,41 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
     SENDING NO WORKLIST MEANS "the one you wrote", which is the flow for an operator who did
     not want to edit anything: `reprice list` already put a proposed price on every row.
 
+    OR AS `edits`, WHICH IS WHAT `#/pricing` SENDS (D103). The lens holds `{sku -> price}` and
+    no CSV writer: `app/package.json` has exactly two runtime dependencies, and PapaParse — the
+    library `CLAUDE.md` requires for this job — is not among them. So the pairs arrive as JSON
+    and are materialised HERE with `tcgcsv.write_csv`, the repo's own writer, into the same
+    directory and under the same name a hand-back would take.
+
+    IT IS TWO COLUMNS AND THAT IS THE POINT. `reprice apply` reads exactly `TCGplayer Id` and
+    `TCG Marketplace Price` out of whatever it is handed, and builds every other byte from the
+    manifest. A file with only those two columns is the narrowest possible expression of
+    D100's *"the operator's editor is not where the bytes come from"* — there is no column in
+    it for a quantity to hide in. Downstream nothing knows the difference, so `read_back`,
+    `import_rows`, `check_only_writable_changed`, `check_quantities_zero`, the duplicate sweep
+    and the whole-file `raised` refusal all run exactly as they do for a spreadsheet.
+
+    THE TWO ARE MUTUALLY EXCLUSIVE. A request carrying both is a caller that has not decided
+    which file it means, and guessing would pick the one it did not.
+
     PREVIEWS BY DEFAULT, and the write half is the last press before bytes leave for a
     marketplace. What it writes is `import.csv`, whose every row carries `Add to Quantity` 0.
     """
     directory = _open_markdown(stamp)
     worklist = directory / cmd_reprice.WORKLIST
     upload = payload.get("worklist")
+    edits = payload.get("edits")
+    if isinstance(upload, dict) and edits is not None:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "worklist_and_edits",
+            "Send `worklist` (a file the operator edited) or `edits` (the pairs a screen "
+            "holds), never both — they are two spellings of the same instruction sheet.",
+        )
     if isinstance(upload, dict):
         worklist = _store_upload(directory, upload, "edited-")
+    elif edits is not None:
+        worklist = _write_edits(directory, edits)
     if not worklist.is_file():
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
@@ -2168,16 +2196,201 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
             f"Markdown {stamp} has no worklist to apply. Send one as `worklist`.",
         )
     argv = [str(PKMNSCAN), "reprice", "apply", str(worklist)]
+    # THE STALE-WRITE GUARD, TRAVELLING TO THE SUBPROCESS. Absent means "did not read one",
+    # which the command allows for the terminal user; present-and-behind refuses the whole
+    # file before a byte is built. See `cli/cmd_reprice.py:_apply`.
+    revision = payload.get("revision")
+    if isinstance(revision, str) and revision:
+        argv += ["--corpus-revision", revision]
     if payload.get("write"):
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
     return {
         "ok": code == 0,
         "exit_code": code,
-        "wrote": bool(payload.get("write")) and code == 0,
+        # ANSWERED BY THE FILE BEING THERE RATHER THAN BY A FLAG, which is the rule
+        # `_markdown_summary` already states one function up. `_apply` exits 0 with nothing
+        # written when every row was refused — a single unreadable price does it — and this
+        # used to answer `wrote: true` over an `import.csv` that does not exist.
+        "wrote": bool(payload.get("write"))
+        and code == 0
+        and (directory / cmd_reprice.IMPORT).is_file(),
         "console": console,
         "stamp": stamp,
+        # THE NEW DIGEST, SO THE SCREEN CAN ADOPT IT. `apply --write` moves the corpus behind
+        # the screen's back — `emit` never did, it only reads — so without this the operator's
+        # very next keystroke is refused `corpus_moved` for a write they just made themselves.
+        "revision": corpus.revision(),
     }
+
+
+def _write_edits(directory: Path, edits: object) -> Path:
+    """`[{sku, price}]` as the two-column instruction sheet `reprice apply` reads.
+
+    VALIDATED HERE AND SHAPED HERE, because everything past this point treats the file as the
+    operator's word. A price is kept as the STRING it arrived as rather than parsed: `read_back`
+    compares as `Decimal` and refuses an unreadable cell by name, and re-formatting a figure on
+    the way in would be this route having an opinion about money.
+    """
+    if not isinstance(edits, list) or not edits:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "edits_invalid",
+            "Send `edits` as a non-empty list of {sku, price}.",
+        )
+    rows = []
+    for entry in edits:
+        if not isinstance(entry, dict):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST, "edits_invalid", "Every edit must be {sku, price}."
+            )
+        sku = str(entry.get("sku") or "").strip()
+        price = str(entry.get("price") or "").strip()
+        if not sku or not price:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "edits_invalid",
+                f"An edit is missing its sku or its price: {entry!r}",
+            )
+        rows.append({tcgcsv.SKU_COLUMN: sku, tcgcsv.PRICE_COLUMN: price})
+    target = directory / "edited-screen.csv"
+    tcgcsv.write_csv(target, (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN), rows)
+    return target
+
+
+def _survey(directory: Path) -> Dict[str, dict]:
+    """`survey.json`'s rows keyed by SKU, or a refusal naming which half is missing.
+
+    THE MARKDOWN'S ANSWER TO `_history_row`, AND ITS DOCSTRING'S ARGUMENT CARRIES OVER WORD
+    FOR WORD: the document that priced this card is the document that says what it is. The
+    survey keeps every live row's export bytes verbatim, which is the five identity cells the
+    catalogue walk reads, so there is no second source to keep in step and no re-parse of an
+    export.
+    """
+    path = directory / cmd_reprice.SURVEY
+    if not path.is_file():
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "survey_not_written",
+            f"Markdown {directory.name} has no {cmd_reprice.SURVEY}. It was written before "
+            f"the lens existed — re-run `reprice list --write` over the same export.",
+        )
+    try:
+        payload = json.loads(path.read_text("utf-8"))
+        rows = payload["skus"]
+    except (OSError, ValueError, KeyError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "survey_unreadable",
+            f"{cmd_reprice.SURVEY} could not be read: {exc}. Re-run `reprice list --write`.",
+        ) from None
+    # PROJECTED SO BOTH DOCUMENTS ANSWER `_history_for_entry` IN ONE SHAPE. A run's
+    # `pricing.json` entry nests the export's own figures under `snap`; a survey row carries
+    # `market` at the top because that is `Candidate`'s word for it. The panel draws
+    # `snap.market` — the export's price, BESIDE the reading and never mixed into it — so
+    # without this a live listing's own asking market read as "the export carries no price for
+    # this card", which is a false sentence over a row the export priced.
+    return {
+        str(row.get("sku") or ""): {**row, "snap": {"market": row.get("market")}}
+        for row in rows
+        if row.get("sku")
+    }
+
+
+def _survey_row(directory: Path, sku: str) -> dict:
+    entry = _survey(directory).get(sku)
+    if entry is None:
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "sku_not_in_markdown",
+            f"Markdown {directory.name} surveyed no SKU {sku}. A history is read off the "
+            f"export row this markdown stored, so a SKU it never saw has no row here to read.",
+        )
+    return entry
+
+
+def do_markdown_table(stamp: str) -> dict:
+    """`GET /pipeline/markdowns/<stamp>/table` — every live listing this survey saw (D103).
+
+    THE LENS'S WHOLE INPUT, and free: it reads `survey.json` and holds nothing. What makes it
+    a lens rather than a gate is that the refused rows are here too, each carrying the code
+    that refused it, so `#/pricing` can draw the operator's entire live inventory and let
+    staleness be a filter they loosen rather than a decision taken before the data arrived.
+
+    THE ORDER IS THE FILE'S, WHICH IS THE REPORT'S. `Plan.surveyed` walks the offer by
+    `at_risk`, then the deferred, then the refusals in `SKIP_ORDER`; a screen drawing this top
+    to bottom draws what the terminal printed.
+    """
+    directory = _open_markdown(stamp)
+    # THROUGH `_survey` FOR THE REFUSALS, then the file once more for the envelope around
+    # them. `_survey` is what names a missing or unreadable survey with a code the screen can
+    # act on, so it runs first and this read cannot be the one that fails.
+    rows = list(_survey(directory).values())
+    payload = json.loads((directory / cmd_reprice.SURVEY).read_text("utf-8"))
+    return {
+        "stamp": stamp,
+        "asked": payload.get("asked") or {},
+        "counts": payload.get("counts") or {},
+        "source": payload.get("source") or {},
+        "at": payload.get("at"),
+        "skus": rows,
+        # THE SENTENCES, SENT ONCE RATHER THAN PER ROW AND NEVER RE-WORDED ON THE CLIENT.
+        # `pipeline/reprice.py:SKIP_SENTENCE` is the one table; a screen composing its own
+        # phrasing for a refusal code is a second description of one fact, which is the drift
+        # D16 exists to catch.
+        "says": dict(reprice.SKIP_SENTENCE),
+        # WHICH CODES MAY NEVER BE PUSHED, so the row can refuse the field rather than let the
+        # operator type a price the apply will throw away. Server-side, because `read_back` is
+        # what actually enforces it and two lists would drift.
+        "unpriceable": list(reprice.UNPRICEABLE_CODES),
+        "floor": str(pricing_mod.FLOOR),
+    }
+
+
+def do_markdown_history(stamp: str, sku: str) -> dict:
+    """`GET /pipeline/markdowns/<stamp>/history?sku=<sku>` — the reading for one live listing.
+
+    `do_pipeline_history`'s body over the markdown's own document — see `_history_for_entry`
+    for why that is one implementation and two addresses, and see that route's header for the
+    third-party argument, which is unchanged: it spends nothing, both hosts are public, it
+    writes only its own derived cache, and it cannot fire without a press.
+    """
+    directory = _open_markdown(stamp)
+    wanted = _wanted_sku(sku)
+    return _history_for_entry(
+        _survey_row(directory, wanted), wanted, {"markdown": directory.name}
+    )
+
+
+def do_markdown_trends(stamp: str, skus: Sequence[str] = ()) -> dict:
+    """`GET /pipeline/markdowns/<stamp>/trends?sku=…` — the strip, over named SKUs only.
+
+    AN EXPLICIT LIST IS REQUIRED HERE AND OPTIONAL ON A RUN, and the difference is size rather
+    than taste. The run route measured 46 SKUs at ~34s of courtesy delay; a survey of the
+    owner's live inventory is 441 rows, which is about five and a half minutes at a free
+    public mirror for readings nobody asked for. D62's rule is that this is a press, and a
+    walk that big would make the press meaningless — so the client sends the rows the operator
+    is actually looking at, filtered, in chunks.
+    """
+    directory = _open_markdown(stamp)
+    wanted = [s for s in (str(x).strip() for x in skus) if s]
+    if not wanted:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "skus_required",
+            "Name the SKUs to read: a survey is the whole live inventory, and walking it "
+            "unasked would be ~5.5 minutes at a public mirror. Pass ?sku= per row.",
+        )
+    return _trends_for_entries(
+        _survey(directory),
+        wanted,
+        {"markdown": directory.name},
+        missing=(
+            f"Markdown {directory.name} surveyed no SKU {{sku}}. A history is read off the "
+            f"export row this markdown stored."
+        ),
+        skip_at_cap=False,
+    )
 
 
 def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
@@ -2231,22 +2444,18 @@ def do_pricing_corpus() -> dict:
 def _corpus_revision() -> str:
     """A short digest of `inventory/prices.json` as it stands on disk, or `""` if absent.
 
-    OUT OF BAND, IN THE ENVELOPE, AND NEVER INSIDE THE DOCUMENT — which is the whole design of
-    this guard. `#/pricing` decides "unsaved" by comparing the corpus object it holds against
-    the one it last sent, BY IDENTITY. Putting a revision inside the document would mean the
-    screen has to rebuild that object every time a write lands, which is exactly the endless
-    unsaved -> saving -> unsaved oscillation that screen was built to avoid. A sibling field is
-    compared by the route and never touched by the screen's dirty check.
+    A DELEGATION, AND THE ONE LINE IS THE POINT. The body moved to `pipeline/corpus.py:revision`
+    so that the CLI writers — `reprice apply`, which read-modify-writes this same file from a
+    subprocess — can be guarded by the identical digest. `cli/` may not import `server/`, so a
+    guard living here could only ever cover the route, and for as long as it did, `PUT /pricing`
+    refused a stale write while a subprocess clobbered one silently.
 
-    WHY IT EXISTS AT ALL: `PUT /pricing` replaces the document wholesale, so a screen holding a
-    snapshot from mount silently reverts anything written underneath it on the next keystroke —
-    no error anywhere, on the one file in this product that holds money. Two tabs on `#/pricing`
-    reach it today, and so does `pkmnscan prices adopt --write` while one is open.
+    THE NAME STAYS BECAUSE THE CALL SITES DO. This is read three times in this module and the
+    indirection costs nothing; what it buys is that there is exactly one reader of the file, a
+    hazard `check_corpus_revision`'s own header names — a digest CACHE added here would leave a
+    route-only test green while the real refusal stopped firing.
     """
-    path = files.prices_path()
-    if not path.is_file():
-        return ""
-    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    return corpus.revision()
 
 
 def do_pricing_corpus_write(payload: dict) -> dict:
@@ -2292,6 +2501,28 @@ def do_pricing_corpus_write(payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST, "corpus_invalid", str(exc)
         ) from None
+
+    # THE ANSWER IS DATED HERE, WHICH IS WHERE IT WAS NOT (D103). `Answer.at` was written in
+    # exactly one place in this repo — `reprice apply` — and read in one, that command's
+    # ratchet, so `priced_recently` meant "marked down recently" while D100 claimed it meant
+    # *"a card the operator hand-priced on #/pricing yesterday is not stale"*. It did not; the
+    # screen has never stamped anything, and hand-pricing fifty live listings left every one
+    # of them reading as stale the next morning. Now that the markdown IS a lens on this
+    # screen, that gap is the ordinary path rather than an edge.
+    #
+    # DIFF-BASED, AND `corpus.stamp_answers` IS WHERE THE THREE RULES LIVE. This route replaces
+    # the document wholesale on every debounced save, so a blanket stamp would move every
+    # answer's `at` to now on every keystroke and read the whole corpus as `priced_recently`
+    # forever — the ratchet inverted into a permanent refusal.
+    # A CORPUS ON DISK THIS PARSER CANNOT READ IS NOT A REASON TO REFUSE THE WRITE that
+    # replaces it — the same posture `do_pipeline_worklist` takes. Every answer then reads as
+    # new and is stamped, which is the honest answer when there is no `before` to compare
+    # against.
+    previous = corpus.Corpus()
+    with contextlib.suppress(decisions.MalformedDecisions, ValueError):
+        previous = corpus.Corpus.read()
+    corpus.stamp_answers(previous, book, master.now())
+
     written = book.write()
     return {
         "ok": True,
@@ -2527,6 +2758,11 @@ def do_pipeline_history(name: str, sku: str) -> dict:
     product line and a mirror having a bad day are not the same problem.
     """
     directory = _open_run(name)
+    wanted = _wanted_sku(sku)
+    return _history_for_entry(_history_row(directory, wanted), wanted, {"run": directory.name})
+
+
+def _wanted_sku(sku: str) -> str:
     wanted = (sku or "").strip()
     if not wanted:
         raise PipelineRefusal(
@@ -2534,7 +2770,25 @@ def do_pipeline_history(name: str, sku: str) -> dict:
             "sku_required",
             "A price history is per SKU. Pass ?sku=<TCGplayer Id>.",
         )
-    entry = _history_row(directory, wanted)
+    return wanted
+
+
+def _history_for_entry(entry: dict, wanted: str, source: dict) -> dict:
+    """The reading for one row, whichever document that row came out of.
+
+    THE SPLIT IS THE ADDRESS, NOT THE WORK. A run's `pricing.json` entry and a markdown's
+    `survey.json` entry are two shapes over one fact — the verbatim export row — and the
+    catalogue walk reads five cells out of it (`Product Line`, `Set Name`, `Number`,
+    `Product Name`, `TCGplayer Id`), which a My Pricing export carries on every row. So the
+    markdown routes are a second ADDRESS over this body and never a second implementation:
+    `not_catalogued`, `history_unresolved` and `history_unreachable` are one vocabulary, and
+    the cache below is keyed by product rather than by document, so a card already read on a
+    run is warm here.
+
+    `source` NAMES THE DOCUMENT and is spread into the answer — `{"run": …}` or
+    `{"markdown": …}`. A markdown stamp sent back under a field called `run` would be a lie
+    the client had to decode.
+    """
     row = entry.get("row") or {}
 
     # NOT EVERY CARD HAS A CATALOGUE, AND THAT IS D22 RATHER THAN A GAP. `misc` carries
@@ -2568,7 +2822,7 @@ def do_pipeline_history(name: str, sku: str) -> dict:
         ) from None
 
     return {
-        "run": directory.name,
+        **source,
         "sku": reading.sku,
         "product_id": reading.product_id,
         # The card's own identity, off the run's table rather than re-derived, so the panel
@@ -2697,8 +2951,39 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
         for entry in (payload.get("skus") or ())
         if str(entry.get("sku") or "")
     }
-    wanted = [s for s in (str(x).strip() for x in skus) if s]
+    return _trends_for_entries(
+        entries,
+        [s for s in (str(x).strip() for x in skus) if s],
+        {"run": directory.name},
+        missing=(
+            f"Run {directory.name} matched no SKU {{sku}}. A history is read off the "
+            f"export row this run stored."
+        ),
+        skip_at_cap=True,
+    )
 
+
+def _trends_for_entries(
+    entries: Dict[str, dict],
+    wanted: Sequence[str],
+    source: dict,
+    *,
+    missing: str,
+    skip_at_cap: bool,
+) -> dict:
+    """The strip's readings over many rows, whichever document those rows came out of.
+
+    ONE IMPLEMENTATION, TWO ADDRESSES — `_history_for_entry`'s argument, and the same cache.
+    What differs between a run and a markdown is entirely in the caller: which file the
+    entries came from, what to call a SKU it does not hold, and whether an unfiltered walk is
+    allowed at all.
+
+    `skip_at_cap` IS A RUN'S DEFAULT AND IS MEANINGLESS FOR A MARKDOWN. It skips the rows a
+    run can add nothing for, on the owner's *"I don't need the prices for the rows that have
+    none left"*; nothing on a live listing is at the cap, so the markdown route passes False
+    and requires an explicit list instead — see `do_markdown_trends` for why the size makes
+    that necessary rather than tidy.
+    """
     refused: Dict[str, str] = {}
     skipped = 0
     rows: List[dict] = []
@@ -2709,12 +2994,9 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
             # this table's own keys. Named rather than dropped: a client asking about a SKU
             # this run never matched has a stale list, and silence would look like a mirror
             # that had nothing to say about a real card.
-            refused[sku] = (
-                f"Run {directory.name} matched no SKU {sku}. A history is read off the "
-                f"export row this run stored."
-            )
+            refused[sku] = missing.format(sku=sku)
             continue
-        if not wanted and entry.get("at_cap"):
+        if skip_at_cap and not wanted and entry.get("at_cap"):
             # THE DEFAULT SKIP, AND IT IS COUNTED RATHER THAN HIDDEN. A screen that showed 46
             # readings over a 60-row list with no number beside them would look like 14 rows
             # had failed. This is what lets it say they were never asked about.
@@ -2742,7 +3024,7 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
     refused.update(walked)
 
     return {
-        "run": directory.name,
+        **source,
         "asked": len(rows),
         "skipped": skipped,
         "skus": {

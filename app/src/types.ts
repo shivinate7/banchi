@@ -2584,10 +2584,82 @@ export type MarkdownAsk = {
  *  none. */
 export type MarkdownAnswer = {
   ok: boolean
-  exit_code: number
+  /** WHETHER `import.csv` IS ACTUALLY THERE, not whether a write was asked for. `apply` exits 0
+   *  with nothing written when every row was refused — one unreadable price does it — so the
+   *  route answers by looking at the directory. */
   wrote: boolean
+  exit_code: number
   console: string
   stamp: string | null
+  /** The corpus digest AFTER the press. `apply --write` writes `inventory/prices.json` from a
+   *  subprocess, which `emit` never does, so a screen that did not adopt this would have its
+   *  operator's next keystroke refused `corpus_moved` for a write it just made itself. */
+  revision?: string
+}
+
+/** One live listing the survey saw (D103).
+ *
+ *  ITS OWN TYPE AND NOT A `PricingSku` WITH HOLES. Twelve of that type's fields are a join's
+ *  cap arithmetic, and three of them would be actively FALSE here rather than merely absent:
+ *  `at_cap` where the cap is not the question, `positions: []` where the doc says the first is
+ *  the representative photograph, and `nothing_to_add: null` — whose own doc says null means
+ *  *"it adds one, which is the ordinary case"* — on a row that adds nothing, ever. A screen
+ *  reassembling a sentence out of parts that say the wrong thing is the drift D16 exists to
+ *  catch, and `app/src/pricingSource.ts`'s adapter is where the two shapes actually meet.
+ *
+ *  EVERY FIGURE IS TEXT AND EVERY FIGURE WAS COMPUTED SERVER-SIDE. `above_market`, `at_risk`,
+ *  `cut` and `given_up` are arithmetic on money, and this client performs none — a price
+ *  through a JSON float comes back as binary floating point, and every comparison downstream
+ *  is `Decimal`. */
+export type MarkdownSku = {
+  sku: string
+  /** Where the plan put it. `offered` is in the worklist; `deferred` QUALIFIED and fell below
+   *  `--limit`; `refused` carries a `skip`. The third state is why this field exists — a
+   *  deferred row and an offered row both carry `skip: null`. */
+  standing: 'offered' | 'deferred' | 'refused'
+  /** A `pipeline/reprice.py` refusal code, or null. Non-null exactly when `standing` is
+   *  `refused`, and at most ONE even where three would apply: `plan`'s ladder is an early
+   *  exit and `SKIP_ORDER` is its precedence. */
+  skip: string | null
+  name: string
+  condition: string
+  /** `Total Quantity` — what TCGplayer says is live, as of the download. */
+  live: number
+  /** The operator's own asking price, `TCG Marketplace Price`. Null on a live row the export
+   *  gave no price for, which is a row nothing can judge a lowering against. */
+  asking: string | null
+  market: string | null
+  above_market: string | null
+  at_risk: string
+  proposed: string | null
+  cut: string | null
+  given_up: string | null
+  /** THE PROXY. How long the CARD has been owned, not how long the listing has been live —
+   *  the store cannot measure the second, and every surface drawing this owes D100's
+   *  sentence. */
+  owned_since: string | null
+  last_sold: string | null
+  priced_at: string | null
+  /** The export row, verbatim, all sixteen cells. What an upload's bytes are built from and
+   *  what a price history's five identity cells are read out of. */
+  row: Record<string, string>
+}
+
+/** The lens's whole input — `survey.json` as `GET /pipeline/markdowns/<stamp>/table` serves it. */
+export type MarkdownTable = {
+  stamp: string
+  at: string | null
+  asked: Record<string, unknown>
+  counts: Record<string, number>
+  source: Record<string, unknown>
+  skus: MarkdownSku[]
+  /** Refusal code -> the operator's sentence, sent once rather than per row and never
+   *  re-worded here: `pipeline/reprice.py:SKIP_SENTENCE` is the one table. */
+  says: Record<string, string>
+  /** The codes no price may be pushed for, decided by the server because `read_back` is what
+   *  enforces it and two lists would drift. */
+  unpriceable: string[]
+  floor: string
 }
 
 /** One markdown as the screen lists it. `files` is what the directory actually holds, so

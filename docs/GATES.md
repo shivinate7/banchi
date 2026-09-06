@@ -329,6 +329,16 @@ at a temporary directory, so nothing here touches the real inventory.
   string-typed record and returned an index that collided later. Both are recorded in
   `docs/DEBTS.md`, and both were re-introduced deliberately to confirm this test catches
   them before it was committed.
+- **The markdown blocks are two, and the second is about a seam the first cannot reach**
+  (D103). `check_markdown` owns the byte contract — every file carries `Add to Quantity` 0, the
+  upload is built from the manifest's bytes, a spreadsheet's mangling round-trips identically, a
+  raise refuses the whole file. `check_markdown_lens` owns the WIDENING: that `survey.json`
+  holds every live row while the worklist stays narrow, that a row the offer never held is
+  priceable because its bytes are on disk, that `dropped` still counts the offer and not the
+  record, that a `sold_out` row is refused by name however good its price, and that a stale
+  corpus digest refuses before a byte is built. The two are kept apart because the first must
+  keep running over byte-identical inputs — that is what makes the money path provably
+  untouched by the second.
 - **What it checks that T1–T6 cannot.** They check rules and this checks wiring. A wrong
   rule gives a wrong answer you can see; a wrong position gives a card that is exactly where
   the inventory says it is not, found weeks later by a person opening the wrong slot.

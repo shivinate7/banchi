@@ -297,6 +297,33 @@ class Plan:
         """Refusals in a fixed order, so two reports of the same store read the same."""
         return [(code, self.skipped[code]) for code in SKIP_ORDER if self.skipped.get(code)]
 
+    def surveyed(self) -> List[Tuple[Candidate, str]]:
+        """Every candidate this plan looked at, each with its standing. The lens's whole table.
+
+        THE ORDER IS THE REPORT'S OWN — `rows` by `at_risk` desc, then `deferred`, then the
+        refusals walked in `SKIP_ORDER` — so `skips`'s promise that two reports of one store
+        read the same extends to the wire, and a screen drawing this top to bottom draws what
+        the terminal printed.
+
+        `standing` IS A THIRD STATE THAT `skip` CANNOT EXPRESS, which is the only reason it is
+        here rather than derived. A `deferred` row — one that QUALIFIED and fell below
+        `--limit` — carries `skip is None` exactly as an offered row does, so without this the
+        difference between "the rule proposes this" and "the rule proposes this and you asked
+        for fewer" is invisible. It is not a second fact that can disagree with `skip`: both
+        are projections of one partition taken in one pass, and `standing == "refused"` is true
+        exactly when `skip` is non-None.
+
+        DELIBERATELY NOT A REFUSAL CODE FOR `deferred`. Those rows qualified, which is why
+        `plan` keeps them out of `skipped` in the first place, and inventing a `below_limit`
+        code would put a non-refusal into `SKIP_ORDER`, `SKIP_SENTENCE` and the report's
+        refusal block.
+        """
+        out: List[Tuple[Candidate, str]] = [(row, "offered") for row in self.rows]
+        out.extend((row, "deferred") for row in self.deferred)
+        for _code, group in self.skips():
+            out.extend((row, "refused") for row in group)
+        return out
+
 
 def plan(
     export_rows: Sequence[Mapping[str, str]],
@@ -422,20 +449,37 @@ def plan(
 # ----------------------------------------------------------------- reading the edits back
 
 
-NOT_IN_WORKLIST = "not_in_worklist"      # a SKU the worklist was never written for
+# A SKU THIS MARKDOWN NEVER SAW. It used to mean "not in the OFFER", and the widening is why
+# it does not any more: the docstring's own argument for the refusal is *"there are no bytes to
+# build a row from"*, and once `survey.json` carries every live row's bytes, that is no longer
+# true of a row the plan merely declined to propose. The lens hands back prices for rows the
+# rule refused — `near_market`, `too_young`, `priced_recently` — and every one of them has an
+# export row on disk. What is left is what the refusal was always protecting: a typo'd id, or a
+# row out of some other export, for which there genuinely are no bytes.
+NOT_IN_WORKLIST = "not_in_worklist"      # a SKU this markdown's survey never saw
 DUPLICATE = "duplicate"                  # the same SKU twice in one file (D7)
 UNREADABLE = "unreadable"                # the price cell is not a number
 BELOW_FLOOR = "below_floor"              # under $0.40, which TCGplayer will not take
 RAISED = "raised"                        # above what the export reported. Never on this path.
 UNCHANGED = "unchanged"                  # equal to what the export reported
 
+# THE TWO THE LENS ADDS, AND THEY ARE THE SURVEY'S OWN CODES RATHER THAN NEW VOCABULARY. A row
+# the screen draws but must not push is refused here under the name the survey already gave it,
+# so the sentence on the row and the sentence in the receipt are one string from one table. See
+# `unpriceable=` on `read_back` for who decides membership.
+UNPRICEABLE_CODES: Tuple[str, ...] = (NOT_THIS_STORE, SOLD_OUT)
+
 EDIT_SENTENCE: Dict[str, str] = {
-    NOT_IN_WORKLIST: "not a row this worklist was written for",
+    NOT_IN_WORKLIST: "not a row this markdown's survey saw",
     DUPLICATE: "the same SKU appears twice",
     UNREADABLE: "the price cell is not a number",
     BELOW_FLOOR: "below the $0.40 floor",
     RAISED: "above the live price; this path only lowers",
     UNCHANGED: "the same price it is already listed at",
+    # VERBATIM FROM `SKIP_SENTENCE`, not re-worded, so the survey and the apply cannot drift
+    # into two descriptions of one fact.
+    NOT_THIS_STORE: SKIP_SENTENCE[NOT_THIS_STORE],
+    SOLD_OUT: SKIP_SENTENCE[SOLD_OUT],
 }
 
 
@@ -463,8 +507,13 @@ class Application:
 
     edits: List[Edit] = field(default_factory=list)
     refused: List[Edit] = field(default_factory=list)
-    #: SKUs the worklist was written for that the operator deleted from it. Not a refusal:
+    #: SKUs the OFFER was written for that the operator deleted from it. Not a refusal:
     #: deleting a line is how a person says "not this one".
+    #:
+    #: THE OFFER, NOT EVERY ROW THE MARKDOWN KNOWS ABOUT — see `read_back`'s `offered`. The two
+    #: were the same set until the lens made `survey.json` carry every live row, and measured
+    #: over the wider one this figure would tell an operator who priced three cards that they
+    #: had deleted 438.
     dropped: List[str] = field(default_factory=list)
 
     @property
@@ -494,6 +543,8 @@ def read_back(
     live: Optional[Mapping[str, int]] = None,
     names: Optional[Mapping[str, str]] = None,
     floor: Decimal = pricing.FLOOR,
+    offered: Optional[Sequence[str]] = None,
+    unpriceable: Optional[Mapping[str, str]] = None,
 ) -> Application:
     """The operator's edited worklist, judged against what the export reported.
 
@@ -508,11 +559,30 @@ def read_back(
     never as text: a live export writes four decimal places ("0.6600") where this pipeline
     writes two ("0.66"), and those are equal as money and different as bytes. A string
     comparison would read every unedited row as a change and mark down the entire store.
+
+    `offered` NARROWS WHAT COUNTS AS DELETED, AND WITHOUT IT THE LENS MAKES THE RECEIPT LIE.
+    `dropped` is "SKUs this file was written for that the operator took out", and it was
+    measured over `was` because those were the same set: the worklist and the manifest both
+    held exactly the proposal. They are not the same set any more — `was` widens to every live
+    row the survey saw so the lens can price one, while the OFFER is still the handful the rule
+    proposed. Left alone, a screen handing back three edits out of 441 known rows would report
+    438 rows deleted from a worklist that never had them. Absent means "measure it over `was`",
+    which is what every caller written before the lens does and what T7 already asserts.
+
+    `unpriceable` MAPS A SKU TO THE SURVEY'S OWN REFUSAL CODE, and a row in it is refused under
+    that code however good its price is. It exists because the lens DRAWS rows it must never
+    push: the 33 SKUs on the owner's export that TCGplayer lists and this store has never held
+    (`not_this_store`), and rows the export carries with no live copies (`sold_out`). Both have
+    bytes, so nothing upstream stops them; what stops them is that lowering the first would
+    move a listing this pipeline did not create and cannot verify, and the second would edit
+    nothing at all. Passing the survey's code rather than a boolean is what keeps one
+    vocabulary between the row's sentence and the receipt's.
     """
     out = Application()
     seen: Dict[str, Edit] = {}
     quantities = dict(live or {})
     labels = dict(names or {})
+    barred = dict(unpriceable or {})
 
     for raw in worklist_rows:
         sku = str(raw.get(tcgcsv.SKU_COLUMN, "")).strip()
@@ -535,6 +605,15 @@ def read_back(
             out.refused.append(edit)
             continue
         edit.was = before
+
+        # BARRED BEFORE THE PRICE IS EVEN READ, because no price makes these pushable. It sits
+        # after the bytes check on purpose: "there is no row for this SKU" is a different
+        # complaint from "there is a row and you may not move it", and the operator gets the
+        # one that is true.
+        if sku in barred:
+            edit.refusal = barred[sku]
+            out.refused.append(edit)
+            continue
 
         try:
             after = tcgcsv.parse_price(raw.get(tcgcsv.PRICE_COLUMN, ""))
@@ -560,7 +639,10 @@ def read_back(
             continue
         out.edits.append(edit)
 
-    out.dropped = sorted(sku for sku in was if sku not in seen)
+    # OVER THE OFFER WHERE ONE WAS NAMED, AND OVER `was` OTHERWISE. See `offered` above for
+    # why the two stopped being the same set, and `Application.dropped` for what the figure
+    # means to the person reading the receipt.
+    out.dropped = sorted(sku for sku in (was if offered is None else offered) if sku not in seen)
     return out
 
 

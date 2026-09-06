@@ -38,9 +38,10 @@ SKUs from then on, and the receipt is what explains them.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Optional
 
 from cli import runs
 from pipeline import corpus, decisions, pricing, reprice, tcgcsv
@@ -51,6 +52,9 @@ DIRNAME = "markdowns"
 WORKLIST = "worklist.csv"
 IMPORT = "import.csv"
 MANIFEST = "manifest.json"
+#: Every live row the survey saw, with its verdict — what `#/pricing` draws as a lens. See
+#: `_write_worklist` for why this is its own file rather than a wider manifest.
+SURVEY = "survey.json"
 REPORT = "report.txt"
 RECEIPT = "receipt.txt"
 
@@ -64,7 +68,33 @@ def _markdowns_dir() -> Path:
 
 
 def _stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    """A free `YYYYMMDD-HHMMSS`, advancing a second at a time until the directory is unclaimed.
+
+    THE SHAPE IS AN ADDRESS AND MAY NOT GROW A SUFFIX. `server/pipeline_routes.py:_STAMP` and
+    the five route patterns in `server/capture_server.py` all spell it `[0-9]{8}-[0-9]{6}`, so
+    a `-2` on the end is a markdown no route can reach — the collision would stop being silent
+    by becoming unaddressable, which is worse.
+
+    WHY IT COLLIDES AT ALL: two `reprice list --write` calls inside one second resolve to one
+    directory and the later manifest replaces the earlier, so the first worklist is judged
+    against an offer that is no longer its own. It became easier to reach when an empty plan
+    started writing too — the survey that proposes nothing is exactly the one an operator runs
+    twice while widening `--days`.
+
+    THE COST IS THAT A DIRECTORY CAN BE NAMED A FEW SECONDS AFTER THE MOMENT IT DESCRIBES, and
+    the manifest's own `at` is the truth either way. A bound rather than a `while True`: a
+    minute of collisions is not a busy operator, it is a clock that has stopped, and spinning
+    silently is how that gets discovered much later.
+    """
+    now = datetime.now(timezone.utc)
+    for step in range(60):
+        stamp = (now + timedelta(seconds=step)).strftime("%Y%m%d-%H%M%S")
+        if not (_markdowns_dir() / stamp).exists():
+            return stamp
+    raise ValueError(
+        "no free markdown stamp within a minute of now — check the clock, and check "
+        f"{_markdowns_dir()} for a directory named after the future."
+    )
 
 
 def _card_facts(inventory):
@@ -169,6 +199,44 @@ def _say_plan(plan, say, source, export, live_rows) -> None:
             say(f"  {reprice.SKIP_SENTENCE[code]:<38} {len(group):>5} SKU(s)   [{code}]")
 
 
+def _cash(value) -> Optional[str]:
+    """A figure as the string the wire carries, or None. Money is text, never a JSON float."""
+    return None if value is None else str(value)
+
+
+def _surveyed(row, standing: str) -> dict:
+    """One candidate as `survey.json` holds it — every figure this path actually knows.
+
+    THE FIGURES ARE COMPUTED HERE AND NEVER ON THE SCREEN. `above_market`, `at_risk`, `cut` and
+    `given_up` are all arithmetic on money, and `app/src/Pricing.tsx` performs none: a price
+    that goes through a JSON float comes back as binary floating point, and every comparison
+    downstream is `Decimal`.
+
+    `row` IS THE VERBATIM EXPORT ROW and is the reason this file can be addressed at all. It is
+    what `_history_row`'s five identity cells are read out of, and what an upload's bytes come
+    from — the same argument the manifest's own copy carries, one file over.
+    """
+    return {
+        "sku": row.sku,
+        "standing": standing,
+        "skip": row.skip,
+        "name": row.name,
+        "condition": row.condition,
+        "live": row.live,
+        "asking": _cash(row.asking),
+        "market": _cash(row.market),
+        "above_market": _cash(row.above_market),
+        "at_risk": _cash(row.at_risk),
+        "proposed": _cash(row.proposed),
+        "cut": _cash(row.cut),
+        "given_up": _cash(row.given_up),
+        "owned_since": row.owned_since,
+        "last_sold": row.last_sold,
+        "priced_at": row.priced_at,
+        "row": row.row,
+    }
+
+
 def _write_worklist(plan, source, say) -> Path:
     directory = _markdowns_dir() / _stamp()
     directory.mkdir(parents=True, exist_ok=True)
@@ -215,9 +283,43 @@ def _write_worklist(plan, source, say) -> Path:
         },
     }
     files.write_json(directory / MANIFEST, manifest)
+
+    # THE SURVEY, WHICH IS A RECORD AND NOT AN OFFER — the fourth file, and D100 §5's own
+    # distinction applied once more. `worklist.csv` offers rows to upload; `manifest.json`
+    # records what the offer said; this records what the whole EXPORT said, so `#/pricing`
+    # can draw every live listing and price one the rule declined to propose.
+    #
+    # IT IS A SEPARATE FILE AND NOT A WIDER MANIFEST, for two measured reasons. `_apply` reads
+    # `manifest["skus"]` to build the upload's bytes, so leaving it alone is what keeps that
+    # path provably untouched by this widening — every existing assertion in `check_markdown`
+    # runs over byte-identical inputs. And `server/pipeline_routes.py:_markdown_summary` parses
+    # the manifest for EVERY stamp to answer `GET /pipeline/markdowns`: at ~700 bytes a row a
+    # wide manifest is ~530KB on the owner's export, so thirty markdowns would mean parsing
+    # 16MB to draw a list.
+    #
+    # A LIST AND NOT A MAP, because the ORDER is the answer. `Plan.surveyed` walks the offer by
+    # `at_risk`, then the deferred, then the refusals in `SKIP_ORDER`, so a screen drawing this
+    # top to bottom draws what the terminal printed.
+    files.write_json(
+        directory / SURVEY,
+        {
+            "kind": "survey",
+            "at": manifest["at"],
+            "asked": plan.asked,
+            "source": source,
+            "counts": {
+                "considered": plan.considered,
+                "offered": len(plan.rows),
+                "deferred": len(plan.deferred),
+                "refused": sum(len(group) for group in plan.skipped.values()),
+            },
+            "skus": [_surveyed(row, standing) for row, standing in plan.surveyed()],
+        },
+    )
     say("")
     say(f"wrote            {directory / WORKLIST}")
     say(f"                 {directory / MANIFEST}")
+    say(f"                 {directory / SURVEY}")
     return directory
 
 
@@ -252,7 +354,13 @@ def _list(args, say) -> int:
     priced_at = {
         sku: answer.at
         for sku, answer in book.answers.items()
-        if answer.at and not answer.is_hold
+        # `channel == "price"` IS THE HALF THAT WAS MISSING, and it is not belt-and-braces.
+        # `cli/cmd_join.py` seeds `Answer(value=None, channel="unknown")` for every card the
+        # catalog could not price — the ABSENCE of an answer, which is what makes `blocking`
+        # refuse an emit. Now that `corpus.stamp_answers` dates answers written from
+        # `#/pricing` too, a `not answer.is_hold` test alone would let an UNPRICED card read
+        # as `priced_recently` and be refused a markdown for the wrong reason.
+        if answer.at and answer.channel == "price" and not answer.is_hold
     }
 
     plan = reprice.plan(
@@ -282,9 +390,19 @@ def _list(args, say) -> int:
         say("")
         say("nothing to mark down. Every live row is named above — widen --days, lower")
         say("--above-market, or accept that nothing here has been sitting long enough.")
-        return 0
-
-    if not args.write:
+        # AND IT STILL WRITES, WHICH IS THE ONE PLACE THE LENS CHANGED THIS COMMAND'S SHAPE.
+        # This used to return here, so a survey that proposed nothing left no directory at all
+        # — and `#/pricing`'s lens is reached BY a stamp, on a screen whose whole premise is
+        # that staleness is a filter rather than a gate. On the owner's own store `--days 10`
+        # selects zero rows, so the most ordinary way to ask "show me everything" produced
+        # nothing to address.
+        #
+        # THE DIRECTORY SHAPE IS INVARIANT: a header-only `worklist.csv` rather than no
+        # worklist, so nothing downstream has to test for a file that is sometimes absent. It
+        # is also still safe to upload by accident, being a file with no rows in it.
+        if not args.write:
+            return 0
+    elif not args.write:
         say("")
         say(f"DRY RUN — nothing written. Re-run with --write to put the worklist in "
             f"{_markdowns_dir()}/,")
@@ -313,6 +431,55 @@ def _load_manifest(path: Path, override) -> Path:
     return path.parent / MANIFEST
 
 
+def _survey_beside(manifest_path: Path):
+    """`survey.json`'s rows keyed by SKU, and the SKUs no price may be pushed for.
+
+    Returns `({}, {})` where there is no survey, which is every markdown written before the
+    lens existed — applying one of those worklists then reads exactly as it always did.
+
+    THE BAR IS THE SURVEY'S OWN CODE, NOT A JUDGEMENT TAKEN HERE. `not_this_store` is the 33
+    SKUs on the owner's export that TCGplayer lists and this store has never held; lowering one
+    would move a listing this pipeline did not create and whose copies it cannot verify, which
+    is outside the measurement D100's whole safety argument rests on. `sold_out` is a row the
+    export carries with no live copies, so there is no listing for a price to edit. Both are
+    drawn on the lens — omitting them would show 408 rows against an export the operator can
+    see holds 441 — and neither is pushable.
+    """
+    path = manifest_path.parent / SURVEY
+    if not path.is_file():
+        return {}, {}
+    try:
+        payload = json.loads(path.read_text("utf-8"))
+        rows = payload["skus"]
+    except (OSError, ValueError, KeyError):
+        # A SURVEY THAT CANNOT BE READ IS A SURVEY THAT IS NOT THERE. It is a record, and the
+        # offer — which is what `apply` is really about — is in the manifest beside it. Losing
+        # the lens's extra reach is not a reason to refuse an upload the manifest fully
+        # describes.
+        return {}, {}
+    # PROJECTED INTO THE MANIFEST'S VOCABULARY, so `_apply` reads one shape and not two. The
+    # survey calls the export's price `asking`, which is `Candidate`'s own word for it and the
+    # right word on a screen drawing a live listing; the manifest calls it `was`, which is the
+    # right word for a figure a lowering is judged against. The translation belongs here, at
+    # the one seam, rather than in every reader.
+    by_sku = {
+        str(row.get("sku") or ""): {
+            "was": row.get("asking"),
+            "live": row.get("live"),
+            "name": row.get("name"),
+            "row": row.get("row"),
+        }
+        for row in rows
+        if row.get("sku")
+    }
+    barred = {
+        str(row.get("sku")): str(row.get("skip"))
+        for row in rows
+        if row.get("sku") and row.get("skip") in reprice.UNPRICEABLE_CODES
+    }
+    return by_sku, barred
+
+
 def _apply(args, say) -> int:
     path = Path(args.worklist)
     if not path.is_file():
@@ -332,12 +499,30 @@ def _apply(args, say) -> int:
         say(f"{manifest_path} is unusable: {exc}")
         return 1
 
+    # THE SURVEY WIDENS WHAT MAY BE PRICED; THE MANIFEST STILL SAYS WHAT WAS OFFERED. A row the
+    # rule declined to propose — `near_market`, `too_young`, `priced_recently` — is a row the
+    # lens draws and the operator may hand a price back for, and its bytes are on disk. What it
+    # is NOT is part of the offer, so `offered=` keeps `dropped` measuring the worklist.
+    #
+    # OPTIONAL, AND ABSENT IS THE OLD BEHAVIOUR EXACTLY. A markdown written before this landed
+    # has no `survey.json`, and applying its worklist must read the same as it always did.
+    survey, unpriceable = _survey_beside(manifest_path)
+    known = dict(entries)
+    for sku, entry in survey.items():
+        known.setdefault(sku, entry)
+
     edited = tcgcsv.read_export(path)
     application = reprice.read_back(
         edited.rows,
-        {sku: entry["was"] for sku, entry in entries.items()},
-        live={sku: int(entry.get("live", 0)) for sku, entry in entries.items()},
-        names={sku: str(entry.get("name", "")) for sku, entry in entries.items()},
+        # A SURVEY ROW WITH NO ASKING PRICE CARRIES `None` AND IS DROPPED FROM `was` RATHER
+        # THAN COERCED. `read_back` refuses an unparseable `was` as `not_in_worklist`, which is
+        # the honest answer for a live row the export gave no price for: there is nothing to
+        # judge a lowering against.
+        {sku: entry["was"] for sku, entry in known.items() if entry.get("was") is not None},
+        live={sku: int(entry.get("live") or 0) for sku, entry in known.items()},
+        names={sku: str(entry.get("name") or "") for sku, entry in known.items()},
+        offered=list(entries),
+        unpriceable=unpriceable,
     )
 
     say("")
@@ -364,7 +549,8 @@ def _apply(args, say) -> int:
         say("not uploading")
         for code in (
             reprice.UNCHANGED, reprice.BELOW_FLOOR, reprice.UNREADABLE,
-            reprice.NOT_IN_WORKLIST, reprice.RAISED, reprice.DUPLICATE,
+            reprice.NOT_IN_WORKLIST, *reprice.UNPRICEABLE_CODES,
+            reprice.RAISED, reprice.DUPLICATE,
         ):
             group = [e for e in application.refused if e.refusal == code]
             if group:
@@ -392,7 +578,29 @@ def _apply(args, say) -> int:
         say("cannot change a quantity, so uploading it twice cannot double anything.")
         return 0
 
-    originals = {sku: dict(entry["row"]) for sku, entry in entries.items()}
+    # THE STALE-WRITE REFUSAL, AND IT RUNS BEFORE A SINGLE BYTE IS BUILT. `PUT /pricing` has
+    # been guarded since D86 while this command — which read-modify-writes the same file from a
+    # subprocess — was not, so a `#/pricing` tab open during an apply had its next keystroke
+    # refused for a write it had made itself. Now that the press lives ON that screen, that is
+    # the ordinary case rather than a race.
+    #
+    # ABSENT MEANS "DID NOT READ ONE", WHICH IS ALLOWED — the terminal user editing the file
+    # and applying a worklist by hand, exactly the carve-out the route makes. The guard is for
+    # a caller that DID read a revision and is now behind.
+    #
+    # AND IT REFUSES THE WHOLE FILE. The corpus is what `prices_for` will list this card at
+    # from now on; an `import.csv` built against a corpus the operator cannot see is a file
+    # that moves money on a decision nobody made.
+    offered_revision = getattr(args, "corpus_revision", None)
+    if offered_revision:
+        current = corpus.revision()
+        if current and offered_revision != current:
+            say("")
+            say("REFUSED — the pricing file changed since this was read: another tab, another")
+            say("command, or an edit on disk. Nothing is written. Re-read and try again.")
+            return 1
+
+    originals = {sku: dict(entry["row"]) for sku, entry in known.items() if entry.get("row")}
     try:
         rows = reprice.import_rows(application.edits, originals)
     except (KeyError, ValueError) as exc:
@@ -419,10 +627,17 @@ def _apply(args, say) -> int:
     # markdown — the marked-down price is the store's price for that SKU from now on, not a
     # property of this file. `at` is what the ratchet reads next time: a SKU answered inside
     # the window is refused as `priced_recently` unless `--again`.
+    #
+    # THE STAMP GOES THROUGH `corpus.stamp_answers` RATHER THAN BEING SET HERE, so that this
+    # command and `PUT /pricing` date an answer by one rule. Setting `at` inline was the only
+    # place in the repo that ever wrote it, which is why `priced_recently` meant "marked down
+    # recently" while D100 claimed it meant "priced recently, by any hand".
+    before = corpus.Corpus.read()
     book = corpus.Corpus.read()
     stamp = master.now()
     for edit in application.edits:
-        book.answers[edit.sku] = corpus.Answer(value=str(edit.now), at=stamp)
+        book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
+    corpus.stamp_answers(before, book, stamp)
     book.write()
 
     lines = [

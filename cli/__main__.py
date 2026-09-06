@@ -312,6 +312,12 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"the {cmd_reprice.MANIFEST} to judge it against (default: beside the worklist)",
     )
     applying.add_argument(
+        "--corpus-revision",
+        help="the digest of inventory/prices.json this caller last read. Refuses the WHOLE "
+        "file if the corpus has moved since. Omit it to say 'I did not read one', which is "
+        "the terminal user applying a worklist by hand and is allowed.",
+    )
+    applying.add_argument(
         "--write",
         action="store_true",
         help="write import.csv and record the prices. Previews without it.",

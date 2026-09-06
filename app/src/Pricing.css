@@ -1038,8 +1038,20 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
    TIERS — decided by the width of the list.
    ========================================================================== */
 
+/* A LIVE LISTING HAS NO PHOTOGRAPH AND NO QUANTITY GOING INTO A FILE (D103), so the lens drops
+   the thumb (36px) and the Qty cell (56px) from the front of every template. `.pricing-facts`
+   is `display: contents`, so the row is a flat grid and the token count has to match the
+   VISIBLE children exactly — nine here, seven without those two.
+
+   THE HONEST COST: this is a third axis over two that already existed, and eight literal
+   templates is what that multiplies to. Composing the template from a cell list would be the
+   real fix and would change the declared-property assertion `pricing.spec.ts` makes about this
+   rule, so it is argued separately rather than smuggled in here. */
+.pricing-section[data-copies='none'] { --pricing-cols: minmax(0, 1fr) 128px 68px 68px 68px 132px 68px; }
+
 /* the trend column exists only once something has been asked for (D79) */
 .pricing-body[data-trends='off'] .pricing-section { --pricing-cols: 36px minmax(0, 1fr) 56px 68px 68px 68px 132px 68px; }
+.pricing-body[data-trends='off'] .pricing-section[data-copies='none'] { --pricing-cols: minmax(0, 1fr) 68px 68px 68px 132px 68px; }
 .pricing-body[data-trends='off'] .pricetrend,
 .pricing-body[data-trends='off'] .pricetrend-keys { display: none; }
 
@@ -1051,6 +1063,8 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
 @container pricing (min-width: 1040px) {
   .pricing-section[data-direct='some'] { --pricing-cols: 36px minmax(0, 1fr) 56px 128px 68px 68px 68px 68px 132px 68px; }
   .pricing-body[data-trends='off'] .pricing-section[data-direct='some'] { --pricing-cols: 36px minmax(0, 1fr) 56px 68px 68px 68px 68px 132px 68px; }
+  .pricing-section[data-direct='some'][data-copies='none'] { --pricing-cols: minmax(0, 1fr) 128px 68px 68px 68px 68px 132px 68px; }
+  .pricing-body[data-trends='off'] .pricing-section[data-direct='some'][data-copies='none'] { --pricing-cols: minmax(0, 1fr) 68px 68px 68px 68px 132px 68px; }
   .pricing-section[data-direct='some'] .pricing-ref-direct_low,
   .pricing-section[data-direct='some'] .pricing-caption-direct_low { display: block; }
 }
@@ -1073,6 +1087,11 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   }
   .pricing-thumb { grid-column: 1; grid-row: 1 / 3; }
   .pricing-id { grid-column: 2; grid-row: 1; }
+  /* With no thumb there is no first column to leave room for, and the two placed children
+     move left rather than the row keeping a 36px gutter over nothing. */
+  .pricing-section[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 124px auto; }
+  .pricing-section[data-copies='none'] .pricing-id { grid-column: 1; }
+  .pricing-section[data-copies='none'] .pricing-facts { grid-column: 1; }
   .pricing-facts {
     grid-column: 2;
     grid-row: 2;

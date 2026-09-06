@@ -183,8 +183,14 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   --above-market P  only listings asking more than P%
                                    #                     above `TCG Market Price`
                                    #   --limit N         the N rows worth the most; rest named
-                                   #   --again           override the ratchet
-./pkmnscan reprice  apply <worklist.csv> [--write]
+                                   #   --again           override the ratchet. IT NOW COVERS
+                                   #                     HAND-PRICING TOO: `corpus.stamp_answers`
+                                   #                     dates every price the screen writes, so
+                                   #                     a card priced on `#/pricing` yesterday
+                                   #                     is refused `priced_recently` today —
+                                   #                     which is what D100 always claimed and
+                                   #                     never did (D103).
+./pkmnscan reprice  apply <worklist.csv> [--corpus-revision <digest>] [--write]
                                    # The edited worklist back; `--write` produces `import.csv`,
                                    #   which is what you upload through My Pricing.
                                    #   NOTHING IS EVER DELETED AT TCGPLAYER TO LOWER A PRICE.
@@ -199,10 +205,24 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   Only `TCGplayer Id` and `TCG Marketplace Price` are read
                                    #   out of the file you hand back; every other byte comes
                                    #   from the manifest, so a spreadsheet cannot corrupt it.
+                                   #   `--corpus-revision` refuses the WHOLE file if
+                                   #   `inventory/prices.json` moved since the caller read it.
+                                   #   Omit it to say "did not read one", which is the terminal
+                                   #   user. It exists because this command writes the corpus
+                                   #   from a subprocess and `emit` never did, so a `#/pricing`
+                                   #   tab open during an apply had its next keystroke refused
+                                   #   for a write it had just made (D103).
                                    #   Reachable on `#/runs`, from a header button beside the
                                    #   store-wide reconcile — a modal and not a route, which
                                    #   D100's own §5 now records as a choice rather than the
-                                   #   nav measurement it started as.
+                                   #   nav measurement it started as. AND ON `#/pricing` AS A
+                                   #   LENS (D103): `reprice list --write` leaves a
+                                   #   `survey.json` holding every live row with its verdict,
+                                   #   and `#/pricing?markdown=<stamp>` prices them in the same
+                                   #   UI a run is priced in — charts, presets, holds, the
+                                   #   keyboard walk. `--write` writes that directory even when
+                                   #   the rule proposes nothing, because the lens is reached BY
+                                   #   a stamp.
 ```
 
 ## The front end
@@ -228,8 +248,11 @@ sentence**, and see "the census" below for what enforces that.
 #/runs         Runs           the pipeline: the free preflight, the two-step money gate, join /
                               emit / reconcile, the run log, and the import CSVs as downloads
 #/review       Review         one card at a time, photo first — the answer writes and advances
-#/pricing      Pricing        the hand-pricing worklist across runs, one row per SKU, the rule
-                              strip, and D49's deliberate holds
+#/pricing      Pricing        the hand-pricing worklist, one row per SKU, the rule strip, and
+                              D49's deliberate holds. TWO SOURCES (D103): the joined runs, and —
+                              at `#/pricing?markdown=<stamp>` — the operator's whole LIVE
+                              inventory out of a My Pricing export, where staleness is a filter
+                              rather than a gate and the press writes a price-only `import.csv`
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
                               many of them sit in one box, pulled one copy at a time
 #/shipping     Shipping       which envelope an order goes in, out of TCGplayer's own shipping
@@ -908,6 +931,7 @@ D99  The cut-off is a figure the operator sets, and one press writes one spreads
 D100 Nothing is deleted to lower a price, the quantity is not a variable, and the age is a proxy that says so
 D101 A claim a screen names is a claim a screen can fix, and the derived tuple outran its decoder
 D102 The mark is an illustration with its own palette, and the spec is its store of record
+D103 Staleness is a filter and not a gate, the record holds every live row, and the file that leaves the machine stays narrow
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

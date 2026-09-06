@@ -13,8 +13,13 @@ import { createPortal } from 'react-dom'
 
 import {
   describeFailure,
+  applyMarkdown,
+  getMarkdownTable,
   getPriceHistory,
   getPriceTrends,
+  markdownFileUrl,
+  markdownHistory,
+  markdownTrends,
   emitMerged,
   cropPreview,
   getPricingCorpus,
@@ -32,6 +37,8 @@ import type {
   MergedSku,
   RosterRun,
   PricingCorpus,
+  MarkdownAnswer,
+  MarkdownTable,
   PricingWorklist,
   PricingSku,
   RunDetail,
@@ -46,8 +53,17 @@ import { FLAT_KEY, owed, subThresholdSkus, type OwedReason } from './readiness'
 import { PriceHistoryPanel, RANGE_LABEL, type HistoryRead } from './PriceHistory'
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { RunFiles } from './RunFiles'
+import { LogWell } from './RunsLog'
 import { runBoxLabel } from './runScope'
-import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented, type Crop, type IconName } from './kit'
+import {
+  markdownInHash,
+  markdownSource,
+  runSource,
+  runsInHash,
+  type PricingSource,
+  type SectionSpec,
+} from './pricingSource'
+import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented, type Crop } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
 
@@ -191,12 +207,11 @@ const SNAPS: { key: string; field: keyof PricingSku['snap']; label: string; says
   { key: 'd', field: 'direct_low', label: 'Direct', says: 'Direct low', column: 'TCG Direct Low' },
 ]
 
-const SECTIONS: {
-  bucket: PricingSku['bucket']
-  title: string
-  icon: IconName
-  note: (cut: string) => string
-}[] = [
+/* THE SECTION LIST STAYS HERE AND IS PASSED TO THE SOURCE, beside `PRESETS`, which
+   `scripts/docs-audit.py`'s `pricing presets` row reads out of THIS FILE by path. The pricing
+   vocabulary belongs at the screen's front door, and moving half of it would turn a passing
+   mechanical check into a false alarm over the other half. */
+const SECTIONS: SectionSpec[] = [
   {
     bucket: 'listable',
     title: 'Above the cut-off',
@@ -214,6 +229,18 @@ const SECTIONS: {
     title: 'No market price',
     icon: 'alert',
     note: () => 'The catalog carries no price for these. A missing price is unknown, not low — the files cannot be written while any is unanswered.',
+  },
+]
+
+/* THE LENS DRAWS ONE BAND, because the three above are a JOIN's partition. `bucket` decides
+   which import file a row is bound for, and a live listing is bound for none — it is already
+   listed. One section, named for what these rows actually are. */
+const LIVE_SECTIONS: SectionSpec[] = [
+  {
+    bucket: 'listable',
+    title: 'Live at TCGplayer',
+    icon: 'tag',
+    note: () => 'Every listing this export reported live. Type a lower price on any of them; nothing is sent until you press.',
   },
 ]
 
@@ -449,12 +476,6 @@ function setAnswer(book: PricingCorpus, sku: string, value: unknown, channel: 'p
   if (value === undefined) delete skus[sku]
   else skus[sku] = { ...(skus[sku] ?? {}), value: value as never, channel }
   return { ...book, skus }
-}
-
-/** The runs named on the hash. `run` repeats rather than carrying a comma list. */
-function runsInHash(): string[] {
-  const query = window.location.hash.split('?')[1] ?? ''
-  return new URLSearchParams(query).getAll('run').filter((name) => name !== '')
 }
 
 /** Close a popover on an outside press or Escape. */
@@ -781,6 +802,17 @@ export function Pricing() {
   /** Which runs the worklist is over; EMPTY means "whatever still has work in it" (D86). */
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(runsInHash()))
   const [work, setWork] = useState<PricingWorklist | null>(null)
+  /** THE MARKDOWN STAMP ON THE HASH, and the table it names (D103). Null is the runs mode,
+   *  which is every visit that does not carry `?markdown=`. Separate state from `work` on
+   *  purpose: the two are different documents and nothing folds them together. */
+  const [stamp, setStamp] = useState<string | null>(() => markdownInHash())
+  const [sheet, setSheet] = useState<MarkdownTable | null>(null)
+  /** The lens's press, as a state machine rather than a call — for the emit press's reason:
+   *  `reprice apply` reads `inventory/prices.json` OFF DISK, so it must not run while a save
+   *  is still in flight. `checking`/`writing` park until the autosave is quiet. */
+  const [push, setPush] = useState<'idle' | 'checking' | 'writing'>('idle')
+  const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
+  const [wroteUpload, setWroteUpload] = useState(false)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
   /** The pricing corpus — one document for the store, and the authority (D86). */
@@ -828,6 +860,13 @@ export function Pricing() {
   const trendWalk = useRef(0)
   const [note, setNote] = useState<{ sku: string; text: string } | null>(null)
   const [filterHeld, setFilterHeld] = useState(false)
+  /** WHICH LIVE LISTINGS ARE ON SCREEN (D103). `all` is the default and that is the owner's
+   *  ruling — staleness is a filter they apply, not a gate applied before the data arrives.
+   *  The alternative was measured and is why: against their own export the seven-day window
+   *  selects 109 of 441 rows and the ten-day window selects NONE, because the oldest capture
+   *  in the store is nine days old. A gate hands back an empty screen for a reason about the
+   *  store's age rather than about the listings. */
+  const [lens, setLens] = useState<'all' | 'offered' | 'refused'>('all')
 
   /* THE CUSTOM RULE'S THREE ANSWERS, HELD AS A DRAFT. The standing rule is the corpus's and
      the corpus is written on a valid figure only, so a half-typed percentage is a state of
@@ -869,6 +908,10 @@ export function Pricing() {
     const fromHash = () => {
       const named = runsInHash()
       if (named.length > 0) setPicked(new Set(named))
+      // THE STAMP FOLLOWS THE HASH IN BOTH DIRECTIONS, unlike the run list above, which only
+      // ever widens. Leaving `#/pricing?markdown=…` has to put the screen back on runs, or the
+      // lens would survive the operator navigating out of it.
+      setStamp(markdownInHash())
     }
     window.addEventListener('hashchange', fromHash)
     return () => window.removeEventListener('hashchange', fromHash)
@@ -889,8 +932,8 @@ export function Pricing() {
     }
   }, [])
 
-  /** Fetch the worklist and the corpus together. One request whatever the run count. */
-  const load = useCallback(async (wanted: ReadonlySet<string>) => {
+  /** Fetch the rows and the corpus together. One read whatever the source (D103). */
+  const load = useCallback(async (wanted: ReadonlySet<string>, markdown: string | null) => {
     trendWalk.current += 1
     setTrends({})
     setTrendRun(null)
@@ -898,11 +941,25 @@ export function Pricing() {
     loadWalk.current += 1
     const mine = loadWalk.current
     try {
-      const [answer, held] = await Promise.all([getPricingWorklist([...wanted].sort()), getPricingCorpus()])
+      /* THE CORPUS IS READ EITHER WAY AND THE ROWS COME FROM WHICHEVER DOOR WAS ADDRESSED.
+         One await for the pair, because the two have to describe one moment: a screen holding
+         answers written against a table it did not fetch is pricing the wrong cards. */
+      const [rowsFrom, held] = await Promise.all([
+        markdown === null ? getPricingWorklist([...wanted].sort()) : getMarkdownTable(markdown),
+        getPricingCorpus(),
+      ])
       if (mine !== loadWalk.current) return
+      const answer = markdown === null ? (rowsFrom as PricingWorklist) : null
+      const table = markdown === null ? null : (rowsFrom as MarkdownTable)
       setWork(answer)
+      setSheet(table)
       setBook(held.corpus)
-      setSunkHolds(heldOnArrival(answer.skus, corpusAsDoc(held.corpus)))
+      setSunkHolds(
+        heldOnArrival(
+          answer?.skus ?? ((table?.skus ?? []) as unknown as MergedSku[]),
+          corpusAsDoc(held.corpus),
+        ),
+      )
       /* THE REVISION IS A REF AND NOT STATE, for the reason the whole guard is out of band: the
          dirty check is an identity comparison on `book`, and anything that re-renders on every
          landed write re-dirties the screen. */
@@ -914,7 +971,7 @@ export function Pricing() {
       setReceipt(null)
       setArmed(false)
       setShipTrouble(null)
-      if (answer.runs.length === 1) {
+      if (answer !== null && answer.runs.length === 1) {
         try {
           setDetail(await getRun(answer.runs[0]?.run as string))
         } catch (err) {
@@ -927,6 +984,7 @@ export function Pricing() {
     } catch (err) {
       if (mine !== loadWalk.current) return
       setWork(null)
+      setSheet(null)
       setBook(null)
       setSunkHolds(new Set())
       setFailure(describeFailure(err))
@@ -936,11 +994,25 @@ export function Pricing() {
   }, [])
 
   useEffect(() => {
-    void load(picked)
-  }, [picked, load])
+    void load(picked, stamp)
+  }, [picked, stamp, load])
 
   const loaded = useMemo(() => (work?.runs ?? []).map((row) => row.run), [work])
   const run = loaded.length === 1 ? (loaded[0] as string) : null
+
+  /* WHERE THESE ROWS CAME FROM, AND WHAT MAY BE ASKED ABOUT THEM. Everything below reads
+     `source.*` rather than `run` for the four capabilities that used to hang off that one
+     sentinel — see `pricingSource.ts` for why a null run could not express a second door. */
+  const source: PricingSource = useMemo(
+    () =>
+      stamp === null
+        ? runSource(work, run, SECTIONS, { history: getPriceHistory, trends: getPriceTrends })
+        : markdownSource(stamp, sheet, LIVE_SECTIONS, {
+            history: markdownHistory,
+            trends: markdownTrends,
+          }),
+    [stamp, sheet, work, run],
+  )
   const doc = useMemo(() => corpusAsDoc(book, run), [book, run])
 
   /* THE CUT-OFF IN FORCE, IN THE ORDER `pipeline/corpus.py:policy_for` FOLDS IT: this run's own
@@ -1087,9 +1159,28 @@ export function Pricing() {
       ),
     [work],
   )
-  const table = work?.skus ?? null
+  /* THE LIST, FROM WHICHEVER DOOR WAS ADDRESSED. `source.rows` is `work.skus` on a run and
+     the projected survey on a lens — see `pricingSource.ts:asRow` for where the two shapes
+     meet, and why the projection is documented there rather than asserted by the server. */
+  const table = source.rows.length > 0 || stamp !== null ? source.rows : null
   const answers = useMemo(() => (doc?.overrides ?? {}) as Record<string, unknown>, [doc])
   const unpriced = useMemo(() => (doc?.no_market_data ?? {}) as Record<string, unknown>, [doc])
+  /** Where the plan put each live listing. `offered` is what the rule proposed — the rows a
+   *  `worklist.csv` would hold — and `refused` carries a code the strip can name. */
+  const standingOf = useMemo(() => {
+    const by = new Map<string, string>()
+    for (const row of sheet?.skus ?? []) by.set(row.sku, row.standing)
+    return by
+  }, [sheet])
+
+  /** What each live listing is asking, off the survey. The figure the manifest will judge a
+   *  lowering against, so the row's own refusal is counted from it and never recomputed. */
+  const askingOf = useMemo(() => {
+    const by = new Map<string, string | null>()
+    for (const row of sheet?.skus ?? []) by.set(row.sku, row.asking)
+    return by
+  }, [sheet])
+
   /* THE LIST IS PARTITIONED AT THE CUT-OFF THIS SCREEN IS SHOWING, not at the one the table
      was built with. The server draws the split at the figure stored when the table was fetched;
      the operator can type a new one, and the answer to "how many cards does that make cheap"
@@ -1098,11 +1189,13 @@ export function Pricing() {
      the stored one re-derives exactly the buckets the server sent. */
   const rows = useMemo(
     () =>
-      (table ?? []).map((sku) => {
-        const bucket = bucketAt(sku, cut)
-        return bucket === sku.bucket ? sku : { ...sku, bucket }
-      }),
-    [table, cut],
+      !source.repartition
+        ? (table ?? []).filter((sku) => lens === 'all' || standingOf.get(sku.sku) === lens)
+        : (table ?? []).map((sku) => {
+            const bucket = bucketAt(sku, cut)
+            return bucket === sku.bucket ? sku : { ...sku, bucket }
+          }),
+    [table, cut, source.repartition, lens, standingOf],
   )
 
   /* READINESS READS THE PARTITION AS DRAWN, not the one the table arrived with: at a cut-off the
@@ -1111,11 +1204,81 @@ export function Pricing() {
      command refuse. */
   const owes = useMemo(() => owed(doc, subThresholdSkus(rows)), [doc, rows])
 
+
+  /** THE PAIRS THIS SCREEN WOULD SEND — a typed price on a row the survey holds, and nothing
+   *  else. Rows nobody touched are simply absent, which `read_back` reports as `dropped`:
+   *  "left alone, which is what deleting a line means". */
+  const pushable = useMemo(() => {
+    const out: { sku: string; price: string }[] = []
+    if (stamp === null) return out
+    for (const row of rows) {
+      const answer = answers[row.sku]
+      if (typeof answer === 'string' && answer.trim() !== '') out.push({ sku: row.sku, price: answer.trim() })
+    }
+    return out
+  }, [stamp, rows, answers])
+
+  /* THE LENS'S PRESS, SEQUENCED THE WAY THE EMIT PRESS IS — and here it is not merely tidy:
+     `reprice apply` reads `inventory/prices.json` off disk and refuses the whole file against a
+     stale digest, so pressing with a save in flight would refuse for a write this screen was
+     itself still making.
+
+     AND IT RE-READS ON SUCCESS. `apply --write` writes the corpus from a subprocess, which
+     `emit` never does, so the digest this screen holds is stale the moment the press lands and
+     the operator's next keystroke would be refused `corpus_moved` — the screen fighting its own
+     button. The route answers with the new digest and we adopt it. */
+  useEffect(() => {
+    if (push === 'idle' || stamp === null) return
+    if (book !== null && failedBook.current === book) {
+      setPush('idle')
+      setShipTrouble({
+        code: 'answers_not_saved',
+        message: 'Your answers could not be saved, so nothing was sent. Fix the error above and the next keystroke will retry the save.',
+      })
+      return
+    }
+    if (dirty || saving || inFlight.current) return
+    const write = push === 'writing'
+    void (async () => {
+      try {
+        const result = await applyMarkdown(stamp, {
+          edits: pushable,
+          revision: revision.current,
+          write,
+        })
+        setApplied(result)
+        setWroteUpload(result.wrote)
+        if (result.revision) revision.current = result.revision
+        setShipTrouble(null)
+        if (write && result.wrote) {
+          toast({
+            kind: 'ok',
+            title: 'The upload file is written',
+            body: 'Upload import.csv through TCGplayer’s My Pricing. Every row carries Add to Quantity 0.',
+          })
+        }
+      } catch (err) {
+        setShipTrouble(describeFailure(err))
+      } finally {
+        setPush('idle')
+      }
+    })()
+  }, [push, stamp, pushable, dirty, saving, book])
+
+  /* A NEW CHECK IS OWED THE MOMENT A PRICE MOVES. The write press only exists while a check
+     stands, and a check that described a different set of edits is worse than none — it would
+     offer a write over rows the operator has since changed. */
+  useEffect(() => {
+    setApplied(null)
+    setWroteUpload(false)
+  }, [pushable])
+
+
   /** The list as drawn: open rows, then the holds that were standing when the page opened,
    *  then the groups this run can add nothing for. */
   const sections = useMemo(
     () =>
-      SECTIONS.map((section) => {
+      source.sections.map((section) => {
         const inSection = rows.filter((row) => row.bucket === section.bucket)
         const items: Drawn[] = []
         const holds: MergedSku[] = []
@@ -1146,7 +1309,7 @@ export function Pricing() {
         const direct = inSection.some((sku) => sku.snap.direct_low !== null)
         return { ...section, total: inSection.length, items, uniform, direct }
       }).filter((section) => section.total > 0),
-    [rows, sunkHolds],
+    [rows, sunkHolds, source.sections],
   )
 
   const order = useMemo(
@@ -1471,25 +1634,33 @@ export function Pricing() {
   /** Take the reading for one SKU, and ask nothing if this session already has it. */
   const readHistory = useCallback(
     (sku: PricingSku, force = false) => {
-      if (run === null) return
+      const ask = source.history
+      if (ask === null) return
       if (!force && history[sku.sku] !== undefined) return
       setHistory((current) => ({ ...current, [sku.sku]: { kind: 'reading' } }))
-      getPriceHistory(run, sku.sku)
+      ask(sku.sku)
         .then((payload) => setHistory((current) => ({ ...current, [sku.sku]: { kind: 'read', payload } })))
         .catch((error) =>
           setHistory((current) => ({ ...current, [sku.sku]: { kind: 'refused', why: describeFailure(error).message } })),
         )
     },
-    [history, run],
+    [history, source.history],
   )
 
   /** Read the shape of every row still waiting on an answer — one press, chunked, sequential. */
   const loadTrends = useCallback(() => {
-    if (run === null) return
+    const ask = source.trends
+    const at = source.id
+    if (ask === null || at === null) return
+    /* SCOPED TO THE ROWS ON SCREEN, WHICH ON A LENS IS THE WHOLE POINT OF THE FILTER. The run
+       route measured 46 SKUs at ~34s of courtesy delay; a survey of a real live inventory is
+       ~441 rows, about five and a half minutes at a free public mirror. D62's rule is that
+       this is a PRESS, and a walk that big makes the press meaningless rather than merely
+       slow — so the operator narrows first and asks about what they narrowed to. */
     const open = rows.filter((row) => !row.at_cap).map((row) => row.sku)
     const walk = (trendWalk.current += 1)
     setTrends(Object.fromEntries(open.map((sku) => [sku, { kind: 'reading' } as TrendRead])))
-    setTrendRun({ run, total: open.length, done: 0, skipped: rows.length - open.length, spans: null, reading: true })
+    setTrendRun({ run: at, total: open.length, done: 0, skipped: rows.length - open.length, spans: null, reading: true })
 
     const chunks: string[][] = []
     for (let at = 0; at < open.length; at += TREND_CHUNK) chunks.push(open.slice(at, at + TREND_CHUNK))
@@ -1498,7 +1669,7 @@ export function Pricing() {
       for (const chunk of chunks) {
         if (trendWalk.current !== walk) return
         try {
-          const payload = await getPriceTrends(run, chunk)
+          const payload = await ask(chunk)
           if (trendWalk.current !== walk) return
           setTrends((current) => {
             const next = { ...current }
@@ -1513,7 +1684,7 @@ export function Pricing() {
             return next
           })
           setTrendRun((current) =>
-            current === null || current.run !== run
+            current === null || current.run !== at
               ? current
               : {
                   ...current,
@@ -1533,16 +1704,16 @@ export function Pricing() {
             return next
           })
           setTrendRun((current) =>
-            current === null || current.run !== run ? current : { ...current, done: current.done + chunk.length },
+            current === null || current.run !== at ? current : { ...current, done: current.done + chunk.length },
           )
         }
       }
       if (trendWalk.current === walk) {
-        setTrendRun((current) => (current === null || current.run !== run ? current : { ...current, reading: false }))
+        setTrendRun((current) => (current === null || current.run !== at ? current : { ...current, reading: false }))
       }
     }
     void read()
-  }, [rows, run])
+  }, [rows, source.trends, source.id])
 
   /* Which row the pointer is over, and which one a held key latched. Refs: nothing draws them. */
   const hovered = useRef<string | null>(null)
@@ -1561,14 +1732,14 @@ export function Pricing() {
   /** Pin the drawer to one SKU. Closes the photograph: one drawer, one card. */
   const pinHistory = useCallback(
     (sku: PricingSku) => {
-      if (run === null) return
+      if (source.history === null) return
       heldSku.current = null
       setPeek(null)
       setPhotoFor(null)
       setPinned(sku.sku)
       readHistory(sku)
     },
-    [readHistory, run],
+    [readHistory, source.history],
   )
 
   /** Publish the ship bar's measured height as `--pricing-ship-h` (D85); the drawer reads it. */
@@ -1720,10 +1891,18 @@ export function Pricing() {
   const historySku = useMemo(() => (historyFor === null ? null : rows.find((row) => row.sku === historyFor) ?? null), [historyFor, rows])
 
   const scopeName = useMemo(() => {
+    /* THE LENS NAMES THE EXPORT IT WAS READ FROM, because "Box 3 · RB Epics" is a run's answer
+       to "what am I looking at" and a markdown's answer is a moment and a file. */
+    if (stamp !== null) {
+      const when = sheet?.at ? new Date(sheet.at) : null
+      return when === null || Number.isNaN(when.getTime())
+        ? 'Live listings'
+        : `Live listings · read ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    }
     if (run === null) return null
     const row = detail !== null && detail.run === run ? detail : runs.find((r) => r.run === run)
     return row === undefined ? null : runBoxLabel(row)
-  }, [run, detail, runs])
+  }, [stamp, sheet, run, detail, runs])
 
   const closePicker = useCallback(() => setRunsOpen(false), [])
   useDismiss(pickerRef, runsOpen, closePicker)
@@ -1771,11 +1950,11 @@ export function Pricing() {
       if (holdFor !== null || filesOpen || runsOpen || loading) return
       if (isEditableTarget(event.target)) return
       event.preventDefault()
-      void load(picked)
+      void load(picked, stamp)
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [phone, holdFor, filesOpen, runsOpen, loading, load, picked])
+  }, [phone, holdFor, filesOpen, runsOpen, loading, load, picked, stamp])
 
   const activePreset = PRESETS.find((p) => p.rule === doc?.rule && p.basis === doc?.basis) ?? null
   /* NO INVENTED FIGURES. The floor is the store's own and a screen that cannot read it says
@@ -1839,14 +2018,7 @@ export function Pricing() {
      count was frozen into `pricing.json` by the join, so the join's own write time IS their
      age. (The moment TCGplayer was last asked — `listings.at` in the store — is not on the
      wire; this is the nearest honest stamp and it is never later than that one.) */
-  const readAtOf = useCallback(
-    (sku: MergedSku): number | null => {
-      const from = sku.in[sku.in.length - 1]?.run ?? run
-      const stamp = from === null ? undefined : work?.written_at?.[from]
-      return typeof stamp === 'number' ? stamp : null
-    },
-    [work, run],
-  )
+  const readAtOf = source.readAtOf
   const readAt = useMemo(() => {
     const stamps = Object.values(work?.written_at ?? {}).filter((n): n is number => typeof n === 'number')
     return stamps.length === 0 ? null : Math.max(...stamps)
@@ -1895,7 +2067,23 @@ export function Pricing() {
     )
 
   const scopeLine =
-    loaded.length === 0 ? (
+    source.kind === 'markdown' ? (
+      /* THE LENS SAYS WHAT IT IS AND WHEN IT WAS READ. `loaded.length` is a run count and is
+         zero here forever, which would leave a screen full of live listings saying "Nothing
+         loaded." — the sentence being false is the whole reason this branch is first. */
+      <>
+        {scopeName === null ? null : <span>{scopeName}</span>}
+        <span className="pricing-scope-run bn-mono">{stamp}</span>
+        <span>
+          {rows.length} live SKU{rows.length === 1 ? '' : 's'}
+        </span>
+        {pushable.length === 0 ? null : (
+          <span>
+            {pushable.length} price{pushable.length === 1 ? '' : 's'} typed
+          </span>
+        )}
+      </>
+    ) : loaded.length === 0 ? (
       <span>Nothing loaded.</span>
     ) : run !== null ? (
       <>
@@ -1976,7 +2164,7 @@ export function Pricing() {
           iconOnly
           kbd={phone ? undefined : 'R'}
           className="pricing-reload"
-          onClick={() => void load(picked)}
+          onClick={() => void load(picked, stamp)}
           disabled={loading}
           busy={loading}
           title={phone ? 'Reload' : 'Reload · R'}
@@ -1988,8 +2176,10 @@ export function Pricing() {
   )
 
   /* THE EMPTY STATES: the fetch failed, nothing is joined, the narrowing matched nothing, or
-     every open run has been answered. */
-  if (work === null || work.runs.length === 0) {
+     every open run has been answered — and, on a lens, an export TCGplayer returned nothing
+     live in. THE GUARD IS ABOUT ROWS AND NOT ABOUT `work`, because a markdown has no `runs`
+     and would otherwise take the runs mode's "nothing joined" branch forever. */
+  if (source.rows.length === 0) {
     const joined = work?.roster ?? []
     return (
       <main className="pricing bn-page">
@@ -2009,8 +2199,22 @@ export function Pricing() {
               </>
             }
             actions={
-              <Button icon="refresh" onClick={() => void load(picked)}>
+              <Button icon="refresh" onClick={() => void load(picked, stamp)}>
                 Try again
+              </Button>
+            }
+          />
+        ) : source.kind === 'markdown' ? (
+          /* THE LENS'S OWN EMPTY STATE, and the empty state is exactly the kind of thing that
+             IS about which door it was: "no joined runs yet" is a false sentence over a
+             markdown, and "no live listings" is a false one over a run picker. */
+          <EmptyState
+            icon="tag"
+            title="Nothing live in that export"
+            body="This markdown surveyed no live listings — every row TCGplayer returned was sold out. Download a fresh My Pricing export and read it again on Runs."
+            actions={
+              <Button variant="primary" icon="play" onClick={() => (window.location.hash = '#/runs')}>
+                Go to Runs
               </Button>
             }
           />
@@ -2062,9 +2266,9 @@ export function Pricing() {
       {chrome}
 
       <div className="pricing-body" data-trends={trendRun === null ? 'off' : 'on'}>
-        {work.skipped.length === 0 ? null : (
+        {(work?.skipped ?? []).length === 0 ? null : (
           <Notice tone="warn" title="A run could not be read and is left out of this list" className="pricing-notice">
-            {work.skipped.map((row) => (
+            {(work?.skipped ?? []).map((row) => (
               <span className="pricing-machine" key={row.run}>
                 {row.run} · {row.code}
               </span>
@@ -2079,7 +2283,7 @@ export function Pricing() {
                 allowed to revert it. Re-reading is the way back, and it costs whatever is typed
                 and unsaved, so the button says that rather than presenting a reload as free. */}
             {failure.code !== 'corpus_moved' ? null : (
-              <Button size="sm" variant="quiet" icon="refresh" onClick={() => void load(picked)}>
+              <Button size="sm" variant="quiet" icon="refresh" onClick={() => void load(picked, stamp)}>
                 Re-read the pricing file, losing what is unsaved here
               </Button>
             )}
@@ -2094,7 +2298,15 @@ export function Pricing() {
             line, which was fine while the figure was only an answer ABOUT those cards — now that
             the figure IS the line, a cut-off typed low enough to empty the lower section would
             take its own control off the screen and leave no way back to it. */}
-        <div className="pricing-deck" ref={deckRef} data-cards="two">
+        <div className="pricing-deck" ref={deckRef} data-cards={source.kind === 'markdown' ? 'one' : 'two'}>
+          {source.kind === 'markdown' ? (
+            /* ONE OF THE TWO PLACES THAT ASK WHICH DOOR IT WAS, and it earns it: the run deck
+               is a cut-off editor and a readiness verdict, and NEITHER is a fact about a live
+               listing. The cut-off decides which import file a row goes in and this row goes
+               in none; the verdict counts what `emit` would write and `emit` never runs here. */
+            <MarkdownPanel table={sheet} rows={rows} answers={answers} />
+          ) : (
+            <>
           <CutoffPanel
             count={subCount}
             above={rows.length - subCount}
@@ -2118,6 +2330,8 @@ export function Pricing() {
             readAge={readAge}
             emitted={emitted}
           />
+            </>
+          )}
         </div>
 
         <div className="pricing-toolbar">
@@ -2213,6 +2427,29 @@ export function Pricing() {
             </div>
           </div>
           <div className="pricing-toolbar-right">
+            {source.kind !== 'markdown' ? null : (
+              /* THE LENS, AS A FILTER OVER WHAT IS ALREADY LOADED — never a second read. The
+                 rows are all here; narrowing is instant and widening costs nothing, which is
+                 exactly what a gate could not offer: on the owner's own store the ten-day
+                 window selects zero rows and the only remedy was to change the number and
+                 fetch again. `All` is first and is the default (D103). */
+              <Segmented<'all' | 'offered' | 'refused'>
+                value={lens}
+                aria-label="Which live listings to show"
+                options={[
+                  { value: 'all', label: `All ${(sheet?.skus ?? []).length}` },
+                  {
+                    value: 'offered',
+                    label: `Not selling ${Number(sheet?.counts?.offered ?? 0)}`,
+                  },
+                  {
+                    value: 'refused',
+                    label: `Passed over ${Number(sheet?.counts?.refused ?? 0)}`,
+                  },
+                ]}
+                onChange={setLens}
+              />
+            )}
             {held.length === 0 ? null : (
               <Button
                 size="sm"
@@ -2236,11 +2473,23 @@ export function Pricing() {
               icon="trendUp"
               className="pricing-trend-btn"
               onClick={loadTrends}
-              disabled={run === null || trendRun?.reading === true}
+              disabled={source.trends === null || trendRun?.reading === true}
               busy={trendRun?.reading === true}
-              title={run === null ? 'Trends read one run at a time — pick a single run' : 'Read the shape of every open row off two public mirrors'}
+              title={
+                source.trends === null
+                  ? 'Trends read one run at a time — pick a single run'
+                  : `Read the shape of the ${rows.length} row${rows.length === 1 ? '' : 's'} on screen off two public mirrors`
+              }
             >
-              {trendRun === null ? 'Load trends' : trendRun.reading ? `Reading ${trendRun.done} of ${trendRun.total}…` : 'Read again'}
+              {/* THE COUNT IS ON THE BUTTON, because on a lens this press is the one that can be
+                  rude: the reading is a courtesy-delayed walk at a free public mirror, and the
+                  operator deserves to know it is about to ask about four hundred cards rather
+                  than forty before they press. */}
+              {trendRun === null
+                ? `Load trends${source.kind === 'markdown' ? ` · ${rows.length}` : ''}`
+                : trendRun.reading
+                  ? `Reading ${trendRun.done} of ${trendRun.total}…`
+                  : 'Read again'}
             </Button>
           </div>
         </div>
@@ -2291,6 +2540,13 @@ export function Pricing() {
             key={section.bucket}
             data-bucket={section.bucket}
             data-direct={section.direct ? 'some' : 'none'}
+            /* THE THIRD GRID AXIS, and the only one whose absence is about the SOURCE rather
+               than about this section's contents. A live listing is not a copy in a drawer, so
+               the thumbnail and the quantity cell have nothing to say — see `pricingSource.ts`.
+               The cells are NOT RENDERED rather than hidden: the thumb is a `<button>`, and
+               CLAUDE.md's rule is that a control a persona may not use is not focusable and not
+               reachable by a screen reader, not one specificity change from coming back. */
+            data-copies={source.copies ? 'some' : 'none'}
           >
             <header className="pricing-section-head">
               <div className="pricing-section-lead">
@@ -2330,9 +2586,9 @@ export function Pricing() {
             </header>
 
             <div className="pricing-caption" aria-hidden="true">
-              <span />
+              {!source.copies ? null : <span />}
               <span>Card</span>
-              <span className="pricing-caption-qty">Qty</span>
+              {!source.copies ? null : <span className="pricing-caption-qty">Qty</span>}
               <span className="pricetrend-keys">
                 {['month', 'annual'].map((range) => (
                   <span key={range}>{RANGE_LABEL[range] ?? range}</span>
@@ -2343,7 +2599,7 @@ export function Pricing() {
                   {column.label} <Kbd>{column.key.toUpperCase()}</Kbd>
                 </span>
               ))}
-              <span className="pricing-caption-price">Lists at</span>
+              <span className="pricing-caption-price">{source.kind === 'markdown' ? 'New price' : 'Lists at'}</span>
               <span />
             </div>
 
@@ -2364,7 +2620,14 @@ export function Pricing() {
                 const why = withheld && standing !== 'unlisted' && standing.note ? standing.note : null
                 const first = sku.positions[0] ?? null
                 const boxes = [...new Set(sku.positions.map((place) => place.box))].sort((a, b) => a - b)
-                const state = fieldState(sku, standing, doc, cut, cutFrom !== 'default')
+                const state = fieldState(
+                  sku,
+                  standing,
+                  doc,
+                  cut,
+                  cutFrom !== 'default',
+                  source.kind === 'markdown' ? (askingOf.get(sku.sku) ?? null) : undefined,
+                )
                 const rowNote = note !== null && note.sku === sku.sku ? note.text : null
                 return (
                   <div
@@ -2383,7 +2646,9 @@ export function Pricing() {
                     data-hold={holdFor === sku.sku ? 'open' : undefined}
                     data-drawn={(historySku?.sku ?? photoSku?.sku) === sku.sku ? 'true' : undefined}
                   >
-                    <PricingThumb at={first} name={sku.name} onOpen={() => openPhoto(sku)} />
+                    {!source.copies ? null : (
+                      <PricingThumb at={first} name={sku.name} onOpen={() => openPhoto(sku)} />
+                    )}
 
                     <div className="pricing-id">
                       <span className="pricing-name" title={sku.name}>
@@ -2437,10 +2702,12 @@ export function Pricing() {
                     </div>
 
                     <div className="pricing-facts">
-                      <span className="pricing-qty" title={`${sku.add_to_quantity} of the ${sku.copies} copies on hand go in the file`}>
-                        <span className="bn-sr">Quantity </span>
-                        {sku.add_to_quantity} <span className="pricing-qty-of">of {sku.copies}</span>
-                      </span>
+                      {!source.copies ? null : (
+                        <span className="pricing-qty" title={`${sku.add_to_quantity} of the ${sku.copies} copies on hand go in the file`}>
+                          <span className="bn-sr">Quantity </span>
+                          {sku.add_to_quantity} <span className="pricing-qty-of">of {sku.copies}</span>
+                        </span>
+                      )}
 
                       <TrendCell read={trends[sku.sku]} />
 
@@ -2517,7 +2784,7 @@ export function Pricing() {
                         aria-pressed={pinned === sku.sku}
                         aria-label={`Price history for ${sku.name}`}
                         title="Price history · hold T to peek"
-                        disabled={run === null}
+                        disabled={source.history === null}
                         onClick={() => (pinned === sku.sku ? unpin() : pinHistory(sku))}
                       >
                         Price history
@@ -2615,7 +2882,7 @@ export function Pricing() {
                 role="tab"
                 className="bn-tab"
                 aria-selected="false"
-                disabled={run === null}
+                disabled={source.history === null}
                 onClick={() => pinHistory(photoSku)}
               >
                 <Icon name="history" size={14} /> History
@@ -2886,6 +3153,77 @@ export function Pricing() {
           )}
         </aside>
       )}
+
+      {/* THE LENS'S OWN PRESS — the second of the two places that ask which door it was, and
+          the one place where getting it wrong costs money (D103). It is a THIRD sibling and
+          never a mode of either bar above: `emit` writes a file that ADDS quantity, this one
+          writes a file that only ever changes a price, and D100 §2's doubling — nine SKUs on
+          this store at `2 x pushed - sold` — is what one file uploaded twice already did. Two
+          presses that can never be confused for each other beats one press with a flag.
+
+          BOTH BARS ABOVE HIDE THEMSELVES HERE WITH NO EDIT AT ALL: `loaded` derives from
+          `work.runs`, which is null on a lens, so `loaded.length < 2` and `run === null` are
+          both true. The run path is untouched by construction rather than by care. */}
+      {source.kind !== 'markdown' || stamp === null ? null : (
+        <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Push these prices">
+          <div className="pricing-ship-status">
+            <span className="bn-pill bn-pill-accent">
+              <Icon name="trendDown" size={12} />
+              {pushable.length} {pushable.length === 1 ? 'price' : 'prices'} to push
+            </span>
+            <span className="pricing-ready pricing-ship-says">
+              Every row carries <code className="bn-code">Add to Quantity</code> 0 — this changes
+              prices and cannot move a single copy, so uploading it twice changes nothing.
+            </span>
+          </div>
+          <div className="pricing-ship-act">
+            {/* TWO PRESSES, MATCHING THE COMMAND AND `Markdown.tsx`'s OWN THREE-STEP REGISTER:
+                the check answers first, and the write does not exist until it has. An absence
+                rather than a disabled button, which is the rule that sheet already keeps. */}
+            <Button
+              icon="eye"
+              size="lg"
+              busy={push === 'checking'}
+              disabled={push !== 'idle' || pushable.length === 0}
+              onClick={() => setPush('checking')}
+            >
+              {push === 'checking' ? 'Checking…' : 'Check these prices'}
+            </Button>
+            {applied === null || !applied.ok ? null : (
+              <Button
+                variant="primary"
+                size="lg"
+                icon="trendDown"
+                className="pricing-emit"
+                busy={push === 'writing'}
+                disabled={push !== 'idle'}
+                onClick={() => setPush('writing')}
+              >
+                {push === 'writing' ? 'Writing…' : 'Write the upload file'}
+              </Button>
+            )}
+            {!wroteUpload ? null : (
+              <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
+                <Icon name="download" size={16} />
+                import.csv
+              </a>
+            )}
+          </div>
+
+          {applied === null ? null : (
+            <LogWell
+              text={applied.console}
+              label={wroteUpload ? 'What the write printed' : 'What the check printed'}
+              className="pricing-ship-console"
+              maxHeight={220}
+            />
+          )}
+
+          {shipTrouble === null ? null : (
+            <Notice tone="danger" title={shipTrouble.message} code={shipTrouble.code} className="pricing-ship-trouble" />
+          )}
+        </aside>
+      )}
     </main>
   )
 }
@@ -3140,6 +3478,129 @@ const OWED_SAYS: Record<OwedReason, string> = {
  * is a sentence you meet after the work rather than before it. The press stays down there;
  * the account of it is here.
  */
+/** THE LENS'S LANDING CARD — what this export says, and what the screen would push.
+ *
+ *  `ReadyPanel`'s SHAPE AND NOT ITS CONTENT. That panel counts what `emit` would write into an
+ *  import file; nothing here is bound for one. What a markdown owes the operator before they
+ *  start typing is different and shorter: how many live listings there are, how many the rule
+ *  proposed, what they are asking in total, and — the one that can stop the press — how many
+ *  of their own edits are RAISES.
+ *
+ *  THE RAISE COUNT IS THE POINT OF THIS PANEL. `pipeline/reprice.py:read_back` marks a price
+ *  above the live one `RAISED`, and `Application.fatal` refuses THE WHOLE FILE over a single
+ *  one. On a lens over four hundred live listings an operator will eventually type a higher
+ *  number, so the count is drawn where they will see it before they press rather than
+ *  discovered by a refusal afterwards.
+ *
+ *  IT IS A SECOND IMPLEMENTATION OF `after > before` AND IT CAN DRIFT, which is `readiness.ts`'s
+ *  own confessed shape and the same trade: a server answer lags the keystroke that satisfies
+ *  it. What keeps it honest is that it counts against the SURVEY's own `asking` — the figure
+ *  the manifest will judge against — and never a figure this screen recomputed.
+ */
+function MarkdownPanel({
+  table,
+  rows,
+  answers,
+}: {
+  table: MarkdownTable | null
+  rows: readonly MergedSku[]
+  answers: Record<string, unknown>
+}) {
+  const asking = useMemo(() => {
+    const by = new Map<string, string | null>()
+    for (const row of table?.skus ?? []) by.set(row.sku, row.asking)
+    return by
+  }, [table])
+
+  const { typed, raises, copies } = useMemo(() => {
+    let typedCount = 0
+    let raiseCount = 0
+    let live = 0
+    for (const row of rows) {
+      live += row.listing?.live ?? 0
+      const answer = answers[row.sku]
+      if (typeof answer !== 'string' || answer.trim() === '') continue
+      typedCount += 1
+      const was = asking.get(row.sku)
+      const now = Number(answer)
+      const before = was === null || was === undefined ? NaN : Number(was)
+      if (!Number.isNaN(now) && !Number.isNaN(before) && now > before) raiseCount += 1
+    }
+    return { typed: typedCount, raises: raiseCount, copies: live }
+  }, [rows, answers, asking])
+
+  const counts = table?.counts ?? {}
+  return (
+    <section
+      className="bn-panel pricing-verdict"
+      data-ready={raises === 0 ? 'true' : 'false'}
+      aria-label="What this export says, and what would be pushed"
+    >
+      <header className="pricing-deck-head">
+        <span className="pricing-deck-mark">
+          <Icon name={raises === 0 ? 'tag' : 'alert'} size={16} />
+        </span>
+        <div className="pricing-deck-heading">
+          <span className="bn-eyebrow">Live inventory</span>
+          <h2 className="pricing-deck-title">
+            {raises === 0 ? `${rows.length} listing${rows.length === 1 ? '' : 's'} live` : 'A price went up'}
+          </h2>
+        </div>
+      </header>
+
+      {raises === 0 ? (
+        <p className="pricing-verdict-says">
+          {typed === 0 ? (
+            <>
+              <strong>Nothing typed yet.</strong> Every row here is a listing TCGplayer is holding
+              right now. Type a lower price on any of them — nothing leaves this machine until you
+              press.
+            </>
+          ) : (
+            <>
+              <strong>
+                {typed} price{typed === 1 ? '' : 's'} typed
+              </strong>{' '}
+              — the rest are left exactly as they are listed.
+            </>
+          )}
+        </p>
+      ) : (
+        <p className="pricing-verdict-says">
+          <strong>
+            {raises} row{raises === 1 ? '' : 's'} above the live price.
+          </strong>{' '}
+          This path only lowers, and one raised row refuses the whole upload — not just that row.
+          Bring them back down or clear them.
+        </p>
+      )}
+
+      {/* THE SAME KEY STRIP `ReadyPanel` DRAWS UNDER ITS METER, without the bar: these three are
+          not parts of one whole — a listing can be both proposed by the rule and typed over —
+          so a proportional bar would be a picture of an arithmetic that does not hold. */}
+      <ul className="pricing-meter-keys">
+        {(
+          [
+            ['typed', copies, `live cop${copies === 1 ? 'y' : 'ies'}`],
+            ['rule', Number(counts.offered ?? 0), 'proposed by the rule'],
+            ['held', typed, 'typed by hand'],
+          ] as const
+        ).map(([part, count, says]) => (
+          <li key={part} data-part={part} data-zero={count === 0 ? 'true' : undefined}>
+            <span className="pricing-meter-dot" aria-hidden="true" />
+            {count} {says}
+          </li>
+        ))}
+      </ul>
+
+      <p className="pricing-verdict-fine">
+        Apply can still refuse for a reason this screen cannot see — the floor, a duplicate, or a
+        price that has not moved.
+      </p>
+    </section>
+  )
+}
+
 function ReadyPanel({
   owes,
   progress,
@@ -3330,12 +3791,39 @@ function fieldState(
   doc: DecisionsDocument,
   cut: string,
   cutWritten: boolean,
+  /** The live asking price, on a lens. Absent on a run, where there is no live listing to be
+   *  above or below. */
+  asking?: string | null,
 ): { text: string; title?: string; tone: 'quiet' | 'ok' | 'warn' } {
   if (isWithheld(standing)) {
     // The human label is drawn; the machine string it stands for travels in the title.
     const reason = heldReason(standing)
     const label = (HOLD_SHORT as Record<string, string>)[reason] ?? reason
     return { text: label ? `Held · ${label}` : 'Held', title: reason ? `withheld: ${reason}` : 'withheld', tone: 'quiet' }
+  }
+  /* THE RAISE, ON THE ROW, AT THE KEYSTROKE (D103). `read_back` marks a price above the live
+     one `RAISED` and `Application.fatal` refuses THE WHOLE FILE over one — so on a lens over
+     four hundred live listings, an operator who types a higher number must find out here and
+     not from a refusal after the press. */
+  if (asking !== undefined && asking !== null && typeof standing === 'string') {
+    const now = Number(standing)
+    const was = Number(asking)
+    if (!Number.isNaN(now) && !Number.isNaN(was)) {
+      if (now > was) {
+        return {
+          text: 'Above the live price',
+          title: `Listed at $${was.toFixed(2)}. This path only lowers, and one raised row refuses the whole upload.`,
+          tone: 'warn',
+        }
+      }
+      if (now === was) return { text: 'Unchanged', title: `Already listed at $${was.toFixed(2)}.`, tone: 'quiet' }
+      return { text: `Down from $${was.toFixed(2)}`, tone: 'ok' }
+    }
+  }
+  /* AND ON A LENS, AN UNTYPED ROW IS NOT "on the rule" — no rule is going to write it. It is
+     simply listed at what it is listed at, which is what the row already shows. */
+  if (asking !== undefined && typeof standing !== 'string') {
+    return { text: 'Listed', title: 'Nothing typed — this listing is left exactly as it is.', tone: 'quiet' }
   }
   if (typeof standing === 'string') return { text: 'Typed', tone: 'ok' }
   if (sku.bucket === 'no_market_data') return { text: 'Needs a price', tone: 'warn' }

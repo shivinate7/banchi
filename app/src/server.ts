@@ -39,6 +39,7 @@ import type {
   ExportFetched,
   ExportScope,
   MarkdownAnswer,
+  MarkdownTable,
   MarkdownAsk,
   MarkdownSummary,
   RunDetail,
@@ -1841,13 +1842,76 @@ export async function markdownListings(
  */
 export async function applyMarkdown(
   stamp: string,
-  options: { worklist?: CsvUpload; write?: boolean } = {},
+  options: {
+    worklist?: CsvUpload
+    /** The pairs `#/pricing` holds, materialised into the two-column instruction sheet BY THE
+     *  SERVER (D103). This client writes no CSV: `app/package.json` carries two runtime
+     *  dependencies and PapaParse — the library CLAUDE.md requires for the job — is not one,
+     *  and hand-rolling `join(',')` is the rule that lint exists to state. Mutually exclusive
+     *  with `worklist`; both together is a refusal rather than a guess. */
+    edits?: { sku: string; price: string }[]
+    /** The corpus digest this screen last read. Refuses the WHOLE file if the pricing file has
+     *  moved since — `apply --write` writes the corpus from a subprocess, which `emit` never
+     *  did, so without this the operator's next keystroke is refused for a write they just
+     *  made. Omit to say "did not read one", which the command allows. */
+    revision?: string
+    write?: boolean
+  } = {},
 ): Promise<MarkdownAnswer> {
   return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/apply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ worklist: options.worklist, write: Boolean(options.write) }),
+    body: JSON.stringify({
+      worklist: options.worklist,
+      edits: options.edits,
+      revision: options.revision,
+      write: Boolean(options.write),
+    }),
   })) as MarkdownAnswer
+}
+
+/**
+ * Every live listing one markdown's survey saw, refused rows included (D103).
+ *
+ * FREE, AND IT READS ONE FILE. This is the lens's whole input: `#/pricing?markdown=<stamp>`
+ * draws the operator's entire live inventory out of it and lets staleness be a filter they
+ * loosen rather than a decision taken before the data arrived.
+ */
+export async function getMarkdownTable(stamp: string): Promise<MarkdownTable> {
+  return (await request(
+    `/pipeline/markdowns/${encodeURIComponent(stamp)}/table`,
+    NO_CACHE,
+  )) as MarkdownTable
+}
+
+/**
+ * The same reading `getPriceHistory` serves, addressed at a markdown instead of a run.
+ *
+ * ONE BODY, TWO ADDRESSES. The catalogue walk reads five identity cells off a verbatim export
+ * row and a My Pricing export carries all five, so what a markdown needed was an address. It
+ * LEAVES THE MACHINE exactly as the run route does — public hosts, nothing spent, one press.
+ */
+export async function markdownHistory(stamp: string, sku: string): Promise<PriceHistoryPayload> {
+  return (await request(
+    `/pipeline/markdowns/${encodeURIComponent(stamp)}/history?sku=${encodeURIComponent(sku)}`,
+    NO_CACHE,
+  )) as PriceHistoryPayload
+}
+
+/**
+ * The strip, over the SKUs named — and the list is REQUIRED here where it is optional on a run.
+ *
+ * A survey is the whole live inventory. The run route measured 46 SKUs at ~34s of courtesy
+ * delay, so an unfiltered walk over 441 rows is about five and a half minutes at a free public
+ * mirror — which would make D62's press meaningless rather than merely slow. Send the rows the
+ * operator is actually looking at, in chunks.
+ */
+export async function markdownTrends(stamp: string, skus: string[]): Promise<TrendsPayload> {
+  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+  return (await request(
+    `/pipeline/markdowns/${encodeURIComponent(stamp)}/trends${query === '' ? '' : `?${query}`}`,
+    NO_CACHE,
+  )) as TrendsPayload
 }
 
 /** Every markdown this store has written, newest first. A read. */
