@@ -1714,11 +1714,15 @@ COMPONENTS = [
                         "view worth looking at. Tracked, unlike the renders — it used to "
                         "live under captures/, which .gitignore excludes wholesale, so the "
                         "list could not be committed and a fresh clone started with none.",
-                # D5 is what the list is for: EIGHT owner screens and the Fulfiller's, which
+                # D5 is what the list is for: SEVEN owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
                 # orders and shipping by D69) and the count beside them was not, the same
-                # drift the app/ entry below carries a paragraph about. D13 is
+                # drift the app/ entry below carries a paragraph about. It went eight to seven
+                # on 2026-09-05 when D24's owner ruled that `#/inventory` keeps its pooled
+                # photographs and loses its render (docs/DEBTS.md section 14) — and the `route
+                # census` row caught this sentence in the same run, which is the whole reason
+                # that row exists. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another. D39 added
                 # the `runs` line on 2026-08-29 — the pipeline's own route, and this comment

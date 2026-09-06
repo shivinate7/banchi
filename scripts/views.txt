@@ -62,7 +62,20 @@ capture       http://localhost:5173/#/
 # The render still earns its place — all 16 were one reason code and all were parked, so
 # most of what docs/DESIGN.md specifies has still only ever been drawn.
 review        http://localhost:5173/#/review
-inventory     http://localhost:5173/#/inventory
+
+# `inventory http://localhost:5173/#/inventory` STOOD HERE UNTIL 2026-09-05, AND WHAT REMOVED
+# IT IS A RULING RATHER THAN A DEFECT. The screen draws a pooled card's photograph on purpose:
+# `app/src/BoxBrowse.tsx:79` gives code cards their own `Pooled` shelf and `PhotoPanel` draws
+# them like any other row, which is D31's "one owner-side view of stored cards" meaning every
+# card. Asked whether that shelf is worth looking at, the owner said yes — so the photograph
+# stays and the RENDER goes, which is the `views exposure` row's own first discharge ("drop
+# this line") taken deliberately.
+#
+# What it costs is one automated screenshot of the product's densest screen, and that is a real
+# loss rather than a free win: `#/inventory` is three columns at 1440 and a stack at 390, and
+# nothing else in this list exercises that. Look at it by hand at the three widths in both
+# themes, the way `## Verifying a screen` prescribes, and never by pointing `make screenshot`
+# back at it. `docs/DEBTS.md` section 14 has the trace and the other three screens' standing.
 
 # The pipeline, on its own route since 2026-08-29 (D39). Worth its own render for the reason
 # every other line here has one: it is a screen a human looks at, and with the capture server

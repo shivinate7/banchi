@@ -1347,6 +1347,10 @@ does, or take the ruling to the owner. This is that third one, with the trace be
 `#/`'s hero deck, and every one of those screens draws `photoUrl(box, index)` off it. The
 exposures are real. They are not formalities.
 
+**THE RULING CAME BACK THE SAME DAY, and it is two answers rather than one** — see "The
+recommendation" below. `#/inventory` keeps its pooled photographs and loses its render;
+`#/`, `#/runs` and `#/pricing` keep both, recorded and unfixed, until a real code card exists.
+
 ### The premise that was assumed, and why it is false
 
 `CLAUDE.md` says code cards go through `./pkmnscan scan` — QR, free, no model call — rather than
@@ -1461,12 +1465,29 @@ the only exclusion in the product that a photograph cannot get past.
    on `PricingSku.positions` (the wire cannot express the fact today), a `game` test in
    `deckFromCards` plus a card-record consult in `deckFromBoxes`, and a game filter on the
    crop-preview sample. Each is small and each earns a `never`-titled test.
-3. **`#/inventory`** — the only one that is a real question. Its `Pooled` shelf is a designed
-   feature: the owner's one view of stored cards (D31) showing every card, including the
-   pooled ones. Filtering the photograph there removes something built on purpose. The
-   alternatives are to leave it exposed and drop the manifest line (so `make screenshot` never
-   renders it), or to gate the photograph on the shelf rather than on the row. **This is the
-   ruling that is D24's owner's to make, and this entry does not make it.**
+3. **`#/inventory`** — the only one that was a real question, **and it is answered.** Its
+   `Pooled` shelf is a designed feature: the owner's one view of stored cards (D31) showing
+   every card, including the pooled ones. Filtering the photograph there removes something
+   built on purpose.
+
+   **RULED 2026-09-05, by the owner, asked directly whether that shelf is worth looking at:
+   yes.** So the photograph stays exactly as it is and the RENDER goes — `scripts/views.txt`
+   no longer lists `#/inventory`, which is the `views exposure` row's own first discharge
+   ("drop this line") taken on purpose rather than as a dodge. The screen is unchanged; what
+   changed is that `make screenshot` no longer walks it.
+
+   **The cost is named rather than waved past.** `#/inventory` is the densest screen in the
+   product — three columns at 1440, a stack at 390 — and it is now the only owner screen with
+   no automated render. Verifying it means opening it by hand at the three widths in both
+   themes, per `CLAUDE.md`'s `## Verifying a screen`. Pointing `make screenshot` back at it
+   re-arms the leak.
+
+**THE OTHER THREE ARE RECORDED AND NOT BUILT, ALSO ON THE OWNER'S WORD (2026-09-05).** Asked
+whether to filter `#/`, `#/runs` and `#/pricing` now, the answer was to keep the writeup and
+build nothing. That is a defensible call while §8.1 holds — there is no pooled capture to
+leak — and it is a **dated** one: the day a real code card is photographed, those three
+screens start drawing it and this paragraph is the thing that was decided against. The
+options above are costed and ready; none of them is more than a small filter and a test.
 
 **What is NOT recommended is the sentence that makes all of this go away**: "code cards go
 through `scan`, so no pooled card is ever joined". It reads as a design constraint and it is
