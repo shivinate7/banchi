@@ -3742,6 +3742,50 @@ _TRANSPORT_NUMBERS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
     "seven": 7, "eight": 8, "nine": 9, "ten": 10,
 }
+# ------------------------------------------- the set list's refusals, against the screen's map
+#
+# `GET /pipeline/games/<game>/sets` is the one refusal path in this repo that answers 200 and
+# hands the CODE to a screen to re-word. That is argued and right — the operator is mid-capture
+# and a failed autocomplete is not a failed capture — but it makes `CaptureScreen.tsx`'s
+# `hintReason` the place a transport refusal becomes a sentence, and nothing checked that it
+# covered the refusals that can arrive.
+#
+# IT COVERED TWO OF NINE. Measured 2026-09-06: `tcg_export.filters` can raise nine distinct
+# codes and the map named `tcg_session_expired` and `tcg_cookie_missing`, so a WAF block at the
+# rig read `Set list unavailable (tcg_blocked)` — a raw machine string on screen, which
+# docs/DESIGN.md's register rule forbids, with the module's own remedy (set the user agent in
+# `.env`) discarded one function above it.
+#
+# THE ROUTE CARRIES `message` NOW AND THAT IS THE FLOOR, NOT THIS ROW'S SUBJECT. A fallback
+# that is routinely what the operator reads is a fallback nobody widens the map for, which is
+# how the two-of-nine state lasted; this row is what keeps the net out from under the screen.
+HINT_REASON_SCREEN = ROOT / "app" / "src" / "CaptureScreen.tsx"
+
+#: The transport function the set-list route calls, and the root of the walk. Every refusal
+#: reachable from it — through the endpoint accessors, the cookie read, the opener and the
+#: status reader — is a code that can land on the capture screen.
+HINT_REASON_ROOT = "filters"
+
+#: The screen's map, read as the codes it compares against. Anchored on the function so a
+#: rewrite that moves the comparisons elsewhere is REPORTED rather than silently uncovered.
+_HINT_REASON_FN_RE = re.compile(r"function hintReason\([^)]*\)[^{]*\{(.*?)\n\}", re.S)
+_HINT_REASON_CODE_RE = re.compile(r"code === '([a-z_]+)'")
+
+#: Codes the map may name that no transport refusal produces, each with the reason it is there.
+#: Declared rather than inferred: a map allowed to name anything is a map this row cannot read
+#: in the second direction, and the dead branch is the finding that direction exists for.
+HINT_REASON_NON_TRANSPORT = {
+    "no_category": (
+        "the route's own, raised before anything is fetched — this game carries no "
+        "`tcgplayer_category_id` in pipeline/games.py, which is a fact about the registry "
+        "rather than about the portal."
+    ),
+    "unreachable": (
+        "the CLIENT's own, invented in `loadSets`'s catch when the request never reached the "
+        "capture server. No server sends it, and the operator cannot tell it from "
+        "`tcg_unreachable`, which is why the screen labels them together."
+    ),
+}
 FIXTURES_DIR = ROOT / "fixtures"
 
 # Opt-in extra exports, colon-separated, absolute or repo-relative. For the operator who
@@ -5542,6 +5586,148 @@ def _transport_requests(tree: ast.AST, urls: Dict[str, str]) -> Set[Tuple[str, s
             empty = body is not None and isinstance(body.value, ast.Constant) and body.value.value is None
             pairs.add((named, "GET" if body is None or empty else "POST"))
     return pairs
+
+
+def _refusals_reachable(tree: ast.AST, root: str) -> Optional[Set[str]]:
+    """Every `FetchRefusal` code raisable from `root`, following calls within the module.
+
+    A CLOSURE OVER THE CALL GRAPH, not a grep of the file and not a read of one function.
+    `filters` raises two of the nine itself; the other seven come out of `_cookie`, `_open`,
+    `_check_status` and the endpoint accessors. A reader that stopped at the function the route
+    names would have reported two — which is exactly the number the screen already labelled,
+    so it would have blessed the defect it was written to find. Measured by removing the
+    recursion: seven codes flip to unreachable.
+
+    Returns None when `root` is not defined, which is a finding rather than an empty answer: an
+    empty set reads as "nothing can go wrong", and the difference between that and "this reader
+    has lost its subject" is the whole value of the row.
+    """
+    bodies = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    if root not in bodies:
+        return None
+    seen: Set[str] = set()
+    codes: Set[str] = set()
+    pending = [root]
+    while pending:
+        name = pending.pop()
+        if name in seen or name not in bodies:
+            continue
+        seen.add(name)
+        for node in ast.walk(bodies[name]):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if node.func.id == "FetchRefusal":
+                first = node.args[0] if node.args else None
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    codes.add(first.value)
+            elif node.func.id in bodies:
+                pending.append(node.func.id)
+    return codes
+
+
+def check_hint_reasons(report: Report) -> None:
+    """The capture screen's refusal labels, against the refusals its route can send.
+
+    **THE ONE PLACE A TRANSPORT REFUSAL BECOMES A SENTENCE ON A SCREEN.** Three of the four
+    call sites into `server/tcg_export.py` answer 502 carrying the module's own remedial
+    sentence. The fourth — `GET /pipeline/games/<game>/sets` — answers 200 and hands the CODE
+    to `CaptureScreen.tsx` to re-word, because the operator is mid-capture and a failed
+    autocomplete is not a failed capture. That is argued and it is right. What it means is that
+    `hintReason` is the copy for nine refusals, and nothing read it.
+
+    **IT NAMED TWO OF THE NINE.** Measured 2026-09-06. The other seven fell to the map's
+    unknown-code tail and printed as `Set list unavailable (tcg_blocked)`. The tail is argued
+    and correct — `docs/DESIGN.md` shows reason codes beside names, so what the operator saw
+    stays greppable — and a session widening the map wrote over that argument before putting
+    it back. THE DEFECT IS THE SEVEN, NOT THE TAIL: a floor is not where nine tenths of a map
+    should land. Nothing could say so — the route was green, the screen typechecked, and the
+    only way to see it was to make TCGplayer refuse a real client.
+
+    **MECHANICAL, and the reachability is the part that makes it so.** The codes are string
+    literals in `FetchRefusal(...)` calls and the map is a run of `code === '...'` comparisons;
+    both are read with a parser, and the reachable set is closed over the module's own call
+    graph rather than taken from the one function the route names — see `_refusals_reachable`
+    for what that difference measured.
+
+    **BOTH DIRECTIONS.** A reachable code the map does not name is an operator reading a
+    fallback. A code the map names that nothing can raise is a dead branch, and dead branches
+    are how a map stops being readable as the answer to "what can happen here"; those are
+    permitted only through `HINT_REASON_NON_TRANSPORT`, which carries the reason for each.
+
+    **THE ROUTE CARRIES `message` NOW, AND THIS ROW IS WHY THAT IS NOT THE FIX.** A fallback
+    that is routinely what the operator reads is a fallback nobody ever widens the map for —
+    which is how two-of-nine survived. The transport's sentence sits between the map and the
+    bare code, and it names `.env`, which this screen deliberately does not; the map is what
+    the screen owes.
+    """
+    findings: List[Finding] = []
+    module = rel(TRANSPORT_PROMISE_MODULE)
+    screen = rel(HINT_REASON_SCREEN)
+
+    for path in (TRANSPORT_PROMISE_MODULE, HINT_REASON_SCREEN):
+        if not exists(path):
+            report.add("hint reasons", MECHANICAL, [Finding(rel(path), "does not exist")])
+            return
+
+    try:
+        tree = ast.parse(read(TRANSPORT_PROMISE_MODULE))
+    except SyntaxError as exc:
+        report.add("hint reasons", MECHANICAL, [Finding(module, f"cannot be parsed.\n{exc}")])
+        return
+
+    reachable = _refusals_reachable(tree, HINT_REASON_ROOT)
+    if reachable is None:
+        report.add("hint reasons", MECHANICAL, [Finding(module, (
+            f"defines no `{HINT_REASON_ROOT}`, which is the call the set-list route makes and "
+            f"the root this row walks from.\n  Re-point `HINT_REASON_ROOT`, or drop the row — "
+            f"a reader with no subject reports nothing and\n  blesses whatever the screen "
+            f"happens to say."
+        ))], "")
+        return
+
+    block = _HINT_REASON_FN_RE.search(read(HINT_REASON_SCREEN))
+    if block is None:
+        report.add("hint reasons", MECHANICAL, [Finding(screen, (
+            "defines no `hintReason` this row can read. It is the copy for every refusal the "
+            "set-list route can send;\n  either it was renamed, or it was restructured past "
+            "the pattern watching it. A check that quietly\n  stops covering a screen's copy "
+            "is worse than no check."
+        ))], "")
+        return
+
+    named = set(_HINT_REASON_CODE_RE.findall(block.group(1)))
+
+    for code in sorted(reachable - named):
+        findings.append(Finding(screen, (
+            f"does not name `{code}`, which `{module}:{HINT_REASON_ROOT}` can raise and the "
+            f"set-list route sends\n  straight to this screen. Unnamed, the operator reads the "
+            f"transport's own sentence — written for the\n  pipeline's reader, not for "
+            f"somebody holding a card over a stand. Give it a clause in the rig's register."
+        )))
+
+    for code in sorted(named - reachable - set(HINT_REASON_NON_TRANSPORT)):
+        findings.append(Finding(screen, (
+            f"names `{code}` and nothing reachable from `{module}:{HINT_REASON_ROOT}` raises "
+            f"it, so that branch is dead.\n  Strike it, or record it in "
+            f"`HINT_REASON_NON_TRANSPORT` with where it does come from — a map that may name\n"
+            f"  anything cannot be read as the answer to what can happen here."
+        )))
+
+    for code, why in sorted(HINT_REASON_NON_TRANSPORT.items()):
+        if code not in named:
+            findings.append(Finding(screen, (
+                f"no longer names `{code}`, which is declared as a code this map covers: {why}\n"
+                f"  Either the screen stopped labelling it — and it now falls through — or the "
+                f"declaration is stale."
+            )))
+
+    report.add(
+        "hint reasons",
+        MECHANICAL,
+        findings,
+        f"{len(reachable)} refusals reachable from {HINT_REASON_ROOT}(), "
+        f"{len(named)} labelled by the screen",
+    )
 
 
 def check_transport_promise(report: Report) -> None:
@@ -10491,6 +10677,7 @@ def audit(staged_only: bool) -> Report:
     check_pricing_presets(report)
     check_export_request(report)
     check_transport_promise(report)
+    check_hint_reasons(report)
     check_tested_by_reach(report)
     check_status_sources(report)
     check_design_tokens(report)

@@ -3416,7 +3416,11 @@ def do_tcg_sets(game: str) -> dict:
     entry = game_registry.get(game) or {}
     category = entry.get("tcgplayer_category_id")
     if not category:
-        return {"game": game, "sets": [], "reason": "no_category"}
+        # NOT A TRANSPORT REFUSAL AND SO NOT A TRANSPORT SENTENCE. Nothing was fetched:
+        # this game carries no `tcgplayer_category_id`, which is a fact about
+        # `pipeline/games.py` rather than about the portal, and the screen says so in
+        # its own words. The key is present and null for the one-shape rule above.
+        return {"game": game, "sets": [], "reason": "no_category", "message": None}
     category = int(category)
     if category not in _SETS_CACHE:
         try:
@@ -3425,7 +3429,24 @@ def do_tcg_sets(game: str) -> dict:
             # NOT AN ERROR TO THE SCREEN. The operator is mid-capture; a refusal here is a
             # missing convenience, not a failed capture, and the reason is carried so the
             # screen can say why the list is empty rather than pretending the game has no sets.
-            return {"game": game, "sets": [], "reason": caught.code}
+            #
+            # AND THE SENTENCE TRAVELS WITH IT, WHICH IT DID NOT UNTIL 2026-09-06. This was
+            # the one refusal path of four that kept the code and dropped `message` — the
+            # other three (`do_pipeline_export`, `do_live_export`, `do_run_scope`) all carry
+            # it — and it is the one whose consumer re-labels from a map. `hintReason` named
+            # two of the NINE codes `tcg_export.filters` can raise, so seven fell to that
+            # map's unknown-code tail.
+            #
+            # THE TAIL IS A DESIGN AND THE MAP IS THE FIX. `CaptureScreen.tsx` argues the
+            # bare code deliberately — docs/DESIGN.md shows reason codes beside names, so
+            # what the operator saw stays greppable — and that argument is older than this
+            # comment. What was wrong was seven of nine landing on it. The map is wide now,
+            # `make docs-audit`'s `hint reasons` row keeps it wide, and this key is the layer
+            # between the two: words instead of a bare token for a code the map has not
+            # caught up with. NOT what the operator normally reads, and the screen must not
+            # let it become that — the sentences below name `.env`, and that screen does
+            # not.
+            return {"game": game, "sets": [], "reason": caught.code, "message": caught.message}
         _SETS_CACHE[category] = [
             {"name": str(row.get("Text") or ""), "id": str(row.get("Value") or "")}
             for row in (vocabulary.get("Sets") or [])
@@ -3439,6 +3460,9 @@ def do_tcg_sets(game: str) -> dict:
         # either. A hint stored as an alias still resolves — `match_sets` folds it first.
         "aliases": {str(k): str(v) for k, v in aliases.items()},
         "reason": None,
+        # ALWAYS PRESENT, NULL ON SUCCESS, so the client reads one shape rather than probing
+        # for a key. `previous` in the export receipt is the same rule.
+        "message": None,
     }
 
 
