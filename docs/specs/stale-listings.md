@@ -322,11 +322,27 @@ every use is refused is worse than no control.
 441 live rows of a My Pricing export and blank on 7,787 of 7,802 rows of the wide Filtered
 Export, which is why `reprice.BASES` is local to that module rather than added to
 `pricing.BASES`. A history row names the basis only when it is not the default — naming it on
-every row would be noise on the ordinary case. And step 1 — fetching the export — still happens at
-TCGplayer: `server/tcg_export.py` can download one, but only at `MyInventory: False`, the
-*catalogue* scope, and its own comment forbids flipping that without the owner. What the screen
-gained is a link to My Pricing and a sentence saying it does not fetch for you, so the operator
-is not navigating from memory.
+every row would be noise on the ordinary case. **Step 1 is a press now** (D104). **Fetch my live listings** on the sheet and on the store-wide
+reconcile calls `POST /pipeline/live-export`, which fetches at `MyInventory: True` behind
+`tcg_export.LIVE_FILTERS` — a second guarded constant, because `STANDING_FILTERS` is the
+CATALOGUE fetch's instruction and does not move. One fetch feeds both consumers: the file is kept
+and named, and either route takes `fetched: <name>` in place of an upload, so marking down and
+then reconciling act on **one** reading rather than two downloads minutes apart. The drop zone
+stays and is not a fallback — an operator with a download in hand should not fetch again, and a
+dead cookie must not be a dead end.
+
+**It narrows by nothing, and that is a rule rather than a convenience.** On this path an all-row
+the portal rejects fails **loudly** — `System Error` as a 200 carrying HTML, already named
+`tcg_request_rejected` — while a wrong narrowing fails **silently**, as a smaller, perfectly
+parseable CSV. So every axis is `0`, `LanguageIds` included, where the catalogue's proven `["1"]`
+is the worse choice for exactly that reason.
+
+**`ExcludeListos` is FALSE here and TRUE on the catalogue**, and the audit row asserts they
+disagree. On the catalogue the flag excludes *other sellers'* photo listings; on My Pricing every
+row is the operator's own. Measured on their 2026-09-01 download: four rows carry a `Photo URL`
+and all four are live — including **C-4654187, Kai'Sa (Signature), one copy at $7,000.00**, and
+C-4619603 at 37 copies. `True` would have made the lens omit the most valuable listing in the
+store, permanently and invisibly.
 
 **The press is `edits`**, not a CSV the browser wrote: `app/package.json` carries two runtime
 dependencies and PapaParse is not one, so the pairs go as JSON and `do_markdown_apply` materialises
@@ -436,6 +452,12 @@ Unmeasured, in order of consequence:
    Pricing upload.
 3. **Does a price change land immediately, or stage?** Unknown. `reconcile --live` against a
    fresh download is what answers it.
+4. **Does the portal accept `CategoryId: "0"` and `LanguageIds: ["0"]` on a My Pricing fetch?**
+   (D104.) Nothing in this repo has sent either. The evidence that some cross-category value
+   exists is the owner's own file — 759 rows over six product lines from one download — and the
+   failure is loud rather than silent. **Two unmeasured values on one press makes a refusal
+   harder to attribute**: if it refuses, try `LanguageIds: ["1"]` — the value proven on the run
+   path — with `CategoryId: "0"` before concluding the category is the problem.
 
 **The first real press should be `reprice list --limit 5 --write`, then `apply --write`,
 uploaded, then `reconcile --live` against a fresh download to read the prices back.** Record the

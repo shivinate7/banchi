@@ -5,12 +5,13 @@ import {
   applyMarkdown,
   describeFailure,
   getMarkdowns,
+  fetchLiveExport,
   markdownFileUrl,
   markdownListings,
   type Failure,
 } from './server'
 import { readUpload } from './csvUpload'
-import type { CsvUpload, MarkdownAnswer, MarkdownSummary } from './types'
+import type { CsvUpload, LiveExportFetched, MarkdownAnswer, MarkdownSummary } from './types'
 import { Button, Icon, Notice } from './kit'
 import { toast } from './kit/toast'
 import { DropZone, FileButton } from './RunsDrop'
@@ -135,6 +136,11 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
    *  back to market" — and against `asking` it means "leave it", which the `unchanged` refusal
    *  already names honestly. */
   const [cut, setCut] = useState<'percent' | 'match'>('percent')
+  /** The live export this server fetched, if one was. Separate from `busy` because the fetch is
+   *  its own wait — it opens a socket to TCGplayer and can take seconds — and the survey that
+   *  follows it is a second one the operator should see start. */
+  const [fetching, setFetching] = useState(false)
+  const [fetched, setFetched] = useState<LiveExportFetched | null>(null)
   const [exportName, setExportName] = useState<string | null>(null)
   const [worklistName, setWorklistName] = useState<string | null>(null)
 
@@ -143,6 +149,8 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
      produces have to describe one file, or the numbers on the screen were about something
      else. */
   const held = useRef<CsvUpload | null>(null)
+  /** The live export the SERVER holds, by name — the fetched counterpart to `held`'s bytes. */
+  const fetchedName = useRef<string | null>(null)
   const edited = useRef<CsvUpload | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
 
@@ -181,11 +189,19 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
   const read = useCallback(
     async (write: boolean) => {
       const file = held.current
-      if (file === null) return
+      const named = fetchedName.current
+      /* ONE DOCUMENT, FROM WHICHEVER DOOR. Bytes the operator dropped are held so the second
+         press sends the same ones; a fetched file is the SERVER's and is named, so re-reading
+         it with different numbers costs no second socket to TCGplayer. */
+      if (file === null && named === null) return
       setBusy(true)
       setFailure(null)
       try {
-        const answer = await markdownListings(file, { ...ask(), write })
+        const answer = await markdownListings(file, {
+          ...ask(),
+          ...(named === null ? {} : { fetched: named }),
+          write,
+        })
         setSurvey(answer)
         if (answer.wrote && answer.stamp !== null) {
           setStamp(answer.stamp)
@@ -208,6 +224,34 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
     },
     [ask, refresh],
   )
+
+  /** Fetch the live export, then survey it in the same press.
+   *
+   *  ONE PRESS AND NOT TWO, because the fetch is not a thing the operator wants for its own
+   *  sake — it is how step 1 stops being a trip to another website. The survey that follows is
+   *  the answer they came for, and it is the same `read` the drop zone calls, so the two
+   *  entrances converge immediately rather than running parallel flows.
+   *
+   *  THE NAME IS HELD, NOT THE BYTES. `held` is bytes this screen must re-send; `fetchedName`
+   *  is a file the server keeps, so `Read it again with these numbers` re-surveys the identical
+   *  document without asking TCGplayer twice. Picking an export clears it, and fetching clears
+   *  the bytes — one document at a time, which is the rule the route enforces anyway. */
+  const fetchLive = useCallback(async () => {
+    setFetching(true)
+    setFailure(null)
+    try {
+      const answer = await fetchLiveExport()
+      setFetched(answer)
+      setExportName(answer.fetched)
+      held.current = null
+      fetchedName.current = answer.fetched
+      await read(false)
+    } catch (err) {
+      setFailure(describeFailure(err))
+    } finally {
+      setFetching(false)
+    }
+  }, [read])
 
   const apply = useCallback(
     async (write: boolean) => {
@@ -250,6 +294,11 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
       setWroteImport(false)
       setFailure(null)
       setExportName(file.name)
+      /* ONE DOCUMENT AT A TIME. The route refuses a request carrying both, so the screen must
+         not be able to build one — and the operator who drops a file after fetching plainly
+         means the file. */
+      fetchedName.current = null
+      setFetched(null)
       setWorklistName(null)
       edited.current = null
       void readUpload(file)
@@ -472,25 +521,49 @@ export function Markdown({ open, onClose }: { readonly open: boolean; readonly o
               <span>Mark down again inside the window</span>
             </label>
 
-            {/* WHERE THE FILE COMES FROM, because the first step of this flow is off this
-                machine and the screen said nothing about it — the operator was navigating from
-                memory. A LINK AND NOT A FETCH: `server/tcg_export.py` can already download an
-                export, but only at `MyInventory: False` — the CATALOG scope — and its own
-                comment forbids flipping that without the owner. Fetching the live inventory is
-                a real feature and is named as one in `docs/specs/stale-listings.md` §9; this is
-                the sentence that stops the screen pretending step 1 does not exist. */}
-            <p className="runs-md-says">
-              The file comes from TCGplayer:{' '}
-              <a
-                className="runs-md-out"
-                href="https://store.tcgplayer.com/admin/pricing"
-                target="_blank"
-                rel="noreferrer noopener"
+            {/* THE FILE, FETCHED (D104). Step 1 used to happen entirely off this machine and
+                the screen could only point at it. `POST /pipeline/live-export` brings the
+                operator's own live listings at `MyInventory: True` — the opposite document from
+                the run path's catalogue fetch, behind its own guarded constant.
+
+                THE DROP ZONE STAYS AND IS NOT A FALLBACK. An operator with a download already in
+                hand should not have to fetch again, and a dead cookie must not be a dead end:
+                every refusal here is a sentence, and the zone below is what it leaves them. */}
+            <div className="runs-md-row">
+              <Button
+                variant="primary"
+                icon="download"
+                busy={fetching}
+                disabled={busy || fetching}
+                onClick={() => void fetchLive()}
               >
-                My Pricing
-              </a>{' '}
-              → Export, all printings. Nothing here fetches it for you yet.
-            </p>
+                {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
+              </Button>
+              <span className="runs-md-hint">
+                or drop a{' '}
+                <a
+                  className="runs-md-out"
+                  href="https://store.tcgplayer.com/admin/pricing"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  My Pricing
+                </a>{' '}
+                export below.
+              </span>
+            </div>
+            {fetched === null ? null : (
+              <Notice tone="ok" title={`${fetched.live_rows} listings live · ${fetched.live_copies} copies`}>
+                Read from TCGplayer just now, {fetched.rows} rows.
+                {/* WHAT THE FETCH COULD NOT BRING, SAID OUT LOUD, because nothing downstream can
+                    ever disagree with it: `ExcludeListos` is the standing instruction and D64
+                    measured `Photo URL` empty in every export, so the file cannot report its own
+                    omissions. A lens that claims to draw a whole live inventory owes this. */}
+                {fetched.shortfall === null ? null : (
+                  <span className="runs-md-shortfall"> {fetched.shortfall}</span>
+                )}
+              </Notice>
+            )}
 
             <DropZone
               title="Drop the My Pricing export here"

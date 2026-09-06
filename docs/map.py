@@ -1323,7 +1323,11 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
-                "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17", "D18", "D22", "D23", "D24", "D26", "D31", "D39", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D90", "D92", "D96", "D101", "D102"],
+                "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
+                                "D18", "D22", "D23", "D24", "D26", "D31", "D39", "D49", "D50",
+                                "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72",
+                                "D75", "D76", "D80", "D81", "D83", "D84", "D90", "D92", "D96",
+                                "D101", "D102", "D104"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1870,7 +1874,7 @@ COMPONENTS = [
                                 "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
-                                "D92", "D93", "D96", "D100", "D103"],
+                                "D92", "D93", "D96", "D100", "D103", "D104"],
                 "tested_by": ["T7"],
             },
             "tcg_export.py": {
@@ -1901,7 +1905,8 @@ COMPONENTS = [
                 # file being fetched IS — the Pricing tab's Export Filtered CSV, which is the
                 # listing path's own input. D24 is the opsec rule this borrows: a bearer
                 # instrument does not go in a file anyone else reads.
-                "governed_by": ["D3", "D11", "D16", "D24", "D33", "D53", "D64", "D65", "D69", "D8", "D9", "D76"],
+                "governed_by": ["D3", "D8", "D9", "D11", "D16", "D24", "D33", "D53", "D64",
+                                "D65", "D69", "D76", "D104"],
                 "tested_by": ["T7"],
                 "note": "Stdlib only, like the rest of the server: requirements.txt names the "
                         "absence of `requests` on purpose and one more fetch is not a reason "
@@ -2452,7 +2457,8 @@ COMPONENTS = [
                                               "D46", "D48", "D49", "D52", "D53", "D58", "D59",
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
-                                              "D89", "D90", "D91", "D92", "D100", "D103"]},
+                                              "D89", "D90", "D91", "D92", "D100", "D103",
+                                              "D104"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript.",
@@ -2463,7 +2469,7 @@ COMPONENTS = [
                                              "D53", "D54", "D56", "D58", "D59", "D61", "D62",
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
-                                             "D93", "D100", "D103"]},
+                                             "D93", "D100", "D103", "D104"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme and the rail — and nothing else",
                                     "governed_by": ["D13", "D27", "D94", "D95"],
@@ -3021,7 +3027,7 @@ COMPONENTS = [
                                               "until a preview has answered (D33's gate pointed "
                                               "at the ledger), and the same bytes are sent twice "
                                               "rather than re-picked.",
-                                      "governed_by": ["D7", "D13", "D33", "D87"],
+                                      "governed_by": ["D7", "D13", "D33", "D87", "D104"],
                                       # `app/tests/live-reconcile.spec.ts` is the check the hard
                                       # rule says does not otherwise exist — it runs under
                                       # `make design-check`, not at turn end, so it is named
@@ -3055,7 +3061,7 @@ COMPONENTS = [
                                      "No fill on the selected chip — the solid accent is reserved "
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
-                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103"]},
+                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -3128,8 +3134,8 @@ COMPONENTS = [
                                          "spec can say for it — that nothing is deleted at "
                                          "TCGplayer to lower a price, and that the age it ranks "
                                          "on is OWNERSHIP age.",
-                                 "governed_by": ["D7", "D9", "D13", "D33", "D49", "D86", "D87",
-                                                 "D94", "D95", "D100", "D103"],
+                                 "governed_by": ["D7", "D9", "D13", "D33", "D49", "D64", "D86",
+                                                 "D87", "D94", "D95", "D100", "D103", "D104"],
                                  # `app/tests/markdown.spec.ts` is the check the hard rule says
                                  # does not otherwise exist — it runs under `make design-check`,
                                  # not at turn end, so it is named here in prose rather than in
@@ -3983,7 +3989,7 @@ COMPONENTS = [
                         "than disabled, D33's shape applied twice on one screen. Two routes are "
                         "intercepted and their bodies read; no real request is made and no store "
                         "is touched.",
-                "governed_by": ["D7", "D9", "D33", "D86", "D100", "D103"],
+                "governed_by": ["D7", "D9", "D33", "D64", "D86", "D100", "D103", "D104"],
                 "note": "ONE OF ITS CASES IS A GEOMETRY ASSERTION AND IT WAS WRITTEN FROM A "
                         "DEFECT. The survey console rendered 512px wide and 0px TALL — "
                         "`.runslog` sets `overflow: hidden`, which makes a flex item's automatic "

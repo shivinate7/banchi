@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-import { describeFailure, reconcileLive, type Failure } from './server'
+import { describeFailure, fetchLiveExport, reconcileLive, type Failure } from './server'
 import { readUpload } from './csvUpload'
 import { Button, Icon, Notice } from './kit'
 import { toast } from './kit/toast'
@@ -34,14 +34,24 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
   const [readAt, setReadAt] = useState<string | null>(null)
   const held = useRef<Awaited<ReturnType<typeof readUpload>> | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
+  /** The live export the SERVER holds, by name — the fetched counterpart to `held`'s bytes. */
+  const fetchedName = useRef<string | null>(null)
+  const [fetching, setFetching] = useState(false)
 
   const send = useCallback(async (write: boolean) => {
     const file = held.current
-    if (file === null) return
+    const named = fetchedName.current
+    /* ONE DOCUMENT, FROM WHICHEVER DOOR (D104) — the markdown sheet's rule, and the same
+       reason: the preview the operator read and the write that follows must describe one
+       reading, and a fetched file is the server's rather than this screen's. */
+    if (file === null && named === null) return
     setBusy(true)
     setFailure(null)
     try {
-      const answer = await reconcileLive(file, { write })
+      const answer = await reconcileLive(file, {
+        write,
+        ...(named === null ? {} : { fetched: named }),
+      })
       setReport(answer.console)
       setWrote(answer.wrote)
       if (answer.wrote) {
@@ -63,6 +73,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
       setWrote(false)
       setFailure(null)
       setFileName(file.name)
+      fetchedName.current = null
       void readUpload(file)
         .then((upload) => {
           held.current = upload
@@ -119,6 +130,39 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
               {readAt === null ? '.' : ` — read ${whenLabel(readAt)}.`}
             </span>
           </p>
+
+          {/* THE SAME DOCUMENT THE MARKDOWN SHEET FETCHES, AND THE SAME FILE (D104). An
+              operator who marks down and then reconciles is acting on ONE reading rather than
+              two downloads taken minutes apart — which matters here more than there, because
+              this is the press that writes `live` for every SKU in the store. */}
+          <div className="livecheck-fetch">
+            <Button
+              variant="primary"
+              icon="download"
+              busy={fetching}
+              disabled={busy || fetching}
+              onClick={() => {
+                void (async () => {
+                  setFetching(true)
+                  setFailure(null)
+                  try {
+                    const answer = await fetchLiveExport()
+                    held.current = null
+                    fetchedName.current = answer.fetched
+                    setFileName(answer.fetched)
+                    await send(false)
+                  } catch (err) {
+                    setFailure(describeFailure(err))
+                  } finally {
+                    setFetching(false)
+                  }
+                })()
+              }}
+            >
+              {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
+            </Button>
+            <span className="livecheck-hint">or drop a My Pricing export below.</span>
+          </div>
 
           <div className="livecheck-pick">
             <DropZone

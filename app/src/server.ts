@@ -39,6 +39,7 @@ import type {
   ExportFetched,
   ExportScope,
   MarkdownAnswer,
+  LiveExportFetched,
   MarkdownTable,
   MarkdownAsk,
   MarkdownSummary,
@@ -1789,13 +1790,19 @@ export async function getPricing(name: string): Promise<PricingPayload> {
  * that can report the other direction — what TCGplayer holds that this pipeline never sent.
  */
 export async function reconcileLive(
-  file: CsvUpload,
-  options: { write?: boolean } = {},
+  /** The bytes an operator dropped, or `null` when `options.fetched` names a file this server
+   *  already holds (D104). Never both — the route refuses rather than guessing. */
+  file: CsvUpload | null,
+  options: { write?: boolean; fetched?: string } = {},
 ): Promise<{ ok: boolean; exit_code: number; wrote: boolean; console: string }> {
   return (await request('/pipeline/reconcile-live', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ export: file, write: Boolean(options.write) }),
+    body: JSON.stringify({
+      ...(file === null ? {} : { export: file }),
+      ...(options.fetched === undefined ? {} : { fetched: options.fetched }),
+      write: Boolean(options.write),
+    }),
   })) as { ok: boolean; exit_code: number; wrote: boolean; console: string }
 }
 
@@ -1820,13 +1827,16 @@ export async function reconcileLive(
  * `rule_invalid`, `basis_invalid`, `number_invalid`.
  */
 export async function markdownListings(
-  file: CsvUpload,
+  /** The bytes an operator dropped, or `null` when `options.fetched` names a file this server
+   *  already holds (D104). Never both — the route refuses a request carrying two documents
+   *  rather than guessing which one it meant. */
+  file: CsvUpload | null,
   options: MarkdownAsk = {},
 ): Promise<MarkdownAnswer> {
   return (await request('/pipeline/markdowns', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ export: file, ...options }),
+    body: JSON.stringify(file === null ? { ...options } : { export: file, ...options }),
   })) as MarkdownAnswer
 }
 
@@ -1868,6 +1878,30 @@ export async function applyMarkdown(
       write: Boolean(options.write),
     }),
   })) as MarkdownAnswer
+}
+
+/**
+ * Fetch the operator's own live listings from TCGplayer, and keep the file (D104).
+ *
+ * FREE. It starts no child and can put no number on an invoice — but it reads a secret and
+ * opens a socket, which is the property `POST /pipeline/runs/<name>/export` already had and
+ * almost nothing else does.
+ *
+ * THE SECOND DOCUMENT, NOT A SECOND SCOPE. `fetchExport` on a run brings the CATALOGUE, at
+ * `MyInventory: False`, narrowed to that run's sets — the cards NOT listed. This brings the
+ * opposite: everything live, every product line, which is what the markdown and the store-wide
+ * reconcile both read. Hand the returned `fetched` name to either instead of an upload.
+ *
+ * Refusals worth branching on are the fetch family — `tcg_cookie_missing`,
+ * `tcg_session_expired`, `tcg_request_rejected`, `tcg_unreachable` — each of which carries a
+ * sentence saying whether the credential, the request or the host is the problem.
+ */
+export async function fetchLiveExport(): Promise<LiveExportFetched> {
+  return (await request('/pipeline/live-export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })) as LiveExportFetched
 }
 
 /**

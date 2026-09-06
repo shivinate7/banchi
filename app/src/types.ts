@@ -2566,6 +2566,9 @@ export type ShippingForgotten = { batch: string; forgotten: boolean }
  *  row of an ordinary Filtered Export and a listing run reading it would silently write no
  *  price at all. */
 export type MarkdownAsk = {
+  /** A live export this server already holds, named instead of uploaded (D104). Mutually
+   *  exclusive with an upload; both together is a refusal rather than a guess. */
+  fetched?: string
   days?: number
   percent?: number | string
   rule?: string
@@ -2595,6 +2598,24 @@ export type MarkdownAnswer = {
    *  subprocess, which `emit` never does, so a screen that did not adopt this would have its
    *  operator's next keystroke refused `corpus_moved` for a write it just made itself. */
   revision?: string
+}
+
+/** What one live-export fetch brought back (D104).
+ *
+ *  `shortfall` IS A SENTENCE AND NOT A COUNT, and that is the honest shape. `ExcludeListos` is
+ *  the owner's standing instruction and it excludes their own photo listings; D64 measured
+ *  `Photo URL` empty in all eleven exports, filtered AND unfiltered, so the file cannot say how
+ *  many are missing and neither can this. Null when nothing is excluded. */
+export type LiveExportFetched = {
+  ok: boolean
+  /** The name this server kept it under. What `fetched` on the next request names. */
+  fetched: string
+  at: string
+  rows: number
+  /** Rows TCGplayer reported live — `Total Quantity > 0` — and the copies across them. */
+  live_rows: number
+  live_copies: number
+  shortfall: string | null
 }
 
 /** One live listing the survey saw (D103).

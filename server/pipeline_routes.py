@@ -105,6 +105,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -1937,16 +1938,10 @@ def do_reconcile_live(payload: dict) -> dict:
     opened any absolute path a request named would be a file-read primitive behind an origin
     header. It lands under `inventory/.reconcile/`, beside the store it is about to settle.
     """
-    upload = payload.get("export")
-    if not isinstance(upload, dict):
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "export_required",
-            "Send `export` as {name, content} — TCGplayer's My Pricing export, all printings.",
-        )
-    target = files.inventory_dir() / ".reconcile"
-    target.mkdir(parents=True, exist_ok=True)
-    path = _store_upload(target, upload, "live-")
+    # THE SAME DOCUMENT THE MARKDOWN READS, AND NOW THE SAME FILE. `fetched` names one this
+    # server already holds, so an operator who marks down and then reconciles is acting on ONE
+    # reading rather than two downloads taken minutes apart.
+    path = _live_export_from(payload)
     argv = [str(PKMNSCAN), "reconcile", "--live", str(path)]
     if payload.get("write"):
         argv.append("--write")
@@ -2045,16 +2040,7 @@ def do_markdown_list(payload: dict) -> dict:
     `reprice list` names the directory it made in a sentence meant for a person, and a route
     that scraped that sentence would break the moment the sentence was reworded.
     """
-    upload = payload.get("export")
-    if not isinstance(upload, dict):
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "export_required",
-            "Send `export` as {name, content} — TCGplayer's My Pricing export, all printings.",
-        )
-    target = files.inventory_dir() / ".reprice"
-    target.mkdir(parents=True, exist_ok=True)
-    path = _store_upload(target, upload, "live-")
+    path = _live_export_from(payload)
 
     argv = [str(PKMNSCAN), "reprice", "list", str(path)]
     argv += _markdown_flags(payload)
@@ -2141,6 +2127,160 @@ def _positive(value, field: str) -> int:
             f"`{field}` is {value!r}, which is not a whole number of 0 or more.",
         )
     return number
+
+
+#: Where a fetched live export is kept. Derived, per checkout, and never swept — the file is
+#: the evidence for the reading the store wrote off it, which is `do_pipeline_export`'s rule for
+#: a run's own exports one directory over. `inventory/` is gitignored wholesale.
+LIVE_DIR = ".live"
+#: What a fetched file is named, and the prefix `_open_live_export` requires. A name that could
+#: be anything is a file-read primitive behind an origin header.
+LIVE_PREFIX = "live-tcgplayer-"
+
+
+def do_live_export() -> dict:
+    """`POST /pipeline/live-export` — fetch the operator's own live listings from TCGplayer.
+
+    FREE, AND IT IS NOT THE ROUTE THAT SPENDS — `do_pipeline_export`'s sentence, and for its
+    reason: this is a download of the operator's own Pricing tab, nothing starts a child and
+    nothing here can put a number on an invoice. What it does that almost nothing else does is
+    read a secret and open a socket, which is why the call lives behind one function in
+    `server/tcg_export.py`.
+
+    THE SECOND DOCUMENT, NOT THE SECOND SCOPE. `POST /pipeline/runs/<name>/export` fetches the
+    CATALOGUE — `MyInventory: False`, narrowed to a run's sets, whose whole job is listing cards
+    that are NOT listed. This fetches the opposite: everything the operator has live, across
+    every product line, which is what `reprice list` and `reconcile --live` both read. See
+    `tcg_export.LIVE_FILTERS` for why that is a second guarded constant rather than a flag.
+
+    ONE FETCH FEEDS BOTH CONSUMERS. The file is kept and named, and `POST /pipeline/markdowns`
+    and `POST /pipeline/reconcile-live` both accept `fetched: <name>` in place of an upload — so
+    an operator who marks down and then reconciles is acting on ONE reading rather than two
+    downloads taken minutes apart, which is the same argument `Markdown.tsx` makes for holding
+    the uploaded bytes across its two presses.
+    """
+    directory = files.inventory_dir() / LIVE_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    try:
+        body = tcg_export.fetch_live(tcg_export.LiveScope())
+    except tcg_export.FetchRefusal as caught:
+        # A BAD GATEWAY AND NOT A 500, `do_pipeline_export`'s rule: the failure is at TCGplayer
+        # or in the credential this machine holds for it, and every one of these carries a
+        # sentence saying which.
+        raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, caught.code, str(caught)) from None
+
+    name = f"{LIVE_PREFIX}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.csv"
+    path = directory / name
+    path.write_bytes(body)
+
+    try:
+        export = tcgcsv.read_export(path)
+    except (tcgcsv.MalformedCsv, OSError) as exc:
+        # A REFUSAL TEARS DOWN WHAT IT BUILT — `do_pipeline_export`'s rule again. A directory
+        # accumulating one dead file per mis-timed press stops explaining itself.
+        path.unlink(missing_ok=True)
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "tcg_unexpected_response",
+            f"TCGplayer answered with something that is not an export: {exc}. Nothing was kept.",
+        ) from None
+
+    live_rows = 0
+    live_copies = 0
+    for row in export.rows:
+        held = tcgcsv.parse_quantity(row.get(tcgcsv.LIVE_QUANTITY_COLUMN, ""))
+        if held > 0:
+            live_rows += 1
+            live_copies += held
+
+    return {
+        "ok": True,
+        "fetched": name,
+        "at": master.now(),
+        "rows": len(export.rows),
+        "live_rows": live_rows,
+        "live_copies": live_copies,
+        # WHAT THE FETCH COULD NOT BRING, NAMED RATHER THAN LEFT TO BE NOTICED. See
+        # `_live_shortfall`.
+        "shortfall": _live_shortfall(),
+    }
+
+
+def _live_shortfall() -> Optional[str]:
+    """The sentence saying what this document cannot contain, or None when it can contain all.
+
+    IT RETURNS None TODAY, AND THE FUNCTION EXISTS ANYWAY. `LIVE_FILTERS` narrows by nothing —
+    every axis is the portal's all-row, on the rule that a rejected all-row fails LOUDLY while a
+    wrong narrowing fails silently — so there is nothing for this to say.
+
+    WHAT IT GUARDS IS THE DAY SOMEBODY NARROWS ONE. `ExcludeListos: True` would drop the
+    operator's own photo listings; measured on their real 2026-09-01 download, that is four
+    rows, including a single copy at $7,000. And D64 measured `Photo URL` empty in all eleven
+    catalogue exports, so nothing downstream could ever notice the omission. A lens that claims
+    to draw a whole live inventory has to be able to say when it cannot — otherwise the first
+    narrowing anybody adds is silent forever.
+
+    A SENTENCE AND NOT A COUNT, because there is no count to be had: the file cannot report its
+    own omissions, which is the whole reason this is needed.
+    """
+    if tcg_export.LIVE_FILTERS.get("ExcludeListos") is True:
+        return (
+            "Listings that carry a photo are not in this file — `ExcludeListos` is on. Nothing "
+            "in an export records how many, so this cannot say. On the last real download that "
+            "was four listings, one of them a single copy at $7,000."
+        )
+    return None
+
+
+def _open_live_export(name: str) -> Path:
+    """One fetched live export, by name. Shape, then prefix, then membership.
+
+    `_open_markdown`'s RULE, and it is what keeps a name from being a file-read primitive
+    guarded only by an origin header.
+    """
+    if not _DOWNLOADABLE.match(name or "") or not str(name).startswith(LIVE_PREFIX):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "fetched_invalid",
+            f"{name!r} is not the name of a fetched live export.",
+        )
+    path = files.inventory_dir() / LIVE_DIR / name
+    if not path.is_file():
+        raise PipelineRefusal(
+            HTTPStatus.NOT_FOUND,
+            "no_such_fetch",
+            f"No fetched live export named {name}. Fetch one, or drop a download in.",
+        )
+    return path
+
+
+def _live_export_from(payload: dict) -> Path:
+    """The live export this request means — a fetched one it names, or bytes it uploaded.
+
+    BOTH, AND NEITHER IS THE FALLBACK. A fetch is the ordinary path now; an upload is what an
+    operator does with a download they already have, or when the cookie has expired. A request
+    carrying both has not decided which file it means, and guessing would pick the other one.
+    """
+    fetched = payload.get("fetched")
+    upload = payload.get("export")
+    if fetched is not None and isinstance(upload, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "fetched_and_export",
+            "Send `fetched` (a live export this server holds) or `export` (bytes), never both.",
+        )
+    if fetched is not None:
+        return _open_live_export(str(fetched))
+    if not isinstance(upload, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "export_required",
+            "Send `export` as {name, content} — TCGplayer's My Pricing export, all printings — "
+            "or `fetched` naming one this server already has.",
+        )
+    target = files.inventory_dir() / ".reprice"
+    target.mkdir(parents=True, exist_ok=True)
+    return _store_upload(target, upload, "live-")
 
 
 def do_markdown_apply(stamp: str, payload: dict) -> dict:
