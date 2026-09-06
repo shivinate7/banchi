@@ -22,24 +22,34 @@
  svg,img{display:block}
 </style>
 <div class="wrap">
-<h1>the lockup — round 4 · halved again, and past the top edge</h1>
+<h1>the lockup — round 5 · the forced pair, and the tiebreak is a measurement</h1>
 <div class="sub">
-<b>Where the three rounds have got to.</b> R1 offered 0.045&ndash;0.140 &rarr; took 0.045&ndash;0.085.
-R2 offered 0.018&ndash;0.085 &rarr; took 0.026&ndash;0.045. R3 offered 0.026&ndash;0.045 &rarr; took
-<b>0.036&ndash;0.045</b>, eliminating 0.026 and 0.031.
+<b>The sweep has converged.</b> R1 0.045&ndash;0.085 &rarr; R2 0.026&ndash;0.045 &rarr; R3
+0.036&ndash;0.045 &rarr; R4 <b>0.045 and 0.050</b>. Both are interior this time &mdash; 0.036 and 0.040
+below them, 0.056 above &mdash; so the range was finally right and there is nothing left to widen.
 <br><br>
-<b>0.045 is now sitting on the top edge of what I offered, so the range was wrong again</b> &mdash;
-&sect;7 rule 5. And there is a real hole in the evidence: 0.045 is good and 0.065 is not, but
-<b>nothing between them has ever been drawn</b>. R2 jumped straight from one to the other. So this round
-does two things at once, which is allowed because they are the same axis: it halves the surviving band
-and it fills that hole.
+<b>They are 0.005 apart, which is a fifth of a pixel at kanji 40.</b> Another bisection would offer 0.047
+at a tenth of a pixel, and &sect;7 rule 7 calls that noise dressed as diligence. So this is a forced pair
+at a size where half a pixel is actually visible, and not another round.
 <br><br>
-<b>Same holds throughout:</b> pad 0.22, gap 0.06, roman 0.36&times; width-matched, caps, kanji tracking
-0.07em, roman at 62% opacity, arm 0.32, tail tip 0.07, ramp 0.45, radius pinned absolute.
+<b>The tiebreak is not taste.</b> The stroke is a fraction of the kanji size, so it shrinks with the
+lockup, and the two differ in exactly where the bracket stops being a whole pixel:
 <br><br>
-<b>The step is now a third of a pixel at kanji 40.</b> 0.036 to 0.040 is 1.44px to 1.60px. If this row
-reads as one row, that is the JND and &sect;7 rule 7 ends it &mdash; take any of them and the sweep is
-finished rather than inconclusive.
+<table style="border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:8px">
+<tr><th style="padding:4px 12px;text-align:left;color:#8b93a0">stroke</th><th style="padding:4px 12px">kanji 96</th><th style="padding:4px 12px">kanji 40</th><th style="padding:4px 12px">kanji 26</th><th style="padding:4px 12px">kanji 22</th><th style="padding:4px 12px">kanji 20</th><th style="padding:4px 12px;color:#c2410c">1px at kanji</th></tr>
+<tr><td style="padding:4px 12px">0.045</td><td style="padding:4px 12px;text-align:right">4.32</td><td style="padding:4px 12px;text-align:right">1.80</td><td style="padding:4px 12px;text-align:right">1.17</td><td style="padding:4px 12px;text-align:right;color:#c2410c">0.99</td><td style="padding:4px 12px;text-align:right;color:#c2410c">0.90</td><td style="padding:4px 12px;text-align:right;color:#c2410c">22.2</td></tr>
+<tr><td style="padding:4px 12px">0.050</td><td style="padding:4px 12px;text-align:right">4.80</td><td style="padding:4px 12px;text-align:right">2.00</td><td style="padding:4px 12px;text-align:right">1.30</td><td style="padding:4px 12px;text-align:right">1.10</td><td style="padding:4px 12px;text-align:right">1.00</td><td style="padding:4px 12px;text-align:right">20.0</td></tr>
+</table>
+<br>
+<b>0.050 holds a whole pixel down to kanji 20; 0.045 gives out at 22.</b> That is a small difference and it
+is the only one that is not a matter of preference, so unless your eye prefers 0.045 at the big size, the
+recommendation is <b>0.050</b>.
+<br><br>
+<b>One thing you are NOT looking at yet.</b> The corner radius has been pinned all sweep at
+<code>1.85 &times; 0.110</code> &mdash; the OLD stroke&rsquo;s value &mdash; so it could stay still while the
+stroke moved. Restoring the coupled rule at 0.050 would shrink it by more than half. Every specimen here
+still carries the old, oversized corner; that is the next round and it will change the shape more than the
+last two rounds did.
 </div>
 <div id="out"></div></div>
 <script>
@@ -138,8 +148,8 @@ function kanjiStem(size){
 }
 
 const HOLD = {pad:0.22, gap:0.06, tip:0.07, tl:0.45, arm:0.32}
-const VALUES = [0.036, 0.040, 0.045, 0.050, 0.056]
-const REJECTED = [0.031, 0.065]      /* eliminated in R3, and rejected in R2 — re-shown at the foot */
+const VALUES = [0.045, 0.050]        /* the forced pair — section 7 rule 1 */
+const REJECTED = [0.040, 0.056]      /* the nearest loser on each side, re-shown */
 const KEPT = []
 const INCUMBENT = null
 
@@ -152,7 +162,7 @@ function row(size, dark){
   c.appendChild(lk)
   const kept = KEPT.indexOf(v) >= 0
   const cap=el('div','cap'+(kept?' was':''))
-  cap.textContent=v.toFixed(3)+(v<=0.045?' — survived R3':' — new, above your edge')
+  cap.textContent=v.toFixed(3)+(v===0.050?' — holds 1px to kanji 20':' — gives out at kanji 22')
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
   s.appendChild(c); made.push([lk,v,num,size])})
@@ -160,8 +170,8 @@ function row(size, dark){
  return made
 }
 
-o.appendChild(el('h2',null,'at kanji 64 — the shape, with room to see three quarters of a pixel'))
-const Z=row(64,false)
+o.appendChild(el('h2',null,'at kanji 96 — where half a pixel is visible'))
+const Z=row(96,false)
 o.appendChild(el('h2',null,'at kanji 40'))
 const A=row(40,false)
 o.appendChild(el('h2',null,'at kanji 22 — the size it would be used at'))
@@ -176,14 +186,14 @@ const R=(function(){
  REJECTED.forEach(function(v){
   const c=el('div','cell')
   const lk=stamp(40, HOLD.gap, HOLD.pad, '#0f1217'); c.appendChild(lk)
-  const cap=el('div','cap was'); cap.textContent=v.toFixed(3)+(v<0.04?' — you eliminated this, R3':' — passed over, R2')
+  const cap=el('div','cap was'); cap.textContent=v.toFixed(3)+' — the nearest loser, R4'
   c.appendChild(cap)
   const num=el('div','num'); c.appendChild(num)
   s2.appendChild(c); made.push([lk,v,num,40])})
  o.appendChild(s2); return made})()
 
 document.fonts.ready.then(function(){
- const stem={64:kanjiStem(64), 40:kanjiStem(40), 22:kanjiStem(22)}
+ const stem={96:kanjiStem(96), 40:kanjiStem(40), 22:kanjiStem(22)}
  ;[Z,A,C,B,R].forEach(function(g){ g.forEach(function(r){
   const lk=r[0], v=r[1], num=r[2], size=r[3]
   /* radius still pinned, at the same absolute value round 1 used, so the two rounds are comparable */
