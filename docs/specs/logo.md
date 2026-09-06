@@ -240,12 +240,15 @@ block 4px; padding moves it 16px. Three rounds were spent tuning the wrong param
 | cut | use |
 | --- | --- |
 | display — the values above | 64px and up |
-| small — stroke 3.4, no taper | below 64px |
+| small — **stroke 4.2**, no taper, no filter | below 64px |
 
 Not optional. A 1.7 stroke is a scratch at 32px and absent at 16px.
 
-**The small cut is DRAWN and SWEPT as of 2026-09-05 — see §11.** Stroke 3.4 and the removal of
-the taper both survived; two things the table above does not mention did not.
+**The small cut is DRAWN and SWEPT as of 2026-09-05, and the stroke in this row MOVED — see
+§11.** This table asserted 3.4 before anything had been drawn. The sweep put 3.4 against 2.4 /
+3.0 / 4.2 / 5.0 and the owner chose **4.2**, which is what `app/src/kit/markGeometry.ts` ships.
+The taper's removal survived. Two things this row does not mention — the marbling and the
+filter — did not.
 
 ## 4. Where the assets stand
 
@@ -278,9 +281,16 @@ images, and say so in the message.
 and carries the old stroke, arm, card radius, gap, sheen, displacement and seed. It is kept
 because it is what was reviewed, not because it is right.
 
-**Nothing exists for**: the small optical cut, the bare brackets in either cut, or the lockup.
-All four are generated from the parameters above rather than drawn, so producing them is
-mechanical once the RANGED values are chosen.
+**Nothing exists for**: the bare brackets in either cut, or the lockup. **Both** are generated
+from the parameters above rather than drawn, so producing them is mechanical once the RANGED
+values are chosen — though the bare brackets are less mechanical than they look, because the
+card is drawn OVER the brackets and removing it is a change to the drawing rather than a layer
+being switched off.
+
+**This paragraph said "the small optical cut" and "All four" over a list of three until
+2026-09-05.** The small cut is built and shipping (§11, D102); the count was never right. Both
+errors survived because nothing reads this sentence — `logo parity` reads §9's palette table and
+stops there, and `paths` resolves repo-relative tokens, not claims about what exists.
 
 **The generators are committed now because they were lost once already.** Every sheet this
 design has been judged on was built in a session scratchpad and thrown away with it; the ground
@@ -334,7 +344,7 @@ transferable thing in this file.
 An optometrist does not ask "how good is this lens." They do seven things:
 
 1. **Forced choice between two.** *Better with one, or two?* People are unreliable at absolute
-   judgement and reliable at comparison.
+   judgment and reliable at comparison.
 2. **Bracket before bisecting.** Open wide enough that **both ends are wrong**. If nobody ever
    says "worse", the edges have not been found — only the limits of what was offered.
 3. **Deliberately cross the optimum.** Go one step past the best value to hear "worse". That
@@ -527,8 +537,9 @@ ambiguous, and this table is the place that disambiguates.
 Sheet: `logo/pass-locked-set.png` — the six at 200px, and again at 48px and 28px.
 
 **At 28px the brackets are essentially gone.** That row is not a decision, it is the evidence for
-section 3's *small* optical cut (stroke 3.4, no taper), which has still never been drawn. **Six
-marks are locked at the display cut and none is locked at the small cut**, and a favicon is 28px.
+section 3's *small* optical cut, which §11 has now drawn and swept at 4.2. **Six marks were
+locked at the display cut and none at the small cut when this row was written**, and a favicon
+is 28px.
 
 ## 10. Still open
 
@@ -578,8 +589,8 @@ correct at none of them.**
 
 | what | result |
 | --- | --- |
-| **stroke 3.4** | HELD. Swept 2.4 / 3.0 / 3.4 / 4.2 / 5.0. 2.4 is still a ghost at 16px; 5.0 chokes the corner and crowds the card. The pick is interior, which is what section 7 rule 5 asks for |
-| **no taper** | HELD, and now argued rather than asserted. At tip 0.07 a 3.4 stroke is 0.24 wide where it ends — a quarter of one unit in a 100-unit box, which is a third of a pixel at 28px. Swept 0.07 / 0.25 / 0.50 / 1.00 |
+| **stroke — 3.4 asserted, 4.2 chosen** | Swept 2.4 / 3.0 / 3.4 / 4.2 / 5.0. 2.4 is still a ghost at 16px; 5.0 chokes the corner and crowds the card. Both ends fail and the pick is interior, which is section 7 rule 5 satisfied — but the pick is **4.2**, not the 3.4 section 3 had asserted, and §3's row is corrected rather than left standing |
+| **no taper** | HELD, and now argued rather than asserted. At tip 0.07 a 4.2 stroke is 0.29 wide where it ends — under a third of one unit in a 100-unit box, which is a third of a pixel at 28px. Swept 0.07 / 0.25 / 0.50 / 1.00 |
 | **gap 11.5** | HELD. 9.75 crowds; 13.0 pushes the brackets into the tile's own corner radius |
 | **card scale 1.0** | HELD. 1.12 and 1.25 buy legibility and stop the mark being a card *in* a slot |
 
@@ -722,3 +733,732 @@ and so inverts — and the change is deliberate rather than a regression.
 a light tile is a real drawing that a person could prefer, and its stops are on the sheet. It was
 not chosen, once, by one person, on one day. `logo/sheets/light-ground.html` §7 puts it back on
 screen.
+
+## 13. The lockup — recovered, and given tails
+
+**THIS PASS WAS LOST AND HAS BEEN RECOVERED, WHICH IS THE THING TO READ FIRST.** The lockup was
+drawn on `claude/logo-state-of-record`, judged over eleven sheets in one session, and **never
+committed** — that branch carries three files under `logo/` and none of them is a lockup. §4 of
+this file already records the lesson it repeats: *"the generators are committed now because they
+were lost once already. Every sheet this design has been judged on was built in a session
+scratchpad and thrown away with it."* The rule was written and then not applied to the next
+thing drawn.
+
+It survived only because a temporary directory had not been cleaned. `sheets/lockup-tight.html`
+is that sheet, committed verbatim, and `sheets/lockup-tails.html` continues it.
+
+**A session that draws a pass and does not commit its generator has not done the work**, however
+good the render is. The render goes to the owner and the parameters go nowhere.
+
+### What was approved, written down
+
+Recovered from the generator rather than from memory:
+
+| what | value |
+| --- | --- |
+| Kanji | Hiragino Sans, `letter-spacing: .07em` |
+| Roman | Manrope 700 at **0.36×** the kanji, tracked by iteration until its measured width equals the kanji's, then pulled back by the trailing unit |
+| Roman opacity | **0.62** — the roman is subordinate by tone, not only by size |
+| Case | all caps |
+| Padding | fractions of the kanji size; `0.28` and `0.22` are the two kept |
+| Line gap | `0.06` of the kanji size |
+| Bracket stroke | **`0.050`** of the kanji size — swept over five rounds, see below |
+| Bracket arm | `0.32` |
+| Bracket corner radius | **`1.85 × stroke`** — a value §3 never names |
+
+**The roman's 0.62 opacity is not in §3's table and is doing real work.** It is what makes the
+roman read as subordinate at a size that would otherwise compete, and it was recovered from the
+generator; nobody had written it down.
+
+### The settled values, and the one place they live
+
+**This table is the store of record for the lockup's parameters, and `make docs-audit`'s
+`lockup params` row reconciles it against `sheets/lockup-round.html`'s declared holds in both
+directions.** A value settled in a round and then typed a second time somewhere else is how the
+two caption bugs in that sheet happened, twice, in the same row.
+
+| key | value | settled |
+| --- | --- | --- |
+| `pad` | 0.50 | rounds 16–20, closed on the pixel floor |
+| `gap` | 0.08 | rounds 21–23, answered in the column |
+| `stroke` | 0.050 | rounds 1–5 |
+| `arm` | 0.32 | round 24 — carried, and CONFIRMED rather than moved |
+| `rrMul` | 4.0 | rounds 6–10, closed on the JND |
+| `tip` | 0.15 | round 13 |
+| `tl` | 0.70 | rounds 11–12 |
+| `romanSize` | 0.25 | rounds 28–31 |
+| `romanFill` | 0.75 | rounds 25–27 |
+| `romanTrack` | 0.14 | a SEED, not an answer — see below |
+| `romanOpacity` | 0.45 | rounds 32–34, with a stated exception |
+
+**A key in this table is not the same as a key that has been argued.** The `settled` column says
+which is which, and it is the only place that says it — a value carried from the recovered pass
+and a value chosen against four alternatives look identical once they are both just numbers.
+
+**The three `roman*` keys were literals in `sheets/lockup-core.js` until round 25, and that is
+why they are last.** Everything else here has been reconciled against this table on every commit
+since the `lockup params` row landed; those three were typed into the markup, so they could not
+be swept, could not be declared as held, could not be asserted against the drawing, and could
+not disagree with this file in any way anything would notice. **A parameter that is not a
+parameter is outside every guard this project has**, which is the general form of it.
+
+**`romanTrack` is in this table and is not a settled value, and that distinction was found by
+publishing it as one.** `frame()` runs a thirty-iteration solve that width-matches the roman to
+the kanji by rewriting `letter-spacing`, which is the recovered pass's whole reason for existing.
+So the 0.14em is a *seed*: it changes how many iterations the solve takes and nothing else, and
+it is overwritten before anything is drawn. Published as settled it would have been a number in
+this file that **no drawing on any sheet has ever used** — the same defect as a caption naming a
+value the picture beside it does not have, one level further back. The drawing now records
+`romanTrackSolved`, the tracking that actually reached it, and **it cannot be swept**: it is
+derived, and §7 rule 6 has nothing to hold constant while it moves.
+
+### The roman's opacity, settled over three rounds — and the light theme sits under a floor on purpose
+
+**0.45 of the ink.** It replaces the 0.62 carried from the recovered pass.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 32 | 0.35 – 1.00 | 0.35 – 0.62 | the low end was not bracketed |
+| 33 | 0.20 – 0.58, **both grounds** | 0.27 – 0.45 | the grounds are not mirrors |
+| 34 | 0.35 – 0.50, against a floor | 0.45 | one value clears, on one ground |
+
+**An opacity is the only parameter in this set whose failure can be measured rather than judged**,
+and two measurements were built for it. The caption prints the WCAG ratio against the specimen's
+own ground. `sheets/ink.mjs` counts, at the floor size and at `deviceScaleFactor: 1`, how many
+pixels the letterforms reach at each of six distances from that ground.
+
+**The two grounds are not mirrors, and the figures say by how much.** The same alpha carries about
+a quarter more contrast on dark — 0.35 reads 2.98:1 there against 2.27:1 on white. Light gives
+sharper peaks and fewer pixels; dark gives lower peaks and broader coverage, because antialiasing
+a light stem onto a dark ground spreads outward rather than thinning.
+
+**The bar is this product's, because WCAG declines to supply one** — it exempts logotypes from
+contrast minimums outright, so citing 4.5:1 would be borrowing authority the standard withholds.
+`tokens.css`'s faintest ink, `--bn-ink-4`, carries its own note: *"this is the floor a word may
+sit at, never a caption."* Solved per channel against the panel each theme draws on — `#ffffff`
+and `#14171c` — **that floor is alpha 0.50 on light and 0.45 on dark.**
+
+**So the light theme sits under its own floor, and that is a decision rather than an oversight.**
+0.45 reads 4.09:1 on dark, clearing 4.0; and 3.02:1 on light, under 3.6. 0.50 was drawn and would
+have cleared both — the owner chose 0.45 with the cost named. Two things make it defensible: the
+roman repeats information the kanji already carries, and ink-4's note was written for interface
+text rather than for a logotype's second line. **A later session finding the light theme under
+that floor should read this paragraph before "fixing" it.**
+
+**The reopening condition is a theme-dependent opacity**, which was considered and rejected here:
+dark could take a lower value on the same argument, and two numbers is where a mark starts
+becoming two marks.
+
+### The roman's size, settled over four rounds — and the last one changed the instrument
+
+**0.25 of the kanji — a quarter.** It replaces the 0.36 carried from the recovered pass, which
+is the largest move any value in this series has made.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 28 | 0.24 – 0.48 | 0.24 – below 0.36 | the low end was not bracketed |
+| 29 | 0.14 – 0.34 | 0.19 – below 0.34 | both ends failed |
+| 30 | 0.20 – 0.33 | 0.23 – 0.27, undecided | the step reached 1.1px at the floor |
+| 31 | 0.23 – 0.27, **at true pixels** | 0.25 | the rounding was the whole difference |
+
+**With `romanFill` settled first, this sweep asks about weight rather than length.** Every
+specimen occupies the same 77px, because the solve holds it there — so what moves is the roman's
+presence against the kanji. Round 25 deferred the size for exactly this reason: a size judged
+against a moving width is judged against nothing (§7 rule 6).
+
+**Round 31 is where the method had to change rather than stop.** The step was 0.01, which is
+0.32px of type at kanji 32 — and a sheet cannot ask anyone to choose between two drawings a third
+of a pixel apart. **Drawing them larger is the wrong fix**, and §9's small row is this project's
+own record of making it: shot at `deviceScaleFactor: 2`, its "28px" tiles carried 56 real pixels,
+in the one row whose whole job was to demonstrate a failure. So `sheets/pixels.mjs` does the
+opposite — it renders at `deviceScaleFactor: 1`, which is what a 1× display gets, and magnifies
+the resulting **bitmap** with smoothing off. **At this step the screen's rounding is the entire
+difference**, and that is the only form of the question with an answer: at the floor, 0.23 and
+0.24 lose the counters of B and C, 0.26 and 0.27 hold their stems, and 0.25 is the crossover.
+
+**One crop per specimen, stacked.** A magnified row of five is six thousand pixels wide, and any
+client that receives it scales it back to fit — which undoes the magnification exactly and leaves
+an image that looks like evidence and is not.
+
+**Two failure modes bound this variable and they are at opposite ends.** Below, legibility, and it
+binds at the floor size first: a 0.14 roman is 4.5px at kanji 32. Above, the fill — held at 0.75,
+so past about 0.43 the type's natural width exceeds the target and the solve tracks **negative**,
+crowding the letters. The sheet prints the solved tracking and flags a negative one in the
+rejection red.
+
+### The roman's run, settled over three rounds — and the parameter did not exist when they started
+
+**0.75 of the kanji's width.** The roman is tracked out to three quarters of 番地 and hangs left.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 25 | 0.62 – 1.00 | 0.62 – 0.88 open | both ends failed on the first pass |
+| 26 | 0.66 – 0.87 | 0.66 – 0.83 open | the incumbent survived a forced choice |
+| 27 | 0.68 – 0.82, **incumbent absent** | 0.75 | it won without it in the row |
+
+**`romanFill` did not exist before round 25, and the reason it had to is a defect.** `frame()`
+has always contained a thirty-iteration solve that tracks the roman out to match the kanji's
+width. **It never ran.** `.go` and `.rom` are both `display:block`, so
+`getBoundingClientRect().width` returns the *containing block's* width for either — the same
+number, always — and `kw - rw` was identically zero. The loop exited on its first iteration
+having already written `letter-spacing: 0px`, and that assignment destroyed the 0.14em seed
+before anything was drawn. A `Range` measures inline content regardless of the box's display,
+which is the fix.
+
+**So every lockup in rounds 1 – 24 carried zero tracking on the roman**, and the width it filled
+— 0.775 of the kanji at roman 0.36 — was never chosen by anyone. It was where Manrope lands.
+**It is also not stable**: the unmatched roman fills a different fraction at every roman size, so
+the relationship being judged would have moved the moment the size did. As a fraction it is the
+same shape at every size, which is the difference between a design and a coincidence.
+
+**Shown the repaired match, the owner rejected both states** — flush right was too much, and the
+accident was not a choice — which is what made it a parameter rather than a switch.
+
+**Round 27 is the one worth reading twice.** 0.775 had sat in two consecutive rows and been kept
+both times, and nothing in the method could yet distinguish *good* from *familiar* — the eye had
+twenty-five rounds of practice with that exact drawing. So it was **left out of the final row**.
+0.75 won against four alternatives with the familiar one absent, and it is 2.6px from the
+accident at the sidebar size: **the incumbent was near-optimal, and not optimal.** A control that
+is never removed cannot tell you which of those it is.
+
+**Below the natural width the tracking goes negative and the letters tighten**, which is a floor
+rather than a taste. The sheet prints the solved tracking and flags a negative one in the same
+red it uses for a rejection.
+
+### The line gap, settled over three rounds — and the first answer that came from the column
+
+**0.08 of the kanji size**, between 番地 and BANCHI. It replaces the 0.06 carried from the
+recovered pass, the second and last value this series inherited rather than chose.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 21 | 0.00 – 0.38 | 0 – below 0.24 | zero survived, and zero is a floor |
+| 22 | 0.00 – 0.23 | 0.08 picked | picked off the **context** row |
+| 23 | 0.02 – 0.14 | 0.05 – below 0.11 | the step reached 1.4px |
+
+**Rule 5's one legitimate exception is recorded here rather than left to look like a lapse.**
+Round 21 ended with 0.00 — the smallest value offered — inside the kept band, which normally
+means the range anchored the answer and the sweep must be reopened wider. It cannot be, because
+**there is nothing below zero to offer.** The low end is bracketed by geometry rather than by
+taste, the same way §11's size floor was bounded by 番's counters closing rather than by anyone's
+preference. Two of the padding's five rounds were spent on genuinely unbracketed ends; this is
+not one of those, and a later session should not read it as one.
+
+**That zero was kept is a finding.** The roman is allowed to sit hard under the kanji, reading as
+one block rather than two lines. It lost to 0.08, but only by a round.
+
+**0.08 came off the context row, and no other answer in this series did.** It was not among the
+sweep row's values at all — it was drawn only inside the 212px sidebar column, which had been
+added in round 18 on the argument that air always reads calmer with nothing to be calm against.
+That is the evidence for the row, and the rule it earns: **where the two rows disagree, the
+column wins.**
+
+**The stop is the same measured one the padding used.** Round 23's step was 1.4px at the sidebar
+size — finer than the 1.9px that closed the padding — and 0.08 is the midpoint of the final
+0.05 – 0.11 bracket, taken under §7 rule 7 rather than split into a twenty-fourth round.
+
+### The padding, settled over five rounds — and rule 5 fired twice more
+
+**0.50 of the kanji size, each side.** It replaces the 0.22 carried from the recovered pass,
+which had been the ground under fifteen earlier rounds without ever being offered against
+anything.
+
+| round | offered | kept | what it proved |
+| --- | --- | --- | --- |
+| 16 | 0.10 – 0.36 | 0.22 and up | the top end was not bracketed |
+| 17 | 0.22 – 0.52 | above 0.28, up | the top end was not bracketed **again** |
+| 18 | 0.34 – 1.25 | 0.34 – below 0.72 | both ends failed at last |
+| 19 | 0.30 – 0.70 | above 0.40 – below 0.60 | both ends failed again |
+| 20 | 0.42 – 0.58 | above 0.46 – 0.54 | the step reached 1.9px |
+
+**Rule 5 fired twice, and the shape it took is worth recording.** Rounds 16 and 17 each ended
+with the largest value offered still in the kept band, so neither said anything about where the
+top was. More than that: **0.22 was kept in round 16 and rejected in round 17.** The drawing did
+not change between them — the company it kept did. That is what a range does to an eye, and it
+is the reason rule 5 exists rather than a lapse by the person answering.
+
+**The round that broke the anchor ran to 1.25 — padding wider than the kanji is tall.** Only a
+range too wide to anchor could tell a real preference from a tracked one, and 0.72 failed the
+moment one was offered.
+
+**The stop is measured, not felt.** Each caption prints its own gap from the specimen before it,
+so the size of the question is on the sheet. Round 20's step was 1.9px of padding at the sidebar
+size; the next halving is 0.96px, and a sheet asking for a choice between two drawings a pixel
+apart is measuring the monitor rather than the design. The final bracket was 0.46 – 0.54 and
+**0.50 is its midpoint**, taken under §7 rule 7 rather than split further.
+
+**One value failed by measurement rather than by eye**, and it is the only one in this variable
+that did: at 1.25 the block is 229px wide and the sidebar gives 212px, so it is outside the
+product before taste gets a vote.
+
+**What the sweep found that was not about padding.** Past about 0.40 the padding stops being the
+visible difference and the height of the brand block becomes it — 108px of sidebar column at
+0.42 against 124px at 0.58, above a nav that begins immediately underneath. That is why the
+sheet gained a third row drawing each value inside the 212px the shell actually gives; on white,
+more air always reads calmer, because there is nothing for it to be calm against.
+
+### The stroke, settled over five rounds
+
+**`0.11` was the recovered value and it is wrong once the bracket is tapered.** The owner's first
+word on the tails was that they read too thick, and five rounds of forced choice put the stroke at
+**0.050 of the kanji size** — less than half what the recovered pass carried.
+
+| round | offered | taken |
+| --- | --- | --- |
+| 1 | 0.045 – 0.140 | 0.045 – 0.085 |
+| 2 | 0.018 – 0.085 | 0.026 – 0.045 |
+| 3 | 0.026 – 0.045 | 0.036 – 0.045 |
+| 4 | 0.036 – 0.056 | 0.045 and 0.050 |
+| 5 | forced pair | **0.050** |
+
+**§7 rule 5 fired twice and both times the range was mine.** Round 1's band reached its own floor, so
+round 2 opened downward; round 3's reached its own ceiling, so round 4 opened upward — and opening
+upward exposed a hole nobody had noticed, that 0.045 was good and 0.065 was not with *nothing between
+them ever drawn*. A 44% step had been standing in for a bracket.
+
+**Rounds 1 and 2 disagree, and that is rule 3 rather than a contradiction.** 0.065 and 0.085 were
+accepted the first time and passed over the second, once they were shown against thinner neighbors and
+at size. §6 records the identical narrowing for the sheen.
+
+**The last step was decided by a measurement, not by the eye.** 0.045 and 0.050 are a fifth of a pixel
+apart at kanji 40 and another bisection would have been noise (rule 7). What separates them is that the
+stroke is a *fraction* of the kanji size, so it shrinks with the lockup: **0.050 holds a whole pixel down
+to kanji 20, and 0.045 gives out at 22.2.**
+
+**What this leaves open, and it is not small.** The corner radius was pinned at `1.85 × 0.110` for the
+whole sweep so the stroke could move alone (§7 rule 6). At the settled stroke that pin is **4.07 × the
+stroke**, where the recovered rule says 1.85 ×. Every specimen judged across those five rounds carries a
+corner more than twice the rule's — so the radius is not merely unswept, it is currently *wrong*, and it
+is the next round.
+
+### The corner radius, settled over five rounds — and it is 0.20 of the kanji size
+
+**`1.85 × stroke` was the recovered rule and it is eliminated.** Rounds 6 to 10 swept the radius as a
+multiple of the stroke, and the multiple the original pass shipped lost in round 7.
+
+| round | offered | taken |
+| --- | --- | --- |
+| 6 | 1.0 – 7.0 × | 1.85 – 5.5 × — both ends failed, 1.0 "far too square" |
+| 7 | 1.85 – 5.5 × | 2.6 – 5.5 × — the recovered rule out |
+| 8 | 2.6 – 6.2 × | 3.3 – 5.5 × — both ends failed |
+| 9 | 3.3 – 5.5 × | 3.85 – under 5.5 × — 5.5 out after surviving three rounds |
+| 10 | 3.85 – 4.95 × | **all five alike — the JND** |
+
+**Round 10 ended on §7 rule 7 and the claim is measured rather than reported.** Rendered at true size
+and subtracted pixel for pixel, adjacent specimens at kanji 40 differ by a mean of **0.7 to 3.5 out of
+255** — under 1.4% — with the deviation confined to a few dozen pixels at each corner. "About the same"
+is a result, and here it is a number.
+
+**The pick is `4.0 × the stroke`, which is `0.20` of the kanji size, and the reason is not aesthetic.**
+The radius sat pinned at `1.85 × 0.110` through rounds 1 to 5 so the stroke could move alone; at the
+settled stroke that pin is **4.07 ×**. Every judgement about the stroke was therefore made against a
+corner of 4.07. Picking anything far from it would mean the stroke was chosen against a corner that
+does not ship. 4.0 is **0.34px from the pin at kanji 96** — a tenth of the difference the JND
+measurement already calls invisible — and it is a round number in both expressions: 4.0 × the stroke,
+0.20 of the kanji size.
+
+**A finding this sweep produced twice, by accident, and which belongs in §7.** A value at the END of a
+row is not being tested the way an interior one is. 5.5 × was accepted in rounds 6, 7 and 8 while it
+sat at the top of the row with nothing above it and a coarse step below; the first time it had 4.95 and
+4.4 pressed against it, it lost. §6 records the same shape for the sheen and §3 for the ground, both
+times as "shown a second time it failed". The sharper statement is that **a row's endpoints are weak
+evidence regardless of how many times they are shown**, and the fix is to crowd them rather than to
+re-show them.
+
+### The tail's ramp, settled at 0.70 — and the clamp finally has a number
+
+| round | offered | taken |
+| --- | --- | --- |
+| 11 | 0.15 – 0.75 of the arm | above 0.30 – 0.75 — reached my ceiling |
+| 12 | 0.38 – 0.80 | **0.70** |
+
+**Round 11's ceiling was mine; round 12's was the geometry's.** §6 records that the taper routine
+clamps the ramp at half the path and that above the clamp every value renders identically — and never
+says where the clamp is, so each session has rediscovered it by walking into it. **On the settled
+geometry it binds at `tl` 0.82**, reaching 63.0px at kanji 96; **0.80 is the largest fraction that
+still draws something new.** Round 12 therefore spanned the entire remaining possibility, and 0.70 is
+interior to it.
+
+### The tip, settled at 0.15 — and why the radius argument does not transfer
+
+Round 13 offered 0 to 0.40 of the stroke and both ends failed on the first offer: a true point out, 0.25
+and 0.40 out. The survivors, 0.07 and 0.15, were called meaningless to tell apart, and they are — a
+bisection would have offered steps of **0.096px at kanji 96**, a tenth of a pixel.
+
+**So it was decided on a criterion rather than an eye, and the criterion is whether the taper
+TERMINATES or DISSOLVES.** A stroke whose end is sub-pixel fades into antialiasing; one that crosses a
+whole pixel ends definitely.
+
+| tip | reaches 1px at | |
+| --- | --- | --- |
+| 0.07 | kanji 286 | never, in practice |
+| **0.15** | kanji 133 | reachable at a README or display size |
+
+**0.15 is the only value in the accepted band that ever gives the tail a resolvable terminal**, and it
+costs nothing at small sizes because both are sub-pixel there anyway.
+
+**The consistency argument that decided the radius deliberately does NOT apply here, and the difference
+is measurable.** The radius was pinned at 4.07 while five rounds of stroke were judged, and at kanji 96
+that pin is **19.54px** — it drove every judgement, so moving far from it would have invalidated them.
+The tip across those same rounds was **0.34px at kanji 96 and 0.08px at kanji 22**: under a third of a
+pixel, and it drove nothing. Consistency binds a parameter that was visible while other things were
+being judged. It does not bind one that was invisible. Applying the same rule to both would have been
+the rule spreading past its own argument.
+
+### The size floor is kanji 32, and the bracket is not what sets it
+
+**Measured at deviceScaleFactor 1 and magnified by whole pixels**, because a floor judged on a 2×
+render is judged at twice the detail a 1× screen gives — which is exactly what §9's small row did.
+
+Three things give out, and they give out at different sizes:
+
+| kanji | block | 番 counters (p10) | roman | bracket |
+| --- | --- | --- | --- | --- |
+| 40 | 104 × 74 | 1.33 | 14.4 | 2.00 |
+| 32 | 83 × 59 | **1.07** | 11.5 | 1.60 |
+| 26 | 68 × 48 | *0.87* | 9.4 | 1.30 |
+| 22 | 57 × 41 | *0.73* | *7.9* | 1.10 |
+| 18 | 47 × 33 | *0.60* | *6.5* | *0.90* |
+| 14 | 36 × 26 | *0.47* | *5.0* | *0.70* |
+
+**The kanji fails first, at about kanji 30. The roman second, about 24. The bracket last, about 20.**
+
+**So the floor is `kanji 32` — a block of about 83 × 59px — and the thing that sets it is 番's
+density, not the bracket.** That is worth stating plainly because it is the opposite of what fourteen
+rounds of bracket refinement would lead anyone to assume: the part that was swept hardest is the part
+with the most headroom, and it is the last of the three to break.
+
+**The metric is the tenth percentile of 番's interior whites**, measured off the rendered glyph — the
+point at which a tenth of its counters stop being resolvable and a dense glyph begins filling in. The
+*minimum* was tried first and is useless: it is a single near-tangent between two strokes and reads
+0.02 – 0.07px at every size, which measures antialiasing rather than legibility. The median is the
+typical counter and stays comfortable everywhere. Only the p10 moves through the range that matters.
+
+**What this settles about the sidebar.** The expanded sidebar is 236px and holds a kanji-32 lockup
+with room to spare. The 64px rail cannot: the block at kanji 22 is already 57px wide and two of the
+three measures have failed by then. **The lockup is an expanded-sidebar object and the rail needs
+something else** — which is the bare-bracket question §13 leaves open.
+
+### The sidebar, and the rail's own two values
+
+Sheet: `logo/sheets/sidebar-morph.html`. **The lockup when the sidebar is open, the bare brackets when
+it is a rail** — the owner's idea, and §1's own description of the mark: *"with the card removed the
+same brackets become an empty slot, which is the in-product mark."*
+
+**Neither size is chosen; both are what fits.** The expanded sidebar is 236px with 12px padding, so the
+lockup sits at **kanji 32** — exactly the floor above — with a block of 83 × 59px inside 212px of
+usable width. The 64px rail **cannot hold the lockup at all**, which is why it gets brackets rather
+than a smaller lockup.
+
+**The rail's bracket does NOT inherit the lockup's rules, and that is a correction rather than a
+choice.** `rrMul` is 4.0 × a stroke of 0.050 — 0.20 of the kanji. Applied to a rail bracket at 0.11 of
+its frame, 4.0 × gives 0.44 of the frame: an arc with no arm left, which is what the first draft drew.
+The rail takes the icon's own proportion instead.
+
+| | rail |
+| --- | --- |
+| stroke | **0.11** of the frame — swept at 44px and 64px, both ends failing |
+| radius | **0.146** of the frame — the icon's 8 in a 54.8 box |
+
+**The morph is drawn rather than described.** Both brackets are the same routine at the same point
+count, so the path interpolates directly and the sheet's filmstrip is real intermediate geometry at
+five points, not a cross-fade standing in for one. **Both rules change across the move** — 0.050 of the
+kanji becomes 0.11 of the frame, 4.0 × the stroke becomes 0.146 of the frame — so each end is resolved
+to pixels and the pixels are interpolated. Interpolating the *rules* sends the middle frames somewhere
+neither end goes; the first draft did exactly that and carried a stroke seven times too heavy through
+the middle.
+
+**What the mockup puts in front of a decision.** At the rail the brackets enclose nothing. §1 says that
+empty slot *is* the mark, and the drawing is the first chance to judge whether it reads that way or
+reads as a frame around an absence.
+
+### The tails
+
+The brackets were plain stroked paths with round caps. They carry the icon's tapered outline now,
+off the same `taperParts` the sheet already used for the icon — asked for on 2026-09-05.
+
+**The clamp is at 0.82 on this geometry, and §6 never said where it was.** That entry records the
+defect — *"every value above that rendered identically while being presented as a sweep"* — without
+ever quantifying it, so every later session had to rediscover it. Measured at the settled stroke,
+radius and arm: **the ramp binds at `tl` 0.82**, where it reaches 63.0px at kanji 96 and the taper runs
+from the tip to the midpoint of both arms. Above 0.82 the routine draws an identical bracket forever.
+That is a ceiling on the parameter itself rather than a matter of taste, and it is the one edge in this
+whole sweep that a wider range cannot move.
+
+**§6's taper clamp came back in the sweep that added them.** `taperParts` clamps the ramp at half
+the path, so a ramp fraction above that renders identically while being presented as a sweep —
+*"three images approved as different were the same image."* At pad 0.22 the clamp binds at 0.80.
+The sheet prints the ramp actually used under every specimen and marks a clamped one in orange,
+so the defect is visible rather than silent. **A sweep whose top end is clamped is not a sweep,
+and the only defense that has ever worked here is printing the number.**
+
+## 14. The lockup's font — what it cannot ship with, and what it can
+
+**Drawn 2026-09-05, on the owner's instruction to take the lockup next.** Sheet:
+`logo/sheets/lockup.html`. Re-render:
+
+```
+node docs/specs/logo/sheets/shot.mjs $PWD/docs/specs/logo/sheets/lockup.html /tmp/lockup.png 1420 1000
+```
+
+**It works.** 番地 over BANCHI inside the same diagonal brackets reads as a member of the family
+at 420, 260 and 150px, in both themes, and §3's ×0.93 dark-mode stroke correction does what it
+says — the two weights read the same. Below about 150px wide the roman's tracking becomes
+fragile and the lockup should hand off to the icon.
+
+### §3 asked for a width match and did not say which width
+
+*"Tracked until it is exactly as wide as 番地"* has two answers, and they differ by 7.7%.
+Measured on this machine at kanji size 100, so every figure is also a fraction of the em:
+
+| | 番地, Hiragino Sans, tracked 0.07em | BANCHI, Manrope 700 at 0.36 |
+| --- | --- | --- |
+| advance | **214.00** | 211.35 |
+| ink width | **198.70** | 198.70 |
+| ink height | 91.50 | 25.54 |
+| tracking | 7.00, locked | **11.22 = 0.312em**, solved |
+
+**CSS applies letter-spacing after every glyph including the last**, so the advance carries one
+trailing unit of air the ink does not. Matched on advance, the roman overhangs the kanji's
+visible edge on both sides by half that unit. **The match is on INK**, and the sheet's §1 puts
+both up with their measured ink boxes drawn so the choice is a forced pair rather than an
+assertion.
+
+**Nothing is positioned by line box.** Hiragino's font box is 88 up / 12 down on a 100 em;
+Manrope's is 92 up / 23 down — 115 units on the same em. Stacking the two by their line boxes
+puts the optical center in the wrong place by construction.
+
+### The bracket corner radius is this section's own HELD value
+
+§3's lockup table names a stroke and an arm and no radius. The icon's 8 cannot simply travel:
+its bracket box is 54.8 x 67.5 and the lockup's is a different shape entirely. The sheet sweeps
+1.0 / 1.6 / **2.2** / 3.0 / 4.2 multiples of the stroke and 2.2 is drawn as the pick. **It is
+HELD in §2's sense — chosen once, never tested against a second eye** — and it is named here
+rather than buried, which is the whole point of that tag.
+
+### THE FONT CANNOT SHIP, AND THAT IS A CONTRACT PROBLEM RATHER THAN A COPYRIGHT ONE
+
+`Hiragino Sans` is LOCKED in §3 and is on every Mac. **Extracting its outlines into this
+repository is not permitted by the license this machine holds.** macOS SLA §2E grants the fonts
+only *"to display and print content while running the Apple Software"*; §2N forbids derivative
+works of any part of it. The `fsType` bit on all ten weights is 8, Editable embedding — that
+governs embedding the FONT into a document and is **not** authority to ship extracted outlines.
+
+**So the sheet is a judging reference and not a deliverable.** It sets live system text, which
+is exactly what the license permits, and it renders only on a Mac. Nothing generated from it may
+be committed.
+
+**The framing matters, because the obvious conclusion from that paragraph is wrong.** Typeface
+*designs* are not copyrightable in the US — *Eltra v. Ringer*, and the Copyright Office's own
+1988 rule that digitized typeface designs are not registrable. What *is* protected is the font
+file's control-point data (*Adobe v. Southern Software*, N.D. Cal. 1998). Japan sets a higher
+bar still: the Supreme Court's 2000 *Gona U* decision requires distinctive originality **and**
+artistic quality, and SCREEN markets Hiragino in precisely the disqualifying terms —
+*"orthodox, universally preferable and with excellent readability."* **The exposure is the
+macOS agreement, not the typeface.** A spec that says "we cannot use this typeface" would be
+wrong and would push toward a redesign nobody needs.
+
+### Three ways out, measured rather than guessed
+
+| route | what it costs | what it costs the repo |
+| --- | --- | --- |
+| **Adobe Fonts** — Hiragino Kaku Gothic ProN | a Creative Cloud subscription | the generator runs only on a licensed Mac |
+| **MyFonts** — Hiragino Sans W0–W9 | $109 – $210 per weight, perpetual | same, minus the subscription |
+| **Vendor an OFL face** | nothing | re-runnable forever, and a real departure from a LOCKED row |
+
+**Adobe Fonts is the same drawing, not a lookalike, and that was checked rather than assumed.**
+All four faces in `ヒラギノ角ゴシック W6.ttc` point at one CFF table at one offset, and 番
+extracted from face 0 (Hiragino Sans W6) and face 2 (Hiragino Kaku Gothic ProN W6) is
+byte-identical. Adobe's font licensing terms permit exactly the operation the lockup needs:
+convert type to outlines, modify them, and trademark the result — only modifying the font
+software file is barred.
+
+**No open face is a drop-in, and the closest one is not the obvious one.** Rendered to a
+normalized 200x200 mask and scored by intersection-over-union against Hiragino W6:
+
+| face | IoU vs W6 |
+| --- | --- |
+| **IBM Plex Sans JP 700** | **0.848** |
+| BIZ UDPGothic 700 | 0.836 |
+| IBM Plex Sans JP 600 | 0.830, and its ink ratio matches W6 exactly |
+| Noto Sans JP 700 | 0.785 |
+| Noto Sans JP 500 | 0.762 |
+
+**`Zen Kaku Gothic New` is ruled out on a measurement rather than on taste.** It draws 番 nearly
+5% wider relative to the em than 地, where Hiragino keeps the pair within 0.5% — in a two-glyph
+lockup that reads as visibly unbalanced.
+
+An 85% outline overlap is not a shape match. **Substituting is a design change to a LOCKED row,
+not a like-for-like swap**, and it is the owner's call rather than a session's.
+
+### DECIDED 2026-09-06: IBM Plex Sans JP 400, and the weight is the correction
+
+**The owner chose the OFL face on seeing it drawn**, weight-matched, at the sizes the lockup
+ships. Free, re-runnable on any machine, and subset to 番地 it is about 1.1KB.
+
+**The weight in that table is not the weight this uses, and that mattered.** §14 scores every
+candidate against **Hiragino W6**, because it was written when the lockup was a display asset.
+`.go` sets no `font-weight`, so all thirty-five of §13's rounds drew Hiragino at **regular** —
+and the first comparison sheet put Plex **700** beside it, which compares a semibold with a book
+weight and reads the difference as a typeface difference. Weight-matched, **Plex JP 400** is what
+sits beside it.
+
+**The geometry does not move at all, which was measured rather than hoped.** At kanji 100, 番地 is
+214.00px advance / 199px ink in Hiragino and 214.81 / 200 in Plex 400. Re-rendering §13's settled
+lockup on the new face at 32, 40, 48, 64 and 80 gives **byte-identical block dimensions at every
+size** — 102 × 75, 128 × 93, 153 × 112, 204 × 149, 255 × 186. Nothing that is a fraction of the
+kanji's box changed, because a full-width em is a full-width em.
+
+**So what the swap can still cost is optical, and only two values are exposed to it**: `romanSize`
+and `romanOpacity`, both judged as the roman's weight against the kanji's. Sheet:
+`logo/sheets/lockup-face.html`.
+
+**§15's gate is discharged without re-grading them, and the reason is that neither was chosen on
+taste.** Rounds 36 and 37 were built to re-offer both and then withdrawn — a forced choice is
+worth an owner's attention only when nothing else can answer, and here something can:
+
+- **`romanSize` 0.25** was picked as the crossover in the magnified raster — below it, B and C
+  lose their counters at the floor size. Re-measured on Plex 400 at `deviceScaleFactor: 1`: same
+  crossover.
+- **`romanOpacity` 0.45** was picked against a floor derived from `--bn-ink-4`, and **a contrast
+  ratio is a property of the composite color and the ground, not of the letterform.** Re-measured
+  on Plex: 4.09:1 on dark and 3.02:1 on light, identical to the figures §13 recorded.
+
+**Both criteria are face-independent, so both survive the substitution intact** — which is a
+stronger claim than a second forced choice would have produced, because it says *why* the answer
+did not move rather than only that it did not.
+
+**What the face does change is pixel coverage**, and `ink.mjs` measures it: at 0.45 and kanji 32,
+Plex reaches 70 of ~140 pixels at a distance of 64 on light and 95 on dark, against Hiragino's 73
+and 73. The light ground loses a little; the dark ground gains more.
+
+### The question underneath, which is not about type at all
+
+**Every `Logo` call site in this product is 44px or below, and this lockup is not drawn below
+about 150px.** There is no marketing page, no OG card, no app-store listing. The only surfaces
+that could carry it are `#/gallery`, the owner's crash page if it grew, and `README.md`.
+
+**If the honest answer is "nothing today", then the right outcome is this section and no
+artifact** — the parameters recorded, the measurement made, the license understood, and nothing
+built that no screen reaches. That would be CLAUDE.md's own rule applied to a brand asset rather
+than to a route.
+
+## 15. Wiring the lockup into the app — the plan
+
+**Written 2026-09-06, after §13's thirty-five rounds settled every parameter.** Nothing in this
+section is built. It is the plan, and its first item is a gate rather than a task.
+
+### §14's closing conclusion is overtaken, and that is why this section exists
+
+§14 ended by asking whether the lockup has a surface at all: *"this lockup is not drawn below
+about 150px… If the honest answer is 'nothing today', then the right outcome is this section and
+no artifact."* That was true of the lockup as it stood. **Round 15 moved the floor to kanji 32 —
+a 102 × 75px block** — and rounds 16–34 settled the parameters that make it hold together there.
+
+So the surface is real now: **the sidebar brand row**, 212px of usable width, currently drawing
+`[mark] Banchi / every card has an address`. The lockup replaces all three of those, because it
+already says the name twice in two scripts.
+
+### The gate: every judgement in this series was made on a font that cannot ship
+
+**Measured rather than assumed.** Rendering 番 at 100px through the sheets' own family stack and
+differencing pixel for pixel against each candidate: the stack resolves to **Hiragino Sans, with
+zero pixels different.** Not the ProN variant (1,293 pixels differ), and Noto Sans JP is not
+installed on this machine at all — its "difference" equals a nonexistent family's.
+
+§14 establishes that Hiragino cannot be redistributed and ranks the open faces by outline overlap
+(IBM Plex Sans JP 700 leads at IoU 0.848). What §14 does not say — because the parameters did not
+exist yet — is **which of the eleven settled values depend on the face**, and that determines how
+much of this series has to be re-run after a substitution.
+
+| parameter | face-dependent? | why |
+| --- | --- | --- |
+| `romanSize` 0.25 | **yes** | it was judged as the roman's *weight against the kanji's*, and no two faces carry the same stem weight at the same nominal size |
+| `romanOpacity` 0.45 | **yes** | same argument, and `ink.mjs`'s counts are a measurement of one face's stems |
+| `romanFill` 0.75 | **barely — measured** | see below |
+| `pad` `gap` `arm` `stroke` `rrMul` `tl` `tip` | no | all relative to the kanji's **box**, and a full-width em is a full-width em |
+
+**`romanFill` was written into this table as the most exposed value and the measurement says
+otherwise.** At kanji 100, 番地 is **214.00px advance / 199px ink in Hiragino Sans** and
+**214.81 / 200 in IBM Plex Sans JP 400** — 0.4% and 0.5% apart. The denominator barely moves,
+so neither does the picture. The claim was reasoned from "it is a ratio to the kanji" and was
+wrong; it is corrected here rather than left standing because a plan's risk table is the part a
+later session acts on.
+
+**What the substitution costs is weight, not width**, which is why the two rows above it survive.
+
+**And one discrepancy inside this spec was found by taking that measurement.** §14 says the match
+is on **ink** — *"CSS applies letter-spacing after every glyph including the last… matched on
+advance, the roman overhangs the kanji's visible edge on both sides by half that unit"* — but
+`sheets/lockup-core.js` solves against a `Range`'s box, which is the **advance**. So `romanFill`
+0.75 is 0.75 of the advance and **0.807 of the ink**. Every round in §13 used one definition
+consistently, so the settled value is sound; what is not sound is a spec asserting two things.
+**Resolving that is part of the build, not a footnote**: either the solve moves to ink and
+`romanFill` is restated as 0.807, or §14's rule is amended to name the advance and say why.
+
+**So the plan is gated on the face, and the re-run is bounded.** Once a face is chosen, the three
+rows above are re-offered — one round each, as a same-or-different check against the settled
+value, with a full sweep only where the answer is "different". The other seven are asserted
+unchanged by `lockup params` and need no eye.
+
+### The solve is baked, not shipped
+
+`frame()`'s width-match depends on exactly four things — the face, the two strings, `romanSize`
+and `romanFill` — and **all four are fixed at build time.** Shipping the solve would mean
+measuring text in a layout effect on every mount: a reflow, a flash before it settles, and a
+different answer whenever the webfont arrives late. `scripts/build-lockup.mjs` runs it once and
+emits the letter-spacing as a constant, the way `build-mark.mjs` already emits the mark's geometry.
+
+**Nothing about the lockup is hand-drawn or hand-edited**, and that rule carries over from D102
+verbatim: change §13's table, re-run the script.
+
+### What gets built
+
+| artifact | note |
+| --- | --- |
+| `scripts/build-lockup.mjs` | reads §13's settled table and `sheets/lockup-core.js`; writes the geometry, the baked tracking and the subset font's path |
+| `app/src/kit/lockupGeometry.ts` | generated, never hand-edited |
+| `app/public/fonts/…` | the chosen face **subset to 番地 only** — measured at ~1.1KB for IBM Plex Sans JP, OFL |
+| `app/src/kit/Lockup.tsx` | `Lockup({size, className})`; BANCHI uses `--bn-font-display`, already in the app |
+
+**The accessibility contract is the opposite of the mark's.** `Logo` is `aria-hidden` because it
+sits beside the word "Banchi". **The lockup *is* that word**, so it carries `role="img"` and an
+accessible name — and the sidebar has no other text to fall back on once the wordmark is gone.
+
+**Never a `border-radius`**, for the same reason as the mark.
+
+### Where it goes
+
+- **The sidebar brand row**, replacing the mark, the wordmark and the tagline together.
+- **The rail keeps bare brackets.** The lockup does not fit 64px: at kanji 22 the block is 57px
+  and two of its three measures have already failed §11's floor. The morph between them is drawn
+  in `sheets/sidebar-morph.html` as real interpolated geometry at five points, not a cross-fade.
+- **`#/gallery`**, beside the mark.
+- **Nowhere else.** No marketing page exists to want one.
+
+### The guard that has to come with it
+
+`lockup params` today reconciles §13's table against the *sheet*. Once a generated file exists it
+must reconcile **both directions against that too**, exactly as `logo parity` does for
+`markPalettes.ts` — otherwise the generated file is free to drift from the spec that produced it,
+which is the failure `logo parity` was written for. `raw color` cannot see a `.ts` file, so the
+same argued exemption applies and the same row is what makes it safe.
+
+`app/tests/brand.spec.ts` gains the floor — a lockup below kanji 32 must not render — and the
+accessible name.
+
+### The one open question, and what would answer it
+
+**What size does the lockup sit at in the open sidebar?** 32, 40 and 48 all fit the 212px column.
+Every round in §13 was drawn at 48 and at the floor, so both ends are familiar and the middle is
+not. **This is not answerable from a sheet** — it is a question about how much of a 236px panel a
+brand row should eat above a nav — so it gets mockups of the real sidebar at all three, in both
+themes, and a forced choice like every other value in this section.
+
+### What would make this not worth building
+
+Stated so it is a decision rather than a drift: **if the chosen face's re-run fails all three
+face-dependent rows**, the honest reading is that the lockup was designed against a typeface it
+cannot have, and the right outcome is to keep the mark alone in the sidebar and leave §13 as a
+record. That is §14's own conclusion, held open rather than quietly dropped now that a surface
+exists.

@@ -3373,6 +3373,15 @@ def literals_from_module(path: Path) -> Dict[str, object]:
     return out
 
 
+# Files whose bytes are not prose. `cited_decisions` reads every mapped file looking for `D<n>`
+# and a compressed image will eventually contain those three bytes by chance — icon-180.png
+# "cited" D31 and icon-512.png "cited" D2 on the day they were added.
+BINARY_SUFFIXES = frozenset({
+    ".png", ".jpg", ".jpeg", ".webp", ".heic", ".gif", ".avif", ".pdf",
+    ".ico", ".woff", ".woff2", ".ttf", ".otf", ".zip", ".sqlite",
+})
+
+
 def cited_decisions(path: Path) -> Set[str]:
     """Every decision id a file cites, suppressions excluded.
 
@@ -3384,7 +3393,17 @@ def cited_decisions(path: Path) -> Set[str]:
     commits the moment the third digit came into reach — measured, on the first full run
     after the widen, and the reason `without_noqa` is applied here and not only to the
     citation scan.
+
+    A BINARY FILE CITES NOTHING, and reading one as text is how it comes to. The map gained
+    entries for `app/public/icon-*.png` on 2026-09-05 and this reader found `D31` in one and
+    `D2` in another — byte sequences inside compressed image data, matched by a regular
+    expression that had no reason to expect anything but source. The finding is MECHANICAL, so
+    it blocked the commit, and the remedy it names is to add a decision id to `governed_by`
+    that the file does not cite and nobody chose. A citation is a thing a person wrote; a file
+    with no text to read has written none.
     """
+    if path.suffix.lower() in BINARY_SUFFIXES:
+        return set()
     lines = (without_noqa(line) for line in read(path).splitlines())
     return {"D" + digits for line in lines for digits in _DECISION_RE.findall(line)}
 
@@ -6890,6 +6909,137 @@ def check_logo_parity(report: Report) -> None:
                if not findings else f"{len(findings)} disagreements with section 9")
 
 
+
+LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
+SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
+MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
+
+_LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
+
+
+def check_rail_mark(report: Report) -> None:
+    """The sidebar mockup's rail bracket is the mark the app actually ships.
+
+    IT WAS AN INVENTION, and drew four things wrong at once — stroke 11.0 against the mark's
+    4.2, radius 14.6 against 8, an inset of 5.5 against 22.6, and a taper §11 had removed from
+    the small cut on a measurement. It had been re-derived from the DISPLAY cut's unit rescaled
+    into the wrong box, in the one sheet the sidebar's size is decided from.
+
+    The fix copies two constants out of the generated file, which is itself the defect this
+    project keeps finding — a value typed a second time. So this row reconciles them. Provably
+    wrong when it fires: both sides are literals.
+    """
+    if not exists(SIDEBAR_MORPH) or not exists(MARK_GEOMETRY):
+        return
+    sheet, gen = read(SIDEBAR_MORPH), read(MARK_GEOMETRY)
+    want_path = re.search(r"SMALL_BRACKET = '([^']+)'", gen)
+    want_stroke = re.search(r"SMALL_STROKE = ([\d.]+)", gen)
+    got_path = re.search(r"MARK_SMALL_BRACKET = '([^']+)'", sheet)
+    got_stroke = re.search(r"MARK_SMALL_STROKE = ([\d.]+)", sheet)
+    if not (want_path and want_stroke):
+        report.add("rail mark", MECHANICAL, [Finding(
+            rel(MARK_GEOMETRY),
+            "SMALL_BRACKET or SMALL_STROKE is gone from the generated mark. The sidebar mockup "
+            "copies both; with them missing this row compares nothing, which is worse than failing.",
+        )], "")
+        return
+    problems = []
+    if not got_path or got_path.group(1) != want_path.group(1):
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            "the rail's bracket path is not the mark's. `markGeometry.ts` is generated from "
+            "`small-cut.html` and is what every surface below 64px draws (D102); a sheet that "
+            "re-derives it is drawing a mark the product does not contain.",
+        ))
+    if not got_stroke or abs(float(got_stroke.group(1)) - float(want_stroke.group(1))) > 1e-9:
+        problems.append(Finding(
+            rel(SIDEBAR_MORPH),
+            f"the rail's stroke is {got_stroke.group(1) if got_stroke else 'absent'} and the "
+            f"mark's is {want_stroke.group(1)}.",
+        ))
+    report.add("rail mark", MECHANICAL, problems,
+               "the rail bracket is the shipped mark, path and stroke")
+
+
+def check_lockup_params(report: Report) -> None:
+    """The lockup sheet's declared holds and docs/specs/logo.md's settled table agree.
+
+    A PARAMETER SETTLED IN A ROUND AND THEN TYPED A SECOND TIME IS HOW THAT SHEET ALREADY WENT
+    WRONG, twice, in the same row: a hand-written caption said a value had been rejected in a
+    round it had not been. The sheet fixed its own half by deriving every label from one
+    `ROUND` object. This row is the other half — the object and the spec are two copies of the
+    same decision, and nothing was comparing them.
+
+    The sheet asserts, on every render, that the values it DECLARES as held were the values it
+    actually DREW. That is a different claim from this one and neither covers the other: the
+    sheet cannot see the spec, and this row cannot see a drawing.
+
+    Provably wrong when it fires — both sides are literals.
+    """
+    if not exists(LOGO_SPEC) or not exists(LOCKUP_ROUND):
+        return
+
+    spec_section = read(LOGO_SPEC)
+    marker = "### The settled values, and the one place they live"
+    if marker not in spec_section:
+        report.add("lockup params", MECHANICAL, [Finding(
+            rel(LOGO_SPEC),
+            "the settled-values table is gone. This row compares it against the sheet's holds; "
+            "with it missing the row is not comparing anything, which is worse than failing.",
+        )], "")
+        return
+    tail = spec_section[spec_section.index(marker):]
+    tail = tail[: tail.index("\n### ", 10)] if "\n### " in tail[10:] else tail
+    published = {k: float(v) for k, v in _LOCKUP_SPEC_ROW.findall(tail)}
+
+    sheet = read(LOCKUP_ROUND)
+    # THE KEY THE ROUND IS SWEEPING CANNOT ALSO BE HELD, and the first version of this row did not
+    # know that: it fired the moment a settled parameter came up for its own round. A settled value
+    # must be pinned OR be the one under test, and "under test" is a state the sheet declares.
+    sweeping = re.search(r"sweeping:\s*'(\w+)'", sheet)
+    sweeping = sweeping.group(1) if sweeping else ""
+    block = re.search(r"holds:\s*\{([^}]*)\}", sheet)
+    if block is None or not published:
+        report.add("lockup params", MECHANICAL, [Finding(
+            rel(LOCKUP_ROUND),
+            "no `holds: {...}` in the round sheet, or no rows in the spec table. Say so here "
+            "rather than passing.",
+        )], "")
+        return
+    declared = {
+        k: float(v)
+        for k, v in re.findall(r"(\w+)\s*:\s*([0-9.]+)", block.group(1))
+    }
+
+    findings: List[Finding] = []
+    for key in sorted(set(published) - set(declared) - {sweeping}):
+        findings.append(Finding(
+            rel(LOCKUP_ROUND),
+            f"docs/specs/logo.md settles `{key}` at {published[key]} and the sheet neither holds "
+            f"it nor is sweeping it. A settled parameter that is neither pinned nor under test is "
+            f"one the next round can move without anybody noticing.",
+        ))
+    for key in sorted(set(declared) - set(published)):
+        findings.append(Finding(
+            rel(LOGO_SPEC),
+            f"the sheet holds `{key}` at {declared[key]} and the settled table does not list it. "
+            f"Every value a round holds fixed is a decision, even an inherited one.",
+        ))
+    for key in sorted(set(declared) & set(published)):
+        if abs(declared[key] - published[key]) > 1e-9:
+            findings.append(Finding(
+                f"{rel(LOCKUP_ROUND)} -> {key}",
+                f"held at {declared[key]} in the sheet and settled at {published[key]} in "
+                f"docs/specs/logo.md. The spec is the store of record; move the sheet, or move "
+                f"the spec first and say which round moved it.",
+            ))
+
+    report.add("lockup params", MECHANICAL, findings,
+               f"{len(published)} settled values against the sheet's holds"
+               + (f", `{sweeping}` under test" if sweeping in published else "")
+               if not findings else f"{len(findings)} disagreements")
+
+
 # ------------------------------------------------------------------ views opsec (D24)
 
 VIEWS_MANIFEST = ROOT / "scripts" / "views.txt"
@@ -10018,6 +10168,8 @@ def audit(staged_only: bool) -> Report:
     check_supervisor_self_watch(report)
     check_motion_params(report)
     check_logo_parity(report)
+    check_lockup_params(report)
+    check_rail_mark(report)
     check_withhold_reasons(report)
     check_order_reasons(report)
     check_pricing_presets(report)

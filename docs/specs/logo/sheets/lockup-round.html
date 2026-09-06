@@ -1,0 +1,306 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the lockup, round by round</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400&family=Manrope:wght@700&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 14px;max-width:1060px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:22px 0 9px}
+ .strip{display:inline-flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .strip.dk{background:#0c0e12}
+ .strip.dk .cap{color:#838b98}
+ .strip.dk .cap.was{color:#fb923c}
+ .strip.dk .num{color:#4ade80}
+ .strip.dk .panel{background:#14171c;border-color:#262b34}
+ .strip.dk .nav{color:#b9bfc9}
+ .strip.dk .nav b{color:#93a7ff;background:#1b2547}
+ .panel{width:236px;padding:12px;background:#fff;border:1px solid #e3e6ea;border-radius:12px;
+        display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+ .nav{display:flex;flex-direction:column;gap:7px;width:100%;font:500 11px system-ui;color:#4b5563}
+ .nav b{font-weight:600;color:#3b5bdb;background:#eef2ff;border-radius:7px;padding:6px 9px}
+ .nav span{padding:6px 9px}
+ .was{color:#c2410c;font-weight:700}
+ .num{font:500 9px ui-monospace,monospace;color:#15803d;text-align:center;line-height:1.5}
+ .lk{position:relative;display:inline-block}
+ .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
+ .go{font-family:'IBM Plex Sans JP',sans-serif;font-weight:400;line-height:1;display:block}
+ .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
+ table.hist{border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:10px;margin:0 0 10px}
+ table.hist td,table.hist th{padding:4px 14px;text-align:left;border-bottom:1px solid #eef1f4}
+ table.hist th{color:#8b93a0;font-weight:600}
+ .checks{border-radius:10px;padding:12px 16px;margin:0 0 14px;font:12px/1.6 system-ui}
+ .pass{background:#dcfce7;border:1px solid #16a34a;color:#14532d}
+ .fail{background:#fee2e2;border:2px solid #c2410c;color:#7f1d1d;font-weight:600}
+ svg,img{display:block}
+</style>
+<div class="wrap">
+<h1 id="title"></h1>
+<div id="checks"></div>
+<div class="sub" id="lede"></div>
+<div id="hist"></div>
+<div id="out"></div></div>
+<script src="./lockup-core.js"></script>
+<script>
+window.__sheetReady = false
+
+/* ===========================================================================================
+   THE ROUND, AS DATA.
+   Everything below is derived from this object -- the title, the prose, the history table, the
+   captions, and the assertions. Nothing about the round is typed twice, because the two caption
+   bugs in this sheet were both a hand-written label disagreeing with the round it described.
+   =========================================================================================== */
+const ROUND = {
+ n: 35,
+ sweeping: 'size',
+ unit: 'px kanji',
+ values: [32, 40, 48, 64, 80],
+ notes: {32:'the floor — §11’s smallest permitted draw', 48:'the sidebar candidate'},
+ rejected: {},
+ holds: {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
+         romanFill:0.75, romanSize:0.25, romanTrack:0.14, romanOpacity:0.45, tails:true},
+ sizes: [48],
+ dark: true,
+ context: null,
+ history: [
+  ['16–20', 'padding', '0.10 – 1.25', '0.50 of the kanji', 'rule 5 twice; stopped at 1.9px'],
+  ['21–23', 'line gap', '0.00 – 0.38', '0.08 of the kanji', 'answered off the CONTEXT row'],
+  ['24', 'bracket arm', '0.12 – 0.62', '0.32 of the block', 'a carried value CONFIRMED, not moved'],
+  ['25–27', 'roman run', '0.62 – 1.00', '0.75 of the kanji’s width', 'won with the incumbent ABSENT'],
+  ['28–31', 'roman size', '0.14 – 0.48', '0.25 of the kanji', 'settled at TRUE pixels'],
+  ['32–34', 'roman opacity', '0.20 – 1.00', '0.45 of the ink', 'light sits under a floor, on purpose'],
+  ['35', 'nothing', '—', 'the finished lockup, 32 – 80px', 'all eleven values asserted'],
+  ['36–37', 'the face re-check', 'built, then withdrawn', 'both values HELD', 'the criteria are face-independent'],
+ ],
+ lede: '<b>The face is IBM Plex Sans JP 400 and every value is settled on it.</b> Rounds 36 and 37 were '+
+  'built to re-offer the two optically-judged values and then withdrawn: neither was chosen on taste, so '+
+  'something other than an eye could answer whether the substitution moved them. The size was picked as '+
+  'the crossover in a magnified raster and the crossover is in the same place; the opacity was picked '+
+  'against a contrast floor, and contrast is a property of the colour and the ground rather than of the '+
+  'letterform. Both criteria are face-independent.'+
+  '<br><br><b>So this sheet is back to having nothing to sweep</b>, and sweeps the one quantity that is '+
+  'not a parameter — how big the lockup is drawn — which is what keeps `lockup params` checking all '+
+  'eleven values rather than ten.'
+}
+
+const o=document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+
+document.getElementById('title').textContent =
+ 'the lockup — round '+ROUND.n+' · '+ROUND.title
+document.getElementById('lede').innerHTML = ROUND.lede +
+ '<br><br><b>Held this round, and asserted rather than promised:</b> ' +
+ Object.keys(ROUND.holds).map(function(k){return k+' '+ROUND.holds[k]}).join(', ') + '.'
+
+;(function(){
+ const t=el('table','hist')
+ t.innerHTML='<tr><th>round</th><th>variable</th><th>offered</th><th>taken</th><th></th></tr>' +
+  ROUND.history.map(function(r){return '<tr><td>'+r[0]+'</td><td style="color:#8b93a0">'+r[1]+'</td><td>'+r[2]+'</td><td><b>'+r[3]+'</b></td><td style="color:#8b93a0">'+r[4]+'</td></tr>'}).join('')
+ document.getElementById('hist').appendChild(t)})()
+
+/* ONE builder turns a swept value into a drawing, and EVERY row on this sheet goes through it.
+   They did not. Round 16 inlined a near-copy of `row()` to sweep two sizes, `row()` went dead,
+   and the re-shown row kept handing `stamp` the HELD pad instead of the value it was captioned
+   with — so round 17 published three identical drawings under three different labels. That is
+   round 6's defect, in the one row whose job is to check the answer against what was already
+   rejected, and it survived because `check()` was called on the sweep rows only.
+   Both halves are fixed: one builder below, and the re-shown row is asserted with the rest. */
+const SWEPT = ROUND.sweeping
+
+/* The swept key lives in one of two places — `stamp`'s geometry, or `frame`'s options — and
+   nothing else on this sheet needs to know which. */
+/* Three places a parameter can live, and the sweep has to reach all of them: the block's own
+   geometry (pad, gap), the roman's type (size ratio, tracking, opacity) and the bracket's
+   drawing (stroke, arm, radius, tip, ramp). `SWEPT` picks which one receives the value; nothing
+   else on the sheet knows or needs to. */
+const STAMP_KEYS = ['romanSize','romanTrack','romanOpacity']
+const INK = {light:'#0f1217', dark:'#eef0f4'}
+function mk(size, v, theme){
+ const o = {}
+ STAMP_KEYS.forEach(function(k){ o[k] = (SWEPT===k) ? v : ROUND.holds[k] })
+ return stamp(size,
+              SWEPT==='gap' ? v : ROUND.holds.gap,
+              SWEPT==='pad' ? v : ROUND.holds.pad,
+              INK[theme||'light'], o)
+}
+/* EVERY hold reaches the drawing, derived rather than listed. This was a hardcoded five-key
+   object -- stroke, arm, tl, rrMul, tip -- so a hold outside that list was declared in the sheet
+   and never passed to `frame()`. `romanFill` was the first one: round 28 declared it at 0.75 and
+   drew it at 1, and `tails` had been in the same position unnoticed, correct only because the
+   default happens to match. A list that must be edited whenever a parameter is added is the same
+   defect as a caption that must be edited whenever a value changes; both were in this file. */
+function optsFor(v){
+ const o = {}
+ Object.keys(ROUND.holds).forEach(function(k){
+  if (k==='pad' || k==='gap' || STAMP_KEYS.indexOf(k)>=0) return
+  o[k] = ROUND.holds[k]
+ })
+ if (SWEPT!=='pad' && SWEPT!=='gap' && SWEPT!=='size' && STAMP_KEYS.indexOf(SWEPT)<0) o[SWEPT] = v
+ return o
+}
+
+function row(size, values, capFn, theme){
+ const s=el('div','strip'+(theme==='dark'?' dk':'')); const made=[]
+ values.forEach(function(v){
+  const c=el('div','cell')
+  /* `size` is the ONE thing that is not a lockup parameter -- it is how big the lockup is drawn,
+     not part of its design -- so sweeping it exempts nothing from the settled table, and the
+     `lockup params` row checks all eleven values rather than ten. That is what makes this the
+     right final state for the sheet: the finished lockup, at every size it will be drawn at,
+     with every parameter asserted. */
+  const drawAt = (SWEPT==='size') ? v : size
+  const lk=mk(drawAt, v, theme)
+  c.appendChild(lk)
+  const cp=capFn(v)
+  const cap=el('div','cap'+(cp.was?' was':''))
+  cap.textContent=cp.text
+  c.appendChild(cap)
+  const num=el('div','num'); c.appendChild(num)
+  s.appendChild(c); made.push({lk:lk, v:v, num:num, size:drawAt})})
+ o.appendChild(s); return made
+}
+
+/* ---- the assertions ------------------------------------------------------------------------ */
+function check(groups){
+ const problems=[], proved=[]
+ groups.forEach(function(g){
+  const size=g[0].size, seen={}
+  /* 1 — every specimen a different drawing */
+  g.forEach(function(r){
+   const geom=r.lk.dataset.geom||''
+   if(seen[geom]!==undefined) problems.push('kanji '+size+': '+seen[geom]+' and '+r.v+' drew the SAME bracket — the swept variable is not reaching the drawing')
+   else seen[geom]=r.v})
+  /* 2 — the swept key actually moved, and moved for every value */
+  /* `size` is the only thing varying in a settled view, and it is recorded in `used` like any
+     other key, so this assertion still means something: the specimens must genuinely differ. */
+  const swept=g.map(function(r){return JSON.parse(r.lk.dataset.used)[ROUND.sweeping]})
+  if(new Set(swept).size !== g.length) problems.push('`'+ROUND.sweeping+'` took only '+new Set(swept).size+' distinct values across '+g.length+' specimens')
+  /* 3 — every held key identical across specimens AND equal to what was declared */
+  Object.keys(ROUND.holds).forEach(function(k){
+   const got=g.map(function(r){return JSON.parse(r.lk.dataset.used)[k]})
+   if(new Set(got).size !== 1) problems.push('kanji '+size+': `'+k+'` was declared held but took '+new Set(got).size+' values: '+got.join(', '))
+   else if(got[0] !== ROUND.holds[k]) problems.push('kanji '+size+': `'+k+'` declared '+ROUND.holds[k]+' but drawn at '+got[0])})
+  /* 4 — nothing clamped without saying so */
+  /* ALL THREE clamps. This checked only the radius until round 12, which sweeps the ramp -- so the
+     assertion could not see the very bound the round was walking toward. The arm's floor was added
+     for round 24 for the same reason and one step earlier: it binds below arm ~= 0.076 and, unlike
+     the other two, it was not recorded at all, so a guard that had been extended once would still
+     have missed it. A guard that watches some of the bounds is the taper clamp all over again. */
+  g.forEach(function(r){
+   ;[['radius','rr'],['ramp','ramp'],['arm','armpx']].forEach(function(pair){
+    const v=r.lk.dataset[pair[1]]||''
+    if(v.indexOf('CLAMPED')>=0) problems.push('kanji '+size+': '+r.v+' hit the '+pair[0]+' cap — '+v)})})
+  proved.push('kanji '+size)})
+ const box=el('div','checks '+(problems.length?'fail':'pass'))
+ box.innerHTML = problems.length
+  ? '&#9888; THIS SHEET IS NOT A SWEEP.<br>' + problems.map(function(p){return '&bull; '+p}).join('<br>')
+  : '&#10003; Checked on this render, at ' + proved.join(', ') + ': every specimen is a distinct drawing; '
+    + '<code>'+ROUND.sweeping+'</code> took '+ROUND.values.length+' distinct values; '
+    + Object.keys(ROUND.holds).length + ' declared holds were identical across every specimen and equal to what is stated above; '
+    + 'nothing hit a clamp.'
+ document.getElementById('checks').appendChild(box)
+}
+
+const groups = ROUND.sizes.map(function(sz){
+ o.appendChild(el('h2',null,'at kanji '+sz+(sz===ROUND.sizes[0]?' — the sidebar candidate':' — the floor')))
+ return row(sz, ROUND.values, function(v){
+  const note=ROUND.notes[v]
+  /* NOT toFixed(2). 0.775 printed as "0.78" is a caption naming a value the drawing beside it does
+     not have -- the smallest possible version of the bug this sheet has now had four times. */
+  return {text:String(v)+(note?' — '+note:''), was:!!note}})})
+
+/* Padding read on white always flatters the larger value, because more air is calmer with nothing
+   to be calm against. The sidebar is where it has to hold: a 236px panel that already carries 12px
+   of its own padding, with nav beneath it. Same builder, same assertions -- this is not a second
+   variable, it is the one variable in the place it lands. */
+/* THE SAME ROW ON THE OTHER GROUND. An opacity is not symmetric between themes: white at 0.35 on
+   #0c0e12 is not the mirror of black at 0.35 on white, either in contrast -- the ratios differ,
+   because luminance is not linear in alpha -- or in rendering, since antialiasing a light stem
+   onto a dark ground spreads differently from the reverse. The app ships both themes, so a value
+   graded on one is graded on half the product. Colours are `tokens.css`'s real dark values. */
+const darkRows = (function(){
+ if(!ROUND.dark) return []
+ return ROUND.sizes.map(function(sz){
+  o.appendChild(el('h2',null,'on the dark ground — kanji '+sz))
+  return row(sz, ROUND.values, function(v){
+   const note=ROUND.notes[v]
+   return {text:String(v)+(note?' — '+note:''), was:!!note}}, 'dark')})})()
+
+const context = (function(){
+ if(!ROUND.context) return []
+ o.appendChild(el('h2',null,'in the column the shell actually gives — 212px of usable width'))
+ const s2=el('div','strip'); const made=[]
+ ROUND.context.forEach(function(v){
+  const c=el('div','cell')
+  const panel=el('div'); panel.className='panel'
+  const lk=mk(48, v); panel.appendChild(lk)
+  const nav=el('div','nav','<b>Home</b><span>Capture</span><span>Runs</span><span>Review</span>')
+  panel.appendChild(nav)
+  c.appendChild(panel)
+  const cap=el('div','cap'); cap.textContent=v.toFixed(2); c.appendChild(cap)
+  const num=el('div','num'); c.appendChild(num)
+  s2.appendChild(c); made.push({lk:lk, v:v, num:num, size:48})})
+ o.appendChild(s2); return made})()
+
+/* §7: "re-present an earlier lens to check the answer is stable". The rebuild dropped this strip
+   and it is a rule rather than a flourish, so it is back — and driven by ROUND.rejected, so its
+   labels cannot drift from the round the way the hand-written ones twice did. */
+const rejected = (function(){
+ const keys=Object.keys(ROUND.rejected).map(Number)
+ if(!keys.length) return []
+ o.appendChild(el('h2',null,'re-shown — what this band has already rejected'))
+ return row(96, keys, function(v){
+  return {text:v+ROUND.unit+' — '+ROUND.rejected[v], was:true}})})()
+
+document.fonts.ready.then(function(){
+ const all = groups.concat(darkRows).concat(context.length?[context]:[]).concat(rejected.length?[rejected]:[])
+ all.forEach(function(g){ g.forEach(function(r,i){
+  frame(r.lk, optsFor(r.v))
+  /* The figure under a specimen has to be the quantity being SWEPT. Round 20 added a delta and
+     computed it from `pad`; on the first round that swept something else every cell printed
+     "Δ 0.0px" -- a confidently wrong number, which is worse than none, and the third caption in
+     this sheet's history to describe a drawing other than the one above it. `pxOf` is keyed off
+     SWEPT so a caption cannot report a variable the round is not asking about. */
+  const pxOf = function(size, v){
+   return (SWEPT==='pad'||SWEPT==='gap'||SWEPT==='stroke'||SWEPT==='romanSize') ? size*v : null
+  }
+  const px = pxOf(r.size, r.v)
+  const prev = g[i-1]
+  const step = (prev && px!==null) ? px - pxOf(prev.size, prev.v) : null
+  r.num.innerHTML = 'block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
+   + (px!==null ? '<br><span style="color:#6b7280">'+SWEPT+' '+px.toFixed(1)+'px</span>' : '')
+   + (step!==null ? '<br><span style="color:#9aa1ab">Δ '+step.toFixed(1)+'px from the last</span>' : '')
+   + (SWEPT!=='pad' ? '<br><span style="color:#b6bcc5">pad '+(r.size*ROUND.holds.pad).toFixed(1)+'px, held</span>' : '')
+   /* the SOLVED tracking, on the rounds that touch the roman -- it is the number that reached the
+      drawing, and the seed beside it in `holds` is not */
+   /* AN OPACITY HAS A CONTRAST RATIO, and it is the one thing about this variable that is not a
+      matter of taste. The roman is one ink on one ground, so the effective colour is a straight
+      composite and the WCAG ratio follows from it. Printed because `docs/DESIGN.md` floors
+      contrast elsewhere in this product at 7:1 and nothing had ever measured it here. */
+   + (SWEPT==='romanOpacity' ? (function(){
+       /* against THIS specimen's ground, not against white. Computing the dark row's ratio
+          against a white page would have published a confident wrong number on every dark cell. */
+       const a=r.v, L=function(c){c/=255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4)}
+       const dk = r.lk.dataset.col === '#eef0f4'
+       const ink = dk ? [0xee,0xf0,0xf4] : [0x0f,0x12,0x17]
+       const gnd = dk ? [0x0c,0x0e,0x12] : [255,255,255]
+       const mix=function(i){return ink[i]*a+gnd[i]*(1-a)}
+       const lumOf=function(c){return 0.2126*L(c[0])+0.7152*L(c[1])+0.0722*L(c[2])}
+       const lum=lumOf([mix(0),mix(1),mix(2)]), lg=lumOf(gnd)
+       const hi=Math.max(lum,lg), lo=Math.min(lum,lg)
+       const ratio=(hi+0.05)/(lo+0.05)
+       const col = ratio<4.5 ? '#c2410c' : '#6b7280'
+       return '<br><span style="color:'+col+'">contrast '+ratio.toFixed(1)+':1'+(ratio<4.5?' — under 4.5':'')+'</span>'
+     })() : '')
+   + (SWEPT.indexOf('roman')===0
+      ? '<br><span style="color:#6b7280">roman '+r.lk.dataset.romanW+'px of '+r.lk.dataset.kanjiW+'px</span>'
+      + '<br><span style="color:'+(+r.lk.dataset.romanTrackSolved<0?'#c2410c':'#b6bcc5')+'">tracking '
+      + (+r.lk.dataset.romanTrackSolved*r.size).toFixed(2)+'px'+(+r.lk.dataset.romanTrackSolved<0?' — TIGHTENING':'')+'</span>' : '')
+ })})
+ check(all)
+ window.__sheetReady = true
+})
+</script>

@@ -1,0 +1,209 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the sidebar, and the morph</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400&family=Manrope:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px;max-width:1500px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 16px;max-width:1040px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:26px 0 9px}
+ .stage{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start;background:#fff;border-radius:14px;padding:22px 24px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center;margin-top:8px}
+ .num{font:500 8.5px ui-monospace,monospace;color:#6b7280;text-align:center;line-height:1.5}
+ .lk{position:relative;display:inline-block}
+ .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
+ .go{font-family:'IBM Plex Sans JP',sans-serif;font-weight:400;line-height:1;display:block}
+ .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
+
+ /* the shell, at the app's own tokens */
+ .side{--bg:#fff;--ink:#0f1217;--ink3:#6b7280;--line:rgba(15,18,23,.08);--accent:#3d5af1;--tint:rgba(61,90,241,.10);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;height:392px;padding:12px;
+  display:flex;flex-direction:column;gap:8px;overflow:hidden;font-family:Inter,system-ui,sans-serif}
+ .side.dark{--bg:#090b0e;--ink:#eef0f4;--ink3:#838b98;--line:rgba(255,255,255,.08);--accent:#7f90ff;--tint:rgba(127,144,255,.14)}
+ .brand{display:flex;align-items:center;gap:10px;padding:8px;min-height:48px}
+ .brandtext{display:flex;flex-direction:column;line-height:1.05;min-width:0}
+ .bname{font-family:Manrope;font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+ .btag{font-size:9.5px;letter-spacing:.01em;color:var(--ink3);font-weight:500;white-space:nowrap}
+ .navlab{font:600 9px Inter;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);padding:10px 8px 2px}
+ .nav{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;color:var(--ink);font-size:13px;font-weight:500;white-space:nowrap}
+ .nav.on{background:var(--tint);color:var(--accent)}
+ .ico{width:18px;height:18px;flex:none;border-radius:4px;border:1.6px solid currentColor;opacity:.85}
+ .side.rail{width:64px;align-items:center}
+ .side.rail .brandtext,.side.rail .navlab,.side.rail .nav span{display:none}
+ .side.rail .nav{justify-content:center;padding:8px 0;width:40px}
+ .side.rail .brand{padding:8px 0;justify-content:center}
+</style>
+<div class="wrap">
+<h1>the sidebar — the lockup open, the brackets closed</h1>
+<div class="sub">
+The owner&rsquo;s idea, drawn: <b>the lockup when the sidebar is open, collapsing to the bare brackets when it
+is a rail</b>. &sect;1 already calls that second state the mark &mdash; <i>&ldquo;with the card removed the
+same brackets become an empty slot, which is the in-product mark.&rdquo;</i>
+<br><br>
+<b>The lockup REPLACES the wordmark and the tagline.</b> An earlier draft of this sheet drew it beside
+<code>Banchi</code> and <code>every card has an address</code>, which was wrong twice: the lockup already says
+the name, in two scripts, so the row read as twice as busy as it would be &mdash; and it faked the sizing,
+squeezing the lockup into what was left after the text instead of letting it own the row.
+<br><br>
+<b>So the size is now an open question rather than a forced one.</b> With 212px of usable width the lockup
+fits anywhere from the kanji-32 floor up to kanji 80, and three candidates are drawn below. The rail is 64px and <b>cannot hold the lockup at all</b>: at kanji 22 the block
+is 57px and two of its three measures have already failed. That is why the rail gets the brackets rather than
+a smaller lockup.
+<br><br>
+<b>The morph is drawn, not described.</b> Both brackets come from the same <code>taperParts</code> at the same
+point count, so the path interpolates directly &mdash; the filmstrip below is the real intermediate geometry
+at five points, not a cross-fade standing in for one.
+</div>
+<div id="out"></div></div>
+<script src="./lockup-core.js"></script>
+<script>
+window.__sheetReady = false
+/* THE DRAWING COMES FROM `lockup-core.js`. This file had its own frozen copies of
+   `taperParts`, `stamp` and `frame` -- pasted, along with that file's own comment saying
+   "a sheet that draws the lockup and does not load this file is that bug coming back".
+   It came back. The forked `stamp` took four arguments, so every roman parameter handed to
+   it was silently discarded and the mockup drew the roman at 0.36 and flush to the kanji,
+   while §13 settled 0.25 at 0.75 of its width. This is the sheet the sidebar SIZE was about
+   to be decided from. */
+/* §13's SETTLED TABLE, and this file carried the pre-sweep values until 2026-09-06 -- pad 0.22 and
+   gap 0.06, the two figures rounds 16-23 replaced, plus no roman parameters at all. A mockup drawn
+   on stale constants is a picture of a lockup that no longer exists, and it is the picture a size
+   decision would have been made from. */
+const P = {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
+           romanFill:0.75, romanSize:0.25, romanOpacity:0.45}
+const o = document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+
+/* THE RAIL DRAWS THE MARK THAT ALREADY SHIPS, and until 2026-09-06 it drew an invention.
+   `app/src/kit/markGeometry.ts` is generated from `small-cut.html` and is what every surface in
+   the product below 64px renders (D102). This sheet had re-derived a bracket instead -- stroke
+   0.11 and radius 0.146 of the frame, reasoned from "the icon's 8 in a 54.8 box" -- and got four
+   things wrong at once:
+
+     stroke  11.0 against the mark's 4.2   -- 2.6x too heavy: 3.96px against 1.51px at this size
+     radius  14.6 against the mark's 8     -- 1.8x too round
+     inset    5.5 against the mark's 22.6  -- the mark's bracket sits INSIDE its tile, not on the edge
+     taper    applied, and §11 REMOVED the taper from the small cut on a measurement
+
+   It was re-derived from the DISPLAY cut's unit (5.562) rescaled into the wrong box, and the
+   small cut is what draws below 64px. Nothing about the mark is re-derived here now: the two
+   constants below are copied from the generated file and `make docs-audit`'s `rail mark` row
+   reconciles them, because a value typed a second time is how this file already went wrong. */
+const MARK_SMALL_BRACKET = 'M22.609 41.901V24.252A8 8 0 0 1 30.609 16.252H43.426'
+const MARK_SMALL_STROKE = 4.2
+function bareBrackets(px, col){
+ const one='<path d="'+MARK_SMALL_BRACKET+'" fill="none" stroke="'+col+'" stroke-width="'+
+   MARK_SMALL_STROKE+'" stroke-linecap="round"/>'
+ return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'">'+one
+   +'<g transform="rotate(180 50 50)">'+one+'</g></svg>'
+}
+
+function sidebar(dark, rail){
+ const s=el('div','side'+(dark?' dark':'')+(rail?' rail':''))
+ if(!rail) s.style.width='236px'
+ /* NO WORDMARK AND NO TAGLINE. The lockup REPLACES `[mark] Banchi / every card has an address` --
+    it already says the name twice, in two scripts. Drawing it beside the text was wrong twice over:
+    it made the sidebar read as twice as busy as it would be, and it faked the sizing, because the
+    lockup was squeezed into what was left after the text instead of owning the row. */
+ const brand=el('div','brand')
+ const holder=el('div'); holder.style.cssText='flex:none'
+ brand.appendChild(holder)
+ s.appendChild(brand)
+ ;[['Home',true],['Capture',false],['Runs',false],['Review',false],['Pricing',false]].forEach(function(n,i){
+  if(i===1) s.appendChild(el('div','navlab','Workflow'))
+  const a=el('div','nav'+(n[1]?' on':''))
+  a.appendChild(el('span','ico')); a.appendChild(el('span',null,n[0]))
+  s.appendChild(a)})
+ return {side:s, holder:holder}
+}
+
+/* ---- 1 · the two states -------------------------------------------------------------------- */
+o.appendChild(el('h2',null,'the two states, at the widths the shell actually gives'))
+;(function(){
+ const st=el('div','stage')
+ /* ALL THREE SIZES IN BOTH THEMES. The dark column drew kanji 40 alone, which is the one thing a
+    size comparison cannot do -- it asks the question on one ground and answers it on another. */
+ ;[[false,32,'kanji 32 — the floor'],[false,40,'kanji 40'],[false,48,'kanji 48'],[false,0,'rail · 64px'],
+   [true,32,'dark · kanji 32'],[true,40,'dark · kanji 40'],[true,48,'dark · kanji 48'],
+   [true,0,'rail · dark']].forEach(function(c){
+  const wrap=el('div'); wrap.style.cssText='display:flex;flex-direction:column;align-items:center'
+  const b=sidebar(c[0], c[1]===0); wrap.appendChild(b.side)
+  const col = c[0] ? '#eef0f4' : '#0f1217'
+  if(c[1]===0) b.holder.innerHTML = bareBrackets(32, col)
+  else { const lk=stamp(c[1], P.gap, P.pad, col,
+           {romanSize:P.romanSize, romanOpacity:P.romanOpacity})
+         b.holder.appendChild(lk); lk.dataset.pend='1' }
+  wrap.appendChild(el('div','cap',c[2]))
+  /* measured after the frame runs, never scaled from a remembered 83x59 -- those were the
+     PRE-SWEEP dimensions and the settled block is 102x75 at kanji 32 */
+  if(c[1]) { const n=el('div','num'); n.dataset.meas='1'; wrap.appendChild(n) }
+  st.appendChild(wrap)})
+ o.appendChild(st)})()
+
+/* ---- 2 · the morph ------------------------------------------------------------------------- */
+o.appendChild(el('h2',null,'the morph — real interpolated geometry at five points, not a cross-fade'))
+o.appendChild(el('div','sub','The lockup’s frame is 83×59 and the rail’s is 36×36, so the bracket travels in shape as well as in '+
+ 'size — and its <b>stroke and radius rules both change</b> across the move: 0.050 of the kanji becomes '+
+ 'the mark’s own 0.042 of its tile, and 4.0× the stroke becomes the mark’s 0.08. Both are resolved to pixels at each '+
+ 'end and interpolated as pixels, because interpolating the RULES would send the middle frames somewhere '+
+ 'neither end goes. The name fades over the first half; the bracket travels across the whole.'))
+;(function(){
+ const st=el('div','stage'); st.style.alignItems='center'
+ /* Both ends in REAL PIXELS. The first draft took the rail's stroke as 11 — its value in a 100-unit
+    viewBox — and interpolated toward 11px, so the middle frames carried a stroke seven times too
+    heavy and read as blobs. At 36px the rail's 0.11 is 3.96px. The RADIUS RULE also changes across
+    the morph, from 4.0x the stroke to the MARK's own 0.08 of its tile, so it is interpolated as a
+    resolved pixel
+    value rather than as a rule. */
+ /* the OPEN end is measured from a real settled lockup at the floor size rather than typed --
+    it was 83x59 here, which is what the block was before rounds 16-23 moved pad and gap */
+ const probe=stamp(32, P.gap, P.pad, '#0f1217', {romanSize:P.romanSize, romanOpacity:P.romanOpacity})
+ probe.style.cssText='position:absolute;left:-9999px'; document.body.appendChild(probe)
+ frame(probe, {stroke:P.stroke, arm:P.arm, tl:P.tl, rrMul:P.rrMul, tip:P.tip, romanFill:P.romanFill})
+ const A={w:probe.offsetWidth, h:probe.offsetHeight, s:32*P.stroke, r:(32*P.stroke)*P.rrMul}
+ probe.remove()
+ /* the RAIL end is the shipped mark's own geometry at the size the rail draws it -- it was a
+    locally-invented `RAIL` rule, so the morph was travelling toward a bracket the product does
+    not contain */
+ const RAILPX = 32
+ const B={w:RAILPX, h:RAILPX, s:RAILPX*MARK_SMALL_STROKE/100, r:RAILPX*8/100}
+ for(let k=0;k<=4;k++){
+  const t=k/4
+  const w=A.w+(B.w-A.w)*t, h=A.h+(B.h-A.h)*t, sw=A.s+(B.s-A.s)*t
+  const i=sw/2, W=w-sw, H=h-sw
+  const rr=Math.min(A.r+(B.r-A.r)*t, Math.min(W,H)/2-.1)
+  const p=taperParts(i,i,W*P.arm,H*P.arm,rr,sw,P.tip,P.tl)
+  const one='<path d="'+p.body+'" fill="#0f1217"/>'+p.caps.map(function(c){
+    return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="#0f1217"/>':''}).join('')
+  const cell=el('div'); cell.style.cssText='display:flex;flex-direction:column;align-items:center'
+  const box=el('div'); box.style.cssText='position:relative;width:'+w+'px;height:'+h+'px'
+  box.innerHTML='<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="position:absolute;inset:0;overflow:visible">'
+   +one+'<g transform="rotate(180 '+(w/2).toFixed(2)+' '+(h/2).toFixed(2)+')">'+one+'</g></svg>'
+  /* the name, fading out over the first half */
+  const nameOp = Math.max(0, 1 - t*2)
+  const nm=el('div'); nm.style.cssText='position:absolute;inset:0;display:flex;flex-direction:column;'
+   +'align-items:center;justify-content:center;opacity:'+nameOp.toFixed(2)+';color:#0f1217'
+  nm.innerHTML='<span class="go" style="font-size:'+(32*(1-t*0.25)).toFixed(1)+'px;letter-spacing:.07em">番地</span>'
+   +'<span class="rom" style="font-size:'+(32*0.36).toFixed(1)+'px;letter-spacing:2.6px;margin-top:'+(32*P.gap).toFixed(1)+'px;opacity:.62">BANCHI</span>'
+  box.appendChild(nm)
+  cell.appendChild(box)
+  cell.appendChild(el('div','cap', t===0?'open':t===1?'rail':(t*100)+'%'))
+  cell.appendChild(el('div','num', Math.round(w)+'×'+Math.round(h)+'px · stroke '+sw.toFixed(2)))
+  st.appendChild(cell)}
+ o.appendChild(st)})()
+
+document.fonts.ready.then(function(){
+ setTimeout(function(){
+  document.querySelectorAll('.lk[data-pend]').forEach(function(lk){
+   /* romanFill was missing from this call, so every sidebar specimen drew the roman at the
+      DEFAULT 1.0 -- flush to the kanji -- while §13 settled it at 0.75. The mockup would have
+      shown a lockup the spec does not describe, in the one place a size decision gets made. */
+   frame(lk, {stroke:P.stroke, arm:P.arm, tl:P.tl, tip:P.tip, rrMul:P.rrMul, romanFill:P.romanFill})
+   const wrap=lk.closest('.side') && lk.closest('.side').parentElement
+   const n=wrap && wrap.querySelector('[data-meas]')
+   if(n) n.textContent=lk.offsetWidth+'×'+lk.offsetHeight+'px in 212px'})
+  window.__sheetReady=true
+ }, 400)
+})
+</script>

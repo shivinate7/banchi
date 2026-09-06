@@ -1,0 +1,229 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the lockup as a plate</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@500;600;700&text=%E7%95%AA%E5%9C%B0&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px;max-width:1560px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 18px;max-width:1060px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:26px 0 6px}
+ .note{font:400 11px system-ui;color:#8a919b;margin:0 0 10px;max-width:1060px}
+ .note b{color:#c2410c}
+ .strip{background:#fff;border-radius:14px;padding:22px 26px;display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end}
+ .strip.dark{background:#0c0e12}
+ .strip.dark .cap{color:#8892a0}.strip.dark .num{color:#69727e}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+ .cap{font:600 10px system-ui;color:#5c636e;text-align:center}
+ .num{font:500 8.5px ui-monospace,monospace;color:#79808b;text-align:center;line-height:1.55}
+ .pick{background:#fffaf0;box-shadow:inset 0 0 0 2px #e0836a;border-radius:12px;padding:12px 10px}
+ .strip.dark .pick{background:#1a1410;box-shadow:inset 0 0 0 2px #7a4030}
+ svg{display:block}
+</style>
+<div class="wrap">
+<h1>the lockup as a plate — the icon with the name where the card goes</h1>
+<div class="sub">
+<b>Nothing here is new geometry.</b> The tile is the committed <code>TILE</code> path out of
+<code>app/src/kit/markGeometry.ts</code>, the brackets are the committed tapered construction, and the six
+palettes are read out of <code>markPalettes.ts</code> — which <code>logo parity</code> already reconciles
+against §9. What changes is the tile's aspect and what sits inside the brackets.
+<br><br>
+<b>The tile is SPLICED, not stretched.</b> Widening a quintic superellipse by scaling shears its corners into
+ellipses and it stops being the same shape; splicing a straight run in at the vertical centreline keeps every
+corner byte-identical to the icon's at the same drawn height.
+<br><br>
+<b>番地 is live text in IBM Plex Sans JP, subset to two glyphs — 1,108 bytes.</b> Not outlines: the macOS
+agreement governs extracting Hiragino's shapes into a file, and displaying a font you are licensed for is a
+different act. An open face at 1.1 KB removes the question rather than answering it.
+</div>
+<div id="out"></div></div>
+<script>
+window.__sheetReady = false
+const TILE = 'M100.00 50.00L99.99 62.06L99.97 65.91L99.93 68.70L99.87 70.98L99.80 72.92L99.71 74.64L99.60 76.19L99.48 77.61L99.34 78.91L99.18 80.12L99.01 81.26L98.82 82.32L98.61 83.33L98.38 84.28L98.14 85.19L97.88 86.04L97.60 86.86L97.31 87.64L96.99 88.39L96.66 89.10L96.31 89.78L95.94 90.43L95.54 91.05L95.13 91.64L94.70 92.21L94.25 92.76L93.77 93.28L93.28 93.77L92.76 94.25L92.21 94.70L91.64 95.13L91.05 95.54L90.43 95.94L89.78 96.31L89.10 96.66L88.39 96.99L87.64 97.31L86.86 97.60L86.04 97.88L85.19 98.14L84.28 98.38L83.33 98.61L82.32 98.82L81.26 99.01L80.12 99.18L78.91 99.34L77.61 99.48L76.19 99.60L74.64 99.71L72.92 99.80L70.98 99.87L68.70 99.93L65.91 99.97L62.06 99.99L50.00 100.00L37.94 99.99L34.09 99.97L31.30 99.93L29.02 99.87L27.08 99.80L25.36 99.71L23.81 99.60L22.39 99.48L21.09 99.34L19.88 99.18L18.74 99.01L17.68 98.82L16.67 98.61L15.72 98.38L14.81 98.14L13.96 97.88L13.14 97.60L12.36 97.31L11.61 96.99L10.90 96.66L10.22 96.31L9.57 95.94L8.95 95.54L8.36 95.13L7.79 94.70L7.24 94.25L6.72 93.77L6.23 93.28L5.75 92.76L5.30 92.21L4.87 91.64L4.46 91.05L4.06 90.43L3.69 89.78L3.34 89.10L3.01 88.39L2.69 87.64L2.40 86.86L2.12 86.04L1.86 85.19L1.62 84.28L1.39 83.33L1.18 82.32L0.99 81.26L0.82 80.12L0.66 78.91L0.52 77.61L0.40 76.19L0.29 74.64L0.20 72.92L0.13 70.98L0.07 68.70L0.03 65.91L0.01 62.06L0.00 50.00L0.01 37.94L0.03 34.09L0.07 31.30L0.13 29.02L0.20 27.08L0.29 25.36L0.40 23.81L0.52 22.39L0.66 21.09L0.82 19.88L0.99 18.74L1.18 17.68L1.39 16.67L1.62 15.72L1.86 14.81L2.12 13.96L2.40 13.14L2.69 12.36L3.01 11.61L3.34 10.90L3.69 10.22L4.06 9.57L4.46 8.95L4.87 8.36L5.30 7.79L5.75 7.24L6.23 6.72L6.72 6.23L7.24 5.75L7.79 5.30L8.36 4.87L8.95 4.46L9.57 4.06L10.22 3.69L10.90 3.34L11.61 3.01L12.36 2.69L13.14 2.40L13.96 2.12L14.81 1.86L15.72 1.62L16.67 1.39L17.68 1.18L18.74 0.99L19.88 0.82L21.09 0.66L22.39 0.52L23.81 0.40L25.36 0.29L27.08 0.20L29.02 0.13L31.30 0.07L34.09 0.03L37.94 0.01L50.00 0.00L62.06 0.01L65.91 0.03L68.70 0.07L70.98 0.13L72.92 0.20L74.64 0.29L76.19 0.40L77.61 0.52L78.91 0.66L80.12 0.82L81.26 0.99L82.32 1.18L83.33 1.39L84.28 1.62L85.19 1.86L86.04 2.12L86.86 2.40L87.64 2.69L88.39 3.01L89.10 3.34L89.78 3.69L90.43 4.06L91.05 4.46L91.64 4.87L92.21 5.30L92.76 5.75L93.28 6.23L93.77 6.72L94.25 7.24L94.70 7.79L95.13 8.36L95.54 8.95L95.94 9.57L96.31 10.22L96.66 10.90L96.99 11.61L97.31 12.36L97.60 13.14L97.88 13.96L98.14 14.81L98.38 15.72L98.61 16.67L98.82 17.68L99.01 18.74L99.18 19.88L99.34 21.09L99.48 22.39L99.60 23.81L99.71 25.36L99.80 27.08L99.87 29.02L99.93 31.30L99.97 34.09L99.99 37.94L100.00 50.00Z'
+const MARKS=[
+  {key:'bluesteel',label:'bluesteel',prism:['#E4EEF8','#B0C8E0','#7F9FC0','#F2F8FF','#6086AC'],bracket:['#FFFFFF','#B8C8D8','#F2F8FF','#8FA4B8'],ground:['#182430','#060B12'],base:'#5A6E80'},
+  {key:'lilacish',label:'lilacish',prism:['#EFEAFA','#BCB4E0','#8E86C0','#F6F2FF','#6E68A8'],bracket:['#FFFFFF','#B8C8D8','#F2F8FF','#8FA4B8'],ground:['#231F34','#0B0914'],base:'#5A6E80'},
+  {key:'mint',label:'mint',prism:['#E6F6F0','#A8D4C4','#78AC9C','#F2FCF8','#589084'],bracket:['#FFFFFF','#B8C8D8','#F2F8FF','#8FA4B8'],ground:['#162722','#050D0A'],base:'#5A6E80'},
+  {key:'yellowGold',label:'yellow gold',prism:['#FFD97A','#F0A82E','#C9821E','#FFEFC0','#B36F18'],bracket:['#FFFBEE','#E8CE8A','#FFFDF6','#C0A254'],ground:['#141619','#000000'],base:'#C98A2E'},
+  {key:'whiteGold',label:'white gold',prism:['#FFFBF2','#EFE6D2','#DCD0B8','#FFFFFF','#C9BCA2'],bracket:['#FFFBEE','#E8CE8A','#FFFDF6','#C0A254'],ground:['#141619','#000000'],base:'#D8D2C4'},
+  {key:'roseGold',label:'rose gold',prism:['#FFD9C8','#F0B49A','#DE9070','#FFE9DF','#C87A5C'],bracket:['#FFF0E8','#E8B49C','#FFF8F4','#C88A6C'],ground:['#141619','#000000'],base:'#D99878'}]
+
+function taperParts(x0,y0,aX,aY,r,w,tip,tlf){
+ const L1=Math.max(aY-r,0),L2=r*Math.PI/2,L3=Math.max(aX-r,0),L=L1+L2+L3,N=320,pts=[]
+ const tl=Math.max(tlf*Math.max(aX,aY),0.0001)
+ for(let i=0;i<=N;i++){const s=L*i/N;let x,y,tx,ty
+  if(s<=L1){x=x0;y=y0+aY-s;tx=0;ty=-1}
+  else if(s<=L1+L2){const th=Math.PI+(s-L1)/r;x=x0+r+r*Math.cos(th);y=y0+r+r*Math.sin(th);tx=-Math.sin(th);ty=Math.cos(th)}
+  else{const d=s-L1-L2;x=x0+r+d;y=y0;tx=1;ty=0}
+  const f=tip+(1-tip)*Math.min(Math.min(1,s/tl),Math.min(1,(L-s)/tl))
+  pts.push({x:x,y:y,nx:-ty,ny:tx,w:Math.max(w*f,0.001)})}
+ const q=function(v){return v.toFixed(3)}
+ const out=pts.map(function(p){return q(p.x+p.nx*p.w/2)+' '+q(p.y+p.ny*p.w/2)})
+ const inn=pts.map(function(p){return q(p.x-p.nx*p.w/2)+' '+q(p.y-p.ny*p.w/2)}).reverse()
+ return {body:'M'+out[0]+out.slice(1).map(function(s){return 'L'+s}).join('')+
+   'L'+inn[0]+inn.slice(1).map(function(s){return 'L'+s}).join('')+'Z',
+  caps:[[pts[0].x,pts[0].y,pts[0].w/2],[pts[pts.length-1].x,pts[pts.length-1].y,pts[pts.length-1].w/2]]}}
+
+
+/* Splice a straight run of `w` units into the tile at its vertical centreline. */
+function tile(w){
+ return 'M' + TILE.slice(1,-1).split('L').map(function(p){
+  const xy=p.split(' '), x=parseFloat(xy[0])
+  return ((x>=50? x+w : x).toFixed(2))+' '+xy[1]
+ }).join('L') + 'Z'
+}
+
+/* The icon's own numbers, unchanged. */
+const CW=31.782, CH=44.495, GAP=11.5, ARM=0.32, RAD=8
+
+function plate(o){
+ o=o||{}
+ const m = MARKS.find(function(x){return x.key===(o.mark||'bluesteel')})
+ const W = o.W===undefined ? 42 : o.W              // how much straight run is spliced in
+ /* Arm 0.32 is §3's own lockup value and the matrix in §5 confirms it: the icon's 0.38 makes the
+    arms run into the type, because on the icon the CARD is drawn over the bracket ends and hides
+    the overlap -- nothing occludes them here. Stroke 2.4 rather than the icon's 1.7 because the
+    plate is 1.42x as wide at the same height, so the same absolute stroke reads thinner across it. */
+ const stroke = o.stroke===undefined ? 2.4 : o.stroke
+ const sh = o.sh===undefined ? 0.15 : o.sh
+ const id = 'p'+(o.i||0)+(o.mark||'b')+Math.round(W)
+ const TW = 100+W
+ const cw = CW+W, cx = 50+W/2-cw/2, cy = 50-CH/2
+ const bw = cw+2*GAP, bh = CH+2*GAP, bx = 50+W/2-bw/2, by = 50-bh/2
+ const arm = o.arm===undefined ? ARM : o.arm
+ const tp = taperParts(bx, by, bw*arm, bh*arm, RAD, stroke, 0.07, 0.3)
+ const one = '<path d="'+tp.body+'" fill="url(#'+id+'c)"/>'+tp.caps.map(function(c){
+   return c[2]>0.02?'<circle cx="'+c[0].toFixed(2)+'" cy="'+c[1].toFixed(2)+'" r="'+c[2].toFixed(2)+'" fill="url(#'+id+'c)"/>':''}).join('')
+
+ /* The name, where the card was — measured and centred on INK, never on the line box.
+    IBM Plex Sans JP's font box and Manrope's do not agree (Manrope's is 115 units on a 100 em),
+    so stacking by line boxes puts the optical centre in the wrong place by construction. */
+ const ctx = plate._c || (plate._c = document.createElement('canvas').getContext('2d'))
+ const ratio = o.ratio===undefined?0.36:o.ratio
+ const gapF  = o.gap===undefined?0.10:o.gap
+
+ /* Solve the kanji size so the block's INK fills the card's footprint on whichever axis binds. */
+ function block(K){
+  const kt = K*0.07, rs = K*ratio
+  ctx.font = '600 '+K+'px "IBM Plex Sans JP"'
+  const k = ctx.measureText('番地')
+  const kInk = k.actualBoundingBoxRight + k.actualBoundingBoxLeft + kt      // 2 glyphs, 1 inner gap... plus trailing
+  const kW = k.width + kt          /* one inner tracking unit only: ink, not advance */
+  const kH = k.actualBoundingBoxAscent + k.actualBoundingBoxDescent
+  ctx.font = '700 '+rs+'px Manrope'
+  const r = ctx.measureText('BANCHI')
+  const rTrack = (kW - (r.actualBoundingBoxRight + r.actualBoundingBoxLeft)) / 5
+  const rH = r.actualBoundingBoxAscent + r.actualBoundingBoxDescent
+  return {K, kt, rs, k, r, rTrack, kW, kH, rH, H: kH + gapF*K + rH}
+ }
+ let K = cw*0.40
+ for (let n=0; n<24; n++){                 /* fit to the binding axis */
+  const b = block(K)
+  const fw = cw / b.kW, fh = CH / b.H
+  const f = Math.min(fw, fh)
+  if (Math.abs(f-1) < 0.002) break
+  K *= (1 + (f-1)*0.7)
+ }
+ const B = block(K)
+ const top = 50 - B.H/2
+ const kBase = top + B.k.actualBoundingBoxAscent
+ const rBase = top + B.kH + gapF*K + B.r.actualBoundingBoxAscent
+ const mid = 50 + W/2
+ const fill = o.typeFill==='flat' ? m.prism[3] : (o.typeFill==='chrome' ? 'url(#'+id+'c)' : 'url(#'+id+'p)')
+ /* text-anchor=middle centres on the ADVANCE, which carries a trailing tracking unit the ink does
+    not — so both lines are nudged left by half of their own trailing unit to centre on ink. */
+ const name = '<text x="'+(mid - B.kt/2).toFixed(2)+'" y="'+kBase.toFixed(2)+'" text-anchor="middle" font-family="IBM Plex Sans JP" font-weight="600" font-size="'+K.toFixed(2)+'" letter-spacing="'+B.kt.toFixed(3)+'" fill="'+fill+'">番地</text>'
+  + '<text x="'+(mid - B.rTrack/2).toFixed(2)+'" y="'+rBase.toFixed(2)+'" text-anchor="middle" font-family="Manrope" font-weight="700" font-size="'+B.rs.toFixed(2)+'" letter-spacing="'+B.rTrack.toFixed(3)+'" fill="'+fill+'">BANCHI</text>'
+
+ return '<svg viewBox="0 0 '+TW+' 100" width="'+(o.px||300)+'" xmlns="http://www.w3.org/2000/svg">'
+ +'<defs>'
+ +'<linearGradient id="'+id+'g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+m.ground[0]+'"/><stop offset="1" stop-color="'+m.ground[1]+'"/></linearGradient>'
+ +'<linearGradient id="'+id+'c" x1=".75" y1=".067" x2=".25" y2=".933">'+m.bracket.map(function(c,i){return '<stop offset="'+[0,.33,.67,1][i]+'" stop-color="'+c+'"/>'}).join('')+'</linearGradient>'
+ +'<linearGradient id="'+id+'s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="'+sh+'"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'
+ +'<linearGradient id="'+id+'p" x1=".671" y1=".030" x2=".329" y2=".970">'+m.prism.map(function(c,i){return '<stop offset="'+(i/4).toFixed(3)+'" stop-color="'+c+'"/>'}).join('')+'</linearGradient>'
+ +'<clipPath id="'+id+'t"><path d="'+tile(W)+'"/></clipPath>'
+ +'</defs>'
+ +'<path d="'+tile(W)+'" fill="url(#'+id+'g)"/>'
+ +'<g clip-path="url(#'+id+'t)"><rect width="'+TW+'" height="40" fill="url(#'+id+'s)"/></g>'
+ +one+'<g transform="rotate(180 '+(50+W/2).toFixed(2)+' 50)">'+one+'</g>'
+ +(o.card
+   /* the shipped mark's face: the card, filled with the prism, which is exactly what the SMALL
+      cut draws below 64px. Not the name -- the rail candidate has to be the real thing. */
+   ? '<rect x="'+cx.toFixed(3)+'" y="'+cy.toFixed(3)+'" width="'+cw.toFixed(3)+'" height="'+CH+'" rx="1.9" fill="'+m.base+'"/>'
+     +'<rect x="'+cx.toFixed(3)+'" y="'+cy.toFixed(3)+'" width="'+cw.toFixed(3)+'" height="'+CH+'" rx="1.9" fill="url(#'+id+'p)"/>'
+   : (o.bare?'':name))+'</svg>'
+}
+
+const out=document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+function head(t,note){out.appendChild(el('h2',null,t));if(note)out.appendChild(el('div','note',note))}
+function strip(dark){const s=el('div','strip'+(dark?' dark':''));out.appendChild(s);return s}
+function cell(s,o,cap,num,pick){const d=el('div','cell'+(pick?' pick':''))
+ d.insertAdjacentHTML('beforeend',plate(o)); d.appendChild(el('div','cap',cap))
+ if(num)d.appendChild(el('div','num',num)); s.appendChild(d)}
+
+document.fonts.ready.then(function(){
+ head('1 · how much straight run to splice in',
+  'W = 0 is the icon’s own tile, portrait, with the name crushed into a card-shaped hole. Both ends are meant '+
+  'to fail: at 0 the name cannot fit, at 90 the plate is a banner and stops being a sibling of the icon.')
+ ;[0,20,42,64,90].forEach(function(W,i){
+  if(i===0)var s=strip()
+  })
+ ;(function(){const s=strip()
+  ;[0,20,42,64,90].forEach(function(W,i){
+   cell(s,{W:W,i:i,px:110+W*1.6},'W = '+W,'tile '+(100+W)+' × 100  ·  aspect '+((100+W)/100).toFixed(2),W===42)})})()
+
+ head('2 · what the name is made of',
+  'The card’s own material moved onto the type. The prism gradient is what the holo foil is built from; '+
+  '§11 measured it reading as a lit surface across a 32×44 card, and twelve strokes of a kanji is not a card — '+
+  'so the flat stop and the chrome bracket gradient are both put up against it.')
+ ;(function(){const s=strip()
+  ;[['prism','the prism gradient — the card’s material'],['flat','flat, prism stop 4'],['chrome','the bracket’s chrome']].forEach(function(c,i){
+   cell(s,{typeFill:c[0],i:10+i,px:300},c[1],'',c[0]==='prism')})})()
+
+ head('3 · all six, on §9’s own grounds',
+  'Read out of <code>markPalettes.ts</code>, which <code>logo parity</code> already reconciles against §9 in '+
+  'both directions — so this sheet cannot drift from the locked set, and the plate introduces <b>zero new hex</b>.')
+ ;(function(){const s=strip()
+  MARKS.forEach(function(m,i){cell(s,{mark:m.key,i:20+i,px:250},m.label,'')})})()
+
+ head('5 · the bracket — arm crossed with stroke',
+  'The icon’s arm is 0.38 and §3’s lockup row says 0.32, which looked like a discrepancy and is not: '+
+  'on the icon the CARD is drawn OVER the bracket ends, so the overlap is hidden. Nothing occludes '+
+  'them here, so at 0.38 the arms run into 番 and into BANCHI. Crossed with stroke because a longer '+
+  'arm at the same weight reads lighter — §7 rule 6’s named exception. Both ends fail: 0.20 is a '+
+  'corner tick that holds nothing, 0.38 collides.')
+ ;(function(){
+  ;[0.20,0.26,0.32,0.38].forEach(function(arm){
+   out.appendChild(el('div','note','arm '+arm.toFixed(2)+(arm===0.32?' — §3’s lockup row':arm===0.38?' — the icon’s':'')))
+   const s2=strip()
+   ;[1.7,2.4,3.2].forEach(function(w,j){
+    cell(s2,{arm:arm,stroke:w,i:40+arm*100+j,px:250},'stroke '+w+(w===1.7?' — the icon’s':''),'',arm===0.32&&w===2.4)})})})()
+
+ head('6 · the sidebar, which is what this is for',
+  'The owner’s idea, and it is what gives the lockup a job: the plate when the sidebar is open, '+
+  'collapsing to the mark when it is a rail. <b>What the rail should hold is the open question</b> — '+
+  'the bare brackets, which §1 calls “an empty slot, the in-product mark”, or the icon, which is what '+
+  'ships today. Drawn on the app’s own dark page at the real widths: 236px expanded, 64px rail.')
+ ;(function(){const s2=strip(true)
+  const d1=el('div','cell'); d1.insertAdjacentHTML('beforeend',plate({i:60,px:204}))
+  d1.appendChild(el('div','cap','expanded · 204px in a 236px sidebar')); s2.appendChild(d1)
+  const d2=el('div','cell'); d2.insertAdjacentHTML('beforeend',plate({i:61,W:0,px:44,bare:true}))
+  d2.appendChild(el('div','cap','rail · bare brackets')); s2.appendChild(d2)
+  const d3=el('div','cell'); d3.insertAdjacentHTML('beforeend',plate({i:62,W:0,px:44,card:true,stroke:4.2,arm:0.38}))
+  d3.appendChild(el('div','cap','rail · the shipped mark')); s2.appendChild(d3)
+  const d4=el('div','cell'); d4.insertAdjacentHTML('beforeend',plate({i:63,W:0,px:110,bare:true}))
+  d4.appendChild(el('div','cap','bare brackets, magnified')); s2.appendChild(d4)
+  const d5=el('div','cell'); d5.insertAdjacentHTML('beforeend',plate({i:64,W:0,px:110,card:true,stroke:4.2,arm:0.38}))
+  d5.appendChild(el('div','cap','the shipped mark, magnified')); s2.appendChild(d5)})()
+
+ head('4 · the sizes a sidebar actually gives it',
+  'The expanded sidebar is 236px wide and the rail is 64px. Drawn at the widths that fit, on the app’s own '+
+  'dark page.')
+ ;(function(){const s=strip(true)
+  ;[236,200,150,110].forEach(function(px,i){
+   cell(s,{i:30+i,px:px},px+'px wide','')})})()
+
+ window.__sheetReady = true
+})
+</script>

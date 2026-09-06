@@ -1,0 +1,102 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the width-match, broken and repaired</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400&family=Manrope:wght@700&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 14px;max-width:1060px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:22px 0 9px}
+ .strip{display:inline-flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .panel{width:236px;padding:12px;background:#fff;border:1px solid #e3e6ea;border-radius:12px;
+        display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+ .nav{display:flex;flex-direction:column;gap:7px;width:100%;font:500 11px system-ui;color:#4b5563}
+ .nav b{font-weight:600;color:#3b5bdb;background:#eef2ff;border-radius:7px;padding:6px 9px}
+ .nav span{padding:6px 9px}
+ .was{color:#c2410c;font-weight:700}
+ .num{font:500 9px ui-monospace,monospace;color:#15803d;text-align:center;line-height:1.5}
+ .lk{position:relative;display:inline-block}
+ .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
+ .go{font-family:'IBM Plex Sans JP',sans-serif;font-weight:400;line-height:1;display:block}
+ .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
+ table.hist{border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:10px;margin:0 0 10px}
+ table.hist td,table.hist th{padding:4px 14px;text-align:left;border-bottom:1px solid #eef1f4}
+ table.hist th{color:#8b93a0;font-weight:600}
+ .checks{border-radius:10px;padding:12px 16px;margin:0 0 14px;font:12px/1.6 system-ui}
+ .pass{background:#dcfce7;border:1px solid #16a34a;color:#14532d}
+ .fail{background:#fee2e2;border:2px solid #c2410c;color:#7f1d1d;font-weight:600}
+ svg,img{display:block}
+</style>
+<body><div class="wrap">
+<h1 id="title">the roman’s width-match — never once performed, and what performing it does</h1>
+<div class="sub" id="lede"></div>
+<div id="out"></div>
+</div>
+<script src="./lockup-core.js"></script>
+<script>
+const P = {pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15}
+const o=document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+
+document.getElementById('lede').innerHTML =
+ '<b>`frame()` has always contained a thirty-iteration solve that tracks the roman out until it '+
+ 'matches the kanji’s width.</b> It has never done so. `.go` and `.rom` are both `display:block`, '+
+ 'so `getBoundingClientRect().width` returns the CONTAINING BLOCK’s width for either of them — the '+
+ 'same number, always — and `kw - rw` was identically zero. The loop exited on its first iteration '+
+ 'having already written `letter-spacing: 0px`, and <b>that assignment destroyed the 0.14em seed '+
+ 'before anything was drawn.</b>'+
+ '<br><br><b>So every lockup in all twenty-five rounds carries zero tracking on the roman</b>, and '+
+ 'the 0.14em published in the spec’s settled table is a number no drawing has ever used. A `Range` '+
+ 'measures inline content regardless of the box’s display; with that one change the solve runs and '+
+ 'converges — 6.3px of tracking at the settled 0.36, where it had been 0.'+
+ '<br><br><b>This is not a regression and nothing was broken by this session.</b> The recovered '+
+ 'sheets carry the same two `display:block` rules, so the pass you approved was drawn this way too. '+
+ 'What is wrong is the description, in three places at once: the code’s own comment, the spec, and '+
+ 'what I told you earlier in this session.'+
+ '<br><br><b>Which is why this is a comparison and not a fix.</b> Left is the lockup as it has been '+
+ 'drawn and judged for twenty-five rounds. Right is the same lockup with the match its code has '+
+ 'always claimed to perform. Everything else is held at the settled values.'
+
+function pair(size, rs){
+ const row = el('div','strip')
+ ;[['as drawn for 25 rounds — no match', true],['width-matched — as the code always claimed', false]].forEach(function(m){
+  const c = el('div','cell')
+  const lk = stamp(size, P.gap, P.pad, '#0f1217', {romanSize:rs})
+  c.appendChild(lk)
+  const cap = el('div','cap'+(m[1]?'':' was')); cap.textContent = m[0]; c.appendChild(cap)
+  const num = el('div','num'); c.appendChild(num)
+  row.appendChild(c)
+  c.dataset.nomatch = m[1] ? '1' : ''
+ })
+ o.appendChild(row)
+ return row
+}
+
+const rows = []
+;[[48,0.30],[48,0.36],[48,0.44],[32,0.36]].forEach(function(p){
+ o.appendChild(el('h2',null,'kanji '+p[0]+' · roman '+p[1]+'×'))
+ rows.push(pair(p[0], p[1]))
+})
+
+document.fonts.ready.then(function(){
+ rows.forEach(function(row){
+  [].forEach.call(row.querySelectorAll('.cell'), function(c){
+   const lk = c.querySelector('.lk')
+   frame(lk, {stroke:P.stroke, arm:P.arm, tl:P.tl, rrMul:P.rrMul, tip:P.tip,
+              widthMatch: !c.dataset.nomatch})
+   const g=document.createRange(); g.selectNodeContents(lk.querySelector('.r'))
+   const rw=g.getBoundingClientRect().width
+   const g2=document.createRange(); g2.selectNodeContents(lk.querySelector('.k'))
+   const kwv=g2.getBoundingClientRect().width
+   c.querySelector('.num').innerHTML =
+     'block '+lk.offsetWidth+' × '+lk.offsetHeight+'px'
+     + '<br><span style="color:#6b7280">roman '+rw.toFixed(1)+'px vs kanji '+kwv.toFixed(1)+'px</span>'
+     + '<br><span style="color:#9aa1ab">tracking '+(+lk.dataset.romanTrackSolved*(+lk.dataset.size)).toFixed(2)+'px</span>'
+  })
+ })
+ window.__sheetReady = true
+})
+</script>

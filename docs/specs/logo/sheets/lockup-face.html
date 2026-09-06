@@ -1,0 +1,114 @@
+<!doctype html>
+<meta charset="utf-8"><title>Banchi — the kanji face, seen rather than scored</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700&family=IBM+Plex+Sans+JP:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+ *{box-sizing:border-box}
+ body{margin:0;background:#dde1e6;font:13px/1.45 system-ui,sans-serif;color:#22262d}
+ .wrap{padding:26px 28px}
+ h1{font:700 11px system-ui;letter-spacing:.1em;text-transform:uppercase;opacity:.45;margin:0 0 4px}
+ .sub{font-size:12px;color:#6b7280;margin:0 0 14px;max-width:1060px}
+ h2{font:700 10px system-ui;letter-spacing:.12em;text-transform:uppercase;color:#7b838f;margin:22px 0 9px}
+ .strip{display:inline-flex;gap:30px;flex-wrap:wrap;background:#fff;border-radius:14px;padding:22px 24px;align-items:flex-end}
+ .cell{display:flex;flex-direction:column;align-items:center;gap:8px}
+ .cap{font:500 9px system-ui;color:#8b93a0;text-align:center}
+ .strip.dk{background:#0c0e12}
+ .strip.dk .cap{color:#838b98}
+ .strip.dk .cap.was{color:#fb923c}
+ .strip.dk .num{color:#4ade80}
+ .strip.dk .panel{background:#14171c;border-color:#262b34}
+ .strip.dk .nav{color:#b9bfc9}
+ .strip.dk .nav b{color:#93a7ff;background:#1b2547}
+ .panel{width:236px;padding:12px;background:#fff;border:1px solid #e3e6ea;border-radius:12px;
+        display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+ .nav{display:flex;flex-direction:column;gap:7px;width:100%;font:500 11px system-ui;color:#4b5563}
+ .nav b{font-weight:600;color:#3b5bdb;background:#eef2ff;border-radius:7px;padding:6px 9px}
+ .nav span{padding:6px 9px}
+ .was{color:#c2410c;font-weight:700}
+ .num{font:500 9px ui-monospace,monospace;color:#15803d;text-align:center;line-height:1.5}
+ .lk{position:relative;display:inline-block}
+ .lk svg{position:absolute;inset:0;overflow:visible;pointer-events:none}
+ .go{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;line-height:1;display:block}
+ .rom{font-family:Manrope,system-ui,sans-serif;font-weight:700;line-height:1;display:block;white-space:nowrap}
+ table.hist{border-collapse:collapse;font:11px ui-monospace,monospace;background:#fff;border-radius:10px;margin:0 0 10px}
+ table.hist td,table.hist th{padding:4px 14px;text-align:left;border-bottom:1px solid #eef1f4}
+ table.hist th{color:#8b93a0;font-weight:600}
+ .checks{border-radius:10px;padding:12px 16px;margin:0 0 14px;font:12px/1.6 system-ui}
+ .pass{background:#dcfce7;border:1px solid #16a34a;color:#14532d}
+ .fail{background:#fee2e2;border:2px solid #c2410c;color:#7f1d1d;font-weight:600}
+ svg,img{display:block}
+
+ .go.plex3{font-family:'IBM Plex Sans JP',sans-serif;font-weight:300}
+ .go.plex4{font-family:'IBM Plex Sans JP',sans-serif;font-weight:400}
+ .go.plex5{font-family:'IBM Plex Sans JP',sans-serif;font-weight:500}
+ .big{font-size:120px;line-height:1;display:flex;gap:44px;align-items:flex-end;background:#fff;
+      border-radius:14px;padding:20px 26px}
+ .big div{text-align:center}
+ .big .lbl{font:600 11px system-ui;color:#7b838f;margin-top:8px}
+</style>
+<body><div class="wrap">
+<h1 id="title">the kanji face — what the free option actually costs, drawn rather than scored</h1>
+<div class="sub" id="lede"></div>
+<div id="out"></div>
+</div>
+<script src="./lockup-core.js"></script>
+<script>
+const P={pad:0.50, gap:0.08, stroke:0.050, rrMul:4.0, arm:0.32, tl:0.70, tip:0.15,
+         romanFill:0.75, romanSize:0.25, romanOpacity:0.45}
+const o=document.getElementById('out')
+function el(t,cls,html){const d=document.createElement(t);if(cls)d.className=cls;if(html!==undefined)d.innerHTML=html;return d}
+/* WEIGHT-MATCHED, which the first draft of this sheet was not. `.go` sets no `font-weight`, so
+   every one of the thirty-five rounds drew Hiragino at REGULAR -- and putting Plex 700 beside it
+   compares a semibold with a book weight and calls the difference a typeface difference. §14's
+   table scores against Hiragino W6 because it was written when the lockup was a display asset.
+   At the sizes this ships, the comparison that matters is against the weight actually used. */
+const FACES=[['','Hiragino Sans, regular — what all 35 rounds drew, and cannot ship'],
+             ['plex3','IBM Plex Sans JP 300 — free, OFL'],
+             ['plex4','IBM Plex Sans JP 400 — free, OFL'],
+             ['plex5','IBM Plex Sans JP 500 — free, OFL']]
+
+document.getElementById('lede').innerHTML =
+ '<b>Every picture in this series drew 番地 in Hiragino Sans</b>, which comes with macOS and may be '+
+ 'displayed but not redistributed (§14). The rows below put the free replacement beside it at the '+
+ 'sizes the lockup is actually drawn, so the question is answered by looking rather than by a '+
+ 'number.<br><br><b>The glyphs alone are first, large.</b> That is where a shape difference is '+
+ 'visible at all. The lockups under it are the sizes that ship — and at those sizes the question '+
+ 'is not whether the drawings differ but whether anyone could tell.'
+
+o.appendChild(el('h2',null,'番地 alone, 150px — where a difference can be seen at all'))
+const big=el('div','big')
+FACES.forEach(function(f){
+ const d=el('div')
+ const s=el('span','go '+f[0]); s.textContent='番地'; s.style.letterSpacing='.07em'
+ d.appendChild(s); d.appendChild(el('div','lbl',f[1].split(' — ')[0]))
+ big.appendChild(d)})
+o.appendChild(big)
+
+const groups=[]
+;[48,32].forEach(function(sz){
+ o.appendChild(el('h2',null,'the lockup at kanji '+sz+(sz===32?' — the floor':' — the sidebar candidate')))
+ const strip=el('div','strip'); const made=[]
+ FACES.forEach(function(f){
+  const c=el('div','cell')
+  const lk=stamp(sz,P.gap,P.pad,'#0f1217',{romanSize:P.romanSize,romanOpacity:P.romanOpacity})
+  if(f[0]) lk.querySelector('.k').classList.add(f[0])
+  c.appendChild(lk)
+  c.appendChild(el('div','cap'+(f[0]?'':' was'),f[1]))
+  const num=el('div','num'); c.appendChild(num)
+  strip.appendChild(c); made.push({lk:lk,num:num})})
+ o.appendChild(strip); groups.push(made)})
+
+document.fonts.ready.then(function(){
+ setTimeout(function(){
+  groups.forEach(function(g){g.forEach(function(r){
+   frame(r.lk,{stroke:P.stroke,arm:P.arm,tl:P.tl,rrMul:P.rrMul,tip:P.tip,romanFill:P.romanFill})
+   r.num.innerHTML='block '+r.lk.offsetWidth+' × '+r.lk.offsetHeight+'px'
+    /* ADVANCE, NOT INK, and it said ink. §14 distinguishes the two and puts the match on ink;
+      `textW` returns a Range's box, which is the ADVANCE. Printing the advance under the word
+      "ink" made four different faces read as identical when what is identical is the em they are
+      all full-width in. Sixth caption in this work to name the wrong quantity. */
+   +'<br><span style="color:#6b7280">advance '+r.lk.dataset.kanjiW+'px</span>'
+    +'<br><span style="color:#9aa1ab">tracking '+(+r.lk.dataset.romanTrackSolved*+r.lk.dataset.size).toFixed(2)+'px</span>'})})
+  window.__sheetReady=true
+ },600)
+})
+</script>
