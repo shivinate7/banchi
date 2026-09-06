@@ -899,6 +899,40 @@ pixel, and it drove nothing. Consistency binds a parameter that was visible whil
 being judged. It does not bind one that was invisible. Applying the same rule to both would have been
 the rule spreading past its own argument.
 
+### The size floor is kanji 32, and the bracket is not what sets it
+
+**Measured at deviceScaleFactor 1 and magnified by whole pixels**, because a floor judged on a 2×
+render is judged at twice the detail a 1× screen gives — which is exactly what §9's small row did.
+
+Three things give out, and they give out at different sizes:
+
+| kanji | block | 番 counters (p10) | roman | bracket |
+| --- | --- | --- | --- | --- |
+| 40 | 104 × 74 | 1.33 | 14.4 | 2.00 |
+| 32 | 83 × 59 | **1.07** | 11.5 | 1.60 |
+| 26 | 68 × 48 | *0.87* | 9.4 | 1.30 |
+| 22 | 57 × 41 | *0.73* | *7.9* | 1.10 |
+| 18 | 47 × 33 | *0.60* | *6.5* | *0.90* |
+| 14 | 36 × 26 | *0.47* | *5.0* | *0.70* |
+
+**The kanji fails first, at about kanji 30. The roman second, about 24. The bracket last, about 20.**
+
+**So the floor is `kanji 32` — a block of about 83 × 59px — and the thing that sets it is 番's
+density, not the bracket.** That is worth stating plainly because it is the opposite of what fourteen
+rounds of bracket refinement would lead anyone to assume: the part that was swept hardest is the part
+with the most headroom, and it is the last of the three to break.
+
+**The metric is the tenth percentile of 番's interior whites**, measured off the rendered glyph — the
+point at which a tenth of its counters stop being resolvable and a dense glyph begins filling in. The
+*minimum* was tried first and is useless: it is a single near-tangent between two strokes and reads
+0.02 – 0.07px at every size, which measures antialiasing rather than legibility. The median is the
+typical counter and stays comfortable everywhere. Only the p10 moves through the range that matters.
+
+**What this settles about the sidebar.** The expanded sidebar is 236px and holds a kanji-32 lockup
+with room to spare. The 64px rail cannot: the block at kanji 22 is already 57px wide and two of the
+three measures have failed by then. **The lockup is an expanded-sidebar object and the rail needs
+something else** — which is the bare-bracket question §13 leaves open.
+
 ### The tails
 
 The brackets were plain stroked paths with round caps. They carry the icon's tapered outline now,
