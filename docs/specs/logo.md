@@ -1301,3 +1301,109 @@ that could carry it are `#/gallery`, the owner's crash page if it grew, and `REA
 artifact** — the parameters recorded, the measurement made, the license understood, and nothing
 built that no screen reaches. That would be CLAUDE.md's own rule applied to a brand asset rather
 than to a route.
+
+## 15. Wiring the lockup into the app — the plan
+
+**Written 2026-09-06, after §13's thirty-five rounds settled every parameter.** Nothing in this
+section is built. It is the plan, and its first item is a gate rather than a task.
+
+### §14's closing conclusion is overtaken, and that is why this section exists
+
+§14 ended by asking whether the lockup has a surface at all: *"this lockup is not drawn below
+about 150px… If the honest answer is 'nothing today', then the right outcome is this section and
+no artifact."* That was true of the lockup as it stood. **Round 15 moved the floor to kanji 32 —
+a 102 × 75px block** — and rounds 16–34 settled the parameters that make it hold together there.
+
+So the surface is real now: **the sidebar brand row**, 212px of usable width, currently drawing
+`[mark] Banchi / every card has an address`. The lockup replaces all three of those, because it
+already says the name twice in two scripts.
+
+### The gate: every judgement in this series was made on a font that cannot ship
+
+**Measured rather than assumed.** Rendering 番 at 100px through the sheets' own family stack and
+differencing pixel for pixel against each candidate: the stack resolves to **Hiragino Sans, with
+zero pixels different.** Not the ProN variant (1,293 pixels differ), and Noto Sans JP is not
+installed on this machine at all — its "difference" equals a nonexistent family's.
+
+§14 establishes that Hiragino cannot be redistributed and ranks the open faces by outline overlap
+(IBM Plex Sans JP 700 leads at IoU 0.848). What §14 does not say — because the parameters did not
+exist yet — is **which of the eleven settled values depend on the face**, and that determines how
+much of this series has to be re-run after a substitution.
+
+| parameter | face-dependent? | why |
+| --- | --- | --- |
+| `romanFill` 0.75 | **yes, most** | it is a ratio to the kanji's **ink width**; a different face changes the denominator, so the same number draws a different picture |
+| `romanSize` 0.25 | **yes** | it was judged as the roman's *weight against the kanji's*, and Plex JP 700 is not Hiragino W6's weight |
+| `romanOpacity` 0.45 | **yes** | same argument, and the ink measurement in `ink.mjs` is a measurement of one face's stems |
+| `pad` `gap` `arm` `stroke` `rrMul` `tl` `tip` | low risk | all relative to the kanji's **box**, not its shape — a full-width em is a full-width em |
+
+**The magnitude is not small.** Hiragino Kaku Gothic ProN is the *same drawing* by a different
+name and still differs by 1,293 of 4,729 inked pixels at 100px. An 85% outline overlap is a
+different letter at 8px.
+
+**So the plan is gated on the face, and the re-run is bounded.** Once a face is chosen, the three
+rows above are re-offered — one round each, as a same-or-different check against the settled
+value, with a full sweep only where the answer is "different". The other seven are asserted
+unchanged by `lockup params` and need no eye.
+
+### The solve is baked, not shipped
+
+`frame()`'s width-match depends on exactly four things — the face, the two strings, `romanSize`
+and `romanFill` — and **all four are fixed at build time.** Shipping the solve would mean
+measuring text in a layout effect on every mount: a reflow, a flash before it settles, and a
+different answer whenever the webfont arrives late. `scripts/build-lockup.mjs` runs it once and
+emits the letter-spacing as a constant, the way `build-mark.mjs` already emits the mark's geometry.
+
+**Nothing about the lockup is hand-drawn or hand-edited**, and that rule carries over from D102
+verbatim: change §13's table, re-run the script.
+
+### What gets built
+
+| artifact | note |
+| --- | --- |
+| `scripts/build-lockup.mjs` | reads §13's settled table and `sheets/lockup-core.js`; writes the geometry, the baked tracking and the subset font's path |
+| `app/src/kit/lockupGeometry.ts` | generated, never hand-edited |
+| `app/public/fonts/…` | the chosen face **subset to 番地 only** — measured at ~1.1KB for IBM Plex Sans JP, OFL |
+| `app/src/kit/Lockup.tsx` | `Lockup({size, className})`; BANCHI uses `--bn-font-display`, already in the app |
+
+**The accessibility contract is the opposite of the mark's.** `Logo` is `aria-hidden` because it
+sits beside the word "Banchi". **The lockup *is* that word**, so it carries `role="img"` and an
+accessible name — and the sidebar has no other text to fall back on once the wordmark is gone.
+
+**Never a `border-radius`**, for the same reason as the mark.
+
+### Where it goes
+
+- **The sidebar brand row**, replacing the mark, the wordmark and the tagline together.
+- **The rail keeps bare brackets.** The lockup does not fit 64px: at kanji 22 the block is 57px
+  and two of its three measures have already failed §11's floor. The morph between them is drawn
+  in `sheets/sidebar-morph.html` as real interpolated geometry at five points, not a cross-fade.
+- **`#/gallery`**, beside the mark.
+- **Nowhere else.** No marketing page exists to want one.
+
+### The guard that has to come with it
+
+`lockup params` today reconciles §13's table against the *sheet*. Once a generated file exists it
+must reconcile **both directions against that too**, exactly as `logo parity` does for
+`markPalettes.ts` — otherwise the generated file is free to drift from the spec that produced it,
+which is the failure `logo parity` was written for. `raw color` cannot see a `.ts` file, so the
+same argued exemption applies and the same row is what makes it safe.
+
+`app/tests/brand.spec.ts` gains the floor — a lockup below kanji 32 must not render — and the
+accessible name.
+
+### The one open question, and what would answer it
+
+**What size does the lockup sit at in the open sidebar?** 32, 40 and 48 all fit the 212px column.
+Every round in §13 was drawn at 48 and at the floor, so both ends are familiar and the middle is
+not. **This is not answerable from a sheet** — it is a question about how much of a 236px panel a
+brand row should eat above a nav — so it gets mockups of the real sidebar at all three, in both
+themes, and a forced choice like every other value in this section.
+
+### What would make this not worth building
+
+Stated so it is a decision rather than a drift: **if the chosen face's re-run fails all three
+face-dependent rows**, the honest reading is that the lockup was designed against a typeface it
+cannot have, and the right outcome is to keep the mark alone in the sidebar and leave §13 as a
+record. That is §14's own conclusion, held open rather than quietly dropped now that a surface
+exists.
