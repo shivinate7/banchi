@@ -3646,7 +3646,7 @@ COMPONENTS = [
                         "matters, which is negative — `c` stays the shutter and `b` stays "
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
-                "governed_by": ["D3", "D22", "D23", "D27", "D65"],
+                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -3663,7 +3663,7 @@ COMPONENTS = [
                         "undoing exactly one, a row undoing that card AND everything after "
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
-                "governed_by": ["D10", "D41", "D58"],
+                "governed_by": ["D10", "D41", "D58", "D101"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "
@@ -3968,7 +3968,7 @@ COMPONENTS = [
                         "browser case over it, and the `GET /games` fixture omitted `products` "
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
-                        "thirty seconds each on a switch that had been detached.",
+                        "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
                 "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "

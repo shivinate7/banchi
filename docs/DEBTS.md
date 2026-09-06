@@ -265,6 +265,60 @@ a tuple, so the row needs a roster the Python does not publish. That is cluster 
 again, asked of one more module. Until it is settled the header says nothing audits it, which
 is the claim this file exists to keep true.
 
+### ~~The eleventh hop is the fixtures, and adding `product` broke four tests nothing runs~~ — CLOSED 2026-09-05
+
+**The chain above has one more hop than it lists, and D101 walked ten of the eleven.** Adding
+`product` to `GameRegistry`, to `do_put_box_claims` and to `BoxOps`'s claim editor was correct
+everywhere the list names. What it did not touch is the STUBBED COPY OF THE WIRE that every
+browser spec carries — `app/tests/inventory.spec.ts`'s `GAMES`, and the same fixture in
+`capture-undo.spec.ts` and `capture-claims.spec.ts` — none of which grew `products` or
+`product_game`.
+
+**What that cost, measured on `46160bf` before anything here was changed: 8 of 78 cases in
+`inventory.spec.ts` failed, and the suite took 58s instead of 18s** because six of them were
+30-second timeouts. `BoxOps` wrote the missing `products` — `undefined` — over the `[]` its
+state starts as, the next read of `productList.length` threw inside the editor's render, and
+the subtree left the DOM. Playwright reported `element was detached from the DOM` and named
+nothing else. Four of the eight are the box-claims cases: **the tests over the very control
+D101 added were the ones it broke.**
+
+**It merged green, and the reason is structural.** `app/tests/` runs under `make design-check`
+alone, which is deliberately off the commit path — `make check` runs the nine Python tests, the
+audit, lint and the typecheck, and none of them starts a browser. So the failure was invisible
+to everything a session or a hook looks at, and it stayed invisible for as long as nobody
+happened to run the browsers.
+
+**Fixed in three places, and only one of them is the fixtures.**
+
+- `app/src/BoxOps.tsx` writes `registry.products ?? []` and `registry.product_game ?? null`.
+  The comment three lines above it already promised exactly this — *"A registry that answered
+  no products is the same 'not drawn'"* — and the code did not keep the promise. An older
+  server is the real shape this defends against; a stub is how it was found.
+- The three `GAMES` fixtures carry both fields.
+- **All three are annotated `: GameRegistry`, and that is the guard.** They were object
+  literals handed to `route.fulfill` through `JSON.stringify`, so nothing had ever compared
+  them to the type they imitate. `app/tsconfig.json` includes `tests`, so the annotation puts
+  them behind `make check`'s typecheck — **on the commit path**, where the browsers are not.
+  Mutation: delete `products` from the fixture and `tsc --noEmit` reports
+  `Property 'products' is missing in type ... but required in type 'GameRegistry'`. The next
+  field added to that wire is a failed commit rather than a silent crash.
+
+After it: **111 of 111 across the four spec files, then 163 of 163 across six.**
+
+**What is NOT closed.** Two `/games` stubs remain untyped inline literals — `nav.spec.ts:114`
+and `run-panel.spec.ts:411`, both `{ games: [] }` — and they are left that way on purpose:
+their point is a registry that answered nothing, which is a state worth stubbing, and the
+`?? []` above is what makes it safe.
+
+**And the general form stands.** Six of the eighteen spec files now import their fixtures'
+types from `app/src/types.ts` — these three, plus `orders`, `pricing` and `shipping`, which had
+done it from the start and are the reason it was already this repo's habit rather than a new
+idea. **Twelve do not**, so
+the next field added to a wire can do this again in any of them. The remedy is the same
+annotation, one file at a time; it is a session's work rather than a decision, and what makes
+it worth doing is that the annotation moves the failure onto the commit path, where nothing
+else about these tests is.
+
 ---
 
 ## 4 — Criteria and evidence: nine ways a row goes quiet
@@ -353,6 +407,63 @@ Two cases were added because someone noticed they were missing; a third omission
 as invisible. A docs-audit row would be the wrong instrument — re-implementing `isDeparted` in
 Python goes green against a fixture that renders nothing — so this stays a thing a person
 notices.
+
+### ~~The gallery drew the rows in a layout no screen produces~~ — CLOSED 2026-09-05
+
+**Found by looking at the sheet at 390, which is the only way it could have been found.** The
+two fixtures above were added and asserted, and both were drawn in the wrong shape.
+`app/src/CardLocations.css` answers to `@container copies` in four places, and the widest is
+not the interesting one: `(max-width: 619px)` is the entire narrow layout — the address on its
+own line, the state and the action beneath it — which that file's own comment calls *"most of
+the time, because the pane is one column of a three-column screen"*.
+
+**`container-name: copies` was established in exactly one place in this app**, `Inventory.css`'s
+`.inventory-detail`, the pane beside the photograph. `#/gallery` is not inside it, so all four
+rules were dead on the sheet and the specimen drew the base grid at every width. At 390 the
+address collapsed to one word a line and `ME01 commons` clipped to `M…`; the header's SKU line
+truncated for the same reason. **The product cannot produce that shape at any width**, which
+makes it the same defect the item above is about, one level down: the row was on the page, and
+it was the wrong row.
+
+`app/src/Gallery.tsx` wraps the owner specimen in `.kit-copies`, a `copies` query container
+declared in `Gallery.css`. **Owner only, deliberately** — every `@container copies` rule is
+scoped to `.card-locations-owner`, and the Fulfiller's skin establishes no such container in the
+product either, so naming one on that specimen would invent a context that view does not have.
+
+**Guarded, and observed red.** `app/tests/gallery.spec.ts` sets a 400px viewport and compares
+the row's computed `grid-template-areas` against the narrow form. Comparing the resolved
+cascade rather than asserting a class is the point: a class can be present while the rule that
+reads it never matches, and that was the defect. Mutation: drop `container-name` from
+`.kit-copies` and it reports `"place state action" "bar bar bar"` — the base grid — while the
+four class-based cases beside it stay green, which is why they could not have caught this.
+
+**What is NOT closed is the general form of it.** Nothing checks that a component rendered on
+the sheet is rendered in a context resembling the one it ships in. `copies` was found because
+someone looked; `pane` (`BoxBrowse.css`) and `pricing` (`Pricing.css`) are two more named
+containers, and whether any specimen of theirs is on this sheet at all has not been asked.
+
+### One of the four `copies` bands cannot fire in the product, and it misses by four pixels
+
+**Found while checking the fix above, and NOT fixed — the remedy is a design decision.**
+`CardLocations.css:233` opens `@container copies (min-width: 760px)`, the widest layout, where
+the position bar moves up into the row: `'place bar state action'`. Measured on this tree at
+viewport widths of 1440, 1920 and 2560, `.inventory-detail` — the only element in this app that
+establishes the `copies` container — is **608px, 756px and 756px**. It does not grow past 756
+because the chain above it is fixed: `.bn-page` caps at 1600, `.browse-body` takes 1536 as
+`300px + 1fr` with a 20px gap, and `.browse-band`'s `minmax(220px, 34%) minmax(0, 1fr)` leaves
+the pane 756.164px at every width beyond that. **So that rule is unreachable, by four pixels,
+at every viewport a person can open.**
+
+The product's copies pane is in the NARROW band at 1440 (608px), which is the CSS comment's own
+claim — *"most of the time, because the pane is one column of a three-column screen"* — measured
+rather than asserted for the first time here.
+
+**Three remedies and none of them is a session's to pick.** Lower the threshold to something the
+pane reaches; widen the page or the band so it does; or delete the rule and the layout it
+describes. The first two change what the screen looks like at desktop widths and the third
+throws away a design somebody drew, so this is recorded and left. What a session must NOT do is
+retune the number quietly: every breakpoint in that file carries a measurement in its comment,
+and 760 is the only one with nothing behind it.
 
 ---
 
