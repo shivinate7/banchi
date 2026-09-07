@@ -2417,7 +2417,7 @@ COMPONENTS = [
             # kinds, `[role='button']` — so it can never reach a `.position-*` class, which is
             # what keeps D41's Fulfiller firewall and D45's walk-to scoping component-graph facts
             # rather than things a global rule could quietly breach.
-            "src/base.css": {"does": "reset and the page ground, and the four app-wide floors: the "
+            "src/base.css": {"does": "reset and the page ground, and the six app-wide floors: the "
                                      "`:focus-visible` ring, the cursor floor added 2026-08-29 after "
                                      "39 of 142 interactive elements were measured with no cursor "
                                      "rule any selector could reach, tabular figures on every table, "
@@ -2432,8 +2432,34 @@ COMPONENTS = [
                                      "the four loops that carry meaning (the busy ring, the skeleton "
                                      "shimmer, the live dot, the two capture spinners), slowed to "
                                      "1.4s rather than frozen, because a ring stopped at a partial "
-                                     "arc reads as a disabled button.",
-                             "governed_by": ["D5", "D41", "D45", "D50", "D94"]},
+                                     "arc reads as a disabled button. AND THE RESPONSE FLOOR, "
+                                     "added 2026-09-06 on the owner's report that hovering felt "
+                                     "wrong: a control that answers the pointer eases into it, "
+                                     "over background-color, border-color, color and box-shadow, "
+                                     "which is the half of D50 that never reached this file. "
+                                     "Measured first — 293 of 315 rendered controls responded to "
+                                     "a hover and 17 of them SNAPPED, ten being `.bn-brand`, the "
+                                     "sidebar rail toggle on every route; the floor took that to "
+                                     "0 of 294. `a` is in this list and deliberately NOT in the "
+                                     "cursor floor above: the user agent dresses a link for the "
+                                     "pointer and gives it no transition. `transform` and "
+                                     "`padding` are excluded because D28 forbids a hover that "
+                                     "moves a target under a finger already travelling toward "
+                                     "it, and a blanket `transition: all` would animate both. "
+                                     "AND THE PRESS FLOOR, built the same day when the owner "
+                                     "reopened D50's `:active` deferral: 121 of 311 enabled "
+                                     "controls responded to a press and 190 did not, every "
+                                     "`.bn-nav-link` among them, and it is 317 of 317 now. "
+                                     "Written in `translate` rather than `transform` because "
+                                     "the individual property COMPOSES instead of replacing — "
+                                     "so the floor cannot destroy a control's own scale, which "
+                                     "is what makes it a floor at all — and because it is "
+                                     "composited, which is the same reflow test the response "
+                                     "floor applies. 1px is the value the kit had already "
+                                     "chosen. It is deliberately NOT transitioned: a press must "
+                                     "land on the frame the finger goes down. Disabled controls "
+                                     "do not move, and a screen opts out with `translate: none`.",
+                             "governed_by": ["D5", "D28", "D41", "D45", "D50", "D94"]},
 
             # ---- the kit: the primitives every screen is built from (D94, 2026-09) ----
             # D94 IS THE ENTRY, and D50 is the one it discharges: an interactive element's
@@ -4082,7 +4108,7 @@ COMPONENTS = [
                         "roster harvest already applies to itself, because a fixture regression "
                         "would leave every screen on its empty state and turn the richest sweep "
                         "in this suite into a loop over nothing, passing instantly and forever.",
-                "governed_by": ["D28", "D43", "D50", "D69", "D70"],
+                "governed_by": ["D28", "D43", "D50", "D69", "D70", "D110"],
                 "note": "IT WAS A PINNED ROSTER OF SEVEN HASHES FOR TWO DAYS, four lines under "
                         "its own header warning against exactly that. D69 added #/orders and "
                         "#/shipping and D70 added #/codes; none reached the list, three screens "

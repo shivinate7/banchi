@@ -113,6 +113,100 @@ label:has(> input[type='file']) { cursor: pointer; }
 button:disabled, select:disabled, textarea:disabled, input:disabled,
 [aria-disabled='true'] { cursor: not-allowed; }
 
+/* RESPONSE FLOOR: A CONTROL THAT ANSWERS THE POINTER EASES INTO IT, and this is the second
+   half of D50 rather than a new idea. That entry is titled for an interactive element's
+   FEEDBACK, and only the cursor half reached this file: `cursor` was answered once, above,
+   while every hover response stayed with whichever sheet remembered to write a `transition`.
+   Most did. The ones that did not are not badly written — they are the sheets whose author had
+   no reason to think about it, which is the argument the cursor block one above already makes.
+
+   MEASURED IN A BROWSER, 2026-09-06, hovering all 315 controls the eleven routes draw against
+   `shell.ts`'s store with the transition allowed to settle: 293 respond, and 17 of them SNAPPED
+   while 276 eased. Ten of the seventeen were `.bn-brand` — the sidebar's rail toggle, on screen
+   on every route — whose 109px hover slab appeared in one frame beside nav links fading a much
+   smaller pill over 120ms. That is the report this floor was written for: the owner named the
+   control, and what reads as its border being wrong is a hard edge arriving with no ease under
+   a pointer that is still moving.
+
+   `a` IS HERE AND IS DELIBERATELY NOT IN THE CURSOR FLOOR, which is the one place these two
+   lists must differ. D50's own count records why: a bare `<a href>` was never a cursor defect
+   because the user agent already answers it. The user agent gives it no TRANSITION, so a link
+   that takes a hover colour snaps unless a sheet says otherwise — `.home-more` on Home was two
+   of the seventeen. A control the UA dresses correctly for the pointer is still undressed for
+   time.
+
+   FOUR PROPERTIES, AND THE OMISSIONS ARE THE POINT. `transform`, `padding`, `width` and
+   `font-size` are absent because D50 forbids a hover that reflows — D28's defect was the review
+   queue moving under a finger already travelling toward a target — and a blanket `transition:
+   all` would animate every one of them the first time a screen touched one. These four cannot
+   move a target: they repaint it. `opacity` is left out for a narrower reason, that mount and
+   unmount animations already own it and a floor would fight them.
+
+   A SCREEN THAT WANTS INSTANT STILL WINS, by cascade order rather than by specificity — the
+   same guarantee the cursor floor rests on and the same one D50 had to correct its own comment
+   about: `main.tsx` imports this file before every component sheet, so a tie goes to the
+   component and `transition: none` in a screen's own rule is all an exception costs.
+
+   REDUCED MOTION IS ALREADY ANSWERED thirty lines below, where `transition-duration` is crushed
+   to 0.01ms for everything. This floor adds no loop and carries no meaning, so it needs no
+   place on that block's exception list. */
+button, select, summary, a,
+input[type='checkbox'], input[type='radio'], input[type='file'], input[type='range'],
+[role='button'], [role='tab'], [role='option'], [role='menuitem'] {
+  transition: background-color var(--bn-t-fast) var(--bn-ease),
+              border-color var(--bn-t-fast) var(--bn-ease),
+              color var(--bn-t-fast) var(--bn-ease),
+              box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+
+/* PRESS FLOOR: A CONTROL ANSWERS THE FINGER AS WELL AS THE POINTER. D50 declined this on
+   2026-08-29 — "only three files have one today, and adding it to ~20 controls is churn with
+   reflow risk" — and the owner reopened it on 2026-09-06. Both halves of that reason had
+   expired. It is 16 files and 29 rules now, grown with no floor and no guard, which is the
+   scattering the deferral was trying to avoid rather than the tidiness it assumed. And the
+   reflow risk is answerable: `translate` is a composited property, so a pressed control moves
+   nothing around it. That is the same test the response floor above applies, and it is why
+   `padding` and `font-size` fail it and this does not.
+
+   MEASURED FIRST, over the 311 enabled controls the eleven routes draw: 121 pressed and 190
+   DID NOT. The largest silent group was `.bn-nav-link` — every item in the sidebar, which is
+   this product's primary navigation — and `.bn-brand` was silent here too, so the control the
+   owner named was dead to the pointer AND to the finger.
+
+   `translate`, NOT `transform`, AND THAT IS THE WHOLE REASON THIS CAN BE A FLOOR AT ALL. The
+   individual transform property composes with `transform` instead of replacing it, so a floor
+   written this way cannot destroy a control's own rotation or scale. Measured before it was
+   written: exactly one control in the product carries a rest `transform` (`.pull-confirm`) and
+   NOTHING uses `translate`, so the property was free. It also gives the two vocabularies a
+   clean seam — **`translate` is the product's dip, `transform: scale()` is a screen's own
+   emphasis** — and the six rules that were spelling the dip as `transform: translateY(1px)`
+   have been moved onto the floor rather than left to double it.
+
+   1px BECAUSE THE PRODUCT ALREADY CHOSE 1px. This invents no number: `kit.css` pressed
+   `.bn-btn`, `.bn-chip` and `.bn-seg-item` by exactly this much, and three screens copied it.
+   What was missing was not the value but a single place to keep it.
+
+   DELIBERATELY NOT TRANSITIONED. A press must land on the frame the button goes down, and the
+   response floor above owns the properties that should ease. Adding `translate` to that list
+   would put 120ms of lag between the finger and the feedback, which is the opposite of what
+   this is for. It is therefore also not motion in the sense `prefers-reduced-motion` is asking
+   about — an instantaneous, user-initiated 1px — and is left alone by that block below, as the
+   kit's own press rules always were.
+
+   OFF WHEN THE CONTROL IS OFF, which the disabled arm of the cursor floor above already
+   establishes as this file's business: a control refusing the click must not move under it.
+   A screen wanting no dip at all writes `translate: none`, which is one property and one
+   comment — the same cheap exception the two floors above offer, and `.fulfillment-row`,
+   `.ff-row` and `.runs-box` each take it. */
+button:active, select:active, summary:active, a:active,
+input[type='checkbox']:active, input[type='radio']:active,
+input[type='file']:active, input[type='range']:active,
+[role='button']:active, [role='tab']:active, [role='option']:active, [role='menuitem']:active {
+  translate: 0 1px;
+}
+button:disabled:active, select:disabled:active, textarea:disabled:active, input:disabled:active,
+[aria-disabled='true']:active { translate: none; }
+
 /* Details/summary — no default marker. */
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }

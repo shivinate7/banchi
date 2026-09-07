@@ -571,8 +571,10 @@
 }
 .fulfillment-row:hover,
 .ff-row:hover { background: var(--bn-surface); transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
+/* A ROW DOES NOT DIP, and `transform: none` stopped saying that when base.css gained a
+   press floor written in `translate`. Both properties, so the opt-out still holds. */
 .fulfillment-row:active,
-.ff-row:active { transform: none; }
+.ff-row:active { transform: none; translate: none; }
 .ff-row .ff-row-name {
   grid-area: name;
   font-family: var(--bn-font-display);

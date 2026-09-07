@@ -122,7 +122,11 @@
 }
 .capture-row:hover { background: var(--bn-hover); }
 .capture-row:hover .capture-k { color: var(--bn-accent); border-color: var(--bn-accent); }
-.capture-row .capture-k { justify-self: start; }
+.capture-row .capture-k {
+  justify-self: start;
+  /* the key cap repaints with its row; the floor reaches controls, not a <kbd> inside one. */
+  transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
 .capture-right { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
@@ -301,7 +305,8 @@
 .capture-shutter { --btn-h: 52px; font-size: var(--bn-fs-lg); border-radius: var(--bn-r-lg); }
 .capture-shutter .bn-kbd { height: 22px; min-width: 22px; font-size: var(--bn-fs-sm); margin-left: var(--bn-2); }
 .capture-shutter:not(:disabled):hover { transform: translateY(-1px); }
-.capture-shutter:not(:disabled):active { transform: translateY(1px) scale(0.99); }
+/* the dip is the press floor's; the shutter keeps its squeeze. */
+.capture-shutter:not(:disabled):active { transform: scale(0.99); }
 /* Everything standing in the way, as ONE block: a sunken well under the shutter holding one
    row per reason. A reason with a one-press way out carries the button on its own row, so the
    shortcut and the sentence are the same object rather than two competing ones — and a reason

@@ -47,10 +47,18 @@
   box-shadow: var(--bn-shadow-3), var(--bn-shadow-accent);
 }
 
-/* ---- pressed. `[data-force-state]` is the gallery holding the state still. ---- */
+/* ---- pressed. `[data-force-state]` is the gallery holding the state still. ----
+   THE DIP IS SPELLED HERE AS WELL AS IN THE FLOOR, and this is the one rule in the product
+   that has to say it twice. `base.css`'s press floor answers `:active`, which the gallery's
+   held state is NOT — it is a data attribute standing in for a press that is not happening —
+   so without this line the sheet would draw the pressed button 1px higher than a real press
+   does, and the one screen whose whole job is showing a state would be showing the wrong one.
+   The net position is unchanged from before the floor: `transform` on `:active` already
+   replaced the hover lift outright, so this button sat 1px below rest then and does now. */
 .pull-confirm:active,
 [data-force-state='pressed'] .pull-confirm {
-  transform: translateY(1px) scale(0.985);
+  translate: 0 1px;
+  transform: scale(0.985);
   box-shadow: var(--bn-shadow-1);
   filter: brightness(0.92);
 }

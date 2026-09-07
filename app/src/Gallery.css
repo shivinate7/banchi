@@ -192,7 +192,8 @@
   box-shadow: var(--bn-shadow-1);
   font-size: var(--bn-fs-2xs);
   color: var(--bn-ink-3);
-  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease);
+  transition: transform var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease),
+              color var(--bn-t-fast) var(--bn-ease);
 }
 .kit-icon:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); color: var(--bn-accent); }
 .kit-icon .bn-mono { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

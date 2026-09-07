@@ -151,7 +151,8 @@
   user-select: none;
 }
 .bn-btn:hover { background: var(--bn-btn-bg-hover); }
-.bn-btn:active { transform: translateY(1px) scale(0.99); }
+/* the dip belongs to base.css's press floor; the squeeze is the button's own. */
+.bn-btn:active { transform: scale(0.99); }
 .bn-btn:disabled, .bn-btn[aria-disabled='true'] { opacity: var(--bn-disabled); transform: none; }
 .bn-btn .bn-icon { flex: none; }
 .bn-btn .bn-kbd { margin-left: var(--bn-1); margin-right: calc(-1 * var(--bn-1)); }
@@ -282,7 +283,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
     opacity var(--bn-t-fast) var(--bn-ease);
 }
 .bn-chip:hover { background: var(--bn-btn-bg-hover); color: var(--bn-ink); }
-.bn-chip:active { transform: translateY(1px); }
+/* no rule of its own any more — base.css's press floor supplies the 1px dip. */
 .bn-chip:disabled, .bn-chip[aria-disabled='true'] { opacity: var(--bn-disabled); transform: none; }
 .bn-chip .bn-icon { flex: none; }
 .bn-chip .bn-dot { width: 7px; height: 7px; }
@@ -440,7 +441,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
 }
 .bn-seg-item:hover { color: var(--bn-ink); }
-.bn-seg-item:active { transform: translateY(1px); }
+/* no rule of its own any more — base.css's press floor supplies the 1px dip. */
 .bn-seg-item[aria-pressed='true'],
 .bn-seg-item[aria-selected='true'],
 .bn-seg-item[aria-current] {

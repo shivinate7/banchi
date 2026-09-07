@@ -307,6 +307,290 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
   ).toHaveLength(0)
 })
 
+/* THE RESPONSE ITSELF, ASSERTED AS A RULE OVER EVERY `:hover` RULE THE APP LOADED — which is
+ * the half of D50 this file did not have. Everything above is about `cursor`, and the one case
+ * below it about hover reaches exactly ONE element, `.search-field-box` on `#/gallery`. D50 is
+ * titled for an interactive element's FEEDBACK; a guard that checks one control's border colour
+ * is not holding that entry to its own name, and the owner's report of 2026-09-06 landed in the
+ * gap: `.bn-brand`, the sidebar's rail toggle, painted a 109px hover slab in a single frame on
+ * all ten routes while the nav links under it faded over 120ms. Every assertion in this file
+ * was green through it, because none of them looks at time.
+ *
+ * MEASURED BEFORE IT WAS WRITTEN, by hovering all 315 controls the eleven routes draw and
+ * letting the transition settle: 293 responded, 276 eased and 17 SNAPPED, across six classes in
+ * five sheets. `base.css`'s response floor took that to 0 of 294 in one block.
+ *
+ * IT READS THE CSSOM RATHER THAN HOVERING, and that is the difference between a rule and a
+ * roster one level down. Hovering finds only what this store happens to draw and costs ~100s at
+ * one worker; walking `document.styleSheets` finds every `:hover` rule in every sheet whether or
+ * not something renders it today, which is the same widening D50 recorded when it re-measured
+ * its own reflow claim over "all 64 :hover rules in all 26 sheets" instead of over the routes a
+ * browser drew. There are 161 of those rules now and 31 sheets — it was 164 when this was
+ * written and D110 deleted three dark-only overrides the same day; the count is not pinned here,
+ * because the point is that the walk discovers them.
+ *
+ * THE FOUR PROPERTIES ARE THE FLOOR'S OWN FOUR, deliberately, so the guard and the guarantee
+ * cannot drift apart. `transform` and `opacity` are outside both: mount animations own opacity,
+ * and a transform is contained micro-motion a screen may want to time itself — `Codes.css`'s
+ * 4px-to-7px arrow nudge is transitioned on its own rule and is not this rule's business.
+ * `text-decoration` is outside because `base.css`'s own `a:hover` underline is an affordance
+ * rather than a repaint, and easing it would look wrong.
+ *
+ * A SCREEN MAY STILL SAY `transition: none` AND THIS WILL FAIL IT, which is correct and is the
+ * cheap exception D50 describes: an exception costs one rule and one comment saying why, and
+ * this is what makes somebody write the comment. */
+test('a control that answers the pointer eases into it', async ({ page }) => {
+  test.setTimeout(60_000)
+
+  /* THE FLOOR'S FOUR, NAMED ONCE. `background` and `border` are the shorthands a sheet actually
+     writes; they set the longhand this asks about, so both spellings count as a repaint. */
+  const REPAINT = ['background', 'background-color', 'border-color', 'border-top-color',
+    'border-bottom-color', 'border-left-color', 'border-right-color', 'border', 'color',
+    'box-shadow', 'outline-color']
+
+  const offenders: string[] = []
+  let rulesWalked = 0
+  let elementsChecked = 0
+
+  for (const route of await routesFromNav(page)) {
+    await page.goto(`/${route}`)
+    await settleFonts(page)
+    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {})
+    await expect(page.locator('main').first()).toBeVisible()
+
+    const result = await page.evaluate((REPAINT) => {
+      const bad: string[] = []
+      let walked = 0
+      let checked = 0
+
+      /* MEDIA AND SUPPORTS BLOCKS ARE RECURSED INTO, because the phone's rules live in one and a
+         hover rule that only exists under a breakpoint is still a hover rule. A cross-origin
+         sheet throws on `.cssRules` — the font CDN is one — so the read is guarded and skipped
+         rather than allowed to fail the case for a sheet this product does not own. */
+      const collect = (list: CSSRuleList, out: CSSStyleRule[]) => {
+        for (const r of Array.from(list)) {
+          if (r instanceof CSSStyleRule) out.push(r)
+          else if ('cssRules' in r) { try { collect((r as CSSGroupingRule).cssRules, out) } catch { /* opaque */ } }
+        }
+      }
+      const rules: CSSStyleRule[] = []
+      for (const sheet of Array.from(document.styleSheets)) {
+        try { collect(sheet.cssRules, rules) } catch { /* cross-origin, not ours */ }
+      }
+
+      for (const rule of rules) {
+        if (!rule.selectorText || !rule.selectorText.includes(':hover')) continue
+        const repaints = REPAINT.filter((p) => rule.style.getPropertyValue(p) !== '')
+        if (!repaints.length) continue
+        walked++
+
+        /* THE ELEMENT THE RULE PAINTS IS THE ONE THAT HAS TO CARRY THE TRANSITION, and for a
+           descendant rule that is not the element carrying `:hover`. Dropping the pseudo-class
+           turns `.a:hover .b` into `.a .b`, which selects exactly what the rule paints, and
+           `.a:hover` into `.a`, which is the element itself. Both are what we must ask. */
+        const rest = rule.selectorText.replace(/:hover/g, '')
+        let targets: HTMLElement[] = []
+        try { targets = Array.from(document.querySelectorAll<HTMLElement>(rest)) } catch { continue }
+
+        for (const el of targets) {
+          const b = el.getBoundingClientRect()
+          if (b.width === 0 || b.height === 0) continue
+          checked++
+          const cs = getComputedStyle(el)
+          /* THE ONE EXEMPTION IN THIS FILE, AND IT IS STATED RATHER THAN SPELLED AROUND.
+             `app/eslint.config.js` bans splitting on a comma because v1 shredded a TCGplayer
+             export that way, and it deliberately catches the regex form too — its own comment
+             calls that "the same bug wearing a coat", which is right about a CSV. This is not
+             one. `transition-property` and `transition-duration` are comma-separated CSS lists
+             read back out of `getComputedStyle`, where the browser has already normalised the
+             separator and no field can contain a comma or a quote. The two lists are also
+             POSITIONAL — `durs[i]` is the duration of `props[i]` — so a parse that did not
+             preserve order would answer the wrong question, which is the opposite of the CSV
+             hazard rather than an instance of it. */
+          // eslint-disable-next-line no-restricted-syntax -- a CSS list from getComputedStyle, not a CSV; see above
+          const props = cs.transitionProperty.split(',').map((s) => s.trim())
+          // eslint-disable-next-line no-restricted-syntax -- ditto, and positionally paired with `props`
+          const durs = cs.transitionDuration.split(',').map((s) => s.trim())
+          const eased = (want: string) => {
+            const norm = want === 'background' ? 'background-color'
+              : want === 'border' ? 'border-color'
+              : want.startsWith('border-') && want.endsWith('-color') ? 'border-color'
+              : want
+            for (let i = 0; i < props.length; i++) {
+              const p = props[i] ?? ''
+              const d = durs[i % durs.length] ?? '0s'
+              if (d === '0s' || d === '') continue
+              if (p === 'all' || p === norm || p === want) return true
+              if (norm === 'border-color' && p.startsWith('border-') && p.endsWith('-color')) return true
+            }
+            return false
+          }
+          const snapped = repaints.filter((p) => !eased(p))
+          if (snapped.length) {
+            bad.push(`${rule.selectorText}  repaints ${snapped.join(', ')} with no transition on ` +
+              `${el.tagName.toLowerCase()}.${String(el.className || '').slice(0, 40)}`)
+          }
+        }
+      }
+      return { bad, walked, checked }
+    }, REPAINT)
+
+    rulesWalked += result.walked
+    elementsChecked += result.checked
+    for (const b of result.bad) if (!offenders.includes(`${b}`)) offenders.push(b)
+  }
+
+  /* THE SAME FLOOR THE SWEEP ABOVE KEEPS, FOR THE SAME REASON. A selector that stops matching,
+     a sheet that stops loading, or a fixture regression that empties every screen would turn
+     this into a walk over nothing — green, instantly, forever. Measured on this worktree
+     2026-09-06 at 300 rule-element pairs; the floor is set well under it so ordinary drift does
+     not trip it, and well over the handful an all-empty store would leave. */
+  expect(elementsChecked, 'the walk checked almost nothing — are the stylesheets still loading?')
+    .toBeGreaterThan(100)
+  expect(rulesWalked, 'no repainting :hover rule was found at all — is the CSSOM read still valid?')
+    .toBeGreaterThan(20)
+
+  expect(
+    offenders,
+    `${offenders.length} hover rules repaint a control without easing it:\n${offenders.join('\n')}`,
+  ).toHaveLength(0)
+})
+
+/* THE PRESS, IN TWO CASES, BECAUSE THE FLOOR AND THE SCREENS CAN FAIL DIFFERENTLY — the same
+ * split the cursor half of this file already makes, and for the same reason. The sweep asks
+ * whether what the product draws obeys the rule; the floor case asks whether the rule answers
+ * correctly for every shape a control can take. Neither subsumes the other.
+ *
+ * D50 DECLINED `:active` ON 2026-08-29 AND THE OWNER REOPENED IT ON 2026-09-06. Measured over
+ * the 311 enabled controls the eleven routes draw: 121 pressed and 190 did not, the largest
+ * silent group being every `.bn-nav-link` in the sidebar — this product's primary navigation —
+ * and `.bn-brand`, which was therefore dead to the pointer and to the finger at once. */
+
+/* THE VOCABULARY IS SPLIT ON PURPOSE AND THIS IS WHAT KEEPS IT SPLIT: `translate` is the
+ * product's 1px dip and `transform: scale()` is a screen's own emphasis. They are different
+ * properties so they COMPOSE — which is the only reason a press floor could be written at all
+ * without destroying the one control that carries a rest transform.
+ *
+ * A screen that spells the dip as `transform: translateY(1px)` is not merely off-style, it
+ * DOUBLES the floor to 2px, and it does so silently. Six rules were spelling it that way when
+ * the floor landed and all six were moved onto it. This is the rule that stops a seventh, and
+ * `translateY(0)` stays legal because that is a control CANCELLING a hover lift rather than
+ * declaring a dip — five rules do exactly that and are correct. */
+test('no screen spells the press dip as a transform — the floor owns it', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await settleFonts(page)
+  await expect(page.locator('main.gallery')).toBeVisible()
+
+  const found = await page.evaluate(() => {
+    const collect = (list: CSSRuleList, out: CSSStyleRule[]) => {
+      for (const r of Array.from(list)) {
+        if (r instanceof CSSStyleRule) out.push(r)
+        else if ('cssRules' in r) { try { collect((r as CSSGroupingRule).cssRules, out) } catch { /* opaque */ } }
+      }
+    }
+    const rules: CSSStyleRule[] = []
+    for (const sheet of Array.from(document.styleSheets)) {
+      try { collect(sheet.cssRules, rules) } catch { /* cross-origin, not ours */ }
+    }
+    const bad: string[] = []
+    let walked = 0
+    for (const rule of rules) {
+      if (!rule.selectorText?.includes(':active')) continue
+      walked++
+      const tf = rule.style.getPropertyValue('transform')
+      if (!tf) continue
+      /* `translateY(0)` and `translate(…, 0)` cancel a lift and are allowed; any NONZERO
+         vertical offset is the floor's job being done twice. */
+      const m = tf.match(/translateY\(\s*(-?[\d.]+)([a-z%]*)\s*\)/i)
+      if (m && parseFloat(m[1] ?? '0') !== 0) {
+        bad.push(`${rule.selectorText}  spells the dip as \`transform: ${tf.trim()}\` — ` +
+          `that doubles base.css's press floor. Keep the scale, drop the translateY.`)
+      }
+    }
+    return { bad, walked }
+  })
+
+  expect(found.walked, 'no `:active` rule was found at all — is the CSSOM read still valid?')
+    .toBeGreaterThan(10)
+  expect(
+    found.bad,
+    `${found.bad.length} rules double the press floor:\n${found.bad.join('\n')}`,
+  ).toHaveLength(0)
+})
+
+/* THE FLOOR ITSELF, PRESSED WITH A REAL MOUSE ON ELEMENTS THIS TEST BUILDS — and it has to be a
+ * real press, because `:active` cannot be forced from script the way a class can. Bare elements
+ * with no component class are the point, exactly as in the cursor floor's own case below: the
+ * floor is what is under test, so anything dressed in a screen's class would be testing that
+ * screen instead.
+ *
+ * THE DISABLED SHAPE IS THE ONE THAT EARNS THIS CASE. A control refusing the click must not move
+ * under it — the same claim the cursor floor's disabled arm makes with `not-allowed`, and the
+ * class that was 30 of D50's original 41 defects. A floor that pressed everything including the
+ * controls that refuse would be a new defect of exactly that shape. */
+const PRESS_SHAPES: [html: string, moves: boolean, why: string][] = [
+  ['<button>x</button>', true, 'a button'],
+  ['<button disabled>x</button>', false, 'a disabled button'],
+  ['<button aria-disabled="true">x</button>', false, 'an aria-disabled button'],
+  ['<a href="#/gallery">x</a>', true, 'a link'],
+  ['<select><option>x</option></select>', true, 'a select'],
+  ['<select disabled><option>x</option></select>', false, 'a disabled select'],
+  ['<summary>x</summary>', true, 'a summary'],
+  ['<div role="button">x</div>', true, 'a div promoted to a control'],
+  ['<div role="menuitem">x</div>', true, 'a menu item'],
+  ['<input type="checkbox">', true, 'a checkbox'],
+  ['<input type="checkbox" disabled>', false, 'a disabled checkbox'],
+  /* NOT A CONTROL, AND ASSERTED NEGATIVELY for the same reason the cursor floor asserts one:
+     a floor that reached ordinary content would be making a false offer, and `<p>` is the
+     cheapest proof that the selector list is a list rather than a `*`. */
+  ['<p>words</p>', false, 'a paragraph, deliberately not a control'],
+]
+
+test('the press floor answers for every shape a control can take', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await settleFonts(page)
+  await expect(page.locator('main.gallery')).toBeVisible()
+
+  const wrong: string[] = []
+  for (const [html, moves, why] of PRESS_SHAPES) {
+    /* PLACED AT A FIXED POINT ON TOP OF EVERYTHING, so the press lands on the shape under test
+       and not on whatever the gallery draws there. Rebuilt per shape rather than laid out in a
+       row, because a press must be aimed and one known coordinate is cheaper than eleven. */
+    await page.evaluate((h) => {
+      document.getElementById('press-probe')?.remove()
+      const host = document.createElement('div')
+      host.id = 'press-probe'
+      host.style.cssText = 'position:fixed;top:300px;left:500px;width:120px;height:44px;z-index:2147483647'
+      host.innerHTML = h
+      const el = host.firstElementChild as HTMLElement
+      el.style.display = 'block'
+      el.style.width = '120px'
+      el.style.height = '44px'
+      document.body.appendChild(host)
+    }, html)
+
+    await page.mouse.move(560, 322)
+    await page.mouse.down()
+    const translate = await page.evaluate(
+      () => getComputedStyle(document.getElementById('press-probe')!.firstElementChild!).translate,
+    )
+    await page.mouse.up()
+
+    const moved = translate !== 'none' && translate !== ''
+    if (moved !== moves) {
+      wrong.push(moves
+        ? `  ${why} did not move under the press — translate is "${translate}"`
+        : `  ${why} moved under the press — translate is "${translate}", and it must not move at all`)
+    }
+  }
+  await page.evaluate(() => document.getElementById('press-probe')?.remove())
+
+  expect(
+    wrong,
+    `the press floor answers wrongly for ${wrong.length} of ${PRESS_SHAPES.length} shapes:\n${wrong.join('\n')}`,
+  ).toHaveLength(0)
+})
+
 /* THE HOVER STATE THE OWNER GRANTED A TOKEN FOR, ASSERTED AS A CHANGE RATHER THAN AS A VALUE.
  * Pinning `rgb(107, 110, 115)` would go red the day the owner picks a different grey, which is
  * a token decision and not a regression. What must stay true is that the edge RESPONDS — a

@@ -358,7 +358,8 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
     background-color var(--bn-t-fast) var(--bn-ease);
 }
 .runs-box:hover { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); }
-.runs-box:active { transform: none; }
+/* opts out of the press floor as well as of its own lift — see Fulfillment.css. */
+.runs-box:active { transform: none; translate: none; }
 .runs-box[aria-pressed='true'] {
   background: var(--bn-accent-tint);
   box-shadow: inset 0 0 0 1.5px var(--bn-accent);
