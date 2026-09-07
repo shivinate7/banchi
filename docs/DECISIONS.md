@@ -6559,3 +6559,139 @@ commit. Nothing there can spend money: a re-measurement needs an explicit flag A
 
 **What retires this:** a T1 whose inputs stop being frozen — a model that floats, or an eval set
 that regenerates — at which point re-deriving each run means something again.
+
+## D113 — A line closes three ways, and only one of them claims a copy went
+
+**Built 2026-09-06, on the owner finding orders they could not close.** They put it plainly:
+*"there's orders still remaining in open that i can't close out because it's skus banchi has
+never seen."* They were right, and the reason turned out to be larger than the three orders
+that prompted it.
+
+**`record_pull` WAS THE ONLY WRITER OF `fulfilled`, AND IT REQUIRES A `capture_id`.** That
+requirement is correct — a pull moves a card this store holds, and an unidentifiable one is a
+double-shipment waiting to happen. But a sealed Holiday Calendar has no card record and never
+will, and neither has a single that shipped from a pile this rig never photographed. Such a
+line could not be closed **at all**: no CLI path, no route, no control. `Ledger.unfulfilled` is
+`quantity - fulfilled`, so the order stayed open forever.
+
+**THE STORAGE MODEL HAD ANTICIPATED THIS AND NOTHING HAD WRITTEN IT.** `LineProgress`'s own
+docstring, from the day it was written: *"it is a SUBSET rather than a second spelling of the
+count, so `fulfilled` may legitimately exceed `len(copies)` if a copy is ever recorded without
+one."* This entry is the writer that sentence was waiting for.
+
+### What was measured, and why the answer is two mechanisms rather than one
+
+**The first reading, 2026-09-06 20:45 — 20 orders, 3 open, all three unclosable.** A Pokemon
+Holiday Calendar 2025 ($77.99, sealed), a One Piece Double Pack Set (x2, sealed), and a
+Riftbound *Lonely Poro (Overnumbered)* `#221/219` at **$404.44** — a real single the store has
+never photographed. No card carries those SKUs, no listing record does either, and the store
+holds no card named `Poro` and none numbered `221/219`.
+
+**The store then moved under the session, and the picture got much larger.** The owner pressed
+fetch mid-build. Second reading, 100 orders: 68 `Shipped - In Transit`, 18
+`Shipped - Delivered`, 14 `Ready to Ship`.
+**83 open, and 69 of those 83 were orders TCGplayer had already shipped.**
+
+**THAT WAS A CORRECTNESS BUG, NOT NOISE, AND IT IS THE STRONGEST FINDING HERE.**
+`pipeline/orders.py:resolve_all` walks open orders **oldest first** and `_Draw._taken` stops two
+orders claiming one physical copy. Already-shipped orders, being older, therefore took copies
+**before** the live ones. Measured: **31 physical copies allocated to already-shipped orders**,
+and three `Ready to Ship` lines reading `short` while their copies sat on the shelf —
+
+```
+SKU 9038187  ABE44-BD123 (Shipped - In Transit, 2026-08-31) took the copy
+             49B84-6A2EC (Ready to Ship,        2026-09-06) 0 picks, `short`
+SKU 9422329  51B75-E5DD4 (Shipped - In Transit, 2026-08-31) took it
+             1EF4F-1A670 (Ready to Ship,        2026-09-07) 0 picks, `short`
+SKU 9035516  7F569-38FDC (Shipped - In Transit, 2026-08-31) resolved
+             92F83-8002B (Ready to Ship,        2026-09-05) wanted 3, got 1, `short`
+```
+
+After the stand-down: 14 open, and two of those three resolve. The third is a genuine shortfall
+— two copies exist and three were bought.
+
+**WHY THOSE 69 ARE NOT A FILL, WHICH IS THE TEMPTING ONE-MECHANISM ANSWER.** Many of them
+shipped using copies **still sitting in the boxes as `identified`**, because the sale never went
+through this store. A fill adds to `fulfilled`, so the count would read right while the card
+stayed on the shelf, live, and got offered to the next buyer. The two acts are different
+sentences and get different writers.
+
+### The three ways, and what each one claims
+
+| | writes | claims a copy went | reverses with |
+|---|---|---|---|
+| `record_pull` | `fulfilled` + `copies` | yes, and sells the card | `forget_pull`, by capture id |
+| `record_fill` | `fulfilled` + `by_hand` | yes; there is no card to sell | `forget_fill`, by count |
+| `close_line` | `closed_at` + `closed_reason` | **no** | `reopen_line` |
+
+`FILL_REASONS` is `sealed` / `off_system`. `CLOSE_REASONS` is `shipped_elsewhere` /
+`not_shipping`. **`not_shipping` is deliberately on the stand-down and not the fill**: a refund
+or a cancellation stops a line owing without anything going anywhere, and closing it through
+`fulfilled` would put a shipment on record for one that never happened.
+
+**THE INVARIANT IS `fulfilled == len(copies) + by_hand`**, maintained by four methods and
+written by nothing else. `Ledger.progress_drift` reports any row where it fails and T7 asserts
+that report is empty — because every reader downstream takes `fulfilled` alone and would be
+just as confident about a number that had come apart.
+
+### Where the operator's claim lives, and why it is not on the order record
+
+**`ingest` replaces an `OrderRecord` wholesale on any content change** — `self.orders[key] =
+record`. So a `kind` written onto the feed's copy survives exactly until the marketplace moves
+the status string, at which point a sealed product silently becomes a single again and starts
+sending the picker into the boxes after a playmat. That is the header's own argument for the
+two-map split, in a second currency, so `kind` goes in the OURS half beside the counts.
+T7 asserts it: a claim and a stand-down both survive a sync that moved `status` to
+`Shipped - Delivered`.
+
+**The feed still wins where it said anything at all.** `_engine_order` reads `line.kind or
+declared_kind`. Reversed, one stale tick would outrank a marketplace that later learned to
+classify its own products.
+
+### The status proposes; it never decides
+
+**The owner asked for the obvious shortcut** — *"upon import, close out all orders from the
+import if they're not in ready to ship"* — and it is refused, for three reasons they accepted:
+
+1. **`ingest` may not write fulfilment.** The two maps exist so it cannot, and the header says a
+   careful merge inside `ingest` *"would be one refactor away from not working"*.
+2. **`fulfilled` counts copies that went.** Writing it from a status claims pulls that never
+   happened — on 42 lines whose SKU has no card record at all, a pull of a card that does not
+   exist.
+3. **"Not Ready to Ship" is an open-ended set.** The vocabulary was never published
+   (`server/order_transport.py` argues it at length), so a `Cancelled` would be swallowed the
+   day that word appears and recorded as handled.
+
+So `BacklogPrompt` reads the statuses off what is open, **names them in its own sentence**, and
+the operator presses.
+
+**AND IT MATCHES THE POSITIVE, BECAUSE THE FIRST BUILD MADE THIS ENTRY'S OWN MISTAKE.**
+`BacklogPrompt` shipped as `status !== 'Ready to Ship'` — reason 3 above,
+written by hand one layer up from the server that refuses it. `app/tests/orders.spec.ts` fixes an
+order at `Ready to ship` with a lower-case `s`, and the negative proposed that live order for a
+bulk close on sight. It matches `startsWith('shipped')` on the folded string now and
+**fails closed** — a status the rule does not recognise is left open. The two directions are not
+symmetric — a shipped order left open is the status quo and is visible on screen, while a live
+order swept into a bulk close is a card that never gets picked.
+A spec pins it against `Cancelled`, `Pending`, `Awaiting Payment`, `ready to ship` and `""`. `make merge`'s bargain exactly: automate the lookup, never the decision.
+**The complementary fix is at the door** — a standing status filter on the fetch, so shipped
+orders never arrive — and it is separate work; a door filter cannot retroactively clear a
+backlog, and a stand-down cannot stop the next import.
+
+### What is reachable
+
+`POST /orders/fill`, `POST /orders/line-kind` and `POST /orders/close`, each with a client
+function and a control: the two line presses inside the reason banner of a `sku_unseen` or
+`not_a_single` line — the two reasons whose remedy was otherwise a dead end — and the backlog
+prompt above the list, where it can change the walk it is about rather than arriving after it.
+All three carry an undo on the toast.
+
+**A ROW THAT RECORDS NOTHING IS DROPPED.** `progress` creates on write, so the first build left
+one all-default row per line behind a stand-down and its undo —
+**measured at 80 rows from a single bulk close and undo** —
+exactly the state `progress`'s docstring calls *"a row claiming a
+pull that never happened"*. Every reversal now prunes.
+
+**What would reopen this:** a refund that needs to be told apart from a cancellation, or a
+`not_shipping` line that later ships after all. Both want a state on the line rather than a
+reason string beside a stamp, and neither has happened yet.

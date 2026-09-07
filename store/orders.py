@@ -129,6 +129,36 @@ FILENAME = "orders.json"
 
 VERSION = 1
 
+# WHY A HAND-FILL MUST SAY WHICH KIND IT IS. `record_fill` closes a line with no physical
+# card behind it, which is the one write in this module that cannot be checked against
+# anything — there is no `capture_id` to collide, no photograph, no slot. The reason is
+# therefore the whole audit trail, and a free-text box would make it prose nobody greps.
+#
+# TWO WORDS, AND THE THIRD ONE IS DELIBERATELY ABSENT. A refunded or cancelled line also
+# stops owing copies, and closing it through here would spell "we shipped this" for a line
+# nothing shipped — `fulfilled` is the count of copies that WENT, and overloading it is how
+# a ledger stops being able to answer what left the building. That case wants its own state
+# and it is named in D113 as a reopening rather than squeezed in here.
+FILL_SEALED = "sealed"          # not a single: picked off a shelf and shipped by hand
+FILL_OFF_SYSTEM = "off_system"  # a single this store never photographed
+FILL_REASONS = (FILL_SEALED, FILL_OFF_SYSTEM)
+
+# WHY A LINE CAN STOP OWING WITHOUT ANYTHING BEING FILLED. A fill says copies WENT and adds
+# to the count; a stand-down says this store is not going to account for them at all, and
+# touches no count. The two are not interchangeable and the 2026-09-06 measurement is why:
+# 69 of the owner's 83 open orders were ones TCGplayer had already shipped, and many shipped
+# using copies that are STILL in the store as `identified` — hand-filling those would claim
+# a copy went while leaving the card on the shelf to be offered to the next buyer. What they
+# need is to stop being tracked, which is a different sentence.
+#
+# `not_shipping` IS THE CASE `record_fill` REFUSES TO SPELL. A refund or a cancellation
+# stops a line owing without a copy going anywhere, and closing it through `fulfilled` would
+# put a shipment on record for one that never happened. It belongs here, where nothing is
+# counted, and D113 records that this is where it went.
+CLOSE_SHIPPED_ELSEWHERE = "shipped_elsewhere"  # it went out; this store did not track it
+CLOSE_NOT_SHIPPING = "not_shipping"            # refunded, cancelled — nothing will go
+CLOSE_REASONS = (CLOSE_SHIPPED_ELSEWHERE, CLOSE_NOT_SHIPPING)
+
 # The separator between the feed and the order's own number. The KEY is
 # `{source}:{order_number}`, split on the FIRST colon, which is why `source` may not
 # contain one and `order_number` may: without that asymmetry a source `a:b` with order `c`
@@ -249,13 +279,74 @@ class LineProgress:
     `fulfilled` is the authority and is a COUNT. `copies` is the capture ids of those of
     them we could identify, which is what makes a repeated pull a no-op; it is a SUBSET
     rather than a second spelling of the count, so `fulfilled` may legitimately exceed
-    `len(copies)` if a copy is ever recorded without one. `Ledger.record_pull` is the only
-    writer of either and moves both together, so the two cannot drift apart there.
+    `len(copies)` if a copy is ever recorded without one.
+
+    A COPY IS RECORDED WITHOUT ONE BY `record_fill`, AND `by_hand` IS HOW MANY. The sentence
+    above anticipated this from the beginning and nothing wrote it until 2026-09-06, which
+    left three real orders permanently open — a sealed Holiday Calendar, a sealed Double Pack
+    Set and a $404 single this store never photographed. None of them can ever have a
+    `capture_id`, so `record_pull` — which requires one, for reasons that are right — could
+    never close them, and no other writer existed. See D113.
+
+    THE INVARIANT IS `fulfilled == len(copies) + by_hand`, and FOUR methods maintain it:
+    `record_pull` and `forget_pull` move `fulfilled` with `copies`, `record_fill` and
+    `forget_fill` move it with `by_hand`. Nothing else in this module writes any of the
+    three, so they can only come apart in those four places — the same property the two-map
+    split gives the file as a whole, one register down. `Ledger.progress_drift` reports any
+    row where it does not hold, and T7 asserts that report is empty.
+
+    `reason` SAYS WHY A HAND-FILL WAS HONEST and is never inferred. `kind` is the operator's
+    own classification of the line, and it lives HERE rather than on `OrderLine` for the
+    reason this whole map exists: `ingest` replaces an order record wholesale, so a kind
+    written onto the feed's copy is destroyed by the next sync that sees any change — which
+    is the defect the header describes for a fulfilment count, in a second currency.
     """
 
     fulfilled: int = 0
     copies: List[str] = field(default_factory=list)
     at: Optional[str] = None
+    # Left unvalidated here on purpose, exactly as `OrderLine.kind` is and for the header's
+    # reason: this module is a document. The door validates — `server/capture_server.py`
+    # refuses a reason outside `FILL_REASONS` and a kind outside `LINE_KINDS` before either
+    # reaches a write.
+    by_hand: int = 0
+    reason: Optional[str] = None
+    kind: Optional[str] = None
+    # THE STAND-DOWN, AND IT IS NOT A COUNT. `closed_at` set means this line needs nothing
+    # further from this store even though `outstanding` may still be positive — the copies
+    # are not claimed to have gone, they are simply no longer this store's to account for.
+    # Derived `closed` rather than a second boolean, so a flag and a stamp cannot disagree.
+    closed_at: Optional[str] = None
+    closed_reason: Optional[str] = None
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether this row records nothing at all.
+
+        A row in this state is indistinguishable from no row — `recorded` invents an empty
+        one for a caller that asks about a line nobody has touched — so keeping it is pure
+        cost, and `progress`'s own docstring calls it what it is: a row claiming a pull that
+        never happened. The reversals below drop one rather than leave it.
+
+        `at` IS NOT READ HERE, deliberately. It is the stamp of whatever last happened, and a
+        row whose every fact has been reversed is empty however recently it was emptied.
+        """
+        return (
+            int(self.fulfilled) == 0
+            and int(self.by_hand) == 0
+            and not self.copies
+            and self.kind is None
+            and self.closed_at is None
+        )
+
+    @property
+    def closed(self) -> bool:
+        """Whether this line has been stood down. Derived, never stored.
+
+        A stored boolean beside the stamp is two answers to one question, and the pair goes
+        out of step the first time somebody clears one of them.
+        """
+        return self.closed_at is not None
 
 
 @dataclass
@@ -693,6 +784,251 @@ class Ledger:
         row.at = now()
         return len(going)
 
+    # ------------------------------------------------------------------- the hand-fill
+
+    def _line_or_raise(self, key: str, sku):
+        """The line `key`/`sku` names, or the refusal saying which half was wrong.
+
+        Lifted out of `record_pull` rather than copied into the three writers below: the two
+        refusals are the same two, and a second spelling of `UnknownOrderLine`'s message is
+        a second thing to keep true.
+        """
+        record = self.orders.get(str(key))
+        if record is None:
+            raise UnknownOrder(f"{str(key)!r} is not in this ledger")
+        line = record.line_for(sku)
+        if line is None:
+            raise UnknownOrderLine(
+                f"order {key} has no line for SKU {str(sku).strip()!r}; it ordered "
+                f"{', '.join(str(each.sku) for each in record.lines) or 'nothing'}"
+            )
+        return line
+
+    def record_fill(self, key: str, sku, count: int, reason: str) -> int:
+        """Close `count` copies of a line with NO physical card behind them. Returns `count`.
+
+        THE WRITE `record_pull` CANNOT MAKE, AND THE ONE THREE REAL ORDERS NEEDED. That
+        method requires a `capture_id` per copy and is right to: a pull moves a card this
+        store holds, and an unidentifiable one is a double-shipment waiting to happen. But a
+        sealed Holiday Calendar has no card record and never will, and neither has a single
+        that shipped from a pile this rig never photographed — so the line could not be
+        closed at all, and the order stayed open forever with nothing on any screen able to
+        move it. See D113.
+
+        NOT IDEMPOTENT, AND THAT IS THE HONEST SHAPE. `record_pull` is idempotent because a
+        `capture_id` is an identity — pressing twice names the same physical card, so the
+        second press is nothing. A hand-fill has no identity to compare: two presses are two
+        claims about two copies, and there is no fact in the store that can tell a repeat
+        from a genuine second copy. So it ADDS, `OverFulfilled` is the ceiling that stops it
+        running away, and the reversal below is what a mis-press is undone with. A screen
+        that wants press-once semantics gets them by showing what is already recorded, which
+        `_order_progress` already ships.
+
+        THREE REFUSALS:
+
+          `UnknownOrder`      nothing to fill. Inventing the order here would put a shipment
+                              on record for a purchase nobody can produce — `record_pull`'s
+                              own words, and the same hazard.
+          `UnknownOrderLine`  the buyer did not order this SKU.
+          `OverFulfilled`     recording more than the line ordered. NOT CLAMPED, for
+                              `record_pull`'s reason: you cannot ship the fourth.
+
+        A count of zero or less is refused too, and as a `ValueError` rather than a silent
+        no-op: nothing on a screen should ever ask for it, so one arriving is a caller bug
+        and swallowing it would hide the bug rather than the press.
+        """
+        count = int(count)
+        if count <= 0:
+            raise ValueError(f"a hand-fill records at least one copy; got {count}")
+        line = self._line_or_raise(key, sku)
+
+        row = self.recorded(key, sku)
+        if int(row.fulfilled) + count > int(line.quantity):
+            raise OverFulfilled(
+                f"order {key} ordered {line.quantity} of SKU {line.sku} and has "
+                f"{row.fulfilled} recorded; {count} more would be "
+                f"{int(row.fulfilled) + count}"
+            )
+
+        stored = self.progress(key, sku)
+        stored.fulfilled = int(stored.fulfilled) + count
+        stored.by_hand = int(stored.by_hand) + count
+        stored.reason = str(reason).strip() or None
+        stored.at = now()
+        return count
+
+    def forget_fill(self, key: str, sku, count: int) -> int:
+        """Take `count` hand-filled copies back off a line. Returns how many were removed.
+
+        `record_fill`'s reversal, and it can only reach `by_hand`. A line carrying two pulled
+        copies and one hand-filled one reverses to two pulled copies — never to one pulled
+        and one hand-filled — because the two counts name different acts and this method
+        knows only its own. Reversing a PULL is `forget_pull`, which needs the capture ids.
+
+        CLAMPED RATHER THAN REFUSED, which is `forget_pull`'s asymmetry: asking to reverse
+        more than is there reverses what is there. A reversal of something that already is
+        not there has nothing left to do.
+
+        `reason` IS CLEARED ONLY WHEN THE LAST ONE GOES. It describes the hand-fills on this
+        line, so it outlives a partial reversal and dies with the last copy it explained.
+        """
+        count = int(count)
+        row = self.fulfilment.get(str(key), {}).get(str(sku).strip())
+        if row is None or count <= 0:
+            return 0
+        going = min(count, int(row.by_hand))
+        if going <= 0:
+            return 0
+        row.by_hand = int(row.by_hand) - going
+        row.fulfilled = max(0, int(row.fulfilled) - going)
+        if row.by_hand == 0:
+            row.reason = None
+        row.at = now()
+        self._drop_if_empty(key, sku)
+        return going
+
+    # ------------------------------------------------------------- the operator's claim
+
+    def declare_kind(self, key: str, sku, kind: Optional[str]) -> None:
+        """Record what the OPERATOR says this line is. `None` withdraws the claim.
+
+        IT LIVES IN THIS MAP AND NOT ON `OrderLine`, and that is the header's own argument
+        rather than a preference. `ingest` replaces an order record wholesale on any content
+        change, so a kind written onto the feed's copy survives exactly until the marketplace
+        moves the status string — at which point a sealed product silently becomes a single
+        again and starts sending the picker to look for it in the boxes. The feed's `kind`
+        stays where it is and stays the feed's; this is ours, and `ingest` cannot reach it
+        for the same structural reason it cannot reach a count.
+
+        UNVALIDATED HERE, VALIDATED AT THE DOOR — `OrderLine.kind`'s rule exactly, and the
+        same one: a closed vocabulary in a document refuses a feed that learned a new product
+        category, while an unknown kind stored through the server raises at RESOLVE time and
+        takes the whole order screen down for one bad write.
+
+        A ROW THAT EXISTS ONLY FOR THIS CLAIMS NO PULL. `progress`'s docstring warns that a
+        row created by somebody looking at it is a row claiming a pull that never happened —
+        this one carries `fulfilled` 0 and `by_hand` 0 and claims a classification, which is
+        a thing the operator did say.
+        """
+        claimed = str(kind).strip() if kind is not None else ""
+        self._line_or_raise(key, sku)
+        if not claimed:
+            row = self.fulfilment.get(str(key), {}).get(str(sku).strip())
+            if row is not None:
+                row.kind = None
+                self._drop_if_empty(key, sku)
+            return
+        self.progress(key, sku).kind = claimed
+
+    def declared_kind(self, key: str, sku) -> Optional[str]:
+        """The operator's claim about this line, or None. Never the feed's."""
+        return self.recorded(key, sku).kind
+
+    def _drop_if_empty(self, key: str, sku) -> None:
+        """Delete a row that has come to record nothing, and the order's map with it.
+
+        CALLED BY EVERY REVERSAL, and it is not tidiness. A stand-down that is undone would
+        otherwise leave one all-default row per line behind — measured at 80 rows from a
+        single bulk close and its undo — and `_parse_fulfilment` faithfully reloads every one
+        of them on the next open. `recorded` already answers for a line with no row, so these
+        carry no information and cost a store lock's worth of writing on every save.
+        """
+        key = str(key)
+        rows = self.fulfilment.get(key)
+        if rows is None:
+            return
+        sku = str(sku).strip()
+        row = rows.get(sku)
+        if row is None or not row.is_empty:
+            return
+        del rows[sku]
+        if not rows:
+            del self.fulfilment[key]
+
+    def close_line(self, key: str, sku, reason: str) -> bool:
+        """Stand one line down: it needs nothing further from this store. Returns whether
+        anything moved.
+
+        NOT A FILL, AND THE DISTINCTION IS THE ENTRY. `record_fill` adds to `fulfilled` and
+        says copies WENT; this touches no count and says only that this store is no longer
+        accounting for them. Measured 2026-09-06 on the owner's store: 69 of 83 open orders
+        were already shipped by TCGplayer, and many of them shipped using copies still
+        sitting in the boxes as `identified`. Hand-filling those would have claimed a copy
+        went while leaving the card on the shelf for the next buyer — the count would read
+        right and the store would be wrong.
+
+        IT IS PER LINE BECAUSE THE RESOLVER IS. An order-level flag would be a second place
+        that decides whether a line is live, and `Ledger.unfulfilled` already walks lines;
+        a caller standing a whole order down calls this once per line, which is what
+        `server/capture_server.py:do_order_close` does inside one write.
+
+        IDEMPOTENT, AND IT DOES NOT RE-STAMP. Closing a line that is already closed changes
+        nothing and returns False, so a repeated press does not move `closed_at` — the
+        stamp answers "when did this stop being ours", and a second press is not a second
+        answer to it. A DIFFERENT reason does re-stamp: that is a correction, not a repeat.
+
+        The two refusals are `record_fill`'s and for the same reasons.
+        """
+        line = self._line_or_raise(key, sku)
+        said = str(reason).strip()
+        row = self.recorded(key, sku)
+        if row.closed and row.closed_reason == said:
+            return False
+        stored = self.progress(key, sku)
+        stored.closed_at = now()
+        stored.closed_reason = said or None
+        # `line` is read for the refusals above and deliberately not used to change a count.
+        del line
+        return True
+
+    def reopen_line(self, key: str, sku) -> bool:
+        """Undo a stand-down. Returns whether anything moved.
+
+        `close_line`'s reversal and nothing wider — it cannot touch a count, so reopening a
+        line that was also hand-filled leaves the fill exactly where it was. Reversing THAT
+        is `forget_fill`.
+
+        NO WINDOW AND NO CLOCK, which is `forget_pull`'s ruling: how long an undo stays
+        offered is the screen's business.
+        """
+        row = self.fulfilment.get(str(key), {}).get(str(sku).strip())
+        if row is None or not row.closed:
+            return False
+        row.closed_at = None
+        row.closed_reason = None
+        self._drop_if_empty(key, sku)
+        return True
+
+    def closed_lines(self, key: str) -> int:
+        """How many of one order's lines are stood down. For a screen's own sentence."""
+        record = self.orders.get(str(key))
+        if record is None:
+            return 0
+        return sum(1 for line in record.lines if self.recorded(key, line.sku).closed)
+
+    def progress_drift(self) -> List[str]:
+        """Every row where `fulfilled != len(copies) + by_hand`, said in words.
+
+        THE INVARIANT'S READER. Four methods maintain it and a fifth would break it silently,
+        because nothing downstream divides the count back into its two halves — a screen
+        drawing "2 of 3 recorded" reads `fulfilled` alone and would be just as confident
+        about a number that had come apart. Empty on a healthy ledger; T7 asserts it.
+
+        A LIST RATHER THAN AN ASSERT. This is read from a running server over the owner's own
+        store, and a raise here would take the order screen down over an arithmetic slip that
+        loses nobody a card.
+        """
+        out: List[str] = []
+        for key, rows in sorted(self.fulfilment.items()):
+            for sku, row in sorted(rows.items()):
+                parts = len(row.copies) + int(row.by_hand)
+                if int(row.fulfilled) != parts:
+                    out.append(
+                        f"{key} SKU {sku}: fulfilled {row.fulfilled} but "
+                        f"{len(row.copies)} copies + {row.by_hand} by hand = {parts}"
+                    )
+        return out
+
     # -------------------------------------------------------------------------- reading
 
     def get(self, key: str) -> Optional[OrderRecord]:
@@ -714,11 +1050,21 @@ class Ledger:
         it stock ahead of one we know is older. The two orderings agree on purpose: a
         screen listing what is outstanding and a resolver deciding who gets the last copy
         must not disagree about which order comes first.
+
+        A STOOD-DOWN LINE OWES NOTHING HERE EVEN WHERE `outstanding` IS POSITIVE. That is
+        the whole point of `close_line` — see `CLOSE_REASONS` — and it is read here rather
+        than subtracted from `outstanding`, because `outstanding` answers "how many copies
+        does this line still owe", which is a fact about the ORDER and does not change
+        because this store stopped tracking it. Two different questions, two readers.
         """
         out = [
             record
             for key, record in self.orders.items()
-            if any(self.outstanding(key, line.sku) > 0 for line in record.lines)
+            if any(
+                self.outstanding(key, line.sku) > 0
+                and not self.recorded(key, line.sku).closed
+                for line in record.lines
+            )
         ]
         return sorted(
             out, key=lambda r: (r.placed_at is None, r.placed_at or "", r.key)

@@ -2287,8 +2287,37 @@ export type OrderLineProgress = {
   /** Where each recorded copy sits RIGHT NOW, joined at read time off its capture id and
    *  stored nowhere (D36). Nulls where the card is gone. The copies panel's `pulled` mark. */
   pulled: OrderPulledCopy[]
+  /** How many of `recorded` were closed with NO card behind them — `POST /orders/fill`, D113.
+   *  `recorded` is the whole count and this is the part of it nothing in the store can
+   *  corroborate, so a screen drawing `recorded` alone cannot tell a pulled line from a
+   *  hand-filled one. `reason` is why that was honest: `sealed` or `off_system`. */
+  by_hand: number
+  reason: string | null
+  /** The OPERATOR's claim about what this line is, or null. Never the feed's — that rides on
+   *  `OrderLineWire.kind`, and the server prefers the feed wherever it said anything at all.
+   *  It lives in the fulfilment map because `ingest` replaces the order record wholesale. */
+  declared_kind: OrderLineKind | null
+  /** When this line was stood down, and why — `POST /orders/close`, D113. A stood-down line
+   *  needs nothing further from this store EVEN WHERE `outstanding` is positive: no copy is
+   *  claimed to have gone, it is simply no longer ours to account for. Null is the normal
+   *  state. `closed_reason` is `shipped_elsewhere` or `not_shipping`. */
+  closed_at: string | null
+  closed_reason: OrderCloseReason | null
   at: string | null
 }
+
+/** What a line IS, for the resolver's routing. `single` is the default the server applies to
+ *  a feed that said nothing, which the TCGplayer feed always does. */
+export type OrderLineKind = 'single' | 'sealed' | 'accessory'
+
+/** Why a hand-fill was honest. `sealed` — not a single, picked off a shelf; `off_system` — a
+ *  single this store never photographed. Both say a copy WENT. */
+export type OrderFillReason = 'sealed' | 'off_system'
+
+/** Why a line was stood down. NEITHER CLAIMS A COPY LEFT, which is what separates these from
+ *  `OrderFillReason`: `shipped_elsewhere` is an order that went out without this store
+ *  tracking the copies, `not_shipping` is one that will never go — a refund, a cancellation. */
+export type OrderCloseReason = 'shipped_elsewhere' | 'not_shipping'
 
 /** One order as the feed said it, with our progress beside it.
  *
@@ -2375,6 +2404,39 @@ export type ResolvedOrder = {
   complete: boolean
   outstanding: number
   lines: ResolvedLine[]
+}
+
+/** `POST /orders/fill` in both directions — D113. Nothing is sold and no card is touched;
+ *  there is no card. `moved` is how many copies this press recorded or reversed. */
+export type OrderFillResult = {
+  undone: boolean
+  order_key: string
+  sku: string
+  moved: number
+  recorded: number
+  by_hand: number
+  outstanding: number
+  reason: string | null
+}
+
+/** `POST /orders/line-kind` — the operator's claim, echoed back as stored. Null means the
+ *  claim was withdrawn and the feed's own word (or its silence) stands again. */
+export type OrderLineKindResult = {
+  order_key: string
+  sku: string
+  kind: OrderLineKind | null
+}
+
+/** `POST /orders/close` in both directions — D113. A bulk press: `orders` is how many were
+ *  named, `moved` how many actually changed, `lines` how many lines under them. `still_open`
+ *  is the ledger's own count AFTER the write, which is what the press was for. */
+export type OrderCloseResult = {
+  undone: boolean
+  orders: number
+  moved: number
+  lines: number
+  reason: OrderCloseReason | null
+  still_open: number
 }
 
 /** `GET /orders`, out of ONE store snapshot so the list and the resolution cannot disagree.

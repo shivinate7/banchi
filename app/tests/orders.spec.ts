@@ -147,7 +147,7 @@ function order(over: Partial<OrderRow> = {}): OrderRow {
     open: true,
     lines: [line().line],
     progress: [
-      { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null },
+      { sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
     ],
   }
   return { ...base, ...over }
@@ -327,6 +327,23 @@ async function open(
     await page.route(/\/inventory$/, withBoot(JSON.stringify({ cards: {} })))
   }
 
+  /* D113's three writes. Registered BEFORE `/orders$` like every other write-shaped route here,
+     because the read regex is the looser one and would otherwise swallow them. */
+  for (const [pattern, answer] of [
+    [/\/orders\/fill$/, { undone: false, order_key: '', sku: '', moved: 1, recorded: 1, by_hand: 1, outstanding: 0, reason: 'sealed' }],
+    [/\/orders\/line-kind$/, { order_key: '', sku: '', kind: 'sealed' }],
+    [/\/orders\/close$/, { undone: false, orders: 1, moved: 1, lines: 1, reason: 'shipped_elsewhere', still_open: 0 }],
+  ] as const) {
+    await page.route(pattern, async (route) => {
+      wire.push({
+        method: route.request().method(),
+        path: new URL(route.request().url()).pathname,
+        body: route.request().postDataJSON(),
+      })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })
+    })
+  }
+
   await page.route(/\/orders$/, async (route) => {
     wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body: null })
     const chosen = typeof options.orders === 'function' ? options.orders() : options.orders
@@ -370,6 +387,125 @@ test('the route resolves, and the nav offers it under its own chord', async ({ p
 })
 
 /* -------------------------------------------------------------------------------------- 2 */
+
+/* ============================================================== D113: the three closes ==== */
+
+test('a line no pull can reach offers the two presses that can, and each sends its own body', async ({
+  page,
+}) => {
+  /* THE CASE THE WHOLE ENTRY IS ABOUT. A `sku_unseen` line has no card in the store and never
+     will, so `POST /orders/pull` — which needs a capture_id — can never close it. Before D113
+     the remedy row was the end of the road and three real orders sat open behind it. */
+  const unseen = line({ reason: 'sku_unseen', fulfilled: 0, outstanding: 1, on_hand: 0, picks: [] })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [order()],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [unseen] }],
+    ),
+  })
+
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+
+  /* THE CLASSIFICATION IS A SEPARATE PRESS FROM THE FILL, and the shipping lane is why: a sealed
+     product must be classifiable BEFORE it ships, or the routing answer arrives after it stopped
+     mattering. Two controls here is the assertion, not an accident of layout. */
+  await stand.getByRole('button', { name: 'Not a single' }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path === '/orders/line-kind').length)
+    .toBe(1)
+  expect(wire.find((one) => one.path === '/orders/line-kind')?.body).toEqual({
+    source: 'TCGplayer',
+    number: ORDER_NUMBER,
+    sku: SKU,
+    kind: 'sealed',
+  })
+
+  /* The fill names a COUNT and a REASON and no copy at all — there is no capture id to send,
+     which is the entire reason this route exists beside `/orders/pull`. */
+  await stand.getByRole('button', { name: /shipped/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length).toBe(1)
+  const fill = wire.find((one) => one.path === '/orders/fill')?.body as Record<string, unknown>
+  expect(fill).toEqual({
+    source: 'TCGplayer',
+    number: ORDER_NUMBER,
+    sku: SKU,
+    count: 1,
+    reason: 'off_system',
+  })
+  /* NO capture_id, NO targets, NO box, NO index. A hand-fill that carried a position would be
+     claiming to know which physical card went, which is exactly what it does not know. */
+  expect(Object.keys(fill)).not.toContain('targets')
+  expect(Object.keys(fill)).not.toContain('capture_id')
+})
+
+test('a resolved line offers no stand-down, because its remedy is the pick rows', async ({ page }) => {
+  /* THE OTHER HALF OF THE RULE. The presses are drawn ONLY where the remedy is a dead end;
+     offering "I shipped this by hand" beside a line whose copies are sitting in box 3 is an
+     invitation to close it without the walk, and `fulfilled` would then count a copy that is
+     still on the shelf. */
+  await open(page)
+  await expect(page.locator('.orders-standdown')).toHaveCount(0)
+})
+
+test('an order the marketplace already shipped is proposed for stand-down, and the status only proposes', async ({
+  page,
+}) => {
+  /* MEASURED 2026-09-06: 69 of the owner's 83 open orders were ones TCGplayer had already
+     shipped, and because `resolve_all` walks oldest-first they were holding 31 physical copies
+     away from the orders that still needed picking. */
+  const shipped = order({ status: 'Shipped - In Transit' })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [shipped],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+    ),
+  })
+
+  const prompt = page.locator('.orders-backlog')
+  await expect(prompt).toBeVisible()
+  /* THE STATUS IS NAMED IN THE SENTENCE RATHER THAN ASSERTED AS A CATEGORY. The vocabulary was
+     never published, so a screen that said "shipped orders" while matching something else would
+     be the guess `order_transport.py` refuses to make, one layer up. */
+  await expect(prompt).toContainText('Shipped - In Transit')
+
+  await prompt.getByRole('button', { name: /Stand down/ }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
+  expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({
+    orders: [{ source: 'TCGplayer', number: ORDER_NUMBER }],
+    reason: 'shipped_elsewhere',
+  })
+})
+
+test('a Ready to Ship order is never proposed for stand-down', async ({ page }) => {
+  /* THE PRESS MAY NOT REACH LIVE WORK. `open()`'s default order is Ready to ship, so the prompt
+     must not draw at all — a bulk control that swept in the orders you still have to pick would
+     be worse than the backlog it exists to clear. */
+  await open(page)
+  await expect(page.locator('.orders-backlog')).toHaveCount(0)
+})
+
+test('a status this rule does not recognise is left open rather than swept in', async ({ page }) => {
+  /* THE FAIL-CLOSED PROPERTY, AND IT IS THE ONE THIS CONTROL LIVES OR DIES BY. The first build
+     matched the NEGATIVE — `status !== 'Ready to Ship'` — which is the open-ended set D113
+     refuses on the server, written by hand one layer up. It proposed a live order the moment a
+     fixture spelled the status `Ready to ship` with a lower-case s.
+
+     A word the marketplace has not used yet must land on the SAFE side by construction. The two
+     directions are not symmetric: a shipped order left open is the status quo and is visible on
+     screen, while a live order swept into a bulk close is a card that never gets picked. */
+  for (const status of ['Cancelled', 'Pending', 'Awaiting Payment', 'ready to ship', '']) {
+    const wire = await open(page, {
+      orders: payloadOf(
+        [order({ status })],
+        [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [line()] }],
+      ),
+    })
+    await expect(page.locator(VIEW)).toBeVisible()
+    await expect(page.locator('.orders-backlog')).toHaveCount(0)
+    expect(wire.filter((one) => one.path === '/orders/close')).toEqual([])
+  }
+})
 
 test('all six reasons are drawn, including the ones that are zero', async ({ page }) => {
   await open(page)
@@ -709,7 +845,7 @@ test('the walk counts the orders it was started over, and the figure moves as on
     number: HISTORY,
     recorded: 1,
     open: false,
-    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null }],
+    progress: [{ sku: SKU, wanted: 1, recorded: 1, outstanding: 0, over: 0, copies: [], pulled: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }],
   })
 
   const both = payloadOf(
