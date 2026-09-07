@@ -573,14 +573,22 @@ lan-check:
 # None of these four goes near `make check` or the git hook. D18: nothing that writes may run
 # on the path that decides whether a commit proceeds, and `launch-agent` writes to ~/Library,
 # which is the strongest form of that rule this repo has had to apply.
+# `$(ARGS)` ON ALL THREE, AND `down`'s REFUSAL IS WHY. In the main checkout, where a launch
+# agent keeps the server alive over the real store, `down` and `restart` refuse and print
+# `make down ARGS=--confirm     do it anyway`. That line did not work: neither target forwarded
+# ARGS, so the escape hatch the guard itself names was unrunnable, and the only ways past a
+# refusal that was designed to be answerable were to call `scripts/serve.py` directly or to
+# reach around the guard entirely. Found 2026-09-06 by following the printed instruction.
+#
+# `up` takes them too, for `--no-watch`, which `restart` already passes through.
 up:
-	@$(PYTHON) scripts/serve.py up
+	@$(PYTHON) scripts/serve.py up $(ARGS)
 
 down:
-	@$(PYTHON) scripts/serve.py down
+	@$(PYTHON) scripts/serve.py down $(ARGS)
 
 restart:
-	@$(PYTHON) scripts/serve.py restart
+	@$(PYTHON) scripts/serve.py restart $(ARGS)
 
 # Generated, never tracked, and written OUTSIDE the repo into ~/Library/LaunchAgents. A
 # tracked plist would carry an absolute path baked on one Mac, which is D47's failure verbatim
