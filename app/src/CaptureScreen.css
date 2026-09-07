@@ -120,8 +120,7 @@
   cursor: pointer;
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.capture-row:hover { background: var(--bn-surface-3); }
-:root[data-theme='dark'] .capture-row:hover { background: var(--bn-surface-2); }
+.capture-row:hover { background: var(--bn-hover); }
 .capture-row:hover .capture-k { color: var(--bn-accent); border-color: var(--bn-accent); }
 .capture-row .capture-k { justify-self: start; }
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
@@ -240,8 +239,7 @@
   cursor: pointer;
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.capture-opt:hover { background: var(--bn-surface-3); color: var(--bn-ink); }
-:root[data-theme='dark'] .capture-opt:hover { background: var(--bn-surface-2); }
+.capture-opt:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .capture-opt:hover .capture-k { color: var(--bn-accent); border-color: var(--bn-accent); }
 .capture-k-blank { display: inline-block; width: 18px; height: 18px; }
 .capture-mark {

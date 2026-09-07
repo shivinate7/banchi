@@ -1070,6 +1070,7 @@ D106 The push and the publish are two presses, and the second one is the only th
 D107 The rule only ever marks down; the operator may point either way
 D108 The dock app is the page Chrome already renders, and the manifest is what makes it one
 D109 A price is a fact about a listing, and the store remembers listings it never photographed
+D110 A hover is an alpha, because the same paint over three grounds is three different hovers
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
