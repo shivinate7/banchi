@@ -911,14 +911,18 @@ const BROWSER_TITLE = '番地 banchi'
    to ignore. This is not that: it is wayfinding, and it should be calm.
    THE SCREEN DWELLS LONGER THAN THE NAME, which is a choice worth stating because the owner
    floated the reverse. The name is confirmation you already have — you know which app you opened.
-   The screen is the news, so it holds for twice as long; weighted the other way you would glance
-   at a strip of tabs and see `番地 banchi` two times in three, having to wait to learn which page
-   it is. Swapping the two numbers is the whole change if that judgement is wrong.
+   The screen is the news, so it holds longer; weighted the other way you would glance at a strip
+   of tabs and mostly see `番地 banchi`, having to wait to learn which page it is. Swapping the two
+   numbers is the whole change if that judgement is wrong.
+   THE RATIO SOFTENED WHEN THE PAIR SLOWED. It began 4000/2000 — the screen twice the name — and
+   the owner set 6000/4000, which is 1.5x. A longer floor matters more than the ratio here: at
+   four seconds the name is comfortably readable on its own, so the shorter half no longer needs
+   to be short to stay out of the way.
    WCAG 2.2.2 asks that content auto-updating for more than five seconds can be paused, stopped or
    hidden. A tab title is browser chrome rather than page content, so the criterion is arguably not
    engaged — but the spirit is, and `prefers-reduced-motion` is the mechanism: it stops this dead
    and shows both halves at once. */
-const TITLE_DWELL = { screen: 4000, name: 2000 } as const
+const TITLE_DWELL = { screen: 6000, name: 4000 } as const
 
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
