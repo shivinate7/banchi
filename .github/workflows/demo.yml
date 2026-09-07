@@ -71,9 +71,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           # NOT the rig's version, and the difference is deliberate rather than overlooked.
           # That Mac runs 3.9.6, which is why requirements.txt pins zxing-cpp==2.3.0 for its
@@ -84,7 +84,7 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -147,7 +147,7 @@ jobs:
           [ "$fail" -eq 0 ] || exit 1
           echo "clean: no machine-local paths and no secret values in dist-demo/"
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist-demo
 
@@ -159,4 +159,31 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
+        # DELIBERATELY STILL NODE 20, AND THIS IS THE ONE PIN IN THE REPO THAT IS.
+        # Every other action here moved to its first Node 24 major on 2026-09-07 and each
+        # one was PROVEN on a real run first. This one cannot be: the `github-pages`
+        # environment carries a deployment-branch policy naming `main` alone, so the deploy
+        # job is rejected before the action loads on any branch a PR could live on. There is
+        # no way to exercise a new major of it except by merging it to main and finding out
+        # in production, over the one thing here a stranger can see.
+        #
+        # So the deprecation warning is ACCEPTED rather than cleared. GitHub force-runs this
+        # on Node 24 today and the deploy passes; when that forcing ends, THIS STEP FAILS and
+        # the demo stops republishing. The published page keeps serving the last successful
+        # deployment either way — Pages does not un-publish — so the failure costs freshness,
+        # never the site. That is the bargain: a known, dated, visible-in-every-run warning
+        # instead of an unverifiable change to the publish path.
+        #
+        # WHAT TO DO WHEN THE FORCING ENDS, or sooner if you want it gone: move it to v5 and
+        # watch the run on main. v5 is the Node 24 move plus the removal of a file-permissions
+        # error message; v5.0.1 adds backoff and jitter to deployment polling. No input
+        # changed — `token`, `timeout`, `error_count`, `reporting_interval`, `artifact_name`,
+        # `preview` and `page_url` are the same seven in both majors, and this step passes
+        # none of them. `workflow_dispatch` re-runs the publish if it goes wrong.
+        #
+        # THE MISMATCH WITH upload-pages-artifact@v5 ABOVE IS SUPPORTED, NOT AN OVERSIGHT.
+        # v4 and v5 of this action locate the artifact with identical code — the same
+        # `DefaultArtifactClient.listArtifacts()` from `@actions/artifact` — and both state
+        # the same requirement in the same words: "Ensure artifacts are uploaded with
+        # actions/upload-artifact@v4 or later." upload-pages-artifact@v5 uploads with v7.
         uses: actions/deploy-pages@v4

@@ -51,11 +51,11 @@ jobs:
       # The self-tests build throwaway clones and read `git worktree list`, and `merge-selftest`
       # walks main against a fixture origin. Full history is not needed for any of that, but a
       # detached single commit is: `renumbered ids` compares this branch against main.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           # 3.11 for the reason demo.yml gives at length: the rig's 3.9.6 is EOL and pinned for
           # a cp39 wheel this path never loads. Nothing here runs the QR decode or the camera.
@@ -64,7 +64,7 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
