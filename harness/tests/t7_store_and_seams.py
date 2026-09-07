@@ -16498,8 +16498,21 @@ def check_order_ledger(checks: Checks) -> None:
         row = stored_payloads("fulfilment")[key]["9191486"]
         checks.equal(
             sorted(row.keys()),
-            ["at", "copies", "fulfilled"],
-            "the stored row is a COUNT, its capture ids, and a stamp — nothing else",
+            ["at", "by_hand", "closed_at", "closed_reason", "copies", "fulfilled",
+             "kind", "reason"],
+            "the stored row is COUNTS, its capture ids, stamps and the operator's own "
+            "words — and still not one position. D113 added five keys to this row and "
+            "this assertion is what made that a decision rather than a drift: `by_hand` "
+            "and `reason` are the hand-fill, `closed_at`/`closed_reason` the stand-down, "
+            "`kind` the operator's claim. Every one is a fact about the LINE; none is a "
+            "slot, which is the property this roster exists to hold",
+        )
+        checks.equal(
+            int(row["fulfilled"]) - len(row["copies"]) - int(row["by_hand"]),
+            0,
+            "and `fulfilled` == len(copies) + by_hand — the invariant four methods "
+            "maintain and nothing else may write. A fifth writer would break it "
+            "silently, because every reader downstream takes `fulfilled` alone",
         )
         checks.equal(
             [c for c in row["copies"] if "/" in str(c)],
@@ -16713,6 +16726,204 @@ def check_order_ledger(checks: Checks) -> None:
             "orders still owing copies come back oldest-placed first — the same sequence "
             "pipeline/orders.py:order_sequence serves them in, so a screen listing what is "
             "outstanding and the resolver deciding who gets the last copy cannot disagree",
+        )
+
+        # ------------- 11b. D113: THE TWO WAYS A LINE CLOSES WITH NO CARD BEHIND IT
+        #
+        # `record_pull` needs a `capture_id` and is right to. But a sealed product has no
+        # card record and never will, and neither has a single that shipped from a pile
+        # this rig never photographed — so before D113 such a line could not be closed at
+        # all, and three real orders sat open with nothing on any screen able to move them.
+        # These two writers are the answer, and they are DIFFERENT: a fill says copies
+        # WENT and adds to the count; a stand-down says this store is no longer accounting
+        # for them and touches no count at all.
+        sealed_key = order_store.order_key("TCGplayer", "E-5")
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record("E-5", line("8791361", 2, name="Holiday Calendar"),
+                                           placed_at="2026-08-31T10:00:00.000+00:00")])
+            snapshot.ledger.record_fill(sealed_key, "8791361", 2, order_store.FILL_SEALED)
+        filled = store.read()
+        checks.equal(
+            (filled.ledger.fulfilled(sealed_key, "8791361"),
+             filled.ledger.outstanding(sealed_key, "8791361"),
+             filled.ledger.recorded(sealed_key, "8791361").by_hand,
+             filled.ledger.recorded(sealed_key, "8791361").copies),
+            (2, 0, 2, []),
+            "a hand-fill closes the line with NO copy behind it — `fulfilled` 2, `by_hand` "
+            "2, `copies` empty. `LineProgress` anticipated this from the beginning ('so "
+            "`fulfilled` may legitimately exceed len(copies)') and nothing wrote it until "
+            "D113",
+        )
+        checks.ok(
+            all(r.number != "E-5" for r in filled.ledger.unfulfilled()),
+            "and the order leaves the open list, which is the whole point of the press",
+        )
+        checks.equal(
+            filled.ledger.progress_drift(), [],
+            "and the invariant holds across a store that now carries both kinds of row",
+        )
+        checks.raises(
+            order_store.OverFulfilled,
+            lambda: store.read().ledger.record_fill(sealed_key, "8791361", 1,
+                                                    order_store.FILL_SEALED),
+            "a hand-fill past the order refuses rather than clamping — it is NOT "
+            "idempotent (there is no identity to compare, so two presses are two claims) "
+            "and this ceiling is what stops a repeated press running away",
+        )
+        with store.write() as snapshot:
+            back = snapshot.ledger.forget_fill(sealed_key, "8791361", 99)
+        checks.equal(back, 2, "the reversal is clamped, not refused — forget_pull's rule")
+        checks.ok(
+            store.read().ledger.recorded(sealed_key, "8791361").reason is None
+            and "8791361" not in store.read().ledger.fulfilment.get(sealed_key, {}),
+            "and a row that has come to record NOTHING is dropped rather than left behind "
+            "— `progress` creates on write, so without this a stand-down and its undo left "
+            "one all-default row per line (measured: 80 from a single bulk close)",
+        )
+
+        # A STAND-DOWN IS NOT A FILL, and this is the assertion that says so.
+        with store.write() as snapshot:
+            snapshot.ledger.close_line(sealed_key, "8791361",
+                                       order_store.CLOSE_SHIPPED_ELSEWHERE)
+        stood = store.read()
+        checks.equal(
+            (stood.ledger.fulfilled(sealed_key, "8791361"),
+             stood.ledger.outstanding(sealed_key, "8791361"),
+             stood.ledger.recorded(sealed_key, "8791361").closed),
+            (0, 2, True),
+            "it closes the line while `fulfilled` stays 0 and the line still OWES 2 — no "
+            "copy is claimed to have gone. Measured 2026-09-06: 69 of 83 open orders were "
+            "already shipped by TCGplayer, many using copies STILL in the boxes, so a fill "
+            "would have made the count read right while the card stayed on the shelf",
+        )
+        checks.ok(
+            all(r.number != "E-5" for r in stood.ledger.unfulfilled()),
+            "and `unfulfilled` honours it even though `outstanding` is positive — two "
+            "different questions, read separately rather than subtracted",
+        )
+
+        # THE PROPERTY THE KIND'S HOME EXISTS FOR.
+        with store.write() as snapshot:
+            snapshot.ledger.declare_kind(sealed_key, "8791361", "sealed")
+            snapshot.ledger.ingest([record("E-5", line("8791361", 2, name="Holiday Calendar"),
+                                           status="Shipped - Delivered",
+                                           placed_at="2026-08-31T10:00:00.000+00:00")])
+        outlived = store.read()
+        checks.equal(
+            (outlived.ledger.declared_kind(sealed_key, "8791361"),
+             outlived.ledger.recorded(sealed_key, "8791361").closed,
+             outlived.ledger.get(sealed_key).status),
+            ("sealed", True, "Shipped - Delivered"),
+            "THE OPERATOR'S CLAIM AND THE STAND-DOWN BOTH SURVIVE A SYNC THAT MOVED THE "
+            "STATUS. This is why neither lives on `OrderRecord`: `ingest` replaces that "
+            "wholesale, so a kind written there would die the moment the marketplace "
+            "changed a word, and a sealed product would silently become a single again",
+        )
+        with store.write() as snapshot:
+            snapshot.ledger.reopen_line(sealed_key, "8791361")
+        checks.ok(
+            store.read().ledger.recorded(sealed_key, "8791361").closed is False
+            and store.read().ledger.declared_kind(sealed_key, "8791361") == "sealed",
+            "and reopening reverses ONLY the stand-down — the claim about what the line "
+            "IS is a different fact and is left standing",
+        )
+        checks.raises(
+            order_store.UnknownOrderLine,
+            lambda: store.read().ledger.record_fill(sealed_key, "0000000", 1,
+                                                    order_store.FILL_SEALED),
+            "and a hand-fill against a SKU the buyer did not order refuses, like a pull",
+        )
+
+        # ---- 11c. D113: A COPY THAT LEFT BY THE WRONG DOOR, which is the walk's own edge case
+        #
+        # Reproduced against the owner's store 2026-09-06: mark ONE copy sold on `#/inventory`
+        # while an order wants three, then pull the other two through the walk. `#/inventory`'s
+        # sale does not touch the ledger — D63 keeps them apart, rightly, because a sale is a
+        # fact about a card and a fulfilment is a fact about an order — so nothing ever counted
+        # the first copy. The line ended `fulfilled` 2, `outstanding` 1, `no_copies_on_hand`:
+        # OPEN FOREVER, with the third copy already in the envelope.
+        mixed = order_store.order_key("TCGplayer", "F-6")
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record("F-6", line("9191486", 3, name="Moonfall"),
+                                           placed_at="2026-09-01T10:00:00.000+00:00")])
+            snapshot.ledger.record_pull(mixed, "9191486", ["m1", "m2"])
+        checks.equal(
+            (store.read().ledger.fulfilled(mixed, "9191486"),
+             store.read().ledger.outstanding(mixed, "9191486")),
+            (2, 1),
+            "two pulled through the walk, one still owed — and the third copy has already left "
+            "the store by the sale door, so no pull can ever reach it",
+        )
+        with store.write() as snapshot:
+            snapshot.ledger.record_fill(mixed, "9191486", 1,
+                                        order_store.FILL_SOLD_SEPARATELY)
+        settled = store.read()
+        row = settled.ledger.recorded(mixed, "9191486")
+        checks.equal(
+            (settled.ledger.fulfilled(mixed, "9191486"),
+             settled.ledger.outstanding(mixed, "9191486"),
+             len(row.copies), row.by_hand, row.reason),
+            (3, 0, 2, 1, order_store.FILL_SOLD_SEPARATELY),
+            "THE TWO KINDS OF CLOSE COMPOSE ON ONE LINE: 2 pulled copies with their capture ids "
+            "and 1 recorded by hand, `fulfilled` 3, and the row still says which was which. A "
+            "single count could not tell the operator that two of these are traceable to a slot "
+            "and one is only their word",
+        )
+        checks.ok(
+            all(r.number != "F-6" for r in settled.ledger.unfulfilled()),
+            "and the order finally closes — the state it could not reach before D113",
+        )
+        checks.equal(
+            settled.ledger.progress_drift(), [],
+            "with `fulfilled == len(copies) + by_hand` holding across a MIXED row, which is the "
+            "case that would break it if a fifth writer ever moved one half alone",
+        )
+        # ---- 11d. D113: A LINE STANDS DOWN WITHOUT TAKING ITS SIBLINGS
+        #
+        # `close_line` was line-shaped from the start; `POST /orders/close` was not, so the
+        # screen drew "It isn't shipping" only on single-line orders and a refunded line on a
+        # three-line order had no press at all. The wire carries both scopes now and this is the
+        # property that makes the line one worth having.
+        many = order_store.order_key("TCGplayer", "G-7")
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record(
+                "G-7",
+                line("9191486", 1, name="Moonfall"),
+                line("9197754", 2, name="Sunrise"),
+                line("9199579", 1, name="Dusk"),
+                placed_at="2026-09-02T10:00:00.000+00:00",
+            )])
+            snapshot.ledger.close_line(many, "9197754", order_store.CLOSE_NOT_SHIPPING)
+        one_down = store.read()
+        checks.equal(
+            [one_down.ledger.recorded(many, sku).closed
+             for sku in ("9191486", "9197754", "9199579")],
+            [False, True, False],
+            "one refunded line stands down and its two siblings are untouched — the whole "
+            "reason this scope exists, and what an order-shaped close cannot express",
+        )
+        checks.ok(
+            any(r.number == "G-7" for r in one_down.ledger.unfulfilled()),
+            "and the ORDER is still open, because it still owes the other two. A stand-down "
+            "answers for a line, and `unfulfilled` asks about all of them",
+        )
+        checks.equal(
+            one_down.ledger.closed_lines(many), 1,
+            "and the count of stood-down lines is readable, so a screen can say so in words",
+        )
+        with store.write() as snapshot:
+            snapshot.ledger.reopen_line(many, "9197754")
+        checks.equal(
+            store.read().ledger.closed_lines(many), 0,
+            "the reversal reaches only the line it names — a sibling the press never touched "
+            "cannot be reopened by it either, because it was never closed",
+        )
+
+        checks.equal(
+            order_store.FILL_SOLD_SEPARATELY != order_store.FILL_OFF_SYSTEM, True,
+            "`sold_separately` is its own word and not `off_system`: that one means this store "
+            "never photographed the card, and this card it did — the two want telling apart by "
+            "whoever reads the row later",
         )
 
     # ------------------------------- 12. parse drops what the dataclasses do not declare
