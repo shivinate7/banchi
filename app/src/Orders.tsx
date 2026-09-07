@@ -370,14 +370,18 @@ function StatusPicker({
   loading,
   failure,
   filter,
+  busy,
   onChange,
+  onConfirm,
   onRetry,
 }: {
   readonly preview: OrdersPreview | null
   readonly loading: boolean
   readonly failure: Failure | null
   readonly filter: OrderFetchFilter
+  readonly busy: boolean
   readonly onChange: (next: OrderFetchFilter) => void
+  readonly onConfirm: () => void
   readonly onRetry: () => void
 }) {
   const rows = preview?.by_status ?? []
@@ -429,6 +433,23 @@ function StatusPicker({
         </div>
       ) : (
         <>
+          {/* THE ASK, AND IT HAPPENS ONCE ON THIS DEVICE. Measured on the owner's store the day
+              this was written: 69 of 83 open orders were ones TCGplayer had already shipped, and
+              because `resolve_all` serves oldest-first out of one pool they held 31 physical
+              copies — three Ready-to-Ship lines read `short` while the cards sat in boxes. A
+              default of "everything" reproduces that wherever nobody opens this panel, and a
+              default of "everything except the shipped ones" would need a status vocabulary this
+              product may not have. So a person is shown the real list, once. */}
+          {filter.asked ? null : (
+            <p className="orders-statuses-ask">
+              <Icon name="info" size={15} />
+              <span>
+                <b>Which of these are worth fetching?</b> An order TCGplayer has already shipped still
+                holds its copies here, so a live order can be told a card is short while it sits in a
+                box. Nothing has been fetched yet, and this is remembered on this device.
+              </span>
+            </p>
+          )}
           <div className="orders-statuses-head">
             <p className="orders-statuses-note">
               {/* The two figures are the whole point of the panel: what the press will take, out
@@ -492,6 +513,18 @@ function StatusPicker({
             />
             <span className="orders-status-name">Skip orders the ledger already holds at that status</span>
           </label>
+          {/* THE CONFIRM EXISTS ONLY WHILE THE DEVICE IS UNANSWERED. Afterwards the panel is a
+              setting and the Fetch button beside it is the press; a second primary here would be
+              two doors to one act. */}
+          {filter.asked ? null : (
+            <div className="orders-statuses-confirm">
+              <Button variant="primary" icon="refresh" onClick={onConfirm} busy={busy} disabled={busy || picked === 0}>
+                {picked === 0
+                  ? 'Tick at least one'
+                  : `Fetch these ${picked.toLocaleString()} ${plural(picked, 'order', 'orders')}`}
+              </Button>
+            </div>
+          )}
           <p className="orders-statuses-note orders-statuses-foot">
             The strings are TCGplayer&rsquo;s own, counted by a free call that details nothing. This choice is
             remembered on this device.
@@ -1259,6 +1292,10 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const [vocab, setVocab] = useState<OrdersPreview | null>(null)
   const [vocabBusy, setVocabBusy] = useState(false)
   const [vocabFailure, setVocabFailure] = useState<Failure | null>(null)
+  /** The panel, so a press that OPENS it can bring it into view. On a phone the well is taller
+   *  than the viewport and the picker lands below the fold, so the ask — which the operator did
+   *  not go looking for — would be an answered press that appears to have done nothing. */
+  const pickerBox = useRef<HTMLDivElement>(null)
 
   const live = useRef(true)
   const pasteBox = useRef<HTMLTextAreaElement>(null)
@@ -1352,7 +1389,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      ONE PRESS, AND THE RECEIPT SAYS WHAT IT LEFT. The button asks and takes in the same press —
      there is no status step in front of it — and what the call could not carry is reported
      afterwards, with the control to take the next batch. */
-  const onFetch = () => {
+  const onFetch = (using: OrderFetchFilter = filter) => {
     void (async () => {
       setBusy('fetch')
       setFailure(null)
@@ -1393,12 +1430,32 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           setBusy(null)
           return
         }
+        /* THE FIRST PRESS ON THIS DEVICE STOPS HERE AND SHOWS THE LIST. It has cost one free
+           call — the preview details nothing and writes nothing — and it details nothing now
+           either: the panel opens with every status ticked and its own press finishes the
+           errand. Once. `asked` is what makes it once, and it is set by answering rather than
+           by arriving, so a press interrupted here asks again rather than silently defaulting.
+
+           THIS IS NOT D91's TWO-PRESS FLOW. That asked on every press, which is what the owner
+           ruled out. What is being bought is the one thing a default cannot buy: somebody has
+           looked at the actual strings, which is the only place in this product where a status
+           may be judged (D113). */
+        if (!using.asked) {
+          if (!live.current) return
+          setPickerOpen(true)
+          setBusy(null)
+          /* After the paint that opens it. `block: 'nearest'` and no smooth behaviour: this is a
+             correction to where the press left the page, not motion carrying meaning, and the
+             reduced-motion floor should not have to have an opinion about it. */
+          window.requestAnimationFrame(() => pickerBox.current?.scrollIntoView({ block: 'nearest' }))
+          return
+        }
         /* THE OPERATOR'S TICK LIST, INTERSECTED WITH WHAT THIS WINDOW ACTUALLY HOLDS. Asking
            for a status no order carries is not an error on the wire — it matches nothing and
            costs a walk — but it is a fact worth reporting, so what falls out is kept and drawn
            rather than dropped. `filter.statuses === null` is a device that has never opened the
            picker, and it takes the whole vocabulary: today's press, unchanged. */
-        const wanted = filter.statuses
+        const wanted = using.statuses
         const statuses = (wanted === null ? inWindow : inWindow.filter((one) => wanted.includes(one))).slice(0, 50)
         const absent = wanted === null ? [] : wanted.filter((one) => !inWindow.includes(one))
         if (statuses.length === 0) {
@@ -1416,7 +1473,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         }
         const found = await fetchOrders({
           statuses,
-          ...(filter.skipKnown ? { skip_known: true } : {}),
+          ...(using.skipKnown ? { skip_known: true } : {}),
         })
         if (!live.current) return
         /* The four counts the merge brings on `OrdersFetched` — see `FetchCounts` above. Absent
@@ -1495,8 +1552,22 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
    *  an unsaved state worth having: every tick is idempotent, the fetch reads the same value the
    *  panel draws, and a Save button would be a second source of truth for one boolean each. */
   const onFilterChange = (next: OrderFetchFilter) => {
-    setFilter(next)
-    rememberOrderFilter(next)
+    /* TOUCHING A TICK IS ANSWERING. Somebody reading the list and unticking a status has done
+       the thing the ask exists for, so the panel stops asking from that moment — the confirm
+       below is for the person whose answer is "all of them, yes". */
+    const answered = { ...next, asked: true }
+    setFilter(answered)
+    rememberOrderFilter(answered)
+  }
+
+  /** The ask's own press: record that this device has been shown the list, and fetch on it. The
+   *  answered filter is passed to `onFetch` rather than left to the next render, because the
+   *  state has not committed yet and the press must act on what was just agreed. */
+  const onConfirmStatuses = () => {
+    const answered = { ...filter, asked: true }
+    setFilter(answered)
+    rememberOrderFilter(answered)
+    onFetch(answered)
   }
 
   /* WHAT THE CONTROL SAYS BEFORE IT IS OPENED. An unchosen device says "All statuses" — which is
@@ -1534,13 +1605,15 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   )
 
   const statusPanel = pickerOpen ? (
-    <div id="orders-status-picker">
+    <div id="orders-status-picker" ref={pickerBox}>
       <StatusPicker
         preview={vocab}
         loading={vocabBusy}
         failure={vocabFailure}
         filter={filter}
+        busy={busy === 'fetch'}
         onChange={onFilterChange}
+        onConfirm={onConfirmStatuses}
         onRetry={loadVocabulary}
       />
     </div>
@@ -1619,7 +1692,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         {/* The fetch is behind the same well as the paste: the same errand with the copying done
             for you, arriving at the ledger through the one door `orderPaste.ts` owns. */}
         {withFetch ? (
-          <Button icon="refresh" onClick={onFetch} busy={busy === 'fetch'} disabled={busy !== null}>
+          <Button icon="refresh" onClick={() => onFetch()} busy={busy === 'fetch'} disabled={busy !== null}>
             Fetch from TCGplayer
           </Button>
         ) : null}
@@ -1955,7 +2028,7 @@ function PullStage({
             body="Fetch this account's own orders from TCGplayer, or paste one in. Nothing on this screen spends money; the pull is the only write, and it can be taken back."
             actions={
               <>
-                <Button variant="primary" size="lg" icon="refresh" onClick={onFetch} busy={busy === 'fetch'} disabled={busy !== null}>
+                <Button variant="primary" size="lg" icon="refresh" onClick={() => onFetch()} busy={busy === 'fetch'} disabled={busy !== null}>
                   Fetch from TCGplayer
                 </Button>
                 {statusControl}

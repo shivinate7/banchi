@@ -6594,15 +6594,54 @@ list this product may ever draw a status picker from.
 toggle; the picker sits beside the Fetch button on `#/orders` and is never in front of it. An
 operator who never opens it fetches exactly what they fetched yesterday.
 
-**FIVE THINGS THIS TURNS ON, AND EACH OF THEM IS THE DIFFERENCE BETWEEN A FILTER AND A LIE:**
+**THE DEFAULT WAS "EVERY STATUS" UNTIL THE NUMBERS CAME IN, AND THE OWNER CHANGED IT.** This
+entry was drafted, built and reviewed with an unchosen device fetching the whole window — an
+operator who never opens the control loses nothing, which is a good instinct and was the wrong
+answer here. A parallel session measured the owner's own store the same afternoon, and every
+figure below was re-derived independently against `inventory/store.sqlite` and the live
+`GET /orders` before it was acted on:
 
-**1. Unchosen is not "all ticked".** `statuses: null` is a device that has never opened the
-panel, and it takes every status the window returned — today's press, byte for byte. An empty
-list is a different state and the screen refuses it by name rather than letting the wire answer
-`statuses_required`, which is a true sentence about a body and a useless one about a choice
-somebody made on this screen. The first untick materialises the list out of THIS WINDOW, which
-is the only place strings can come from; ticking back to everything returns to null, so a
-device does not carry a list that the next window would narrow against.
+- **100 orders: 68 `Shipped - In Transit`, 18 `Shipped - Delivered`, 14 `Ready to Ship`.**
+- **83 are OPEN by the ledger's reckoning, and 69 of those 83 TCGplayer has already shipped.**
+  `open` means "still owes copies" and nothing here ever pulled them: those orders were shipped
+  without going through this app, so they never leave.
+- **Those orders hold 31 physical copies, and three Ready-to-Ship lines read `short`.**
+  `pipeline/orders.py:resolve_all` walks `order_sequence` — oldest `placed_at` first — over ONE
+  shared `_Draw`, whose `_taken` set stops two orders claiming one copy. A delivered order from
+  August is older than a live one from September, so it takes the card first, and the picker is
+  told a card is unavailable while it sits in a box.
+
+So the every-status default does not merely fail to help. It keeps a correctness defect alive on
+every device where nobody opens the panel, which is every device by construction.
+
+**AND THE OBVIOUS FIX IS THE ONE THING THIS PRODUCT MAY NOT DO.** "Everything except the shipped
+ones" requires `app/` to know that `Shipped - In Transit` means shipped. That vocabulary does not
+exist — `server/order_transport.py` refuses to have it, and the same session refused the same
+guess at ingest for the same reason: the set is open-ended, and a `Refunded` TCGplayer adds next
+year is swallowed silently by a rule written against this year's strings.
+
+**So a human is asked once, in front of the real list, and never again.** The owner chose this on
+2026-09-06 over both alternatives. `asked` is a third field on the key: the first press runs the
+preview, opens the panel with everything ticked, and details NOTHING; its own primary press —
+*Fetch these 370 orders* — records the answer and completes the errand. Touching any tick counts
+as answering too, because somebody unticking a status has already done the thing the ask is for.
+
+**THIS IS NOT D91's TWO-PRESS FLOW COMING BACK.** That asked on *every* press, and the owner
+ruled it out — *"why would it ever say 1 of 3 found"*. This is spent once per device, ever, and
+what it buys is the one thing no default can: somebody has looked at the actual strings, which is
+the only place in this product where a status may be judged.
+
+**SIX THINGS THIS TURNS ON, AND EACH OF THEM IS THE DIFFERENCE BETWEEN A FILTER AND A LIE:**
+
+**1. Unchosen is not "all ticked", and "all ticked" is not "unasked".** `statuses: null` is
+"every status this window holds" and stays the value a confirmed device usually carries — a
+stored LIST would silently drop a status TCGplayer adds next month, the exact drop D91 exists to
+prevent. `asked` is the separate fact that a human has seen the list. An empty list is a third
+state and the screen refuses it by name rather than letting the wire answer `statuses_required`,
+which is a true sentence about a body and a useless one about a choice somebody made on this
+screen. The first untick materialises the list out of THIS WINDOW, which is the only place
+strings can come from; ticking back to everything returns to null, so a device does not carry a
+list that the next window would narrow against.
 
 **2. A remembered tick the window returned nothing for is drawn, not dropped.** The fetch
 cannot ask for a status no order carries, so the string falls out of the call — and it is named
@@ -6634,10 +6673,20 @@ in `deviceMemory.ts` rather than at its call site, which is what `app/eslint.con
 message asks for: the rule bans the STORE, so a named file is the only exception it can
 express, and a new key belongs where the reviewer is already looking.
 
-**What was NOT done:** no default status is coded, here or anywhere. It is tempting to ship
-*"everything except the ones that look shipped"* and it is exactly the guess `order_transport.py`
-spends a docstring refusing. The default is every status, and the operator narrows it or does
-not.
+**6. A browser that refuses storage is asked every time**, which is the honest consequence of
+refusing storage rather than a case to work around. `storedOrderFilter` returns UNASKED on a
+throw, and UNASKED is the safe direction: the unsafe one imports orders delivered a month ago and
+lets them hold copies a live order needs.
+
+**What was NOT done, and it is the thing this entry is most about:** no status is coded, here or
+anywhere in `app/`. Every string on the panel came off the preview and goes back to the fetch
+verbatim. The ask exists precisely so that the product never has to have an opinion about which
+of them means "already gone".
+
+**What is NOT fixed by this:** the 69 shipped orders ALREADY in the owner's ledger. A door filter
+cannot retroactively clear what came through before it. That is an order-level archive, on
+`claude/unseen-skus-order-closure-022667`, and it is deliberately not built here — both changes
+touch `#/orders` and the fulfilment map, and the two would collide.
 
 **What retires this:** TCGplayer publishing the status vocabulary. Then a shipped order could be
 recognised rather than merely counted, and the picker could carry a real default instead of the

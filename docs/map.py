@@ -4258,7 +4258,12 @@ COMPONENTS = [
                                              "the wire; and the picker's rows are asserted to be "
                                              "exactly the preview's, because a row this file did "
                                              "not put on the wire would be a status vocabulary "
-                                             "somebody coded into app/. It "
+                                             "somebody coded into app/. THREE MORE OVER THE ASK: "
+                                             "a device nobody has answered is shown the list and "
+                                             "its first press details NOTHING, answering is "
+                                             "remembered so the next press goes straight through, "
+                                             "and a tick counts as an answer without the confirm "
+                                             "being pressed. It "
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",

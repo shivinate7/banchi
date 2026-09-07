@@ -1022,3 +1022,23 @@
   .orders-status { min-height: var(--bn-control-h); }
   .orders-statuses-head { align-items: stretch; }
 }
+
+/* The ask, drawn once per device. Accent-tinted rather than warn-tinted: nothing has gone
+   wrong, a question is being put — and the panel it leads is the answer to it. */
+.orders-statuses-ask {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent-tint);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  line-height: 1.5;
+}
+.orders-statuses-ask .bn-icon { flex: none; margin-top: 2px; color: var(--bn-accent); }
+.orders-statuses-ask b { color: var(--bn-ink); }
+
+/* The confirm sits under the list, not beside the head: it is the last thing read and the
+   figure on it counts what the ticks above add up to. */
+.orders-statuses-confirm { display: flex; }

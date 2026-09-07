@@ -637,6 +637,11 @@ test('a paste is projected before it is sent, and what was dropped is named', as
 test('a fetch the cap cut short says how many it left, and an empty one still re-reads', async ({
   page,
 }) => {
+  /* SETTLED, BECAUSE THIS CASE IS ABOUT THE CAP AND NOT ABOUT THE ASK. `statuses: null` is
+     "every status the window holds", which is what this press has always sent; what changed on
+     2026-09-06 is that a device nobody has ASKED stops to show the list first (D113). The two
+     are separate facts and this case pins the first one. */
+  await remember(page, null)
   const wire = await open(page, {
     fetched: { orders: [], matched: 130, skipped_known: 30, detailed: 0, remaining: 100 },
   })
@@ -929,6 +934,9 @@ const FILTER_KEY = 'banchi.orders.fetch-filter'
  *  D91's comparison is verbatim, and a case that folded them would be testing a fold that must
  *  never exist. */
 async function remember(page: Page, statuses: string[] | null, skipKnown = false): Promise<void> {
+  /* `asked: true` on every one of these: what they are about is the press a SETTLED device
+     makes. The unsettled one is its own case at the end of this file, and the whole point of
+     that flag is that these two are different presses. */
   await page.addInitScript(
     ([key, value]) => {
       try {
@@ -943,7 +951,7 @@ async function remember(page: Page, statuses: string[] | null, skipKnown = false
         /* a browser refusing storage reads as never chosen, which is the other case */
       }
     },
-    [FILTER_KEY, JSON.stringify({ statuses, skipKnown })] as [string, string],
+    [FILTER_KEY, JSON.stringify({ statuses, skipKnown, asked: true })] as [string, string],
   )
 }
 
@@ -1022,6 +1030,7 @@ test('every status ticked off refuses the press here, rather than letting the wi
 test('the picker is built from the preview alone, and unticking one narrows the next press', async ({
   page,
 }) => {
+  await remember(page, null)
   const wire = await open(page)
   await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
 
@@ -1056,5 +1065,88 @@ test('the picker is built from the preview alone, and unticking one narrows the 
   const calls = wire.filter((one) => one.path.endsWith('/orders/fetch'))
   expect(calls.slice(0, 2).every((one) => (one.body as { preview?: boolean }).preview === true)).toBe(true)
   const sent = calls[2]?.body as { statuses?: string[] }
+  expect(sent.statuses).toEqual(['Cancelled', 'Ready to Ship'])
+})
+
+/* ------------------------------------------------------------------------------------- 16
+ *
+ * THE FIRST PRESS ON A DEVICE NOBODY HAS ASKED. The owner decided this on 2026-09-06 against a
+ * measurement taken on their own store: 69 of the 83 open orders were ones TCGplayer had already
+ * shipped, and because `pipeline/orders.py:resolve_all` serves oldest-first out of one shared
+ * pool those orders held 31 physical copies — three Ready-to-Ship lines read `short` while the
+ * cards sat in boxes. A default of "everything" reproduces that on every device where nobody
+ * opens the panel; a default of "everything except the shipped ones" needs a status vocabulary
+ * `server/order_transport.py` refuses to have and would swallow a `Refunded` added later.
+ *
+ * SO THE FIRST PRESS SHOWS THE LIST AND DETAILS NOTHING, and answering it is what makes it the
+ * last one. That is bounded by the two cases here: nothing is detailed before the answer, and
+ * nothing is asked after it. */
+
+test('a device nobody has asked is shown the list, and the first press details nothing', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+
+  /* THE PANEL OPENED BY ITSELF and says why. Nothing on this screen had to be found first. */
+  await expect(page.locator('.orders-statuses-ask')).toContainText('Which of these are worth fetching?')
+  await expect(page.locator('.orders-statuses-list .orders-status')).toHaveCount(3)
+
+  /* ONE CALL, AND IT IS THE FREE ONE. The preview walks search pages and details nothing; the
+     press that costs detail calls has not happened, and neither has an ingest. */
+  const asked = wire.filter((one) => one.path.endsWith('/orders/fetch'))
+  expect(asked).toHaveLength(1)
+  expect((asked[0]?.body as { preview?: boolean }).preview).toBe(true)
+  expect(wire.filter((one) => one.path.endsWith('/orders/ingest'))).toHaveLength(0)
+
+  /* THE ANSWER IS THE PRESS. Everything is ticked, so the figure is the whole window — this is
+     the person whose answer is "all of them, yes", and the point is that they SAID it. */
+  await page.locator('.orders-statuses-confirm').getByRole('button', { name: /Fetch these 370 orders/ }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(3)
+  const calls = wire.filter((one) => one.path.endsWith('/orders/fetch'))
+  const sent = calls[2]?.body as { statuses?: string[] }
+  expect(sent.statuses).toEqual(['Shipped', 'Cancelled', 'Ready to Ship'])
+})
+
+/* ------------------------------------------------------------------------------------- 17 */
+
+test('answering is remembered, so the next press fetches without asking again', async ({ page }) => {
+  /* NOT D91's TWO-PRESS FLOW, which the owner ruled out — that asked on every press. The ask is
+     spent once per device, and this is the case that says so: a device carrying an answer goes
+     straight through, and the panel it would have opened is not on screen. */
+  await remember(page, null)
+  const wire = await open(page)
+  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(2)
+  const sent = wire.filter((one) => one.path.endsWith('/orders/fetch'))[1]?.body as { statuses?: string[] }
+  expect(sent.statuses).toEqual(['Shipped', 'Cancelled', 'Ready to Ship'])
+  await expect(page.locator('.orders-statuses-ask')).toHaveCount(0)
+})
+
+/* ------------------------------------------------------------------------------------- 18 */
+
+test('a tick IS an answer, so unticking one settles the device without pressing the confirm', async ({
+  page,
+}) => {
+  /* The confirm exists for the person whose answer is "all of them". Somebody who reads the list
+     and unticks a status has already done the thing the ask is for, and being asked again next
+     time would be the recurring step that was ruled out. */
+  const wire = await open(page)
+  await page.locator('main.orders .bn-head-actions').getByRole('button', { name: 'Add orders' }).click()
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+  await expect(page.locator('.orders-statuses-ask')).toBeVisible()
+
+  await page.locator('.orders-statuses-list .orders-status').first().locator('input[type=checkbox]').uncheck()
+  /* The ask and its confirm are gone the moment the tick lands; the panel is a setting now. */
+  await expect(page.locator('.orders-statuses-ask')).toHaveCount(0)
+  await expect(page.locator('.orders-statuses-confirm')).toHaveCount(0)
+
+  await page.locator('.orders-paste').getByRole('button', { name: 'Fetch from TCGplayer' }).click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/fetch')).length).toBe(3)
+  const sent = wire.filter((one) => one.path.endsWith('/orders/fetch'))[2]?.body as { statuses?: string[] }
   expect(sent.statuses).toEqual(['Cancelled', 'Ready to Ship'])
 })

@@ -111,29 +111,46 @@ export function rememberRail(rail: boolean): void {
  * window does not return is therefore a real possibility, and the screen SAYS SO rather than
  * quietly dropping it.
  *
- * NULL IS NOT AN EMPTY LIST. `statuses: null` means this device has never chosen, and the
- * screen reads it as every status the window returned — today's behaviour exactly, so an
- * operator who never opens the control loses nothing. An empty list means they ticked
- * everything off, and the screen refuses the press rather than sending a body the wire
- * rejects with a code the operator cannot act on.
+ * NULL IS NOT AN EMPTY LIST, AND IT IS NOT "UNANSWERED" EITHER — that is what `asked` is for.
+ * `statuses: null` means "every status this window holds", which stays the value a confirmed
+ * device usually carries: a stored LIST would silently drop a status TCGplayer adds next month,
+ * which is the exact drop D91 exists to prevent. An empty list means they ticked everything off,
+ * and the screen refuses the press rather than sending a body the wire rejects with a code the
+ * operator cannot act on.
+ *
+ * `asked` IS WHETHER A HUMAN HAS SEEN THE LIST, AND THE FIRST PRESS WAITS FOR IT. The owner
+ * decided this on 2026-09-06 against a measurement: 69 of the 83 open orders on their store are
+ * ones TCGplayer had already shipped, those orders hold 31 physical copies, and three
+ * Ready-to-Ship lines read `short` while the cards sat in boxes — because `resolve_all` serves
+ * oldest-first out of one pool and a delivered order is older than a live one. A default of
+ * "everything" reproduces that on every device where nobody opens the control.
+ *
+ * THE ALTERNATIVE WAS A CODED DEFAULT AND IT IS NOT AVAILABLE. "Everything except the shipped
+ * ones" needs this file to know that `Shipped - In Transit` means shipped, which is the
+ * vocabulary `server/order_transport.py` refuses to have and which would swallow a `Refunded`
+ * TCGplayer adds later. So a human is asked, once, in front of the real list — and never again.
+ * This is NOT D91's two-press flow, which the owner ruled out: that asked on every press.
  */
 const ORDER_FILTER_KEY = 'banchi.orders.fetch-filter'
 
-/** What this device narrows the order fetch to. `statuses: null` is "never chosen". */
+/** What this device narrows the order fetch to. `statuses: null` is every status the window
+ *  holds; `asked` is whether a human has ever been shown that list. */
 export type OrderFetchFilter = {
   readonly statuses: readonly string[] | null
   readonly skipKnown: boolean
+  readonly asked: boolean
 }
 
-/** The unchosen filter: every status the window holds, nothing skipped. Today's press. */
-const EVERY_ORDER_STATUS: OrderFetchFilter = { statuses: null, skipKnown: false }
+/** A device that has never been asked. Every status, nothing skipped — and the first press
+ *  stops to show the list rather than acting on this. */
+const UNASKED: OrderFetchFilter = { statuses: null, skipKnown: false, asked: false }
 
 export function storedOrderFilter(): OrderFetchFilter {
   try {
     const raw = localStorage.getItem(ORDER_FILTER_KEY)
-    if (raw === null) return EVERY_ORDER_STATUS
+    if (raw === null) return UNASKED
     const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed !== 'object' || parsed === null) return EVERY_ORDER_STATUS
+    if (typeof parsed !== 'object' || parsed === null) return UNASKED
     const list = (parsed as { statuses?: unknown }).statuses
     /* Deduped and stripped on the way out, so a hand-edited value cannot make the fetch body
        something the wire refuses for a reason the operator cannot see. */
@@ -142,11 +159,17 @@ export function storedOrderFilter(): OrderFetchFilter {
           (one) => one !== '',
         )
       : null
-    return { statuses, skipKnown: (parsed as { skipKnown?: unknown }).skipKnown === true }
+    return {
+      statuses,
+      skipKnown: (parsed as { skipKnown?: unknown }).skipKnown === true,
+      asked: (parsed as { asked?: unknown }).asked === true,
+    }
   } catch {
-    /* Private mode, blocked storage, or a half-written value: never chosen, which is every
-       status. The press this device is about to make is the one it always made. */
-    return EVERY_ORDER_STATUS
+    /* Private mode, blocked storage, or a half-written value. UNASKED, which means the press
+       stops and shows the list — the safe direction, because the unsafe one imports orders that
+       were delivered a month ago and lets them hold copies a live order needs. A browser that
+       refuses storage asks every time, which is the honest consequence of refusing storage. */
+    return UNASKED
   }
 }
 
@@ -154,10 +177,14 @@ export function rememberOrderFilter(filter: OrderFetchFilter): void {
   try {
     localStorage.setItem(
       ORDER_FILTER_KEY,
-      JSON.stringify({ statuses: filter.statuses === null ? null : [...filter.statuses], skipKnown: filter.skipKnown }),
+      JSON.stringify({
+        statuses: filter.statuses === null ? null : [...filter.statuses],
+        skipKnown: filter.skipKnown,
+        asked: filter.asked,
+      }),
     )
   } catch {
-    /* Quota or a blocked origin. The choice still holds for this tab; only the next visit
-       falls back to every status. */
+    /* Quota or a blocked origin. The choice still holds for this tab; only the next visit is
+       asked again. */
   }
 }
