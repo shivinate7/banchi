@@ -2434,6 +2434,9 @@ export type OrderLineKindResult = {
  *  is the ledger's own count AFTER the write, which is what the press was for. */
 export type OrderCloseResult = {
   undone: boolean
+  /** Which scope the press used. `orders` stood every line of each named order down; `lines`
+   *  stood exactly the named lines down and left their siblings alone. */
+  scope: 'orders' | 'lines'
   orders: number
   moved: number
   lines: number

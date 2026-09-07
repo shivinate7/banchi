@@ -2778,6 +2778,48 @@ export async function closeOrders(
   })) as OrderCloseResult
 }
 
+/**
+ * Stand individual LINES down, leaving their siblings alone (D113).
+ *
+ * `closeOrders`' other scope, and the one a multi-line order needs. One refunded line on a
+ * three-line order must not take the other two with it — the order-shaped call stands every line
+ * down, which is right for a backlog of whole orders that already shipped and wrong for a single
+ * line nobody is sending.
+ *
+ * ONE ROUTE, TWO SCOPES, because only the scope differs — both call `Ledger.close_line` and a
+ * second route would be two spellings of one write. Sending `orders` AND `lines` in one body
+ * refuses as `close_scope_ambiguous` rather than picking one, and a SKU the buyer did not order
+ * refuses the whole press before any line moves.
+ */
+export async function closeLines(
+  lines: readonly { source: string; number: string; sku: string }[],
+  reason: OrderCloseReason,
+): Promise<OrderCloseResult> {
+  return (await request('/orders/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lines: lines.map((l) => ({ source: l.source, number: l.number, sku: l.sku })),
+      reason,
+    }),
+  })) as OrderCloseResult
+}
+
+/** `closeLines`' reversal. It reopens only the lines it names — a sibling the same press never
+ *  touched stays exactly as it was. */
+export async function reopenLines(
+  lines: readonly { source: string; number: string; sku: string }[],
+): Promise<OrderCloseResult> {
+  return (await request('/orders/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lines: lines.map((l) => ({ source: l.source, number: l.number, sku: l.sku })),
+      undo: true,
+    }),
+  })) as OrderCloseResult
+}
+
 /** `closeOrders`' reversal. Puts the orders back on the open list exactly as they were; it
  *  touches no count, so a line that was also hand-filled keeps its fill. */
 export async function reopenOrders(

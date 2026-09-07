@@ -7,6 +7,7 @@ import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReaso
 import { setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
 import {
+  closeLines,
   closeOrders,
   declareLineKind,
   describeFailure,
@@ -17,6 +18,7 @@ import {
   ingestOrders,
   previewOrders,
   pullCopy,
+  reopenLines,
   reopenOrders,
   undoFill,
   undoPull,
@@ -1375,14 +1377,47 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     })()
   }
 
-  /* D113. A line that is not shipping at all — refunded, cancelled, or the copy was retired
-     damaged and the buyer took a refund. It stands the ORDER down rather than the line, because
-     `POST /orders/close` is order-shaped and every one of these has been a single-line order in
-     practice; a multi-line order with one refunded line wants the line-shaped route, which the
-     ledger already has (`close_line`) and this screen does not yet reach. Named rather than
-     pretended: the button is drawn only where the order has ONE line. */
-  const onCloseLine = (order: OrderRow, _line: ResolvedLine, reason: OrderCloseReason) => {
-    onStandDown([order], reason)
+  /* D113. A line that is not shipping at all — refunded, cancelled, or the copy retired damaged
+     and the buyer refunded. IT IS LINE-SHAPED, so one refunded line on a three-line order never
+     takes the other two with it. The first build sent the order-shaped call and drew the button
+     only where the order had ONE line, which left the multi-line case with no press at all; the
+     wire has both scopes now and this is simply the line one. */
+  const onCloseLine = (order: OrderRow, line: ResolvedLine, reason: OrderCloseReason) => {
+    void (async () => {
+      setBusy(`close/${line.order_key}/${line.sku}`)
+      setFailure(null)
+      try {
+        const aim = [{ source: order.source, number: order.number, sku: line.sku }]
+        await closeLines(aim, reason)
+        if (!live.current) return
+        toast({
+          kind: 'receipt',
+          icon: 'check',
+          title: `Closed ${line.line.name ?? line.sku}`,
+          body: 'Nothing was marked sold and no copy is claimed to have gone.',
+          ttlMs: UNDO_WINDOW_MS,
+          action: {
+            label: 'Undo',
+            onPress: () => {
+              void (async () => {
+                try {
+                  await reopenLines(aim)
+                  touchHub()
+                } catch (err) {
+                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                }
+              })()
+            },
+          },
+        })
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
   }
 
   /* --------------------------------------------------------------------- what is drawn */
@@ -2416,29 +2451,25 @@ function LineStandDown({
               I already sent {owed === 1 ? 'it' : `these ${owed}`}
             </Button>
           )}
-          {/* THE ONE PLACE `not_shipping` IS REACHABLE. It stands the ORDER down, so it is drawn
-              only on a single-line order — on a multi-line one it would close lines nobody
-              answered for, and the line-shaped route this wants does not exist on the wire yet. */}
-          {order.lines.length === 1 ? (
-            <Button
-              icon="undo"
-              busy={busy === 'close'}
-              disabled={locked}
-              onClick={() => onCloseLine(order, line, 'not_shipping')}
-            >
-              It isn&apos;t shipping
-            </Button>
-          ) : null}
+          {/* THE ONE PLACE `not_shipping` IS REACHABLE, and it is LINE-shaped: on a three-line
+              order this closes this line and leaves the other two exactly as they were. */}
+          <Button
+            icon="undo"
+            busy={busy === `close/${line.order_key}/${line.sku}`}
+            disabled={locked}
+            onClick={() => onCloseLine(order, line, 'not_shipping')}
+          >
+            It isn&apos;t shipping
+          </Button>
         </div>
         <p className="orders-standdown-note">
           {/* THE COUNTS ARE THE EVIDENCE and they are already on the breakdown row above, so this
               says what each press MEANS rather than repeating them. */}
           “I already sent it” records that the copy went out for this order but left through the
           sale on <code>#/inventory</code>, so nothing counted it here — it adds to the order&apos;s
-          count and marks nothing sold, because it already is.
-          {order.lines.length === 1
-            ? ' “It isn’t shipping” closes the order claiming no copy went at all — a refund, a cancellation, or a card retired damaged.'
-            : ' A line that is never shipping on a multi-line order has no press here yet.'}
+          count and marks nothing sold, because it already is. “It isn’t shipping” closes this line
+          claiming no copy went at all — a refund, a cancellation, or a card retired damaged
+          {order.lines.length === 1 ? '' : ', leaving the order’s other lines alone'}.
         </p>
       </div>
     )

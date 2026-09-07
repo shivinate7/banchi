@@ -829,8 +829,15 @@ ORDER_FILL_UNDO_FIELDS = ("source", "number", "sku", "count", "undo")
 ORDER_LINE_KIND_FIELDS = ("source", "number", "sku", "kind")
 
 # `POST /orders/close` stands whole orders down. Two tuples, `ORDER_PULL_FIELDS`' rule.
+# TWO SCOPES, ONE OPERATION, AND THEY ARE MUTUALLY EXCLUSIVE. `orders` stands every line of the
+# orders it names down; `lines` stands exactly the lines it names down and leaves their siblings
+# alone. Both call `Ledger.close_line` — only the scope differs — so a second route would be two
+# spellings of one write. A body carrying BOTH is a client that has not decided, and obeying it
+# with one silently ignored is how a refunded line takes its siblings with it.
 ORDER_CLOSE_FIELDS = ("orders", "reason")
 ORDER_CLOSE_UNDO_FIELDS = ("orders", "undo")
+ORDER_CLOSE_LINE_FIELDS = ("lines", "reason")
+ORDER_CLOSE_LINE_UNDO_FIELDS = ("lines", "undo")
 
 # A backlog ceiling. The owner's store had 69 orders needing this in one press on the day it
 # was built, so a limit under that would have made the feature useless on its own first use;
@@ -9116,15 +9123,37 @@ def do_order_close(payload: dict) -> dict:
     then refused would leave the operator unable to tell which 40.
     """
     undo = _optional_flag(payload, "undo", "undo_invalid")
-    _reject_unknown(payload, ORDER_CLOSE_UNDO_FIELDS if undo else ORDER_CLOSE_FIELDS)
 
-    raw = payload.get("orders")
+    # WHICH SCOPE, DECIDED BEFORE ANYTHING IS VALIDATED. Both fields present is a client that
+    # has not decided, and picking one would stand lines down that nobody answered for.
+    by_line = "lines" in payload
+    if by_line and "orders" in payload:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "close_scope_ambiguous",
+            "Send `orders` OR `lines`, never both. `orders` stands every line of an order "
+            "down; `lines` stands exactly the lines it names down and leaves their siblings "
+            "alone. A body carrying both has not decided which, and obeying one of them "
+            "silently is how a refunded line takes the rest of the order with it.",
+        )
+    if by_line:
+        _reject_unknown(
+            payload, ORDER_CLOSE_LINE_UNDO_FIELDS if undo else ORDER_CLOSE_LINE_FIELDS
+        )
+    else:
+        _reject_unknown(payload, ORDER_CLOSE_UNDO_FIELDS if undo else ORDER_CLOSE_FIELDS)
+
+    raw = payload.get("lines" if by_line else "orders")
     if not isinstance(raw, list) or not raw:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
-            "orders_required",
-            "Send `orders` — the orders to stand down, each as {source, number}. A close "
-            "of nothing is refused rather than recorded as a close of nothing.",
+            "lines_required" if by_line else "orders_required",
+            (
+                "Send `lines` — the lines to stand down, each as {source, number, sku}. "
+                if by_line
+                else "Send `orders` — the orders to stand down, each as {source, number}. "
+            )
+            + "A close of nothing is refused rather than recorded as a close of nothing.",
         )
     if len(raw) > ORDER_CLOSE_LIMIT:
         raise BadRequest(
@@ -9154,25 +9183,37 @@ def do_order_close(payload: dict) -> dict:
                 f"that will never go. Neither claims a copy left.",
             )
 
-    keys: List[str] = []
+    # `(order key, sku or None)`. `None` means every line of that order — the two scopes meet
+    # here and the loop below is the same either way.
+    aimed: List[Tuple[str, Optional[str]]] = []
+    what = "Line" if by_line else "Order"
     for at, entry in enumerate(raw, start=1):
         if not isinstance(entry, dict):
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST,
-                "order_invalid",
-                f"Order {at} of {len(raw)} is not an object. Nothing was written.",
+                "line_invalid" if by_line else "order_invalid",
+                f"{what} {at} of {len(raw)} is not an object. Nothing was written.",
             )
-        _reject_unknown(entry, ("source", "number"))
+        _reject_unknown(entry, ("source", "number", "sku") if by_line else ("source", "number"))
         source = _order_text(
             entry, "source", "source_required",
-            f"Order {at} of {len(raw)} carries no `source`.",
+            f"{what} {at} of {len(raw)} carries no `source`.",
         )
         number = _order_text(
             entry, "number", "number_required",
-            f"Order {at} of {len(raw)} carries no `number`.",
+            f"{what} {at} of {len(raw)} carries no `number`.",
+        )
+        sku = (
+            _order_text(
+                entry, "sku", "sku_required",
+                f"{what} {at} of {len(raw)} carries no `sku`. Fulfilment is keyed by SKU "
+                f"because that is the only line identity stable across two ingests.",
+            )
+            if by_line
+            else None
         )
         try:
-            keys.append(order_store.order_key(source, number))
+            aimed.append((order_store.order_key(source, number), sku))
         except order_store.BadOrderKey as exc:
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST, "order_key_invalid", str(exc)
@@ -9185,22 +9226,41 @@ def do_order_close(payload: dict) -> dict:
         # exit, so a raise below would discard the lot — but the operator would be told
         # nothing about WHICH order was wrong, and a 69-order backlog press is exactly where
         # that matters.
-        missing = [key for key in keys if ledger.orders.get(key) is None]
+        missing = [key for key, _ in aimed if ledger.orders.get(key) is None]
         if missing:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "order_not_ingested",
-                f"{len(missing)} of {len(keys)} are not in this ledger, so the whole press "
+                f"{len(missing)} of {len(aimed)} are not in this ledger, so the whole press "
                 f"is refused and nothing was written: {', '.join(missing[:10])}"
                 + (" …" if len(missing) > 10 else ""),
+            )
+        # A SKU THE BUYER DID NOT ORDER IS REFUSED BEFORE ANY LINE MOVES, not skipped: a
+        # stand-down aimed at a line that is not there means the screen and the store disagree,
+        # and standing the others down would leave the operator believing all of them went.
+        astray = [
+            f"{key} SKU {sku}"
+            for key, sku in aimed
+            if sku is not None and ledger.orders[key].line_for(sku) is None
+        ]
+        if astray:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "sku_not_on_order",
+                f"{len(astray)} of {len(aimed)} name a SKU that order does not carry, so the "
+                f"whole press is refused and nothing was written: {', '.join(astray[:10])}"
+                + (" …" if len(astray) > 10 else ""),
             )
 
         moved = 0
         lines = 0
-        for key in keys:
+        for key, sku in aimed:
             record = ledger.orders.get(key)
+            # `None` is every line of the order; a SKU is exactly that one. The two scopes are
+            # one loop, which is why they are one route.
+            wanted = record.lines if sku is None else [record.line_for(sku)]
             touched = False
-            for line in record.lines:
+            for line in wanted:
                 if undo:
                     changed = ledger.reopen_line(key, line.sku)
                 else:
@@ -9213,7 +9273,8 @@ def do_order_close(payload: dict) -> dict:
 
         return {
             "undone": bool(undo),
-            "orders": len(keys),
+            "scope": "lines" if by_line else "orders",
+            "orders": len(aimed),
             "moved": int(moved),
             "lines": int(lines),
             "reason": reason or None,

@@ -474,13 +474,46 @@ test('a copy that left by the sale door can be recorded, and a line that will no
   })
 
   /* THE ONLY PLACE `not_shipping` IS REACHABLE. Without this press it is a server capability no
-     screen can reach, which is the rule this whole change cites — broken by the change itself. */
+     screen can reach, which is the rule this whole change cites — broken by the change itself.
+
+     IT SENDS `lines`, NOT `orders`, and that is the assertion rather than a detail: the
+     order-shaped scope stands EVERY line of the order down, which on a multi-line order would
+     close lines nobody answered for. */
   await stand.getByRole('button', { name: /isn.t shipping/i }).click()
   await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
   expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({
-    orders: [{ source: 'TCGplayer', number: ORDER_NUMBER }],
+    lines: [{ source: 'TCGplayer', number: ORDER_NUMBER, sku: SKU }],
     reason: 'not_shipping',
   })
+})
+
+test('a refunded line on a multi-line order is closed alone, and the siblings are not named', async ({
+  page,
+}) => {
+  /* THE CASE THE FIRST BUILD HAD NO PRESS FOR. It drew "It isn't shipping" only where the order
+     had ONE line, because the wire was order-shaped and closing a three-line order to answer for
+     one refunded line is worse than offering nothing. Both scopes exist now, so the button is
+     unconditional and the BODY is what keeps the siblings safe. */
+  const gone = line({ reason: 'no_copies_on_hand', fulfilled: 0, outstanding: 1, on_hand: 0, sold: 2, picks: [] })
+  const sibling = { ...line().line, sku: '9197754', name: 'Sunrise' }
+  const wire = await open(page, {
+    orders: payloadOf(
+      [order({ lines: [gone.line, sibling] })],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [gone] }],
+    ),
+  })
+
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+  await stand.getByRole('button', { name: /isn.t shipping/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
+
+  const body = wire.find((one) => one.path === '/orders/close')?.body as { lines: { sku: string }[] }
+  expect(body.lines).toHaveLength(1)
+  expect(body.lines[0]?.sku).toBe(SKU)
+  /* THE SIBLING IS NOT IN THE BODY AT ALL — not sent and refused, simply never named. */
+  expect(JSON.stringify(body)).not.toContain('9197754')
+  expect(Object.keys(body)).not.toContain('orders')
 })
 
 test('a short line offers no hand-fill, because its copies are still in the boxes', async ({ page }) => {

@@ -16878,6 +16878,47 @@ def check_order_ledger(checks: Checks) -> None:
             "with `fulfilled == len(copies) + by_hand` holding across a MIXED row, which is the "
             "case that would break it if a fifth writer ever moved one half alone",
         )
+        # ---- 11d. D113: A LINE STANDS DOWN WITHOUT TAKING ITS SIBLINGS
+        #
+        # `close_line` was line-shaped from the start; `POST /orders/close` was not, so the
+        # screen drew "It isn't shipping" only on single-line orders and a refunded line on a
+        # three-line order had no press at all. The wire carries both scopes now and this is the
+        # property that makes the line one worth having.
+        many = order_store.order_key("TCGplayer", "G-7")
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record(
+                "G-7",
+                line("9191486", 1, name="Moonfall"),
+                line("9197754", 2, name="Sunrise"),
+                line("9199579", 1, name="Dusk"),
+                placed_at="2026-09-02T10:00:00.000+00:00",
+            )])
+            snapshot.ledger.close_line(many, "9197754", order_store.CLOSE_NOT_SHIPPING)
+        one_down = store.read()
+        checks.equal(
+            [one_down.ledger.recorded(many, sku).closed
+             for sku in ("9191486", "9197754", "9199579")],
+            [False, True, False],
+            "one refunded line stands down and its two siblings are untouched — the whole "
+            "reason this scope exists, and what an order-shaped close cannot express",
+        )
+        checks.ok(
+            any(r.number == "G-7" for r in one_down.ledger.unfulfilled()),
+            "and the ORDER is still open, because it still owes the other two. A stand-down "
+            "answers for a line, and `unfulfilled` asks about all of them",
+        )
+        checks.equal(
+            one_down.ledger.closed_lines(many), 1,
+            "and the count of stood-down lines is readable, so a screen can say so in words",
+        )
+        with store.write() as snapshot:
+            snapshot.ledger.reopen_line(many, "9197754")
+        checks.equal(
+            store.read().ledger.closed_lines(many), 0,
+            "the reversal reaches only the line it names — a sibling the press never touched "
+            "cannot be reopened by it either, because it was never closed",
+        )
+
         checks.equal(
             order_store.FILL_SOLD_SEPARATELY != order_store.FILL_OFF_SYSTEM, True,
             "`sold_separately` is its own word and not `off_system`: that one means this store "

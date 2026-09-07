@@ -6669,6 +6669,28 @@ rule the entry cites.
 
 **`short` is deliberately excluded.** While copies are on hand the remedy really is to pull
 them, and a fill button there would invite closing a line whose cards are sitting in box 3.
+
+### The stand-down has two scopes, and the per-line press uses the narrow one
+
+**`Ledger.close_line` was line-shaped from the start; `POST /orders/close` was not.** So the
+first build drew *"it isn't shipping"* only where the order had ONE line.
+**A refunded line on a multi-line order therefore had no press at all** —
+the order-shaped call would have closed lines
+nobody answered for, which is worse than offering nothing. Named as a gap, then built on the
+owner's word the same session.
+
+**One route, two scopes, because only the scope differs.** `orders` stands every line of the
+orders it names down — the backlog press. `lines` stands exactly the lines it names down. Both
+call `close_line` and a second route would be two spellings of one write.
+**A body carrying both refuses** as `close_scope_ambiguous` rather than picking one,
+and a SKU the buyer did not order
+refuses the whole press before any line moves — a stand-down aimed at a line that is not there
+means the screen and the store disagree, and standing the others down would leave the operator
+believing all of them went.
+
+**Measured on a real 4-line order:** closing one line left the other three untouched, and the
+order **stayed open** because it still owed them. That last part is the point — a stand-down
+answers for a line, and `unfulfilled` asks about all of them.
 T7 pins the mixed row that results — 2 pulled copies with their capture ids, 1 by hand,
 `fulfilled` 3 — because a single count could not tell the operator that two are traceable to a
 slot and one is only their word.
