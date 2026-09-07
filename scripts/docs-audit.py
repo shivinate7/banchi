@@ -7956,6 +7956,247 @@ def _pooled_exclusion_evidence(route_path: str) -> Optional[str]:
     return None
 
 
+# ------------------------------------------------------- browser storage keys (D27, D94)
+
+INDEX_HTML = ROOT / "app" / "index.html"
+
+# A key literal, in either store. The two prefixes are the whole namespace: `banchi.` for
+# anything written since the rebrand and `pkmnscan.` for everything older, frozen at its
+# spelling because renaming a live key silently discards what sits under the old one (D94).
+_STORAGE_KEY_RE = re.compile(r"""['"]((?:banchi|pkmnscan)\.[A-Za-z0-9._-]+)['"]""")
+
+# Which store a file touches. Member access only — `window.localStorage`, a bare
+# `localStorage`, and the `window["localStorage"]` spelling the lint rule also has to cover.
+_STORAGE_USE_RE = re.compile(r"""\b(local|session)Storage\b|['"](local|session)Storage['"]""")
+
+# CLAUDE.md's published roster. Anchored on the sentence, not on a line number: the count is
+# a WORD there because the sentence is prose, and a digit would read as a heading number.
+_ROSTER_RE = re.compile(
+    r"\*\*(\w+) keys are stored on the device.*?\*\*(.*?)(?=\n\n)", re.S
+)
+_ROSTER_FILE_RE = re.compile(r"`(app/src/[A-Za-z0-9_/]+\.tsx?)`")
+
+_NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+}
+
+
+def _storage_sites() -> Tuple[Dict[str, Dict[str, List[str]]], List[Finding]]:
+    """Every browser-storage key the app writes, by store, with the files that hold it.
+
+    KEYS ARE BOUND TO A STORE BY THEIR FILE, not by their call site, and that is the honest
+    limit of this reader. `app/src/CaptureScreen.tsx` reaches its keys through one
+    `readSession(key)` helper, so the literal and the `sessionStorage` call are in different
+    functions and no regex walks from one to the other; `app/src/useCamera.ts` passes consts
+    for the same reason `app/eslint.config.js` gives — a selector cannot read a key handed
+    over as an identifier. What holds instead is that no file in this app touches both stores,
+    which makes the file a sound binding — and a file that starts touching both is reported
+    rather than guessed at, because that is the moment this reader would begin to lie.
+    """
+    findings: List[Finding] = []
+    by_store: Dict[str, Dict[str, List[str]]] = {"local": {}, "session": {}}
+    sources = sorted(APP_SRC.rglob("*.ts")) + sorted(APP_SRC.rglob("*.tsx"))
+    for path in sources + [INDEX_HTML]:
+        if not exists(path):
+            continue
+        text = read(path)
+        body = _strip_ts_comments(text) if path.suffix != ".html" else re.sub(
+            r"<!--.*?-->", "", text, flags=re.S
+        )
+        keys = sorted(set(_STORAGE_KEY_RE.findall(body)))
+        if not keys:
+            continue
+        stores = {a or b for a, b in _STORAGE_USE_RE.findall(body)}
+        if not stores:
+            # A key spelling in a file that opens no store. Nothing does this today; it is
+            # most likely a doc comment that survived the strip, so it is passed over rather
+            # than reported — a false alarm on a comment is the one thing that would teach
+            # somebody to route around this row.
+            continue
+        if len(stores) > 1:
+            findings.append(
+                Finding(
+                    rel(path),
+                    "touches both `localStorage` and `sessionStorage`, so this row cannot say "
+                    "which store its keys belong to.\n"
+                    f"  keys here: {', '.join('`' + k + '`' for k in keys)}\n"
+                    "  Split the device-local keys into their own module the way "
+                    "`app/src/deviceMemory.ts` already is, or bind each key to its store some "
+                    "way a reader can follow. The binding is by FILE and there is no other.",
+                )
+            )
+            continue
+        store = stores.pop()
+        for key in keys:
+            by_store[store].setdefault(key, []).append(rel(path))
+    return by_store, findings
+
+
+def check_storage_keys(report: Report) -> None:
+    """Every browser-storage key the app writes, against what the docs publish.
+
+    THIS ROW EXISTS BECAUSE THE PUBLISHED SENTENCE WAS WRONG AND NOTHING COULD SAY SO.
+    CLAUDE.md read "**Four keys are stored on the device**" and then listed five, from
+    2026-09-03 — the day `banchi.orders.last-check` landed — until 2026-09-06. In the same
+    sentence the theme and the rail were attributed to `app/src/kit/index.tsx` and
+    `App.tsx`, which is where they are USED; `app/src/deviceMemory.ts` is the module that
+    holds them, and it exists precisely so that a reviewer has one file to read. Neither
+    error was reachable from any check in this file.
+
+    `app/eslint.config.js` is not that check and cannot become one. It bans the STORE by
+    esquery selector and says so at length: a selector cannot read a key passed as a const,
+    so the only exception it can express is a named FILE. It answers "may this file open
+    `localStorage`" and never "which keys exist, what are they called, and does the
+    documentation match" — which is the whole of what went wrong.
+
+    TWO STORES, TWO DIFFERENT BARS, because the docs make two different promises.
+
+     - `localStorage` is RECONCILED. CLAUDE.md publishes a count, a roster and the files, so
+       all three are held against `app/src` in both directions. A key that survives closing
+       the browser is the one a stale roster costs something for: D27 permits it only for
+       facts about THIS MACHINE, and the way that permission erodes is one key at a time
+       with nobody counting.
+     - `sessionStorage` must only be NAMED IN MARKDOWN SOMEWHERE, the bar `check_env_names`
+       sets for environment variables and for the reason given there — nothing mechanical
+       can judge whether an explanation is any good, but it can hold that the key was
+       written down once, on purpose, where a reader looking for it would find it. D27
+       promised its keys were "named here" and named them only as English (*box number, set
+       hint, finish claim…*) while the app spelled them `pkmnscan.session.*`. Measured
+       2026-09-06: seven of the eight keys under that carve-out appeared in no markdown file
+       in this repo, and two of them — `game` and `product` — had never been described in
+       any form, having arrived after the entry was written.
+
+    THE PREFIX IS HELD TOO, AS OF 2026-09-06, AND THIS ROW ARGUED THE OTHER WAY FIRST. The
+    audit that built it proposed freezing `pkmnscan.*` on the ten keys that carried it —
+    D94 keeps every name beneath the product, a key's spelling is fixed on the day it is
+    written, and renaming a live one discards whatever a browser holds under the old
+    spelling. The owner overruled that after being shown the cost, declined a read-time
+    fallback because a fallback can never safely be deleted afterwards, and took the loss:
+    two presses on the rig, six on a capture tab left open across the deploy, and one key
+    (`captureId`) that can burn a position if a capture was in flight at that moment. So
+    there is no frozen set to remember, which is the only reason a prefix rule is checkable
+    at all — `banchi.` on every key, with the whole argument in D27's second amendment.
+
+    D94 IS NOT REOPENED BY THAT and this row is not evidence that it is. That entry governs
+    the checkout, the CLI, the packages, the store on disk, every route on the wire and
+    `PKMNSCAN_HOME`; a storage key is a name this product writes and no other program reads,
+    which is what separates it from every item on that list. Nothing here should be read as
+    licence to rename anything else.
+    """
+    by_store, findings = _storage_sites()
+    local, session = by_store["local"], by_store["session"]
+
+    # THE PREFIX, over both stores at once. One line, because after the 2026-09-06 rename
+    # there is no exception set to carry — the moment there is one, this becomes a list
+    # somebody has to maintain and the rule stops being a rule.
+    for key in sorted(set(local) | set(session)):
+        if not key.startswith("banchi."):
+            where = (local.get(key) or session.get(key) or ["app/src"])[0]
+            findings.append(
+                Finding(
+                    where,
+                    f"`{key}` does not carry the `banchi.` prefix every browser-storage key "
+                    "has carried since 2026-09-06 (D27, second amendment).\n"
+                    "  Ten keys were renamed off `pkmnscan.` that day, with no migration and "
+                    "the cost accepted in writing. A new key spelled the old way is not "
+                    "continuity with them — they are gone — it is a second convention.",
+                )
+            )
+
+    claude = ROOT / "CLAUDE.md"
+    roster = _ROSTER_RE.search(read(claude)) if exists(claude) else None
+    if roster is None:
+        findings.append(
+            Finding(
+                "CLAUDE.md",
+                "no `**N keys are stored on the device**` sentence found, so the roster this "
+                "row reconciles is gone or reworded past the pattern watching it.\n"
+                f"  the app writes {len(local)} `localStorage` key(s): "
+                f"{', '.join('`' + k + '`' for k in sorted(local))}\n"
+                "  Restore the sentence, or delete this row rather than leaving it passing "
+                "vacuously — see docs/DEBTS.md on a green row that cannot fail.",
+            )
+        )
+    else:
+        word, paragraph = roster.group(1), roster.group(0)
+        published = set(_STORAGE_KEY_RE.findall(paragraph.replace("`", "'")))
+        count = _NUMBER_WORDS.get(word.lower())
+        if count is None:
+            findings.append(
+                Finding("CLAUDE.md", f"`{word} keys are stored on the device` — not a number word.")
+            )
+        elif count != len(local):
+            findings.append(
+                Finding(
+                    "CLAUDE.md",
+                    f"says `{word}` ({count}) keys are stored on the device; `app/src` writes "
+                    f"{len(local)}.\n"
+                    f"  in the app: {', '.join('`' + k + '`' for k in sorted(local))}\n"
+                    "  This is the exact defect the row was built for: the sentence said four "
+                    "and listed five for three days.",
+                )
+            )
+        for key in sorted(published - set(local)):
+            findings.append(
+                Finding(
+                    "CLAUDE.md",
+                    f"`{key}` is published as a device-local key and no file in `app/src` "
+                    "writes it to `localStorage`.",
+                )
+            )
+        for key in sorted(set(local) - published):
+            findings.append(
+                Finding(
+                    local[key][0],
+                    f"`{key}` is written to `localStorage` and CLAUDE.md's roster does not "
+                    "name it.\n"
+                    "  D27 permits `localStorage` only for facts about THIS MACHINE. Add it "
+                    "to that sentence with what it is a fact about, and correct the count.",
+                )
+            )
+        named = set(_ROSTER_FILE_RE.findall(paragraph))
+        holding = {f for files in local.values() for f in files if f.startswith("app/src/")}
+        for path in sorted(named - holding):
+            findings.append(
+                Finding(
+                    "CLAUDE.md",
+                    f"the roster names `{path}` and that file writes no `localStorage` key.\n"
+                    "  Name the module that HOLDS the key, not the screen that reads it back. "
+                    "`App.tsx` and `kit/index.tsx` were named here and "
+                    "`app/src/deviceMemory.ts`, which exists to hold them, was not.",
+                )
+            )
+        for path in sorted(holding - named):
+            findings.append(
+                Finding(
+                    path,
+                    "writes a `localStorage` key and CLAUDE.md's roster does not name this "
+                    f"file: {', '.join('`' + k + '`' for k in sorted(k for k in local if path in local[k]))}",
+                )
+            )
+
+    documented = "\n".join(read(doc) for doc in markdown_files())
+    for key in sorted(session):
+        if key not in documented:
+            findings.append(
+                Finding(
+                    session[key][0],
+                    f"`{key}` is written to `sessionStorage` and named in no markdown file.\n"
+                    "  D27 says the permitted keys are named there. Spell it — describing a "
+                    "key in English is not naming it, and a key nothing spells is one no "
+                    "search finds.",
+                )
+            )
+    report.add(
+        "storage keys",
+        MECHANICAL,
+        findings,
+        f"{len(local)} device-local keys against CLAUDE.md's roster, "
+        f"{len(session)} session keys all named in markdown",
+    )
+
+
 def check_views_opsec(report: Report) -> None:
     """D24's standing sentence: scripts/views.txt may never name a URL whose render can
     contain a code card. Enforcement existed for the images (captures/ is gitignored, both
@@ -10496,6 +10737,38 @@ def self_test() -> int:
         str(by_label["raw color"]),
     )
 
+    # ------------------------------------------------------------------ storage keys
+    #
+    # The reader binds a key to a store BY ITS FILE, which is sound only while no file in
+    # `app/src` opens both. That is a property of the tree rather than of the code, so it is
+    # asserted here: the day it stops holding, this case fails and the row starts reporting
+    # the file instead of guessing at it.
+    sites, site_findings = _storage_sites()
+    ok(
+        not site_findings,
+        "no file in app/src touches both stores, so the file is a sound binding",
+        str(site_findings),
+    )
+    ok(
+        "banchi.capture.deviceId" in sites["local"] and "banchi.session.box" in sites["session"],
+        "keys resolve to the right store through a const and through a helper's parameter",
+        str(sorted(sites["local"]) + sorted(sites["session"])),
+    )
+    ok(
+        _NUMBER_WORDS.get((_ROSTER_RE.search(read(ROOT / "CLAUDE.md")) or [None, "x"])[1].lower())
+        == len(sites["local"]),
+        "CLAUDE.md's count word parses and equals the number of device-local keys",
+        str(sorted(sites["local"])),
+    )
+    report = Report()
+    check_storage_keys(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["storage keys"],
+        "every storage key the app writes is published where the docs promise it is",
+        str(by_label["storage keys"]),
+    )
+
     # The staged-mode primitives, which have no loud failure mode: every one of them
     # answers plausibly against the worktree while auditing a tree the commit will not
     # produce. Driven through the module globals because that is how audit() drives them.
@@ -10930,6 +11203,7 @@ def audit(staged_only: bool) -> Report:
     check_status_sources(report)
     check_design_tokens(report)
     check_raw_color(report)
+    check_storage_keys(report)
     check_views_opsec(report)
     check_doc_hygiene(report, docs)
     check_route_rosters(report)
