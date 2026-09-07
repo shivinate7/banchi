@@ -31,8 +31,12 @@ NEUTRALS                        light        dark
 --bn-bg                         #f4f5f8      #0c0e12     the page
 --bn-surface                    #ffffff      #14171c     raised: panels, rows, cards
 --bn-surface-2                  #eceef2      #090b0e     sunken: wells, code, inactive tracks
---bn-surface-3                  #f7f8fa      #1b1f26     hover ground on a surface
+--bn-surface-3                  #f7f8fa      #1b1f26     an object that paints its own ground,
+                                                         lifted: a chip, a card, a raised row
 --bn-surface-glass              white .72    #14171c .72 the sticky bars, over blur
+--bn-hover                      ink 3%       white 4%    the pointer is over this surface. An
+                                                         alpha, so it rides the ground — a
+                                                         surface that rests TRANSPARENT only
 
 INK
 --bn-ink                        #0f1217      #eef0f4     body text, headings, money

@@ -148,7 +148,7 @@
 }
 .boxops-ops > .boxops-op:last-child,
 .boxops-ops > :last-child > .boxops-op:last-of-type { border-bottom: 0; }
-.boxops-op:hover:not(:disabled) { background: var(--bn-surface-3); }
+.boxops-op:hover:not(:disabled) { background: var(--bn-hover); }
 .boxops-op:disabled { opacity: 0.5; }
 .boxops-op-icon {
   display: grid;

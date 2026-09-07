@@ -102,7 +102,7 @@
   font: inherit;
   cursor: pointer;
 }
-.bn-brand:hover { text-decoration: none; background: var(--bn-surface-3); }
+.bn-brand:hover { text-decoration: none; background: var(--bn-hover); }
 /* The slot is the only thing here that animates LAYOUT, and it is why the nav below does not
    lurch: the brand row goes 109px -> 48px when the lockup gives way to the mark, and without this
    every nav row, group label and the footer would jump 61px in the frame the column started a
@@ -227,8 +227,7 @@
   white-space: nowrap;
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-.bn-nav-link:hover { background: var(--bn-surface-3); color: var(--bn-ink); text-decoration: none; }
-:root[data-theme='dark'] .bn-nav-link:hover { background: var(--bn-surface); }
+.bn-nav-link:hover { background: var(--bn-hover); color: var(--bn-ink); text-decoration: none; }
 .bn-nav-link .bn-icon { flex: none; color: var(--bn-ink-3); transition: color var(--bn-t-fast), transform var(--bn-t) var(--bn-ease-spring); }
 .bn-nav-link:hover .bn-icon { color: var(--bn-ink); }
 .bn-nav-link[aria-current='page'] { color: var(--bn-accent); background: var(--bn-accent-tint); font-weight: 600; }
@@ -313,7 +312,7 @@
   border-top: 1px solid var(--bn-line);
 }
 .bn-side-foot .bn-btn { justify-content: flex-start; box-shadow: none; background: transparent; color: var(--bn-ink-2); font-weight: 500; height: 34px; }
-.bn-side-foot .bn-btn:hover { background: var(--bn-surface-3); color: var(--bn-ink); }
+.bn-side-foot .bn-btn:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .bn-side-foot .bn-btn .bn-icon { color: var(--bn-ink-3); }
 .bn-server {
   display: flex;

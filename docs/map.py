@@ -2337,7 +2337,9 @@ COMPONENTS = [
             # ---- the ground: what everything else reads ----
             "src/tokens.css": {"does": "BANCHI'S TOKENS, and the only file in app/ allowed to write a "
                                        "color. Named `--bn-*` and grouped by the job rather than by "
-                                       "the value: neutrals (bg, surface 1-3, glass), ink 1-4, three "
+                                       "the value: neutrals (bg, surface 1-3, glass, and `--bn-hover`, "
+                                       "the pointer's own step — an ALPHA so it rides whatever "
+                                       "ground it lands on, D110), ink 1-4, three "
                                        "line weights, brand (accent with hover/press/two tints, and "
                                        "`live`, the vermilion that means a camera or a capture), the "
                                        "four semantic pairs, three shadows plus an accent glow, the "
@@ -2359,7 +2361,7 @@ COMPONENTS = [
                                        "raises the three control heights to a thumb's 40-46px — the "
                                        "POINTER decides, not the width, because an iPad in portrait "
                                        "is 820px wide and all thumb.",
-                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94"],
+                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110"],
                                "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
                                        "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
                                        "spacing row and one radius, and merges every `:root` in this "
