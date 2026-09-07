@@ -356,6 +356,13 @@ def _surveyed(row, standing: str) -> dict:
         "above_market": _cash(row.above_market),
         "at_risk": _cash(row.at_risk),
         "proposed": _cash(row.proposed),
+        # THE THREE PRESETS, PRICED SERVER-SIDE, EXACTLY AS A RUN'S `pricing.json` CARRIES THEM.
+        # This was absent until 2026-09-07 and the client filled `presets: {}` for every lens
+        # row, so pressing `Market −5%` there filled nothing, changed nothing the lens sends —
+        # `apply` reads typed answers only — and still wrote `policy.rule` to the store,
+        # silently repricing every future joined run. `pipeline/pricing.py` owns the arithmetic
+        # so the two doors cannot compute a different number for one card.
+        "presets": pricing.preset_prices(row.row),
         "cut": _cash(row.cut),
         "given_up": _cash(row.given_up),
         "owned_since": row.owned_since,

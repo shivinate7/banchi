@@ -316,3 +316,48 @@ def flat_price(price, allow_below_floor: bool = False, floor: Decimal = FLOOR) -
             f"labor. Pass allow_below_floor=True to mean it."
         )
     return Disposition(kind=FLAT_PRICE, price=price)
+
+
+# The three presets the pricing screen offers, priced HERE so this module runs once and in
+# Python (D49). The owner picked these three and their numbers in an interview: match market,
+# undercut market by 5, undercut TCG Low by 1. A fourth is a change to this tuple and to
+# `app/src/Pricing.tsx`'s labels, and to nothing else.
+#
+# THE CLIENT PERFORMS NO ARITHMETIC ON MONEY, WHICH IS WHAT THIS TUPLE BUYS. Re-implementing
+# `Rule.apply` + `round_money` + `clamp_floor` in TypeScript would put the rounding-before-
+# clamping order in two languages with nothing auditing the second, and that order is the whole
+# reason `list_price` is a function rather than an expression.
+#
+# HERE RATHER THAN IN `cli/cmd_join.py`, WHICH IS WHERE IT LIVED UNTIL 2026-09-07. Two callers
+# need it now — a run's `pricing.json` and a markdown's `survey.json` — and the second was
+# shipping `presets: {}`, so every preset button on the lens filled nothing while still writing
+# the store's standing rule. One copy of the arithmetic, or the two doors drift.
+PRESETS = (
+    ("market_match", RULE_MATCH, BASIS_MARKET),
+    ("market_undercut_5", "undercut:5", BASIS_MARKET),
+    ("low_undercut_1", "undercut:1", BASIS_LOW),
+)
+
+
+def preset_prices(row) -> dict:
+    """What each named preset would list this export row at, keyed by preset name.
+
+    TAKES THE EXPORT ROW AND NOTHING ELSE, which is what lets a run and a lens share it: a
+    run has a `SkuMatch` and a lens has a survey entry, and the only thing both carry is the
+    verbatim row.
+
+    `None` IS A REAL ANSWER AND NOT AN ERROR. Measured on the wide Pokemon export, 394 of
+    2,476 listable rows carry a blank `TCG Low Price`, so a Low-based preset genuinely has
+    nothing to price them from. The screen prices what it can, leaves the rest, and says
+    which (the owner's ruling).
+    """
+    out = {}
+    for name, rule, basis in PRESETS:
+        column = tcgcsv.MARKET_PRICE_COLUMN if basis == BASIS_MARKET else tcgcsv.LOW_PRICE_COLUMN
+        basis_price = tcgcsv.parse_price(row.get(column, ""))
+        out[name] = (
+            None
+            if basis_price is None or basis_price <= 0
+            else str(list_price(basis_price, rule=Rule.parse(rule)))
+        )
+    return out

@@ -54,20 +54,12 @@ def _counts_block(say, counts: Counter, indent: str = "                   ") -> 
         say(f"{indent}{reason:<34} {count}")
 
 
-# The three presets the pricing screen offers, priced HERE so `pipeline/pricing.py` runs
-# once and in Python (D49). The owner picked these three and their numbers in an interview:
-# match market, undercut market by 5, undercut TCG Low by 1. A fourth is a change to this
-# tuple and to `app/src/Pricing.tsx`'s labels, and to nothing else.
-#
-# THE CLIENT PERFORMS NO ARITHMETIC ON MONEY, WHICH IS WHAT THIS TUPLE BUYS. Re-implementing
-# `Rule.apply` + `round_money` + `clamp_floor` in TypeScript would put `pricing.py`'s
-# rounding-before-clamping order in two languages with nothing auditing the second, and that
-# order is the whole reason `list_price` is a function rather than an expression.
-PRESETS = (
-    ("market_match", pricing.RULE_MATCH, pricing.BASIS_MARKET),
-    ("market_undercut_5", "undercut:5", pricing.BASIS_MARKET),
-    ("low_undercut_1", "undercut:1", pricing.BASIS_LOW),
-)
+# MOVED TO `pipeline/pricing.py` ON 2026-09-07, and delegated rather than duplicated. A
+# markdown's `survey.json` needs the identical figures — the lens shipped `presets: {}` until
+# then, so every preset button there filled nothing while still writing the store's standing
+# rule — and two copies of the arithmetic is two doors that drift. The names are re-exported
+# because this module's callers already spell them here.
+PRESETS = pricing.PRESETS
 
 
 def _cell(row, column):
@@ -83,30 +75,8 @@ def _cell(row, column):
 
 
 def _preset_prices(match):
-    """What each named preset would list this SKU at, or `None` where it cannot price it.
-
-    `None` IS A REAL ANSWER AND NOT AN ERROR. Measured on the wide Pokemon export, 394 of
-    2,476 listable rows carry a blank `TCG Low Price`, so a Low-based preset genuinely has
-    nothing to price them from — and `SkuMatch.list_price` returns `None` there, which
-    `tcgcsv.set_writable` would turn into an import row carrying a quantity and no price.
-    The screen prices what it can, leaves the rest, and says which (the owner's ruling).
-    """
-    out = {}
-    for name, rule, basis in PRESETS:
-        basis_price = tcgcsv.parse_price(
-            match.row.get(
-                tcgcsv.MARKET_PRICE_COLUMN
-                if basis == pricing.BASIS_MARKET
-                else tcgcsv.LOW_PRICE_COLUMN,
-                "",
-            )
-        )
-        out[name] = (
-            None
-            if basis_price is None or basis_price <= 0
-            else str(pricing.list_price(basis_price, rule=pricing.Rule.parse(rule)))
-        )
-    return out
+    """What each named preset would list this SKU at. `pipeline/pricing.py` owns the figures."""
+    return pricing.preset_prices(match.row)
 
 
 def _pricing_table(run_dir, resolved, choice, snapshot):
