@@ -6624,10 +6624,54 @@ sentences and get different writers.
 | `record_fill` | `fulfilled` + `by_hand` | yes; there is no card to sell | `forget_fill`, by count |
 | `close_line` | `closed_at` + `closed_reason` | **no** | `reopen_line` |
 
-`FILL_REASONS` is `sealed` / `off_system`. `CLOSE_REASONS` is `shipped_elsewhere` /
-`not_shipping`. **`not_shipping` is deliberately on the stand-down and not the fill**: a refund
-or a cancellation stops a line owing without anything going anywhere, and closing it through
-`fulfilled` would put a shipment on record for one that never happened.
+`FILL_REASONS` is `sealed` / `off_system` / `sold_separately`. `CLOSE_REASONS` is
+`shipped_elsewhere` / `not_shipping`.
+**`not_shipping` is deliberately on the stand-down and not the fill.**
+A refund or a cancellation stops a line owing without anything going anywhere, and
+closing it through `fulfilled` would put a shipment on record for one that never happened.
+
+### The walk's own edge case, and the third fill reason
+
+**The owner asked what happens when a copy is pulled ahead of time.** Three of the four answers
+were already good: a card pulled physically but not recorded is still `identified`, so the walk
+offers it and the record catches up; a copy recorded against another order refuses with
+`CopyAlreadyPulled` and draws as spoken for; a re-shot copy reads as unseen and is named as an
+honest limit in `store/orders.py`'s header. **The fourth is a trap**, and it was the same trap as
+the unseen SKUs wearing a different reason code.
+
+**Reproduced on the owner's store.** An order for 3 copies of `9018548`, resolved, 3 in box 3:
+
+```
+before                                wanted 3  picks 3  resolved           fulfilled 0
+mark 3/650 sold on #/inventory
+after                                 wanted 3  picks 2  short   on_hand 2  fulfilled 0
+pull the two the walk still offers
+end                                   wanted 3  picks 0  no_copies_on_hand  fulfilled 2, owed 1
+```
+
+**Open forever, with the third copy already in the envelope.** `#/inventory`'s sale does not
+touch the ledger — D63 keeps them apart, rightly, because a sale is a fact about a card and a
+fulfilment is a fact about an order — so nothing ever counted it. `no_copies_on_hand`'s remedy
+*"Sold, retired or pooled — the counts beside this line say which"* is a dead end, and the first
+build of this entry gated its presses to `sku_unseen` and `not_a_single`, so none was offered.
+
+**`sold_separately` is the third fill reason and it is not `off_system`.** That word means this
+store never photographed the card; this card it did, and the two want telling apart by whoever
+reads the row later — one is a bookkeeping gap, the other a blind spot.
+
+**`no_copies_on_hand` gets TWO presses, because it carries three truths.** `_reason`'s own
+comment says so: this order's copy went out by the sale, another buyer took the last one, or it
+was retired damaged. Only the operator knows which, so *"I already sent it"* fills and *"it
+isn't shipping"* stands down, and neither is assumed.
+**That press is also the only place `not_shipping` is reachable** —
+without it, this entry's own change left a server capability no screen could reach, which is the
+rule the entry cites.
+
+**`short` is deliberately excluded.** While copies are on hand the remedy really is to pull
+them, and a fill button there would invite closing a line whose cards are sitting in box 3.
+T7 pins the mixed row that results — 2 pulled copies with their capture ids, 1 by hand,
+`fulfilled` 3 — because a single count could not tell the operator that two are traceable to a
+slot and one is only their word.
 
 **THE INVARIANT IS `fulfilled == len(copies) + by_hand`**, maintained by four methods and
 written by nothing else. `Ledger.progress_drift` reports any row where it fails and T7 asserts

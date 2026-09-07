@@ -636,6 +636,7 @@ type PullHandler = (order: OrderRow, line: ResolvedLine, pick: PickRow, target: 
 type FillHandler = (order: OrderRow, line: ResolvedLine, count: number, reason: OrderFillReason) => void
 type KindHandler = (order: OrderRow, line: ResolvedLine, kind: 'sealed' | 'accessory' | null) => void
 type StandDownHandler = (rows: readonly OrderRow[], reason: OrderCloseReason) => void
+type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderCloseReason) => void
 
 /* ---- the selection, mirrored in the hash ----------------------------------------------------- */
 
@@ -1374,6 +1375,16 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     })()
   }
 
+  /* D113. A line that is not shipping at all — refunded, cancelled, or the copy was retired
+     damaged and the buyer took a refund. It stands the ORDER down rather than the line, because
+     `POST /orders/close` is order-shaped and every one of these has been a single-line order in
+     practice; a multi-line order with one refunded line wants the line-shaped route, which the
+     ledger already has (`close_line`) and this screen does not yet reach. Named rather than
+     pretended: the button is drawn only where the order has ONE line. */
+  const onCloseLine = (order: OrderRow, _line: ResolvedLine, reason: OrderCloseReason) => {
+    onStandDown([order], reason)
+  }
+
   /* --------------------------------------------------------------------- what is drawn */
 
   const setStage = (next: Stage) => {
@@ -1561,6 +1572,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           onFill={onFill}
           onDeclareKind={onDeclareKind}
           onStandDown={onStandDown}
+          onCloseLine={onCloseLine}
           onFetch={onFetch}
           onReread={() => void reread()}
         />
@@ -1677,6 +1689,7 @@ function PullStage({
   onFill,
   onDeclareKind,
   onStandDown,
+  onCloseLine,
   onFetch,
   onReread,
 }: {
@@ -1701,6 +1714,7 @@ function PullStage({
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
   readonly onStandDown: StandDownHandler
+  readonly onCloseLine: CloseLineHandler
   readonly onFetch: () => void
   readonly onReread: () => void
 }) {
@@ -1900,6 +1914,7 @@ function PullStage({
       onPull={onPull}
       onFill={onFill}
       onDeclareKind={onDeclareKind}
+      onCloseLine={onCloseLine}
       onReread={onReread}
       variant={variant}
     />
@@ -2173,6 +2188,7 @@ function OrderDetail({
   onPull,
   onFill,
   onDeclareKind,
+  onCloseLine,
   onReread,
   variant,
 }: {
@@ -2185,6 +2201,7 @@ function OrderDetail({
   readonly onPull: PullHandler
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
   readonly onReread: () => void
   /** `panel` is the detail beside the list; `inline` is the body under an accordion head, which
    *  already drew the number, the date and the bar. */
@@ -2245,6 +2262,7 @@ function OrderDetail({
               onPull={onPull}
               onFill={onFill}
               onDeclareKind={onDeclareKind}
+              onCloseLine={onCloseLine}
             />
           ))}
         </ol>
@@ -2355,6 +2373,7 @@ function LineStandDown({
   busy,
   onFill,
   onDeclareKind,
+  onCloseLine,
 }: {
   readonly order: OrderRow
   readonly line: ResolvedLine
@@ -2362,6 +2381,7 @@ function LineStandDown({
   readonly busy: string | null
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
 }) {
   const claimed = progress?.declared_kind ?? null
   const sealed = claimed === 'sealed' || claimed === 'accessory' || line.line.kind !== 'single'
@@ -2369,6 +2389,60 @@ function LineStandDown({
   const filling = busy === `fill/${line.order_key}/${line.sku}`
   const claiming = busy === `kind/${line.order_key}/${line.sku}`
   const locked = busy !== null
+
+  /* THE COPIES WERE HERE AND HAVE LEFT, which is a different situation from a SKU this store has
+     never seen and takes a different pair of presses. `no_copies_on_hand` covers three truths at
+     once — this order's copy went out through `#/inventory`'s sale, another buyer took the last
+     one, or it was retired damaged — and `_reason`'s own comment says so. Only the operator knows
+     which, so both answers are offered and neither is assumed. */
+  const gone = line.reason === 'no_copies_on_hand'
+  if (gone) {
+    return (
+      <div className="orders-standdown">
+        {progress !== null && progress.by_hand > 0 ? (
+          <p className="orders-standdown-said">
+            {plural(progress.by_hand, 'copy', 'copies')} already closed by hand.
+          </p>
+        ) : null}
+        <div className="orders-standdown-row">
+          {owed < 1 ? null : (
+            <Button
+              variant="primary"
+              icon="hand"
+              busy={filling}
+              disabled={locked}
+              onClick={() => onFill(order, line, owed, 'sold_separately')}
+            >
+              I already sent {owed === 1 ? 'it' : `these ${owed}`}
+            </Button>
+          )}
+          {/* THE ONE PLACE `not_shipping` IS REACHABLE. It stands the ORDER down, so it is drawn
+              only on a single-line order — on a multi-line one it would close lines nobody
+              answered for, and the line-shaped route this wants does not exist on the wire yet. */}
+          {order.lines.length === 1 ? (
+            <Button
+              icon="undo"
+              busy={busy === 'close'}
+              disabled={locked}
+              onClick={() => onCloseLine(order, line, 'not_shipping')}
+            >
+              It isn&apos;t shipping
+            </Button>
+          ) : null}
+        </div>
+        <p className="orders-standdown-note">
+          {/* THE COUNTS ARE THE EVIDENCE and they are already on the breakdown row above, so this
+              says what each press MEANS rather than repeating them. */}
+          “I already sent it” records that the copy went out for this order but left through the
+          sale on <code>#/inventory</code>, so nothing counted it here — it adds to the order&apos;s
+          count and marks nothing sold, because it already is.
+          {order.lines.length === 1
+            ? ' “It isn’t shipping” closes the order claiming no copy went at all — a refund, a cancellation, or a card retired damaged.'
+            : ' A line that is never shipping on a multi-line order has no press here yet.'}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="orders-standdown">
@@ -2435,6 +2509,7 @@ function OrderLineRow({
   onPull,
   onFill,
   onDeclareKind,
+  onCloseLine,
 }: {
   readonly order: OrderRow
   readonly line: ResolvedLine
@@ -2444,6 +2519,7 @@ function OrderLineRow({
   readonly onPull: PullHandler
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
 }) {
   const remedy = orderReasonRemedy(line.reason)
   const head = headlineOf(line)
@@ -2506,9 +2582,13 @@ function OrderLineRow({
             <p className="orders-line-says">{orderReasonLabel(line.reason)}</p>
             {remedy === '' ? null : <p className="orders-line-remedy">{remedy}</p>}
             <p className="orders-line-breakdown">{breakdownOf(line)}</p>
-            {/* D113. The two reasons whose remedy is otherwise a dead end get the presses that
-                can actually move them; every other reason keeps the remedy alone. */}
-            {line.reason === 'sku_unseen' || line.reason === 'not_a_single' ? (
+            {/* D113. The THREE reasons whose remedy is otherwise a dead end get the presses that
+                can actually move them. `short` is deliberately not among them: while copies are
+                still on hand the remedy really is to pull them, and a fill button there would
+                invite closing a line whose cards are sitting in box 3. */}
+            {line.reason === 'sku_unseen' ||
+            line.reason === 'not_a_single' ||
+            line.reason === 'no_copies_on_hand' ? (
               <LineStandDown
                 order={order}
                 line={line}
@@ -2516,6 +2596,7 @@ function OrderLineRow({
                 busy={busy}
                 onFill={onFill}
                 onDeclareKind={onDeclareKind}
+                onCloseLine={onCloseLine}
               />
             ) : null}
           </div>

@@ -2311,8 +2311,10 @@ export type OrderLineProgress = {
 export type OrderLineKind = 'single' | 'sealed' | 'accessory'
 
 /** Why a hand-fill was honest. `sealed` — not a single, picked off a shelf; `off_system` — a
- *  single this store never photographed. Both say a copy WENT. */
-export type OrderFillReason = 'sealed' | 'off_system'
+ *  single this store never photographed; `sold_separately` — the copy was here and left through
+ *  `#/inventory`'s sale rather than the order pull, so nothing counted it against the order.
+ *  All three say a copy WENT, which is what separates them from `OrderCloseReason`. */
+export type OrderFillReason = 'sealed' | 'off_system' | 'sold_separately'
 
 /** Why a line was stood down. NEITHER CLAIMS A COPY LEFT, which is what separates these from
  *  `OrderFillReason`: `shipped_elsewhere` is an order that went out without this store

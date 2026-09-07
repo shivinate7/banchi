@@ -9043,8 +9043,10 @@ def do_order_fill(payload: dict) -> dict:
                 f"{', '.join(order_store.FILL_REASONS)} — {order_store.FILL_SEALED} for a "
                 f"line that is not a single and was picked by hand, "
                 f"{order_store.FILL_OFF_SYSTEM} for a single this store never "
-                f"photographed. A refund or a cancellation is neither and is not closed "
-                f"here: `fulfilled` counts copies that went.",
+                f"photographed, {order_store.FILL_SOLD_SEPARATELY} for a copy that was "
+                f"here and left through #/inventory's sale rather than the order pull. A "
+                f"refund or a cancellation is none of them and is not closed here: "
+                f"`fulfilled` counts copies that went. Stand it down instead.",
             )
 
     with Store().write() as snapshot:

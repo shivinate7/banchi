@@ -141,7 +141,15 @@ VERSION = 1
 # and it is named in D113 as a reopening rather than squeezed in here.
 FILL_SEALED = "sealed"          # not a single: picked off a shelf and shipped by hand
 FILL_OFF_SYSTEM = "off_system"  # a single this store never photographed
-FILL_REASONS = (FILL_SEALED, FILL_OFF_SYSTEM)
+# THE COPY WAS HERE AND LEFT BY THE WRONG DOOR. Measured 2026-09-06: mark one copy sold on
+# `#/inventory` while an order wants three, pull the other two through the walk, and the line
+# ends at `fulfilled` 2, `outstanding` 1, `no_copies_on_hand` — open forever, with the third
+# copy in the envelope. `#/inventory`'s sale does not touch the ledger (D63 keeps them apart,
+# rightly: a sale is a fact about a card and a fulfilment is a fact about an order), so
+# nothing counted it. NOT `off_system`, which means this store never photographed the card at
+# all; this one it did, and the two want telling apart by whoever reads the row later.
+FILL_SOLD_SEPARATELY = "sold_separately"
+FILL_REASONS = (FILL_SEALED, FILL_OFF_SYSTEM, FILL_SOLD_SEPARATELY)
 
 # WHY A LINE CAN STOP OWING WITHOUT ANYTHING BEING FILLED. A fill says copies WENT and adds
 # to the count; a stand-down says this store is not going to account for them at all, and

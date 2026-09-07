@@ -439,6 +439,65 @@ test('a line no pull can reach offers the two presses that can, and each sends i
   expect(Object.keys(fill)).not.toContain('capture_id')
 })
 
+test('a copy that left by the sale door can be recorded, and a line that will not ship can be closed', async ({
+  page,
+}) => {
+  /* THE WALK'S OWN EDGE CASE, reproduced against the real store on 2026-09-06: mark one copy
+     sold on `#/inventory` while an order wants three, pull the other two through the walk, and
+     the line lands at `no_copies_on_hand` with `outstanding` 1 and no copy any pull can reach.
+     `#/inventory`'s sale never touches the ledger (D63), so nothing counted the first copy.
+
+     `no_copies_on_hand` carries THREE truths — this order's copy went out by the sale, another
+     buyer took the last one, or it was retired damaged — so both answers are offered and
+     neither is assumed. */
+  const gone = line({ reason: 'no_copies_on_hand', fulfilled: 0, outstanding: 1, on_hand: 0, sold: 3, picks: [] })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [order()],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [gone] }],
+    ),
+  })
+
+  const stand = page.locator('.orders-standdown').first()
+  await expect(stand).toBeVisible()
+
+  await stand.getByRole('button', { name: /already sent/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/fill').length).toBe(1)
+  expect(wire.find((one) => one.path === '/orders/fill')?.body).toEqual({
+    source: 'TCGplayer',
+    number: ORDER_NUMBER,
+    sku: SKU,
+    count: 1,
+    /* NOT `off_system`. That means this store never photographed the card; this one it did, and
+       the row has to say which so the next reader can tell a bookkeeping gap from a blind spot. */
+    reason: 'sold_separately',
+  })
+
+  /* THE ONLY PLACE `not_shipping` IS REACHABLE. Without this press it is a server capability no
+     screen can reach, which is the rule this whole change cites — broken by the change itself. */
+  await stand.getByRole('button', { name: /isn.t shipping/i }).click()
+  await expect.poll(() => wire.filter((one) => one.path === '/orders/close').length).toBe(1)
+  expect(wire.find((one) => one.path === '/orders/close')?.body).toEqual({
+    orders: [{ source: 'TCGplayer', number: ORDER_NUMBER }],
+    reason: 'not_shipping',
+  })
+})
+
+test('a short line offers no hand-fill, because its copies are still in the boxes', async ({ page }) => {
+  /* THE BOUNDARY. `short` means copies are on hand or spoken for, and the remedy really is to
+     pull them — a fill button here would invite closing a line whose cards are sitting in box 3,
+     and `fulfilled` would then count a copy still on the shelf. */
+  const short = line({ reason: 'short', fulfilled: 0, outstanding: 2, on_hand: 1 })
+  await open(page, {
+    orders: payloadOf(
+      [order()],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [short] }],
+    ),
+  })
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect(page.locator('.orders-standdown')).toHaveCount(0)
+})
+
 test('a resolved line offers no stand-down, because its remedy is the pick rows', async ({ page }) => {
   /* THE OTHER HALF OF THE RULE. The presses are drawn ONLY where the remedy is a dead end;
      offering "I shipped this by hand" beside a line whose copies are sitting in box 3 is an

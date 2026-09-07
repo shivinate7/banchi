@@ -16834,6 +16834,57 @@ def check_order_ledger(checks: Checks) -> None:
             "and a hand-fill against a SKU the buyer did not order refuses, like a pull",
         )
 
+        # ---- 11c. D113: A COPY THAT LEFT BY THE WRONG DOOR, which is the walk's own edge case
+        #
+        # Reproduced against the owner's store 2026-09-06: mark ONE copy sold on `#/inventory`
+        # while an order wants three, then pull the other two through the walk. `#/inventory`'s
+        # sale does not touch the ledger — D63 keeps them apart, rightly, because a sale is a
+        # fact about a card and a fulfilment is a fact about an order — so nothing ever counted
+        # the first copy. The line ended `fulfilled` 2, `outstanding` 1, `no_copies_on_hand`:
+        # OPEN FOREVER, with the third copy already in the envelope.
+        mixed = order_store.order_key("TCGplayer", "F-6")
+        with store.write() as snapshot:
+            snapshot.ledger.ingest([record("F-6", line("9191486", 3, name="Moonfall"),
+                                           placed_at="2026-09-01T10:00:00.000+00:00")])
+            snapshot.ledger.record_pull(mixed, "9191486", ["m1", "m2"])
+        checks.equal(
+            (store.read().ledger.fulfilled(mixed, "9191486"),
+             store.read().ledger.outstanding(mixed, "9191486")),
+            (2, 1),
+            "two pulled through the walk, one still owed — and the third copy has already left "
+            "the store by the sale door, so no pull can ever reach it",
+        )
+        with store.write() as snapshot:
+            snapshot.ledger.record_fill(mixed, "9191486", 1,
+                                        order_store.FILL_SOLD_SEPARATELY)
+        settled = store.read()
+        row = settled.ledger.recorded(mixed, "9191486")
+        checks.equal(
+            (settled.ledger.fulfilled(mixed, "9191486"),
+             settled.ledger.outstanding(mixed, "9191486"),
+             len(row.copies), row.by_hand, row.reason),
+            (3, 0, 2, 1, order_store.FILL_SOLD_SEPARATELY),
+            "THE TWO KINDS OF CLOSE COMPOSE ON ONE LINE: 2 pulled copies with their capture ids "
+            "and 1 recorded by hand, `fulfilled` 3, and the row still says which was which. A "
+            "single count could not tell the operator that two of these are traceable to a slot "
+            "and one is only their word",
+        )
+        checks.ok(
+            all(r.number != "F-6" for r in settled.ledger.unfulfilled()),
+            "and the order finally closes — the state it could not reach before D113",
+        )
+        checks.equal(
+            settled.ledger.progress_drift(), [],
+            "with `fulfilled == len(copies) + by_hand` holding across a MIXED row, which is the "
+            "case that would break it if a fifth writer ever moved one half alone",
+        )
+        checks.equal(
+            order_store.FILL_SOLD_SEPARATELY != order_store.FILL_OFF_SYSTEM, True,
+            "`sold_separately` is its own word and not `off_system`: that one means this store "
+            "never photographed the card, and this card it did — the two want telling apart by "
+            "whoever reads the row later",
+        )
+
     # ------------------------------- 12. parse drops what the dataclasses do not declare
     #
     # `store/master.py:parse` filters on `__annotations__`, and a field written but not
