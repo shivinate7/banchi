@@ -238,7 +238,7 @@
     box-shadow var(--bn-t-fast) var(--bn-ease);
 }
 .pricing-section-answer:hover { color: var(--bn-ink); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
-.pricing-section-answer:active { transform: translateY(1px); }
+/* the 1px dip comes from base.css's press floor now. */
 .pricing-section-answer-figure {
   font-size: var(--bn-fs-lg);
   font-weight: 700;
@@ -976,7 +976,7 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
 .pricing-ship-verdict:hover { background: var(--bn-surface-2); }
-.pricing-ship-verdict:active { transform: translateY(1px); }
+/* the 1px dip comes from base.css's press floor now. */
 .pricing-ship-verdict > .bn-icon:last-child { flex: none; color: var(--bn-ink-4); }
 .pricing-ready { display: inline; font-size: var(--bn-fs-md); line-height: 1.4; color: var(--bn-ink-2); min-width: 0; }
 .pricing-ready .bn-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }

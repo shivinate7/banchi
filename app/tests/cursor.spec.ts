@@ -455,6 +455,141 @@ test('a control that answers the pointer eases into it', async ({ page }) => {
   ).toHaveLength(0)
 })
 
+/* THE PRESS, IN TWO CASES, BECAUSE THE FLOOR AND THE SCREENS CAN FAIL DIFFERENTLY — the same
+ * split the cursor half of this file already makes, and for the same reason. The sweep asks
+ * whether what the product draws obeys the rule; the floor case asks whether the rule answers
+ * correctly for every shape a control can take. Neither subsumes the other.
+ *
+ * D50 DECLINED `:active` ON 2026-08-29 AND THE OWNER REOPENED IT ON 2026-09-06. Measured over
+ * the 311 enabled controls the eleven routes draw: 121 pressed and 190 did not, the largest
+ * silent group being every `.bn-nav-link` in the sidebar — this product's primary navigation —
+ * and `.bn-brand`, which was therefore dead to the pointer and to the finger at once. */
+
+/* THE VOCABULARY IS SPLIT ON PURPOSE AND THIS IS WHAT KEEPS IT SPLIT: `translate` is the
+ * product's 1px dip and `transform: scale()` is a screen's own emphasis. They are different
+ * properties so they COMPOSE — which is the only reason a press floor could be written at all
+ * without destroying the one control that carries a rest transform.
+ *
+ * A screen that spells the dip as `transform: translateY(1px)` is not merely off-style, it
+ * DOUBLES the floor to 2px, and it does so silently. Six rules were spelling it that way when
+ * the floor landed and all six were moved onto it. This is the rule that stops a seventh, and
+ * `translateY(0)` stays legal because that is a control CANCELLING a hover lift rather than
+ * declaring a dip — five rules do exactly that and are correct. */
+test('no screen spells the press dip as a transform — the floor owns it', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await settleFonts(page)
+  await expect(page.locator('main.gallery')).toBeVisible()
+
+  const found = await page.evaluate(() => {
+    const collect = (list: CSSRuleList, out: CSSStyleRule[]) => {
+      for (const r of Array.from(list)) {
+        if (r instanceof CSSStyleRule) out.push(r)
+        else if ('cssRules' in r) { try { collect((r as CSSGroupingRule).cssRules, out) } catch { /* opaque */ } }
+      }
+    }
+    const rules: CSSStyleRule[] = []
+    for (const sheet of Array.from(document.styleSheets)) {
+      try { collect(sheet.cssRules, rules) } catch { /* cross-origin, not ours */ }
+    }
+    const bad: string[] = []
+    let walked = 0
+    for (const rule of rules) {
+      if (!rule.selectorText?.includes(':active')) continue
+      walked++
+      const tf = rule.style.getPropertyValue('transform')
+      if (!tf) continue
+      /* `translateY(0)` and `translate(…, 0)` cancel a lift and are allowed; any NONZERO
+         vertical offset is the floor's job being done twice. */
+      const m = tf.match(/translateY\(\s*(-?[\d.]+)([a-z%]*)\s*\)/i)
+      if (m && parseFloat(m[1] ?? '0') !== 0) {
+        bad.push(`${rule.selectorText}  spells the dip as \`transform: ${tf.trim()}\` — ` +
+          `that doubles base.css's press floor. Keep the scale, drop the translateY.`)
+      }
+    }
+    return { bad, walked }
+  })
+
+  expect(found.walked, 'no `:active` rule was found at all — is the CSSOM read still valid?')
+    .toBeGreaterThan(10)
+  expect(
+    found.bad,
+    `${found.bad.length} rules double the press floor:\n${found.bad.join('\n')}`,
+  ).toHaveLength(0)
+})
+
+/* THE FLOOR ITSELF, PRESSED WITH A REAL MOUSE ON ELEMENTS THIS TEST BUILDS — and it has to be a
+ * real press, because `:active` cannot be forced from script the way a class can. Bare elements
+ * with no component class are the point, exactly as in the cursor floor's own case below: the
+ * floor is what is under test, so anything dressed in a screen's class would be testing that
+ * screen instead.
+ *
+ * THE DISABLED SHAPE IS THE ONE THAT EARNS THIS CASE. A control refusing the click must not move
+ * under it — the same claim the cursor floor's disabled arm makes with `not-allowed`, and the
+ * class that was 30 of D50's original 41 defects. A floor that pressed everything including the
+ * controls that refuse would be a new defect of exactly that shape. */
+const PRESS_SHAPES: [html: string, moves: boolean, why: string][] = [
+  ['<button>x</button>', true, 'a button'],
+  ['<button disabled>x</button>', false, 'a disabled button'],
+  ['<button aria-disabled="true">x</button>', false, 'an aria-disabled button'],
+  ['<a href="#/gallery">x</a>', true, 'a link'],
+  ['<select><option>x</option></select>', true, 'a select'],
+  ['<select disabled><option>x</option></select>', false, 'a disabled select'],
+  ['<summary>x</summary>', true, 'a summary'],
+  ['<div role="button">x</div>', true, 'a div promoted to a control'],
+  ['<div role="menuitem">x</div>', true, 'a menu item'],
+  ['<input type="checkbox">', true, 'a checkbox'],
+  ['<input type="checkbox" disabled>', false, 'a disabled checkbox'],
+  /* NOT A CONTROL, AND ASSERTED NEGATIVELY for the same reason the cursor floor asserts one:
+     a floor that reached ordinary content would be making a false offer, and `<p>` is the
+     cheapest proof that the selector list is a list rather than a `*`. */
+  ['<p>words</p>', false, 'a paragraph, deliberately not a control'],
+]
+
+test('the press floor answers for every shape a control can take', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await settleFonts(page)
+  await expect(page.locator('main.gallery')).toBeVisible()
+
+  const wrong: string[] = []
+  for (const [html, moves, why] of PRESS_SHAPES) {
+    /* PLACED AT A FIXED POINT ON TOP OF EVERYTHING, so the press lands on the shape under test
+       and not on whatever the gallery draws there. Rebuilt per shape rather than laid out in a
+       row, because a press must be aimed and one known coordinate is cheaper than eleven. */
+    await page.evaluate((h) => {
+      document.getElementById('press-probe')?.remove()
+      const host = document.createElement('div')
+      host.id = 'press-probe'
+      host.style.cssText = 'position:fixed;top:300px;left:500px;width:120px;height:44px;z-index:2147483647'
+      host.innerHTML = h
+      const el = host.firstElementChild as HTMLElement
+      el.style.display = 'block'
+      el.style.width = '120px'
+      el.style.height = '44px'
+      document.body.appendChild(host)
+    }, html)
+
+    await page.mouse.move(560, 322)
+    await page.mouse.down()
+    const translate = await page.evaluate(
+      () => getComputedStyle(document.getElementById('press-probe')!.firstElementChild!).translate,
+    )
+    await page.mouse.up()
+
+    const moved = translate !== 'none' && translate !== ''
+    if (moved !== moves) {
+      wrong.push(moves
+        ? `  ${why} did not move under the press — translate is "${translate}"`
+        : `  ${why} moved under the press — translate is "${translate}", and it must not move at all`)
+    }
+  }
+  await page.evaluate(() => document.getElementById('press-probe')?.remove())
+
+  expect(
+    wrong,
+    `the press floor answers wrongly for ${wrong.length} of ${PRESS_SHAPES.length} shapes:\n${wrong.join('\n')}`,
+  ).toHaveLength(0)
+})
+
 /* THE HOVER STATE THE OWNER GRANTED A TOKEN FOR, ASSERTED AS A CHANGE RATHER THAN AS A VALUE.
  * Pinning `rgb(107, 110, 115)` would go red the day the owner picks a different grey, which is
  * a token decision and not a regression. What must stay true is that the edge RESPONDS — a

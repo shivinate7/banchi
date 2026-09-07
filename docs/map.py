@@ -2364,7 +2364,7 @@ COMPONENTS = [
             # kinds, `[role='button']` — so it can never reach a `.position-*` class, which is
             # what keeps D41's Fulfiller firewall and D45's walk-to scoping component-graph facts
             # rather than things a global rule could quietly breach.
-            "src/base.css": {"does": "reset and the page ground, and the five app-wide floors: the "
+            "src/base.css": {"does": "reset and the page ground, and the six app-wide floors: the "
                                      "`:focus-visible` ring, the cursor floor added 2026-08-29 after "
                                      "39 of 142 interactive elements were measured with no cursor "
                                      "rule any selector could reach, tabular figures on every table, "
@@ -2392,7 +2392,20 @@ COMPONENTS = [
                                      "pointer and gives it no transition. `transform` and "
                                      "`padding` are excluded because D28 forbids a hover that "
                                      "moves a target under a finger already travelling toward "
-                                     "it, and a blanket `transition: all` would animate both.",
+                                     "it, and a blanket `transition: all` would animate both. "
+                                     "AND THE PRESS FLOOR, built the same day when the owner "
+                                     "reopened D50's `:active` deferral: 121 of 311 enabled "
+                                     "controls responded to a press and 190 did not, every "
+                                     "`.bn-nav-link` among them, and it is 317 of 317 now. "
+                                     "Written in `translate` rather than `transform` because "
+                                     "the individual property COMPOSES instead of replacing — "
+                                     "so the floor cannot destroy a control's own scale, which "
+                                     "is what makes it a floor at all — and because it is "
+                                     "composited, which is the same reflow test the response "
+                                     "floor applies. 1px is the value the kit had already "
+                                     "chosen. It is deliberately NOT transitioned: a press must "
+                                     "land on the frame the finger goes down. Disabled controls "
+                                     "do not move, and a screen opts out with `translate: none`.",
                              "governed_by": ["D5", "D28", "D41", "D45", "D50", "D94"]},
 
             # ---- the kit: the primitives every screen is built from (D94, 2026-09) ----
