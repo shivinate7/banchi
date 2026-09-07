@@ -325,7 +325,8 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
  * one worker; walking `document.styleSheets` finds every `:hover` rule in every sheet whether or
  * not something renders it today, which is the same widening D50 recorded when it re-measured
  * its own reflow claim over "all 64 :hover rules in all 26 sheets" instead of over the routes a
- * browser drew. There are 164 of those rules now and 31 sheets; the count is not pinned here,
+ * browser drew. There are 161 of those rules now and 31 sheets — it was 164 when this was
+ * written and D110 deleted three dark-only overrides the same day; the count is not pinned here,
  * because the point is that the walk discovers them.
  *
  * THE FOUR PROPERTIES ARE THE FLOOR'S OWN FOUR, deliberately, so the guard and the guarantee

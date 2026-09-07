@@ -4093,7 +4093,7 @@ COMPONENTS = [
                         "roster harvest already applies to itself, because a fixture regression "
                         "would leave every screen on its empty state and turn the richest sweep "
                         "in this suite into a loop over nothing, passing instantly and forever.",
-                "governed_by": ["D28", "D43", "D50", "D69", "D70"],
+                "governed_by": ["D28", "D43", "D50", "D69", "D70", "D110"],
                 "note": "IT WAS A PINNED ROSTER OF SEVEN HASHES FOR TWO DAYS, four lines under "
                         "its own header warning against exactly that. D69 added #/orders and "
                         "#/shipping and D70 added #/codes; none reached the list, three screens "
