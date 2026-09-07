@@ -11,15 +11,15 @@
 # A fresh runner is the point. It has no venv, no banked cache, no image mirror and no recording
 # — exactly the checkout nobody ever tests in, which is the checkout this is for.
 #
-# IT RUNS `make ci-check`, NOT `make check`, AND THE MAKEFILE ARGUES THE DIFFERENCE. Two rows
-# are missing and neither is an oversight: `harness` needs T1's banked run (96K) against a 133M
-# image mirror, both untracked by design, and T1 deliberately REFUSES to submit on a cold cache
-# rather than spending money — so here it could only ever fail, and a permanently red gate
-# teaches people to ignore the gate. `vale` needs a binary that is not on the runner and has
-# never gated a commit. Everything else answers from the tree alone.
+# IT RUNS `make ci-check`, NOT `make check`, AND THE MAKEFILE ARGUES THE DIFFERENCE. One row is
+# missing: `vale` needs a binary that is not on the runner and has never gated a commit.
+# Everything else, the harness included, answers from the tree alone — D112 made that true by
+# moving T1's 40K of labels out of the 133M image mirror they had been filed inside.
 #
-# SO A GREEN RUN HERE MEANS "the tree is self-consistent", NEVER "the rig is fine". T1's score,
-# the detector's numbers and every browser assertion still come from a person at the Mac.
+# SO A GREEN RUN HERE MEANS "the tree is self-consistent", NEVER "the rig is fine". T1 asserts a
+# committed measurement rather than taking a new one; the detector's numbers and every browser
+# assertion still come from a person at the Mac. Nothing here can spend money: the only step
+# that could is a re-measurement, which needs both an explicit flag and a key, and has neither.
 #
 # IT GATES AND NOTHING ELSE. No commit, no branch move, no publish — D42 keeps main moving by
 # pull request only, and a workflow that wrote would be a second way. It reads the repo.

@@ -55,6 +55,8 @@ nothing about the next card, which is the only thing the number is for.
 
 from __future__ import annotations
 
+import hashlib
+import inspect
 import json
 import os
 from collections import Counter, OrderedDict
@@ -220,6 +222,32 @@ def _miss_confidence(scores: List[Score]) -> Dict[str, int]:
     return dict(sorted(counter.items()))
 
 
+def scorer_fingerprint() -> str:
+    """Stable hash of the code that turns banked answers into the committed number.
+
+    WHY THIS EXISTS, AND IT IS THE THING THAT LETS THE REPLAY STOP RUNNING. Between two turns
+    nothing about this test can change except its inputs and its arithmetic. The prompt and the
+    fixture set already have fingerprints; the ARITHMETIC did not, so re-deriving the score on
+    every run was the only thing standing between an edited scorer and a stale committed number.
+    Hashing it makes that guard explicit and free — a replay proves the same fact once, and
+    afterwards the fingerprints prove it costs nothing (D112).
+
+    THE SOURCE OF THESE FUNCTIONS, NOT OF THE FILE. Hashing the module would make every comment
+    edit in it demand a fresh $-costing measurement, which is the trap `prompt_fingerprint`
+    already documents avoiding for the crop-retry turn. What is hashed is exactly what decides a
+    verdict: the per-card comparison, the per-set aggregation, the holdout split, and the floor
+    the gate reads.
+    """
+    parts = [
+        inspect.getsource(_score),
+        inspect.getsource(_per_set),
+        inspect.getsource(Score.correct.fget),
+        repr(ID_ACCURACY_FLOOR),
+    ]
+    payload = "\n".join(parts).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:12]
+
+
 def _score(cards, run: batch.BatchRun) -> List[Score]:
     scores = []
     for card in cards:
@@ -301,6 +329,19 @@ def _same_measurement(existing: dict, payload: dict) -> bool:
     }
 
 
+def _banked_result(config: str = "none") -> Optional[dict]:
+    """The committed measurement for this configuration, or None if there is not one."""
+    suffix = "" if config == "none" else "-{0}".format(config)
+    path = RESULTS_DIR / "t1{0}.json".format(suffix)
+    if not path.is_file():
+        return None
+    try:
+        found = json.loads(path.read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    return found if isinstance(found, dict) else None
+
+
 def run() -> Result:
     checks = Checks()
     notes: List[str] = []
@@ -323,6 +364,43 @@ def run() -> Result:
             "       new hash in the same commit as the new harness/results/t1.json.\n"
             "       Stopping here rather than re-submitting 150 images on a cache miss."
         )
+
+    # THE COMMITTED MEASUREMENT, ASSERTED WITHOUT RE-DERIVING IT. Between two turns nothing
+    # here can change but the prompt, the fixture set and the arithmetic — the model is pinned,
+    # the answers are banked, the labels are tracked. All three now have fingerprints, so when
+    # they agree with what `harness/results/t1.json` was generated under, replaying the cache
+    # can only reproduce the number already committed beside them. It ran on every turn under
+    # the Stop hook and produced the same 2026-08-23 figure every time, at the price of needing
+    # a 133M image mirror to be present at all (D112).
+    #
+    # THIS IS NOT A SKIP AND MUST NOT READ AS ONE. Nothing is assumed: three hashes are compared
+    # and the committed result is held to its own floor. A mismatch on any of them falls through
+    # to the real replay below, which is where the money and the images are.
+    banked = None if runcache.forced() else _banked_result(config)
+    cards = fixtures.labels()
+    if banked is not None and cards is not None:
+        fixture_now = fixtures.fixture_fingerprint(cards)
+        scorer_now = scorer_fingerprint()
+        agreed = (
+            banked.get("fixture_fingerprint") == fixture_now
+            and banked.get("scorer_fingerprint") == scorer_now
+            and banked.get("prompt_fingerprint") == PROMPT_FINGERPRINT
+        )
+        if agreed:
+            checks.equal(fixture_now, banked["fixture_fingerprint"], "the eval set is unmoved")
+            checks.equal(scorer_now, banked["scorer_fingerprint"], "the scorer is unmoved")
+            floor = float(banked.get("accuracy_floor", ID_ACCURACY_FLOOR))
+            holdout = banked.get("holdout_accuracy")
+            checks.ok(
+                isinstance(holdout, (int, float)) and holdout >= floor,
+                "the committed holdout clears its floor ({0} >= {1})".format(holdout, floor),
+            )
+            say("replayed nothing: prompt, eval set and scorer all agree with")
+            say("harness/results/t1.json, generated {0}".format(banked.get("generated_at")))
+            say("{0} images · {1} · holdout {2}".format(
+                banked.get("image_count"), banked.get("model"), holdout))
+            say("re-measure deliberately: PKMNSCAN_RERUN_T1=1 make harness (docs/GATES.md)")
+            return checks.result()
 
     try:
         cards = fixtures.load(log=say)
@@ -453,6 +531,7 @@ def run() -> Result:
         "transport": "anthropic.messages.batches",
         "prompt_fingerprint": prompt_id,
         "fixture_fingerprint": fixture_id,
+        "scorer_fingerprint": scorer_fingerprint(),
         "set_hint_mode": hint_mode,
         "image_count": total,
         "set_count": len(per_set),

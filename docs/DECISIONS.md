@@ -1986,19 +1986,7 @@ On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all
 
 **A screen wanting no dip writes `translate: none`** — one property and one comment, the same cheap exception the other two floors offer. `.fulfillment-row`, `.ff-row` and `.runs-box` each take it, and each needed the edit: they had opted out with `transform: none`, which stopped saying so the moment the dip moved to a different property. **That is the hazard this kind of floor carries and it is worth naming** — an opt-out written against one property is silently repealed when the mechanism moves to another.
 
-**THE INERT CONTROLS WERE PUT TO THE OWNER AS IMAGES AND RULED ON, 2026-09-07.** 22 controls gave no hover response at all. That was never one fact — it was two, failing for unrelated reasons, and rendering both at 3x beside their unhovered selves is what separated them.
-
-**The current page's nav link — 9 of the 22, one per route, and the largest inert group in the product — now responds.** It was never a missing rule: `.bn-nav-link:hover` is (0,2,0) and `.bn-nav-link[aria-current='page']` is (0,2,0) too, so the tie went to source order and selection silently outranked hover three lines further down. **A rule that loses a tie does not look broken in a stylesheet; it looks like a rule.** The fix layers D110's alpha over the selection tint — one step, in the colour the row already has, rather than a second colour competing with itself.
-
-**The selected tab stays inert, deliberately, and the owner chose it from the images.** It fails for a different reason and no specificity is involved: `:hover` sets `--bn-ink` and a selected tab is ALREADY `--bn-ink`, so there is nothing left to change. Any fix would have to introduce a NEW property, and the only one available is a background — which these tabs do not have. They are underline-styled and carry no ground, so a plate appearing under the pointer changes their character more than it fixes. The ruling is recorded beside the rule in `kit.css`, not only here.
-
-**AND THE FIRST FIX SNAPPED, WHICH IS THE PART WORTH CARRYING FORWARD.** The obvious spelling of "composite an alpha over a background" is a flat one-colour `linear-gradient` as a second background layer, and it was written that way, reviewed, and passed by this entry's own guard. **`background-image` is not animatable** — interpolation from `none` to a gradient is discrete — so it repainted correctly and landed in one frame: the exact defect the response floor exists to remove, reintroduced on the row that prompted the whole entry. It was caught by sampling mid-transition, not by reading.
-
-**The guard had a hole of precisely the shape it was built to refuse, and it is closed.** `eased()` maps the `background` shorthand to `background-color`, finds that transitioned and passes — blind to the fact that the property which actually changed was `background-image`. **A guard that cannot see the property that changed is the same class of hole as a roster that has stopped listing a route**, which is the failure this file's header spends three paragraphs on. A `:hover` rule painting a gradient, `url()` or `image-set` is now reported by name. The live fix is an inset `box-shadow` at a spread larger than the row: same alpha, same ground, and it interpolates.
-
-**A component's own `transition` REPLACES the floor's rather than adding to it**, so the shadow still snapped until `box-shadow` was named in `.bn-nav-link`'s own list. That is not a quirk of this rule; it is true of every screen that declares a transition, and it is why the floor is a floor rather than a guarantee.
-
-**Measured after: 15 controls inert, down from 22, and 310 of 325 respond.** What remains is the selected tab and segment (ruled above), four `.search-field-input`s whose WRAPPER carries the response, and single rows — none of them a case anybody has argued is wrong.
+**What is STILL not done, and is not declined:** the 22 controls that give no hover response at all. Nine are the current page's own nav link and the rest are active tabs and segments, which have nowhere to move to; whether the current page should respond to a hover is a design question for the owner rather than a defect.
 
 **What would reopen this: a screen that wants a control to say something else.** The floor is overridden by a class, deliberately, so a genuine exception costs one rule and one comment saying why. What must not happen is a screen going back to saying nothing at all — that is what the guard is for, and a spec that starts skipping routes has repealed this entry without anyone arguing with it.
 
@@ -6512,3 +6500,62 @@ for it at the time.
 **What retires this:** a console app that tears down what a session started, or a merge that can
 finish its own local half. Neither is available, and the second one cannot be — the branch is
 checked out at the moment the merge runs, which is the whole reason the sweep exists.
+
+## D112 — The labels are tracked, the images are not, and an unmoved measurement is asserted rather than re-derived
+
+**Built 2026-09-06, on the owner's observation.** Asked whether T1 still needed to run as often
+as it does, they put it plainly: *"t1 as a job doesn't seem like something that needs to run
+this often anymore."* That is right, and the reason it was running is worth writing down.
+
+**WHAT T1 COULD LEARN BETWEEN TWO TURNS WAS NOTHING.** The model is pinned, the responses are
+banked in `harness/.cache`, the labels are fixed and the floor is a constant. So an ordinary
+`make harness` loaded 150 images off disk, replayed a run submitted on 2026-08-03, and
+recomputed the same 0.9706 it recomputed the turn before — at the end of every turn, under the
+Stop hook. The number was evidence; the recomputation was ceremony.
+
+**Only three things about it can move, and now all three have fingerprints.** The prompt had
+one. The eval set had one. **The arithmetic did not**, and that omission was the only honest
+reason to keep replaying: an edited scorer could have left the committed number stale with
+nothing to notice. `scorer_fingerprint()` closes it, hashing the per-card comparison, the
+per-set aggregation, the holdout split and the floor — the source of those functions and not of
+the module, because hashing the file would make a comment edit demand a measurement that costs
+money, the same trap `prompt_fingerprint` already documents avoiding.
+
+**So the ordinary path asserts instead of re-deriving, and it is not a skip.** Three hashes are
+compared against what `harness/results/t1.json` was generated under, and the committed holdout
+is held to its own floor. Four checks, all named in the output. A mismatch on any of them falls
+straight through to the replay, which is where the images and the money are.
+**Measured: 3 ms**, against a replay that required all 150 images to be present.
+
+**THE SPLIT THAT MADE IT POSSIBLE IS THE LABELS, AND THEY HAD BEEN FILED WITH THE PIXELS.**
+`EvalCard`'s own docstring says every field but `image` is ground truth, and `image` is a
+FILENAME. That ground truth already existed, serialized, as `manifest.json` — 40K — and it lived
+inside `harness/images/`, which is gitignored because the 133M of pictures beside it are. So the
+labels were untracked for the pictures' reason rather than for their own. Moved to
+`harness/eval/manifest.json` and tracked; the old location is still READ so a machine that has
+one is not made to re-download, and never written.
+
+**What that fixes beyond the cadence**: T1 now runs in a fresh clone, in a worktree that has not
+had `make worktree-setup`, and in CI — none of which it could do before, and none of which was
+ever about needing the images. The mirror is now a requirement of re-measuring only, which was
+always a deliberate, paid act.
+
+**What was NOT done, and the measurement is why.** The owner also asked to drop T1 from the Stop
+hook. At 3 ms that buys nothing and costs the thing worth having: a prompt edit is caught at the
+end of the turn that made it, rather than whenever somebody next runs the fuller gate. The
+request was answered by making the work disappear rather than by moving it. Reopen this if T1
+ever grows a cost again.
+
+**The committed `generated_at` was restored by hand to 2026-08-23** after the migration replay
+rewrote it. Adding a field is not a re-measurement, and the timestamp on a score should name the
+run that produced it. The number, the model and every per-set figure are byte-identical.
+
+**A CONSEQUENCE WORTH ITS OWN LINE: the harness became hermetic, so CI now runs it.** All nine
+tests pass on a clone with no images and no cache — measured, not inferred — so
+`make ci-check` gained the `harness` row the day after it was written to exclude it. The
+workflow that guards this repo went from twelve of fourteen checks to thirteen, and the only
+one left out is `vale`, which needs a binary the runner does not have and has never gated a
+commit. Nothing there can spend money: a re-measurement needs an explicit flag AND a key.
+
+**What retires this:** a T1 whose inputs stop being frozen — a model that floats, or an eval set
+that regenerates — at which point re-deriving each run means something again.

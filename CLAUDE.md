@@ -1128,6 +1128,7 @@ D108 The dock app is the page Chrome already renders, and the manifest is what m
 D109 A price is a fact about a listing, and the store remembers listings it never photographed
 D110 A hover is an alpha, because the same paint over three grounds is three different hovers
 D111 Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
+D112 The labels are tracked, the images are not, and an unmoved measurement is asserted rather than re-derived
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
