@@ -84,6 +84,16 @@ test-results
 # `server/ports.py`, the same derivation Vite and Playwright read.
 .claude/launch.json
 
+# THE AGENT-ISOLATION WORKTREES. Local state by definition — each one is a checkout the console
+# app made for a session, and `git worktree` already knows where they are. Nothing under here
+# was ever committable, so this pattern costs nothing at the commit; it is load-bearing for the
+# AUDIT. `scripts/docs-audit.py:ignored_paths` exempts gitignored paths precisely so a check
+# cannot be "green on the owner's machine and red on a fresh clone" — its own words — and
+# without this line three references in docs/DECISIONS.md failed `make check` on any clone that
+# had never made a worktree. Found by running the checks on a fresh clone rather than reasoning
+# about them.
+.claude/worktrees/
+
 # Vale packages sync into styles/ ; only the repo-local style is tracked.
 styles/*
 !styles/PKMNSCAN/

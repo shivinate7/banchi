@@ -1,0 +1,88 @@
+# Re-run the gate on every pull request, because nothing ever did.
+#
+# WHY THIS EXISTS. `make check` runs fourteen checks and had no re-checker: it fired only when a
+# person typed it, on a machine that already had whatever that machine happened to have. On
+# 2026-09-06 that turned out to matter — `tsc --noEmit` needed `app/demo/bundle.json`, a file
+# `make demo-record` writes and `.gitignore` excludes, so `make check` FAILED IN EVERY FRESH
+# CHECKOUT, main included, for 121 commits. Nobody saw it because every tree it was run in had
+# made a recording. That is D111's shape one register up: a mechanism that is thorough, correct
+# and never re-evaluated.
+#
+# A fresh runner is the point. It has no venv, no banked cache, no image mirror and no recording
+# — exactly the checkout nobody ever tests in, which is the checkout this is for.
+#
+# IT RUNS `make ci-check`, NOT `make check`, AND THE MAKEFILE ARGUES THE DIFFERENCE. Two rows
+# are missing and neither is an oversight: `harness` needs T1's banked run (96K) against a 133M
+# image mirror, both untracked by design, and T1 deliberately REFUSES to submit on a cold cache
+# rather than spending money — so here it could only ever fail, and a permanently red gate
+# teaches people to ignore the gate. `vale` needs a binary that is not on the runner and has
+# never gated a commit. Everything else answers from the tree alone.
+#
+# SO A GREEN RUN HERE MEANS "the tree is self-consistent", NEVER "the rig is fine". T1's score,
+# the detector's numbers and every browser assertion still come from a person at the Mac.
+#
+# IT GATES AND NOTHING ELSE. No commit, no branch move, no publish — D42 keeps main moving by
+# pull request only, and a workflow that wrote would be a second way. It reads the repo.
+
+name: check
+
+on:
+  pull_request:
+  # Main too, and not only pull requests. A merge can break what neither side broke alone —
+  # the semantic conflict git merges cleanly — and the whole point here is that somebody finds
+  # out without having to remember to look.
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per branch, newest wins: an older commit's verdict is not something anybody wants
+# once a newer one exists.
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # The self-tests build throwaway clones and read `git worktree list`, and `merge-selftest`
+      # walks main against a fixture origin. Full history is not needed for any of that, but a
+      # detached single commit is: `renumbered ids` compares this branch against main.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.11 for the reason demo.yml gives at length: the rig's 3.9.6 is EOL and pinned for
+          # a cp39 wheel this path never loads. Nothing here runs the QR decode or the camera.
+          # `ruff` reads its target from ruff.toml (`py39`), not from the interpreter, so lint
+          # fidelity is unaffected by running on a newer one.
+          python-version: '3.11'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm ci --prefix app
+
+      # `git config user.*` because merge-selftest and janitor-selftest COMMIT inside their own
+      # temp fixtures, and a runner has no identity by default. Fixture-local, and neither test
+      # ever touches this checkout.
+      - name: Identify git
+        run: |
+          git config --global user.email "check@example.com"
+          git config --global user.name "check"
+
+      - name: make ci-check
+        run: make ci-check

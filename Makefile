@@ -71,6 +71,7 @@ help:
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
+	@echo "  make ci-check     what a fresh clone can prove: check minus harness and vale."
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
@@ -371,6 +372,37 @@ check:
 	@$(MAKE) --no-print-directory vale
 	@$(MAKE) --no-print-directory typecheck
 
+# WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
+# This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
+# for 121 commits — `tsc` needed `app/demo/bundle.json`, which `make demo-record` writes and
+# nothing tracks — and no one noticed, because the only trees it was run in had made a recording.
+# A gate with no re-checker is the same defect D111 records one register up.
+#
+# TWO ROWS ARE ABSENT AND NEITHER IS AN OVERSIGHT:
+#   harness  T1 replays a banked run from `harness/.cache` (96K, untracked) against
+#            `harness/images` (133M mirror, untracked, and a symlink D47 refuses to commit).
+#            A fresh clone has neither, and T1 REFUSES TO SUBMIT on a cold cache rather than
+#            spending — see its own message. So in CI it can only fail, never pass, and a
+#            permanently red gate teaches people to ignore the gate.
+#   vale     needs a binary that is not on the runner, and it never gated a commit anyway.
+#
+# Everything below answers from the tree alone, which is exactly what a re-checker can own.
+# IT IS A SUBSET AND CAN DRIFT FROM `check`. Kept adjacent to it deliberately, so the two are
+# read together; `make explain` still describes the full suite and this list adds no rows to it.
+ci-check:
+	@$(MAKE) --no-print-directory docs-audit
+	@$(MAKE) --no-print-directory audit-self-test
+	@$(MAKE) --no-print-directory githooks-selftest
+	@$(MAKE) --no-print-directory merge-selftest
+	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory port-agreement
+	@$(MAKE) --no-print-directory set-hint-agreement
+	@$(MAKE) --no-print-directory screen-freshness
+	@$(MAKE) --no-print-directory sigil-check
+	@$(MAKE) --no-print-directory ignore-check
+	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory typecheck
+
 # The other half of D47: every path a worktree provisions is ignored whatever kind of thing is
 # at it. In `check` and never in the git hook — D18 forbids a commit gate that depends on local
 # state, and this asks about provisioning, so a fresh clone would fail a commit over nothing.
@@ -517,7 +549,7 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install
+.PHONY: janitor janitor-selftest janitor-install ci-check
 
 .PHONY: lan-check
 lan-check:
