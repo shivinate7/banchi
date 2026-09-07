@@ -71,6 +71,7 @@ help:
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
+	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
@@ -482,6 +483,24 @@ janitor:
 janitor-selftest:
 	@bash scripts/janitor-selftest.sh
 
+# THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
+# session in every project, but the command they name has to exist without this checkout in
+# sight — so the two files are COPIED, exactly as `make hooks` copies the git hooks out of the
+# tree rather than pointing at it. A copy can go stale, which is why `make status` compares it
+# and says so, the same way it reports a stale hooks-armed directory. One press, once per
+# machine; run it again after this tree's copy changes.
+janitor-install:
+	@mkdir -p $$HOME/.claude/bin
+	@cp scripts/janitor.py scripts/session-teardown.sh $$HOME/.claude/bin/
+	@chmod +x $$HOME/.claude/bin/janitor.py $$HOME/.claude/bin/session-teardown.sh
+	@echo "installed to ~/.claude/bin: janitor.py, session-teardown.sh"
+	@echo "  hook it up once, in ~/.claude/settings.json, so it covers every repo:"
+	@echo '    "SessionEnd":     [{"hooks": [{"type": "command", "timeout": 60,'
+	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
+	@echo '    "WorktreeRemove": [{"hooks": [{"type": "command", "timeout": 60,'
+	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
+	@echo '  then the sweep reaches any clone: ~/.claude/bin/janitor.py --root <path>'
+
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://pkmnscan.lan:5173`, and nothing in this repo knows that name — the DHCP reservation
 # and the DNS record are theirs, on their UniFi (D43). What this checks is the four things on
@@ -498,7 +517,7 @@ janitor-selftest:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest
+.PHONY: janitor janitor-selftest janitor-install
 
 .PHONY: lan-check
 lan-check:
