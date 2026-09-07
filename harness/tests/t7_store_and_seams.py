@@ -18471,6 +18471,33 @@ def check_shipping_lane(checks: Checks) -> None:
 # ------------------------------------------------------------- the shipping routes
 
 
+def home_files(home):
+    """Every path under a store home, EXCEPT SQLite's own journal.
+
+    `store.sqlite-wal` and `store.sqlite-shm` are created by OPENING the database in WAL mode —
+    by a read, not by a write — and SQLite deletes them when the last connection closes
+    cleanly. Whether they survive to the end of a check is therefore a fact about connection
+    lifetime and about the platform, not about anything having been persisted.
+
+    THIS COST A RED MAIN ON 2026-09-06. The stamp check compares this snapshot before and after
+    to assert D61's rule that buyer PII passes through and is never kept. It passed on macOS
+    for a year and failed the first time it ran on Linux, where the two files outlived the
+    read; the diff was exactly `-shm` and `-wal` and nothing else, so nothing had been
+    persisted and the assertion was reading "the database was opened" as "a file was kept".
+
+    What the check is FOR still works: a cache directory, a temp file or a log line carrying a
+    row is a real path and still appears here. Only the engine's own journal is excluded, and
+    only because its presence was never evidence of the thing being asserted.
+    """
+    return sorted(
+        str(path.relative_to(home))
+        for path in home.rglob("*")
+        if path.suffix not in (".sqlite-wal", ".sqlite-shm")
+        and not path.name.endswith(("-wal", "-shm"))
+    )
+
+
+
 def check_shipping_routes(checks: Checks) -> None:
     """`server/shipping_routes.py` and `server/order_transport.py` — the two seams that hold
     somebody else's personal data, asserted on what they DO NOT carry.
@@ -18532,7 +18559,7 @@ def check_shipping_routes(checks: Checks) -> None:
     fixture = SHIPPING_EXPORT.read_text("utf-8")
 
     with isolated_home() as home:
-        before = sorted(str(path.relative_to(home)) for path in home.rglob("*"))
+        before = home_files(home)
 
         answer = answers(
             checks,
@@ -18786,7 +18813,7 @@ def check_shipping_routes(checks: Checks) -> None:
             with contextlib.suppress(shipping_routes.ShippingRefusal):
                 shipping_routes.do_shipping_forget(spare)
 
-        after = sorted(str(path.relative_to(home)) for path in home.rglob("*"))
+        after = home_files(home)
         checks.equal(
             after,
             before,
@@ -19572,7 +19599,7 @@ def check_shipping_stamps(checks: Checks) -> None:
             }
         )
 
-        before = sorted(str(path.relative_to(home)) for path in home.rglob("*"))
+        before = home_files(home)
 
         batch = answers(
             checks,
@@ -19765,7 +19792,7 @@ def check_shipping_stamps(checks: Checks) -> None:
             "the ledger is opened at all",
         )
 
-        after = sorted(str(path.relative_to(home)) for path in home.rglob("*"))
+        after = home_files(home)
         checks.equal(
             after,
             before,
