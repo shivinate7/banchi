@@ -590,7 +590,7 @@ correct at none of them.**
 | what | result |
 | --- | --- |
 | **stroke — 3.4 asserted, 4.2 chosen** | Swept 2.4 / 3.0 / 3.4 / 4.2 / 5.0. 2.4 is still a ghost at 16px; 5.0 chokes the corner and crowds the card. Both ends fail and the pick is interior, which is section 7 rule 5 satisfied — but the pick is **4.2**, not the 3.4 section 3 had asserted, and §3's row is corrected rather than left standing |
-| **no taper** | HELD, and now argued rather than asserted. At tip 0.07 a 4.2 stroke is 0.29 wide where it ends — under a third of one unit in a 100-unit box, which is a third of a pixel at 28px. Swept 0.07 / 0.25 / 0.50 / 1.00 |
+| **no taper** | HELD, and now argued rather than asserted. At tip 0.07 a 4.2 stroke is 0.29 wide where it ends — under a third of one unit in a 100-unit box, which is a third of a pixel at 28px. Swept 0.07 / 0.25 / 0.50 / 1.00. **AMENDED 2026-09-06 for the browser tab ONLY — see §18**, which takes the taper at tip 0.15 and accepts the loss this row measured |
 | **gap 11.5** | HELD. 9.75 crowds; 13.0 pushes the brackets into the tile's own corner radius |
 | **card scale 1.0** | HELD. 1.12 and 1.25 buy legibility and stop the mark being a card *in* a slot |
 
@@ -1793,3 +1793,61 @@ object, not an ink color: an app icon on a phone home screen does not invert whe
 does."* A dark-mode dock icon is that same argument at the same size. **Nothing here reopens
 it** — if it is ever reopened it is section 12's to reopen, on a sheet, and the platform
 question is downstream of that rather than a reason to revisit it.
+
+## 18. The browser tab — the empty slot, and what it gives up
+
+**Settled 2026-09-06, on the owner's decision, after three rounds of true-pixel renders.**
+`app/public/favicon.svg` is no longer the mark. It is **the empty slot**: the bracket pair alone,
+in `bluesteel`'s own metal, with no tile, no card and no sheen.
+
+| | |
+| --- | --- |
+| shape | the mark's L — corner (22.609, 16.252), arms 20.82 × 25.65, radius 8 |
+| weight | **4.2**, §11's small cut |
+| taper | **tip 0.15, ramp 0.70** — §13's lockup values, read from `lockupGeometry.ts` |
+| paint | `bluesteel.bracket`, `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` |
+| ground | **none** |
+
+### Why the empty slot at all
+
+§1 has always said it: *"with the card removed the same brackets become an empty slot, which is
+the in-product mark."* That sentence was read as scoped to surfaces inside the app, and the tab
+kept the whole mark by default rather than by decision. The owner's instruction closes it — the
+tab should be what the collapsed sidebar is.
+
+### The taper is §11's rejected range, and it is taken anyway
+
+**§11 swept tip at 0.07 / 0.25 / 0.50 / 1.00 and chose 1.00.** The lockup's 0.15 falls *inside*
+the band that sweep rejected, and §11's arithmetic applies unchanged: a 4.2 stroke at tip 0.15
+ends 0.63 units wide, which is 0.2px at 32 and 0.1px at 16. **The arm ends do drop out at 16px.**
+Rendered at true 16 and 32 on three grounds before the choice, against the untapered wire.
+
+The owner chose the taper knowing that. It is the drawing the open lockup makes, it is
+unmistakably better at 32 — where a Retina tab actually renders — and the tab is the one surface
+where the mark is decoration rather than a control. **§11's finding is not overturned**: it governs
+`Logo`, every in-app surface and the app icons, all of which stay untapered below 64px.
+
+### No tile, and the cost is named
+
+`bluesteel`'s bracket metal runs `#FFFFFF` to `#8FA4B8`. With no ground of its own, **the tab icon
+is close to invisible on a light browser tab bar** — measured at 16, 20, 32 and 48px against
+Chrome's light chrome (`#dee1e6`). It reads well on a dark tab bar and on the mid-grey of a
+bookmarks bar.
+
+This is §12's finding arriving at a surface §12 did not cover. That section fixed the mark's tile
+dark in both themes *because* a light ground lost the silhouette; the same physics applies here and
+there is no tile to fix. Two ways out were drawn and both declined: keeping the dark tile (legible
+everywhere, but a ground the owner did not ask for) and two icons chosen by `sizes` (legible
+everywhere, but the tab would not always look the same). **The owner took the trade explicitly.**
+
+### What did not change
+
+The **app icons keep the full mark** — `icon-180.png`, `icon-1024.png` and §17's macOS grid all
+still draw the tile, the card and the brackets. `markGeometry.ts` and `markPalettes.ts` are
+byte-identical across this change, so `Logo` and every in-product surface are untouched. This is
+the tab and nothing else.
+
+`scripts/build-mark.mjs` emits it from `tabSvg()`, reading `tip` and `tl` out of
+`lockupGeometry.ts` rather than retyping them — that file is generated from §13's table and
+`make docs-audit`'s `lockup params` row reconciles the two, so the tab cannot drift from the
+lockup it is named after. Its `rail mark` row holds the tab to the mark's own L.
