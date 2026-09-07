@@ -376,31 +376,37 @@ async function screens(page: import('@playwright/test').Page) {
 }
 
 test('the tab title alternates on a named screen, and holds still where it should', async ({ page }) => {
+  /* A LONGER BUDGET, AND IT IS THE CADENCE THAT NEEDS IT. One cycle is now 6s + 4s, and a case
+     that proves alternation has to watch more than one of them — then prove the timer STOPPED,
+     which means waiting past the longer dwell twice. That sums past Playwright's 30s default.
+     Set explicitly rather than raised globally: every other spec in this suite should still fail
+     fast, and a default nudged up to suit one file hides a hang in all of them. */
+  test.setTimeout(90_000)
   const { named } = await screens(page)
 
   await page.goto(`/${named.href}`)
   await page.waitForTimeout(400)
   /* Sampled across more than one full cycle. The dwell is ASYMMETRIC — the screen holds longer
-     than the name — so the window has to clear the sum of both, not twice the shorter one. Ten
-     seconds at 300ms covers a 4s + 2s cycle with room for the machine to be slow, and it is
+     than the name — so the window has to clear the sum of both, not twice the shorter one. Sixteen
+     seconds at 500ms covers a 6s + 4s cycle with room for the machine to be slow, and it is
      deliberately not derived from the constants: a test that reads the value it is checking
      passes when that value is wrong. */
   const seen = new Set<string>()
-  for (let i = 0; i < 34; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
+  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.waitForTimeout(500) }
   expect([...seen].sort(), 'the tab shows each half in turn, neither truncated into the other')
     .toEqual([named.label.toLowerCase(), '番地 banchi'].sort())
 
   // Home: one word for both the screen and the product, so nothing to take turns with
   await page.goto('/#/')
-  await page.waitForTimeout(5000)   // past the longer dwell, so a timer would have shown by now
+  await page.waitForTimeout(8000)   // past the longer dwell, so a timer would have shown by now
   const home = await page.title()
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(8000)
   expect(await page.title(), 'Home has nothing to alternate with and must hold still').toBe(home)
   expect(home).toBe('番地 banchi')
 
   // and the timer from the screen we just left must not have survived to fight this one
   const after = new Set<string>()
-  for (let i = 0; i < 24; i++) { after.add(await page.title()); await page.waitForTimeout(300) }
+  for (let i = 0; i < 26; i++) { after.add(await page.title()); await page.waitForTimeout(500) }
   expect([...after], 'a timer from the previous route is still running').toEqual(['番地 banchi'])
 
   /* THE TAB IS LOWERCASE AND THE NAV IS NOT, which is the whole shape of this change. The label
@@ -412,11 +418,12 @@ test('the tab title alternates on a named screen, and holds still where it shoul
 })
 
 test("the Fulfiller's tab names his task, not the product", async ({ page }) => {
+  test.setTimeout(60_000)   // two waits past the longer dwell, to prove it does not move
   const { fulfiller } = await screens(page)
   await page.goto(`/${fulfiller.href}`)
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(8000)
   const first = await page.title()
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(8000)
   expect(first, 'his tab says what he is doing, lowercase like every other tab').toBe('cards to pull')
   expect(await page.title(), 'and it does not alternate at him').toBe(first)
 })
@@ -424,13 +431,14 @@ test("the Fulfiller's tab names his task, not the product", async ({ page }) => 
 /* `reducedMotion` is set on an explicit CONTEXT rather than through `test.use`, which this
    Playwright's fixture types do not accept it in. */
 test('with reduced motion the tab stops taking turns and shows both at once', async ({ browser, baseURL }) => {
+  test.setTimeout(60_000)   // a full cycle's worth of samples, to prove none of them differ
   const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL })
   const page = await ctx.newPage()
   const { named } = await screens(page)
   await page.goto(`/${named.href}`)
   await page.waitForTimeout(600)
   const seen = new Set<string>()
-  for (let i = 0; i < 34; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
+  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.waitForTimeout(500) }
   await ctx.close()
   expect([...seen], 'reduced motion gets one steady title, concatenated')
     .toEqual([`${named.label.toLowerCase()} · 番地 banchi`])
