@@ -904,9 +904,21 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
    before React runs; there is no way to share a constant with static HTML. */
 const BROWSER_TITLE = '番地 banchi'
 
-/* How long each half of the tab title holds before the other takes over. The owner asked for a
-   second. Named rather than typed into the interval so it is one place to retune. */
-const TITLE_ALTERNATE_MS = 1000
+/* HOW LONG EACH HALF OF THE TAB TITLE HOLDS. Asymmetric, and slower than it started.
+   A second each was the owner's first ask and read as too frequent in use. THE ONE-SECOND FLIP IS
+   THE NOTIFICATION-FLASH TEMPO — the pattern that alternates a title to nag you back to a tab —
+   and every implementation of it in the wild sits at 1000-2000ms because it is MEANT to be hard
+   to ignore. This is not that: it is wayfinding, and it should be calm.
+   THE SCREEN DWELLS LONGER THAN THE NAME, which is a choice worth stating because the owner
+   floated the reverse. The name is confirmation you already have — you know which app you opened.
+   The screen is the news, so it holds for twice as long; weighted the other way you would glance
+   at a strip of tabs and see `番地 banchi` two times in three, having to wait to learn which page
+   it is. Swapping the two numbers is the whole change if that judgement is wrong.
+   WCAG 2.2.2 asks that content auto-updating for more than five seconds can be paused, stopped or
+   hidden. A tab title is browser chrome rather than page content, so the criterion is arguably not
+   engaged — but the spirit is, and `prefers-reduced-motion` is the mechanism: it stops this dead
+   and shows both halves at once. */
+const TITLE_DWELL = { screen: 4000, name: 2000 } as const
 
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
@@ -1183,14 +1195,19 @@ export function App() {
     if (route?.path === '/') { document.title = BROWSER_TITLE; return }
     if (stillTitle) { document.title = `${name} · ${BROWSER_TITLE}`; return }
 
-    // the screen first: it is the half you are looking for when you scan a strip of tabs
+    /* the screen first: it is the half you are looking for when you scan a strip of tabs.
+       A chained timeout rather than an interval, because the two halves hold for different
+       lengths and one interval cannot express that. */
     let showName = true
+    let timer = 0
     document.title = name
-    const id = window.setInterval(() => {
+    const flip = () => {
       showName = !showName
       document.title = showName ? name : BROWSER_TITLE
-    }, TITLE_ALTERNATE_MS)
-    return () => window.clearInterval(id)
+      timer = window.setTimeout(flip, showName ? TITLE_DWELL.screen : TITLE_DWELL.name)
+    }
+    timer = window.setTimeout(flip, TITLE_DWELL.screen)
+    return () => window.clearTimeout(timer)
   }, [route, stillTitle])
 
   useEffect(() => {

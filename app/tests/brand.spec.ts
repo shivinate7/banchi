@@ -379,33 +379,37 @@ test('the tab title alternates on a named screen, and holds still where it shoul
   const { named } = await screens(page)
 
   await page.goto(`/${named.href}`)
-  await page.waitForTimeout(500)
-  // sample across more than one full cycle; both halves must appear IN FULL, never concatenated
+  await page.waitForTimeout(400)
+  /* Sampled across more than one full cycle. The dwell is ASYMMETRIC — the screen holds longer
+     than the name — so the window has to clear the sum of both, not twice the shorter one. Ten
+     seconds at 300ms covers a 4s + 2s cycle with room for the machine to be slow, and it is
+     deliberately not derived from the constants: a test that reads the value it is checking
+     passes when that value is wrong. */
   const seen = new Set<string>()
-  for (let i = 0; i < 12; i++) { seen.add(await page.title()); await page.waitForTimeout(250) }
+  for (let i = 0; i < 34; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
   expect([...seen].sort(), 'the tab shows each half in turn, neither truncated into the other')
     .toEqual([named.label, '番地 banchi'].sort())
 
   // Home: one word for both the screen and the product, so nothing to take turns with
   await page.goto('/#/')
-  await page.waitForTimeout(1400)
+  await page.waitForTimeout(5000)   // past the longer dwell, so a timer would have shown by now
   const home = await page.title()
-  await page.waitForTimeout(1400)
+  await page.waitForTimeout(5000)
   expect(await page.title(), 'Home has nothing to alternate with and must hold still').toBe(home)
   expect(home).toBe('番地 banchi')
 
   // and the timer from the screen we just left must not have survived to fight this one
   const after = new Set<string>()
-  for (let i = 0; i < 6; i++) { after.add(await page.title()); await page.waitForTimeout(300) }
+  for (let i = 0; i < 24; i++) { after.add(await page.title()); await page.waitForTimeout(300) }
   expect([...after], 'a timer from the previous route is still running').toEqual(['番地 banchi'])
 })
 
 test("the Fulfiller's tab names his task, not the product", async ({ page }) => {
   const { fulfiller } = await screens(page)
   await page.goto(`/${fulfiller.href}`)
-  await page.waitForTimeout(1400)
+  await page.waitForTimeout(5000)
   const first = await page.title()
-  await page.waitForTimeout(1400)
+  await page.waitForTimeout(5000)
   expect(first, 'his tab says what he is doing').toBe('Cards to pull')
   expect(await page.title(), 'and it does not alternate at him').toBe(first)
 })
@@ -419,7 +423,7 @@ test('with reduced motion the tab stops taking turns and shows both at once', as
   await page.goto(`/${named.href}`)
   await page.waitForTimeout(600)
   const seen = new Set<string>()
-  for (let i = 0; i < 8; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
+  for (let i = 0; i < 34; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
   await ctx.close()
   expect([...seen], 'reduced motion gets one steady title, concatenated')
     .toEqual([`${named.label} · 番地 banchi`])
