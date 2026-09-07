@@ -388,7 +388,7 @@ test('the tab title alternates on a named screen, and holds still where it shoul
   const seen = new Set<string>()
   for (let i = 0; i < 34; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
   expect([...seen].sort(), 'the tab shows each half in turn, neither truncated into the other')
-    .toEqual([named.label, '番地 banchi'].sort())
+    .toEqual([named.label.toLowerCase(), '番地 banchi'].sort())
 
   // Home: one word for both the screen and the product, so nothing to take turns with
   await page.goto('/#/')
@@ -402,6 +402,13 @@ test('the tab title alternates on a named screen, and holds still where it shoul
   const after = new Set<string>()
   for (let i = 0; i < 24; i++) { after.add(await page.title()); await page.waitForTimeout(300) }
   expect([...after], 'a timer from the previous route is still running').toEqual(['番地 banchi'])
+
+  /* THE TAB IS LOWERCASE AND THE NAV IS NOT, which is the whole shape of this change. The label
+     is one string drawn by the sidebar, the palette and the keyboard sheet; lowercasing it at the
+     source would have rewritten all three. Asserting the nav's casing here is what stops the
+     cheap fix from passing. */
+  expect(named.label, 'the nav keeps Title Case — only the tab speaks lowercase')
+    .not.toBe(named.label.toLowerCase())
 })
 
 test("the Fulfiller's tab names his task, not the product", async ({ page }) => {
@@ -410,7 +417,7 @@ test("the Fulfiller's tab names his task, not the product", async ({ page }) => 
   await page.waitForTimeout(5000)
   const first = await page.title()
   await page.waitForTimeout(5000)
-  expect(first, 'his tab says what he is doing').toBe('Cards to pull')
+  expect(first, 'his tab says what he is doing, lowercase like every other tab').toBe('cards to pull')
   expect(await page.title(), 'and it does not alternate at him').toBe(first)
 })
 
@@ -426,7 +433,7 @@ test('with reduced motion the tab stops taking turns and shows both at once', as
   for (let i = 0; i < 34; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
   await ctx.close()
   expect([...seen], 'reduced motion gets one steady title, concatenated')
-    .toEqual([`${named.label} · 番地 banchi`])
+    .toEqual([`${named.label.toLowerCase()} · 番地 banchi`])
 })
 
 /* THE BRAND IS THE CONTROL — the user's own instruction, after the 22px chevron proved

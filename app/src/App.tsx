@@ -1188,10 +1188,16 @@ export function App() {
   const stillTitle = useMedia('(prefers-reduced-motion: reduce)')
 
   useEffect(() => {
-    const name = route?.label ?? 'Not found'
+    /* LOWERCASED HERE AND NOWHERE ELSE. The tab reads `inventory`, the nav still reads
+       `Inventory` — `route.label` is the nav's string and the sidebar, the palette and the
+       keyboard sheet all draw it. Lowercasing the label itself would rewrite every one of them;
+       this is the tab's own voice, applied where the tab's title is composed.
+       `toLowerCase` rather than `toLocaleLowerCase`: the labels are ASCII English and the locale
+       form has a Turkish dotted-i behaviour nobody here wants. */
+    const name = (route?.label ?? 'Not found').toLowerCase()
     // The Fulfiller's tab names his task, and Home has nothing to alternate WITH — the screen and
     // the product are the same word there. Both are one title and no timer.
-    if (route?.persona === 'fulfiller') { document.title = 'Cards to pull'; return }
+    if (route?.persona === 'fulfiller') { document.title = 'cards to pull'; return }
     if (route?.path === '/') { document.title = BROWSER_TITLE; return }
     if (stillTitle) { document.title = `${name} · ${BROWSER_TITLE}`; return }
 
