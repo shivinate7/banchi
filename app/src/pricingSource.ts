@@ -183,7 +183,15 @@ function asRow(entry: MarkdownSku): MergedSku {
     rule_price: entry.proposed,
     // TCGPLAYER'S OWN LIVE COUNT, which is an honest figure and the one the row's `LiveCount`
     // is for. `pushed` and `staged` are this pipeline's commitments and it has made none here.
-    listing: { pushed: 0, staged: 0, live: entry.live },
+    // `sold_here: 0` DELIBERATELY, AND THE ZERO IS AN ARGUMENT (D115). This row's `live` is
+    // `Total Quantity` off an export the operator fetched moments ago, and the store's counter
+    // counts sales since THE STORE'S OWN reading — a different moment entirely. Folding it in
+    // here would subtract sales this export has already subtracted, which is the double-count
+    // `Listing.held` and `cli/resolve.py:_copies_out` each spend a paragraph refusing. The
+    // client cannot arbitrate two stamps either — D59 and D87 put that in
+    // `Listing.live_reading`, server-side — so zero is the honest answer here rather than a
+    // placeholder.
+    listing: { pushed: 0, staged: 0, live: entry.live, sold_here: 0 },
     // EVERY FIELD BELOW IS A JOIN'S ARITHMETIC AND MEANS NOTHING FOR A LIVE LISTING. They are
     // the values the row's own guards read as "nothing to draw", never an invented figure.
     positions: [],

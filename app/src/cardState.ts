@@ -76,3 +76,18 @@ export function stateLabel(state: string): string {
   const raw = String(state).replace(/_/g, ' ')
   return raw.charAt(0).toUpperCase() + raw.slice(1)
 }
+
+/** What this store believes TCGplayer is holding NOW: the reading, less what has sold here
+ *  since it (D115).
+ *
+ *  ONE HELPER RATHER THAN SIX SUBTRACTIONS. `store/master.py:Listing.live_estimate` is the
+ *  same expression server-side, and a derived value never rides a payload — so the two
+ *  numbers travel and the client subtracts. Six inline `Math.max(0, …)` is the rule living in
+ *  six places, which is what `SearchGroup.listable` exists to avoid for the cap.
+ *
+ *  FLOORED, AND THE FLOOR IS NOT AN ERROR CASE. A counter above the reading is the ordinary
+ *  state of a store whose reading predates its sales, and the honest answer there is "we
+ *  believe none is for sale" — which is what zero says. */
+export function forSale(live: number, soldHere: number): number {
+  return Math.max(0, Math.max(0, live) - Math.max(0, soldHere))
+}

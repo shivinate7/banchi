@@ -610,19 +610,46 @@ function PickRuns({
  * — a SKU with copies pushed and none live is usually an unreconciled push rather than an
  * empty shelf — so it is drawn too, with the same age beside it.
  */
-function LiveCount({ live, age }: { live: number; age: string | null }) {
+function LiveCount({
+  live,
+  soldHere,
+  age,
+}: {
+  live: number
+  soldHere: number
+  age: string | null
+}) {
+  /* TWO NUMBERS SINCE D115, AND THE BIG ONE IS THE ESTIMATE. `live` is the export's READING as
+     it stood when the run was joined; `soldHere` is what has sold here since it. The figure
+     drawn is the difference, because that is the one that has to agree with the shelf (D7).
+     `data-none` follows the ESTIMATE too — its own case is "nothing is for sale", which is now
+     reachable two ways, and a row reading `0 live` while the reading says 4 is exactly the row
+     worth muting.
+     A ROW WITH NOTHING SOLD SINCE DRAWS BYTE-IDENTICALLY to before, which is what keeps the
+     common row unchanged and makes the difference legible where there is one. */
+  const forSaleNow = Math.max(0, Math.max(0, live) - Math.max(0, soldHere))
   return (
     <span
       className="pricing-live"
-      data-none={live === 0 ? 'true' : undefined}
+      data-none={forSaleNow === 0 ? 'true' : undefined}
       title={
-        `What TCGplayer was holding live for this SKU when the run was joined${age === null ? '' : `, ${age}`}. ` +
-        'A reconcile on Runs takes a fresh reading.'
+        soldHere > 0
+          ? `TCGplayer was holding ${live} for this SKU when the run was joined${age === null ? '' : `, ${age}`}. ` +
+            `${soldHere} ${soldHere === 1 ? 'copy has' : 'copies have'} been marked sold here since, ` +
+            `so ${forSaleNow} ${forSaleNow === 1 ? 'is' : 'are'} believed live. ` +
+            'A reconcile on Runs takes a fresh reading.'
+          : `What TCGplayer was holding live for this SKU when the run was joined${age === null ? '' : `, ${age}`}. ` +
+            'A reconcile on Runs takes a fresh reading.'
       }
     >
       <span className="bn-dot bn-dot-live" aria-hidden="true" />
-      {live} live
+      {forSaleNow} live
       {age === null ? null : <span className="pricing-live-age">· read {age}</span>}
+      {soldHere > 0 ? (
+        <span className="pricing-live-age">
+          · {live} when read, {soldHere} sold since
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -2957,7 +2984,11 @@ export function Pricing() {
                         {sku.listing === null ? null : (
                           <span className="pricing-row-span">
                             <span className="pricing-meta-sep">·</span>
-                            <LiveCount live={sku.listing.live} age={ageWords(readAtOf(sku))} />
+                            <LiveCount
+                              live={sku.listing.live}
+                              soldHere={sku.listing.sold_here}
+                              age={ageWords(readAtOf(sku))}
+                            />
                           </span>
                         )}
                         {sku.in.length < 2 && !sku.over_cap ? null : (

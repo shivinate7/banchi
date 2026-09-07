@@ -2833,3 +2833,29 @@ test('a corpus that moved under the screen refuses the write rather than reverti
     notice.getByRole('button', { name: /Re-read the pricing file, losing what is unsaved/ }),
   ).toBeVisible()
 })
+
+test('the run door draws the estimate, and says what it was read at', async ({ page }) => {
+  /* THE RUN DOOR'S `LiveCount` HAD NO DOM ASSERTION AT ALL until D115 — `grep pricing-live
+     app/tests` found one hit, in the markdown spec. That is how the regression this closes
+     would have shipped silently: `cli/cmd_join.py` freezes the listing record into
+     `pricing.json`, and freezing the READING alone would have this screen over-report by
+     precisely the copies sold since — on the screen where money is decided. */
+  await open(page, {
+    skus: [sku({ listing: { pushed: 0, staged: 0, live: 4, sold_here: 2 } })],
+  })
+  const live = page.locator('.pricing-row .pricing-live').first()
+  await expect(live).toContainText('2 live')
+  await expect(live).toContainText('4 when read, 2 sold since')
+})
+
+test('a row with nothing sold since draws exactly what it drew before', async ({ page }) => {
+  /* THE REGRESSION GUARD, and the reason the split is conditional: on the owner's store 440 of
+     443 SKUs have an empty counter, so a row that moved here would make the change visible
+     everywhere and legible nowhere. */
+  await open(page, {
+    skus: [sku({ listing: { pushed: 0, staged: 0, live: 4, sold_here: 0 } })],
+  })
+  const live = page.locator('.pricing-row .pricing-live').first()
+  await expect(live).toContainText('4 live')
+  await expect(live).not.toContainText('when read')
+})

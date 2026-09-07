@@ -126,7 +126,7 @@ So the three listing stages moved off the card and onto the SKU:
 
 - A position's `state` is `captured`, `identified` or `sold`, and describes one physical card. `pushed`, `staged` and `live` are no longer members of `master.STATES`, and `check_state` refuses them — which is what stops a caller reaching for the old `set_state(key, LIVE)` and quietly getting a per-position flag back.
 - `store/master.py:Listing` holds `pushed` / `staged` / `live` as counts per SKU.
-- **Every unsold copy is sellable.** The pull marks whichever copy the hand reached, and the sale decrements the SKU's `live` count, floored at zero.
+- **Every unsold copy is sellable.** The pull marks whichever copy the hand reached, and the sale is COUNTED AGAINST the SKU's reading rather than editing it (D115, 2026-09-07): `live` is what the last export said, `sold_here` is what has sold here since, and the figure on screen is the difference, floored at zero. It decremented `live` directly until then, which is how one copy came to be subtracted twice — once by an export that already knew, once by the sale.
 - Copies on hand is a count of unsold positions; listed quantity is `min(cap, on hand)`.
 
 **That last `min` reached the pipeline and not the screen, until the owner caught it on 2026-08-25.** `pipeline/join.py:add_to_quantity` has always bounded by the copies actually held (`min(room, uncommitted)`), but `GET /search` sent the bare `LIVE_QUANTITY_CAP` and `CardLocations.tsx` drew it as the denominator of `listed N of ...` — so a card the owner had exactly one of read **`listed 0 of 4`**, two inches from `on hand 1`. Not wrong about the cap; wrong about what a fraction means. A denominator is read as what is achievable, and three of those four copies do not exist — which is the failure D20 spends its whole entry on, at SKU scale instead of box scale.
@@ -953,7 +953,7 @@ A budget makes that impossible structurally rather than unlikely by care. Each S
 
 **Least-committed first: `pushed`, then `staged`, then `live`, against one shared budget.** Not `budget` from each stage — two departing cards cannot account for two staged *and* two live copies, and per-stage decrements would give up four commitments for two cards. Which stage a given copy actually backs is unknowable by construction (D7: the backing is deliberately unrecorded), so the order is a rule rather than a lookup, and it is the conservative one: `pushed` is a row in a file that may never have been imported, `staged` is a row TCGplayer confirmed, `live` is a card actually for sale. Being wrong about `live` costs the most, so it is surrendered last.
 
-**A sold or retired copy does not count toward the budget.** It has already left — a sale decrements `live` where it can — and it is not one of the copies a remaining commitment could be backed by. It is also what the operator counts when they look in the box, which is the number they will check the screen against. Such a box is refused by the sold clause anyway, so this opens no new dead end.
+**A sold or retired copy does not count toward the budget.** It has already left — a sale is counted against `live` where there is a record to count it against (D115) — and it is not one of the copies a remaining commitment could be backed by. It is also what the operator counts when they look in the box, which is the number they will check the screen against. Such a box is refused by the sold clause anyway, so this opens no new dead end.
 
 **`staged_at` clears only where `staged` reaches zero.** `Listing.set` stamps it as `staged_at or at`, so a record released to zero and later re-staged would otherwise carry the old date forward and read as stale on the day it was staged — a warning firing on success. A record with copies REMAINING keeps its stamp, because those copies really have been staged since that date and are exactly what the warning exists to find.
 
@@ -2522,7 +2522,7 @@ Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declar
 
 **And after a `reconcile` nothing is standing, which is a hazard this entry does not close.** That corrects a sentence first published as an unqualified guarantee. Once `pushed` and `staged` are both zero, `Listing.live` is the only record left that TCGplayer holds anything, and `_copies_out` does not read it — so a later join whose export under-reports computes `room = cap - 0` and sends the SKU again. **Reading `Listing.live` as a second floor was built and reverted**: `cli/cmd_join.py` sets that field from whatever export it was last handed, so a stale-HIGH stored value would outrank a fresh-LOW export and the SKU would never refill after a sale — T7's own stale-export case went red on it. The two hazards are mirror images and nothing in the data says which reading is newer, so the tie goes to D8 and D11. Pre-existing, unreachable for an operator who never reconciles, and named here rather than claimed away.
 
-**Amended 2026-09-02: the hazard above is closed, by TIME rather than by trusting either side.** `Listing.live_as_of` records when the store's `live` was READ — the export file's mtime for `join` and `reconcile --live`, `now()` for a sale's ±1 and a D34 release — and `Listing.live_reading` is the one rule: the newer reading wins, an equal-second reading is the store's, and a record with no stamp on either side is the export's, as before. `cli/resolve.py:_copies_out` reads it, so the floor under the cap is the NEWEST reading and `SkuMatch.copies_out` no longer `max`es the row's own column back over it; `Listing.observe_live` writes it, so `cli/cmd_join.py` adopts an export's figure only where the file is newer, and the join report names each SKU it kept with both readings. The mirror this entry recorded — a stale-HIGH store outranking a fresh-LOW export — cannot return, because an older store reading loses. D87's amendment of the same day carries the measurement.
+**Amended 2026-09-02: the hazard above is closed, by TIME rather than by trusting either side.** `Listing.live_as_of` records when the store's `live` was READ — the export file's mtime for `join` and `reconcile --live`, `now()` for a D34 release and nothing else since D115 — a sale no longer takes a reading, it counts against the one standing — and `Listing.live_reading` is the one rule: the newer reading wins, an equal-second reading is the store's, and a record with no stamp on either side is the export's, as before. `cli/resolve.py:_copies_out` reads it, so the floor under the cap is the NEWEST reading and `SkuMatch.copies_out` no longer `max`es the row's own column back over it; `Listing.observe_live` writes it, so `cli/cmd_join.py` adopts an export's figure only where the file is newer, and the join report names each SKU it kept with both readings. The mirror this entry recorded — a stale-HIGH store outranking a fresh-LOW export — cannot return, because an older store reading loses. D87's amendment of the same day carries the measurement.
 
 **The ceiling was the shelf and is now the sales, because D7's amendment moved the stamp.** It was `max(live, copies not sold)` — we cannot have SENT more copies than we own and have not sold — which held only while `emit` stamped a SKU onto exactly the copies it wrote into a file. D7's 2026-08-30 amendment stamps `uncommitted_positions` instead, correctly, so a stamp means MATCHED rather than SENT and the shelf count silently stopped binding. Measured on the branch before it was fixed: seven copies with four pushed and one sold went from `room = 1` to `room = 0`, and the correction this entry exists for disappeared without a single test going red until the rebase. **The ceiling is `max(live, pushed + staged - sold)`**, aged by the one event that proves a sent copy has left TCGplayer — a copy cannot sell without having been listed — and the sale count survives the stamp move because an unsent backstock copy is on both sides of the subtraction and cancels.
 
@@ -4983,6 +4983,8 @@ Measured 2026-09-01 against a real My Pricing export, 757 rows:
 
 ### What it writes is `live`, and only `live` — which is smaller than it first looks
 
+**Amended 2026-09-07 (D115): it also clears `sold_here` where it adopts.** That is not a second belief and it does not widen this heading's argument — `pushed` is still the cumulative record and is still never rewritten. The counter holds copies sold here SINCE the reading, so "since the reading" stops meaning anything the moment the reading moves; clearing it is the counter's own definition rather than a new claim about TCGplayer. A reading the store outranks clears nothing, and neither does one whose figure merely agrees.
+
 The first build settled `pushed` too, drawing it down by what the export accounted for. That was wrong twice over and the second pass is what proved it.
 
 **`pushed` is CUMULATIVE, not outstanding.** It counts copies ever written into an import file, an import file holds the last delta only (D54), and the per-run reconcile is the only thing that draws it down. On a store that never reconciled it is *the only record of what was sent*. Rewriting it destroys that.
@@ -6921,3 +6923,146 @@ already in, this one stops more arriving — and neither is sufficient alone.
 recognised rather than merely counted, and the picker could carry a real default instead of the
 window's own list.
 
+## D115 — The reading is what the export said, and what has sold since is counted beside it
+
+**Built 2026-09-07, after the operator asked why the ordering was confusing.** Their
+`reconcile --live` reported **92 copies across 56 SKUs as `unexplained`** — pushed by this
+pipeline, not held by TCGplayer, no card marked sold — and the cause was cards they had pulled
+and never marked. The obvious repair is to reconcile and then mark those sold. Doing it in that
+order counted every one of them twice.
+
+Their question was the entry: *"any advice on if there's better logic we can keep here so it's
+not so confusing? this feels a little unintuitive despite making sense."*
+
+### Three writers, three meanings, and a timestamp race between them
+
+`store/master.py:Listing.live` was written by three things that meant different things:
+
+| writer | meaning | dated `live_as_of` |
+|---|---|---|
+| `observe_live()` | the export's **reading** | the export file's mtime |
+| `bump(LIVE, ±1)` | a sale's **delta** | **`now()`** |
+| `release(budget)` | D34's box-delete **assertion** | `now()`, if it reached `live` |
+
+**A reading and a delta are not the same kind of fact, and "newer wins" cannot arbitrate them.** Worse, `bump` on `LIVE` also restamped `live_as_of = now()` — **a sale claimed to be a fresh reading of TCGplayer that nobody had taken.** That forgery is what let one copy be
+subtracted twice: `reconcile --live` wrote TCGplayer's figure, which already reflected the
+sale, and marking the card sold then decremented it again.
+
+`bump` floored at zero, so on a row already at `live: 0` the second decrement vanished
+silently. On a row with copies left it did not.
+
+### Measured, on the owner's own store
+
+SKU 9197044, stored `live 3` against an export reading `2` — a real disagreement, from the
+2026-09-07 export. The same two acts, run both ways against a copy of the real store:
+
+| | reconcile → mark sold | mark sold → reconcile |
+|---|---|---|
+| **before** | `live 1` | `live 2` |
+| **after** | estimate **1** | estimate **1** |
+
+**The order decided the answer, and now it does not.** A second identical reconcile corrects
+nothing, both before and after.
+
+### The ruling
+
+**`live` holds the export's reading and nothing else.** `sold_here` counts copies sold here
+since that reading, `sold_here_at` dates the newest of them, and the figure every screen draws
+is `live_estimate` — the difference, floored. `reconcile --live` **clears** the counter when it
+adopts a reading taken after the sales, instead of racing it.
+
+**This implements D7's ordering rather than reversing it.** D7 defends the decrement in as many
+words — *"holding the count back until a join makes the app disagree with the shelf the
+operator is standing in front of"* — and that is a rule about **when** the figure drops, not
+about which field it drops in. The derived estimate drops on the same request, with no join in
+between. D7 wanted the screen to agree with the shelf; it never required corrupting the
+export's reading to get there, and that sentence in D7 is kept verbatim because it is the
+argument this change is measured against.
+
+### Why the counter needs its own stamp
+
+`sold_here_at` is not decoration. The restamp being removed was the **only** thing standing
+between a sale and a re-join: `cli/cmd_join.py` re-reads the run's RECORDED export, whose mtime
+is its fetch time — measured at fifteen minutes before its own emit — so **an export fetched before a sale and read after it is the ordinary "Join again" press.** Without a stamp on the
+counter that file is newer than `live_as_of`, clears a counter it knows nothing about, and the
+sale is gone. `sales_pending` is `live_reading`'s sibling and answers for the counter what
+`live_reading` answers for the figure, so `_copies_out` and `observe_live` cannot disagree
+about one file.
+
+**It is all-or-nothing**, because one stamp cannot split a file that landed between two sales;
+a file that cannot be shown newer than the newest counted sale clears none of them, and the
+estimate errs low — D7's direction.
+
+**And its stampless case goes the opposite way from `live_reading`'s**, which is the design in
+one line: an undateable file still wins the FIGURE (D8 and D11's authority) and still cannot
+cancel a sale (a reading that cannot be placed in time cannot be shown to postdate one).
+
+### A fourth verdict, and the early return that could not move
+
+`observe_live` gained `CLEARED` — a reading that moved no copies and still wrote. It is
+distinct from `ADOPTED` because three callers read these words and every one would say
+something false with it: the reconcile would report "settled N listing(s)" beside "0 copies
+corrected", `cmd_join` would run a staged drawdown of zero, and `_settlement`'s preview would
+have no word for a write it must promise.
+
+**The early equality return was narrowed, not moved**, and that is the subtlety. "Equal figure,
+whatever the age" is what keeps a second `reconcile --live` over one file a no-op; moving it
+past arbitration would turn it into `KEPT`, because ties go to the store — the same file read
+twice would report itself outranked.
+
+### What it closed that was accepted in writing
+
+`server/capture_server.py` declined this design explicitly: *"the alternative is recording a
+per-sale delta somewhere in order to reverse it exactly, which is a fourth thing the store
+would have to explain for a number the export overwrites anyway."* Two things changed since.
+The number the export "overwrites anyway" turned out to be the same number the sale was
+writing; and D87's amendment dated the readings, so an export overwrites it only where it is
+NEWER — which a sale was arranging by forging a reading time. **The drift that paragraph accepted — a decrement lost to the floor, returned by a later undo, leaving the estimate one high — is closed by the same move**, because the floor now lives on the derived value and on
+nothing stored.
+
+`bump` refuses `LIVE` outright. Its one caller was the sale, and leaving the expression
+callable with a docstring explaining how to move `live` with it is how the next session puts
+the defect back.
+
+### What did not move
+
+**D34's `release` is untouched, deliberately.** It is a rare, acknowledged, budgeted correction
+with its own screen and receipt, bounded by the calling box's own copies, and it is not part of
+the sale/reconcile loop that caused the confusion. It restamps `live_as_of` and that is honest
+there: the operator has just asserted, on their word, that TCGplayer is holding none of it.
+**After this entry it is the only non-export writer of `live_as_of` in the tree.**
+
+**The cap reads the estimate**, and `check_listing_commands` pins why: once an import has
+landed and `join` has drawn `staged` to zero, `claim` is 0 and the estimate is the only arm of
+`max(live, claim - sold)` that can refill a SKU after a sale. Reading the raw figure there
+would silently retire D7's refill. Three figures stay on the raw reading on purpose — the map's
+key set, the corroboration gate (a fact about the FILE), and the box-delete guards, where a
+guard on a destructive operation takes the safe reading.
+
+**Nothing needed a migration.** An absent key defaults to 0 through `Inventory.parse`'s filter
+on `__annotations__` (D88), and **backfilling any non-zero value would have been the defect** —
+sales before this field existed were already applied to `live`. Rows corrupted by the old
+double-decrement repair themselves on the next reconcile newer than the corruption.
+
+### On screen, both figures
+
+The operator's ruling: the reading and the pending sales are both drawn, everywhere. The big
+figure is the estimate; the split under it — `4 when read · 2 sold here since` — appears only
+where something has sold, because a row of zeroes on 440 of 443 SKUs trains the eye past the
+three that matter.
+
+**Including the Fulfiller, and that was the operator's call over my objection.** I argued for
+the estimate alone on his view — `docs/DESIGN.md` bans jargon there and D5 says he gets no vote
+on owner-side bookkeeping — and was overruled. He gets one sentence in his own words: *"2
+copies sold here since we last counted."* It clears the banned-word list, and it earns its
+place: the count above it now moves the instant he pulls a card, and without the sentence the
+number would change under him with no reason given.
+
+**And every reading age moved from `Listing.at` to `live_as_of`.** `at` is stamped by every
+writer of every field. Before this entry a sale genuinely was a fresh observation of `live`, so
+reading `at` was defensible; after it, a sale touches `at` while observing nothing at all —
+**the age would have got fresher exactly as the figure got staler.**
+
+**What would reopen this**: an operator who wants a price or a quantity they assert here to
+outrank what TCGplayer reports. This entry keeps the export as the authority on the figure and
+this store as the authority only on what it has done since.

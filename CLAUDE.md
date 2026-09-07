@@ -271,7 +271,14 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   by default. Reports BOTH directions — copies this
                                    #   pipeline sent that TCGplayer no longer holds, and SKUs
                                    #   it holds that were never sent from here.
-                                   #   WHAT IT WRITES IS `live`, AND ONLY `live`. `pushed` is
+                                   #   WHAT IT WRITES IS `live`, AND THE COUNTER IT CLEARS
+                                   #   (D115). `live` is the export's READING; a sale no
+                                   #   longer edits it but counts beside it in
+                                   #   `sold_here`, and what a screen draws is the
+                                   #   difference. This clears that counter where it
+                                   #   adopts a reading taken after those sales — which
+                                   #   is why the order stopped mattering: mark sold
+                                   #   whenever, reconcile whenever. `pushed` is
                                    #   the cumulative record of what was sent, and
                                    #   `cli/resolve.py:_copies_out` already corrects a stuck
                                    #   one against the physical ceiling. Nothing had ever
@@ -1171,6 +1178,7 @@ D111 Cleanup is a sweep, not a step in the merge, and liveness is read rather th
 D112 The labels are tracked, the images are not, and an unmoved measurement is asserted rather than re-derived
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
+D115 The reading is what the export said, and what has sold since is counted beside it
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

@@ -409,7 +409,7 @@ function listingFact(card: InventoryCard, listings: Readonly<Record<string, List
     node: (
       <span className="browse-fact-live">
         <span className="bn-tnum">{listing.live}</span> live
-        <ReadingAge at={listing.at} />
+        <ReadingAge at={listing.live_as_of} />
       </span>
     ),
   }

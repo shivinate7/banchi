@@ -517,10 +517,13 @@ const GAMES: GameRegistry = {
  *  is a fact about the copies in the answer — so the answer counts them (see `searchAnswer`)
  *  rather than restating a number a differently-sized card map would contradict. The three
  *  literals it replaced all agreed with the count, which is why nothing below moved. */
-const LISTED: Record<string, { pushed: number; staged: number; live: number }> = {
-  '8937370': { pushed: 0, staged: 2, live: 1 },
-  '8937371': { pushed: 0, staged: 0, live: 0 },
-  '8937372': { pushed: 0, staged: 0, live: 0 },
+const LISTED: Record<
+  string,
+  { pushed: number; staged: number; live: number; sold_here: number }
+> = {
+  '8937370': { pushed: 0, staged: 2, live: 1, sold_here: 0 },
+  '8937371': { pushed: 0, staged: 0, live: 0, sold_here: 0 },
+  '8937372': { pushed: 0, staged: 0, live: 0, sold_here: 0 },
 }
 
 /** The two doors out of inventory — `master.TERMINAL_STATES`. A copy behind either is not on
@@ -576,7 +579,7 @@ function searchAnswer(query: string, cards: Cards = CARDS) {
     query,
     groups: skus.map((sku) => {
       const copies = copiesOf(sku)
-      const listed = LISTED[sku] ?? { pushed: 0, staged: 0, live: 0 }
+      const listed = LISTED[sku] ?? { pushed: 0, staged: 0, live: 0, sold_here: 0 }
       /* D7's count of copies that have not left, taken off the copies this answer is about to
          send — so `listable` below is derived from the same number the group reports and the
          fixture cannot claim a denominator its own rows contradict. */
@@ -594,7 +597,13 @@ function searchAnswer(query: string, cards: Cards = CARDS) {
         printed_total: '132',
         set_hint: 'ME01',
         condition: 'Near Mint',
-        listed,
+        // THE STAGES AND THE COUNTER TRAVEL APART (D115), the way the wire sends them:
+        // `listed` is a walk over `LISTING_STAGES` and `sold_here` deliberately is not a
+        // stage, so the screen's estimate is `listed.live - sold_here` rather than a fourth
+        // key inside `listed`.
+        listed: { pushed: listed.pushed, staged: listed.staged, live: listed.live },
+        sold_here: listed.sold_here,
+        live_as_of: null,
         on_hand,
         cap: 4,
         /* D7's `min(cap, on hand)`, mirroring what `capture_server.py` computes — the shelf
@@ -1121,6 +1130,43 @@ test('selecting a card shows every copy of it, each with both doors out of inven
      The Fulfiller's skin is a different branch and keeps its own name at 32px; nothing in
      `fulfillment.spec.ts` reaches this selector, which is scoped to `.card-locations-owner`. */
   await expect(page.locator('.card-locations-owner .card-locations-name')).toHaveCount(0)
+})
+
+test('a copy sold here since the reading is drawn beside it, and headroom follows', async ({
+  page,
+}) => {
+  /* D115. `listed.live` is the export's READING and `sold_here` is what has sold here since it,
+     so the figure a screen draws is the difference — the one that has to agree with the shelf
+     the operator is standing at (D7's ordering, which D115 kept by deriving rather than by
+     editing the reading).
+     THE SISTER CASE IS THE ONE ABOVE, byte-identical with the counter at zero, which is what
+     says this change is invisible on the 440 rows of the owner's store that have nothing
+     pending and legible on the three that do. */
+  const store: Store = {
+    cards: STORE.cards,
+    search: (query) => {
+      const answer = searchAnswer(query, STORE.cards) as {
+        groups: { sku: string; sold_here: number }[]
+      }
+      for (const group of answer.groups) {
+        if (group.sku === '8937370') group.sold_here = 1
+      }
+      return answer as never
+    },
+  }
+  await open(page, BOXES, store)
+  // Card 1 is selected on arrival — the walk plants the selection on its first row, and that
+  // is SKU 8937370, the row the sister case above asserts at zero sold.
+  await expect(page.locator('.card-locations-owner')).toBeVisible()
+
+  await expect(page.locator('.card-locations-live .bn-stat-value')).toHaveText('0')
+  await expect(page.locator('.card-locations-since')).toHaveText('1 when read · 1 sold here since')
+  /* AND HEADROOM MOVES WITH IT. Computing off the raw reading would say `Room for 1 more live`
+     here and refuse a relist the shelf can support — the one-line bug the change would
+     otherwise have left behind. */
+  await expect(page.locator('.card-locations-counts')).toHaveText(
+    'Pushed 0 · Staged 2 · Room for 2 more live',
+  )
 })
 
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
