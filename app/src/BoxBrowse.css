@@ -473,7 +473,12 @@
   transition: transform var(--bn-t) var(--bn-ease), box-shadow var(--bn-t) var(--bn-ease);
 }
 .browse-photo-frame:hover { transform: translateY(-2px); box-shadow: var(--bn-shadow-3); }
-.browse-photo {
+/* Selected on the FRAME as well as the photo, at 0-2-0, and that is the whole point of the extra
+   class: the kit's `.bn-photo img` default is `contain` at 0-1-1, so it silently outranked this
+   rule's bare 0-1-0 the day the frame gained `bn-photo` in the Banchi rebuild. The rig shoots
+   2160x3840 into a 63/88 window, so `contain` fitted the photograph by its height and left
+   `--bn-stage-bg` showing as a bar down each side — 10.7% of the frame's width, twice over. */
+.browse-photo-frame .browse-photo {
   display: block;
   width: 100%;
   height: 100%;
