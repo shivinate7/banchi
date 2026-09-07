@@ -658,7 +658,23 @@ Ratifies two items that sat on the Someday list, each marked "needs a decision e
 
 **`sessionStorage`, never `localStorage`**, and the permitted keys are named here so a lint rule can enforce the boundary. Session scope is the point: a new tab is a new session, and nothing about a shift survives closing the browser.
 
-**A second use joined the carve-out on 2026-08-29, and it is a handoff rather than a memory** (D39). `pkmnscan.run-scope` carries a box and the cards ticked in it from `#/inventory` to `#/runs`, because the pipeline moved to a route of its own and the one mass-select in the product did not. It qualifies on this entry's own test — device-local, meaningless anywhere else, not a fact about where a card IS — and it is `sessionStorage` for the same reason everything else here is: a tick list that outlived the browser would be a filter over a spend button that nobody alive remembered setting.
+**AMENDED 2026-09-06: THE ROSTER IS SPELLED HERE, BECAUSE IT NEVER WAS.** The sentence above promised the keys were "named here", and they were named only as English — *box number, set hint, finish claim, rarity claim, capture id* — while the app spelled them `pkmnscan.session.*`. A key described but never spelled is a key no search finds. Measured 2026-09-06: seven of the eight keys under this carve-out appeared in no markdown file in this repo, and two of those had never been described either, having arrived after this entry was written — `game` (D21's per-card claim, which is not the set hint beside it) and `product` (C10's sealed-product claim, `booster` / `etb` / `collection_box`). The whole set, as the app spells it after the rename the amendment below records:
+
+```
+banchi.session.box        banchi.session.setHint      banchi.session.finish
+banchi.session.game       banchi.session.rarityClaim  banchi.session.product
+banchi.session.captureId  banchi.run-scope
+```
+
+`app/src/CaptureScreen.tsx`'s `SESSION_KEYS` declares the first seven and `app/src/runHandoff.ts` the last, and **`make docs-audit`'s `storage keys` row now holds this roster against them**: a key the code writes that no markdown file names fails the commit. That is the bar `check_env_names` already sets for environment variables and it is deliberately the same low one — nothing mechanical can judge whether an explanation is any good, which is the semantic half D16 gives to a person, but it can hold that the key was written down once, on purpose, where a reader looking for it would find it. It is a bar this entry could not meet on the day it claimed to.
+
+**AMENDED THE SAME DAY, ON THE OWNER'S WORD: EVERY KEY IS `banchi.*` AND NOTHING MIGRATES.** The audit that spelled the roster above proposed freezing the `pkmnscan.` prefix — D94 keeps every name beneath the product, and a storage key is about as far beneath it as a thing gets — and the owner overruled it after being shown what a rename discards. The split was never a rule: `banchi.*` was simply what the three keys written after the rebrand got, and `pkmnscan.*` what the ten written before it kept. **A read-time fallback was offered and declined**, on the ground that a fallback read can never safely be deleted afterwards — removing it strands any browser that has not opened the app since — so the old values are abandoned in place rather than migrated.
+
+**What it cost, named rather than left to be discovered.** Two `localStorage` keys on the rig: the remembered 4K capture card and D13's quarter turn, both one press on the capture screen. Seven `sessionStorage` keys, which were dying at the end of every shift anyway and are lost only in a tab left OPEN across the deploy — six of them one press each. **The exception is `captureId`**, and it is this entry's own reason for existing: it is the in-flight id of a capture whose response was lost, losing it makes that ambiguity permanently unresolvable, and D10's high-water mark then hands the burned position to the next physical card. The window is exactly "a capture in flight at the moment the new build loaded" and nothing narrows it further. **`run-scope` is the cheapest of the ten**: reading nothing is its safe answer by construction, since its whole purpose is to stop a press paying for more than the operator ticked.
+
+**So the rule is the plain one, and there is no frozen set to remember**: every browser-storage key this app writes is `banchi.*`. D94 is unreconsidered and still governs the checkout, the CLI, the packages, the store, the wire and `PKMNSCAN_HOME`; what this establishes is that a storage key was never on that list, being a name the product itself writes and no other program reads.
+
+**A second use joined the carve-out on 2026-08-29, and it is a handoff rather than a memory** (D39). `banchi.run-scope` carries a box and the cards ticked in it from `#/inventory` to `#/runs`, because the pipeline moved to a route of its own and the one mass-select in the product did not. It qualifies on this entry's own test — device-local, meaningless anywhere else, not a fact about where a card IS — and it is `sessionStorage` for the same reason everything else here is: a tick list that outlived the browser would be a filter over a spend button that nobody alive remembered setting.
 
 **It differs from the four above in what a reload means.** Those exist so a reload does not lose the shift. This one exists so a reload does not silently WIDEN what the next press pays for, and it is cleared deliberately on three routes rather than expiring: the operator's control, picking a box, and arriving from `#/inventory` with nothing ticked. `app/src/runHandoff.ts` is the one module that reads or writes it.
 
@@ -1206,7 +1222,7 @@ The owner, 2026-08-29, asked for `TCG Market Price` on the card summary with a n
 - **A box picker is cheap and cannot disagree with anything.** `#/runs` draws its own strip from `GET /boxes` — thirteen chips carrying a card count each, the same idiom the walk's shelf strip already uses. There is no second source of truth about which boxes exist.
 - **A ticked selection is expensive and would.** `BoxBrowse`'s mass-select is the ONLY one in the product, and it is also what a box-wide claim correction reaches, so two of them would be two answers to what "the selection" means. So there is still exactly one, and `#/inventory` HANDS IT OVER: `app/src/runHandoff.ts` carries the box and its indices through `sessionStorage`, and `#/runs` draws what it was handed with a control that says where it came from and one that gives it back.
 
-**The handoff is D27's CARVE-OUT AND NOT A NEW ONE.** That entry opens session storage to state that is device-local and meaningless anywhere else, against `CLAUDE.md`'s ban — a ban D13 imposes so two devices cannot disagree about where a card IS. A tick list is not where a card is. The key is `pkmnscan.run-scope`, it is declared in one module, and every reader and writer in the app goes through that module's three functions.
+**The handoff is D27's CARVE-OUT AND NOT A NEW ONE.** That entry opens session storage to state that is device-local and meaningless anywhere else, against `CLAUDE.md`'s ban — a ban D13 imposes so two devices cannot disagree about where a card IS. A tick list is not where a card is. The key is `banchi.run-scope` (renamed from `pkmnscan.run-scope` 2026-09-06; see D27), it is declared in one module, and every reader and writer in the app goes through that module's three functions.
 
 **It is not cleared by being read, and it is cleared by every other route into the screen.** A reload during a live run is ordinary — the panel polls, and an identify run takes minutes to hours — so a read-once handoff would silently drop the operator from "36 ticked cards" to "the whole box", which is a change to what the next press spends money on. What clears it: the operator's own control, picking any box on `#/runs`, and **arriving from `#/inventory` with nothing ticked**. That last one is the case that is easy to miss and the reason the control on `#/inventory` writes on every press rather than only when there is something to write — without it, ticking cards, going over, coming back and pressing again would restore yesterday's selection from storage.
 
@@ -6254,6 +6270,90 @@ over what TCGplayer reports — a genuine want, and the point at which the figur
 be stored beside the stamp and arbitrated. D87's "newer wins" does not generalise to it: `live`
 is a quantity both parties observe, and an asking price is an instruction of ours as executed
 by them, which are not two readings of one fact.
+
+## D110 — A hover is an alpha, because the same paint over three grounds is three different hovers
+
+**Built 2026-09-06, on the owner's question about the dark sidebar** — *"is that lighter grayish
+one favorable to you?"* The answer is no, and the interesting part is that the lighter one is not
+the element the question looked like it was about.
+
+**Dark had two hover values on ONE ground, and nothing recorded why.** `.bn-nav-link:hover`
+carried a dark-only override to `--bn-surface`; the brand row directly above it and the footer
+buttons directly below it took `--bn-surface-3`, the value every other hover in the product used.
+Three controls in one column, one ground, two paints.
+
+**Measured in CIE L\*, which is the currency here.** A hex delta says nothing about a step the
+eye can see, and at these luminances it says less than nothing. A sweep of every hover target on
+every screen found exactly three grounds under them: the sidebar `--bn-surface-2` #090b0e, a
+panel `--bn-surface` #14171c, and the page `--bn-bg` #0c0e12 (which carries one target,
+`.kit-index-link` on `#/gallery`). Painting `--bn-surface-3` #1b1f26 over those three is:
+
+```
+ground                        today            white 4%
+sidebar  --bn-surface-2      ΔL*  8.67         ΔL* 3.61
+page     --bn-bg             ΔL*  7.70         ΔL* 4.22
+panel    --bn-surface        ΔL*  4.00         ΔL* 4.51
+                             spread 4.67       spread 0.90
+```
+
+**So the token was never the problem and the sidebar was never a taste question.** ΔL* 4.00 on a
+panel — the table rows and list rows the operator sweeps a pointer across all day — is a good
+hover, and nobody has complained about it. The same name on the sidebar is 8.67, more than
+double, and it reads as SELECTION rather than hover: in the rendered before/after it competes
+with the accent tint two rows below it, which is the one thing in that column that is supposed
+to be the brightest. **The lighter grey is right where it is and wrong where it was looked at**,
+and one value cannot be both.
+
+**The nav-link override was therefore correct, and incomplete.** At ΔL* 4.66 it is within half a
+point of the panel step — somebody tuned it for the darker ground and shipped it. What they could
+not do was generalise it, because an opaque hover has to know what it is sitting on, and a
+stylesheet rule does not.
+
+**An alpha does not have to know.** `--bn-hover` is `white 4%` in dark and `ink 3%` in light; it
+composites against whatever is beneath it, so one name is one perceived step on every ground and
+the per-element compensation disappears. This is not a new idea in this system — the three
+`--bn-line` tokens are already ink at an alpha, and `docs/DESIGN.md` already says of them *"they
+ride the ground."* Hover is the same argument, applied to the surface instead of the hairline.
+**D50 settled the principle** — an interactive element's feedback is the product's, not each
+stylesheet's — and this is the value that principle was missing.
+
+**THE FAMILIES ARE TWO, AND THE SPLIT IS A FACT ABOUT THE ELEMENT RATHER THAN ITS STYLESHEET.**
+An alpha REPLACES a resting background rather than layering on it, so it is correct only where
+the element rests transparent. That is the honest boundary, and it was checked element by element
+against the live DOM rather than assumed:
+
+- **A surface lit under the pointer** — rests transparent, reads `--bn-hover`. 31 rules: the nav,
+  the brand, the footer buttons, `.bn-table tbody tr`, `.bn-list-row`, `.bn-menu-item`,
+  `.pricing-row`, and the screen-level rows.
+- **An object that paints its own ground** — a button, a chip, a raised card — lifts from its OWN
+  colour and keeps `--bn-surface-3` or `--bn-btn-bg-hover`. 12 rules, and every one of them
+  independently carries a `transform: translateY(-1px)` or a shadow, which is the same claim
+  made a second way: these are raised things, not lit surfaces.
+
+The two families agree perceptually without being forced to — family B's step from `--bn-surface`
+to `--bn-surface-3` is ΔL* 4.00, which is where family A now sits. The button's own step is 5.76
+and is deliberately left stronger.
+
+**What it cost light: nothing measurable, and it fixed one thing.** On `#ffffff` — where every
+light hover except one lands — `ink 3%` resolves to #f8f8f8 against today's #f7f8fa, ΔL* −2.42
+against −2.44, and `--bn-ink-3` on the hovered row reads 4.55:1 in both. On the page ground
+today's value went the WRONG WAY: `--bn-surface-3` is LIGHTER than `--bn-bg`, so that hover was
+ΔL* +1.02 and effectively invisible. It is a real −2.44 now.
+
+**Contrast was checked on every hovered surface rather than argued from the direction of travel.**
+Dark improves on the sidebar and the page (the new value is darker than the one it replaces) and
+moves by −0.06 for `--bn-ink-3` on a panel, 4.81:1 → 4.75:1. No text in the product sits on a
+page-ground hover except `.kit-index-link`, which is `--bn-ink` at 16:1.
+
+**Three dark-only overrides are deleted, not replaced.** `.bn-nav-link` is the one this started
+from. The other two are `.capture-row` and `.capture-opt`, which in dark hovered DOWN to
+`--bn-surface-2` — a sink to below the page ground, drawn as dark holes punched in a panel, and
+looked at in the browser before it was called wrong.
+
+**What is NOT settled**: `--bn-btn-bg-hover` stays a hand-picked #262b34 in dark. A button rests
+on its own paint, so the same alpha trick does not reach it, and giving family B a
+lift-from-my-own-ground token is a second change with its own measurement to do. It is named here
+so the next session does not read this entry as covering it.
 
 ## D111 — Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
 

@@ -88,7 +88,7 @@
   color: var(--bn-ink);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.browse-boxcell:hover:not(:disabled) { background: var(--bn-surface-3); }
+.browse-boxcell:hover:not(:disabled) { background: var(--bn-hover); }
 .browse-boxcell:disabled { opacity: 0.45; }
 .browse-boxcell[aria-current='true'] {
   background: var(--bn-accent-tint);
@@ -316,7 +316,7 @@
   scroll-margin-bottom: var(--bn-1);
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-.browse-rowline:hover .browse-row { background: var(--bn-surface-3); color: var(--bn-ink); }
+.browse-rowline:hover .browse-row { background: var(--bn-hover); color: var(--bn-ink); }
 .browse-row-position {
   font-size: var(--bn-fs-xs);
   font-weight: 600;
@@ -524,7 +524,7 @@
   cursor: pointer;
   user-select: none;
 }
-.browse-details-summary:hover { background: var(--bn-surface-3); }
+.browse-details-summary:hover { background: var(--bn-hover); }
 .browse-details-chev { color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
 .browse-details[open] .browse-details-chev { transform: rotate(90deg); }
 .browse-details-hint { margin-left: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }

@@ -188,7 +188,7 @@
   .card-locations-owner .card-locations-state { justify-self: stretch; justify-content: flex-start; }
 }
 .card-locations-owner .card-locations-row:last-child { border-bottom: 0; }
-.card-locations-owner .card-locations-row:hover { background: var(--bn-surface-3); }
+.card-locations-owner .card-locations-row:hover { background: var(--bn-hover); }
 
 /* The copy the walk is standing on. A NEUTRAL rail and a neutral ground: this says "you are
    looking at this one", and deliberately not "take this one" — the accent tint it used to

@@ -256,7 +256,7 @@
 .runs-stage[data-state='current'] .runs-stage-n { background: var(--bn-accent); color: var(--bn-on-accent); }
 .runs-stage[data-state='done'] { color: var(--bn-ink-2); }
 .runs-stage[data-state='done'] .runs-stage-n { background: var(--bn-ok-tint); color: var(--bn-ok); }
-button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink); }
+button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
 
 .runs-composer-body {
   flex: 1 1 auto;
@@ -645,7 +645,7 @@ button.runs-stage:hover { background: var(--bn-surface-3); color: var(--bn-ink);
   color: var(--bn-ink-3);
   transition: color var(--bn-t-fast) var(--bn-ease), background-color var(--bn-t-fast) var(--bn-ease);
 }
-.runs-disclose:hover { color: var(--bn-ink); background: var(--bn-surface-3); }
+.runs-disclose:hover { color: var(--bn-ink); background: var(--bn-hover); }
 .runs-disclose .bn-icon { transition: transform var(--bn-t) var(--bn-ease); }
 .runs-disclose[aria-expanded='true'] .bn-icon { transform: rotate(180deg); }
 /* Beside its base rule, and for the reason written at `.runslog-toggle` above. */

@@ -45,7 +45,10 @@ const IS_DEMO = __BN_DEMO__
  * listener that outlives this stage: a restart is observed by whichever request first sees the
  * new boot id, and that request is usually another screen's (see `OrdersHubStore.ts`). */
 
-export const LANE_LABEL: Record<ShippingLane, string> = {
+/* Not exported. Nothing outside this file has ever read it — `Orders.tsx` carries its own
+ * `ORDER_LANE_LABEL` — and the export was enough on its own to stop React Refresh updating
+ * this module in place, so every edit to the Ship stage reloaded the whole page. */
+const LANE_LABEL: Record<ShippingLane, string> = {
   envelope: 'Envelope',
   parcel: 'Parcel',
   unjudged: 'Needs a look',

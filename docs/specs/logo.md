@@ -1636,9 +1636,23 @@ Measured with probes at 50%, 65% and 85% of its own box: all three missed. About
 control was real, on the affordance the whole gesture depends on.
 
 So it moves onto the thing that is already 128 × 93. Nothing is lost by the brand no longer being
-a link — Home is a nav item with its own key — and the chevron survives as a **hint** rather than
-the control: quiet until the row is hovered, and gone entirely in the rail, where 64px less two
-gutters leaves 48 and the mark takes 32.
+a link — Home is a nav item with its own key — and the chevron survives as a **label for the row**
+rather than a control: **always drawn, and quiet** — `--bn-ink-4` at 0.55, up to full ink under the
+cursor — pinned to the row's right edge by `margin-left: auto`, and gone entirely in the rail,
+where 64px less two gutters leaves 48 and the mark takes 32.
+
+**Always-visible was settled 2026-09-06 against a hover-only reveal**, from four treatments drawn
+at rest and hovered. Hover-only is tidier at rest and it hides the only thing on screen that says
+this row collapses the sidebar; an affordance that must be discovered before it can help is a poor
+way to announce the sole control on a row. What that buys is paid for in volume rather than in
+absence.
+
+**The rule was deleted once, by accident, and shipped.** The morph commit rewrote the CSS region it
+sat inside and took it with it, so the chevron rendered as a bare `.bn-icon` — full ink, always on,
+no auto margin, floating 12px off the frame in the middle of a 109px row. `make check`, `make
+harness` and 407 browser specs were all green: the filmstrips never hovered and nothing asserted
+where it sat or how loud it was. `app/tests/brand.spec.ts` asserts both now, and the operator found
+it by looking at the product.
 
 **At 768–1023px it stays a link.** That breakpoint rails the shell by media query and ignores
 `data-rail`, so a toggle there would set state the layout does not read and appear to do nothing,

@@ -187,7 +187,7 @@
   text-decoration: none;
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.home-box:hover, .home-run:hover { background: var(--bn-surface-3); text-decoration: none; }
+.home-box:hover, .home-run:hover { background: var(--bn-hover); text-decoration: none; }
 .home-box-num {
   width: 32px;
   height: 32px;

@@ -288,6 +288,55 @@ test.describe('with the system preference set to dark', () => {
   })
 })
 
+/* THE CHEVRON IS THE ONE THING ON SCREEN SAYING THE BRAND COLLAPSES THE SIDEBAR, and it shipped
+ * with no styling at all.
+ *
+ * The morph commit rewrote the CSS region `.bn-brand-chevron` sat inside and deleted its rule
+ * block along with it. The element still rendered — as a bare `.bn-icon`: always at full ink, no
+ * `margin-left: auto`, so it floated 12px off the frame in the middle of a 109px row instead of
+ * sitting at the row's edge. `make check`, `make harness` and 407 browser specs were all green,
+ * because the filmstrips never hovered and nothing in this suite asserted where it sits or how
+ * loud it is. The operator found it by looking at the product.
+ *
+ * TWO CLAIMS, AND NEITHER SURVIVES THE DELETION. Position: pinned to the row's right edge, which
+ * only `margin-left: auto` does. Volume: quiet at rest and full under the cursor — the owner chose
+ * that over a hover-only reveal on 2026-09-06, because an affordance that must be discovered
+ * before it can help is a poor way to announce the only control on the row. */
+test('the chevron is quiet, and it is pinned to the row edge rather than floating', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+
+  const read = () =>
+    page.evaluate(() => {
+      const c = document.querySelector<HTMLElement>('.bn-brand-chevron')!
+      const row = document.querySelector('.bn-side .bn-brand')!.getBoundingClientRect()
+      const box = c.getBoundingClientRect()
+      const pad = parseFloat(getComputedStyle(document.querySelector('.bn-side .bn-brand')!).paddingRight)
+      return {
+        opacity: Number(getComputedStyle(c).opacity),
+        // distance from the row's inner right edge: 0 means pinned, ~49 was the floating bug
+        offEdge: row.right - pad - box.right,
+      }
+    })
+
+  const rest = await read()
+  // VISIBLE BUT SUBORDINATE. Both bounds matter: 0 is the hover-only treatment the owner did not
+  // choose, and 1 is the regression's full-ink glyph beside a mark designed without one.
+  expect(rest.opacity, 'the chevron is drawn at rest').toBeGreaterThan(0)
+  expect(rest.opacity, 'and it is quieter than the mark beside it').toBeLessThan(1)
+  expect(Math.abs(rest.offEdge), `the chevron is ${rest.offEdge.toFixed(1)}px off the row edge — it is floating, not pinned`)
+    .toBeLessThan(1)
+
+  await page.hover('.bn-side .bn-brand')
+  await page.waitForTimeout(250)
+  expect((await read()).opacity, 'and it comes up to full under the cursor').toBe(1)
+
+  // GONE IN THE RAIL, not faded: 64px less two gutters leaves 48 and the mark takes 32.
+  await page.click('.bn-side .bn-brand')
+  await page.waitForTimeout(500)
+  await expect(page.locator('.bn-brand-chevron')).toBeHidden()
+})
+
 /* THE BRAND IS THE CONTROL — the user's own instruction, after the 22px chevron proved
    unclickable. Nothing else in this suite presses it, and the whole affordance is one onClick. */
 test('pressing the brand collapses the sidebar and expands it again', async ({ page }) => {

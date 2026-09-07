@@ -102,7 +102,7 @@
   font: inherit;
   cursor: pointer;
 }
-.bn-brand:hover { text-decoration: none; background: var(--bn-surface-3); }
+.bn-brand:hover { text-decoration: none; background: var(--bn-hover); }
 /* The slot is the only thing here that animates LAYOUT, and it is why the nav below does not
    lurch: the brand row goes 109px -> 48px when the lockup gives way to the mark, and without this
    every nav row, group label and the footer would jump 61px in the frame the column started a
@@ -162,6 +162,32 @@
               scale var(--bn-t) var(--bn-ease) var(--bn-brand-roman-delay);
 }
 
+/* THE CHEVRON SAYS WHICH WAY THE ROW GOES. The control is the whole 128 x 93 brand row — that is
+   the point of moving the affordance onto the mark — so this is a label for it, never the target.
+   ALWAYS VISIBLE, AND QUIET (the owner's choice, 2026-09-06, from four treatments drawn at rest
+   and hovered). A hover-only reveal has to be discovered before it can help, and the one thing on
+   screen saying the brand collapses the sidebar should not itself be hidden. The cost it accepts
+   is a permanent glyph beside a mark designed without one, so it is paid down to `--bn-ink-4` at
+   0.55 and only comes up to full ink under the cursor.
+   `margin-left: auto` is what pins it to the row's right edge rather than leaving it 12px off the
+   frame in open space. It is GONE in the rail rather than faded: 64px less two gutters leaves 48,
+   the mark takes 32, and there is no honest room for a second glyph.
+
+   THIS BLOCK WAS DELETED ONCE, BY ACCIDENT, and shipped. The morph commit rewrote the CSS region
+   it sat inside and took it along, so the chevron rendered as a bare `.bn-icon`: always on, no
+   auto margin, full ink, floating mid-row. `make check`, `make harness` and 407 browser specs all
+   stayed green — the filmstrips never hovered and nothing asserted where this sits or how loud it
+   is. `app/tests/brand.spec.ts` asserts both now. */
+.bn-brand-chevron {
+  margin-left: auto;
+  flex: none;
+  color: var(--bn-ink-4);
+  opacity: 0.55;
+  transition: opacity var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+.bn-brand:hover .bn-brand-chevron,
+.bn-brand:focus-visible .bn-brand-chevron { opacity: 1; color: var(--bn-ink); }
+
 .bn-brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
 .bn-brand-name {
   font-family: var(--bn-font-display);
@@ -201,8 +227,7 @@
   white-space: nowrap;
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-.bn-nav-link:hover { background: var(--bn-surface-3); color: var(--bn-ink); text-decoration: none; }
-:root[data-theme='dark'] .bn-nav-link:hover { background: var(--bn-surface); }
+.bn-nav-link:hover { background: var(--bn-hover); color: var(--bn-ink); text-decoration: none; }
 .bn-nav-link .bn-icon { flex: none; color: var(--bn-ink-3); transition: color var(--bn-t-fast), transform var(--bn-t) var(--bn-ease-spring); }
 .bn-nav-link:hover .bn-icon { color: var(--bn-ink); }
 .bn-nav-link[aria-current='page'] { color: var(--bn-accent); background: var(--bn-accent-tint); font-weight: 600; }
@@ -287,7 +312,7 @@
   border-top: 1px solid var(--bn-line);
 }
 .bn-side-foot .bn-btn { justify-content: flex-start; box-shadow: none; background: transparent; color: var(--bn-ink-2); font-weight: 500; height: 34px; }
-.bn-side-foot .bn-btn:hover { background: var(--bn-surface-3); color: var(--bn-ink); }
+.bn-side-foot .bn-btn:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .bn-side-foot .bn-btn .bn-icon { color: var(--bn-ink-3); }
 .bn-server {
   display: flex;

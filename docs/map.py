@@ -1389,11 +1389,20 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
+                #
+                # D27 AND D94 JOIN FOR `storage keys`, and both are load-bearing rather than
+                # illustrative. D27 is the carve-out the row enforces — which browser-storage
+                # keys are permitted and the promise, made in that entry, that they are named
+                # in the documentation. D94 is why the row says nothing about the PREFIX: the
+                # product is Banchi and everything beneath it keeps its name, so `banchi.*`
+                # and `pkmnscan.*` both stand and a row demanding one of them would be
+                # demanding a rename that silently discards what a browser holds under the
+                # old spelling.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D31", "D39", "D49", "D50",
-                                "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72",
-                                "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90", "D92",
-                                "D96", "D101", "D102", "D104"],
+                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D49",
+                                "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70",
+                                "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90",
+                                "D92", "D94", "D96", "D101", "D102", "D104"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1545,7 +1554,20 @@ COMPONENTS = [
                         "may import store.files and server.ports and may never import "
                         "capture_server, whose ORIGINS_ENV it lifts with `ast` instead. "
                         "`report()` is read-only and is what `make status` asks. "
-                        "`make server` and `make dev` are untouched and still work.",
+                        "`make server` and `make dev` are untouched and still work. "
+                        "A FAST FAILURE IS ONE INSIDE `FAST_FAILURE_SECONDS`, and that "
+                        "constant was declared here from the day the file was written and "
+                        "read by NOTHING until 2026-09-06 — so `_note_exit` counted every "
+                        "exit alike, and a supervisor `make launch-agent` keeps alive for "
+                        "days accumulated unrelated deaths toward a limit meant for a crash "
+                        "loop. Found on the owner\'s rig: two clean exits nineteen minutes "
+                        "apart had spent 2 of the 5, and only editing a watched Python file "
+                        "gives them back. The crash-recovery respawn also confirms itself "
+                        "now — it used to end at `spawn_capture` with no probe and no line, "
+                        "so the log\'s last word on a recovery was `restarting in Ns` and a "
+                        "healthy rig read exactly like a wedged one. Both paths go through "
+                        "one `_await_capture`, which takes the CHILD and not just the port "
+                        "(D53\'s own correction). T7 `check_supervisor_recovery`.",
                 # D53 is the entry that argues all of it. D43 because every port and the
                 # agent label come from server/ports.py rather than a constant — a second
                 # spelling here is the cross-tree failure that entry exists to close, and the
@@ -1554,7 +1576,8 @@ COMPONENTS = [
                 # targets may reach `make check` or the git hook, and launch-agent writes to
                 # ~/Library. D13 because the store stays on this Mac and the LAN reach is the
                 # tunnel case that entry already names.
-                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70"],
+                "governed_by": ["D13", "D18", "D43", "D47", "D53", "D70", "D85"],
+                "tested_by": ["T7"],
                 "status": "built",
             },
             "score-trace.py": {
@@ -2356,7 +2379,9 @@ COMPONENTS = [
             # ---- the ground: what everything else reads ----
             "src/tokens.css": {"does": "BANCHI'S TOKENS, and the only file in app/ allowed to write a "
                                        "color. Named `--bn-*` and grouped by the job rather than by "
-                                       "the value: neutrals (bg, surface 1-3, glass), ink 1-4, three "
+                                       "the value: neutrals (bg, surface 1-3, glass, and `--bn-hover`, "
+                                       "the pointer's own step — an ALPHA so it rides whatever "
+                                       "ground it lands on, D110), ink 1-4, three "
                                        "line weights, brand (accent with hover/press/two tints, and "
                                        "`live`, the vermilion that means a camera or a capture), the "
                                        "four semantic pairs, three shadows plus an accent glow, the "
@@ -2378,7 +2403,7 @@ COMPONENTS = [
                                        "raises the three control heights to a thumb's 40-46px — the "
                                        "POINTER decides, not the width, because an iPad in portrait "
                                        "is 820px wide and all thumb.",
-                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94"],
+                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110"],
                                "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
                                        "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
                                        "spacing row and one radius, and merges every `:root` in this "
@@ -2696,9 +2721,15 @@ COMPONENTS = [
                                             "two in `kit/index.tsx`; exempting either would "
                                             "have waved through anything those files ever "
                                             "store, and `App.tsx` is the shell. This module and "
-                                            "`src/useCamera.ts` are the two named exceptions "
-                                            "and between them hold every `localStorage` call in "
-                                            "the app. D27 permits only facts about THIS "
+                                            "`src/useCamera.ts` are the two named FILE "
+                                            "exceptions; `src/Orders.tsx` holds a third key at "
+                                            "two call sites carrying an inline disable, on the "
+                                            "owner's ruling of 2026-09-03, so the count is five "
+                                            "and not four. CLAUDE.md publishes the roster and "
+                                            "`make docs-audit`'s `storage keys` row reconciles "
+                                            "it against this directory in both directions — the "
+                                            "sentence said four and listed five for three days, "
+                                            "and named this file nowhere. D27 permits only facts about THIS "
                                             "MACHINE: a theme is chosen for the room the "
                                             "operator is sitting in, and D13 keeps everything "
                                             "about a card on the Mac so two devices cannot "
@@ -2709,7 +2740,13 @@ COMPONENTS = [
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
                                          "remembered device that refuses to fall back to another",
-                                 "governed_by": ["D13"],
+                                 # D27 and D94 for the two `localStorage` keys this file holds
+                                 # and the argument beside them: D27 permits the store only for
+                                 # facts about THIS MACHINE, and D94 is what the 2026-09-06
+                                 # rename off the `pkmnscan.` prefix had to be argued against —
+                                 # the owner overruled it for storage keys specifically, and
+                                 # this file carries the whole account of what that cost.
+                                 "governed_by": ["D13", "D27", "D94"],
                                  "note": "`started`, `missing` and `error` are three different "
                                          "facts and the screen draws them differently: not "
                                          "asked for yet, not connected, and asked for and "
@@ -3205,8 +3242,31 @@ COMPONENTS = [
                                             "in' for a sealed box and '#12 of 62 so far' for an open "
                                             "one, because an open box's denominator still moves.",
                                     "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68"]},
+            "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
+                                        "`sentenceOf`, `sectionDepthOf`, their types and the shared "
+                                        "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
+                                        "component can HOT-RELOAD: React Refresh only updates a module "
+                                        "in place when every export it has is a component, and one "
+                                        "exported function beside one meant every edit to that file "
+                                        "reloaded the whole page — Vite named it on each save. Kept "
+                                        "together as one module rather than un-exporting the two with "
+                                        "no outside caller, because where a card sits said three ways "
+                                        "is one concept. Nothing here decides where a divider is; every "
+                                        "bound is a card COUNT and not a stored index (D58).",
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68"]},
             "src/PositionBar.css": {"does": "the track at two densities, and the marker",
                                     "governed_by": ["D5", "D20"]},
+            "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
+                                         "component in it — `readingAgo`, `readingExact`, `stateTone`, "
+                                         "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
+                                         "written in (D26's two doors out). Split out of "
+                                         "CardLocations.tsx 2026-09-06 for src/position.ts's reason: "
+                                         "four plain functions exported beside two components meant "
+                                         "React Refresh reloaded the whole page on every edit to that "
+                                         "file. `stateLabel` is the one map every state pill on the "
+                                         "owner's screens draws through, so a raw wire value is never "
+                                         "printed as a label.",
+                                 "governed_by": ["D5", "D26", "D31", "D83", "D92"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
@@ -3802,7 +3862,7 @@ COMPONENTS = [
                                      "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
-                                          "`pkmnscan.run-scope`, D27's carve-out. NOT CLEARED BY "
+                                          "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
                                           "BEING READ, because a reload during a live run is "
                                           "ordinary and a read-once handoff would silently widen "
                                           "what the next press pays for; cleared by the operator, "

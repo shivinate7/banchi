@@ -97,6 +97,17 @@ READY_SECONDS = 10.0
 RESTART_BACKOFF = (1, 2, 4, 8, 15, 30)
 
 # After this many fast failures, stop respawning and KEEP WATCHING. See `_note_exit`.
+#
+# FAST IS THE LOAD-BEARING WORD AND IT WAS DECLARED AND NEVER READ. `FAST_FAILURE_SECONDS`
+# sat in this file from the day it was written with no reader anywhere in `scripts/`, so
+# `_note_exit` counted EVERY exit alike — and this supervisor is started at login by
+# `make launch-agent` and runs for days. Measured on the owner's rig 2026-09-06: two clean
+# exits nineteen minutes apart had already spent 2 of the 5, and nothing but editing a
+# watched Python file would ever have given them back. Five such deaths, however far apart,
+# and the capture server stops coming back while the log claims it "failed to stay up".
+#
+# That is D85's shape one file over — a variable nothing sets is not a fallback, and a
+# constant nothing reads is not a policy.
 FAST_FAILURE_LIMIT = 5
 FAST_FAILURE_SECONDS = 5.0
 
@@ -662,6 +673,7 @@ class Supervisor:
         self.fast_failures = 0
         self.giving_up = False
         self.restarts = 0
+        self.capture_started = 0.0
         self.last_syntax_error: Optional[tuple[str, str]] = None
 
     # -- lifecycle ---------------------------------------------------------
@@ -683,6 +695,7 @@ class Supervisor:
         if took < 0:
             self._refuse_capture(capture_port)
             return
+        self.capture_started = time.time()
         log(f"capture server ready on :{capture_port} (pid {self.capture.pid}) in {took:.1f}s")
 
         self.vite = spawn_vite(self.root)
@@ -769,13 +782,48 @@ class Supervisor:
                 log(f"restarting in {delay}s")
                 time.sleep(delay)
                 self.capture = spawn_capture(self.root)
+                # AND SAY WHETHER IT WORKED. This path used to end here, so the log's last
+                # word on a recovery was "restarting in 4s" and nothing ever confirmed the
+                # server came back — a healthy rig and a wedged one read identically, and
+                # telling them apart meant going to `ps` for the child's parent. The watcher
+                # path has always probed and logged; this one is the half that matters more,
+                # because nobody chose to be here.
+                self._await_capture()
         if self.vite is not None and self.vite.poll() is not None:
             log(f"app exited ({self.vite.returncode}).")
             self._tail(VITE_LOG)
             clear_pidfile(VITE, self.root)
             self.vite = None
 
+    def _await_capture(self) -> None:
+        """Wait for the child THIS supervisor just spawned, and record when it came up.
+
+        `wait_for_port` takes the child rather than only the port, which is D53's own
+        correction: a port another process holds answers exactly like one of ours does, so
+        asking the socket alone reports a squatter as success.
+        """
+        if self.capture is None:
+            return
+        port = ports.capture_port(self.root)
+        took = wait_for_port(port, READY_SECONDS, self.capture)
+        if took >= 0:
+            self.capture_started = time.time()
+            log(f"capture server ready on :{port} (pid {self.capture.pid}) in {took:.1f}s")
+        else:
+            log("capture server did not come back up:")
+            self._tail(CAPTURE_LOG)
+
     def _note_exit(self) -> None:
+        """Count this death only if it was a FAST one, which is what the limit is about.
+
+        The counter exists to stop a crash LOOP — a child that dies as fast as it is started,
+        forever. A child that served for nineteen minutes and then died is not in that loop,
+        and counting it means a supervisor alive for days accumulates unrelated deaths until
+        it gives up on a server that is fine.
+        """
+        lived = time.time() - self.capture_started if self.capture_started else 0.0
+        if lived >= FAST_FAILURE_SECONDS:
+            self.fast_failures = 0
         self.fast_failures += 1
         if self.fast_failures >= FAST_FAILURE_LIMIT:
             self.giving_up = True
@@ -885,14 +933,7 @@ class Supervisor:
         self.restarts += 1
         self.fast_failures = 0
         self.giving_up = False
-        if self.capture is not None:
-            took = wait_for_port(ports.capture_port(self.root), READY_SECONDS, self.capture)
-            if took >= 0:
-                log(f"capture server ready on :{ports.capture_port(self.root)} "
-                    f"(pid {self.capture.pid}) in {took:.1f}s")
-            else:
-                log("capture server did not come back up:")
-                self._tail(CAPTURE_LOG)
+        self._await_capture()
 
     def _first_syntax_error(self, changed: Iterable[str]) -> Optional[tuple[str, str]]:
         for name in changed:

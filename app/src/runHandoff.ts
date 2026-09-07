@@ -49,7 +49,12 @@ export type CarriedScope = {
  *  that a lint rule could enforce the boundary; `app/eslint.config.js` bans `localStorage` by
  *  selector and cannot see a key string, so the defence for this one is that it is declared
  *  once and every reader and writer in the app goes through the three functions below. */
-const KEY = 'pkmnscan.run-scope'
+/* Renamed from `pkmnscan.run-scope` on 2026-09-06 with the other nine, on the owner's word
+ * and with no migration — `useCamera.ts` holds the argument. This is the cheapest of the ten
+ * to abandon: a stale handoff is cleared on three routes by design and its whole purpose is
+ * to stop a press paying for more than the operator ticked, so reading nothing is the safe
+ * answer and always was. */
+const KEY = 'banchi.run-scope'
 
 /** Reads whatever is stored, or `null`. `window.sessionStorage` throws in a browser with
  *  storage disabled, so the access is guarded: the handoff is a convenience and losing it is

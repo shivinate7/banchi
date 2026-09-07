@@ -211,7 +211,7 @@ function finishCells(page: Page) {
  * what the wire carries, so pointing a click at a label and asserting nothing else would
  * leave `Reverse holo` free to store `holo`. It is not all that moved, and the join is
  * asserted in BOTH directions rather than assumed — the cases that claim a member read
- * `pkmnscan.session.finish` back and name it, and the legacy-session case seeds the MEMBER
+ * `banchi.session.finish` back and name it, and the legacy-session case seeds the MEMBER
  * and asserts the labelled cell it presses. */
 const FINISH = {
   normal: /^Normal$/,
@@ -276,7 +276,7 @@ test('the claim is stored in the game’s enum order, never the order it was tap
   await finishCell(page, 'normal').click()
 
   const stored = await page.evaluate(() =>
-    window.sessionStorage.getItem('pkmnscan.session.finish'),
+    window.sessionStorage.getItem('banchi.session.finish'),
   )
   expect(stored).toBe(JSON.stringify(['normal', 'reverse_holo']))
 })
@@ -299,7 +299,7 @@ test('re-tapping the last claimed cell clears the claim, and stores nothing', as
      rather than as `[]`: an empty claim is no claim (D3), and a stored `[]` would be a
      record of nothing that still has to be read back. */
   expect(
-    await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.finish')),
+    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.finish')),
   ).toBeNull()
 
   /* And the collapsed row says so IN WORDS, at full contrast. The removed "no claim" cell
@@ -322,7 +322,7 @@ test('a session written before the claim was a set reads back as ONE member, not
 
      The value is UNQUOTED, which is what the old writer wrote: `JSON.parse` throws on it,
      and the salvage has to be in the `catch` rather than only in the array branch. */
-  await open(page, { 'pkmnscan.session.finish': 'reverse_holo' })
+  await open(page, { 'banchi.session.finish': 'reverse_holo' })
 
   /* The ROW draws the label and the STORE held the member, which is the whole of the
      backfill: the seeded string is `reverse_holo` and the cell it presses below is the one
@@ -361,7 +361,7 @@ test('narrowing a two-member claim down to one CLEARS it rather than promoting i
 
   await expect(finishRow(page)).toContainText('No claim')
   expect(
-    await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.finish')),
+    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.finish')),
   ).toBeNull()
 })
 
@@ -419,7 +419,7 @@ test('the tenth rarity rides 0 and the eleventh rides A — past the digits, by 
   /* Stored in the game's stack order (D22), not the order the keys were pressed — the same
      canonicalisation the finish claim above asserts, over a different control. */
   expect(
-    await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.rarityClaim')),
+    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.rarityClaim')),
   ).toBe(JSON.stringify(['Special Illustration Rare', 'Hyper Rare']))
 })
 
@@ -450,7 +450,7 @@ test('C stays the shutter and B stays the box: an option key never shadows one a
   await page.keyboard.press('c')
   await expect(rarityOpt(page, 'Rainbow Rare')).toHaveAttribute('aria-pressed', 'false')
   expect(
-    await page.evaluate(() => window.sessionStorage.getItem('pkmnscan.session.rarityClaim')),
+    await page.evaluate(() => window.sessionStorage.getItem('banchi.session.rarityClaim')),
   ).toBeNull()
 
   /* And `b` — position 12 under a literal alphabet — still opens the Box field, which is
@@ -910,7 +910,7 @@ test('an ambiguous hint names the sets it could be, and resolves to none of them
 
 test('a hint is never accused while there is no list to check it against', async ({ page }) => {
   await routeSets(page, { game: 'pokemon', sets: [], aliases: {}, reason: 'tcg_cookie_missing' })
-  await open(page, { 'pkmnscan.session.setHint': 'Spiritfoged' })
+  await open(page, { 'banchi.session.setHint': 'Spiritfoged' })
 
   /* THE VERDICT IS `unchecked`, WHICH IS NOT `unmatched`. No cookie, no network, the portal
      down — this screen cannot tell, and D65's whole rule is that it degrades to the control

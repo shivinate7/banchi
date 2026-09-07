@@ -122,7 +122,7 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
 .run-list-group:last-child .run-row:last-child { border-bottom: 0; }
-.run-row:hover { background: var(--bn-surface-3); }
+.run-row:hover { background: var(--bn-hover); }
 .run-row[aria-current='true'] { background: var(--bn-accent-tint); }
 .run-row[aria-current='true']::before {
   content: '';
@@ -317,7 +317,7 @@
   color: var(--bn-ink);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.runs-step-head:hover { background: var(--bn-surface-3); }
+.runs-step-head:hover { background: var(--bn-hover); }
 .runs-step[data-open='true'] > .runs-step-head { background: transparent; }
 .runs-step-mark {
   width: 30px;

@@ -69,7 +69,7 @@
   color: var(--bn-ink);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.pricing-run:hover { background: var(--bn-surface-3); }
+.pricing-run:hover { background: var(--bn-hover); }
 .pricing-run-on { background: var(--bn-accent-tint); }
 .pricing-run-on:hover { background: var(--bn-accent-tint-2); }
 .pricing-run-check {
@@ -633,7 +633,7 @@
   animation-delay: calc(var(--i, 0) * 18ms);
 }
 .pricing-row:last-child { border-bottom: 0; }
-.pricing-row:hover { background: var(--bn-surface-3); }
+.pricing-row:hover { background: var(--bn-hover); }
 .pricing-row[data-drawn='true'] { box-shadow: inset 3px 0 0 var(--bn-accent); background: var(--bn-accent-tint); }
 .pricing-row[data-cap='full'] { opacity: 0.72; }
 .pricing-row[data-dim='true'] { opacity: 0.32; }
@@ -1351,7 +1351,7 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   font-variant-numeric: tabular-nums;
   transition: background-color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
 }
-.pricing-cheap-input:hover { background: var(--bn-surface-3); border-bottom-color: var(--bn-ink-4); }
+.pricing-cheap-input:hover { background: var(--bn-hover); border-bottom-color: var(--bn-ink-4); }
 .pricing-cheap-input:focus-visible {
   outline: none;
   background: var(--bn-surface-3);
