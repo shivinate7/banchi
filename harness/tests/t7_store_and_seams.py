@@ -10939,9 +10939,11 @@ def check_markdown_lens(checks: Checks) -> None:
         )
         checks.equal(
             sorted(by_sku),
-            sorted(SEAM_SKUS),
-            "and the SURVEY holds every live row the export carried, including the ones the "
-            "rule refused — the lens draws all of them or it is a gate wearing a filter's name",
+            sorted(sku for sku in SEAM_SKUS if sku != ARTICUNO_SKU),
+            "and the SURVEY holds every LIVE row the export carried, including the ones the "
+            "rule refused — the lens draws all of them or it is a gate wearing a filter's "
+            "name. `live` is the one word doing work: a row TCGplayer holds no copies of is "
+            "not a row this screen can act on, and it is dropped (see below)",
         )
         checks.equal(
             (by_sku[DUNSPARCE_REVERSE_SKU]["standing"], by_sku[DUNSPARCE_REVERSE_SKU]["skip"]),
@@ -10955,12 +10957,20 @@ def check_markdown_lens(checks: Checks) -> None:
             "QUALIFIED and fell below `--limit`, so a screen reading `skip` alone cannot tell "
             "it from an offered row — and only one of the two is in the worklist",
         )
-        checks.equal(
-            (by_sku[ARTICUNO_SKU]["standing"], by_sku[ARTICUNO_SKU]["skip"]),
-            ("refused", reprice.SOLD_OUT),
-            "and a refused row carries the survey's own code, so the sentence on the screen "
-            "and the sentence in the receipt come from one table",
+        # INVERTED 2026-09-07. This asserted that the sold-out row was in the survey carrying
+        # `SOLD_OUT`, which was right while every refusal was drawn — and `sold_out` is the one
+        # refusal nothing can be done about, `UNPRICEABLE_CODES`' only member since D109. On
+        # the owner's export it is 372 of 759 rows, so the lens drew nearly twice as many dead
+        # rows as live ones. The principle it was protecting — a REFUSED row is still drawn —
+        # is unchanged and asserted on a live refusal in `check_pricing_reach`.
+        checks.ok(
+            ARTICUNO_SKU not in by_sku,
+            "AND A SOLD-OUT ROW IS NOT IN THE SURVEY AT ALL. There is no live listing for a "
+            "price to edit, so it can never be answered and would only be something to "
+            "scroll past",
         )
+        # (THE REPORT STILL NAMES IT is asserted in `check_markdown`, which holds the command's
+        # stdout; this block only has the files on disk.)
         checks.ok(
             all(row.get("row") for row in survey["skus"]),
             "EVERY SURVEY ROW CARRIES THE VERBATIM EXPORT ROW. It is what an upload's bytes "
@@ -11030,9 +11040,15 @@ def check_markdown_lens(checks: Checks) -> None:
 
         # ------------------------------------------------------ the rows that may never go
         code, said = apply_edits(directory, [(ARTICUNO_SKU, "9.00")])
+        # THE REFUSAL MOVED AND THE PROPERTY DID NOT. This expected `[sold_out]` while the
+        # survey still carried the row; it no longer does, so `read_back`'s bytes check fires
+        # first and the complaint becomes `not_in_worklist`. That is the one `read_back`'s own
+        # comment calls "the one that is true": there IS no row for this SKU here. The state is
+        # unreachable from the screen — the row is not drawn — and stays reachable only by
+        # hand-editing a worklist, which is exactly what this asserts still refuses.
         checks.ok(
-            code == 0 and f"[{reprice.SOLD_OUT}]" in said,
-            f"a `{reprice.SOLD_OUT}` row is refused BY NAME however good its price — TCGplayer "
+            code == 0 and f"[{reprice.NOT_IN_WORKLIST}]" in said,
+            f"a `{reprice.SOLD_OUT}` row is refused however good its price — TCGplayer "
             f"holds no copies, so there is no listing for a price to edit",
         )
 
@@ -11103,8 +11119,10 @@ def check_markdown_lens(checks: Checks) -> None:
         )
         checks.equal(
             len(json.loads((empty / cmd_reprice.SURVEY).read_text("utf-8"))["skus"]),
-            len(SEAM_SKUS),
-            "and the survey is full, which is the whole point of writing at all",
+            len([sku for sku in SEAM_SKUS if sku != ARTICUNO_SKU]),
+            "and the survey holds every LIVE row, which is the whole point of writing at all "
+            "— the sold-out one is not among them, and a lens reached by a stamp draws what "
+            "can still be priced rather than everything the export happened to carry",
         )
 
         # -------------------------------------- the screen's press, through the route (D103)
@@ -20111,6 +20129,43 @@ def check_pricing_reach(checks: Checks) -> None:
         [reprice.TOO_YOUNG],
         "WITH NEITHER CLOCK IT IS `too_young`, not priced on a guess. Membership stopped "
         "being a refusal; being undatable did not",
+    )
+
+    # -------------------------------------------------- a dead row is not a worklist row
+    gone = dict(row)
+    gone[tcgcsv.SKU_COLUMN] = "5550002"
+    gone[tcgcsv.LIVE_QUANTITY_COLUMN] = "0"
+    both = reprice.plan(
+        [row, gone], owned_since={}, listed_since={"5550001": old, "5550002": old},
+        days=7, rule=cuts,
+    )
+    checks.equal(
+        [c.skip for c in both.skipped.get(reprice.SOLD_OUT, [])],
+        [reprice.SOLD_OUT],
+        "a row TCGplayer holds no copies of is still REFUSED and still counted — the operator "
+        "is told how many of their export is dead",
+    )
+    checks.equal(
+        sorted(c.sku for c, _standing in both.surveyed()),
+        ["5550001"],
+        "BUT IT IS NOT IN THE SURVEY, which is what the lens draws. `sold_out` is the one "
+        "member of `UNPRICEABLE_CODES`, so the row can never be answered and is only "
+        "something to scroll past — 372 of 759 rows on the owner's export. The EXPORT keeps "
+        "them: `reconcile --live` reads a zero quantity to see a SKU sell out, and "
+        "`livecheck` tells a zero row from a SKU absent altogether",
+    )
+    checks.equal(
+        sorted(c.sku for c, standing in undatable.surveyed() if standing == "refused"),
+        ["5550001"],
+        "A LIVE ROW THE RULE REFUSED IS STILL DRAWN — this one is `too_young`. That is D103's "
+        "rule and the reason the drop above is narrow: staleness is a FILTER over rows the "
+        "operator can still price by hand, and only a row that cannot be priced at all goes",
+    )
+    checks.equal(
+        both.considered,
+        2,
+        "and `considered` still counts it, so no row goes missing from the arithmetic the "
+        "report prints",
     )
 
     # -------------------------------------------------- the cap is configurable (D7)

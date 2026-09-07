@@ -673,7 +673,7 @@ COMPONENTS = [
                                    "7,802 wide-export rows, so a listing run reading it would "
                                    "write no price with nothing raising.",
                            "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D87",
-                                           "D100", "D103", "D107"],
+                                           "D100", "D103", "D107", "D109"],
                            "tested_by": ["T7"]},
             "merge.py": {"does": "one import file over several runs: the copies union, deduped "
                                  "on (box, index), and the live cap spent ONCE over that union. "
@@ -3541,7 +3541,7 @@ COMPONENTS = [
                                                 "D33", "D35", "D37", "D39", "D41", "D48",
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
-                                                "D99", "D100", "D103", "D101", "D105", "D107"]},
+                                                "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -3916,7 +3916,7 @@ COMPONENTS = [
                                              "eleven and three mechanical counts do not move.",
                                      # D103 is the entry; D86 is the one answer file the write
                                      # path is keyed by; D62 is the press the trends scoping keeps.
-                                     "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101"]},
+                                     "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101", "D99"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
                                           "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
@@ -4310,7 +4310,7 @@ COMPONENTS = [
                                                "at a marketplace, and it pins that the trends "
                                                "press is scoped to the filter rather than to "
                                                "the whole survey (D62). Not a harness test.",
-                                               "governed_by": ["D62", "D100", "D103", "D107"]},
+                                               "governed_by": ["D62", "D100", "D103", "D107", "D28", "D99", "D101"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "

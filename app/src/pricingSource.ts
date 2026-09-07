@@ -55,11 +55,13 @@ export type PricingSource = {
 
   /** Whether a typed cut-off re-partitions the list.
    *
-   *  TRUE FOR A RUN AND FALSE FOR A LENS, and it is not a preference. The cut-off decides which
-   *  import file a row is bound for, so on a run the list moving under a new figure IS the
-   *  answer to "how many cards does that make cheap". A live listing is already listed; there
-   *  is no file to be bound for and nothing for the figure to decide, so re-partitioning would
-   *  be the screen inventing a distinction the pipeline will not act on. */
+   *  TRUE ON BOTH DOORS SINCE 2026-09-07, and it was the last thing telling them apart on this
+   *  axis. The cut-off is ONE variable (D99) — the line, and what everything under it lists at
+   *  — so on a run the list moving under a new figure answers "how many cards does that make
+   *  cheap", and on a lens it answers "how many live listings would that press move". Both are
+   *  real; what differs is only WHEN the figure is spent, and that is `CutoffPanel`'s
+   *  `applyCount` rather than this flag. Kept as a field because a future source may genuinely
+   *  have nothing for the figure to decide. */
   repartition: boolean
 
   /** Whether these rows are copies this store physically holds — the thumb, the quantity cell,
@@ -233,10 +235,14 @@ export function markdownSource(
     id: stamp,
     rows: (table?.skus ?? []).map(asRow),
     sections,
-    // THE CUT-OFF DECIDES WHICH IMPORT FILE A ROW IS BOUND FOR, and a live listing is bound
-    // for none. Re-partitioning would be the screen inventing a distinction the pipeline will
-    // not act on — and it would move rows under the operator's hand for no reason (D28).
-    repartition: false,
+    // TRUE SINCE 2026-09-07, AND FALSE BEFORE IT. The old reason was that "the cut-off decides
+    // which import file a row is bound for, and a live listing is bound for none" — right about
+    // the FILE and wrong about the FIGURE. D99 made the line and the cheap price ONE variable,
+    // so the cut-off also says what everything under it is worth, and the operator asked for
+    // exactly that here: price the cheap half of the live book in one press, the way a run
+    // already does. Re-partitioning is no longer a distinction the pipeline will not act on —
+    // it is the one the press acts on.
+    repartition: true,
     // A LIVE LISTING IS NOT A COPY IN A DRAWER. This store may never have held it at all —
     // 28 of the owner's 387 live SKUs are exactly that — so there is no photograph, no slot
     // and no quantity going into a file. THEY ARE PRICEABLE NOW: never having held one used
