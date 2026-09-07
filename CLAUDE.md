@@ -492,6 +492,38 @@ display cut exists to be looked at on `#/gallery`. It is fixed dark in both them
 a light ground was derived and lost its silhouette at every size the app draws (§12). **Never
 put a `border-radius` on it**: the tile is a superellipse and a CSS radius clips it twice.
 
+**`base.css` ANSWERS WHAT A CONTROL DOES UNDER THE POINTER AND THE FINGER, IN THREE FLOORS, SO A
+SCREEN NEVER HAS TO.** D50 is the entry and `app/tests/cursor.spec.ts` is the guard — every one
+of these is mutation-tested, so deleting a floor turns `make design-check` red rather than going
+quietly green:
+
+- **cursor** — a clickable says `pointer`, a text field `text`, and anything DISABLED says
+  `not-allowed`. That last arm was 30 of the 41 defects the floor was built for.
+- **response** — a control that answers the pointer EASES into it, over `background-color`,
+  `border-color`, `color` and `box-shadow`. Measured 2026-09-06: 17 of 293 responding controls
+  snapped, ten of them the sidebar's rail toggle.
+- **press** — a control answers the finger too: `translate: 0 1px`, and never when it is
+  disabled. Measured the same day: 190 of 311 controls were silent under a press.
+
+**Three things follow, and getting any of them wrong is silent:**
+
+**A component's own `transition` REPLACES the floor's, it does not add to it.** Declare one and
+every property that screen animates must be named in it — this cost a real defect on
+`.bn-nav-link`, whose new hover snapped because `box-shadow` was missing from a list it already
+had. Nothing warns you; the rule just does not animate.
+
+**`background-image` is not animatable, so a hover may never composite a layer with a
+gradient.** Interpolation from `none` to a gradient is DISCRETE: the paint lands in one frame
+however it is transitioned. Compositing an alpha over an existing ground is an inset
+`box-shadow` at a spread larger than the element. This shipped wrong once and the guard was
+green through it; the guard reads for it by name now.
+
+**The press dip is `translate` and a screen's own emphasis is `transform: scale()`** — two
+properties on purpose, because they COMPOSE. Spelling the dip as `transform: translateY(1px)`
+silently doubles it to 2px, which six rules were doing. And an opt-out must be written in the
+property the floor actually uses: three rules opting out with `transform: none` were silently
+repealed the day the dip moved to `translate`.
+
 **Motion is part of the system, not decoration.** Durations and easing curves are tokens; the page
 enters, list rows stagger off `--bn-stagger`, selection changes and receipts and progress
 animate, buttons press. `app/src/base.css` honours `prefers-reduced-motion` and keeps turning

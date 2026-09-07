@@ -587,7 +587,33 @@ test('the press floor answers for every shape a control can take', async ({ page
       document.body.appendChild(host)
     }, html)
 
-    await page.mouse.move(560, 322)
+    /* THE PRESS IS AIMED AT WHAT `elementFromPoint` ACTUALLY RETURNS, AND THAT IS THIS CASE'S
+       RECORDED FLAKE. Moving to a hard-coded coordinate and pressing assumes the probe is
+       painted and on top by the time the mouse arrives; under seven parallel workers against a
+       cold dev server it sometimes is not, and the case then reports the FLOOR as broken when
+       what actually happened is that the press landed on the gallery underneath. That is a test
+       telling a true-looking lie about the product, which is worse than a slow one. So: wait
+       until the point resolves to the probe, then press. `expect.poll` gives it the config's
+       own allowance and asserts the SETUP rather than the subject — if the probe never gets
+       there, this fails saying so instead of blaming `base.css`. */
+    const target = await page.evaluate(() => {
+      const el = document.getElementById('press-probe')!.firstElementChild as HTMLElement
+      const b = el.getBoundingClientRect()
+      return { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) }
+    })
+    await page.mouse.move(target.x, target.y)
+    await expect
+      .poll(
+        () =>
+          page.evaluate((t) => {
+            const at = document.elementFromPoint(t.x, t.y)
+            const probe = document.getElementById('press-probe')
+            return Boolean(at && probe && (at === probe.firstElementChild || probe.contains(at)))
+          }, target),
+        { message: `the ${why} probe never reached the point the press is aimed at` },
+      )
+      .toBe(true)
+
     await page.mouse.down()
     const translate = await page.evaluate(
       () => getComputedStyle(document.getElementById('press-probe')!.firstElementChild!).translate,
