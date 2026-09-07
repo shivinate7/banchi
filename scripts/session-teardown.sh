@@ -45,15 +45,26 @@ EOF
 [ "${reason:--}" = "clear" ] && exit 0     # the session continues; its servers are still wanted
 [ -d "$tree" ] || exit 0
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)" || exit 0
-janitor="$here/scripts/janitor.py"
+# BESIDE ITSELF FIRST, THEN ITS OWN REPO. `make janitor-install` copies this file and
+# `janitor.py` into `~/.claude/bin` so a user-level hook can run them in a repo that has never
+# heard of this one; the installed pair has to find each other with no checkout in sight. The
+# repo path is the fallback, which is what this file uses when it runs from the tree.
+mine="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || exit 0
+janitor="$mine/janitor.py"
+[ -f "$janitor" ] || janitor="$(dirname "$mine")/scripts/janitor.py"
 [ -f "$janitor" ] || exit 0
 
 python3 "$janitor" --teardown "$tree" 2>/dev/null || true
 
-# Then the provably-dead, machine-wide: a supervisor whose tree has just been removed is only
-# findable from the process table, because `.serve/` went with the tree. Tier 1 never touches
-# anything that could be live, so it needs no confirmation and asks for none.
-python3 "$janitor" --root "$tree" --tier1 2>/dev/null || true
+# Then the provably-dead: a supervisor whose tree has just been removed is only findable from
+# the process table, because `.serve/` went with the tree. Tier 1 never touches anything that
+# could be live, so it needs no confirmation and asks for none.
+#
+# GATED ON THERE BEING A CLONE AT ALL. Ending a session in a directory that is not a repository
+# is ordinary, and the sweep refuses one loudly — correct when a person typed the command, and
+# noise on every session end when a hook did. Ask git first, quietly.
+if git -C "$tree" rev-parse --show-toplevel >/dev/null 2>&1; then
+  python3 "$janitor" --root "$tree" --tier1 2>/dev/null || true
+fi
 
 exit 0

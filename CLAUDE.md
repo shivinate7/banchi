@@ -200,6 +200,17 @@ make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to r
                     #   Not in `make check` and not in the git hook, for `icloud-sweep`'s
                     #   reason: with it, the only two targets here that can delete a file.
 make janitor-selftest # the sweep against a throwaway clone. In `check`, never in the git hook.
+make janitor-install # COPY THE SWEEP OUT OF THE TREE, SO EVERY REPO REACHES IT (D111).
+                    #   A user-level hook — the settings file in the user's own `~/.claude`,
+                    #   not this repo's — applies to every session in every project, but the
+                    #   command it names has to exist with no
+                    #   checkout in sight — so `janitor.py` and `session-teardown.sh` are
+                    #   COPIED, exactly as `make hooks` copies the git hooks out of the tree
+                    #   rather than pointing at it. It prints the two hook stanzas to paste.
+                    #   THE COPY CAN GO STALE, WHICH IS THE SAME BARGAIN `make hooks` MAKES,
+                    #   and `make status` compares it byte for byte and says so — the copy your
+                    #   other repos run is otherwise not the copy this tree tests. One press
+                    #   per machine, and again whenever either file changes here.
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
 make lan-check      # IS THE OWNER'S LAN URL STILL GOOD? `http://pkmnscan.lan:5173`, from
                     #   the phone. Two of the six things holding it up are on their UniFi and

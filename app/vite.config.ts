@@ -1,6 +1,19 @@
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { CAPTURE_PORT, CAPTURE_URL, DEV_PORT } from './devPort'
+
+// THE RECORDING WHEN THERE IS ONE, THE TYPE-ONLY STUB WHEN THERE IS NOT — the same ordered
+// fallback `app/tsconfig.json` gives the `#demo-bundle` alias, spelled a second time because
+// VITE DOES NOT READ tsconfig `paths`. Getting that wrong is not subtle: the alias typechecked
+// and then failed the build with `Rollup failed to resolve "#demo-bundle"`.
+//
+// The stub is reachable at build time, not only at typecheck time, because `demoServer.ts`
+// enters Rollup's graph even in an ordinary build — measured, not assumed. `make demo-static`
+// seeds and records before it compiles, so the real file is what the demo ships.
+const demoBundle = fileURLToPath(new URL('./demo/bundle.json', import.meta.url))
+const demoBundleStub = fileURLToPath(new URL('./src/demoBundle.stub.ts', import.meta.url))
 
 // Port 5173 is not Vite's default acting by accident — CLAUDE.md and the Makefile's `dev`
 // target both promise :5173, and scripts/views.txt points the screenshot runner there.
@@ -54,6 +67,11 @@ export default defineConfig({
     // the narrowing meaningful rather than decorative. Localhost and bare IPs are allowed
     // by Vite already and need no entry.
     allowedHosts: ['.lan', '.local'],
+  },
+  resolve: {
+    alias: {
+      '#demo-bundle': existsSync(demoBundle) ? demoBundle : demoBundleStub,
+    },
   },
   define: {
     'import.meta.env.VITE_CAPTURE_DEFAULT': JSON.stringify(CAPTURE_URL),

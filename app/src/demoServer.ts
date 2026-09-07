@@ -36,7 +36,10 @@
  * refusal, not a guess.
  */
 
-import bundle from '../demo/bundle.json'
+// `#demo-bundle` is the recording when one exists and a type-only stub when it does not.
+// See src/demoBundle.stub.ts: the recording is generated and gitignored, so a static path
+// here made `tsc` — and therefore `make check` — depend on a build artefact nothing makes.
+import bundle from '#demo-bundle'
 import { ServerError } from './server'
 
 type Recorded = { status: number; body: unknown }

@@ -2684,6 +2684,21 @@ COMPONENTS = [
                                           "no disk to write to. Reached through a dynamic "
                                           "import inside `if (IS_DEMO)`.",
                                   "governed_by": ["D13", "D19", "D81", "D84"]},
+            "src/demoBundle.stub.ts": {"does": "the SHAPE of `make demo-record`'s recording, "
+                                          "for a checkout that has not made one. "
+                                          "`app/demo/bundle.json` is generated and gitignored, "
+                                          "so a static import of it made `tsc --noEmit` — and "
+                                          "therefore `make check` — depend on a build artefact "
+                                          "nothing guarantees: every fresh checkout failed, "
+                                          "main included, unnoticed for 121 commits because "
+                                          "the only tree it was run in had made a recording. "
+                                          "`#demo-bundle` resolves to the real file first and "
+                                          "this second, in `tsconfig.json` for the typecheck "
+                                          "and again in `vite.config.ts` for the build, which "
+                                          "does not read tsconfig paths. Deliberately the "
+                                          "narrowest shape the consumer uses, so it cannot "
+                                          "quietly stand in for the recording.",
+                                  "governed_by": ["D18"]},
             "src/demoServer.ts": {"does": "the capture server, frozen — what `request()` talks "
                                           "to when VITE_DEMO=1 builds the published demo. "
                                           "Replays scripts/demo-record.py's bundle for reads "

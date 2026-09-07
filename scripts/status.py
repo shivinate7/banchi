@@ -872,6 +872,50 @@ def leftovers() -> List[str]:
     ]
 
 
+INSTALLED_JANITOR = Path.home() / ".claude" / "bin"
+
+# The pair `make janitor-install` copies out of this tree, so a user-level hook can run them in
+# a repo that has never heard of this one.
+JANITOR_INSTALLED_FILES = ("janitor.py", "session-teardown.sh")
+
+
+def janitor_install() -> List[str]:
+    """Whether the copy every OTHER repo runs still matches this tree (D111).
+
+    THE COPY IS THE POINT AND THE COPY IS THE HAZARD, which is exactly `make hooks`'s bargain
+    and is reported here the same way. A user-level hook has to name a command that exists with
+    no checkout in sight, so the files are copied rather than pointed at — and a copy drifts
+    silently, which is the failure this whole sweep exists to stop happening to worktrees.
+
+    Silent when nothing is installed: not installing is a choice, not a defect. `make janitor`
+    still works in this checkout either way.
+    """
+    installed = [INSTALLED_JANITOR / name for name in JANITOR_INSTALLED_FILES]
+    if not any(path.exists() for path in installed):
+        return []
+    missing = [path.name for path in installed if not path.exists()]
+    if missing:
+        return [
+            field("Janitor copy", "INCOMPLETE — {0} missing".format(", ".join(missing))),
+            cont("Fix: make janitor-install"),
+        ]
+    stale = []
+    for path in installed:
+        try:
+            if path.read_bytes() != (ROOT / "scripts" / path.name).read_bytes():
+                stale.append(path.name)
+        except OSError:  # unreadable is not a claim that it differs
+            continue
+    if stale:
+        return [
+            field("Janitor copy", "differs from this tree: {0}".format(", ".join(stale))),
+            cont("Expected on a branch that changed them. Otherwise the copy your other"),
+            cont("repos' hooks run is not the copy this tree tests."),
+            cont("Fix: make janitor-install"),
+        ]
+    return [field("Janitor copy", "~/.claude/bin matches this tree")]
+
+
 def store() -> List[str]:
     """The store's two directories, and the shape of the store inside the first (D88).
 
@@ -939,7 +983,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud() + leftovers()
+    lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud() + leftovers() + janitor_install()
     lines += ["", "SERVING"] + serving()
     lines += ["", "STORE"] + store()
 
