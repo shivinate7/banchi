@@ -429,13 +429,20 @@ export type InventoryCard = {
  * `store/master.py:check_state` now refuses them as card states — which is why a screen that
  * wants "how many of this are listed" reads it here and cannot count it off the copies.
  *
- * `live` IS THE STORE'S LAST OBSERVATION, WITH ITS TIME. D8 and D11 put the authority in the
- * TCGplayer export's `Total Quantity`, which `./pkmnscan join` and `reconcile --live` read; a
- * sale decrements this locally and stamps it now, and an export corrects it only where the
- * export was read LATER than `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
- * Do not render it as a fact about the marketplace — render it as what this store last saw,
- * and `live_as_of` is when. Null on a record nothing has read `live` for yet — an emit's
- * record before any join or reconcile — and the export then answers whatever its age. */
+ * `live` IS THE EXPORT'S READING AND NOTHING ELSE, WITH ITS TIME (D115). D8 and D11 put the
+ * authority in the TCGplayer export's `Total Quantity`, which `./pkmnscan join` and
+ * `reconcile --live` read, and an export corrects it only where the export was read LATER than
+ * `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
+ *
+ * A SALE NO LONGER TOUCHES IT. It used to decrement this locally and stamp it now — a delta
+ * wearing a reading's clothes — which is how one copy came to be subtracted twice: once by an
+ * export that already knew, once by the sale. What has sold here since the reading is
+ * `sold_here`, and the number to DRAW is the two together.
+ *
+ * Do not render `live` as a fact about the marketplace — render the estimate as what this
+ * store believes now, `live` as what it last read, and `live_as_of` as when. `live_as_of` is
+ * null on a record nothing has read `live` for yet — an emit's record before any join or
+ * reconcile — and the export then answers whatever its age. */
 export type Listing = {
   sku: string
   condition: string | null
@@ -445,6 +452,12 @@ export type Listing = {
   at: string | null
   staged_at: string | null
   live_as_of: string | null
+  /** Copies sold HERE since `live_as_of`. A delta this store made, never a reading — see the
+   *  block above. `reconcile --live` clears it when it adopts a reading taken after them. */
+  sold_here: number
+  /** When the newest counted sale happened. What stops an export fetched BEFORE a sale from
+   *  cancelling it — the protection the old restamp of `live_as_of` used to buy. */
+  sold_here_at: string | null
 }
 
 export type Inventory = {
@@ -1232,6 +1245,21 @@ export type SearchGroup = {
    *  quantity at all. Merging them here would hide exactly the box that is not earning. */
   listed: { pushed: number; staged: number; live: number }
 
+  /** Copies sold HERE since the reading in `listed.live` was taken (D115).
+   *
+   *  BESIDE `listed` AND NOT INSIDE IT, because it is not a stage: `store/master.py` keeps it
+   *  out of `LISTING_STAGES` so D34's box-delete release cannot surrender it and it is not
+   *  summed into the store's stage totals. What a screen draws is `listed.live - sold_here`,
+   *  floored — see `app/src/cardState.ts:forSale`. */
+  sold_here: number
+
+  /** When `listed.live` was read, or null where nothing has read it. Drawn beside the figure:
+   *  a live count is never shown without its age (the owner, 2026-09-03). This is the stamp to
+   *  use rather than `Listing.at`, which every writer touches — including a sale, which after
+   *  D115 observes nothing about `live` and would make the age look fresher as the figure got
+   *  staler. */
+  live_as_of: string | null
+
   /** Copies still in the boxes — D7: "copies on hand is a count of UNSOLD positions".
    *
    *  NOT `copies.length`, AND THE TWO MUST NOT BE USED INTERCHANGEABLY. `copies` carries the
@@ -1628,7 +1656,10 @@ export type PricingSku = {
    *  caller draws instead is the caller's decision, and `#/pricing` follows `BoxBrowse`'s
    *  `no label · <key>`. */
   positions: { box: number; index: number; label: string | null }[]
-  listing: { pushed: number; staged: number; live: number } | null
+  /** The listing record as it stood WHEN THE RUN WAS JOINED, frozen into `pricing.json`.
+   *  `sold_here` rides with it since D115: `live` is the export's reading, and a screen
+   *  drawing the reading alone would over-report by exactly the copies sold since. */
+  listing: { pushed: number; staged: number; live: number; sold_here: number } | null
 }
 
 export type PricingTable = {

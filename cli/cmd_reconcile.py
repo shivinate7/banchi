@@ -70,10 +70,18 @@ def _say_rows(say, rows, head, note, limit=20):
 def _settlement(rows, listings, as_of: str):
     """What a write over `rows` would do, by `Listing.live_reading` — the same rule the
     write applies through `observe_live`, so the preview cannot promise a correction the
-    write then refuses. Returns `(adopt, kept)`: copies moved per SKU, and the rows the
-    store outranks as `(sku, stored, stored-as-of, offered)`."""
+    write then refuses. Returns `(adopt, kept, caught_up)`: copies moved per SKU, the rows
+    the store outranks as `(sku, stored, stored-as-of, offered)`, and the SKUs whose figure
+    already agrees but whose counted sales this file supersedes.
+
+    THE THIRD BUCKET IS D115's, and the preview needs it for the reason it needs the other
+    two: `observe_live` returns `CLEARED` there and WRITES — it empties `sold_here` and
+    advances `live_as_of` — so a preview that counted it as "nothing to do" would promise a
+    no-op and then move a figure on screen. It moves no COPIES, which is why it is counted
+    apart from `adopt` rather than folded into it."""
     adopt = {}
     kept = []
+    caught_up = []
     for row in rows:
         listing = listings.get(row.sku)
         if listing is None:
@@ -81,12 +89,14 @@ def _settlement(rows, listings, as_of: str):
         stored = max(0, int(listing.live))
         offered = max(0, int(row.live))
         if offered == stored:
+            if listing.sales_pending(as_of) != max(0, int(listing.sold_here)):
+                caught_up.append((row.sku, max(0, int(listing.sold_here))))
             continue
         if listing.live_reading(offered, as_of) == stored:
             kept.append((row.sku, stored, listing.live_observed_at, offered))
         else:
             adopt[row.sku] = abs(offered - stored)
-    return adopt, kept
+    return adopt, kept, caught_up
 
 
 def run_live(args, say) -> int:
@@ -158,7 +168,7 @@ def run_live(args, say) -> int:
         row for row in report.agreed + report.unexplained + report.beyond
         if row.sku in just_published
     ]
-    adopt, kept = _settlement(settling, snapshot.inventory.listings, as_of)
+    adopt, kept, caught_up = _settlement(settling, snapshot.inventory.listings, as_of)
 
     def _say_held(stored_of) -> None:
         """The SKUs this refuses to settle, and why, in both the preview and the receipt.
@@ -204,6 +214,13 @@ def run_live(args, say) -> int:
                 "`pushed` stays 0 on")
             say("                 them: this pipeline did not send them, and `live` is what "
                 "the export attests.")
+        if caught_up:
+            say(f"                 {len(caught_up)} SKU(s) carry sales counted here that this "
+                f"file already reflects;")
+            say("                 their counters would be cleared. No copy moves — the "
+                "figure on screen was")
+            say("                 already right, and what changes is that the store stops "
+                "subtracting them twice.")
         say("`pushed` is left alone: it is the cumulative record of what was sent, and")
         say("`cli/resolve.py:_copies_out` already corrects a stuck one against the physical")
         say("ceiling. Re-run with --write.")
@@ -212,6 +229,7 @@ def run_live(args, say) -> int:
     moved = 0
     touched = 0
     kept_count = 0
+    caught_up_count = 0
     sighted = 0
     recorded = 0
     # WHAT THIS PIPELINE PUBLISHED TOO RECENTLY FOR THE EXPORT TO KNOW ABOUT (D106). Read
@@ -236,6 +254,13 @@ def run_live(args, say) -> int:
                 touched += 1
             elif verdict == master.KEPT:
                 kept_count += 1
+            elif verdict == master.CLEARED:
+                # THE FIGURE AGREED AND THE FILE STILL TAUGHT US SOMETHING (D115): it was
+                # taken after sales this store had counted against the older reading, so
+                # those sales are now in the reading and the counter is emptied. No copy
+                # moved, which is why it is counted apart from `moved` — but a figure on
+                # screen did, so it may not be silent either. D59's rule.
+                caught_up_count += 1
             # THE SIGHTING IS TAKEN WHATEVER THE QUANTITY VERDICT WAS, and that is the
             # point of it being a separate call. A SKU sitting at the same figure returns
             # `UNCHANGED` above and is exactly the row whose age nothing else can
@@ -281,6 +306,14 @@ def run_live(args, say) -> int:
     for sku, stored, stamp, offered in kept[:8]:
         say(f"                   {sku}  store {stored} (as of {stamp}) vs export {offered}")
     _say_held(lambda sku: max(0, int(stages_live.get(sku, 0))))
+    if caught_up_count:
+        say("")
+        say(f"caught up        {caught_up_count} SKU(s) whose counted sales this export "
+            f"already reflects")
+        say("                 The reading did not move, so no copy was corrected. What "
+            "moved is that those")
+        say("                 sales are now IN the reading and are no longer counted on top "
+            "of it (D115).")
     if recorded or sighted:
         say("")
         say(f"recorded         {recorded} SKU(s) live at TCGplayer that this store had no "

@@ -4076,7 +4076,7 @@ def _release_plan(inventory: master.Inventory, box: int) -> Tuple[List[dict], di
 
     THE BUDGET IS THE BOX'S UNSOLD COPIES, WHICH IS THE OWNER'S RULING OF 2026-08-24.
     `TERMINAL_STATES` are excluded because a sold or retired copy has already left: a sale
-    decrements `live` where it can (D7), and a departed card is not one of the copies a
+    is counted against `live` where there is a record to count it against (D7, D115), and a departed card is not one of the copies a
     remaining commitment could be backed by. It is also what the operator counts when they
     look in the box, which is the number they will check this screen against.
     """
@@ -6536,18 +6536,28 @@ def _sell(snapshot, box: int, index: int, undo: bool) -> dict:
     # bump `live` to 1, claiming a copy is for sale on TCGplayer that was never pushed
     # there. A read on a route that may not have a listing is `.get`.
     #
-    # WHAT IT IS AND IS NOT: `Listing` calls `live` an optimistic local estimate between
-    # runs, and D8/D11 put the authority in the export's own quantity, which
-    # `./pkmnscan join` reads on every run. So this is a guess the next join corrects,
-    # never a second source of truth. One edge is left standing rather than papered over:
-    # `bump` floors at zero, so selling a copy while `live` is already 0 loses the
-    # decrement, and a later reversal still adds one — an estimate that has drifted UP by
-    # one until the next join. Accepted, because the alternative is recording a per-sale
-    # delta somewhere in order to reverse it exactly, which is a fourth thing the store
-    # would have to explain for a number the export overwrites anyway.
+    # WHAT IT IS AND IS NOT — AND THE TRADE IN THIS PARAGRAPH WAS RE-TAKEN AT D115. It used
+    # to `bump(master.LIVE, -1)` and to read: "one edge is left standing rather than papered
+    # over — `bump` floors at zero, so selling a copy while `live` is already 0 loses the
+    # decrement, and a later reversal still adds one … Accepted, because the alternative is
+    # recording a per-sale delta somewhere in order to reverse it exactly, which is a fourth
+    # thing the store would have to explain for a number the export overwrites anyway."
+    #
+    # `sold_here` IS THAT PER-SALE DELTA, and two things changed to make it worth its keep.
+    # First, the number the export "overwrites anyway" turned out to be the same number this
+    # line was writing: `reconcile --live` wrote TCGplayer's figure, which ALREADY reflected
+    # the sale, and this line then subtracted the same copy again — measured on the owner's
+    # store as a SKU reading zero while TCGplayer held one. Second, D87's amendment dated the
+    # readings, so "the export overwrites it anyway" stopped being true: an export overwrites
+    # it only where it is NEWER, and a sale was making itself newer by forging a reading time.
+    # The drift the paragraph accepted is closed by the same move, because the floor now lives
+    # on `live_estimate` and on nothing stored.
+    #
+    # ONLY AN EXISTING LISTING IS TOUCHED — see the paragraph above, unchanged: `.get` rather
+    # than `Inventory.listing()`, so a sale of a never-emitted SKU cannot invent a record.
     listing = snapshot.inventory.listings.get(card.sku) if card.sku else None
     if listing is not None:
-        listing.bump(master.LIVE, 1 if undo else -1)
+        listing.sale(undone=undo)
 
     body = {
         "position": key,
@@ -6673,7 +6683,7 @@ def do_retire(box: int, index: int, payload: dict) -> dict:
     for the other's reversal to read.
 
     IT DOES NOT TOUCH THE SKU'S LISTING COUNTS, AND THE ASYMMETRY WITH THE SALE IS THE
-    POINT. `do_mark_sold` decrements `live` because a TCGplayer sale moves TCGplayer's own
+    POINT. `do_mark_sold` COUNTS its sale in `sold_here` (D115) because a TCGplayer sale moves TCGplayer's own
     quantity and the local number estimates that. A retirement is invisible to TCGplayer —
     the listing, if there is one, is still up with one fewer copy behind it — so the honest
     local estimate is UNCHANGED. What shrinks is `copies_on_hand`, which now excludes
@@ -7205,6 +7215,15 @@ def do_search(query: str) -> dict:
                     stage: (int(getattr(listing, stage)) if listing is not None else 0)
                     for stage in master.LISTING_STAGES
                 },
+                # BESIDE `listed` AND NOT INSIDE IT (D115). `listed` is a walk over
+                # `LISTING_STAGES` and the counter is deliberately not a stage — putting it in
+                # that dict would make it a fourth listing stage on three screens and inside
+                # D34's release. These two are what a screen needs to draw both figures: the
+                # READING TCGplayer gave and WHEN, and what has sold here since. The estimate
+                # is `live - sold_here`, floored, and the client subtracts because a derived
+                # value never rides `asdict`.
+                "sold_here": int(getattr(listing, "sold_here", 0) or 0) if listing is not None else 0,
+                "live_as_of": getattr(listing, "live_as_of", None) if listing is not None else None,
                 "on_hand": on_hand,
                 "cap": corpus.live_cap_for(),
                 # D7 IN ONE FIELD: "listed quantity is min(cap, on hand)". The cap above is the
@@ -7251,6 +7270,10 @@ def do_search(query: str) -> dict:
                 "set_hint": _agreed(card.set_hint for card in loose),
                 "condition": _agreed(card.condition for card in loose),
                 "listed": {stage: 0 for stage in master.LISTING_STAGES},
+                # THE LOOSE BAG HAS NO SKU, so it has no listing record and no reading —
+                # zero and null, the same shape every other row carries (D115).
+                "sold_here": 0,
+                "live_as_of": None,
                 "on_hand": loose_on_hand,
                 "cap": corpus.live_cap_for(),
                 # The same min as the keyed group above. Zero listing stages and no SKU to list

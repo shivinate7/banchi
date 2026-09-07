@@ -164,6 +164,14 @@ LISTING_STAGES = (PUSHED, STAGED, LIVE)
 ADOPTED = "adopted"
 KEPT = "kept"
 UNCHANGED = "unchanged"
+# A READING THAT MOVED NO COPIES AND STILL WROTE (D115). The figure agreed, but the file was
+# taken after sales this store had counted against the older reading — so the counter is
+# emptied and `live_as_of` advances. DISTINCT FROM `ADOPTED` because three callers read these
+# words and every one would say something false with it: `cli/cmd_reconcile.py` would report
+# "settled N listing(s)" beside "0 copies corrected", `cli/cmd_join.py` would run a staged
+# drawdown of `quantity - before == 0`, and `_settlement`'s preview has no word for a write it
+# must promise.
+CLEARED = "cleared"
 
 # What a v1 file could carry on a card. Read by `Inventory.parse`'s migration and by nothing
 # else — never widen `check_state` with these.
@@ -713,6 +721,48 @@ class Listing:
     # whose `at` IS the settlement time. The two are told apart at the parse and nowhere
     # else: absent is legacy, null is unread.
     live_as_of: Optional[str] = None
+    # COPIES SOLD HERE SINCE THAT READING — A DELTA THIS PROCESS MADE, NEVER A READING.
+    # `live` above is what TCGplayer's export said and `live_as_of` is when it said it; this
+    # is what has left the building since, and `live_estimate` is the two together.
+    #
+    # THEY WERE ONE NUMBER UNTIL D115, AND THAT IS THE WHOLE DEFECT. `observe_live` wrote a
+    # reading, `bump(LIVE, -1)` wrote a delta, and nothing arbitrated them but a timestamp
+    # race — so `reconcile --live` writing a figure that ALREADY reflected a sale, followed
+    # by marking that card sold, subtracted the same copy twice. Measured on the owner's
+    # store: a SKU at `pushed 4, live 1` read zero while TCGplayer held one, and understating
+    # `live` tells the cap there is room that is not there. A reading and a delta are not the
+    # same kind of fact and "newer wins" cannot arbitrate them; kept apart, ORDER STOPS
+    # MATTERING — mark sold whenever, reconcile whenever.
+    #
+    # NOT A STAGE, and the distinction is load-bearing. `pushed`/`staged`/`live` are members
+    # of `LISTING_STAGES`; this deliberately is not. `set`, `bump`, `release`,
+    # `listing_counts` and `server/capture_server.py:_stages_held` all walk that tuple, so a
+    # fourth member would be surrendered by D34's release, summed into the store's stage
+    # totals, and drawn as a listing stage on three screens. It is a correction TO a stage.
+    #
+    # NEVER FLOORED ON THE WAY UP, which is what makes an undo exact. `bump` floored the
+    # STORED figure, so a decrement lost to the floor was lost for good while a later undo
+    # still added one back — an estimate drifted UP by one, the edge
+    # `server/capture_server.py` accepted rather than paid for. The floor moved to
+    # `live_estimate`, where it loses nothing.
+    sold_here: int = 0
+    # WHEN THE NEWEST COUNTED SALE HAPPENED — the counter's own `live_as_of`, and it is
+    # required rather than decorative. `sale()` may no longer restamp `live_as_of`, and that
+    # restamp was the ONLY thing standing between a sale and a re-join: `cli/cmd_join.py`
+    # re-reads the run's RECORDED export, whose mtime is its fetch time (measured at fifteen
+    # minutes before its own emit), so an export fetched BEFORE a sale and read AFTER it is
+    # the ordinary "Join again" press. Without this stamp that file is newer than
+    # `live_as_of`, clears a counter it knows nothing about, and the sale is gone.
+    #
+    # THE NEWEST SALE AND NOT THE OLDEST, so no sale is forgotten by a file that predates it.
+    # Each stamp on this record is chosen so its field cannot silently lose what it holds:
+    # `first_seen_live` keeps the EARLIEST sighting, `live_as_of` the NEWEST reading, and this
+    # the NEWEST sale. A file landing between two counted sales cannot be split by one stamp,
+    # so it clears neither and the estimate errs low — the direction D7 asks for.
+    #
+    # None means nothing is pending. Left standing on an undo that does not reach zero: it is
+    # still the newest sale that can be named, and holding it errs toward not forgetting.
+    sold_here_at: Optional[str] = None
     # THE FIRST MOMENT THIS SKU WAS SEEN LIVE AT TCGPLAYER, and the only field here that is
     # MONOTONE — earliest wins, and nothing overwrites it. It exists because D100's staleness
     # ranked on how long the CARD had been OWNED, `Listing` having no first-listed stamp, and
@@ -810,26 +860,126 @@ class Listing:
     def observe_live(self, quantity: int, as_of: Optional[str]) -> str:
         """Offer the store a reading of `live` taken at `as_of`. Returns what happened.
 
-        `UNCHANGED` when the reading equals the stored figure, whatever its age — nothing
-        to arbitrate, nothing touched, and `reconcile --live`'s second pass stays a no-op.
-        `KEPT` when `live_reading` prefers the store's own figure: the file is older than
-        the store's observation, and it is refused untouched. `ADOPTED` otherwise: `live`
-        takes the reading, `live_as_of` takes THE FILE'S time, and `at` takes now.
+        FOUR VERDICTS SINCE D115, and the fourth is the reason this method was restructured
+        rather than extended. `UNCHANGED`: the reading equals the stored figure and clears no
+        counted sale — nothing to arbitrate, nothing touched, and the second pass stays a
+        no-op. `CLEARED`: the figure agreed but the file postdates sales counted against the
+        older reading, so the counter is emptied and `live_as_of` advances. `KEPT`: the file
+        is older than the store's observation and is refused untouched, counter included.
+        `ADOPTED`: `live` takes the reading, `live_as_of` takes THE FILE'S time, `at` takes
+        now, and the counter takes whatever `sales_pending` says survives.
+
+        THE EARLY EQUALITY RETURN IS NARROWED, NOT MOVED, and that is the whole subtlety.
+        "Equal figure, whatever the age" is what keeps a second `reconcile --live` over one
+        file a no-op; moving it past arbitration would turn it into `KEPT`, because
+        `newer_stamp` gives ties to the store — the same file read twice would report itself
+        outranked. What it may no longer do is return before the COUNTER is arbitrated: an
+        equal figure read after a sale is a real correction, and it is the one D115 exists to
+        make. Nothing is written when nothing moved, so the second pass computes from
+        identical state and answers identically.
 
         ASSIGNED DIRECTLY RATHER THAN THROUGH `set`, which stamps `live_as_of` with `now()`
-        — right for a sale this process just made, and a forgery here, where it would date
-        an export's reading to the moment it was copied in rather than the moment it was
-        taken, and outrank a later settlement it should have lost to.
+        — a forgery here, where it would date an export's reading to the moment it was copied
+        in rather than the moment it was taken, and outrank a later settlement it should have
+        lost to. (`set` was also right for a sale until D115; a sale no longer takes a
+        reading at all — see `sale`.)
         """
         quantity = max(0, int(quantity))
-        if quantity == max(0, int(self.live)):
-            return UNCHANGED
-        if self.live_reading(quantity, as_of) == max(0, int(self.live)):
+        stored = max(0, int(self.live))
+        pending = self.sales_pending(as_of)
+        if quantity == stored:
+            if pending == max(0, int(self.sold_here)):
+                return UNCHANGED
+            # `sales_pending` is all-or-nothing, so reaching here means it returned 0 against
+            # a counter that is not: the file postdates every counted sale and supersedes it.
+            self.sold_here = pending
+            self.sold_here_at = None
+            self.live_as_of = as_of
+            self.at = now()
+            return CLEARED
+        if self.live_reading(quantity, as_of) == stored:
             return KEPT
         self.live = quantity
         self.live_as_of = as_of
+        self.sold_here = pending
+        if not self.sold_here:
+            self.sold_here_at = None
         self.at = now()
         return ADOPTED
+
+    @property
+    def live_estimate(self) -> int:
+        """What this store believes TCGplayer is holding NOW: the reading, less what has sold
+        here since it. D7's number, derived instead of stored.
+
+        D7'S ORDERING IS HONOURED AND NOT REVERSED. Its defence — "holding the count back
+        until a join makes the app disagree with the shelf the operator is standing in front
+        of" — is a rule about WHEN the figure drops, not about which field it drops in. This
+        drops the instant `sale` is called, on the same request, with no join in between. What
+        it no longer does is corrupt the reading on the way past.
+
+        FLOORED HERE AND NOWHERE ELSE, and moving the floor is the repair. `bump` floored the
+        STORED figure, so a decrement lost to the floor was lost for good while a later undo
+        still added one back. A floor on a DERIVED value loses nothing: `sold_here` keeps the
+        full count underneath it, so sell/sell/undo/undo returns exactly where it started even
+        where every intermediate estimate read zero.
+
+        A counter ABOVE the reading is not an error. It is the ordinary state of a store whose
+        reading predates its sales, and the honest answer there is "none is for sale", which
+        is what zero says.
+        """
+        return max(0, max(0, int(self.live)) - max(0, int(self.sold_here)))
+
+    def sales_pending(self, as_of: Optional[str]) -> int:
+        """How many counted sales survive a reading taken at `as_of`.
+
+        THE ONE RULE, read by `observe_live` for the store and by `cli/resolve.py:_copies_out`
+        for the cap, so the two cannot disagree about one file — `live_reading`'s sibling, and
+        it exists for `live_reading`'s reason. ALL OR NOTHING: one stamp cannot split a file
+        that landed between two sales, so a file that cannot be shown newer than the newest
+        counted sale clears none of them.
+
+        THE STAMPLESS CASE GOES THE OTHER WAY FROM `live_reading`, AND THE ASYMMETRY IS THE
+        POINT. There, an undateable reading keeps the authority D8 and D11 gave the export
+        before `live_as_of` existed. Here it keeps the counter: a reading that cannot be placed
+        in time cannot be shown to postdate a sale, and cancelling a sale on a guess is the
+        loss D7's immediacy exists to prevent. So an undateable file still wins the FIGURE and
+        still cannot cancel a sale.
+        """
+        if not self.sold_here:
+            return 0
+        if newer_stamp(as_of, self.sold_here_at) is True:
+            return 0
+        return max(0, int(self.sold_here))
+
+    def sale(self, *, undone: bool = False) -> int:
+        """One copy of this SKU sold HERE, or that sale reversed. Returns the new counter.
+
+        IT TOUCHES NEITHER `live` NOR `live_as_of`, AND THAT IS THE ENTRY (D115). `live` is the
+        export's reading and this store did not read an export; dating a sale into `live_as_of`
+        claimed an observation of TCGplayer that nobody made, and it is what let one copy be
+        subtracted twice — once by the export that already knew, once by here.
+
+        ONE KEYWORD AND NOT A SIGNED `by`. `bump(LIVE, 1 if undo else -1)` put a sign flip at
+        the call site for a direction the caller already holds as a bool, and the sign is
+        INVERTED relative to that expression — a `+1` that used to mean "undo" now means
+        "sold". `sale(undone=undo)` against `_sell(..., undo)` is a check anyone can make;
+        re-deriving a sign is not.
+
+        THE STAMP GOES FORWARD AND NOT BACK. A reversal that does not reach zero leaves
+        `sold_here_at` where it is: the sale it named may be the one just undone, but the
+        remaining sales are all older, and a stamp that is too NEW only makes the counter
+        harder for an old export to clear — the direction that forgets nothing.
+        """
+        if undone:
+            self.sold_here = max(0, int(self.sold_here) - 1)
+            if not self.sold_here:
+                self.sold_here_at = None
+        else:
+            self.sold_here = max(0, int(self.sold_here)) + 1
+            self.sold_here_at = now()
+        self.at = now()
+        return self.sold_here
 
     def sight(self, as_of: Optional[str]) -> bool:
         """Record that this SKU was live at `as_of`. Monotone: the EARLIEST wins.
@@ -892,10 +1042,24 @@ class Listing:
     def bump(self, stage: str, by: int = 1) -> int:
         """Move one stage's count by `by`, floored at zero. Returns the new value.
 
-        A sale's ±1 on `live` (`server/capture_server.py:do_mark_sold`) is an observation
-        made now, so it is dated now: the store then knows more than any export fetched
-        before the sale, and `observe_live` keeps that knowledge against such a file.
+        IT REFUSES `live`, AND THAT REFUSAL IS THE POINT (D115). This used to carry a sale's
+        ±1 — "an observation made now, so it is dated now" — and that sentence was the whole
+        defect: a sale is a DELTA and dating it into `live_as_of` claimed a reading of
+        TCGplayer nobody took, which let one copy be subtracted twice. `live` now has exactly
+        one writer (`observe_live`, for a reading) and one counter beside it (`sale`, for a
+        delta). Leaving this expression callable with a docstring explaining how to move
+        `live` with it is how the next session puts the defect back, so it raises instead.
+
+        `set(LIVE, …)` STAYS, and the asymmetry is deliberate: that one states a figure
+        outright and is what a fixture and D34's release path use, where "this process is
+        asserting a quantity" is exactly what is meant.
         """
+        if stage == LIVE:
+            raise UnknownState(
+                "`live` is not bumped (D115). A READING goes through `observe_live`, which "
+                "arbitrates it by `live_as_of`; a SALE goes through `sale()`, which counts "
+                "against the reading rather than editing it."
+            )
         if stage not in LISTING_STAGES:
             raise UnknownState(f"{stage!r} not in {LISTING_STAGES}")
         value = max(0, int(getattr(self, stage)) + int(by))
@@ -903,8 +1067,6 @@ class Listing:
         self.at = now()
         if stage == STAGED and by > 0:
             self.staged_at = self.at
-        if stage == LIVE:
-            self.live_as_of = self.at
         return value
 
     def release(self, budget: int) -> Dict[str, int]:

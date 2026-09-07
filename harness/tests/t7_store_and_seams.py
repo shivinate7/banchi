@@ -923,9 +923,9 @@ def check_store_of_record(checks: Checks) -> None:
             "a SKU nothing carries answers an empty list through the index",
         )
         with Store().write() as snapshot:
-            snapshot.inventory.listing("4040", condition="Near Mint").observe_live(
-                3, "2026-09-01T12:00:00+00:00"
-            )
+            row_4040 = snapshot.inventory.listing("4040", condition="Near Mint")
+            row_4040.observe_live(3, "2026-09-01T12:00:00+00:00")
+            row_4040.sale()
         back = Store().read().inventory.listing_for("4040")
         checks.equal(
             (back.live, back.live_as_of),
@@ -933,6 +933,16 @@ def check_store_of_record(checks: Checks) -> None:
             "`live_as_of` round-trips through the listings table — it rides the payload "
             "column, and `Inventory.parse` filters on `Listing.__annotations__`, so a new "
             "field needs no schema bump (D88)",
+        )
+        checks.equal(
+            (back.sold_here, back.sold_here_at is not None, back.live_estimate),
+            (1, True, 2),
+            "AND SO DOES D115's COUNTER, ON THE SAME GUARANTEE — this is the assertion that "
+            "proves the field cost no migration. `store/db.py:TABLES` names four listing "
+            "columns and neither new field is among them; a COLUMN would have needed one, "
+            "because `_ensure_schema` short-circuits on an existing table and there is no "
+            "`ALTER` path in the tree. The estimate is derived on the way out, so it is the "
+            "two stored numbers that have to survive, not the answer",
         )
         parsed = master.Inventory.parse(
             {"version": master.VERSION, "cards": {},
@@ -3962,18 +3972,27 @@ def check_mark_sold(checks: Checks) -> None:
             "and what an undo would put back, so the control can be offered — or not — at "
             "the moment of the sale rather than at the tap that would have failed",
         )
+        sold_record = Store().read().inventory.listing_for("8608859")
         checks.equal(
-            Store().read().inventory.listing_for("8608859").live,
+            sold_record.live_estimate,
             0,
-            "AND THE SKU'S `live` COUNT FALLS BY ONE — the half of a sale that used to be "
-            "free. A sold copy simply stopped wearing `live` before v2; the number is a "
-            "quantity now, and nothing decrements it unless this route does",
+            "AND THE SKU'S COUNT FALLS BY ONE, ON THIS REQUEST — D7's ordering, which D115 "
+            "kept: the app must not disagree with the shelf the operator is standing at. "
+            "What changed is that it falls by DERIVATION rather than by editing the reading",
         )
         checks.equal(
-            (sold["listing"] or {}).get("live"),
-            0,
-            "and the response says so, because a Fulfiller pulling the third of four wants "
-            "to see what is still live without a second request",
+            (sold_record.live, sold_record.sold_here),
+            (1, 1),
+            "and the READING is untouched at 1 — this store did not read an export, so it "
+            "may not claim one. The sale is counted beside it, which is what stops "
+            "`reconcile --live` and this route subtracting the same copy twice",
+        )
+        checks.equal(
+            ((sold["listing"] or {}).get("live"), (sold["listing"] or {}).get("sold_here")),
+            (1, 1),
+            "and the response carries BOTH, because a Fulfiller pulling the third of four "
+            "wants to see what is still live without a second request — and a derived "
+            "figure never rides `asdict`, so the two numbers travel and the reader subtracts",
         )
 
         after = Store().read()
@@ -4334,13 +4353,21 @@ def check_retire(checks: Checks) -> None:
             "with the SKU it left as, the way a sale's line carries it",
         )
 
+        # THE ASYMMETRY SURVIVES AND ITS TERMS CHANGED (D115). This asserted `live` alone,
+        # which distinguished the two doors while a sale edited the reading down. Neither
+        # door touches the reading now, so `live == 1` no longer says anything about
+        # retirement at all — it is the COUNTER that separates them, and asserting the
+        # reading by itself would be a green check over a distinction that had disappeared.
+        retired_record = after.inventory.listing_for("8608859")
         checks.equal(
-            after.inventory.listing_for("8608859").live,
-            1,
-            "AND `live` DOES NOT MOVE — the deliberate asymmetry with the sale: `live` "
-            "estimates TCGplayer's own quantity, and TCGplayer never saw a retirement. "
-            "The listing is still up with one fewer copy behind it, and pulling it down "
-            "is a TCGplayer action the next join observes (D8, D11)",
+            (retired_record.live, retired_record.sold_here, retired_record.live_estimate),
+            (1, 0, 1),
+            "AND A RETIREMENT MOVES NEITHER THE READING NOR THE COUNTER — the deliberate "
+            "asymmetry with the sale: `live` is TCGplayer's own quantity and TCGplayer never "
+            "saw a retirement, and `sold_here` counts copies that LEFT TCGPLAYER, which a "
+            "retired card did not. The listing is still up with one fewer copy behind it, "
+            "and pulling it down is a TCGplayer action the next join observes (D8, D11). A "
+            "sale in the same place would read (1, 1, 0)",
         )
         checks.equal(
             after.inventory.copies_on_hand("8608859"),
@@ -13066,10 +13093,17 @@ def check_listing_commands(checks: Checks) -> None:
         # figure this test had written rather than against one a sale produced.
         for index in (1, 2):
             capture_server.do_mark_sold(3, index, {})
+        after_sales = Store().read().inventory.listing_for(DUNSPARCE_SKU)
         checks.equal(
-            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
+            after_sales.live_estimate,
             2,
-            "two sales take the live count to two, which is the room the cap now has",
+            "two sales take the count to two, which is the room the cap now has",
+        )
+        checks.equal(
+            (after_sales.live, after_sales.sold_here),
+            (4, 2),
+            "and they do it WITHOUT editing the reading (D115): the export said four and "
+            "still says four; what the store knows on top of it is that two have since sold",
         )
 
         # A STALE EXPORT CANNOT CLOSE THE CAP AGAINST THE STORE'S NEWER READING (D87
@@ -13085,16 +13119,26 @@ def check_listing_commands(checks: Checks) -> None:
         earlier = time.time() - 3600
         os.utime(landed, (earlier, earlier))
         stale = command(checks, "join", str(run_dir.directory), "--export", str(landed))
+        # THIS ASSERTION BROKE RATHER THAN INVERTED AT D115, and the reason is the whole
+        # design. It used to read `"1 SKU(s) kept: store newer than this export" in stale` —
+        # true while a sale EDITED `live` down to 2, so a file saying 4 disagreed with the
+        # store and had to be arbitrated away as `KEPT`. The sale no longer edits the reading,
+        # so the file and the store now AGREE at four and there is nothing to arbitrate: the
+        # verdict is `UNCHANGED` and no SKU is kept. The protection did not go anywhere — it
+        # moved from the figure to the counter, and `sales_pending` is what refuses the file.
         checks.ok(
-            "1 SKU(s) kept: store newer than this export" in stale,
-            "a STALE export reporting four live is KEPT OUT and the report says so — a "
-            "reading taken before the sales cannot put the sold copies back",
-            stale,
+            "kept: store newer than this export" not in stale,
+            "a stale export reporting four live is no longer KEPT, because it no longer "
+            "disagrees: the reading it offers is the reading the store holds",
         )
+        stood = Store().read().inventory.listing_for(DUNSPARCE_SKU)
         checks.equal(
-            Store().read().inventory.listing_for(DUNSPARCE_SKU).live,
-            2,
-            "and the store's own two stands",
+            (stood.live, stood.sold_here, stood.live_estimate),
+            (4, 2, 2),
+            "AND THE SALES SURVIVE IT, which is what the old assertion was really protecting. "
+            "The file was fetched an hour before the sales, so `sales_pending` refuses to let "
+            "it cancel them — the store's own two still stands, by the counter's stamp rather "
+            "than by a reading time a sale had forged",
         )
         held = resolve.load(
             runs.open_run(run_dir.directory), landed
@@ -13515,10 +13559,47 @@ def check_boxes_and_listings(checks: Checks) -> None:
         ["9/1", "9/2", "9/4", "9/5", "9/6", "9/7"],
         "in box-walk order, with the sold position left as a permanent gap (D10)",
     )
-    checks.equal(listing.bump(master.LIVE, -1), 3, "a sale decrements the SKU's live count")
+    # INVERTED AT D115, AND THE FIGURES SURVIVE. These read `listing.bump(master.LIVE, -1)
+    # == 3` and "a sale decrements the SKU's live count", which was the mechanism rather than
+    # the rule. The rule — a sale takes the count down at once, and it never goes negative —
+    # is what the 3 and the 0 assert, and both still hold. What moved is WHERE: the reading is
+    # left alone and the sale is counted beside it.
     checks.equal(
-        [listing.bump(master.LIVE, -9), listing.live], [0, 0],
-        "which floors at zero rather than going negative",
+        [listing.sale(), listing.live, listing.live_estimate], [1, 4, 3],
+        "a sale takes the count down AT ONCE (D7's ordering, unchanged) — and does it by "
+        "counting against the reading rather than editing it, so `live` still reads 4",
+    )
+    checks.equal(
+        [listing.sale(), listing.sale(), listing.sale(), listing.live_estimate], [2, 3, 4, 0],
+        "which floors at zero rather than going negative — the floor is on the DERIVED "
+        "figure now, which is what makes an undo exact where `bump`'s stored floor lost it",
+    )
+    checks.equal(
+        [listing.sale(undone=True), listing.live_estimate], [3, 1],
+        "and a reversal is exact: the counter carries the full count under the floor, so "
+        "sell-past-zero then undo returns to where it was rather than drifting UP by one — "
+        "the edge `server/capture_server.py` accepted rather than paid for, now closed",
+    )
+    for _ in range(3):
+        listing.sale(undone=True)
+    checks.equal(
+        [listing.sold_here, listing.sold_here_at, listing.live_estimate], [0, None, 4],
+        "and the stamp clears when the counter empties — nothing is pending, so no file "
+        "needs to be arbitrated against a sale that is no longer counted",
+    )
+    checks.raises(
+        master.UnknownState,
+        lambda: listing.bump(master.LIVE, -1),
+        "`bump` REFUSES `live` outright (D115). Its one caller was the sale, and leaving the "
+        "expression callable with a docstring explaining how to move `live` with it is how "
+        "the next session puts the double-subtraction back",
+    )
+    checks.raises(
+        master.UnknownState,
+        lambda: listing.bump("sold_here"),
+        "and the counter is NOT a stage — `set`, `release`, `listing_counts` and "
+        "`_stages_held` all walk `LISTING_STAGES`, so a fourth member would be surrendered "
+        "by a box delete and drawn as a listing stage on three screens",
     )
     checks.raises(
         master.UnknownState,
@@ -13574,12 +13655,39 @@ def check_boxes_and_listings(checks: Checks) -> None:
         listing.live_reading(7, "2999-01-01T00:00:00+00:00"), 2,
         "and a tie goes to the store: an equal-second reading cannot be shown newer",
     )
-    listing.bump(master.LIVE, -1)
+    # THE ASSERTION D115 INVERTS, AND IT IS THE CHANGE STATED AS A TEST. This read
+    # "`bump(LIVE)` — a sale's ±1 — dates the reading now, so the store then knows more than
+    # any export fetched before the sale". That restamp was the category error: a sale claimed
+    # to be a fresh READING of TCGplayer, which is how one copy came to be subtracted twice —
+    # once by an export that already knew, once by the sale. The protection it bought is not
+    # lost, it MOVED: `sold_here_at` dates the sale, and `sales_pending` is what keeps an
+    # older file from cancelling it. Both halves flip, and the shape is kept so the two
+    # readings sit side by side.
+    before_stamp = listing.live_as_of
+    listing.sale()
     checks.ok(
-        listing.live_as_of == listing.at and listing.live_as_of != "2999-01-01T00:00:00+00:00",
-        "`bump(LIVE)` — a sale's ±1 — dates the reading now, so the store then knows more "
-        "than any export fetched before the sale",
+        listing.live_as_of == before_stamp
+        and listing.live_as_of == "2999-01-01T00:00:00+00:00",
+        "A SALE DOES NOT DATE A READING. It observed nothing about TCGplayer, so "
+        "`live_as_of` stands exactly where the export left it",
     )
+    checks.ok(
+        listing.sold_here_at is not None and listing.at != before_stamp,
+        "what a sale DOES date is its own counter, and `at` — the record was touched, and "
+        "the sale can be told apart from the reading it is counted against",
+    )
+    checks.equal(
+        listing.sales_pending("2026-01-01T00:00:00+00:00"), 1,
+        "AND AN EXPORT FETCHED BEFORE THE SALE CANNOT CANCEL IT — the protection the restamp "
+        "used to buy, now carried by the counter's own stamp. This is the ordinary `Join "
+        "again` press: a run's recorded export is fetched before the sale and read after it",
+    )
+    checks.equal(
+        listing.sales_pending("2999-06-01T00:00:00+00:00"), 0,
+        "while a file taken after the sale supersedes it — all or nothing, because one stamp "
+        "cannot split a file that landed between two sales",
+    )
+    listing.sale(undone=True)
     legacy = master.Listing.from_record(
         {"sku": "legacy", "live": 3, "at": "2026-09-01T12:00:00+00:00"}
     )
@@ -13645,8 +13753,16 @@ def check_boxes_and_listings(checks: Checks) -> None:
     )
     checks.equal(
         (reloaded.listings["777"].sku, reloaded.listings["777"].live),
-        ("777", 0),
-        "and so do listings",
+        ("777", 4),
+        "and so do listings — the READING, which is 4 because the sales above were counted "
+        "beside it rather than subtracted from it (D115). This expected 0 while `bump` "
+        "floored the stored figure on every sale",
+    )
+    checks.equal(
+        (reloaded.listings["777"].sold_here, reloaded.listings["777"].sold_here_at),
+        (0, None),
+        "and the counter round-trips beside it — D88's rule that a new field costs no schema "
+        "bump is the whole reason it could be added rather than overloading the reading",
     )
     checks.equal(
         [c.state for c in reloaded.copies_on_hand("777")],
@@ -17442,12 +17558,20 @@ def check_order_screen(checks: Checks) -> None:
                 "and the ledger keyed the copy by `capture_id` — the one identity a "
                 "renumber cannot move (D36)",
             )
+            pulled_record = snapshot.inventory.listings["9191486"]
             checks.equal(
-                snapshot.inventory.listings["9191486"].live,
+                pulled_record.live_estimate,
                 2,
-                "the SKU's `live` count fell by one, because a listing record existed. A "
-                "Fulfiller pulling copies would otherwise leave TCGplayer's cap arithmetic "
-                "refilling against cards that are in the post",
+                "the SKU's count fell by one, because a listing record existed. A Fulfiller "
+                "pulling copies would otherwise leave TCGplayer's cap arithmetic refilling "
+                "against cards that are in the post",
+            )
+            checks.equal(
+                (pulled_record.live, pulled_record.sold_here),
+                (3, 1),
+                "and the ORDER PULL counts its sale exactly as the single mark-sold does "
+                "(D115) — both go through `_sell`, so there is one rule for what a sale does "
+                "to a listing and neither door edits the export's reading",
             )
             checks.equal(
                 pulled["places"][0]["label"],

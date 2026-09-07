@@ -10,7 +10,7 @@ import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
 import { Button, Icon, Pill } from './kit'
 import './CardLocations.css'
-import { readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
+import { forSale, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -78,7 +78,11 @@ function count(n: number, one: string, many: string): string {
  * lines above it, and the two sentences could not be told apart — is three live, or may three
  * be? Headroom is the same fact in terms nothing else on the panel is measured in. */
 function headroom(group: SearchGroup): string {
-  const room = group.listable - group.listed.live
+  // THE ESTIMATE, NOT THE READING (D115). Headroom is what may still GO live, so it has to
+  // count against what is live NOW — a SKU read at 4 with 2 sold here has room for 2, and
+  // computing off the raw reading would say `At the ceiling of 4` and refuse a relist the
+  // shelf can support. It would also put a third number on a panel that now draws two.
+  const room = group.listable - forSale(group.listed.live, group.sold_here)
   if (group.listable === 0) return 'No copies can go live'
   if (room > 0) return `Room for ${room} more live`
   if (room === 0) return `At the ceiling of ${group.listable}`
@@ -245,14 +249,25 @@ function OwnerRows({
             <span className="bn-stat-label">in the boxes</span>
           </div>
           {/* THE LIVE FIGURE NEVER STANDS ALONE. It is what this store last believed, so its
-              reading age sits under it, quieter than the count itself. */}
+              reading age sits under it, quieter than the count itself.
+              AND SINCE D115 IT IS TWO NUMBERS. The big one is the ESTIMATE — the reading less
+              what has sold here since — because that is the figure that must agree with the
+              shelf the operator is standing at (D7). The split under it is drawn only when
+              there is a difference: `4 when read · 2 sold here since` on 3 of 443 SKUs is
+              information, and `· 0 sold here since` on the other 440 is noise that trains the
+              eye to skip the line. */}
           <div className="bn-stat card-locations-stat card-locations-live">
             <span className="bn-stat-value">
               <span className="bn-dot bn-dot-live" aria-hidden="true" />
-              {group.listed.live}
+              {forSale(group.listed.live, group.sold_here)}
             </span>
             <span className="bn-stat-label">live on TCGplayer</span>
             <ReadingAge at={listedAt} />
+            {group.sold_here > 0 ? (
+              <span className="card-locations-since">
+                {group.listed.live} when read · {group.sold_here} sold here since
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -441,9 +456,23 @@ function FulfillerCard({
             "not read yet" is a sentence about plumbing and he is owed none of those.
             `Fulfillment.tsx` has to pass `listedAt` for this half to appear. */}
         <p className="card-locations-say">
-          {count(group.on_hand, 'copy here', 'copies here')} · {group.listed.live} for sale
+          {count(group.on_hand, 'copy here', 'copies here')} ·{' '}
+          {forSale(group.listed.live, group.sold_here)} for sale
           {readingAgo(listedAt) === null ? '' : `, counted ${readingAgo(listedAt)}`}
         </p>
+        {/* AND WHY IT MOVED, IN HIS WORDS (D115, and the owner's ruling that BOTH figures are
+            drawn everywhere — I argued for the estimate alone here and was overruled). The
+            count above is the estimate, so it drops the moment he pulls a card; without this
+            line the number simply changes under him with no reason given, which is the one
+            thing `docs/DESIGN.md`'s constraints table will not have on this view.
+            "sold", "counted" and "since" are all clear of the banned-word list
+            (`app/tests/fulfillment.spec.ts`), and it is ONE sentence, so D5's "nothing is
+            explained twice" holds. Drawn only when there is something to explain. */}
+        {group.sold_here > 0 ? (
+          <p className="card-locations-say">
+            {count(group.sold_here, 'copy', 'copies')} sold here since we last counted.
+          </p>
+        ) : null}
       </header>
 
       <ul className="card-locations-copies">

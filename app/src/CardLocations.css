@@ -20,6 +20,19 @@
 }
 .inv-readage.is-unread { color: var(--bn-ink-4); font-style: italic; }
 
+/* THE SPLIT UNDER A LIVE COUNT (D115): "4 when read · 2 sold here since". One step louder than
+   `.inv-readage` because it carries FIGURES rather than an age — a reader who sees two numbers
+   under a third needs to be able to read them — and still well under the count itself, which
+   is the one that has to agree with the shelf. Drawn only when something has sold since, so it
+   never appears as a row of zeroes. */
+.card-locations-since {
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------------------------------------------------------------- the owner: dense ---- */
 
 .card-locations-owner {

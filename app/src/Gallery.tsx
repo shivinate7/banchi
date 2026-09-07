@@ -93,6 +93,8 @@ const GROUP: SearchGroup = {
   set_hint: 'me01',
   condition: 'Near Mint',
   listed: { pushed: 0, staged: 1, live: 2 },
+  sold_here: 0,
+  live_as_of: null,
   /* Four of the six copies below have not left by either door, and `listable` is the server's
      own `min(cap, on_hand)` — both move with the copies list rather than being typed beside it,
      so the header's figures and the rows it sits over cannot disagree on a sheet whose whole

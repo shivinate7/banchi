@@ -619,7 +619,7 @@ function CopiesPanel({
           persona="owner"
           sections={layouts}
           currentKey={row.key}
-          listedAt={group.sku === null ? null : (listings[group.sku]?.at ?? null)}
+          listedAt={group.sku === null ? null : (listings[group.sku]?.live_as_of ?? null)}
           claims={wanted}
           onGoTo={onGoTo}
           onSell={onSell}

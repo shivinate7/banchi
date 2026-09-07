@@ -165,6 +165,13 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
                         {"box": pos.box, "index": pos.index, "label": pos.label}
                         for pos in match.positions
                     ],
+                    # FOUR KEYS SINCE D115, AND THE FOURTH IS NOT OPTIONAL. `live` is the
+                    # export's READING and the screen draws the ESTIMATE, so freezing the
+                    # reading alone would have `#/pricing` over-report by exactly the copies
+                    # sold since — on the screen where the operator decides money, and with
+                    # nothing to catch it: no browser spec reads the run door's `LiveCount`.
+                    # A derived value never rides a payload; the two numbers travel and the
+                    # reader subtracts.
                     "listing": (
                         None
                         if record is None
@@ -172,6 +179,7 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
                             "pushed": record.pushed,
                             "staged": record.staged,
                             "live": record.live,
+                            "sold_here": record.sold_here,
                         }
                     ),
                 }
@@ -499,7 +507,12 @@ def run(args, say) -> int:
                 listing = writable.inventory.listing(match.sku, condition=match.condition)
                 before = listing.live
                 verdict = listing.observe_live(quantity, as_of)
-                if verdict == master.UNCHANGED:
+                # `CLEARED` MOVES NO COPIES AND IS NOT REPORTED HERE (D115). The figure agreed
+                # and the file simply postdated sales this store had counted, so the counter
+                # was emptied — nothing to draw down (`quantity - before` is 0), nothing kept,
+                # and nothing corrected. Reporting it beside the moved readings would put a
+                # zero on `moved_live` and a line under a heading about copies that moved.
+                if verdict in (master.UNCHANGED, master.CLEARED):
                     continue
                 if verdict == master.KEPT:
                     kept_live.setdefault(game_join.game, []).append(

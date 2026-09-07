@@ -974,6 +974,13 @@ close to being struck.
   moved the live count by nothing at all, because a sale is a card state and the listing counts
   are D59's per-SKU quantities. The two move for different reasons and a reader expecting one to
   follow the other will misread both. `store/master.py`'s comments describe the earlier state.
+  **A THIRD LAYER, 2026-09-07 (D115), and the strike is NOT lifted.** The original was struck
+  because its reasoning was wrong, not its observation, and that record stands. The observation
+  is true again for a reason it did not have: a sale moves `live` by nothing — not because a
+  sale is a card state, but because `live` is the export's READING and a sale is not an export.
+  What a sale moves is `sold_here`, and the two together are the count a screen draws. So a
+  reader expecting the live count to follow a sale is right about the figure and still wrong
+  about the field, which is why all three layers are kept.
 
 ---
 
