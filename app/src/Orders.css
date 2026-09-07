@@ -954,3 +954,122 @@
   .orders-receipt-clause + .orders-receipt-clause::before { content: none; }
   .orders-empty-receipt { padding: 0 var(--bn-4) var(--bn-4); }
 }
+
+/* ---- the fetch filter: which statuses this press takes (D114) --------------------- */
+
+/* The control's own OFF state is the kit's default button; this is the ON state — the
+   operator has narrowed something, and the button says so without a second badge beside it.
+   Accent tint, exactly as every other engaged control in the product (see `.orders-chip`
+   pressed, and the segmented control). */
+.orders-status-btn-on {
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+}
+.orders-status-btn-on:hover:not(:disabled) { background: var(--bn-accent-tint-2); }
+.orders-status-btn-on .bn-icon { color: inherit; }
+
+.orders-statuses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-3);
+  margin-top: var(--bn-1);
+}
+.orders-statuses-state { display: flex; flex-direction: column; gap: var(--bn-2); align-items: flex-start; }
+.orders-statuses-skel { height: 34px; border-radius: var(--bn-r); }
+.orders-statuses-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-statuses-note b { color: var(--bn-ink); font-variant-numeric: tabular-nums; }
+.orders-statuses-foot { border-top: 1px solid var(--bn-line); padding-top: var(--bn-2); }
+.orders-statuses-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-3);
+  flex-wrap: wrap;
+}
+.orders-statuses-list { display: flex; flex-direction: column; gap: 2px; list-style: none; }
+
+/* One status row. The whole row is the target — it grows to the full control height on a
+   phone by the token below, because a tick beside a word is the smallest thing on this
+   screen and the thumb should get the line rather than the box. */
+.orders-status {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  min-height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2);
+  border-radius: var(--bn-r-sm);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  /* Named in full: a component transition REPLACES `base.css`'s floor rather than adding to
+     it, so every property this rule animates has to be on this list. */
+  transition:
+    background-color var(--bn-t-fast) var(--bn-ease),
+    color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-status:hover { background: var(--bn-hover); color: var(--bn-ink); }
+.orders-status-box { flex: none; width: 16px; height: 16px; accent-color: var(--bn-accent); }
+.orders-status-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.orders-status-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--bn-ink);
+}
+.orders-status-known,
+.orders-status-none {
+  flex: none;
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+}
+/* A status the operator ticked that this window returned nothing for. Dimmed, never removed:
+   the tick is theirs and the emptiness is a fact about the window. */
+.orders-status-absent .orders-status-name { color: var(--bn-ink-3); }
+.orders-status-known-toggle {
+  border-top: 1px solid var(--bn-line);
+  padding-top: var(--bn-2);
+  border-radius: 0;
+  min-height: var(--bn-control-h);
+}
+
+.orders-empty-picker { margin-top: var(--bn-3); text-align: left; }
+
+/* The receipt's own line for statuses this window held none of. Same shape as the paste
+   note it sits under, so the two read as one voice. */
+.orders-receipt-absent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  margin-top: var(--bn-2);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}
+.orders-receipt-absent .bn-icon { flex: none; margin-top: 2px; color: var(--bn-accent); }
+.orders-receipt-absent .bn-mono { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+
+/* Phones: the row grows to a thumb target and the head stacks rather than squeezing a mono
+   string into nothing. */
+@media (max-width: 767px) {
+  .orders-status { min-height: var(--bn-control-h); }
+  .orders-statuses-head { align-items: stretch; }
+}
+
+/* The ask, drawn once per device. Accent-tinted rather than warn-tinted: nothing has gone
+   wrong, a question is being put — and the panel it leads is the answer to it. */
+.orders-statuses-ask {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bn-2);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-accent-tint);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-2);
+  line-height: 1.5;
+}
+.orders-statuses-ask .bn-icon { flex: none; margin-top: 2px; color: var(--bn-accent); }
+.orders-statuses-ask b { color: var(--bn-ink); }
+
+/* The confirm sits under the list, not beside the head: it is the last thing read and the
+   figure on it counts what the ticks above add up to. */
+.orders-statuses-confirm { display: flex; }

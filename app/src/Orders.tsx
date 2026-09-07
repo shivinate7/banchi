@@ -4,6 +4,7 @@ import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmented, typ
 import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
+import { rememberOrderFilter, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
 import {
@@ -36,6 +37,7 @@ import type {
   OrderRow,
   OrdersFetched,
   OrdersPayload,
+  OrdersPreview,
   PickRow,
   Place,
   PullTarget,
@@ -117,7 +119,26 @@ function wireCount(value: number | undefined): number | null {
  *  and nothing else. */
 const LAST_CHECK_KEY = 'banchi.orders.last-check'
 
-type LastCheck = { readonly at: number; readonly matched: number | null }
+/** `statuses` IS THE QUESTION THAT WAS ASKED, not the list that was sent. Null is "every
+ *  status the window holds", which is what an operator who has never opened the picker is
+ *  asking; the strings a window actually returns drift, and a comparison suppressed by that
+ *  drift would be suppressed on most presses. What has to match for "new since" to mean
+ *  anything is the SCOPE — 128 completed orders against 128 of everything is not a delta. */
+type LastCheck = {
+  readonly at: number
+  readonly matched: number | null
+  readonly statuses: readonly string[] | null
+}
+
+/** Whether two remembered scopes are the same question. Order-insensitive; null is its own
+ *  value and never equal to a list, because "everything this window holds" is a different
+ *  question from a list that happens to name everything today. */
+function sameScope(a: readonly string[] | null, b: readonly string[] | null): boolean {
+  if (a === null || b === null) return a === b
+  if (a.length !== b.length) return false
+  const held = new Set(a)
+  return b.every((one) => held.has(one))
+}
 
 function readLastCheck(): LastCheck | null {
   try {
@@ -132,7 +153,14 @@ function readLastCheck(): LastCheck | null {
     const at = (parsed as { at?: unknown }).at
     if (typeof at !== 'number' || !Number.isFinite(at)) return null
     const matched = (parsed as { matched?: unknown }).matched
-    return { at, matched: typeof matched === 'number' && Number.isFinite(matched) ? matched : null }
+    const scope = (parsed as { statuses?: unknown }).statuses
+    return {
+      at,
+      matched: typeof matched === 'number' && Number.isFinite(matched) ? matched : null,
+      /* A check written before D114 carries no scope. Absent reads as null — "everything" —
+         which is exactly what that press asked for, so an upgrade does not invent a mismatch. */
+      statuses: Array.isArray(scope) ? scope.filter((one): one is string => typeof one === 'string') : null,
+    }
   } catch {
     /* Private mode, a blocked origin, a half-written value: no previous check, which the receipt
        draws as the first one on this device. */
@@ -154,8 +182,19 @@ function writeLastCheck(next: LastCheck): void {
 type FetchReceiptData = {
   readonly at: number
   readonly previous: LastCheck | null
-  /** How many orders the matching window held. */
+  /** EVERY order the window held, filter or no filter — the preview's own `total`. It is the
+   *  denominator the filtered figure is honest against: before D114 there was only one number
+   *  here and it was drawn as "in the window", which a filtered press would have made a lie. */
+  readonly windowTotal: number | null
+  /** How many of those the statuses this press asked for matched — the wire's own `matched`. */
   readonly matched: number | null
+  /** The statuses this press asked for, or null where it asked for everything the window held.
+   *  Drawn, so a press that came back thin says whether that was the window or the filter. */
+  readonly asked: readonly string[] | null
+  /** Statuses this device remembers ticking that THIS window returned none of. Never dropped
+   *  silently: the operator ticked them once, and a window holding none of one is a fact about
+   *  the window worth seeing. */
+  readonly absent: readonly string[]
   /** How many of those are new since this device's previous check. */
   readonly newSince: number | null
   /** How many this call detailed, how many it skipped as already known, what its cap left. */
@@ -208,7 +247,14 @@ function FetchReceipt({
   /* PART ONE — what was checked. The window figure comes off the wire; the comparison comes off
      this device's own previous check, and says so plainly when there has not been one. */
   const checked: ReactNode[] = []
-  if (receipt.matched !== null) checked.push(<Fig key="window" n={receipt.matched} of="in the window" />)
+  if (receipt.windowTotal !== null) checked.push(<Fig key="window" n={receipt.windowTotal} of="in the window" />)
+  /* THE FILTERED FIGURE IS A SECOND CLAUSE AND NEVER A REPLACEMENT. "40 in the window" alone,
+     off a window of 370, is the number a filter makes wrong; the two side by side are what say
+     the filter did something. Where nothing is filtered the second clause would restate the
+     first, so it is not drawn. */
+  if (receipt.asked !== null && receipt.matched !== null) {
+    checked.push(<Fig key="matched" n={receipt.matched} of="matched your statuses" />)
+  }
   if (receipt.newSince !== null && receipt.previous !== null) {
     checked.push(
       <span className="orders-receipt-clause" key="new">
@@ -226,6 +272,9 @@ function FetchReceipt({
     checked.push(
       <span className="orders-receipt-clause" key="last">
         last checked {whenWord(receipt.previous.at, now)}
+        {/* A comparison this press cannot honestly make says so, rather than going quiet. The
+            two figures are counts of different questions and subtracting them is nonsense. */}
+        {sameScope(receipt.previous.statuses, receipt.asked) ? null : ' · different statuses'}
       </span>,
     )
   } else {
@@ -279,6 +328,19 @@ function FetchReceipt({
           Checked TCGplayer <span className="orders-receipt-when">· {whenWord(receipt.at, now)}</span>
         </p>
         <p className="orders-receipt-line">{checked}</p>
+        {/* TICKED, AND THE WINDOW HELD NONE OF IT. The alternative was to drop these strings on
+            the floor — the fetch cannot ask for a status the window does not contain, and the
+            wire would answer nothing for it — which is the one thing this screen may not do
+            with an operator's own tick. Named, in the wire's own spelling. */}
+        {receipt.absent.length === 0 ? null : (
+          <p className="orders-receipt-absent">
+            <Icon name="info" size={14} />
+            <span>
+              This window held no <span className="bn-mono">{receipt.absent.join(', ')}</span> orders. Still
+              ticked, for a window that does.
+            </span>
+          </p>
+        )}
       </div>
 
       <div className="orders-receipt-part">
@@ -303,6 +365,192 @@ function FetchReceipt({
         ) : null}
       </div>
     </section>
+  )
+}
+
+/* ============================================================ which orders the press fetches */
+
+/** Which statuses this window holds, and which of them the operator has ticked.
+ *
+ *  THE VOCABULARY IS READ, NEVER DECLARED. Every string on this panel came off
+ *  `POST /orders/fetch {preview: true}` — a free call that walks the search pages, details
+ *  nothing and writes nothing — and goes back to `fetchOrders` byte for byte.
+ *  `server/order_transport.py` argues the ban on a coded vocabulary at length: TCGplayer never
+ *  published these strings, the comparison there is `status.strip() in wanted`, and a status
+ *  this file folded or renamed would be an order that never gets an envelope. So there is no
+ *  list of statuses in this app, and this panel cannot be drawn until the preview has answered.
+ *
+ *  UNCHOSEN IS NOT "ALL TICKED". `filter.statuses === null` is the state of a device that has
+ *  never opened this panel, and the press it makes is the press this screen has always made:
+ *  every status the window returned. The rows are drawn ticked to say so, and the first
+ *  untick materialises the list out of the window rather than out of anything remembered. */
+function StatusPicker({
+  preview,
+  loading,
+  failure,
+  filter,
+  busy,
+  onChange,
+  onConfirm,
+  onRetry,
+}: {
+  readonly preview: OrdersPreview | null
+  readonly loading: boolean
+  readonly failure: Failure | null
+  readonly filter: OrderFetchFilter
+  readonly busy: boolean
+  readonly onChange: (next: OrderFetchFilter) => void
+  readonly onConfirm: () => void
+  readonly onRetry: () => void
+}) {
+  const rows = preview?.by_status ?? []
+  const inWindow = rows.map((row) => row.status)
+  const ticked = (status: string) => filter.statuses === null || filter.statuses.includes(status)
+
+  /* A remembered tick this window returned nothing for. It stays on the panel, and its row says
+     the window held none — the operator ticked it, and taking it away silently is the defect
+     this whole entry is about one register down. */
+  const absent = (filter.statuses ?? []).filter((one) => !inWindow.includes(one))
+
+  const toggle = (status: string) => {
+    /* THE FIRST UNTICK MATERIALISES THE LIST OUT OF THIS WINDOW. There is nothing else it could
+       come from: null carries no strings, and inventing a vocabulary here is the one thing this
+       panel may not do. Any status this window does not hold is therefore not in the list a
+       first untick writes, which is correct — it was not being asked for either. */
+    const base = filter.statuses ?? inWindow
+    const next = base.includes(status) ? base.filter((one) => one !== status) : [...base, status]
+    /* Back to the unchosen state when every status in the window is ticked and nothing else is
+       remembered, so a device that ticks its way back to everything stops carrying a list that
+       the next window would narrow against. */
+    const everything = next.length === inWindow.length && inWindow.every((one) => next.includes(one))
+    onChange({ ...filter, statuses: everything ? null : next })
+  }
+
+  const total = rows.reduce((sum, row) => sum + row.count, 0)
+  const picked = rows.filter((row) => ticked(row.status)).reduce((sum, row) => sum + row.count, 0)
+
+  return (
+    <div className="orders-statuses bn-well" role="group" aria-label="Which orders to fetch">
+      {failure !== null ? (
+        <div className="orders-statuses-state">
+          <Notice tone="danger" title={failure.message} code={failure.code} />
+          <Button size="sm" icon="refresh" onClick={onRetry}>
+            Count them again
+          </Button>
+        </div>
+      ) : loading ? (
+        <div className="orders-statuses-state" aria-busy="true">
+          <span className="bn-skeleton orders-statuses-skel" />
+          <span className="bn-skeleton orders-statuses-skel" />
+          <span className="bn-skeleton orders-statuses-skel" />
+          <p className="orders-statuses-note">Counting this account&rsquo;s window. Nothing is being fetched.</p>
+        </div>
+      ) : rows.length === 0 && absent.length === 0 ? (
+        <div className="orders-statuses-state">
+          <p className="orders-statuses-note">TCGplayer returned no orders in this window, so there is nothing to
+            narrow. The press will say the same.</p>
+        </div>
+      ) : (
+        <>
+          {/* THE ASK, AND IT HAPPENS ONCE ON THIS DEVICE. Measured on the owner's store the day
+              this was written: 69 of 83 open orders were ones TCGplayer had already shipped, and
+              because `resolve_all` serves oldest-first out of one pool they held 31 physical
+              copies — three Ready-to-Ship lines read `short` while the cards sat in boxes. A
+              default of "everything" reproduces that wherever nobody opens this panel, and a
+              default of "everything except the shipped ones" would need a status vocabulary this
+              product may not have. So a person is shown the real list, once. */}
+          {filter.asked ? null : (
+            <p className="orders-statuses-ask">
+              <Icon name="info" size={15} />
+              <span>
+                <b>Which of these are worth fetching?</b> An order TCGplayer has already shipped still
+                holds its copies here, so a live order can be told a card is short while it sits in a
+                box. Nothing has been fetched yet, and this is remembered on this device.
+              </span>
+            </p>
+          )}
+          <div className="orders-statuses-head">
+            <p className="orders-statuses-note">
+              {/* The two figures are the whole point of the panel: what the press will take, out
+                  of what is there. Drawn from the preview, which spent nothing to get them. */}
+              Taking <b>{picked.toLocaleString()}</b> of <b>{total.toLocaleString()}</b>{' '}
+              {plural(total, 'order', 'orders')} in this window.
+            </p>
+            <Button
+              size="sm"
+              icon="check"
+              onClick={() => onChange({ ...filter, statuses: null })}
+              disabled={filter.statuses === null}
+            >
+              Every status
+            </Button>
+          </div>
+
+          <ul className="orders-statuses-list">
+            {rows.map((row) => (
+              <li key={row.status}>
+                <label className="orders-status">
+                  <input
+                    type="checkbox"
+                    className="orders-status-box"
+                    checked={ticked(row.status)}
+                    onChange={() => toggle(row.status)}
+                  />
+                  {/* The status STRING, in mono, because it is the wire's word and not this
+                      product's. `orderReasonLabel` sentence-cases the reasons this repo owns;
+                      there is deliberately no equivalent here. */}
+                  <span className="orders-status-name bn-mono">{row.status}</span>
+                  <span className="orders-status-count">{row.count.toLocaleString()}</span>
+                  {row.known > 0 ? (
+                    <span className="orders-status-known">{row.known.toLocaleString()} in the ledger</span>
+                  ) : null}
+                </label>
+              </li>
+            ))}
+            {absent.map((status) => (
+              <li key={status}>
+                <label className="orders-status orders-status-absent">
+                  <input type="checkbox" className="orders-status-box" checked onChange={() => toggle(status)} />
+                  <span className="orders-status-name bn-mono">{status}</span>
+                  <span className="orders-status-none">none in this window</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+
+          {/* THE SECOND TOGGLE, AND IT IS A ROUTE THAT NO SCREEN REACHED. `skip_known` has been
+              on `POST /orders/fetch` since D91 and `fetchOrders` has always carried it; nothing
+              ever sent it, which CLAUDE.md's "a route is not a feature" names as unfinished
+              rather than as a follow-up. It is the same kind of narrowing as the statuses above
+              — what is this press worth bothering with — so it is ticked in the same panel. */}
+          <label className="orders-status orders-status-known-toggle">
+            <input
+              type="checkbox"
+              className="orders-status-box"
+              checked={filter.skipKnown}
+              onChange={(event) => onChange({ ...filter, skipKnown: event.target.checked })}
+            />
+            <span className="orders-status-name">Skip orders the ledger already holds at that status</span>
+          </label>
+          {/* THE CONFIRM EXISTS ONLY WHILE THE DEVICE IS UNANSWERED. Afterwards the panel is a
+              setting and the Fetch button beside it is the press; a second primary here would be
+              two doors to one act. */}
+          {filter.asked ? null : (
+            <div className="orders-statuses-confirm">
+              <Button variant="primary" icon="refresh" onClick={onConfirm} busy={busy} disabled={busy || picked === 0}>
+                {picked === 0
+                  ? 'Tick at least one'
+                  : `Fetch these ${picked.toLocaleString()} ${plural(picked, 'order', 'orders')}`}
+              </Button>
+            </div>
+          )}
+          <p className="orders-statuses-note orders-statuses-foot">
+            The strings are TCGplayer&rsquo;s own, counted by a free call that details nothing. This choice is
+            remembered on this device.
+          </p>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -1058,6 +1306,24 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /** The last fetch's receipt. It outlives the well it was pressed from, because the remainder
    *  it names is the reason to press again. */
   const [receipt, setReceipt] = useState<FetchReceiptData | null>(null)
+
+  /* ---------------------------------------------------------- the fetch filter (D114) ---- */
+
+  /** What this device narrows the fetch to. Read from `localStorage` ONCE, on mount: it is a
+   *  habit and not a subscription, and re-reading it per render would fight the panel. */
+  const [filter, setFilter] = useState<OrderFetchFilter>(() => storedOrderFilter())
+  const [pickerOpen, setPickerOpen] = useState(false)
+  /** The last window the free preview counted, held so the panel can be drawn without asking
+   *  again — and so a press can reuse it if it is fresh enough to be the same window. It is
+   *  never a substitute for the preview a press makes: that one is what the fetch is built on. */
+  const [vocab, setVocab] = useState<OrdersPreview | null>(null)
+  const [vocabBusy, setVocabBusy] = useState(false)
+  const [vocabFailure, setVocabFailure] = useState<Failure | null>(null)
+  /** The panel, so a press that OPENS it can bring it into view. On a phone the well is taller
+   *  than the viewport and the picker lands below the fold, so the ask — which the operator did
+   *  not go looking for — would be an answered press that appears to have done nothing. */
+  const pickerBox = useRef<HTMLDivElement>(null)
+
   const live = useRef(true)
   const pasteBox = useRef<HTMLTextAreaElement>(null)
   const phone = useMediaQuery('(max-width: 767px)')
@@ -1150,7 +1416,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      ONE PRESS, AND THE RECEIPT SAYS WHAT IT LEFT. The button asks and takes in the same press —
      there is no status step in front of it — and what the call could not carry is reported
      afterwards, with the control to take the next batch. */
-  const onFetch = () => {
+  const onFetch = (using: OrderFetchFilter = filter) => {
     void (async () => {
       setBusy('fetch')
       setFailure(null)
@@ -1183,14 +1449,59 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
            at most its limit and reports `remaining`, which the receipt below already draws with
            the control to take the next batch. */
         const seen = await previewOrders()
-        const statuses = seen.by_status.map((row) => row.status).slice(0, 50)
-        if (statuses.length === 0) {
+        if (live.current) setVocab(seen)
+        const inWindow = seen.by_status.map((row) => row.status)
+        if (inWindow.length === 0) {
           if (!live.current) return
           setPasteNote('TCGplayer returned no orders in this window.')
           setBusy(null)
           return
         }
-        const found = await fetchOrders({ statuses })
+        /* THE FIRST PRESS ON THIS DEVICE STOPS HERE AND SHOWS THE LIST. It has cost one free
+           call — the preview details nothing and writes nothing — and it details nothing now
+           either: the panel opens with every status ticked and its own press finishes the
+           errand. Once. `asked` is what makes it once, and it is set by answering rather than
+           by arriving, so a press interrupted here asks again rather than silently defaulting.
+
+           THIS IS NOT D91's TWO-PRESS FLOW. That asked on every press, which is what the owner
+           ruled out. What is being bought is the one thing a default cannot buy: somebody has
+           looked at the actual strings, which is the only place in this product where a status
+           may be judged (D114). */
+        if (!using.asked) {
+          if (!live.current) return
+          setPickerOpen(true)
+          setBusy(null)
+          /* After the paint that opens it. `block: 'nearest'` and no smooth behaviour: this is a
+             correction to where the press left the page, not motion carrying meaning, and the
+             reduced-motion floor should not have to have an opinion about it. */
+          window.requestAnimationFrame(() => pickerBox.current?.scrollIntoView({ block: 'nearest' }))
+          return
+        }
+        /* THE OPERATOR'S TICK LIST, INTERSECTED WITH WHAT THIS WINDOW ACTUALLY HOLDS. Asking
+           for a status no order carries is not an error on the wire — it matches nothing and
+           costs a walk — but it is a fact worth reporting, so what falls out is kept and drawn
+           rather than dropped. `filter.statuses === null` is a device that has never opened the
+           picker, and it takes the whole vocabulary: today's press, unchanged. */
+        const wanted = using.statuses
+        const statuses = (wanted === null ? inWindow : inWindow.filter((one) => wanted.includes(one))).slice(0, 50)
+        const absent = wanted === null ? [] : wanted.filter((one) => !inWindow.includes(one))
+        if (statuses.length === 0) {
+          if (!live.current) return
+          /* NOTHING IS FETCHED AND THE REASON IS THE FILTER, said in those words. The wire would
+             refuse an empty `statuses` with `statuses_required`, which is a true sentence about
+             a body and a useless one about a choice the operator made on this screen. */
+          setPasteNote(
+            absent.length === 0
+              ? 'Every status is ticked off, so this press would fetch nothing. Open Statuses and tick at least one.'
+              : `This window holds no ${absent.join(', ')} orders — the only statuses ticked here. Nothing was fetched.`,
+          )
+          setBusy(null)
+          return
+        }
+        const found = await fetchOrders({
+          statuses,
+          ...(using.skipKnown ? { skip_known: true } : {}),
+        })
         if (!live.current) return
         /* The four counts the merge brings on `OrdersFetched` — see `FetchCounts` above. Absent
            on this branch's wire, and each absence omits its clause rather than drawing a zero. */
@@ -1199,18 +1510,28 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         const at = Date.now()
         const written = found.orders.length === 0 ? null : await ingestOrders(found.orders)
         if (!live.current) return
+        /* THE COMPARISON IS ONLY DRAWN WHERE THE QUESTION DID NOT CHANGE. Two `matched` figures
+           taken under different status filters are counts of different things, and subtracting
+           them would put a confident "12 new" under a press that merely narrowed. */
+        const comparable = sameScope(previous?.statuses ?? null, wanted)
         setReceipt({
           at,
           previous,
+          windowTotal: wireCount(seen.total),
           matched,
-          newSince: matched !== null && previous?.matched != null ? Math.max(0, matched - previous.matched) : null,
+          asked: wanted === null ? null : statuses,
+          absent,
+          newSince:
+            comparable && matched !== null && previous?.matched != null
+              ? Math.max(0, matched - previous.matched)
+              : null,
           detailed: wireCount(counted.detailed),
           skippedKnown: wireCount(counted.skipped_known),
           remaining: wireCount(counted.remaining),
           fetched: found.orders.length,
           ingest: written,
         })
-        writeLastCheck({ at, matched })
+        writeLastCheck({ at, matched, statuses: wanted })
         /* RE-READ EITHER WAY. A fetch that brought nothing new still refreshes a ledger another
            device may have moved. */
         await reread()
@@ -1222,6 +1543,108 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       }
     })()
   }
+
+  /* ------------------------------------------------------- the filter's own free read ---- */
+
+  /** Count the window by status. FREE, and it details nothing — `writes_nothing: true` comes
+   *  back on the answer. Called when the panel is opened and on its retry, never on a timer:
+   *  it is fifteen search pages on this account's three-month window, which is cheap enough to
+   *  press and not cheap enough to poll. */
+  const loadVocabulary = useCallback(() => {
+    setVocabBusy(true)
+    setVocabFailure(null)
+    void (async () => {
+      try {
+        const seen = await previewOrders()
+        if (!live.current) return
+        setVocab(seen)
+      } catch (err) {
+        if (!live.current) return
+        setVocabFailure(describeFailure(err))
+      } finally {
+        if (live.current) setVocabBusy(false)
+      }
+    })()
+  }, [])
+
+  const onTogglePicker = () => {
+    const next = !pickerOpen
+    setPickerOpen(next)
+    /* Opened with nothing counted yet — including after a failure, so the panel is never a
+       dead end. An already-counted window is reused; the press makes its own preview anyway. */
+    if (next && !vocabBusy && (vocab === null || vocabFailure !== null)) loadVocabulary()
+  }
+
+  /** THE CHOICE IS WRITTEN AS IT IS MADE, not on a Save. There is no version of this panel with
+   *  an unsaved state worth having: every tick is idempotent, the fetch reads the same value the
+   *  panel draws, and a Save button would be a second source of truth for one boolean each. */
+  const onFilterChange = (next: OrderFetchFilter) => {
+    /* TOUCHING A TICK IS ANSWERING. Somebody reading the list and unticking a status has done
+       the thing the ask exists for, so the panel stops asking from that moment — the confirm
+       below is for the person whose answer is "all of them, yes". */
+    const answered = { ...next, asked: true }
+    setFilter(answered)
+    rememberOrderFilter(answered)
+  }
+
+  /** The ask's own press: record that this device has been shown the list, and fetch on it. The
+   *  answered filter is passed to `onFetch` rather than left to the next render, because the
+   *  state has not committed yet and the press must act on what was just agreed. */
+  const onConfirmStatuses = () => {
+    const answered = { ...filter, asked: true }
+    setFilter(answered)
+    rememberOrderFilter(answered)
+    onFetch(answered)
+  }
+
+  /* WHAT THE CONTROL SAYS BEFORE IT IS OPENED. An unchosen device says "All statuses" — which is
+     what it will fetch — rather than a count it would have to run a preview to know.
+
+     BOTH FIGURES ARE COUNTED OVER THE SAME WINDOW, which took a correction: `n of 5` off the
+     raw tick list read "3 of 5" beside a panel saying "taking 47 of 370", because one of the
+     three was a status this window returned none of. A ratio whose halves are counted over
+     different sets is the defect this entry is about. Where no window has been counted yet
+     there is no denominator to be honest against, so the bare tick count is drawn instead. */
+  const statusSummary =
+    filter.statuses === null
+      ? 'All statuses'
+      : filter.statuses.length === 0
+        ? 'No statuses'
+        : vocab === null
+          ? `${filter.statuses.length} ${plural(filter.statuses.length, 'status', 'statuses')}`
+          : `${filter.statuses.filter((one) => vocab.by_status.some((row) => row.status === one)).length} of ${
+              vocab.by_status.length
+            } statuses`
+
+  const statusControl = (
+    <Button
+      icon="filter"
+      iconRight={pickerOpen ? 'minus' : 'plus'}
+      onClick={onTogglePicker}
+      disabled={busy !== null}
+      aria-expanded={pickerOpen}
+      aria-controls="orders-status-picker"
+      className={filter.statuses === null && !filter.skipKnown ? undefined : 'orders-status-btn-on'}
+    >
+      {statusSummary}
+      {filter.skipKnown ? ' · skipping known' : ''}
+    </Button>
+  )
+
+  const statusPanel = pickerOpen ? (
+    <div id="orders-status-picker" ref={pickerBox}>
+      <StatusPicker
+        preview={vocab}
+        loading={vocabBusy}
+        failure={vocabFailure}
+        filter={filter}
+        busy={busy === 'fetch'}
+        onChange={onFilterChange}
+        onConfirm={onConfirmStatuses}
+        onRetry={loadVocabulary}
+      />
+    </div>
+  ) : null
 
   /* ------------------------------------------------------------------------ the pull */
 
@@ -1459,11 +1882,16 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         {/* The fetch is behind the same well as the paste: the same errand with the copying done
             for you, arriving at the ledger through the one door `orderPaste.ts` owns. */}
         {withFetch ? (
-          <Button icon="refresh" onClick={onFetch} busy={busy === 'fetch'} disabled={busy !== null}>
+          <Button icon="refresh" onClick={() => onFetch()} busy={busy === 'fetch'} disabled={busy !== null}>
             Fetch from TCGplayer
           </Button>
         ) : null}
+        {/* THE NARROWING SITS BESIDE THE PRESS, NOT IN FRONT OF IT. D91's two-press flow was
+            ruled out — *"why would it ever say 1 of 3 found"* — so this is a control the
+            operator may never open, and the press works identically if they do not. */}
+        {withFetch ? statusControl : null}
       </div>
+      {withFetch ? statusPanel : null}
       <p className="orders-paste-source">
         Only the SKU, the count and what the feed called the card leave this browser. An order that names no source is
         stamped {DEFAULT_ORDER_SOURCE}.
@@ -1595,6 +2023,11 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           arriving={arriving}
           well={wellOf(true)}
           emptyWell={wellOf(false)}
+          /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
+             the populated path gets both inside `wellOf(true)`, and only one of the two paths
+             renders, so the panel is never on screen twice. */
+          statusControl={statusControl}
+          statusPanel={statusPanel}
           /* The receipt is drawn by the STAGE and not by the well, so closing "Add orders" — or
              arriving at a populated ledger from an empty one — cannot take the remainder away
              with it. */
@@ -1726,6 +2159,8 @@ function PullStage({
   onStandDown,
   onCloseLine,
   onFetch,
+  statusControl,
+  statusPanel,
   onReread,
 }: {
   readonly payload: OrdersPayload | null
@@ -1751,6 +2186,8 @@ function PullStage({
   readonly onStandDown: StandDownHandler
   readonly onCloseLine: CloseLineHandler
   readonly onFetch: () => void
+  readonly statusControl: ReactNode
+  readonly statusPanel: ReactNode
   readonly onReread: () => void
 }) {
   const hub = useHub()
@@ -1874,11 +2311,15 @@ function PullStage({
             title="No orders yet"
             body="Fetch this account's own orders from TCGplayer, or paste one in. Nothing on this screen spends money; the pull is the only write, and it can be taken back."
             actions={
-              <Button variant="primary" size="lg" icon="refresh" onClick={onFetch} busy={busy === 'fetch'} disabled={busy !== null}>
-                Fetch from TCGplayer
-              </Button>
+              <>
+                <Button variant="primary" size="lg" icon="refresh" onClick={() => onFetch()} busy={busy === 'fetch'} disabled={busy !== null}>
+                  Fetch from TCGplayer
+                </Button>
+                {statusControl}
+              </>
             }
           />
+          {statusPanel === null ? null : <div className="orders-empty-picker">{statusPanel}</div>}
           {receipt === null ? null : <div className="orders-empty-receipt">{receipt}</div>}
           <div className="bn-rule">or paste one</div>
           {emptyWell}

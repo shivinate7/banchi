@@ -149,8 +149,9 @@ const LOCAL_STORAGE =
   '`localStorage` survives closing the browser, and D27 permits it only for facts about THIS ' +
   'MACHINE. Two files are exempt outright and this is neither: app/src/useCamera.ts (the ' +
   'remembered camera and the photo rotation, neither of which can take a photograph on its ' +
-  'own) and app/src/deviceMemory.ts (the theme and the rail — shell preferences about the ' +
-  'screen the operator is sitting at). Put a new device-local key in deviceMemory.ts, where ' +
+  'own) and app/src/deviceMemory.ts (the theme, the rail and which order statuses this device ' +
+  'bothers fetching — how the screen the operator is sitting at is dressed, and how they work ' +
+  'at it). Put a new device-local key in deviceMemory.ts, where ' +
   'the argument for it is, rather than at the call site: this rule matches the STORE and not ' +
   'the key, so a named file is the only exception it can express, and that is what puts a new ' +
   'key in front of a reviewer. Everything the capture screen remembers is a claim about the ' +
@@ -215,10 +216,11 @@ export default tseslint.config(
      * than being a ban. TWO FILES, exempted outright. `useCamera.ts` is where D27's carve-out
      * was argued informally before it was a
      * decision — the remembered deviceId and the photo rotation, both of which that file
-     * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own
-     * two, the theme and the rail. All four are facts about the machine this browser is running
-     * on: meaningless on the Fulfiller's laptop, actively wrong if shared, and none about a
-     * card.
+     * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own —
+     * the theme, the rail, and D114's order status filter, which came here rather than to its
+     * call site precisely because this message asks for that. All of them are facts about the
+     * machine this browser is running on: meaningless on the Fulfiller's laptop, actively wrong
+     * if shared, and none about a card.
      *
      * A THIRD CALL SITE EXISTS AND IS NOT A FILE EXEMPTION, which is this shape working rather
      * than leaking. `Orders.tsx` writes `banchi.orders.last-check` — when THIS device last

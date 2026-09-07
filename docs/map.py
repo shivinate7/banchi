@@ -2765,8 +2765,9 @@ COMPONENTS = [
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
-                                            "theme and the rail — and nothing else",
-                                    "governed_by": ["D13", "D27", "D94", "D95"],
+                                            "theme, the rail, and which order statuses this "
+                                            "device bothers fetching (D114) — and nothing else",
+                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3754,12 +3755,12 @@ COMPONENTS = [
                                        "sees, and what the two stages share is a client-side "
                                        "join by order number with nothing written across the "
                                        "seam.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -4018,7 +4019,7 @@ COMPONENTS = [
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18", "D27"],
+                "governed_by": ["D13", "D16", "D18", "D27", "D114"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -4259,17 +4260,28 @@ COMPONENTS = [
                                              "for, that the pull sends the row's own "
                                              "capture_id, and that the receipt reads the "
                                              "pre-write place rather than the sale's departed "
-                                             "label. TWO CASES OVER THE TWO-PRESS FETCH (D91): "
-                                             "the first press details nothing and draws the "
-                                             "window as the wire spelled it, the second details "
-                                             "only the ticked statuses and skips what the ledger "
-                                             "holds, and a fetch the cap cut short says how many "
-                                             "it left — while an empty one still re-reads the "
-                                             "ledger, which is the bug the early return was. It "
+                                             "label. FIVE CASES OVER THE FETCH, which is ONE "
+                                             "press (D91 as the owner amended it, D114): a "
+                                             "fetch the cap cut short says how many it left "
+                                             "while an empty one still re-reads the ledger, "
+                                             "which is the bug the early return was; a "
+                                             "remembered tick narrows the send and carries "
+                                             "skip_known; a ticked status the window holds none "
+                                             "of is NAMED on screen rather than dropped; every "
+                                             "status ticked off is refused here rather than by "
+                                             "the wire; and the picker's rows are asserted to be "
+                                             "exactly the preview's, because a row this file did "
+                                             "not put on the wire would be a status vocabulary "
+                                             "somebody coded into app/. THREE MORE OVER THE ASK: "
+                                             "a device nobody has answered is shown the list and "
+                                             "its first press details NOTHING, answering is "
+                                             "remembered so the next press goes straight through, "
+                                             "and a tick counts as an answer without the confirm "
+                                             "being pressed. It "
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113"]},
+                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
