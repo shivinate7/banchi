@@ -7701,12 +7701,33 @@ def check_rail_mark(report: Report) -> None:
                 "bracket pair alone, no tile, no card, no sheen — and every one of those three is "
                 "a rect. The app icons keep the full mark; this file is the tab.",
             ))
-        if "stop-color" not in fav:
+        # THE PAINT IS SETTLED IN SECTION 18 AND READ FROM THERE, so the two cannot disagree —
+        # `build-mark.mjs` greps that table rather than holding a hex. This row is what makes
+        # that arrangement real: the spec is the state of record and the generated file has to
+        # show it. The tab is the one Banchi surface NOT in a metal, and a regeneration that
+        # quietly put the gradient back would look right on a dark bar and vanish on a light one,
+        # which is the defect section 18 exists to record.
+        want = re.search(r"\| paint \| \*\*flat `(#[0-9A-Fa-f]{6})`\*\*", read(LOGO_SPEC)) \
+            if exists(LOGO_SPEC) else None
+        if not want:
+            problems.append(Finding(
+                rel(LOGO_SPEC),
+                "section 18 no longer settles the tab's paint as `| paint | **flat `#RRGGBB`** |`. "
+                "`scripts/build-mark.mjs` reads that row and refuses to build without it.",
+            ))
+        elif want.group(1) not in fav:
             problems.append(Finding(
                 rel(FAVICON),
-                "the browser tab has no gradient stops. Section 18 paints it in `bluesteel`'s own "
-                "bracket metal, which is what makes it the collapsed sidebar rather than a flat "
-                "outline of it.",
+                f"the browser tab is not painted {want.group(1)}, which is what section 18 settles. "
+                "Gold is the only paint that reads on a dark browser bar and a light one, and the "
+                "tab carries no ground of its own — silver vanishes on light, ink on dark.",
+            ))
+        if "Gradient" in fav:
+            problems.append(Finding(
+                rel(FAVICON),
+                "the browser tab has a gradient. Section 18 settles it FLAT: at 16px the bracket "
+                "pair is about twelve pixels of ink and a four-stop gradient across it resolves to "
+                "noise. Every other surface keeps its metal; this one traded it for legibility.",
             ))
     report.add("rail mark", MECHANICAL, problems,
                "the rail bracket is the shipped mark — in the sheet, at both ends of the morph, and on the tab")
