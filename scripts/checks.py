@@ -142,6 +142,25 @@ CHECKS = (
         "governed_by": ("D18", "D42"),
     },
     {
+        "target": "janitor-selftest",
+        "runs": "bash scripts/janitor-selftest.sh",
+        "asserts": "scripts/janitor.py, against a throwaway clone with real worktrees, a fake "
+                   "liveness oracle and real processes in their own process groups. The cases "
+                   "that matter are the refusals: a worktree with a live session in it, a "
+                   "branch that is unmerged and on no remote, and a husk directory something "
+                   "is still running under. Each asserts the janitor's OWN sentence, because "
+                   "git would refuse some of them on its own and survival by somebody else's "
+                   "refusal is not coverage.",
+        "needs": ("python3", "bash", "git"),
+        "writes": "a bare repo, a clone, four linked worktrees and four short-lived processes, "
+                  "all under `mktemp -d` and all confined to it by `--confine`.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
+                               "tool here besides icloud-sweep that can delete a worktree.",
+        "gates": True,
+        "governed_by": ("D18", "D44", "D53"),
+    },
+    {
         "target": "port-agreement",
         "runs": "python3 scripts/port-agreement.py",
         "asserts": "server/ports.py and app/devPort.ts answer the same port for the same "

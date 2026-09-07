@@ -483,7 +483,14 @@ def cut_branch(root: str, branch: str, confirm: bool) -> None:
 
     held = worktree_holding(root, branch)
     if held:
-        say("  {0}: kept — checked out in {1}.".format(branch, held))
+        # NOT A DEAD END, AND IT READ AS ONE FOR 37 BRANCHES. This condition is true by
+        # construction whenever a session merges its own PR from its own worktree, so the local
+        # delete is skipped exactly when it is wanted — and nothing here ever came back to ask
+        # again. `make janitor` is what asks again: the branch is an ancestor of main and its
+        # remote copy has just been deleted above, so the sweep reaps it the moment no tree
+        # holds it. Nothing is recorded to make that happen; the sweep re-derives it (D110).
+        say("  {0}: kept — checked out in {1}.".format(branch, held),
+            "    `make janitor` takes it once that tree is gone.")
         return
 
     if not run(["git", "merge-base", "--is-ancestor", branch, "main"], cwd=root).ok:

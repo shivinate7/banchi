@@ -73,6 +73,30 @@
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/session-teardown.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scripts/session-teardown.sh",
+            "timeout": 60
+          }
+        ]
+      }
     ]
-  }
+  },
+  "_SessionEnd_teardown_note": "WorktreeRemove fires at the moment the tree goes, which is exactly the moment whose absence left four supervisors restarting against deleted directories on 2026-09-06 (D110). SessionEnd is the second anchor and the weaker one: it is not reliable at app quit or machine sleep, and its `reason` includes `clear`, where the session CONTINUES \u2014 the script skips that reason by name so it cannot stop a server somebody is still using. The timeout is raised because SessionEnd hooks share a 1.5s budget by default and `serve.py down` drains. It fails open on every path, and whatever it misses `make janitor` reaps later \u2014 which is the point of having a sweep that does not depend on an event. NOT on the commit path: D18.",
+  "_WorktreeRemove_teardown_note": "WorktreeRemove fires at the moment the tree goes, which is exactly the moment whose absence left four supervisors restarting against deleted directories on 2026-09-06 (D110). SessionEnd is the second anchor and the weaker one: it is not reliable at app quit or machine sleep, and its `reason` includes `clear`, where the session CONTINUES \u2014 the script skips that reason by name so it cannot stop a server somebody is still using. The timeout is raised because SessionEnd hooks share a 1.5s budget by default and `serve.py down` drains. It fails open on every path, and whatever it misses `make janitor` reaps later \u2014 which is the point of having a sweep that does not depend on an event. NOT on the commit path: D18."
 }

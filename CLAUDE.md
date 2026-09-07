@@ -161,9 +161,9 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + port-agreement + set-hint-agreement +
-                    #   screen-freshness + sigil-check + ignore-check + lint + vale +
-                    #   typecheck.
+                    #   merge-selftest + janitor-selftest + port-agreement +
+                    #   set-hint-agreement + screen-freshness + sigil-check +
+                    #   ignore-check + lint + vale + typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
@@ -181,6 +181,25 @@ make screen-freshness # every server write in app/src has a way back: a re-read,
 make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
+make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D110).
+                    #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
+                    #   it cannot be live — a process whose own script has been deleted, a
+                    #   registration git itself disowns, a husk directory nothing is running
+                    #   under. TIER 2 waits for your word: a merged branch no tree holds, a
+                    #   worktree with no session in it.
+                    #   LIVENESS IS READ, NOT GUESSED. The console app's own per-session
+                    #   records — one JSON per pid, in a `sessions` directory under the
+                    #   user's `~/.claude` — say which tree each running session is
+                    #   standing in; mtimes and
+                    #   `git status` cannot tell an idle tree from a busy one, and on
+                    #   2026-09-06 two trees with zero dirty files switched branches while
+                    #   they were being measured.
+                    #   IT NEVER TOUCHES: the default branch, a branch that is unmerged AND on
+                    #   no remote, a tree with a live session, a tree with uncommitted work, or
+                    #   the main checkout's server — which D53 means to outlive every session.
+                    #   Not in `make check` and not in the git hook, for `icloud-sweep`'s
+                    #   reason: with it, the only two targets here that can delete a file.
+make janitor-selftest # the sweep against a throwaway clone. In `check`, never in the git hook.
 make githooks-selftest # D42's guard over main, proved in a throwaway repo. Never in the git hook.
 make lan-check      # IS THE OWNER'S LAN URL STILL GOOD? `http://pkmnscan.lan:5173`, from
                     #   the phone. Two of the six things holding it up are on their UniFi and
@@ -1070,6 +1089,7 @@ D106 The push and the publish are two presses, and the second one is the only th
 D107 The rule only ever marks down; the operator may point either way
 D108 The dock app is the page Chrome already renders, and the manifest is what makes it one
 D109 A price is a fact about a listing, and the store remembers listings it never photographed
+D110 Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

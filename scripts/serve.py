@@ -37,7 +37,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Iterable, NamedTuple, Optional, Tuple
+from typing import Iterable, List, NamedTuple, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -249,6 +249,32 @@ def _command_of(pid: int) -> str:
     return out.stdout.strip()
 
 
+def _needle(argv: List[str]) -> str:
+    """The one argument that says WHICH TREE this child belongs to.
+
+    THE LAST ABSOLUTE PATH, NOT THE LAST ARGUMENT, AND VITE IS WHY. This was `argv[-1]` until
+    2026-09-06, which is right for the two children whose last argument IS the path — the
+    supervisor's `/abs/scripts/serve.py` and capture's `/abs/server/capture_server.py` — and
+    degenerate for the third. Vite's argv is
+
+        ["npm", "--prefix", "/abs/app", "run", "dev"]
+
+    so the needle was `"dev"`, a substring of essentially every `npm run dev` on the machine,
+    in any tree. That is exactly the basename check `live_pid` spends a paragraph forbidding,
+    and `_sweep_orphans` signals a process group on the strength of it: a recycled pid landing
+    on any Vite anywhere would have been swept as ours. Found by reading, not by an incident —
+    there is live material for it, an `npm run dev --prefix app` the Browser pane starts from
+    `.claude/launch.json` in a tree that has no `.serve/` pidfiles at all.
+
+    Searching from the END keeps the two that were already right: the interpreter is absolute
+    too, and it is the argument a path check would otherwise find first.
+    """
+    for item in reversed(argv):
+        if item.startswith("/"):
+            return item
+    return argv[-1] if len(argv) > 1 else argv[0]
+
+
 def live_pid(child: Child, root: Path = REPO_ROOT) -> Optional[int]:
     """The pid if it is alive AND is still the process we recorded, else None.
 
@@ -283,7 +309,7 @@ def live_pid(child: Child, root: Path = REPO_ROOT) -> Optional[int]:
         # `ps -o command=` prints the full argv, so the absolute path really is there to match.
         # A worktree's path contains the main tree's as a prefix, so the match has to be on the
         # distinguishing argument rather than on the root.
-        needle = argv[-1] if len(argv) > 1 else argv[0]
+        needle = _needle(argv)
         if needle not in command:
             return None
     return pid
@@ -945,22 +971,29 @@ def do_up(args: argparse.Namespace) -> int:
     return 0
 
 
-def _sweep_orphans() -> None:
-    """Children of a supervisor that was killed with -9.
+def _sweep_orphans(root: Path = REPO_ROOT) -> None:
+    """Children of a supervisor that was killed with -9, in `root`'s own `.serve/`.
 
     This is why there is a pidfile per child rather than one for the supervisor alone: without
     them an orphaned `npm run dev` keeps the dev port, and `strictPort` turns the next start
     into a failure rather than a silent move.
+
+    IT ANSWERS FOR ONE TREE AND CANNOT REACH ANOTHER, WHICH IS THE POINT OF THE ARGUMENT.
+    `root` was `REPO_ROOT` and nothing else until 2026-09-06, so `scripts/janitor.py` — which
+    is handed a tree — had no way to ask this question without reimplementing it. What it
+    still does NOT cover is the supervisor itself, and it never can: a supervisor whose tree
+    was deleted has no `.serve/` left to read, because `.serve/` lives inside the tree. That
+    case is the janitor's, and it is answered from the process table instead.
     """
     for child in (CAPTURE, VITE):
-        pid = live_pid(child)
+        pid = live_pid(child, root)
         if pid is None:
-            clear_pidfile(child)
+            clear_pidfile(child, root)
             continue
         print(f"sweeping orphaned {child.label} (pid {pid})")
         with contextlib.suppress(OSError):
             os.killpg(os.getpgid(pid), signal.SIGTERM)
-        clear_pidfile(child)
+        clear_pidfile(child, root)
 
 
 def owned_by_agent(root: Path = REPO_ROOT) -> bool:
