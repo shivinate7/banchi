@@ -913,9 +913,23 @@ COMPONENTS = [
                                   "row set inside ONE SQLite transaction over every table — not "
                                   "the fifth of five JSON files whose set was never atomic, which "
                                   "is what this line said until 2026-09-05 while already citing "
-                                  "D88 three fields below.",
+                                  "D88 three fields below. THREE WAYS A LINE STOPS OWING SINCE "
+                                  "D113 and only two claim a copy went: `record_pull` needs a "
+                                  "`capture_id`, `record_fill` records a COUNT for copies that "
+                                  "went with no card record behind them (`by_hand`, the writer "
+                                  "`LineProgress`'s own docstring anticipated and nothing wrote "
+                                  "for a year), and `close_line` stands a line down without "
+                                  "touching a count at all — for the 69 of 83 open orders "
+                                  "TCGplayer had already shipped, many using copies still in the "
+                                  "boxes, where a fill would read right while the card stayed on "
+                                  "the shelf. `fulfilled == len(copies) + by_hand` is the "
+                                  "invariant, four methods maintain it and `progress_drift` "
+                                  "reports any row where it fails. The operator's `kind` lives "
+                                  "here rather than on the record for this module's own reason: "
+                                  "ingest replaces that wholesale.",
                           "governed_by": ["D7", "D10", "D13", "D16", "D20", "D21", "D24", "D26",
-                                          "D29", "D36", "D53", "D63", "D88"], "tested_by": ["T7"]},
+                                          "D29", "D36", "D53", "D63", "D88", "D113"],
+                          "tested_by": ["T7"]},
             "cache.py": {"does": "the `identifications` table — answers already paid for", "governed_by": ["D2", "D21", "D88"]},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
@@ -2032,7 +2046,7 @@ COMPONENTS = [
                                 "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
-                                "D92", "D93", "D96", "D100", "D103", "D104"],
+                                "D92", "D93", "D96", "D100", "D103", "D104", "D113"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2691,7 +2705,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104"]},
+                                              "D104", "D113"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -2749,11 +2763,11 @@ COMPONENTS = [
                                              "D53", "D54", "D56", "D58", "D59", "D61", "D62",
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
-                                             "D93", "D100", "D103", "D104"]},
+                                             "D93", "D100", "D103", "D104", "D113"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, and which order statuses this "
-                                            "device bothers fetching (D113) — and nothing else",
-                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D113"],
+                                            "device bothers fetching (D114) — and nothing else",
+                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3741,12 +3755,12 @@ COMPONENTS = [
                                        "sees, and what the two stages share is a client-side "
                                        "join by order number with nothing written across the "
                                        "seam.",
-                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113"]},
+                               "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39", "D51", "D57", "D58", "D61", "D63", "D66", "D69", "D91", "D96", "D113", "D114"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -4005,7 +4019,7 @@ COMPONENTS = [
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18", "D27", "D113"],
+                "governed_by": ["D13", "D16", "D18", "D27", "D114"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -4247,7 +4261,7 @@ COMPONENTS = [
                                              "capture_id, and that the receipt reads the "
                                              "pre-write place rather than the sale's departed "
                                              "label. FIVE CASES OVER THE FETCH, which is ONE "
-                                             "press (D91 as the owner amended it, D113): a "
+                                             "press (D91 as the owner amended it, D114): a "
                                              "fetch the cap cut short says how many it left "
                                              "while an empty one still re-reads the ledger, "
                                              "which is the bug the early return was; a "
@@ -4267,7 +4281,7 @@ COMPONENTS = [
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113"]},
+                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

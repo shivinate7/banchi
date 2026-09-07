@@ -7,13 +7,32 @@ import { ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReaso
 import { rememberOrderFilter, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { setHub, touchHub, useHub, type PullFilter, type PullMode, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
-import { describeFailure, fetchOrders, getInventory, getOrders, ingestOrders, previewOrders, pullCopy, undoPull } from './server'
+import {
+  closeLines,
+  closeOrders,
+  declareLineKind,
+  describeFailure,
+  fetchOrders,
+  fillLine,
+  getInventory,
+  getOrders,
+  ingestOrders,
+  previewOrders,
+  pullCopy,
+  reopenLines,
+  reopenOrders,
+  undoFill,
+  undoPull,
+} from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
 import type {
   IngestResult,
   Inventory,
   InventoryCard,
+  OrderCloseReason,
+  OrderFillReason,
+  OrderLineProgress,
   OrderLineReason,
   OrderRow,
   OrdersFetched,
@@ -138,7 +157,7 @@ function readLastCheck(): LastCheck | null {
     return {
       at,
       matched: typeof matched === 'number' && Number.isFinite(matched) ? matched : null,
-      /* A check written before D113 carries no scope. Absent reads as null — "everything" —
+      /* A check written before D114 carries no scope. Absent reads as null — "everything" —
          which is exactly what that press asked for, so an upgrade does not invent a mismatch. */
       statuses: Array.isArray(scope) ? scope.filter((one): one is string => typeof one === 'string') : null,
     }
@@ -164,7 +183,7 @@ type FetchReceiptData = {
   readonly at: number
   readonly previous: LastCheck | null
   /** EVERY order the window held, filter or no filter — the preview's own `total`. It is the
-   *  denominator the filtered figure is honest against: before D113 there was only one number
+   *  denominator the filtered figure is honest against: before D114 there was only one number
    *  here and it was drawn as "in the window", which a filtered press would have made a lie. */
   readonly windowTotal: number | null
   /** How many of those the statuses this press asked for matched — the wire's own `matched`. */
@@ -861,6 +880,14 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
 
 type PullHandler = (order: OrderRow, line: ResolvedLine, pick: PickRow, target: PullTarget) => void
 
+/* D113's three. They travel the same prop chain as `onPull` and for the same reason: the hub owns
+   every write on this screen, so the busy lock, the toast and the re-read are in one place and a
+   row cannot half-refresh the list it is drawn from. */
+type FillHandler = (order: OrderRow, line: ResolvedLine, count: number, reason: OrderFillReason) => void
+type KindHandler = (order: OrderRow, line: ResolvedLine, kind: 'sealed' | 'accessory' | null) => void
+type StandDownHandler = (rows: readonly OrderRow[], reason: OrderCloseReason) => void
+type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderCloseReason) => void
+
 /* ---- the selection, mirrored in the hash ----------------------------------------------------- */
 
 const ORDER_PARAM = 'order'
@@ -1280,7 +1307,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
    *  it names is the reason to press again. */
   const [receipt, setReceipt] = useState<FetchReceiptData | null>(null)
 
-  /* ---------------------------------------------------------- the fetch filter (D113) ---- */
+  /* ---------------------------------------------------------- the fetch filter (D114) ---- */
 
   /** What this device narrows the fetch to. Read from `localStorage` ONCE, on mount: it is a
    *  habit and not a subscription, and re-reading it per render would fight the panel. */
@@ -1439,7 +1466,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
            THIS IS NOT D91's TWO-PRESS FLOW. That asked on every press, which is what the owner
            ruled out. What is being bought is the one thing a default cannot buy: somebody has
            looked at the actual strings, which is the only place in this product where a status
-           may be judged (D113). */
+           may be judged (D114). */
         if (!using.asked) {
           if (!live.current) return
           setPickerOpen(true)
@@ -1653,6 +1680,169 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     })()
   }
 
+  /* ------------------------------------------------------- the two lines that cannot be pulled */
+
+  /* D113. A line whose SKU no card carries can never be closed by a pull — `record_pull` needs a
+     `capture_id` and there is no card to mint one. These two presses are the only way such a line
+     moves, and before them three real orders sat open with nothing on any screen able to touch
+     them. Both re-read on success for `onPull`'s reason: the figure the lede draws is the one this
+     press just moved. */
+
+  const onFill = (order: OrderRow, line: ResolvedLine, count: number, reason: OrderFillReason) => {
+    void (async () => {
+      setBusy(`fill/${line.order_key}/${line.sku}`)
+      setFailure(null)
+      try {
+        const aim = { source: order.source, number: order.number, sku: line.sku }
+        const done = await fillLine(aim, count, reason)
+        if (!live.current) return
+        const name = line.line.name ?? line.sku
+        toast({
+          kind: 'receipt',
+          icon: 'hand',
+          title: `Closed ${plural(done.moved, 'copy', 'copies')} of ${name}`,
+          body: `by hand · ${reason === 'sealed' ? 'not a single' : 'not photographed here'} · order ${order.number}`,
+          ttlMs: UNDO_WINDOW_MS,
+          /* The reversal names a COUNT and not a copy, because the fill never held one. It
+             reverses exactly what this press recorded — `done.moved` — rather than the line's
+             whole hand-filled total, which may include an earlier press the operator meant. */
+          action: {
+            label: 'Undo',
+            onPress: () => {
+              void (async () => {
+                try {
+                  await undoFill(aim, done.moved)
+                  touchHub()
+                } catch (err) {
+                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                }
+              })()
+            },
+          },
+        })
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
+  const onDeclareKind = (order: OrderRow, line: ResolvedLine, kind: 'sealed' | 'accessory' | null) => {
+    void (async () => {
+      setBusy(`kind/${line.order_key}/${line.sku}`)
+      setFailure(null)
+      try {
+        await declareLineKind({ source: order.source, number: order.number, sku: line.sku }, kind)
+        if (!live.current) return
+        toast({
+          kind: 'ok',
+          icon: 'package',
+          title: kind === null ? 'Claim withdrawn' : `Marked ${kind === 'sealed' ? 'sealed' : 'an accessory'}`,
+          body:
+            kind === null
+              ? 'The feed\'s own word stands again.'
+              : 'It ships in a parcel and is picked by hand. It still owes its copies until it is filled.',
+        })
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
+  /* ------------------------------------------------------------------- the backlog stand-down */
+
+  /* D113. Orders the marketplace has already shipped, which this store never tracked the copies
+     of. They are not a fill — many of them went out using copies still sitting in the boxes — so
+     nothing is counted and the reason carries the whole meaning. The STATUS proposes the set and
+     the operator presses; nothing here branches on it by itself. */
+  const onStandDown = (rows: readonly OrderRow[], reason: OrderCloseReason) => {
+    void (async () => {
+      setBusy('close')
+      setFailure(null)
+      try {
+        const aim = rows.map((row) => ({ source: row.source, number: row.number }))
+        const done = await closeOrders(aim, reason)
+        if (!live.current) return
+        toast({
+          kind: 'receipt',
+          icon: 'check',
+          title: `Stood down ${plural(done.moved, 'order', 'orders')}`,
+          body: `${done.still_open} still open · nothing was marked sold`,
+          ttlMs: UNDO_WINDOW_MS,
+          action: {
+            label: 'Undo',
+            onPress: () => {
+              void (async () => {
+                try {
+                  await reopenOrders(aim)
+                  touchHub()
+                } catch (err) {
+                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                }
+              })()
+            },
+          },
+        })
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
+  /* D113. A line that is not shipping at all — refunded, cancelled, or the copy retired damaged
+     and the buyer refunded. IT IS LINE-SHAPED, so one refunded line on a three-line order never
+     takes the other two with it. The first build sent the order-shaped call and drew the button
+     only where the order had ONE line, which left the multi-line case with no press at all; the
+     wire has both scopes now and this is simply the line one. */
+  const onCloseLine = (order: OrderRow, line: ResolvedLine, reason: OrderCloseReason) => {
+    void (async () => {
+      setBusy(`close/${line.order_key}/${line.sku}`)
+      setFailure(null)
+      try {
+        const aim = [{ source: order.source, number: order.number, sku: line.sku }]
+        await closeLines(aim, reason)
+        if (!live.current) return
+        toast({
+          kind: 'receipt',
+          icon: 'check',
+          title: `Closed ${line.line.name ?? line.sku}`,
+          body: 'Nothing was marked sold and no copy is claimed to have gone.',
+          ttlMs: UNDO_WINDOW_MS,
+          action: {
+            label: 'Undo',
+            onPress: () => {
+              void (async () => {
+                try {
+                  await reopenLines(aim)
+                  touchHub()
+                } catch (err) {
+                  toast({ kind: 'refusal', icon: 'alert', title: describeFailure(err).message })
+                }
+              })()
+            },
+          },
+        })
+        await reread()
+      } catch (err) {
+        if (!live.current) return
+        setFailure(describeFailure(err))
+      } finally {
+        if (live.current) setBusy(null)
+      }
+    })()
+  }
+
   /* --------------------------------------------------------------------- what is drawn */
 
   const setStage = (next: Stage) => {
@@ -1847,6 +2037,10 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             )
           }
           onPull={onPull}
+          onFill={onFill}
+          onDeclareKind={onDeclareKind}
+          onStandDown={onStandDown}
+          onCloseLine={onCloseLine}
           onFetch={onFetch}
           onReread={() => void reread()}
         />
@@ -1861,6 +2055,88 @@ export function Orders() {
 }
 
 /* ================================================================================= pull */
+
+/** The backlog prompt: open orders the marketplace itself reports as already gone (D113).
+ *
+ *  WHY THIS IS A PROMPT AND NOT A RULE. `store/orders.py`'s two maps exist so `ingest` cannot
+ *  write fulfilment at all, and `_order_row` states that `open` is the ledger's answer and never
+ *  the feed's `status` string — the vocabulary was never published, so "everything that is not
+ *  Ready to Ship" would swallow a `Cancelled` the day that word first appears and record it as
+ *  handled. The status PROPOSES the set here and the operator presses. That is `make merge`'s
+ *  bargain: automate the lookup, never the decision.
+ *
+ *  IT IS NOT COSMETIC, WHICH IS WHY IT LEADS RATHER THAN HIDING IN A MENU. `resolve_all` walks
+ *  open orders oldest first and `_Draw._taken` stops two orders claiming one copy, so a shipped
+ *  order that is still open takes copies away from one that still needs picking. Measured on the
+ *  owner's store on 2026-09-06: 69 of 83 open orders were already shipped, holding 31 physical
+ *  copies, and three live lines read `short` while their copies sat on the shelf.
+ *
+ *  THE STATUS STRINGS ARE READ, NEVER MATCHED AGAINST A LIST THIS FILE HOLDS. A hard-coded
+ *  roster here would be the same guess the server refuses to make, one layer up. What this knows
+ *  is the negative — an order whose status this operator has NOT got queued for picking — and it
+ *  shows the strings it found so the sentence names them. */
+function BacklogPrompt({
+  open,
+  busy,
+  onStandDown,
+}: {
+  readonly open: readonly OrderRow[]
+  readonly busy: string | null
+  readonly onStandDown: StandDownHandler
+}) {
+  /* IT MATCHES THE POSITIVE AND FAILS CLOSED, AND THE FIRST BUILD DID THE OPPOSITE.
+     `status !== 'Ready to Ship'` is the open-ended negative D113 argues against for the SERVER,
+     and writing it here was that same guess one layer up: `app/tests/orders.spec.ts` fixes an
+     order at `Ready to ship` — a lower-case `s` — and the negative proposed it for stand-down
+     immediately. A live order swept into a bulk close is the one outcome this control must never
+     produce, and the vocabulary was never published, so a case a future status invents must land
+     on the SAFE side by construction rather than by someone remembering to add it.
+
+     So: an order is a candidate only where TCGplayer's own word SAYS it has gone. A status this
+     rule does not recognise is left open — the status quo, and visible — where the negative would
+     have swept it in. `Cancelled`, whenever that word first appears, is not proposed here at all,
+     which is right: a cancellation is `not_shipping` and a decision, not a backlog. */
+  const candidates = useMemo(
+    /* A NULL STATUS IS NOT A CANDIDATE EITHER, which falls out of the positive match rather than
+       needing its own guard: the feed said nothing, so nothing here says it has gone. */
+    () => open.filter((row) => (row.status ?? '').trim().toLowerCase().startsWith('shipped')),
+    [open],
+  )
+  const statuses = useMemo(
+    () => [...new Set(candidates.map((row) => row.status))].sort(),
+    [candidates],
+  )
+  if (candidates.length === 0) return null
+  const busyHere = busy === 'close'
+
+  return (
+    <Notice className="orders-backlog" tone="warn" title={`${candidates.length} open ${plural(candidates.length, 'order is', 'orders are')} already gone`}>
+      <p>
+        TCGplayer reports {candidates.length === 1 ? 'it' : 'them'} as{' '}
+        {joinPhrases(statuses.map((status) => `“${status}”`))}, but this store never recorded which
+        copies went — so {candidates.length === 1 ? 'it is' : 'they are'} still counted as open, and{' '}
+        {candidates.length === 1 ? 'it holds' : 'they hold'} copies away from the orders you still
+        have to pick.
+      </p>
+      <p>
+        Standing them down marks <strong>nothing</strong> sold and claims no copy left the building
+        — it records only that this store is no longer accounting for them. Any card they shipped
+        with is still in its box, and reconciling that is <code>#/inventory</code>&apos;s job.
+      </p>
+      <div className="orders-standdown-row">
+        <Button
+          variant="primary"
+          icon="check"
+          busy={busyHere}
+          disabled={busy !== null}
+          onClick={() => onStandDown(candidates, 'shipped_elsewhere')}
+        >
+          Stand down {candidates.length} shipped {plural(candidates.length, 'order', 'orders')}
+        </Button>
+      </div>
+    </Notice>
+  )
+}
 
 function PullStage({
   payload,
@@ -1878,6 +2154,10 @@ function PullStage({
   emptyWell,
   receipt,
   onPull,
+  onFill,
+  onDeclareKind,
+  onStandDown,
+  onCloseLine,
   onFetch,
   statusControl,
   statusPanel,
@@ -1901,6 +2181,10 @@ function PullStage({
   /** The last fetch's receipt, or null before one has been pressed. */
   readonly receipt: ReactNode
   readonly onPull: PullHandler
+  readonly onFill: FillHandler
+  readonly onDeclareKind: KindHandler
+  readonly onStandDown: StandDownHandler
+  readonly onCloseLine: CloseLineHandler
   readonly onFetch: () => void
   readonly statusControl: ReactNode
   readonly statusPanel: ReactNode
@@ -2104,6 +2388,9 @@ function PullStage({
       claims={claims}
       busy={busy}
       onPull={onPull}
+      onFill={onFill}
+      onDeclareKind={onDeclareKind}
+      onCloseLine={onCloseLine}
       onReread={onReread}
       variant={variant}
     />
@@ -2126,6 +2413,12 @@ function PullStage({
       ) : null}
 
       {receipt}
+
+      {/* D113. IT LEADS, ABOVE THE TOOLBAR AND THE LIST, because what it is about is the list
+          being wrong — an already-shipped order sitting open takes copies from one that still
+          needs picking, so a prompt tucked below the rows would be advice arriving after the
+          walk it should have changed. It draws nothing when there is nothing to propose. */}
+      <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
 
       <div className="orders-toolbar">
         <Segmented<PullMode>
@@ -2369,6 +2662,9 @@ function OrderDetail({
   claims,
   busy,
   onPull,
+  onFill,
+  onDeclareKind,
+  onCloseLine,
   onReread,
   variant,
 }: {
@@ -2379,6 +2675,9 @@ function OrderDetail({
   readonly claims: Claims
   readonly busy: string | null
   readonly onPull: PullHandler
+  readonly onFill: FillHandler
+  readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
   readonly onReread: () => void
   /** `panel` is the detail beside the list; `inline` is the body under an accordion head, which
    *  already drew the number, the date and the bar. */
@@ -2437,6 +2736,9 @@ function OrderDetail({
               claims={claims}
               busy={busy}
               onPull={onPull}
+              onFill={onFill}
+              onDeclareKind={onDeclareKind}
+              onCloseLine={onCloseLine}
             />
           ))}
         </ol>
@@ -2523,6 +2825,153 @@ function OrderDetail({
  * primary read and every one of them is always on screen. */
 const COPIES_SHOWN = 6
 
+/** The two presses for a line no pull can reach (D113).
+ *
+ *  IT IS DRAWN ONLY WHERE THE REMEDY IS OTHERWISE A DEAD END. `sku_unseen` and `not_a_single`
+ *  are the reasons where the resolver has correctly found nothing and no amount of walking the
+ *  boxes will change that — the card is not in this store and was never photographed here, or it
+ *  is not a card at all. Every other reason has a real remedy already on the row: `short` waits
+ *  for stock, `no_copies_on_hand` says stop looking, `resolved` has the pick rows.
+ *
+ *  THE CLASSIFICATION AND THE FILL ARE TWO PRESSES, NOT ONE, and the shipping lane is why: a
+ *  sealed product must be classifiable BEFORE it goes out, because that is what routes it to a
+ *  parcel rather than an envelope it does not fit. Folding them together would make the routing
+ *  answer unavailable until the moment it stopped mattering.
+ *
+ *  THE FILL'S REASON IS DERIVED FROM THE CLAIM RATHER THAN ASKED FOR TWICE. A line the operator
+ *  has called sealed fills as `sealed`; anything else fills as `off_system`. Both say a copy
+ *  WENT — neither is the way to close a refund, which `store/orders.py` refuses to spell through
+ *  a count at all and which `POST /orders/close` answers instead. */
+function LineStandDown({
+  order,
+  line,
+  progress,
+  busy,
+  onFill,
+  onDeclareKind,
+  onCloseLine,
+}: {
+  readonly order: OrderRow
+  readonly line: ResolvedLine
+  readonly progress: OrderLineProgress | null
+  readonly busy: string | null
+  readonly onFill: FillHandler
+  readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
+}) {
+  const claimed = progress?.declared_kind ?? null
+  const sealed = claimed === 'sealed' || claimed === 'accessory' || line.line.kind !== 'single'
+  const owed = line.outstanding
+  const filling = busy === `fill/${line.order_key}/${line.sku}`
+  const claiming = busy === `kind/${line.order_key}/${line.sku}`
+  const locked = busy !== null
+
+  /* THE COPIES WERE HERE AND HAVE LEFT, which is a different situation from a SKU this store has
+     never seen and takes a different pair of presses. `no_copies_on_hand` covers three truths at
+     once — this order's copy went out through `#/inventory`'s sale, another buyer took the last
+     one, or it was retired damaged — and `_reason`'s own comment says so. Only the operator knows
+     which, so both answers are offered and neither is assumed. */
+  const gone = line.reason === 'no_copies_on_hand'
+  if (gone) {
+    return (
+      <div className="orders-standdown">
+        {progress !== null && progress.by_hand > 0 ? (
+          <p className="orders-standdown-said">
+            {plural(progress.by_hand, 'copy', 'copies')} already closed by hand.
+          </p>
+        ) : null}
+        <div className="orders-standdown-row">
+          {owed < 1 ? null : (
+            <Button
+              variant="primary"
+              icon="hand"
+              busy={filling}
+              disabled={locked}
+              onClick={() => onFill(order, line, owed, 'sold_separately')}
+            >
+              I already sent {owed === 1 ? 'it' : `these ${owed}`}
+            </Button>
+          )}
+          {/* THE ONE PLACE `not_shipping` IS REACHABLE, and it is LINE-shaped: on a three-line
+              order this closes this line and leaves the other two exactly as they were. */}
+          <Button
+            icon="undo"
+            busy={busy === `close/${line.order_key}/${line.sku}`}
+            disabled={locked}
+            onClick={() => onCloseLine(order, line, 'not_shipping')}
+          >
+            It isn&apos;t shipping
+          </Button>
+        </div>
+        <p className="orders-standdown-note">
+          {/* THE COUNTS ARE THE EVIDENCE and they are already on the breakdown row above, so this
+              says what each press MEANS rather than repeating them. */}
+          “I already sent it” records that the copy went out for this order but left through the
+          sale on <code>#/inventory</code>, so nothing counted it here — it adds to the order&apos;s
+          count and marks nothing sold, because it already is. “It isn’t shipping” closes this line
+          claiming no copy went at all — a refund, a cancellation, or a card retired damaged
+          {order.lines.length === 1 ? '' : ', leaving the order’s other lines alone'}.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="orders-standdown">
+      {/* WHAT IS ALREADY RECORDED, DRAWN BEFORE THE CONTROL THAT ADDS TO IT. The fill is the one
+          write on this screen that is not idempotent — it has no capture id to compare — so the
+          only thing that can stop a double press is the operator seeing the first one. */}
+      {progress !== null && progress.by_hand > 0 ? (
+        <p className="orders-standdown-said">
+          {plural(progress.by_hand, 'copy', 'copies')} already closed by hand
+          {progress.reason === 'sealed' ? ' as a sealed product' : progress.reason === 'off_system' ? ', shipped from outside this store' : ''}.
+        </p>
+      ) : null}
+
+      <div className="orders-standdown-row">
+        {claimed === null ? (
+          <Button
+            icon="package"
+            busy={claiming}
+            disabled={locked}
+            onClick={() => onDeclareKind(order, line, 'sealed')}
+          >
+            Not a single
+          </Button>
+        ) : (
+          <Button
+            icon="undo"
+            busy={claiming}
+            disabled={locked}
+            onClick={() => onDeclareKind(order, line, null)}
+          >
+            Not sealed after all
+          </Button>
+        )}
+        {owed < 1 ? null : (
+          <Button
+            variant="primary"
+            icon="hand"
+            busy={filling}
+            disabled={locked}
+            onClick={() => onFill(order, line, owed, sealed ? 'sealed' : 'off_system')}
+          >
+            {/* THE FIGURE IS IN THE LABEL. This press closes a line the store cannot corroborate,
+                so the number it will write belongs where the thumb is rather than in a sentence
+                above it — `CLAUDE.md`'s money-moment rule applied to a count. */}
+            I shipped {owed === 1 ? 'this' : `these ${owed}`} by hand
+          </Button>
+        )}
+      </div>
+      <p className="orders-standdown-note">
+        {sealed
+          ? 'Recorded as a sealed product picked by hand. Nothing is marked sold — there is no card here to sell.'
+          : 'Recorded as shipped from stock this store never photographed. Nothing is marked sold — there is no card here to sell.'}
+      </p>
+    </div>
+  )
+}
+
 function OrderLineRow({
   order,
   line,
@@ -2530,6 +2979,9 @@ function OrderLineRow({
   claims,
   busy,
   onPull,
+  onFill,
+  onDeclareKind,
+  onCloseLine,
 }: {
   readonly order: OrderRow
   readonly line: ResolvedLine
@@ -2537,6 +2989,9 @@ function OrderLineRow({
   readonly claims: Claims
   readonly busy: string | null
   readonly onPull: PullHandler
+  readonly onFill: FillHandler
+  readonly onDeclareKind: KindHandler
+  readonly onCloseLine: CloseLineHandler
 }) {
   const remedy = orderReasonRemedy(line.reason)
   const head = headlineOf(line)
@@ -2599,6 +3054,23 @@ function OrderLineRow({
             <p className="orders-line-says">{orderReasonLabel(line.reason)}</p>
             {remedy === '' ? null : <p className="orders-line-remedy">{remedy}</p>}
             <p className="orders-line-breakdown">{breakdownOf(line)}</p>
+            {/* D113. The THREE reasons whose remedy is otherwise a dead end get the presses that
+                can actually move them. `short` is deliberately not among them: while copies are
+                still on hand the remedy really is to pull them, and a fill button there would
+                invite closing a line whose cards are sitting in box 3. */}
+            {line.reason === 'sku_unseen' ||
+            line.reason === 'not_a_single' ||
+            line.reason === 'no_copies_on_hand' ? (
+              <LineStandDown
+                order={order}
+                line={line}
+                progress={order.progress.find((row) => row.sku === line.sku) ?? null}
+                busy={busy}
+                onFill={onFill}
+                onDeclareKind={onDeclareKind}
+                onCloseLine={onCloseLine}
+              />
+            ) : null}
           </div>
           <code className="orders-tag orders-line-reason">{line.reason}</code>
         </div>

@@ -27,7 +27,7 @@
  * reconciles it against this directory in both directions. A comment that counts is a comment
  * that goes stale; the count is checked there, and this one deliberately does not make it.
  *
- * THE ORDER FETCH FILTER (D113) CAME HERE RATHER THAN TO ITS CALL SITE, which is the shape
+ * THE ORDER FETCH FILTER (D114) CAME HERE RATHER THAN TO ITS CALL SITE, which is the shape
  * the lint rule's own message asks for and the opposite of what `last-check` did. That key
  * predates this argument being written down; a new one goes where the reviewer is already
  * looking.
@@ -90,7 +90,7 @@ export function rememberRail(rail: boolean): void {
  * vocabulary, so a guess that drops an order is an envelope that never ships. The owner then
  * ruled out D91's two-press flow, and `Orders.tsx` answered the requirement by echoing back
  * every status the free preview returned — nothing dropped, and nothing narrowed either. This
- * key is the operator's own answer in place of that echo (D113).
+ * key is the operator's own answer in place of that echo (D114).
  *
  * IT IS A HABIT, NOT A RECORD. "I do not want to look at completed orders" is a statement
  * about how the person at this screen works, the same kind of fact as the remembered camera

@@ -821,6 +821,34 @@ ORDER_PULL_FIELDS = ("source", "number", "sku", "targets", "undo")
 ORDER_PULL_UNDO_FIELDS = ("undo", "targets")
 ORDER_PULL_TARGET_FIELDS = ("box", "index", "capture_id")
 
+# What `POST /orders/fill` and `POST /orders/line-kind` carry. The fill takes two tuples for
+# `ORDER_PULL_FIELDS`' reason — a body carrying `undo` AND a reason is a client that has
+# confused the directions, and a reversal does not need one.
+ORDER_FILL_FIELDS = ("source", "number", "sku", "count", "reason")
+ORDER_FILL_UNDO_FIELDS = ("source", "number", "sku", "count", "undo")
+ORDER_LINE_KIND_FIELDS = ("source", "number", "sku", "kind")
+
+# `POST /orders/close` stands whole orders down. Two tuples, `ORDER_PULL_FIELDS`' rule.
+# TWO SCOPES, ONE OPERATION, AND THEY ARE MUTUALLY EXCLUSIVE. `orders` stands every line of the
+# orders it names down; `lines` stands exactly the lines it names down and leaves their siblings
+# alone. Both call `Ledger.close_line` — only the scope differs — so a second route would be two
+# spellings of one write. A body carrying BOTH is a client that has not decided, and obeying it
+# with one silently ignored is how a refunded line takes its siblings with it.
+ORDER_CLOSE_FIELDS = ("orders", "reason")
+ORDER_CLOSE_UNDO_FIELDS = ("orders", "undo")
+ORDER_CLOSE_LINE_FIELDS = ("lines", "reason")
+ORDER_CLOSE_LINE_UNDO_FIELDS = ("lines", "undo")
+
+# A backlog ceiling. The owner's store had 69 orders needing this in one press on the day it
+# was built, so a limit under that would have made the feature useless on its own first use;
+# one that admits a whole exported history would take the store lock for the length of it.
+ORDER_CLOSE_LIMIT = 200
+
+# One press is one line's shortfall. A hand-fill has no `capture_id` to collide, so nothing
+# below it can catch a runaway count but `OverFulfilled` and this — and `OverFulfilled` is
+# bounded by the ORDER, which a fat-fingered paste could legitimately be under.
+ORDER_FILL_LIMIT = 50
+
 # A paste ceiling, not a page size. Two hundred orders is far past any day's work and well
 # short of a whole exported history, which is the accident this guards: one paste of
 # everything the marketplace ever sold would take the store lock for the length of it.
@@ -7835,7 +7863,16 @@ def _engine_order(
     """
     lines = []
     for line in record.lines:
-        claimed = {"kind": line.kind} if line.kind else {}
+        # THE OPERATOR'S CLAIM WINS OVER THE FEED'S SILENCE, AND NEVER OVER ITS WORD.
+        # `Ledger.declared_kind` is what somebody ticked on `#/orders`; `line.kind` is what
+        # the feed said. The feed is preferred where it said anything at all, because it is
+        # describing its own catalogue — the operator's claim exists for the case D113 was
+        # built for, which is a feed that says nothing (this one never does) and a line that
+        # is plainly not a card. Reversed, one stale tick would silently outrank a
+        # marketplace that later learned to classify its own products.
+        declared = ledger.declared_kind(record.key, line.sku)
+        chosen = line.kind or declared
+        claimed = {"kind": chosen} if chosen else {}
         lines.append(
             order_engine.OrderLine(
                 sku=line.sku,
@@ -8018,6 +8055,15 @@ def _order_progress(
                 "over": ledger.over(key, line.sku),
                 "copies": list(row.copies),
                 "pulled": _pulled_positions(inventory, row.copies),
+                # D113. `recorded` is the whole count and these two are how it was reached:
+                # `by_hand` copies closed with nothing in the store behind them, `reason`
+                # why that was honest. A screen drawing `recorded` alone cannot tell a
+                # pulled line from a hand-filled one, and the difference is the audit.
+                "by_hand": int(row.by_hand),
+                "reason": row.reason,
+                # The operator's claim about what this line IS, or None. Never the feed's —
+                # that rides on the line itself, and `_engine_order` prefers it.
+                "declared_kind": row.kind,
                 "at": row.at,
             }
         )
@@ -8892,6 +8938,409 @@ def do_order_pull(payload: dict) -> dict:
     return body
 
 
+def _fill_line_key(payload: dict) -> Tuple[str, str]:
+    """`(order key, sku)` off a body, or the refusal naming which part was missing.
+
+    Shared by the fill and the kind declaration: both address one LINE, and both address it
+    the same way `POST /orders/pull` does — in the body rather than the path, because an
+    order key is `source:number` and a number may legally contain a colon.
+    """
+    source = _order_text(
+        payload,
+        "source",
+        "source_required",
+        "Send `source` — the marketplace this order came from. It is half of the key "
+        "the line is recorded under.",
+    )
+    number = _order_text(
+        payload,
+        "number",
+        "number_required",
+        "Send `number` — the order's own identifier at that marketplace.",
+    )
+    sku = _order_text(
+        payload,
+        "sku",
+        "sku_required",
+        "Send `sku` — the TCGplayer Id of the line. Fulfilment is keyed by SKU because "
+        "that is the only line identity stable across two ingests.",
+    )
+    try:
+        return order_store.order_key(source, number), sku
+    except order_store.BadOrderKey as exc:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "order_key_invalid", str(exc)) from None
+
+
+def _fill_count(payload: dict) -> int:
+    """A positive whole number of copies, bounded. Never `int()` over whatever arrived."""
+    raw = payload.get("count")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "count_invalid",
+            "Send `count` — how many copies of this line are being closed by hand, as a "
+            "whole number. A string or a float is a caller sending a shape this route has "
+            "never seen, and it refuses rather than rounding one.",
+        )
+    if raw < 1:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "count_invalid",
+            f"`count` is {raw}. A fill of nothing is refused rather than recorded as a "
+            f"fill of nothing; to reverse one, send `undo`.",
+        )
+    if raw > ORDER_FILL_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "count_too_large",
+            f"{raw} copies in one press, and this route takes at most "
+            f"{ORDER_FILL_LIMIT}. A hand-fill carries no capture id, so nothing below this "
+            f"can tell a fat-fingered paste from a real armful.",
+        )
+    return int(raw)
+
+
+def do_order_fill(payload: dict) -> dict:
+    """`POST /orders/fill` — close copies of a line with no card behind them. D113.
+
+    THE WRITE `POST /orders/pull` CANNOT MAKE. That route records `capture_id`s and sells the
+    cards they name; this one records a COUNT and sells nothing, because there is nothing in
+    the store to sell. A sealed Holiday Calendar has no card record and never will; neither
+    has a single that shipped from a pile this rig never photographed. Three real orders on
+    the owner's store were permanently open for exactly this and no screen could move them.
+
+    IT TOUCHES NO CARD, AND THAT IS THE WHOLE SAFETY ARGUMENT. `do_order_pull` runs two
+    phases because it moves card state and a half-refused pull leaves the operator holding
+    cards with no record of which went. This route has no card to move, so it is one ledger
+    call inside one `Store.write()` — and it CANNOT reach a card, in `store/orders.py`'s own
+    idiom: `Ledger` holds no `Inventory` and imports nothing that does, so the capability is
+    absent rather than guarded.
+
+    THE REASON IS REQUIRED AND CLOSED. A hand-fill is the one write here with nothing to
+    check it against — no capture id to collide, no photograph, no slot — so the reason is
+    the entire audit trail. `FILL_REASONS` is validated HERE and not in `store/orders.py`,
+    which is `OrderLine.kind`'s rule exactly: that module is a document, and a closed
+    vocabulary in it refuses a store that learned a new word.
+
+    `undo` REVERSES BY COUNT AND CANNOT REACH A PULL. `Ledger.forget_fill` only ever
+    decrements `by_hand`, so a line carrying two pulled copies and one hand-filled one
+    reverses to two pulled copies. Reversing a pull is `POST /orders/pull {undo: true}`,
+    which needs the capture ids this route never had.
+    """
+    undo = _optional_flag(payload, "undo", "undo_invalid")
+    _reject_unknown(payload, ORDER_FILL_UNDO_FIELDS if undo else ORDER_FILL_FIELDS)
+
+    key, sku = _fill_line_key(payload)
+    count = _fill_count(payload)
+
+    reason = ""
+    if not undo:
+        reason = _order_text(
+            payload,
+            "reason",
+            "reason_required",
+            "Send `reason` — why this line closes with no card behind it. It is the only "
+            "record of that, so it is required rather than defaulted.",
+        )
+        if reason not in order_store.FILL_REASONS:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "fill_reason_invalid",
+                f"{reason!r} is not a reason this store records. The reasons are "
+                f"{', '.join(order_store.FILL_REASONS)} — {order_store.FILL_SEALED} for a "
+                f"line that is not a single and was picked by hand, "
+                f"{order_store.FILL_OFF_SYSTEM} for a single this store never "
+                f"photographed, {order_store.FILL_SOLD_SEPARATELY} for a copy that was "
+                f"here and left through #/inventory's sale rather than the order pull. A "
+                f"refund or a cancellation is none of them and is not closed here: "
+                f"`fulfilled` counts copies that went. Stand it down instead.",
+            )
+
+    with Store().write() as snapshot:
+        if undo:
+            moved = snapshot.ledger.forget_fill(key, sku, count)
+        else:
+            try:
+                moved = snapshot.ledger.record_fill(key, sku, count, reason)
+            except order_store.UnknownOrder:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "order_not_ingested",
+                    f"Order {key} is not in this ledger, so there is nothing to fill. "
+                    f"Paste or fetch it first — inventing it here would put a shipment on "
+                    f"record for a purchase nobody can produce.",
+                ) from None
+            except order_store.UnknownOrderLine:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "sku_not_on_order",
+                    f"Order {key} has no line for SKU {sku}. The buyer did not order it, "
+                    f"and fulfilment is keyed by SKU.",
+                ) from None
+            except order_store.OverFulfilled as exc:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT, "over_fulfilled", str(exc)
+                ) from None
+
+        return {
+            "undone": bool(undo),
+            "order_key": key,
+            "sku": sku,
+            "moved": int(moved),
+            "recorded": snapshot.ledger.fulfilled(key, sku),
+            "by_hand": int(snapshot.ledger.recorded(key, sku).by_hand),
+            "outstanding": snapshot.ledger.outstanding(key, sku),
+            "reason": snapshot.ledger.recorded(key, sku).reason,
+        }
+
+
+def do_order_close(payload: dict) -> dict:
+    """`POST /orders/close` — stand whole orders down, or reopen them. D113.
+
+    THE THIRD WAY A LINE STOPS OWING, AND IT COUNTS NOTHING. `POST /orders/pull` records
+    copies and sells the cards; `POST /orders/fill` records a count for copies that went
+    without a card record; this records NEITHER and says only that this store is no longer
+    accounting for the order. Measured 2026-09-06 on the owner's store: 69 of 83 open orders
+    were ones TCGplayer had already shipped, and the ledger had no way to say so.
+
+    WHY NOT A FILL, WHICH IS THE TEMPTING ONE-MECHANISM ANSWER. Many of those 69 shipped
+    using copies STILL sitting in the boxes as `identified` — this store never marked them
+    sold because the sale did not go through it. A fill would add to `fulfilled`, so the
+    count would read right while the card stayed on the shelf, live, and got offered to the
+    next buyer. The stand-down leaves both facts true and unmerged: the order is not ours,
+    the card is still here, and reconciling the second one is `#/inventory`'s job.
+
+    AND WHY THIS IS NOT DONE AT INGEST, WHICH IS WHAT WAS ASKED FOR. `store/orders.py`'s two
+    maps exist so `ingest` cannot write fulfilment at all, and `_order_row` states that
+    `open` is the ledger's answer and never the feed's `status` string. The status is
+    unvalidated and open-ended — the vocabulary was never published, and "everything that is
+    not Ready to Ship" would swallow a `Cancelled` the day that word appears and record it
+    as handled. So the status PROPOSES the set on the screen and the operator presses, which
+    is `make merge`'s bargain exactly: automate the lookup, never the decision.
+
+    ONE `Store.write()` FOR THE WHOLE PRESS, and every order is validated before any is
+    written — `do_order_pull`'s phase rule. A backlog press that stood 40 orders down and
+    then refused would leave the operator unable to tell which 40.
+    """
+    undo = _optional_flag(payload, "undo", "undo_invalid")
+
+    # WHICH SCOPE, DECIDED BEFORE ANYTHING IS VALIDATED. Both fields present is a client that
+    # has not decided, and picking one would stand lines down that nobody answered for.
+    by_line = "lines" in payload
+    if by_line and "orders" in payload:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "close_scope_ambiguous",
+            "Send `orders` OR `lines`, never both. `orders` stands every line of an order "
+            "down; `lines` stands exactly the lines it names down and leaves their siblings "
+            "alone. A body carrying both has not decided which, and obeying one of them "
+            "silently is how a refunded line takes the rest of the order with it.",
+        )
+    if by_line:
+        _reject_unknown(
+            payload, ORDER_CLOSE_LINE_UNDO_FIELDS if undo else ORDER_CLOSE_LINE_FIELDS
+        )
+    else:
+        _reject_unknown(payload, ORDER_CLOSE_UNDO_FIELDS if undo else ORDER_CLOSE_FIELDS)
+
+    raw = payload.get("lines" if by_line else "orders")
+    if not isinstance(raw, list) or not raw:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "lines_required" if by_line else "orders_required",
+            (
+                "Send `lines` — the lines to stand down, each as {source, number, sku}. "
+                if by_line
+                else "Send `orders` — the orders to stand down, each as {source, number}. "
+            )
+            + "A close of nothing is refused rather than recorded as a close of nothing.",
+        )
+    if len(raw) > ORDER_CLOSE_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_orders",
+            f"{len(raw)} orders in one press, and this route takes at most "
+            f"{ORDER_CLOSE_LIMIT}.",
+        )
+
+    reason = ""
+    if not undo:
+        reason = _order_text(
+            payload,
+            "reason",
+            "reason_required",
+            "Send `reason` — why these orders need nothing further. Nothing is counted "
+            "here, so the reason is the only record of what happened.",
+        )
+        if reason not in order_store.CLOSE_REASONS:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "close_reason_invalid",
+                f"{reason!r} is not a reason this store records. The reasons are "
+                f"{', '.join(order_store.CLOSE_REASONS)} — "
+                f"{order_store.CLOSE_SHIPPED_ELSEWHERE} for an order that went out without "
+                f"this store tracking the copies, {order_store.CLOSE_NOT_SHIPPING} for one "
+                f"that will never go. Neither claims a copy left.",
+            )
+
+    # `(order key, sku or None)`. `None` means every line of that order — the two scopes meet
+    # here and the loop below is the same either way.
+    aimed: List[Tuple[str, Optional[str]]] = []
+    what = "Line" if by_line else "Order"
+    for at, entry in enumerate(raw, start=1):
+        if not isinstance(entry, dict):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST,
+                "line_invalid" if by_line else "order_invalid",
+                f"{what} {at} of {len(raw)} is not an object. Nothing was written.",
+            )
+        _reject_unknown(entry, ("source", "number", "sku") if by_line else ("source", "number"))
+        source = _order_text(
+            entry, "source", "source_required",
+            f"{what} {at} of {len(raw)} carries no `source`.",
+        )
+        number = _order_text(
+            entry, "number", "number_required",
+            f"{what} {at} of {len(raw)} carries no `number`.",
+        )
+        sku = (
+            _order_text(
+                entry, "sku", "sku_required",
+                f"{what} {at} of {len(raw)} carries no `sku`. Fulfilment is keyed by SKU "
+                f"because that is the only line identity stable across two ingests.",
+            )
+            if by_line
+            else None
+        )
+        try:
+            aimed.append((order_store.order_key(source, number), sku))
+        except order_store.BadOrderKey as exc:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "order_key_invalid", str(exc)
+            ) from None
+
+    with Store().write() as snapshot:
+        ledger = snapshot.ledger
+
+        # VALIDATE EVERY ORDER BEFORE WRITING ONE. `Store.write()` commits only on a clean
+        # exit, so a raise below would discard the lot — but the operator would be told
+        # nothing about WHICH order was wrong, and a 69-order backlog press is exactly where
+        # that matters.
+        missing = [key for key, _ in aimed if ledger.orders.get(key) is None]
+        if missing:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "order_not_ingested",
+                f"{len(missing)} of {len(aimed)} are not in this ledger, so the whole press "
+                f"is refused and nothing was written: {', '.join(missing[:10])}"
+                + (" …" if len(missing) > 10 else ""),
+            )
+        # A SKU THE BUYER DID NOT ORDER IS REFUSED BEFORE ANY LINE MOVES, not skipped: a
+        # stand-down aimed at a line that is not there means the screen and the store disagree,
+        # and standing the others down would leave the operator believing all of them went.
+        astray = [
+            f"{key} SKU {sku}"
+            for key, sku in aimed
+            if sku is not None and ledger.orders[key].line_for(sku) is None
+        ]
+        if astray:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "sku_not_on_order",
+                f"{len(astray)} of {len(aimed)} name a SKU that order does not carry, so the "
+                f"whole press is refused and nothing was written: {', '.join(astray[:10])}"
+                + (" …" if len(astray) > 10 else ""),
+            )
+
+        moved = 0
+        lines = 0
+        for key, sku in aimed:
+            record = ledger.orders.get(key)
+            # `None` is every line of the order; a SKU is exactly that one. The two scopes are
+            # one loop, which is why they are one route.
+            wanted = record.lines if sku is None else [record.line_for(sku)]
+            touched = False
+            for line in wanted:
+                if undo:
+                    changed = ledger.reopen_line(key, line.sku)
+                else:
+                    changed = ledger.close_line(key, line.sku, reason)
+                if changed:
+                    lines += 1
+                    touched = True
+            if touched:
+                moved += 1
+
+        return {
+            "undone": bool(undo),
+            "scope": "lines" if by_line else "orders",
+            "orders": len(aimed),
+            "moved": int(moved),
+            "lines": int(lines),
+            "reason": reason or None,
+            # What the press was FOR, recomputed after it: how many orders still owe.
+            "still_open": len(ledger.unfulfilled()),
+        }
+
+
+def do_order_line_kind(payload: dict) -> dict:
+    """`POST /orders/line-kind` — record what the operator says a line IS. D113.
+
+    SEPARATE FROM THE FILL ON PURPOSE, AND THE SHIPPING LANE IS WHY. A sealed product needs
+    classifying BEFORE it goes out — that is what routes it to the parcel lane instead of an
+    envelope it does not fit — and it is filled only once it has. One route doing both would
+    make the routing answer unavailable until the moment it stopped mattering.
+
+    IT WRITES INTO THE FULFILMENT MAP AND NOT ONTO THE ORDER RECORD, which is
+    `store/orders.py`'s header argument in a second currency. `ingest` replaces an order
+    record wholesale on any content change, so a kind written onto the feed's copy survives
+    exactly until the marketplace moves the status string — at which point a sealed product
+    silently becomes a single again and starts sending the picker into the boxes after a
+    playmat.
+
+    THE VOCABULARY IS VALIDATED HERE. `pipeline/orders.py:OrderLine.__post_init__` raises
+    `UnknownLineKind` for anything outside `LINE_KINDS`, and that raise happens at RESOLVE
+    time — which would take the whole order screen down for one bad write, with nothing on
+    it saying which. `null` withdraws the claim and is how a mis-tick is undone.
+    """
+    _reject_unknown(payload, ORDER_LINE_KIND_FIELDS)
+    key, sku = _fill_line_key(payload)
+
+    raw = payload.get("kind")
+    if raw is not None and (
+        not isinstance(raw, str) or raw not in order_engine.LINE_KINDS
+    ):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "line_kind_invalid",
+            f"Kind {raw!r} is not one this repo resolves. The kinds are "
+            f"{', '.join(order_engine.LINE_KINDS)}, and `null` withdraws the claim so the "
+            f"feed's own word (or its silence) stands again. Nothing was written.",
+        )
+
+    with Store().write() as snapshot:
+        try:
+            snapshot.ledger.declare_kind(key, sku, raw)
+        except order_store.UnknownOrder:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "order_not_ingested",
+                f"Order {key} is not in this ledger, so there is no line to classify.",
+            ) from None
+        except order_store.UnknownOrderLine:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "sku_not_on_order",
+                f"Order {key} has no line for SKU {sku}. The buyer did not order it.",
+            ) from None
+
+        return {
+            "order_key": key,
+            "sku": sku,
+            "kind": snapshot.ledger.declared_kind(key, sku),
+        }
+
+
 # ------------------------------------------------------------------------------- handler
 
 
@@ -9754,6 +10203,15 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_order_ingest(self._body()))
             if path == "/orders/pull":
                 return self._json(HTTPStatus.OK, do_order_pull(self._body()))
+            # D113's two. `fill` closes a line with no card behind it and sells nothing;
+            # `line-kind` records the operator's own classification, which routes the
+            # shipment and must therefore be sayable BEFORE the fill rather than with it.
+            if path == "/orders/fill":
+                return self._json(HTTPStatus.OK, do_order_fill(self._body()))
+            if path == "/orders/line-kind":
+                return self._json(HTTPStatus.OK, do_order_line_kind(self._body()))
+            if path == "/orders/close":
+                return self._json(HTTPStatus.OK, do_order_close(self._body()))
             # D61's Export Shipping read. Free, re-runnable, and it spends nothing — what
             # it costs is memory holding buyer addresses, which the DELETE below is the way
             # back from.

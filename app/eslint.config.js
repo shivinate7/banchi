@@ -217,7 +217,7 @@ export default tseslint.config(
      * was argued informally before it was a
      * decision — the remembered deviceId and the photo rotation, both of which that file
      * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own —
-     * the theme, the rail, and D113's order status filter, which came here rather than to its
+     * the theme, the rail, and D114's order status filter, which came here rather than to its
      * call site precisely because this message asks for that. All of them are facts about the
      * machine this browser is running on: meaningless on the Fulfiller's laptop, actively wrong
      * if shared, and none about a card.

@@ -66,6 +66,12 @@ import type {
   ShippingBatch,
   ShippingForgotten,
   TrendsPayload,
+  OrderFillReason,
+  OrderFillResult,
+  OrderLineKind,
+  OrderLineKindResult,
+  OrderCloseReason,
+  OrderCloseResult,
 } from './types'
 
 /* The only module in this app that talks to the capture server.
@@ -2671,6 +2677,159 @@ async function pull(body: Record<string, unknown>): Promise<PullResult> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })) as PullResult
+}
+
+/**
+ * Close copies of an order line with NO card behind them (D113).
+ *
+ * THE WRITE `pullCopy` CANNOT MAKE, and the reason it exists. That one records `capture_id`s
+ * and sells the cards they name; a sealed Holiday Calendar has no card record and never will,
+ * and neither has a single that shipped from a pile this rig never photographed. Three real
+ * orders on the owner's store were permanently open for exactly that, with no control on any
+ * screen able to move them.
+ *
+ * NOT IDEMPOTENT, UNLIKE `pullCopy`. A capture id is an identity, so a repeated pull is a
+ * no-op by construction; a hand-fill has no identity to compare and two presses are two
+ * claims. It ADDS, `over_fulfilled` is the ceiling, and `undoFill` is how a mis-press is
+ * reversed. Draw what is already recorded rather than trusting the press to be safe twice.
+ *
+ * It sells nothing and touches no card — `Ledger` holds no `Inventory`, so the capability is
+ * absent rather than guarded. Refusals: `reason_required`, `fill_reason_invalid`,
+ * `count_invalid`, `count_too_large`, `order_not_ingested`, `sku_not_on_order`,
+ * `over_fulfilled`.
+ */
+export async function fillLine(
+  line: { source: string; number: string; sku: string },
+  count: number,
+  reason: OrderFillReason,
+): Promise<OrderFillResult> {
+  return (await request('/orders/fill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: line.source, number: line.number, sku: line.sku, count, reason }),
+  })) as OrderFillResult
+}
+
+/** `fillLine`'s reversal. It can only reach the hand-filled copies: a line carrying two
+ *  pulled copies and one hand-filled one reverses to two pulled copies. Reversing a PULL is
+ *  `undoPull`, which needs the capture ids this route never had. */
+export async function undoFill(
+  line: { source: string; number: string; sku: string },
+  count: number,
+): Promise<OrderFillResult> {
+  return (await request('/orders/fill', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: line.source, number: line.number, sku: line.sku, count, undo: true }),
+  })) as OrderFillResult
+}
+
+/**
+ * Record what the OPERATOR says a line is (D113). `null` withdraws the claim.
+ *
+ * SEPARATE FROM `fillLine` ON PURPOSE, AND THE SHIPPING LANE IS WHY. A sealed product needs
+ * classifying BEFORE it goes out — that is what routes it to the parcel lane rather than an
+ * envelope it does not fit — and it is filled only once it has. One call doing both would
+ * make the routing answer unavailable until the moment it stopped mattering.
+ *
+ * The claim lives in the fulfilment map, so it survives the next sync: `ingest` replaces the
+ * order record wholesale, and a kind written onto the feed's copy would die the moment the
+ * marketplace moved the status string. Refuses `line_kind_invalid` for a kind the resolver
+ * does not know — the raise it prevents happens at RESOLVE time and takes the whole screen
+ * down for one bad write.
+ */
+export async function declareLineKind(
+  line: { source: string; number: string; sku: string },
+  kind: OrderLineKind | null,
+): Promise<OrderLineKindResult> {
+  return (await request('/orders/line-kind', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: line.source, number: line.number, sku: line.sku, kind }),
+  })) as OrderLineKindResult
+}
+
+/**
+ * Stand whole orders down: they need nothing further from this store (D113).
+ *
+ * THE THIRD WAY A LINE STOPS OWING, AND IT COUNTS NOTHING. `pullCopy` records copies and
+ * sells them, `fillLine` records a count for copies that went without a card record, this
+ * records NEITHER. Measured 2026-09-06 on the owner's store: 69 of 83 open orders were ones
+ * TCGplayer had already shipped, and the ledger had no way to say so — they sorted oldest
+ * first and took 31 physical copies away from the orders that still needed picking.
+ *
+ * WHY NOT `fillLine` FOR THOSE, WHICH IS THE TEMPTING ONE-CALL ANSWER: many shipped using
+ * copies STILL in the boxes as `identified`, because the sale never went through this store.
+ * A fill would make the count read right while the card stayed on the shelf and got offered
+ * to the next buyer.
+ *
+ * A BULK CALL, UNLIKE EVERY OTHER WRITE ON THIS SCREEN. The backlog it exists for was 69
+ * orders on its first use, and 69 presses is not a control. Validate-all-then-write-all, so
+ * a refusal leaves nothing written and names which orders were wrong.
+ */
+export async function closeOrders(
+  orders: readonly { source: string; number: string }[],
+  reason: OrderCloseReason,
+): Promise<OrderCloseResult> {
+  return (await request('/orders/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orders: orders.map((o) => ({ source: o.source, number: o.number })), reason }),
+  })) as OrderCloseResult
+}
+
+/**
+ * Stand individual LINES down, leaving their siblings alone (D113).
+ *
+ * `closeOrders`' other scope, and the one a multi-line order needs. One refunded line on a
+ * three-line order must not take the other two with it — the order-shaped call stands every line
+ * down, which is right for a backlog of whole orders that already shipped and wrong for a single
+ * line nobody is sending.
+ *
+ * ONE ROUTE, TWO SCOPES, because only the scope differs — both call `Ledger.close_line` and a
+ * second route would be two spellings of one write. Sending `orders` AND `lines` in one body
+ * refuses as `close_scope_ambiguous` rather than picking one, and a SKU the buyer did not order
+ * refuses the whole press before any line moves.
+ */
+export async function closeLines(
+  lines: readonly { source: string; number: string; sku: string }[],
+  reason: OrderCloseReason,
+): Promise<OrderCloseResult> {
+  return (await request('/orders/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lines: lines.map((l) => ({ source: l.source, number: l.number, sku: l.sku })),
+      reason,
+    }),
+  })) as OrderCloseResult
+}
+
+/** `closeLines`' reversal. It reopens only the lines it names — a sibling the same press never
+ *  touched stays exactly as it was. */
+export async function reopenLines(
+  lines: readonly { source: string; number: string; sku: string }[],
+): Promise<OrderCloseResult> {
+  return (await request('/orders/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lines: lines.map((l) => ({ source: l.source, number: l.number, sku: l.sku })),
+      undo: true,
+    }),
+  })) as OrderCloseResult
+}
+
+/** `closeOrders`' reversal. Puts the orders back on the open list exactly as they were; it
+ *  touches no count, so a line that was also hand-filled keeps its fill. */
+export async function reopenOrders(
+  orders: readonly { source: string; number: string }[],
+): Promise<OrderCloseResult> {
+  return (await request('/orders/close', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orders: orders.map((o) => ({ source: o.source, number: o.number })), undo: true }),
+  })) as OrderCloseResult
 }
 
 /**

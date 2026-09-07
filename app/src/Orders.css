@@ -332,6 +332,37 @@
 .orders-line-remedy { font-size: var(--bn-fs-md); color: var(--bn-ink-2); margin-top: 2px; max-width: 70ch; }
 .orders-line-breakdown { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: var(--bn-1); font-variant-numeric: tabular-nums; }
 
+/* ---- the backlog prompt: orders the marketplace says are already gone (D113) ------------- */
+/* `Notice` stacks its children with no rhythm of its own, which is right for the one-paragraph
+   case it was built for. This one argues in two movements — what is wrong, then what the press
+   does and does not do — and they must not run together as a wall. */
+.orders-backlog p + p { margin-top: var(--bn-2); }
+.orders-backlog .orders-standdown-row { margin-top: var(--bn-3); }
+
+/* ---- the stand-down: the presses for a line no pull can reach (D113) -------------------- */
+/* A HAIRLINE ABOVE IT AND NOTHING ELSE. It sits inside the reason banner, which already carries
+   the tint, the icon and the padding — a second surface here would draw a panel inside a panel
+   for two buttons. The rule separates the remedy's sentence from the controls that act on it. */
+.orders-standdown {
+  margin-top: var(--bn-3);
+  padding-top: var(--bn-3);
+  border-top: 1px solid var(--bn-line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bn-2);
+}
+/* What is already recorded, ABOVE the control that adds to it: the fill is the one write on this
+   screen with no capture id to make it idempotent, so seeing the first press is what stops the
+   second. */
+.orders-standdown-said {
+  font-size: var(--bn-fs-md);
+  font-weight: 600;
+  color: var(--bn-ink);
+  font-variant-numeric: tabular-nums;
+}
+.orders-standdown-row { display: flex; flex-wrap: wrap; gap: var(--bn-2); align-items: center; }
+.orders-standdown-note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); max-width: 70ch; }
+
 /* ---- the walk plan: the whole order, boxes ranked by how much of it each satisfies ----- */
 .orders-plan {
   display: flex;
@@ -924,7 +955,7 @@
   .orders-empty-receipt { padding: 0 var(--bn-4) var(--bn-4); }
 }
 
-/* ---- the fetch filter: which statuses this press takes (D113) --------------------- */
+/* ---- the fetch filter: which statuses this press takes (D114) --------------------- */
 
 /* The control's own OFF state is the kit's default button; this is the ON state — the
    operator has narrowed something, and the button says so without a second badge beside it.
