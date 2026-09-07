@@ -1950,6 +1950,32 @@ themes, before this was written:
 and the foot reach the bottom of an 844px drawer at either size. What 40 buys is that there is one number, not
 two: the drawer and the sidebar are the same object and a second value is a second thing to keep
 in step, which is the defect §13 spent thirty-seven rounds learning.
+### The choice was made on WIDTH, and here is the height it was not made on
+
+**The head grows 60px to 121px, and on any phone shorter than about 800px the drawer's nav list
+scrolls.** That is worth writing down because the forced choice above was drawn at 390 and 320
+*wide*, both on tall viewports — §16's method applied to one axis. Measured afterwards, on the
+same demo store:
+
+| viewport | on main | at kanji 40 | at kanji 32 |
+| --- | --- | --- | --- |
+| 390 x 844 | no scroll | **no scroll** | no scroll |
+| 414 x 736 | 42px | **103px** | 85px |
+| 375 x 667 (SE) | 111px | **172px** | 154px |
+| 360 x 640 | 138px | **199px** | 181px |
+
+**Three things follow, and none of them reopens the size.** The nav ALREADY scrolled on every one
+of those phones — nine items, three group labels and a foot do not fit 667px of drawer, and did
+not before this. The lockup adds 61px to a scroll that existed. And **kanji 32 gives back 18 of
+those 61**, which is not a fix; it is the parity argument traded away for a sixth of the problem.
+
+**The foot never scrolls, and that is why this is a nuisance rather than a defect.** `.bn-drawer`
+is a flex column and `.bn-nav` is the only thing in it that scrolls, so `Cards to pull`, the theme
+toggle and the server line are pinned and reachable at every size measured above. Nothing became
+unreachable.
+
+**What would move it is the drawer's own density**, not the brand — the 44px rows, or the three
+group labels. That is a separate question and it is not this section's.
 
 **`every card has an address` left the product with this edit**, on the owner's ruling, and that
 is worth stating plainly because it was not a side effect. The drawer was its last home — the
