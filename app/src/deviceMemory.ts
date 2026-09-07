@@ -16,9 +16,16 @@
  * WHY THEY ARE IN THIS FILE RATHER THAN AT THEIR CALL SITES. `app/eslint.config.js` bans the
  * store rather than the key, because a selector cannot read a key passed as a const — so the
  * exception has to be a FILE, and a file the reviewer can read whole. `useCamera.ts` is the
- * other one and it holds the other two keys. Between them that is every `localStorage` call
- * in the app, and adding a third key means adding it here where the argument is, in front of
- * whoever is reviewing the diff.
+ * other one and it holds the remembered camera and the photo rotation. Adding a device-local
+ * key means adding it here, where the argument is, in front of whoever is reviewing the diff.
+ *
+ * THIS COMMENT CLAIMED THOSE TWO FILES HELD EVERY `localStorage` CALL IN THE APP, and that
+ * stopped being true on 2026-09-03. `Orders.tsx` holds a third key — `banchi.orders.last-check`,
+ * when THIS device last checked TCGplayer — at two call sites carrying an inline disable that
+ * argues for it, which the owner ruled on. So the shape is two exempt FILES plus one argued
+ * call site, and the roster of all five keys lives in `CLAUDE.md` where `make docs-audit`'s
+ * `storage keys` row reconciles it against this directory in both directions. A comment that
+ * counts is a comment that goes stale; the count is checked now, and this one no longer makes it.
  *
  * EVERY ACCESS IS WRAPPED. Private windows, cleared site data and browsers set to block
  * storage all throw on the accessor itself, and a preference is never worth a blank screen.

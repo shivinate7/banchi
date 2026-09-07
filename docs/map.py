@@ -1347,11 +1347,20 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
+                #
+                # D27 AND D94 JOIN FOR `storage keys`, and both are load-bearing rather than
+                # illustrative. D27 is the carve-out the row enforces — which browser-storage
+                # keys are permitted and the promise, made in that entry, that they are named
+                # in the documentation. D94 is why the row says nothing about the PREFIX: the
+                # product is Banchi and everything beneath it keeps its name, so `banchi.*`
+                # and `pkmnscan.*` both stand and a row demanding one of them would be
+                # demanding a rename that silently discards what a browser holds under the
+                # old spelling.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D31", "D39", "D49", "D50",
-                                "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72",
-                                "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90", "D92",
-                                "D96", "D101", "D102", "D104"],
+                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D49",
+                                "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70",
+                                "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90",
+                                "D92", "D94", "D96", "D101", "D102", "D104"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -2654,9 +2663,15 @@ COMPONENTS = [
                                             "two in `kit/index.tsx`; exempting either would "
                                             "have waved through anything those files ever "
                                             "store, and `App.tsx` is the shell. This module and "
-                                            "`src/useCamera.ts` are the two named exceptions "
-                                            "and between them hold every `localStorage` call in "
-                                            "the app. D27 permits only facts about THIS "
+                                            "`src/useCamera.ts` are the two named FILE "
+                                            "exceptions; `src/Orders.tsx` holds a third key at "
+                                            "two call sites carrying an inline disable, on the "
+                                            "owner's ruling of 2026-09-03, so the count is five "
+                                            "and not four. CLAUDE.md publishes the roster and "
+                                            "`make docs-audit`'s `storage keys` row reconciles "
+                                            "it against this directory in both directions — the "
+                                            "sentence said four and listed five for three days, "
+                                            "and named this file nowhere. D27 permits only facts about THIS "
                                             "MACHINE: a theme is chosen for the room the "
                                             "operator is sitting in, and D13 keeps everything "
                                             "about a card on the Mac so two devices cannot "
@@ -2667,7 +2682,13 @@ COMPONENTS = [
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
                                          "remembered device that refuses to fall back to another",
-                                 "governed_by": ["D13"],
+                                 # D27 and D94 for the two `localStorage` keys this file holds
+                                 # and the argument beside them: D27 permits the store only for
+                                 # facts about THIS MACHINE, and D94 is what the 2026-09-06
+                                 # rename off the `pkmnscan.` prefix had to be argued against —
+                                 # the owner overruled it for storage keys specifically, and
+                                 # this file carries the whole account of what that cost.
+                                 "governed_by": ["D13", "D27", "D94"],
                                  "note": "`started`, `missing` and `error` are three different "
                                          "facts and the screen draws them differently: not "
                                          "asked for yet, not connected, and asked for and "
@@ -3760,7 +3781,7 @@ COMPONENTS = [
                                      "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
-                                          "`pkmnscan.run-scope`, D27's carve-out. NOT CLEARED BY "
+                                          "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
                                           "BEING READ, because a reload during a live run is "
                                           "ordinary and a read-once handoff would silently widen "
                                           "what the next press pays for; cleared by the operator, "

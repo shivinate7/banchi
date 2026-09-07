@@ -302,7 +302,7 @@ export function describeFailure(err: unknown): Failure {
 export function photoUrl(box: number, index: number): string {
   /* THE DEMO BUILD HAS NO PHOTO SERVICE, so the same address resolves to a bundled file.
    * `BASE_URL` rather than a leading slash: a static host serves the demo from a
-   * subdirectory (`/pkmnscan/` on GitHub Pages), and an absolute path would 404 on every
+   * subdirectory (`/banchi/` on GitHub Pages), and an absolute path would 404 on every
    * photograph there while working perfectly at the root — the failure that only appears
    * once it is published. `.jpg` is appended here and nowhere else; the seed writes the
    * store index undecorated, so this stays D52's contract exactly. */

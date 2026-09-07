@@ -607,19 +607,45 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Four keys are stored on the device, and each is a fact about THIS machine rather than
-  about a card**: `pkmnscan.capture.deviceId` and `pkmnscan.capture.rotation`
+  **Five keys are stored on the device, and each is a fact about THIS machine rather than
+  about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
-  `banchi.theme` and `banchi.rail` (`app/src/kit/index.tsx` and `App.tsx` — how this browser
-  is dressed), and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS device last
-  checked TCGplayer, so a fetch receipt can say what is new since; the owner ruled it belongs
-  there on 2026-09-03). None of them is a card, a position or an order.
+  `banchi.theme` and `banchi.rail` (`app/src/deviceMemory.ts` — how this browser is dressed),
+  and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS device last checked
+  TCGplayer, so a fetch receipt can say what is new since; the owner ruled it belongs there
+  on 2026-09-03). None of them is a card, a position or an order.
+
+  **This sentence said FOUR and listed five, from 2026-09-03 until 2026-09-06**, and it named
+  the wrong two files for the theme and the rail — `kit/index.tsx` and `App.tsx` are where
+  those preferences are USED, and `deviceMemory.ts` is the module that exists to hold them,
+  created for that reason by the lint rule below. Both errors are the shape this repo makes
+  mechanical rather than hand-corrects: `make docs-audit`'s `storage keys` row reconciles the
+  count, the roster and the files this paragraph names against `app/src`, in both directions.
+
+  **A SEPARATE STORE HOLDS EIGHT MORE, AND THEY ARE NOT THESE.** D27's carve-out is
+  `sessionStorage` — the capture screen's claims about the stack at the lens
+  (`banchi.session.box`, `.setHint`, `.finish`, `.game`, `.rarityClaim`, `.product`,
+  `.captureId`) and D39's handoff (`banchi.run-scope`). A new tab is a new shift and closing
+  the browser ends one, which is the whole reason they are in the other store.
+
+  **EVERY BROWSER-STORAGE KEY IS `banchi.*`, AS OF 2026-09-06** (D27, amended). Ten of the
+  thirteen were `pkmnscan.*` until that day — not by a rule, but because that is what a key
+  written before the rebrand got — and the owner renamed them **with no migration**, having
+  declined a read-time fallback on the ground that a fallback can never safely be deleted
+  afterwards. The old values are abandoned in place. **This does not reopen D94**, which is
+  about the checkout, the CLI, the packages, the store, the wire and `PKMNSCAN_HOME`: a
+  storage key is a name this product writes and no other program reads, which is what
+  separates it from every item on that list. What it cost is in D27 by name — two presses on
+  the rig, six on an open capture tab, and one key (`captureId`) whose loss D27 itself says
+  can burn a position if a capture was in flight at the moment the new build loaded.
 
   **The rule has a reader now.** `app/eslint.config.js`'s `no-restricted-syntax` bans
-  `localStorage` in `app/src`, with `useCamera.ts` exempted by name and the other call sites
-  carrying an inline disable that states the argument. A guard that is routinely disabled
-  inline is one the next person disables without reading, so the exemptions are few and each
-  one says why beside the key.
+  `localStorage` in `app/src`, with `useCamera.ts` and `deviceMemory.ts` exempted by name and
+  `Orders.tsx`'s two call sites carrying an inline disable that states the argument. A guard
+  that is routinely disabled inline is one the next person disables without reading, so the
+  exemptions are few and each one says why beside the key. **The lint rule matches the STORE
+  and not the key**, so it can say nothing about which keys exist or what they are called;
+  that is what the `storage keys` audit row is for.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
   by SKU with `Add to Quantity` = copy count, capped at the live cap. **That cap is
   `policy.live_cap` in `inventory/prices.json` as of 2026-09-06** — store-wide, overridable
