@@ -159,4 +159,47 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
+        # NODE 20, LIKE EVERY OTHER PIN IN THIS REPO, AND THE DATE IS 2026-09-23.
+        # All eight `uses:` lines here and in `check.yml` target the Node 20 runtime.
+        # GitHub force-runs them on Node 24 and prints a deprecation annotation on every
+        # run; both workflows pass and have passed throughout. This step gets the comment
+        # because it is the only one that CANNOT be proven before it is merged — the
+        # `github-pages` environment carries a deployment-branch policy naming `main`
+        # alone, so the deploy job is rejected before the action loads on any branch a PR
+        # could live on. Moving it means finding out in production, over the one thing
+        # here a stranger can see.
+        #
+        # THE REMOVAL TAKES THE OPT-OUT, NOT THE FORCE-RUN, and getting that backwards is
+        # what this comment exists to prevent. GitHub's changelog, editor's note dated
+        # 2026-08-25: "we upgrade the runner and remove Node20 on September 23rd, 2026."
+        # What that removes is `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true`, the escape
+        # hatch back TO Node 20. Actions declaring node20 keep being force-run on Node 24
+        # — already the default since 2026-06-16, already what every run here does, and
+        # already green. This repo sets that variable nowhere, so it is already living on
+        # the far side of the date.
+        #
+        # SO THE EXPECTED COST OF SEPT 23 IS NOTHING, which is the opposite of what an
+        # earlier draft of this comment said. PR #202 (closed unmerged, branch preserved
+        # at b538944) carried the sentence "when that forcing ends, THIS STEP FAILS and
+        # the demo stops republishing." That reads the removal backwards and should not be
+        # acted on.
+        #
+        # THE CAVEAT, because it is the whole reason this is a comment and not a bump:
+        # GitHub's changelog does NOT state post-removal behaviour outright. The reading
+        # above rests on the annotation's own wording ("being forced to run on Node.js
+        # 24"), on the opt-out existing to go the other way, and on secondary sources. It
+        # is well supported and it is not airtight.
+        #
+        # WHAT TO DO ON 2026-09-23: watch the first run of this workflow on main and read
+        # the annotations. Still warning and still green means the reading held, and every
+        # pin here becomes optional cleanup with no deadline on it. Either job failing
+        # means it did not, and `b538944` has the floor set ready — checkout@v5,
+        # setup-python@v6, setup-node@v5, upload-pages-artifact@v5, each proven green on a
+        # real run, with this step's own move to v5 the only part still unexercised.
+        #
+        # WHY v4 IS STILL HERE AT ALL. A pin moves to the first major that clears the
+        # warning and no further, and only if the move can be proven on a real run first.
+        # This one cannot be, and there is now no dated reason to take it anyway. When it
+        # does move, v5 is the Node 24 move plus a removed file-permissions error message;
+        # no input changed, and this step passes none of the seven either major accepts.
         uses: actions/deploy-pages@v4
