@@ -465,6 +465,14 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: color var(--bn-t-fast) var(--bn-ease);
 }
 .bn-tab:hover { color: var(--bn-ink); }
+/* THE SELECTED TAB DOES NOT ANSWER A HOVER, AND THE OWNER RULED THAT CORRECT ON 2026-09-07.
+   It is inert for a reason that is NOT the nav link's: there is no specificity tie here and no
+   rule losing one. `:hover` sets `--bn-ink` and a selected tab is already `--bn-ink`, so hover
+   has nothing left to change. The fix would therefore have to be a NEW property rather than a
+   stronger value, and the only one available is a background — which these tabs do not have.
+   They are underline-styled and carry no ground at all, so a plate appearing under the pointer
+   changes their character more than it fixes; the underline already says which tab is live.
+   Rendered both ways in both themes and chosen from the images (D50). */
 .bn-tab[aria-selected='true'], .bn-tab[aria-current] { color: var(--bn-ink); }
 .bn-tab::after {
   content: '';

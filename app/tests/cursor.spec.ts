@@ -384,6 +384,24 @@ test('a control that answers the pointer eases into it', async ({ page }) => {
         if (!repaints.length) continue
         walked++
 
+        /* A BACKGROUND *IMAGE* IS NOT ANIMATABLE, AND THIS ARM EXISTS BECAUSE THE CHECK BELOW
+           WAVED ONE THROUGH. `background` is a shorthand: a rule setting it to a gradient sets
+           `background-image`, and interpolation from `none` to a gradient is DISCRETE, so the
+           paint lands in one frame no matter what the transition says. The `eased()` test maps
+           the shorthand to `background-color`, finds that transitioned, and passes — which is
+           exactly what happened to the first draft of `.bn-nav-link[aria-current='page']:hover`
+           on 2026-09-07. It snapped, this file was green, and only a mid-transition sample
+           caught it. A guard that cannot see the property that actually changed is the same
+           class of hole as a roster that has stopped listing a route. */
+        const bg = rule.style.getPropertyValue('background') + ' ' +
+                   rule.style.getPropertyValue('background-image')
+        if (/gradient|url\(|image-set/i.test(bg)) {
+          bad.push(`${rule.selectorText}  paints a background IMAGE on hover — ` +
+            `\`background-image\` interpolates discretely, so this lands in one frame however it ` +
+            `is transitioned. Composite the layer with an inset \`box-shadow\` instead.`)
+          continue
+        }
+
         /* THE ELEMENT THE RULE PAINTS IS THE ONE THAT HAS TO CARRY THE TRANSITION, and for a
            descendant rule that is not the element carrying `:hover`. Dropping the pseudo-class
            turns `.a:hover .b` into `.a .b`, which selects exactly what the rule paints, and
