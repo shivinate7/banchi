@@ -900,6 +900,10 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
 /* docs/specs/logo.md section 16: the open sidebar draws the lockup at kanji 40, and the rail keeps
    the mark at the 32 it already ships. Named here because they are the two numbers the shell
    chooses; everything derived from them comes out of `lockupGeometry.ts`. */
+/* What the browser tab says. `app/index.html`'s <title> is the same string, for the frame
+   before React runs; there is no way to share a constant with static HTML. */
+const BROWSER_TITLE = '番地 banchi'
+
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
 
@@ -1141,7 +1145,13 @@ export function App() {
 
   useEffect(() => {
     const name = route?.label ?? 'Not found'
-    document.title = route?.persona === 'fulfiller' ? 'Cards to pull' : route?.path === '/' ? 'Banchi' : `${name} · Banchi`
+    /* THE BROWSER HEADER READS `番地 banchi` — the kanji, then the name in lowercase. It is the
+       tab's own vocabulary and nothing on screen: the sidebar draws the lockup, the phone bar and
+       the drawer keep their own wordmark, and the Fulfiller's tab still says what he is doing
+       rather than whose product it is. `app/index.html` carries the same string for the moment
+       before React boots. */
+    document.title = route?.persona === 'fulfiller' ? 'Cards to pull'
+      : route?.path === '/' ? BROWSER_TITLE : `${name} · ${BROWSER_TITLE}`
   }, [route])
 
   useEffect(() => {

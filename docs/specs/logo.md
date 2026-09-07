@@ -1805,7 +1805,7 @@ in `bluesteel`'s own metal, with no tile, no card and no sheen.
 | shape | the mark's L — corner (22.609, 16.252), arms 20.82 × 25.65, radius 8 |
 | weight | **4.2**, §11's small cut |
 | taper | **tip 0.15, ramp 0.70** — §13's lockup values, read from `lockupGeometry.ts` |
-| paint | `bluesteel.bracket`, `#FFFFFF #B8C8D8 #F2F8FF #8FA4B8` |
+| paint | **flat `#A8873F`** — see "the paint is gold, and flat" below |
 | ground | **none** |
 
 ### Why the empty slot at all
@@ -1826,6 +1826,42 @@ The owner chose the taper knowing that. It is the drawing the open lockup makes,
 unmistakably better at 32 — where a Retina tab actually renders — and the tab is the one surface
 where the mark is decoration rather than a control. **§11's finding is not overturned**: it governs
 `Logo`, every in-app surface and the app icons, all of which stay untapered below 64px.
+
+### The paint is gold, and flat
+
+**Settled 2026-09-06, after the first version shipped in silver and was wrong on half the
+world's tab bars.** The tab carries no ground, so its paint has to survive both — and *neither*
+of the mark's existing treatments does:
+
+| paint | dark tab bar | light tab bar |
+| --- | --- | --- |
+| `bluesteel.bracket` silver — `#FFFFFF` … `#8FA4B8` | reads | **near-invisible** |
+| ink `#0f1217` | **near-invisible** | reads |
+| gold `#C0A254` / **`#A8873F`** | reads | reads |
+
+**Gold is the only paint in §9's vocabulary whose mid-tones sit in the middle of the luminance
+range**, which is exactly the property a groundless icon needs. Silver's four stops are
+`#FFFFFF`, `#B8C8D8`, `#F2F8FF`, `#8FA4B8` — three of them near-white. Black has the same
+problem inverted. This was drawn before it was chosen: silver, ink, ink-with-gold-tips, the
+`whiteGold` gradient, flat `#C0A254` and flat `#A8873F`, all at true 16/20/32/48 on both bars.
+
+**And it is FLAT, not the gradient.** `whiteGold`'s four stops were drawn too. At 16px the
+bracket pair is about twelve pixels of ink and a four-stop gradient across it resolves to noise;
+the flat fill is the only version that is unambiguous at every size on both grounds. `#A8873F` is
+one shade below §9's `#C0A254` — the deeper value holds the light bar better and costs a little
+on dark, and the light bar is where the groundless icon was failing.
+
+**`#A8873F` IS NOT IN §9, AND THAT IS DELIBERATE.** It is not one of the six locked marks'
+colours and must not be added to them: the marks are an illustration's palette (D102) and this is
+one surface's paint. It lives here, in this table, and `scripts/build-mark.mjs` READS it out of
+this section rather than holding its own copy — the same arrangement `tip` and `tl` already have
+with `lockupGeometry.ts`. `make docs-audit`'s `rail mark` row reconciles the two.
+
+**What this gives up:** the tab is now the one Banchi surface not drawn in a metal. The mark, the
+lockup, the rail and the app icons all keep their gradient; the tab trades it for legibility it
+could not otherwise have. Two ways of keeping the metal were drawn and declined — a dark tile
+(a ground the owner did not want) and two icons chosen by `sizes` (the tab would not always look
+the same).
 
 ### No tile, and the cost is named
 
