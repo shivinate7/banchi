@@ -7543,6 +7543,7 @@ LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
 SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
 MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
 LOCKUP_TSX_ = ROOT / "app" / "src" / "kit" / "Lockup.tsx"
+FAVICON = ROOT / "app" / "public" / "favicon.svg"
 MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
 
 _LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
@@ -7672,8 +7673,29 @@ def check_rail_mark(report: Report) -> None:
                 "without it the shell can only crossfade two drawings, which is what section 16 "
                 "recorded as unavoidable and it was not.",
             ))
+    # THE BROWSER TAB IS THE FOURTH SIDE, settled in section 18: the empty slot, the mark's own L,
+    # no tile and no card. It is generated, so what can go wrong is a regeneration that quietly
+    # reverts it to the whole mark — which would look entirely plausible and which no other row
+    # here can see. A `<rect>` is the tell: the tile's sheen band and the card are both rects and
+    # the bracket pair contains none.
+    if exists(FAVICON):
+        fav = read(FAVICON)
+        if "<rect" in fav:
+            problems.append(Finding(
+                rel(FAVICON),
+                "the browser tab is drawing a rect. Section 18 settles it as the EMPTY SLOT — the "
+                "bracket pair alone, no tile, no card, no sheen — and every one of those three is "
+                "a rect. The app icons keep the full mark; this file is the tab.",
+            ))
+        if "stop-color" not in fav:
+            problems.append(Finding(
+                rel(FAVICON),
+                "the browser tab has no gradient stops. Section 18 paints it in `bluesteel`'s own "
+                "bracket metal, which is what makes it the collapsed sidebar rather than a flat "
+                "outline of it.",
+            ))
     report.add("rail mark", MECHANICAL, problems,
-               "the rail bracket is the shipped mark, in the sheet and at both ends of the morph")
+               "the rail bracket is the shipped mark — in the sheet, at both ends of the morph, and on the tab")
 
 
 def check_lockup_params(report: Report) -> None:
