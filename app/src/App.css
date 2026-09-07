@@ -188,14 +188,11 @@
 .bn-brand:hover .bn-brand-chevron,
 .bn-brand:focus-visible .bn-brand-chevron { opacity: 1; color: var(--bn-ink); }
 
-.bn-brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
-.bn-brand-name {
-  font-family: var(--bn-font-display);
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.bn-brand-tag { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-weight: 500; letter-spacing: 0.02em; white-space: nowrap; }
+/* `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag` were deleted on 2026-09-07 (logo.md
+   section 19). The sidebar stopped drawing them when the lockup landed and the phone drawer was
+   their last render site; the lockup replaces the mark, the wordmark and the tagline together,
+   which is section 16's rule and now holds at every width. `every card has an address` is no
+   longer copy anywhere in the product — Home's lede carries the sentence a person reads. */
 
 
 .bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
@@ -296,7 +293,6 @@
    width cannot reach into. Same resting positions, to the pixel. */
 .bn-shell[data-rail='true'] .bn-side { padding: var(--bn-3) var(--bn-2); }
 .bn-shell[data-rail='true'] .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
-.bn-shell[data-rail='true'] .bn-side .bn-brand-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link .bn-kbd,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-badge,
@@ -375,7 +371,7 @@
   .bn-side { padding: var(--bn-3) var(--bn-2); }
   /* the spine, again — see the rail block above. This breakpoint has no `data-rail` at all. */
   .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
-  .bn-side .bn-brand-text, .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge,
+  .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge,
   .bn-side .bn-side-foot-text, .bn-side .bn-brand-chevron { display: none; }
   .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
   .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0; }
@@ -405,7 +401,13 @@
     padding-top: env(safe-area-inset-top);
   }
   .bn-topbar-title { font-family: var(--bn-font-display); font-weight: 700; font-size: var(--bn-fs-lg); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bn-topbar-brand { display: flex; align-items: center; justify-content: center; gap: var(--bn-2); min-width: 40px; min-height: 40px; margin-left: -7px; color: var(--bn-ink); text-decoration: none; font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); letter-spacing: -0.02em; }
+  /* THE BAR IS THE RAIL, ONE BREAKPOINT DOWN (logo.md section 19). `--bn-brand-open: 0` is what
+     makes the shared slot draw the empty brackets rather than the lockup — the variable is
+     inherited, so this one declaration reaches `.bn-brand-slot` and every rule keyed on it, and
+     there is no second drawing and no JSX branch. The type is at opacity 0 by the same token, so
+     nothing here has to know the lockup has type at all.
+     The typography that used to sit on this rule went with the wordmark it styled. */
+  .bn-topbar-brand { --bn-brand-open: 0; display: flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; margin-left: -4px; color: var(--bn-ink); text-decoration: none; }
 }
 .bn-drawer {
   width: min(300px, 86vw);
@@ -417,7 +419,13 @@
 .bn-drawer .bn-nav-link { height: 44px; font-size: var(--bn-fs-base); }
 .bn-drawer .bn-nav-link .bn-kbd { opacity: 1; }
 .bn-drawer .bn-side-foot .bn-btn, .bn-drawer .bn-server { height: 44px; }
-.bn-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--bn-2) var(--bn-3); }
+/* THE HEAD HOLDS A BLOCK, NOT A ROW. It was a 30px mark beside two lines of type, so
+   `align-items: center` was right; the lockup is 128 x 93 and the Close button belongs at the
+   top of it rather than halfway down its side. `.bn-brand` keeps `width: 100%` from its own
+   reset, which would push Close off the edge here — the drawer's brand is a link to `#/` and
+   not the collapse control, so it takes only the width its slot needs. */
+.bn-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-2); padding: 0 var(--bn-2) var(--bn-3); }
+.bn-drawer-head .bn-brand { width: auto; min-height: 0; }
 
 /* ---- command palette ---------------------------------------------------------- */
 .bn-cmdk {
@@ -767,8 +775,12 @@
 }
 
 
-/* A phone has no rail, and `Drawer` mounts INSIDE .bn-shell — so without this a user who collapsed
-   on desktop would inherit a railed switch into the mobile drawer's own brand row. */
+/* THE SHELL'S DEFAULT AT THIS WIDTH IS OPEN, AND THE BAR OPTS OUT OF IT. `Drawer` mounts INSIDE
+   .bn-shell, so without this a user who collapsed the sidebar on desktop would inherit a railed
+   switch into the drawer's brand row. What changed on 2026-09-07 is that a phone DOES have a
+   rail now — the top bar is one (logo.md section 19) — and it says so itself, on
+   `.bn-topbar-brand`, rather than being carved out here. Two surfaces, one variable, each
+   naming its own state where that state is read. */
 @media (max-width: 767px) {
   .bn-shell, .bn-shell[data-rail='true'] { --bn-brand-open: 1; }
 }

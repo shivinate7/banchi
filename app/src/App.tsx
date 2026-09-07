@@ -926,6 +926,37 @@ const TITLE_DWELL = { screen: 6000, name: 4000 } as const
 
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
+/* THE DRAWER IS THE SIDEBAR ON A PHONE, so it draws the sidebar's number (logo.md section 19).
+   Both were rendered at 390 and 320 in both themes before this was written; 32 fits with room and
+   reads as a smaller copy, 40 owns the head the way it owns the sidebar's. */
+const DRAWER_KANJI = 40
+
+/* ONE BRAND SLOT, THREE PLACES (logo.md section 19). The sidebar, the phone's top bar and the
+   phone's drawer all draw the SAME `Lockup` — what differs is `--bn-brand-open`, which App.css
+   sets per surface, and which the morph reads as the slot's own width. There is no second
+   drawing and no branch here: the bar renders this railed and the drawer renders it open.
+   The slot's two sizes come from the GENERATED block rather than from tokens: a token would be a
+   second copy of a number `lockupGeometry.ts` already carries, and a value typed twice is the
+   defect section 13 spent thirty-seven rounds learning. */
+function BrandSlot({ kanji = SIDEBAR_KANJI }: { readonly kanji?: number }) {
+  return (
+    <span
+      className="bn-brand-slot"
+      style={{
+        ['--bn-lockup-w' as string]: `${(kanji * BLOCK.w) / BLOCK.ref}px`,
+        ['--bn-lockup-h' as string]: `${(kanji * BLOCK.h) / BLOCK.ref}px`,
+        ['--bn-rail-mark' as string]: `${RAIL_MARK}px`,
+      }}
+    >
+      {/* ONE DRAWING, NOT TWO. The rail's empty slot is this same lockup with its bracket morphed
+          and its type faded out — logo.md section 1: "with the card removed the same brackets
+          become an empty slot, which is the in-product mark." It was a second component
+          crossfading past this one until the generator was taught to emit both ends of the
+          bracket at one topology; section 16 records why that was thought impossible. */}
+      <Lockup size={kanji} railSize={RAIL_MARK} className="bn-brand-lockup" decorative />
+    </span>
+  )
+}
 
 /* THE TABLET RAIL IS A MEDIA QUERY AND REACT CANNOT SEE IT. App.css rails the shell between 768
    and 1023 by breakpoint, ignoring `data-rail` entirely — so a toggle offered at that width would
@@ -967,26 +998,7 @@ function Sidebar({
   onToggleTheme: () => void
   onPalette: () => void
 }) {
-    /* the slot's two sizes come from the GENERATED block rather than from tokens: a token would be
-     a second copy of a number `lockupGeometry.ts` already carries, and a value typed twice is the
-     defect section 13 spent thirty-seven rounds learning */
-  const brandSlot = (
-    <span
-      className="bn-brand-slot"
-      style={{
-        ['--bn-lockup-w' as string]: `${(SIDEBAR_KANJI * BLOCK.w) / BLOCK.ref}px`,
-        ['--bn-lockup-h' as string]: `${(SIDEBAR_KANJI * BLOCK.h) / BLOCK.ref}px`,
-        ['--bn-rail-mark' as string]: `${RAIL_MARK}px`,
-      }}
-    >
-      {/* ONE DRAWING, NOT TWO. The rail's empty slot is this same lockup with its bracket morphed
-          and its type faded out — logo.md section 1: "with the card removed the same brackets
-          become an empty slot, which is the in-product mark." It was a second component
-          crossfading past this one until the generator was taught to emit both ends of the
-          bracket at one topology; section 16 records why that was thought impossible. */}
-      <Lockup size={SIDEBAR_KANJI} railSize={RAIL_MARK} className="bn-brand-lockup" decorative />
-    </span>
-  )
+  const brandSlot = <BrandSlot />
 
   return (
     <aside className="bn-side">
@@ -1064,12 +1076,18 @@ function Sidebar({
 
 /* ---- phone chrome ------------------------------------------------------------------------------- */
 /* Every owner screen draws its own h1 directly under this bar, so the bar carries the
-   wordmark rather than repeating (or, on Codes, contradicting) the screen's name. */
+   wordmark rather than repeating (or, on Codes, contradicting) the screen's name.
+   THE MARK HERE IS THE EMPTY SLOT, NOT THE TILE (logo.md section 19). This bar is the rail's
+   own case one breakpoint down — 52px of height against the rail's 64px width — and the lockup
+   is refused by both for the same arithmetic: its floor is kanji 32, which is a 102 x 75 block
+   (section 11). So the bar draws what the rail draws, off the same `Lockup`, and App.css pins
+   the slot railed. It was a `Logo` tile until 2026-09-07, which made the shell speak two brands
+   depending on how wide the window was, and sank into the bar on dark. */
 function PhoneBar({ route, onMenu, onPalette }: { route: Route | undefined; onMenu: () => void; onPalette: () => void }) {
   return (
     <header className="bn-topbar">
       <a className="bn-topbar-brand" href="#/" aria-label="Banchi home">
-        <Logo size={26} />
+        <BrandSlot />
       </a>
       <span className="bn-topbar-title">{route === undefined ? 'Not found' : 'Banchi'}</span>
       <Button variant="ghost" icon="search" iconOnly onClick={onPalette}>
@@ -1100,7 +1118,7 @@ function TabBar({ path, onMore }: { path: string; onMore: () => void }) {
   )
 }
 
-function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState }) {
+function Drawer({ open, path, onClose, theme, onToggleTheme, server, cards }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState; cards: number | null }) {
   const leave = useLeave(open)
   if (!leave.mounted) return null
   const leaving = leave.leaving ? 'true' : undefined
@@ -1109,12 +1127,14 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: b
       <div className="bn-scrim" onClick={onClose} data-leaving={leaving} />
       <div className="bn-sheet bn-sheet-left bn-drawer" role="dialog" aria-label="Screens" data-leaving={leaving}>
         <div className="bn-drawer-head">
-          <a className="bn-brand" href="#/" onClick={onClose}>
-            <Logo size={30} />
-            <span className="bn-brand-text">
-              <span className="bn-brand-name">Banchi</span>
-              <span className="bn-brand-tag">every card has an address</span>
-            </span>
+          {/* THE LOCKUP REPLACES THE MARK, THE WORDMARK AND THE TAGLINE TOGETHER, here as in the
+              sidebar (logo.md section 16, extended by section 19). This drawer IS the sidebar at
+              a phone's width — the same nav, the same foot, one tap away instead of always on —
+              so it draws the sidebar's brand and the sidebar's number. `every card has an
+              address` left the product with this edit, on the owner's ruling; the lockup says the
+              name twice already, and Home's own lede still ends "Every one has an address." */}
+          <a className="bn-brand" href="#/" onClick={onClose} aria-label="Banchi home">
+            <BrandSlot kanji={DRAWER_KANJI} />
           </a>
           <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
             Close
@@ -1139,9 +1159,13 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: b
           <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
             {theme === 'dark' ? 'Light mode' : 'Dark mode'}
           </Button>
+          {/* THE SAME LINE THE SIDEBAR DRAWS, count and all. It said only `Server online` here
+              until 2026-09-07, so a phone could not see how big the store it was answering for
+              was — the one figure the shell carries at every width on a desktop. */}
           <div className="bn-server" data-state={server}>
             <span className={`bn-dot ${server === 'online' ? 'bn-dot-ok' : server === 'offline' ? 'bn-dot-danger' : ''}`} />
             {server === 'online' ? 'Server online' : server === 'offline' ? 'Server offline' : 'Checking server…'}
+            {server === 'online' && cards !== null ? <span className="bn-server-detail"> · {cards.toLocaleString()} cards</span> : null}
           </div>
         </div>
       </div>
@@ -1327,7 +1351,7 @@ export function App() {
         </div>
       </div>
       <TabBar path={path} onMore={() => setDrawer(true)} />
-      <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} />
+      <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} cards={cards} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
       <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} />
       <WhichKey armed={arm !== null} />

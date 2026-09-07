@@ -549,3 +549,106 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
     }
   }
 })
+
+/* ---- the phone chrome (logo.md section 19) -------------------------------------------------
+ *
+ * THE SHELL SPOKE TWO BRANDS UNTIL 2026-09-07, and nothing here could tell. Every case above
+ * sets a desktop viewport, `nav.spec.ts:35` scopes itself to `.bn-side` on purpose, and
+ * `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link` — which is `display: none`
+ * below 768, so that file cannot run at a phone width even in principle. The result was that the
+ * desktop shell drew the lockup, the phone drew a `Logo` tile with a wordmark and a tagline
+ * beside it, and 407 browser specs were green through all of it.
+ */
+
+const PHONE = { width: 390, height: 844 }
+
+test('the phone bar draws the empty slot, at the rail size and never the tile', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  await page.goto('/')
+
+  const drawn = await page.locator('.bn-topbar-brand .bn-lockup-bracket').evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    const svg = el.closest('svg')!
+    const read = (sel: string) => {
+      const n = svg.querySelector(sel)
+      return n === null ? null : Number(getComputedStyle(n).opacity)
+    }
+    return {
+      w: r.width, h: r.height,
+      svgs: el.closest('.bn-brand-slot')!.querySelectorAll('svg').length,
+      tiles: svg.querySelectorAll('rect').length,
+      kanji: read('.bn-lockup-kanji'),
+      roman: read('.bn-lockup-roman'),
+    }
+  })
+
+  /* THE SAME ASSERTION THE COLLAPSED SIDEBAR TAKES, at the same size. The bar is 52px tall and
+     the lockup's floor is a 102 x 75 block, so this surface can only ever hold the rail's end —
+     which is the arithmetic that keeps the lockup out of the 64px rail as well. */
+  const want = markInkBox(32)
+  expect(Math.abs(drawn.w - want.w), `bar bracket ${drawn.w.toFixed(2)}px wide, the mark is ${want.w.toFixed(2)}`).toBeLessThan(0.5)
+  expect(Math.abs(drawn.h - want.h), `bar bracket ${drawn.h.toFixed(2)}px tall, the mark is ${want.h.toFixed(2)}`).toBeLessThan(0.5)
+
+  expect(drawn.svgs, 'one drawing in the bar, not a crossfade between two').toBe(1)
+  // THE EMPTY SLOT, NOT THE APP ICON (section 1). A `Logo` here draws a superellipse tile and
+  // the card inside it — which is what this bar carried until section 19, and what sank into
+  // the bar on dark.
+  expect(drawn.tiles, 'the phone bar carries no tile and no card').toBe(0)
+  // the type is off because `--bn-brand-open` is 0 here, not because anything hid it
+  expect(drawn.kanji, 'the kanji is not drawn in the railed bar').toBe(0)
+  expect(drawn.roman, 'the roman is not drawn in the railed bar').toBe(0)
+})
+
+test('the phone drawer draws the lockup, and no wordmark or tagline beside it', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  await expect(page.locator('.bn-drawer')).toBeVisible()
+  await page.waitForTimeout(500)
+
+  const lockup = page.locator('.bn-drawer .bn-brand-lockup')
+  // section 19 settled kanji 40 — the sidebar's own number, drawn at 390 and 320 in both themes
+  // against 32 before it was taken. A 128 x 93 block in ~268px of usable drawer width.
+  await expect(lockup).toHaveAttribute('width', '127.6')
+  await expect(lockup).toHaveAttribute('height', '93.2')
+  // and it is the OPEN end here: the drawer is the sidebar at this width, not the rail
+  await expect(page.locator('.bn-drawer .bn-lockup-kanji')).toHaveCSS('opacity', '1')
+
+  /* THE LOCKUP REPLACES THE MARK, THE WORDMARK AND THE TAGLINE TOGETHER (section 16, extended by
+     section 19). This drawer was the last place `every card has an address` was drawn; the three
+     classes it needed are deleted from App.css, so these count anywhere in the document and not
+     merely inside the drawer. */
+  await expect(page.locator('.bn-brand-name')).toHaveCount(0)
+  await expect(page.locator('.bn-brand-tag')).toHaveCount(0)
+  await expect(page.getByText('every card has an address')).toHaveCount(0)
+
+  // the sidebar's server line, count and all — it said only `Server online` here until section 19
+  await expect(page.locator('.bn-drawer .bn-server .bn-server-detail')).toContainText('cards')
+})
+
+test('every lockup the product draws clears the size floor', async ({ page }) => {
+  /* SECTION 15 ASKED FOR THIS AND NOTHING BUILT IT. "app/tests/brand.spec.ts gains the floor — a
+     lockup below kanji 32 must not render." Section 11 measured why: 番's counters read 1.07 at
+     32 and 0.87 at 26, so the kanji fills in before the bracket gives out.
+     WHAT THIS CASE CAN AND CANNOT SEE. The refusal itself is `Lockup`'s own early return and
+     there is no render harness in this suite to call it with an arbitrary size — Playwright only
+     ever sees what a screen mounts. So this asserts the arm that a browser CAN answer, and it is
+     the arm that regresses: a new call site drawn too small. Every lockup on every surface, at
+     every width, is at or above the floor's own block. */
+  for (const [w, h] of [[1440, 900], [390, 844]] as const) {
+    await page.setViewportSize({ width: w, height: h })
+    for (const hash of ['/', GALLERY]) {
+      await page.goto(hash)
+      if (w < 768 && hash === '/') await page.getByText('More', { exact: true }).click()
+      await page.waitForTimeout(400)
+      const sizes = await page.locator('.bn-lockup').evaluateAll((els) =>
+        els.map((el) => Number(el.getAttribute('width'))))
+      expect(sizes.length, `${hash} at ${w} draws no lockup at all`).toBeGreaterThan(0)
+      for (const drawn of sizes) {
+        // 32 * BLOCK.w / BLOCK.ref = 102.08, the narrowest block the floor permits
+        expect(drawn, `${hash} at ${w} drew a lockup ${drawn}px wide, under the floor's 102.08`)
+          .toBeGreaterThanOrEqual(102)
+      }
+    }
+  }
+})

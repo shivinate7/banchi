@@ -1887,3 +1887,100 @@ the tab and nothing else.
 `lockupGeometry.ts` rather than retyping them — that file is generated from §13's table and
 `make docs-audit`'s `lockup params` row reconciles the two, so the tab cannot drift from the
 lockup it is named after. Its `rail mark` row holds the tab to the mark's own L.
+
+## 19. The phone — the bar is a rail, and the drawer is the sidebar
+
+**Settled 2026-09-07, on the owner's instruction, against the running application at 390 and
+320 in both themes.** §15 said where the lockup goes and ended the list with *"Nowhere else. No
+marketing page exists to want one."* That sentence was written listing three surfaces — the
+sidebar, the rail, `#/gallery` — and the phone chrome was never among the things it was asked
+about. So the phone kept what it had before the lockup existed: a `Logo` tile in the top bar, and
+a tile with a wordmark and the tagline in the More drawer.
+
+**What that cost is not subtle.** The product wore two different brands depending on how wide the
+window was, and the drawer's brand was the only surface in the shell still drawing a wordmark. On
+dark the bar's tile — a dark superellipse on `--bn-surface-glass` over a near-black page — very
+nearly disappeared, which is the same failure §16 gave the sidebar's bracket a chrome gradient to
+avoid, at a size where it is worse.
+
+| surface | draws | size |
+| --- | --- | --- |
+| sidebar, expanded | the lockup | kanji 40 (§16) |
+| sidebar, railed | the empty slot | 32 |
+| **phone top bar** | **the empty slot** | **32** |
+| **phone drawer** | **the lockup** | **kanji 40** |
+| `#/gallery` | both, beside the mark | 32 / 40 / 56 |
+| browser tab | the empty slot, flat gold | §18 |
+
+### The bar is the rail's case, and the arithmetic is §11's
+
+**The lockup cannot go in the top bar and the reason is already written down.** Its floor is
+kanji 32 (§11), which is a 102 × 75 block; `--bn-topbar-h` is 52px. That is the same refusal the
+64px rail takes, for the same measurement — 番's counters close at about kanji 30, before the
+roman and long before the bracket.
+
+So the bar draws what the rail draws. **This is not a new ruling.** §18 settled it for the browser
+tab on the owner's own instruction — *"the tab should be what the collapsed sidebar is"* — citing
+§1: *"with the card removed the same brackets become an empty slot, which is the in-product
+mark."* §19 is that sentence reaching the third surface it was always about.
+
+**One difference from the tab, and it is deliberate.** §18's favicon is flat gold on no ground,
+because a tab is 16px of chrome the app does not paint. The phone bar is an in-app surface, so it
+takes the rail's own paint: `--bn-lockup-metal`, which `kit.css` resolves per theme — flat ink on
+light, the locked chrome gradient on dark.
+
+### The drawer takes the sidebar's number, and the tagline goes with it
+
+**The drawer IS the sidebar at a phone's width.** Same nav, same groups, same foot, one tap away
+instead of always on. So it draws the sidebar's brand at the sidebar's size, and §16's rule
+applies unchanged: **the lockup replaces the mark, the wordmark and the tagline together.**
+
+**Forced choice, kanji 32 against kanji 40**, drawn in the real drawer at 390 and at 320, in both
+themes, before this was written:
+
+| | kanji 32 | kanji 40 |
+| --- | --- | --- |
+| block | 102 × 75 | 128 × 93 |
+| fits the drawer (`min(300px, 86vw)`, ~268px usable) | yes | yes |
+| fits at 320 (drawer 275px) | yes | yes |
+| nav still reaches the foot without a scroll at 844 | yes | yes |
+| reads as | a smaller copy of the sidebar's | the sidebar's |
+
+**40 is taken.** 32 buys about 45px of drawer above the fold and nothing needs it — nine nav items
+and the foot reach the bottom of an 844px drawer at either size. What 40 buys is that there is one number, not
+two: the drawer and the sidebar are the same object and a second value is a second thing to keep
+in step, which is the defect §13 spent thirty-seven rounds learning.
+
+**`every card has an address` left the product with this edit**, on the owner's ruling, and that
+is worth stating plainly because it was not a side effect. The drawer was its last home — the
+sidebar dropped it when the lockup landed, and `#/gallery` uses it only as a type specimen.
+Home's own lede still ends *"Every one has an address."*, which is the sentence a person reads,
+grammatically bound to the count in front of it.
+
+### What is built
+
+One `BrandSlot` in `app/src/App.tsx`, rendered by the sidebar, the bar and the drawer.
+**There is no second drawing and no JSX branch**: `--bn-brand-open` is inherited, `App.css` sets
+it to 0 on `.bn-topbar-brand`, and the morph reads the slot's own width — so the bar gets the
+rail end from one declaration. `Lockup` did not change for any of this.
+
+`app/src/App.css` lost `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag`, whose last render
+site this was.
+
+### The floor is a guard now, four weeks after it was asked for
+
+§15 said *"`app/tests/brand.spec.ts` gains the floor — a lockup below kanji 32 must not
+render"*, and nothing built it. `Lockup` refuses below `LOCKUP_FLOOR = 32` and returns null.
+It can only fire on a call site that does not exist yet — every surface above is at or over the
+floor, and the rail's 32 comes through `railSize`, which is the mark rather than this drawing.
+
+`app/tests/brand.spec.ts` asserts the bar's bracket is `markGeometry.ts`'s own wire at 32 with no
+tile and its type at opacity 0; the drawer's lockup at 127.6 × 93.2 with the kanji at full opacity
+and no wordmark, tagline or `every card has an address` anywhere in the document; and that every
+lockup drawn at either width clears the floor's block. All three were observed red under mutation.
+
+### What would reopen this
+
+A bar tall enough for a kanji-32 lockup — 84px against today's 52 — is the only thing that would
+change the top half of the table, and it costs about 10% of an 844px viewport on every screen.
+It was considered and refused on that arithmetic, not overlooked.
