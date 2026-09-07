@@ -669,10 +669,11 @@ A screen is not finished because it compiles.
   about a card or the inventory in `localStorage`. Inventory state is server-side, in the
   store; the camera uses a device picker. Two devices share one truth.
 
-  **Five keys are stored on the device, and each is a fact about THIS machine rather than
+  **Six keys are stored on the device, and each is a fact about THIS machine rather than
   about a card**: `banchi.capture.deviceId` and `banchi.capture.rotation`
   (`app/src/useCamera.ts` — which camera and which way up, meaningless on another machine),
-  `banchi.theme` and `banchi.rail` (`app/src/deviceMemory.ts` — how this browser is dressed),
+  `banchi.theme`, `banchi.rail` and `banchi.orders.fetch-filter` (`app/src/deviceMemory.ts` —
+  how this browser is dressed, and which order statuses this device bothers fetching, D113),
   and `banchi.orders.last-check` (`app/src/Orders.tsx` — when THIS device last checked
   TCGplayer, so a fetch receipt can say what is new since; the owner ruled it belongs there
   on 2026-09-03). None of them is a card, a position or an order.
@@ -1161,6 +1162,7 @@ D109 A price is a fact about a listing, and the store remembers listings it neve
 D110 A hover is an alpha, because the same paint over three grounds is three different hovers
 D111 Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
 D112 The labels are tracked, the images are not, and an unmoved measurement is asserted rather than re-derived
+D113 The status requirement is answered by a remembered tick, not by an echo of the preview
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

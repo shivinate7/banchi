@@ -20,12 +20,17 @@
  * key means adding it here, where the argument is, in front of whoever is reviewing the diff.
  *
  * THIS COMMENT CLAIMED THOSE TWO FILES HELD EVERY `localStorage` CALL IN THE APP, and that
- * stopped being true on 2026-09-03. `Orders.tsx` holds a third key — `banchi.orders.last-check`,
+ * stopped being true on 2026-09-03. `Orders.tsx` holds a key — `banchi.orders.last-check`,
  * when THIS device last checked TCGplayer — at two call sites carrying an inline disable that
  * argues for it, which the owner ruled on. So the shape is two exempt FILES plus one argued
- * call site, and the roster of all five keys lives in `CLAUDE.md` where `make docs-audit`'s
- * `storage keys` row reconciles it against this directory in both directions. A comment that
- * counts is a comment that goes stale; the count is checked now, and this one no longer makes it.
+ * call site, and the roster lives in `CLAUDE.md` where `make docs-audit`'s `storage keys` row
+ * reconciles it against this directory in both directions. A comment that counts is a comment
+ * that goes stale; the count is checked there, and this one deliberately does not make it.
+ *
+ * THE ORDER FETCH FILTER (D113) CAME HERE RATHER THAN TO ITS CALL SITE, which is the shape
+ * the lint rule's own message asks for and the opposite of what `last-check` did. That key
+ * predates this argument being written down; a new one goes where the reviewer is already
+ * looking.
  *
  * EVERY ACCESS IS WRAPPED. Private windows, cleared site data and browsers set to block
  * storage all throw on the accessor itself, and a preference is never worth a blank screen.
@@ -72,5 +77,87 @@ export function rememberRail(rail: boolean): void {
     localStorage.setItem(RAIL_KEY, rail ? 'rail' : 'wide')
   } catch {
     /* storage unavailable — the rail still moves for this session */
+  }
+}
+
+/* ------------------------------------------------------------------ the order fetch filter */
+
+/**
+ * HOW THIS DEVICE NARROWS ITS ORDER FETCH, and why that is a fact about the machine.
+ *
+ * D91 made `POST /orders/fetch` refuse a call that names no statuses, on an argument
+ * `server/order_transport.py` makes at length: TCGplayer never published the status
+ * vocabulary, so a guess that drops an order is an envelope that never ships. The owner then
+ * ruled out D91's two-press flow, and `Orders.tsx` answered the requirement by echoing back
+ * every status the free preview returned — nothing dropped, and nothing narrowed either. This
+ * key is the operator's own answer in place of that echo (D113).
+ *
+ * IT IS A HABIT, NOT A RECORD. "I do not want to look at completed orders" is a statement
+ * about how the person at this screen works, the same kind of fact as the remembered camera
+ * and the theme; it names no order, no card, no position and no SKU, and losing it costs one
+ * press of a control that is on screen. The ledger stays the one truth about what is on the
+ * store, which is the whole of what D13's ban protects.
+ *
+ * ONE KEY FOR BOTH TOGGLES, BECAUSE THEY ARE ONE FACT. `statuses` is which of the window's
+ * orders are worth a detail call; `skipKnown` is whether the ones the ledger already holds at
+ * that status are worth asking about again. Both answer "what should this press bother with",
+ * both are ticked in the same panel, and splitting them would put two rows in `CLAUDE.md`'s
+ * roster for one habit.
+ *
+ * THE STRINGS ARE THE WIRE'S OWN, KEPT VERBATIM. What is written here is exactly what the
+ * preview answered, never folded and never mapped, because that is the one comparison the
+ * transport does — `status.strip() in wanted` — and a fold on this side would be the first
+ * step toward the vocabulary that module refuses to have. A remembered string that a later
+ * window does not return is therefore a real possibility, and the screen SAYS SO rather than
+ * quietly dropping it.
+ *
+ * NULL IS NOT AN EMPTY LIST. `statuses: null` means this device has never chosen, and the
+ * screen reads it as every status the window returned — today's behaviour exactly, so an
+ * operator who never opens the control loses nothing. An empty list means they ticked
+ * everything off, and the screen refuses the press rather than sending a body the wire
+ * rejects with a code the operator cannot act on.
+ */
+const ORDER_FILTER_KEY = 'banchi.orders.fetch-filter'
+
+/** What this device narrows the order fetch to. `statuses: null` is "never chosen". */
+export type OrderFetchFilter = {
+  readonly statuses: readonly string[] | null
+  readonly skipKnown: boolean
+}
+
+/** The unchosen filter: every status the window holds, nothing skipped. Today's press. */
+const EVERY_ORDER_STATUS: OrderFetchFilter = { statuses: null, skipKnown: false }
+
+export function storedOrderFilter(): OrderFetchFilter {
+  try {
+    const raw = localStorage.getItem(ORDER_FILTER_KEY)
+    if (raw === null) return EVERY_ORDER_STATUS
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return EVERY_ORDER_STATUS
+    const list = (parsed as { statuses?: unknown }).statuses
+    /* Deduped and stripped on the way out, so a hand-edited value cannot make the fetch body
+       something the wire refuses for a reason the operator cannot see. */
+    const statuses = Array.isArray(list)
+      ? [...new Set(list.filter((one): one is string => typeof one === 'string').map((one) => one.trim()))].filter(
+          (one) => one !== '',
+        )
+      : null
+    return { statuses, skipKnown: (parsed as { skipKnown?: unknown }).skipKnown === true }
+  } catch {
+    /* Private mode, blocked storage, or a half-written value: never chosen, which is every
+       status. The press this device is about to make is the one it always made. */
+    return EVERY_ORDER_STATUS
+  }
+}
+
+export function rememberOrderFilter(filter: OrderFetchFilter): void {
+  try {
+    localStorage.setItem(
+      ORDER_FILTER_KEY,
+      JSON.stringify({ statuses: filter.statuses === null ? null : [...filter.statuses], skipKnown: filter.skipKnown }),
+    )
+  } catch {
+    /* Quota or a blocked origin. The choice still holds for this tab; only the next visit
+       falls back to every status. */
   }
 }
