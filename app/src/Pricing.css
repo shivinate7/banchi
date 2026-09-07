@@ -996,6 +996,27 @@
 .pricing-ship-act { display: flex; align-items: center; gap: var(--bn-3); margin-left: auto; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .pricing-ship-key { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
 .pricing-ship-key .bn-icon { color: var(--bn-ok); }
+/* THE PER-SEND CAP, on the ship bar with the other emit options (D7, rewritten). Sized like a check
+   rather than a field: it is one small number inside a sentence, and giving it a full input's
+   weight would read as the standing policy it deliberately is not. */
+.pricing-ship-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-2);
+  font-size: var(--bn-fs-md);
+  color: var(--bn-ink-2);
+  white-space: nowrap;
+}
+/* TWO CLASSES DELIBERATELY, so the width beats `.bn-input`'s `width: 100%` on specificity
+   rather than on which stylesheet the bundler happened to emit second. */
+.pricing-ship-cap .pricing-ship-cap-input {
+  width: 56px;
+  min-height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .pricing-ship-only { white-space: nowrap; }
 /* A SPLIT THAT CANNOT APPLY IS DIMMED, NEVER REMOVED — a control that vanishes reads as one
    you imagined, and this one is off only while "just the cards above the cut-off" has already

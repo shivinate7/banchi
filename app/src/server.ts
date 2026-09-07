@@ -2184,7 +2184,16 @@ export async function emitMerged(
   runs: readonly string[],
   /* `splitThreshold` restores the old pair of files — `import-listed.csv` and
      `import-subthreshold.csv` — around D9's cut-off. Emit writes ONE `import.csv` without it. */
-  options: { listedOnly?: boolean; splitGames?: boolean; splitThreshold?: boolean } = {},
+  /* `cap` IS THIS SEND'S OWN BOUND AND ORDINARILY ABSENT (D7, rewritten 2026-09-07). There is no
+     standing cap any more: every copy this run holds that TCGplayer does not already have
+     goes out, and this is how one press says otherwise. Omitted rather than sent as a
+     sentinel, so "no cap" is the absence of a claim rather than a number meaning none. */
+  options: {
+    listedOnly?: boolean
+    splitGames?: boolean
+    splitThreshold?: boolean
+    cap?: number | null
+  } = {},
 ): Promise<RunStepResult & { runs: string[] }> {
   return (await request('/pipeline/emit', {
     method: 'POST',
@@ -2194,6 +2203,7 @@ export async function emitMerged(
       listed_only: Boolean(options.listedOnly),
       split_games: Boolean(options.splitGames),
       split_threshold: Boolean(options.splitThreshold),
+      ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
     }),
   })) as RunStepResult & { runs: string[] }
 }
@@ -2415,6 +2425,11 @@ export async function runStep(
     listedOnly?: boolean
     splitGames?: boolean
     splitThreshold?: boolean
+    /* THIS SEND'S CAP, ORDINARILY ABSENT (D7, rewritten 2026-09-07) — and here for the same
+       reason the three flags above are: a send of one and a send of three are the same
+       command, so an option offered on one and not the other would be answering a question
+       about how many runs happen to be open. */
+    cap?: number | null
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2431,6 +2446,10 @@ export async function runStep(
       listed_only: options.listedOnly,
       split_games: options.splitGames,
       split_threshold: options.splitThreshold,
+      /* Spread rather than sent as `undefined`, so "no cap" is the ABSENCE of a claim. The
+         route refuses `cap: 0` by name, and a screen spelling "none" as a number would turn
+         the ordinary press into a refusal. */
+      ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
     }),
   })) as RunStepResult
 }

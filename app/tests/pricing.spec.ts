@@ -186,6 +186,32 @@ async function open(
     })
   })
 
+  /* THE MERGED SEND (D86), which is a DIFFERENT ROUTE and had no stub at all until the cap
+     landed. `POST /pipeline/emit` takes a list of runs rather than living under one, so the
+     pattern above cannot reach it — its `[^/]+` needs a `/pipeline/runs/` in front — and the
+     press that fires it went unexercised while two cases asserted only whether its button was
+     drawn. Registered here so the body a send composes is readable in `wire`. */
+  await page.route(/\/pipeline\/emit$/, async (route) => {
+    wire.push({
+      method: 'POST',
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        exit_code: 0,
+        runs: [RUN],
+        run: RUN,
+        console: 'listed           2 row(s), 2 card(s)',
+        files: [{ name: 'import.csv', bytes: 2048, modified: 0, is_import: true }],
+        summary: { run: RUN, phase: 'reconcile' },
+      }),
+    })
+  })
+
   /* THE PRICE HISTORY (D62). Registered among the specific patterns for the reason the
      comment above gives — Playwright matches most-recent-first, so `[^/]+$` must not get
      there first. Every case that presses `T` reads `wire` to count how many times this was
@@ -2594,6 +2620,114 @@ test('a send of several runs offers one file, and a send of one offers the per-r
   const only = page.getByRole('checkbox', { name: /above the cut-off/ })
   await expect(only).toBeVisible()
   await expect(only).not.toBeChecked()
+})
+
+/* ================================================ the cap, asked for per send (2026-09-07, D7)
+ *
+ * D7'S STANDING CAP OF FOUR IS RETIRED, on the operator's answer that neither reason for it —
+ * an envelope-buster order, a spike selling stale-priced copies — still describes a risk they
+ * carry. So the ordinary press sends every copy the run holds that TCGplayer does not already
+ * have, and a bound is something ONE SEND asks for.
+ *
+ * THE TWO CASES BELOW ARE THE INSTRUMENT FOR "allow me to cap as needed", and each is about the
+ * SHAPE of the body rather than about the arithmetic — `harness/tests/t3_join_coverage.py`
+ * owns the arithmetic on both sides of the bound. What a screen can get wrong here is sending
+ * a cap nobody asked for, or dropping one somebody did.
+ *
+ * A blank field must OMIT the key rather than send a zero or a null. `pipeline_routes.py`
+ * refuses `cap: 0` by name — *"A cap of 0 would send nothing"* — so a screen that spelled "no
+ * cap" as a number would turn the ordinary press into a refusal. */
+
+test('a blank cap sends no cap at all, and the key is absent rather than empty', async ({
+  page,
+}) => {
+  const wire = await open(page, { worklist: SPAN })
+
+  await page.getByRole('button', { name: 'Write one import file' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
+
+  const body = wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>
+  /* `in`, NOT a value comparison. `cap: undefined` disappears through `JSON.stringify` and
+     would read as absent to any assertion on the value, so the only test that can tell a
+     dropped key from a sent one is whether the key is there at all. */
+  expect('cap' in body).toBe(false)
+  expect(body.listed_only).toBe(false)
+
+  /* AND THE BAR SAYS SO, which is the half a body assertion cannot reach. The sentence about
+     spending a cap once across the send is a claim about a figure, and with none asked for it
+     would be describing a bound the press does not apply. */
+  await expect(page.locator('.pricing-ship-says')).toContainText('every copy TCGplayer does not')
+})
+
+test('a figure typed into the cap rides the send, and the bar names what it now does', async ({
+  page,
+}) => {
+  const wire = await open(page, { worklist: SPAN })
+
+  await page.getByLabel('Send at most this many copies of any one SKU').fill('2')
+  /* THE SENTENCE FOLLOWS THE FIELD, before anything is pressed — the operator learns what the
+     figure MEANS at the moment they type it rather than from a receipt afterwards. */
+  await expect(page.locator('.pricing-ship-says')).toContainText('spent once across the send')
+
+  await page.getByRole('button', { name: 'Write one import file' }).click()
+  await expect.poll(() => wire.filter((r) => r.path === '/pipeline/emit').length).toBe(1)
+  expect((wire.find((r) => r.path === '/pipeline/emit')?.body as Record<string, unknown>).cap).toBe(2)
+})
+
+test('a send of ONE carries the cap too, which is the asymmetry the route refuses', async ({
+  page,
+}) => {
+  /* THE PER-RUN STEP'S OWN COMMENT IS THE ARGUMENT: *"a screen that could ask for a split on a
+     send of three and not on a send of one would be answering a question about how many runs
+     are open."* A cap is that same kind of answer, so `POST /pipeline/runs/<n>/emit` takes it
+     through the same parser and one `capField` is rendered in both bars. This case is what
+     stops the two drifting — the merged one above could go on passing while this one silently
+     sent no cap at all. */
+  const wire = await open(page, { skus: [sku()] })
+  await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(1)
+
+  await page.getByLabel('Send at most this many copies of any one SKU').fill('3')
+  await page.getByRole('button', { name: 'Write the import file' }).click()
+
+  const emits = () => wire.filter((r) => r.method === 'POST' && r.path.endsWith('/emit'))
+  await expect.poll(() => emits().length).toBe(1)
+  expect((emits()[0]?.body as Record<string, unknown>).cap).toBe(3)
+})
+
+test('typing in the cap does not reach the row keys, which own bare letters here', async ({
+  page,
+}) => {
+  /* THE SCREEN TAKES UNMODIFIED LETTERS ON A ROW — `D` snap, `H` hold, `T` history, `P` photo,
+     `U` undo — so a second text field on it is a place those could fire. The price field
+     earned that check by having its alphabet closed to `[0-9.]` (D49); this one is closed to
+     digits, and what needs asserting is that the SHELL yields while it has focus rather than
+     that the regex works, which the case above covers. A hold fired from a keystroke meant for
+     the cap would write an answer the operator never gave. */
+  const wire = await open(page, { worklist: SPAN })
+
+  const cap = page.getByLabel('Send at most this many copies of any one SKU')
+  await cap.focus()
+  await page.keyboard.type('h4u')
+  await expect(cap).toHaveValue('4')
+  /* NOTHING WAS WRITTEN. `H` on a row opens the hold editor and `U` undoes an answer; either
+     firing from here is a write the operator did not make, and both would be invisible in the
+     field's own value. */
+  expect(wire.filter((r) => r.method === 'PUT')).toEqual([])
+})
+
+test('the cap field takes digits and nothing else, so a send cannot carry a word', async ({
+  page,
+}) => {
+  await open(page, { worklist: SPAN })
+
+  /* THE FIELD'S ALPHABET IS CLOSED, the price field's own rule (D49) applied to the one other
+     number this screen composes into a request. It reaches a child process's argv — the route
+     integer-checks it for exactly that reason — and a control that accepted `2; rm` would be
+     leaning on the far side of the wire to be the only reader. */
+  const cap = page.getByLabel('Send at most this many copies of any one SKU')
+  await cap.fill('2')
+  await cap.pressSequentially('x9')
+  await expect(cap).toHaveValue('29')
 })
 
 test('the standing policy is on the multi-run landing, and one press writes it once', async ({

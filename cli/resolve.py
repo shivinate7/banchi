@@ -1259,7 +1259,7 @@ def load(
     rule: pricing.Rule = pricing.MATCH,
     basis: str = pricing.BASIS_MARKET,
     review_below: str = routing.CONFIDENCE_LOW,
-    live_cap: int = join.LIVE_QUANTITY_CAP,
+    live_cap: Optional[int] = None,
     threshold: Decimal = pricing.THRESHOLD,
 ) -> Resolved:
     """Read the run, build one catalog per game, walk the ladder, route every card.
