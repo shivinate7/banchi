@@ -176,7 +176,10 @@ function asRow(entry: MarkdownSku): MergedSku {
       low_with_shipping: cell('TCG Low Price With Shipping'),
       direct_low: cell('TCG LowestSalePrice'),
     },
-    presets: {},
+    // THE REAL FIGURES SINCE 2026-09-07. This was `{}`, so every preset button on the lens
+    // filled nothing — and still wrote `policy.rule` to the store, silently repricing every
+    // future joined run from a screen that could not act on the rule itself.
+    presets: entry.presets ?? {},
     rule_price: entry.proposed,
     // TCGPLAYER'S OWN LIVE COUNT, which is an honest figure and the one the row's `LiveCount`
     // is for. `pushed` and `staged` are this pipeline's commitments and it has made none here.

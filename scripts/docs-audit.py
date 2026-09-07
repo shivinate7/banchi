@@ -5341,7 +5341,7 @@ def check_pricing_presets(report: Report) -> None:
     """The three pricing presets, reconciled between the tuple that prices them and the
     table that writes them.
 
-    `cli/cmd_join.py:PRESETS` is `(key, rule, basis)` and prices every SKU under every preset
+    `pipeline/pricing.py:PRESETS` is `(key, rule, basis)` and prices every SKU under every preset
     so the client performs no arithmetic on money. `app/src/Pricing.tsx:PRESETS` is what a
     press on the pricing screen writes into `inventory/prices.json` — and it has to write the RULE,
     because D49 refuses to write the suggestions themselves: an override is layer 1 of
@@ -5365,7 +5365,13 @@ def check_pricing_presets(report: Report) -> None:
     What is checked is the triple a parser has to accept.
     """
     findings: List[Finding] = []
-    python_path = ROOT / "cli" / "cmd_join.py"
+    # THE TABLE MOVED TO `pipeline/pricing.py` ON 2026-09-07 AND THIS ROW FOLLOWED IT. Two
+    # callers price presets now — a run's `pricing.json` and a markdown's `survey.json` — and
+    # the second was shipping `presets: {}`, so every preset button on the lens filled nothing
+    # while still writing the store's standing rule. `cli/cmd_join.py` re-exports the name its
+    # own callers already spell, and a re-export is not a table this audit can read, which is
+    # exactly what it said when the move happened.
+    python_path = ROOT / "pipeline" / "pricing.py"
     ts_path = ROOT / "app" / "src" / "Pricing.tsx"
 
     # `PRESETS` NAMES `pricing.RULE_MATCH` RATHER THAN `"match"`, WHICH IS RIGHT AND IS WHY
@@ -5391,6 +5397,14 @@ def check_pricing_presets(report: Report) -> None:
             and node.value.id == "pricing"
         ):
             return constants.get(node.attr)
+        # AND A BARE NAME, BECAUSE THE TABLE NOW LIVES IN THE MODULE THAT DEFINES THOSE
+        # CONSTANTS. `cli/cmd_join.py` spelled them `pricing.RULE_MATCH`; inside
+        # `pipeline/pricing.py` the same constant is `RULE_MATCH`, and a `pricing.` prefix
+        # there would be a module referring to itself. Resolved against the SAME dict, so
+        # there is still exactly one place a rule name is spelled and this row still
+        # reconciles rather than going quietly green.
+        if isinstance(node, ast.Name):
+            return constants.get(node.id)
         return None
 
     authored: Set[tuple] = set()

@@ -48,6 +48,11 @@ function live(over: Partial<MarkdownSku> = {}): MarkdownSku {
     cut: '2.00',
     given_up: '6.00',
     owned_since: '2026-08-01T00:00:00.000+00:00',
+    presets: {
+      market_match: '22.03',
+      market_undercut_5: '20.93',
+      low_undercut_1: '19.79',
+    },
     listed_since: null,
     held_here: true,
     last_sold: null,
@@ -437,6 +442,66 @@ test('an untouched lens field ghosts the price the listing is live at', async ({
   const field = page.locator('.pricing-input').first()
   await expect(field).toHaveValue('')
   await expect(field).toHaveAttribute('placeholder', '20.0000')
+})
+
+test('a preset writes answers on a lens, and never the standing rule', async ({ page }) => {
+  /* THE DEFECT THIS PINS, MEASURED ON THE OWNER'S OWN STORE 2026-09-07. A lens row carried
+     `presets: {}`, so pressing `Market −5%` filled NOTHING — and still wrote `policy.rule` to
+     `inventory/prices.json`, which is the store-wide setting every future joined run lists by.
+     Both halves were wrong and the wrong one was the one that persisted: repricing a live book
+     silently repriced the next box out of the camera.
+
+     A RUN AND A LENS NEED OPPOSITE THINGS FROM ONE PRESS. `emit` prices a run's unanswered
+     rows BY the standing rule at write time, so a run writes the rule and no per-SKU answer —
+     writing 300 answers there would freeze a rule into figures (D54's staleness). A lens has
+     no emit: `reprice apply` sends typed answers and nothing else, so the press must write
+     answers and must not touch the rule. */
+  const wire = await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno' }),
+      live({ sku: '8608464', name: 'Dunsparce', presets: { market_match: '2.06', market_undercut_5: '1.96', low_undercut_1: null } }),
+    ],
+    counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
+  })
+
+  await page.getByRole('button', { name: 'Market −5%' }).click()
+
+  /* BOTH ROWS TAKE THE PRESET'S OWN FIGURE — server-priced, so the client performs no
+     arithmetic on money and the two doors cannot compute a different number for one card. */
+  await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('20.93')
+  await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('1.96')
+
+  /* AND THE STORE'S STANDING RULE IS UNTOUCHED. This is the half that persisted past the
+     screen, so it is asserted over the bytes rather than over what is drawn. */
+  const writes = wire.filter((row) => row.method === 'PUT' && row.path === '/pricing')
+  expect(writes.length).toBeGreaterThan(0)
+  for (const write of writes) {
+    const policy = (write.body as { policy?: Record<string, unknown> })?.policy ?? {}
+    expect(policy.rule ?? 'match').toBe('match')
+  }
+
+  /* ONE ACT, ONE REVERSAL — the per-SKU undo stack is ten deep (D28) and a press over a real
+     book moves hundreds. */
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('')
+  await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('')
+})
+
+test('a preset leaves a row it cannot price, and says how many', async ({ page }) => {
+  /* `null` IS A REAL ANSWER: 394 of 2,476 rows on the wide Pokemon export carry a blank
+     `TCG Low Price`, so a Low-based preset has nothing to price them from. The screen prices
+     what it can and names the rest rather than writing a row with no price. */
+  await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno', presets: { market_match: '22.03', market_undercut_5: '20.93', low_undercut_1: null } }),
+      live({ sku: '8608464', name: 'Dunsparce', presets: { market_match: '2.06', market_undercut_5: '1.96', low_undercut_1: '1.90' } }),
+    ],
+    counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
+  })
+
+  await page.getByRole('button', { name: 'TCG Low −1%' }).click()
+  await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('1.90')
+  await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('')
 })
 
 test('neither run ship bar is drawn on a lens', async ({ page }) => {

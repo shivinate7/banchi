@@ -504,7 +504,7 @@ COMPONENTS = [
                                    "that has never set one reads the constant, so D9's $0.40 "
                                    "and its labor-bar derivation are untouched. The FLOOR is "
                                    "still a constant; nobody has asked for that one.",
-                           "governed_by": ["D8", "D9", "D86", "D99"], "tested_by": ["T5"]},
+                           "governed_by": ["D8", "D9", "D86", "D99", "D49"], "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
                            "governed_by": ["D3", "D4", "D9", "D29", "D35"], "tested_by": ["T4"]},
             # THE ONLY MODULE IN THIS PACKAGE THAT IMPORTS `store`, and the edge is one-way:
@@ -4310,7 +4310,7 @@ COMPONENTS = [
                                                "at a marketplace, and it pins that the trends "
                                                "press is scoped to the filter rather than to "
                                                "the whole survey (D62). Not a harness test.",
-                                               "governed_by": ["D62", "D100", "D103", "D107", "D28", "D99", "D101"]},
+                                               "governed_by": ["D62", "D100", "D103", "D107", "D28", "D99", "D101", "D54"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "

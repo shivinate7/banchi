@@ -2768,6 +2768,11 @@ export type MarkdownSku = {
   above_market: string | null
   at_risk: string
   proposed: string | null
+  /** What each named preset would list this row at, priced server-side by
+   *  `pipeline/pricing.py:preset_prices` — the SAME function a run's `pricing.json` uses, so
+   *  the two doors cannot compute a different number for one card. `null` per key where the
+   *  basis column is blank, which is a real answer: 394 of 2,476 rows carry no `TCG Low`. */
+  presets: Record<string, string | null>
   cut: string | null
   given_up: string | null
   /** THE PROXY, AND THE FALLBACK RATHER THAN THE ANSWER SINCE 2026-09-06. How long the CARD

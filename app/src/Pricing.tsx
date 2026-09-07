@@ -1521,33 +1521,111 @@ export function Pricing() {
       const chosen = PRESETS.find((row) => row.key === key)
       if (chosen === undefined) return
       const missing = rows.filter((row) => row.presets[key] === null)
-      setBook((current) =>
-        current === null ? current : { ...current, policy: { ...current.policy, rule: chosen.rule, basis: chosen.basis } },
-      )
-      for (const row of rows) {
-        const input = inputs.current.get(row.sku)
-        if (input && answerFor(row) === undefined) {
-          const next = row.presets[key] ?? ''
-          if (input.value !== next) {
-            input.value = next
-            flash(input)
+
+      /* WHAT A PRESET MEANS DEPENDS ON WHICH DOOR IT IS PRESSED ON, and until 2026-09-07 the
+         lens got the run's meaning and neither half of it worked.
+
+         ON A RUN it writes the STANDING RULE and nothing per-SKU. `emit` prices every
+         unanswered row by that rule at write time, so the figures walked into the fields are a
+         preview of what the pipeline will do — no answer is needed and writing one would turn
+         a rule into 300 frozen prices (D54's staleness).
+
+         ON A LENS the rule governs nothing: `reprice apply` sends typed answers and nothing
+         else, and the survey's own `proposed` was frozen from the sheet's `--rule` when it was
+         written. So the press must WRITE ANSWERS or it does nothing at all — and it must NOT
+         write the standing rule, which is the store-wide setting every future joined run lists
+         by. It was doing exactly the wrong one of those. */
+      if (source.proposes) {
+        setBook((current) =>
+          current === null ? current : { ...current, policy: { ...current.policy, rule: chosen.rule, basis: chosen.basis } },
+        )
+        for (const row of rows) {
+          const input = inputs.current.get(row.sku)
+          if (input && answerFor(row) === undefined) {
+            const next = row.presets[key] ?? ''
+            if (input.value !== next) {
+              input.value = next
+              flash(input)
+            }
           }
         }
+        setNote(
+          missing.length === 0
+            ? null
+            : {
+                sku: '',
+                text:
+                  `${rows.length - missing.length} of ${rows.length} rows priced. ` +
+                  `${missing.length} have no price in that column and were left alone: ` +
+                  missing.slice(0, 6).map((row) => row.name).join(', ') +
+                  (missing.length > 6 ? '…' : ''),
+              },
+        )
+        return
       }
-      setNote(
-        missing.length === 0
-          ? null
-          : {
-              sku: '',
-              text:
-                `${rows.length - missing.length} of ${rows.length} rows priced. ` +
-                `${missing.length} have no price in that column and were left alone: ` +
-                missing.slice(0, 6).map((row) => row.name).join(', ') +
-                (missing.length > 6 ? '…' : ''),
-            },
+
+      /* THE LENS'S PRESS — real answers, one act, one reversal, and the same shape the cut-off
+         press takes. Only rows nobody has answered move, so pressing twice is a no-op and a
+         typed price is never overwritten. */
+      const moving = rows.filter(
+        (row) =>
+          source.locked(row.sku) === null &&
+          answerFor(row) === undefined &&
+          typeof row.presets[key] === 'string',
       )
+      if (moving.length === 0) {
+        setNote({
+          sku: '',
+          text: `No row has a price in that column${missing.length > 0 ? ', and every row you have not answered is missing one' : ' left to set'}.`,
+        })
+        return
+      }
+      const before = new Map(moving.map((row) => [row.sku, book?.skus?.[row.sku]]))
+      setBook((current) => {
+        if (current === null) return current
+        let next = current
+        for (const row of moving) next = setAnswer(next, row.sku, row.presets[key] as string, 'price')
+        return next
+      })
+      for (const row of moving) {
+        const input = inputs.current.get(row.sku)
+        if (!input) continue
+        input.value = row.presets[key] as string
+        flash(input)
+        touched.current.delete(row.sku)
+      }
+      setNote(null)
+      toast({
+        kind: 'receipt',
+        title: `${moving.length} row(s) priced — ${chosen.label}`,
+        body:
+          missing.length === 0
+            ? 'Every row you had not already answered.'
+            : `${missing.length} row(s) have no price in that column and were left alone.`,
+        action: {
+          label: 'Undo',
+          onPress: () => {
+            setBook((current) => {
+              if (current === null) return current
+              const skus = { ...(current.skus ?? {}) }
+              for (const row of moving) {
+                const was = before.get(row.sku)
+                if (was === undefined) delete skus[row.sku]
+                else skus[row.sku] = was
+              }
+              return { ...current, skus }
+            })
+            for (const row of moving) {
+              const input = inputs.current.get(row.sku)
+              if (!input) continue
+              input.value = ''
+              flash(input)
+            }
+          },
+        },
+      })
     },
-    [rows, table, answerFor],
+    [rows, table, answerFor, source, book],
   )
 
   /** The rows a cut-off press would move: under the line, and nobody has answered them.
@@ -3844,18 +3922,26 @@ function MarkdownPanel({
 
       {raises === 0 ? (
         <p className="pricing-verdict-says">
+          {/* WHAT A BLANK BOX MEANS, SAID ON BOTH BRANCHES AND NOT ONLY AFTER THE FIRST EDIT
+              (the owner, 2026-09-07). It was stated once typing had started — "the rest are
+              left exactly as they are listed" — which is the moment it is least needed. An
+              operator looking at 387 fields pre-filled with a faint current price has to know
+              that leaving one alone changes nothing at TCGplayer, or the ghost reads as a
+              value that is about to be re-sent. It is also the true rule: `pushable` collects
+              rows carrying a typed answer and `apply` receives only those. */}
           {typed === 0 ? (
             <>
               <strong>Nothing typed yet.</strong> Every row here is a listing TCGplayer is holding
               right now. Type a price on any of them — nothing leaves this machine until you
-              press.
+              press, and <strong>a box left blank keeps the price it already has</strong>.
             </>
           ) : (
             <>
               <strong>
                 {typed} price{typed === 1 ? '' : 's'} typed
               </strong>{' '}
-              — the rest are left exactly as they are listed.
+              — a box left blank keeps the price it already has, so the rest go out exactly as
+              they are listed.
             </>
           )}
         </p>
