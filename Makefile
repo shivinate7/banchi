@@ -63,17 +63,19 @@ help:
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
+	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
 	@echo "  make sigil-check   a bare \`#\` on a screen is a COUNT, never a store key (D92)."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
+	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + port-agreement + set-hint-agreement +"
-	@echo "                    screen-freshness + sigil-check +"
+	@echo "                    merge-selftest + janitor-selftest + port-agreement +"
+	@echo "                    set-hint-agreement + screen-freshness + sigil-check +"
 	@echo "                    ignore-check + lint + vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
@@ -358,6 +360,7 @@ check:
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
+	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -458,6 +461,27 @@ screen-freshness:
 icloud-sweep:
 	@python3 scripts/icloud-sweep.py $(ARGS)
 
+# NOT IN `check`, AND NOT IN THE GIT HOOK, for icloud-sweep's reason exactly: these two are the
+# only targets here that can delete a file, and D18 forbids a writer on the path that decides
+# whether a commit proceeds. Nor is leftover exhaust a defect to fail a commit over — it is a
+# condition the owner's own sessions create on their own schedule.
+#
+# TIER 1 IS REAPED WITHOUT ASKING AND TIER 2 IS NOT. A process whose own script has been deleted
+# cannot be live; a worktree that merely LOOKS idle can be, and was, twice, on the day this was
+# written. `make status` reports the count. Reaping tier 2 is opt-in: `make janitor ARGS=--confirm`.
+# EXIT 1 IS NOT A FAILURE HERE, AND THAT DIFFERS FROM icloud-sweep ON PURPOSE. The sweep exits 1
+# when something is waiting on `--confirm`, which for a preview is the ORDINARY answer rather
+# than a rare finding — a conflict copy is unusual, a reapable worktree is Tuesday. So `make`
+# swallows 1 and nothing else: a crash, a refusal to run, any code above 1 still fails loudly.
+# The code itself is kept because a scheduled caller wants to know whether there is work.
+janitor:
+	@python3 scripts/janitor.py $(ARGS); s=$$?; [ $$s -le 1 ] || exit $$s
+
+# In `check`, never in the git hook: it writes a temp tree and signals the processes it spawned
+# there, which is D18's line. Same standing as merge-selftest and githooks-selftest.
+janitor-selftest:
+	@bash scripts/janitor-selftest.sh
+
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://pkmnscan.lan:5173`, and nothing in this repo knows that name — the DHCP reservation
 # and the DNS record are theirs, on their UniFi (D43). What this checks is the four things on
@@ -474,6 +498,8 @@ icloud-sweep:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
+.PHONY: janitor janitor-selftest
+
 .PHONY: lan-check
 lan-check:
 	@python3 scripts/lan-check.py

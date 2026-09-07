@@ -147,7 +147,7 @@ const TWO_ARG_THEN_RULES = [
 
 const LOCAL_STORAGE =
   '`localStorage` survives closing the browser, and D27 permits it only for facts about THIS ' +
-  'MACHINE. Two files hold such facts and this is neither: app/src/useCamera.ts (the ' +
+  'MACHINE. Two files are exempt outright and this is neither: app/src/useCamera.ts (the ' +
   'remembered camera and the photo rotation, neither of which can take a photograph on its ' +
   'own) and app/src/deviceMemory.ts (the theme and the rail — shell preferences about the ' +
   'screen the operator is sitting at). Put a new device-local key in deviceMemory.ts, where ' +
@@ -212,13 +212,24 @@ export default tseslint.config(
   },
   {
     /* The second exception, and the fourth rule's whole reason for having a shape rather
-     * than being a ban. TWO FILES, and between them they hold every `localStorage` call in the
-     * app. `useCamera.ts` is where D27's carve-out was argued informally before it was a
+     * than being a ban. TWO FILES, exempted outright. `useCamera.ts` is where D27's carve-out
+     * was argued informally before it was a
      * decision — the remembered deviceId and the photo rotation, both of which that file
      * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own
      * two, the theme and the rail. All four are facts about the machine this browser is running
      * on: meaningless on the Fulfiller's laptop, actively wrong if shared, and none about a
      * card.
+     *
+     * A THIRD CALL SITE EXISTS AND IS NOT A FILE EXEMPTION, which is this shape working rather
+     * than leaking. `Orders.tsx` writes `banchi.orders.last-check` — when THIS device last
+     * checked TCGplayer — through two `eslint-disable-next-line` comments that each state the
+     * argument, on the owner's ruling of 2026-09-03. That is the deliberate second door: a file
+     * exemption waives this guard over everything that file will ever store, so it is spent only
+     * on files whose whole subject is device-local memory, and a single argued key goes in at
+     * its call site where the diff shows the reason beside it. An earlier version of this
+     * comment said these two files held every `localStorage` call in the app; it was true when
+     * written and wrong for three days before anyone read it, which is why the roster lives in
+     * CLAUDE.md and is checked by `make docs-audit`'s `storage keys` row rather than counted here.
      *
      * THE SECOND FILE EXISTS BECAUSE OF THIS RULE, which is the rule working rather than being
      * worked around. The theme and the rail were read and written at three call sites in

@@ -596,7 +596,7 @@
   text-align: left;
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.review-close-choice:hover:not(:disabled) { background: var(--bn-surface-3); }
+.review-close-choice:hover:not(:disabled) { background: var(--bn-hover); }
 .review-close-choice:hover:not(:disabled) .review-key { color: var(--bn-accent); border-color: var(--bn-accent); }
 .review-close-choice:disabled { opacity: 0.5; }
 .review-close-choice .review-key { width: 22px; min-width: 22px; height: 22px; font-size: var(--bn-fs-xs); }

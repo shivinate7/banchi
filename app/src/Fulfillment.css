@@ -518,7 +518,7 @@
   color: var(--bn-ink);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.ff-box-head:hover { background: var(--bn-surface-3); }
+.ff-box-head:hover { background: var(--bn-hover); }
 .ff-box-num {
   flex: none;
   width: 48px;
@@ -999,7 +999,7 @@
   color: var(--bn-ink);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
-.ff-more-head:hover { background: var(--bn-surface-3); }
+.ff-more-head:hover { background: var(--bn-hover); }
 .ff-more-num {
   flex: none;
   min-width: 48px;

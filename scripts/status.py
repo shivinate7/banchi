@@ -125,6 +125,14 @@ SOURCES = (
                "one file",
     },
     {
+        "path": "scripts/janitor.py",
+        "kind": "file",
+        "requires": (),
+        "why": "counts what a finished session left behind — run by leftovers() below. Run "
+               "rather than reimplemented, for icloud-sweep's reason: the rule that decides "
+               "what is REAPABLE lives in one file, and it is the rule that must not drift",
+    },
+    {
         "path": "scripts/serve.py",
         "kind": "defs",
         "requires": ("report", "live_pid"),
@@ -832,6 +840,38 @@ def icloud() -> List[str]:
     ]
 
 
+def leftovers() -> List[str]:
+    """What a finished session left behind in this clone, counted and never acted on (D111).
+
+    Reported here for icloud()'s reason exactly: it is a fact you should know and need not act
+    on, and without a line like this it is invisible to every normal command. That invisibility
+    is measured — 73 local branches and four orphaned supervisors accumulated over weeks before
+    anybody looked, and the oldest of the four had been restarting against a deleted directory
+    for a week.
+
+    IT RUNS THE PREVIEW, WHICH PRESSES NOTHING. Tier 1 reaps on its own in a real sweep, so this
+    reports rather than sweeps: `make status` must never be a thing that changes the tree. The
+    count it shows is what is waiting on `--confirm`.
+    """
+    found = resolve("scripts/janitor.py")
+    if not found:
+        return []
+    done = subprocess.run(
+        [sys.executable, str(found[0])],
+        cwd=str(ROOT), capture_output=True, text=True, check=False,
+    )
+    waiting = ""
+    for line in done.stdout.splitlines():
+        if line.startswith("janitor:") and "waiting on --confirm" in line:
+            waiting = line.split("(", 1)[1].rstrip(")").strip()
+    if not waiting:
+        return []
+    return [
+        field("Left behind", waiting),
+        cont("`make janitor` lists them; ARGS=--confirm reaps them"),
+    ]
+
+
 def store() -> List[str]:
     """The store's two directories, and the shape of the store inside the first (D88).
 
@@ -899,7 +939,7 @@ def render() -> str:
     lines += blind_spots(mapdata)
     lines.append(field("the map", "`make map` renders docs/map.py — a package, a path, a"))
     lines.append(cont("decision id, or `--stale` for prose its file has outrun."))
-    lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud()
+    lines += ["", "REPO"] + repo() + hooks() + ports_and_store() + icloud() + leftovers()
     lines += ["", "SERVING"] + serving()
     lines += ["", "STORE"] + store()
 

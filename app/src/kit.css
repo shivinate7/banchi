@@ -515,7 +515,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-table td { padding: var(--bn-3); border-bottom: 1px solid var(--bn-line); vertical-align: middle; }
 .bn-table tr:last-child td { border-bottom: 0; }
 .bn-table tbody tr { transition: background-color var(--bn-t-fast) var(--bn-ease); }
-.bn-table tbody tr:hover { background: var(--bn-surface-3); }
+.bn-table tbody tr:hover { background: var(--bn-hover); }
 .bn-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---- list rows ------------------------------------------------------------------ */
@@ -532,7 +532,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
 .bn-list-row:last-child { border-bottom: 0; }
-.bn-list-row:hover { background: var(--bn-surface-3); }
+.bn-list-row:hover { background: var(--bn-hover); }
 .bn-list-row[aria-current], .bn-list-row[aria-selected='true'] { background: var(--bn-accent-tint); }
 
 /* ---- empty state ------------------------------------------------------------------ */
@@ -663,7 +663,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   color: var(--bn-ink);
   text-align: left;
 }
-.bn-menu-item:hover { background: var(--bn-surface-3); }
+.bn-menu-item:hover { background: var(--bn-hover); }
 .bn-menu-item .bn-icon { color: var(--bn-ink-3); }
 .bn-menu-item-danger { color: var(--bn-danger); }
 .bn-menu-item-danger .bn-icon { color: inherit; }

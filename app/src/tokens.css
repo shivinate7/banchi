@@ -25,8 +25,26 @@
   --bn-bg: #f4f5f8;              /* the page */
   --bn-surface: #ffffff;         /* raised: panels, rows, cards */
   --bn-surface-2: #eceef2;       /* sunken: wells, code, inactive tracks */
-  --bn-surface-3: #f7f8fa;       /* hover ground on a surface */
+  --bn-surface-3: #f7f8fa;       /* an object that paints its own ground, lifted: see --bn-hover */
   --bn-surface-glass: rgba(255, 255, 255, 0.72);
+
+  /* THE POINTER IS OVER THIS SURFACE (D110) — an alpha, so it rides the ground, exactly as the
+     three `--bn-line` tokens do and for the same reason. A hover painted as an OPAQUE
+     surface has to know what it is sitting on: `--bn-surface-3` was the hover everywhere,
+     and a sweep of every hover target on every screen found it landing on THREE grounds of
+     different lightness — the sidebar (`--bn-surface-2`), a panel (`--bn-surface`), and the
+     page — so one name produced three different steps: ΔL* 8.67, 4.00 and 7.70. The
+     sidebar's was more than double the product's own step and read as SELECTION rather
+     than hover, competing with the accent tint two rows below it. A dark-only override on
+     `.bn-nav-link` had been compensating for that ground by hand, and for that element
+     only, which is why the brand directly above it and the footer buttons directly below
+     it did not get the correction. An alpha composites against whatever is beneath it, so
+     the compensation is automatic and no element needs to know its ground. Measured over
+     those same three: 3.61 / 4.51 / 4.22, a spread of 0.90 ΔL* against 4.67.
+     ONLY FOR A SURFACE THAT RESTS TRANSPARENT. An element that paints its own ground —
+     a button, a chip, a card — lifts from its OWN colour and reads `--bn-btn-bg-hover`
+     or `--bn-surface-3`; an alpha there would replace the resting paint, not sit on it. */
+  --bn-hover: rgba(15, 18, 23, 0.03);
 
   --bn-ink: #0f1217;             /* primary text, headings, money */
   --bn-ink-2: #3b414b;           /* secondary text, values in a key/value row */
@@ -204,6 +222,7 @@
   --bn-surface-2: #090b0e;
   --bn-surface-3: #1b1f26;
   --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-hover: rgba(255, 255, 255, 0.04);
 
   --bn-ink: #eef0f4;
   --bn-ink-2: #b9bfc9;

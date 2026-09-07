@@ -251,20 +251,35 @@ function hintNoteText(verdict: HintVerdict, game: string): string {
   )
 }
 
+/* THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
+ * NOTHING MIGRATES. `useCamera.ts` carries the argument in full beside its own two keys; the
+ * short of it is that the split between `banchi.*` and `pkmnscan.*` was chronological rather
+ * than principled, and the owner declined a read-time fallback because a fallback can never
+ * safely be deleted afterwards.
+ *
+ * IT COSTS MORE HERE THAN ANYWHERE ELSE, AND FOR ONE KEY. These are `sessionStorage`, so the
+ * old values were already dying at the end of every shift — except in a tab that was OPEN
+ * across the deploy, which then read seven empty keys and drew a capture screen with no box,
+ * no set hint, no finish, no game, no rarity claim and no product claim. Six of those are one
+ * press each. `captureId` is not: D27 records that it is the in-flight id of a capture whose
+ * response was lost, and losing it makes that ambiguity permanently unresolvable while D10's
+ * high-water mark hands the burned position to the next physical card. So the window in which
+ * this rename could cost a card is exactly "a capture in flight at the moment the new build
+ * loaded", and it is named here rather than left to be discovered. */
 const SESSION_KEYS = {
-  box: 'pkmnscan.session.box',
-  setHint: 'pkmnscan.session.setHint',
-  finish: 'pkmnscan.session.finish',
-  game: 'pkmnscan.session.game',
+  box: 'banchi.session.box',
+  setHint: 'banchi.session.setHint',
+  finish: 'banchi.session.finish',
+  game: 'banchi.session.game',
   // D23's stack claim, as JSON — the one non-scalar in this store, because the claim is a
   // LIST of the game's exact Rarity cells and flattening it to a joined string would be a
   // second spelling of a vocabulary D22 says renders verbatim. Same clock as the rest: a
   // claim about the stack at the lens, dead when the tab closes.
-  rarityClaim: 'pkmnscan.session.rarityClaim',
+  rarityClaim: 'banchi.session.rarityClaim',
   // C10's product claim. A scalar like `game` and `setHint`, not JSON like the claim above:
   // a stack came out of one sealed product, so there is nothing to flatten.
-  product: 'pkmnscan.session.product',
-  captureId: 'pkmnscan.session.captureId',
+  product: 'banchi.session.product',
+  captureId: 'banchi.session.captureId',
 } as const
 
 /* Storage can throw outright — Safari private browsing, a profile with site data disabled,

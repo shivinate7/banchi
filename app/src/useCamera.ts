@@ -67,8 +67,26 @@ const JPEG_QUALITY = 0.95
  * deviceId is the opposite kind of fact: it is meaningless on any other machine and would
  * be actively wrong if shared, since the Fulfiller's laptop has different hardware. Nothing
  * about a card is stored here, and docs/specs/capture-app.md section 9's "no second store
- * in the browser" is about captures, which still go straight to the Mac. */
-const REMEMBERED_DEVICE_KEY = 'pkmnscan.capture.deviceId'
+ * in the browser" is about captures, which still go straight to the Mac.
+ *
+ * THE `pkmnscan.` PREFIX WAS RENAMED TO `banchi.` ON 2026-09-06, ON THE OWNER'S WORD, AND
+ * NOTHING MIGRATES. D94 freezes every name beneath the product and a storage key is about as
+ * far beneath it as a thing gets, so the case for renaming was never technical — the split
+ * was simply chronological, `banchi.*` on the three keys written after the rebrand and
+ * `pkmnscan.*` on the ten written before, which is a residue rather than a rule. The owner
+ * was shown the alternative (read the new key, fall back to the old, write the new) and
+ * declined the shim, on the grounds that a fallback read can never safely be deleted:
+ * removing it later strands any browser that has not opened the app since.
+ *
+ * SO THE OLD VALUES ARE ABANDONED IN PLACE, not deleted, and each one is named where it is
+ * declared rather than counted in one list. Nothing here is a card, a position or a price —
+ * that is D27's whole test — so the worst case is a preference the operator sets again.
+ *
+ * THIS RIG PAID TWO CLICKS FOR IT. `pkmnscan.capture.deviceId` held the 4K capture card the
+ * feeder runs through and `pkmnscan.capture.rotation` held the quarter turn D13's sideways
+ * mount needs; the first load after this landed opened the device picker with nothing
+ * remembered and drew the preview unrotated. Both are one press on the capture screen. */
+const REMEMBERED_DEVICE_KEY = 'banchi.capture.deviceId'
 
 /* Same store and same justification as the device id above: which way the camera is
  * mounted is a fact about THIS rig, wrong on any other machine, and nothing about a card
@@ -91,7 +109,7 @@ const REMEMBERED_DEVICE_KEY = 'pkmnscan.capture.deviceId'
  * every consumer at once — the model, geometry's crop bands, and the review queue's
  * judging photo — where a fix in the identify path would have left a sideways photo on
  * every screen that shows one. */
-const ROTATION_KEY = 'pkmnscan.capture.rotation'
+const ROTATION_KEY = 'banchi.capture.rotation'
 
 /* QUARTER TURNS ONLY, AND ONLY THE TWO THAT ARE EVER RIGHT ON THIS RIG (owner, 2026-08-24).
  * This was `0 | 90 | 180 | 270` and offering all four was offering two wrong answers.

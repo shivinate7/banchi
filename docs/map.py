@@ -1156,7 +1156,7 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42"],
+                "governed_by": ["D18", "D33", "D42", "D111"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1225,6 +1225,48 @@ COMPONENTS = [
                 # server up would go red on a train and in every worktree, and a check that
                 # fails for reasons unrelated to the commit is one people learn to ignore.
                 "governed_by": ["D43", "D47", "D53"],
+            },
+            "janitor.py": {
+                "does": "the sweep: what a finished session left behind, and — where it is "
+                        "provably dead — reaped. Two tiers. TIER 1 needs no confirmation "
+                        "because it cannot be live: a process whose own script has been "
+                        "deleted, a registration `git worktree prune` disowns, a husk "
+                        "directory holding nothing but `.serve/` caches with nothing running "
+                        "under it. TIER 2 previews and waits for `--confirm`: a merged branch "
+                        "no tree holds, a worktree with no session in it. Liveness is READ "
+                        "from `~/.claude/sessions/<pid>.json`, never inferred from mtimes — "
+                        "see `_same_process` for the timezone bug that made every session "
+                        "read as dead, and for why every unreadable case resolves to LIVE. "
+                        "`--teardown` is the half a session-end hook runs. Repo-agnostic: no "
+                        "import from this tree, and `--root` points it at any clone.",
+                # D44 is the asymmetry it inherits — provably dead is reaped, doubtful is only
+                # ever reported. D18 keeps it off the gate: with icloud-sweep it is one of the
+                # two targets here that can delete a file. D53 is what it must not undo — the
+                # main checkout's supervisor is the product and is never touched. D42 is why a
+                # branch is judged by ancestry rather than by `git branch -d`.
+                "governed_by": ["D18", "D42", "D44", "D53"],
+            },
+            "janitor-selftest.sh": {
+                "does": "proves janitor.py against a throwaway origin, clone and four linked "
+                        "worktrees, with a fake liveness oracle and four short-lived processes "
+                        "confined to the fixture by `--confine`. The cases that matter are the "
+                        "refusals, and each asserts the janitor's own sentence rather than the "
+                        "outcome alone — git would refuse some of them by itself, and survival "
+                        "by somebody else's refusal is not coverage. Mutation-tested: five "
+                        "guards removed one at a time, all five caught.",
+                "governed_by": ["D18", "D44"],
+            },
+            "session-teardown.sh": {
+                "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
+                        "started in a linked worktree and nothing else — the main checkout's "
+                        "server is D53's product and is never touched, a tree another session "
+                        "is still standing in is left alone, and the branch and the tree are "
+                        "never touched at all. Then runs janitor.py --tier1, because a "
+                        "supervisor whose tree has just been removed is findable only from the "
+                        "process table: `.serve/` went with the tree. Fails open on every path.",
+                # D53 is the behaviour it is careful not to break; D18 keeps it off the commit
+                # path, exactly as the SessionStart guard beside it is kept off.
+                "governed_by": ["D18", "D53"],
             },
             "icloud-sweep.py": {
                 "does": "lists iCloud Drive conflict copies (`foo 2.py`) and, with --delete, "
@@ -1347,11 +1389,20 @@ COMPONENTS = [
                 # who does not know the count has been wrong seven times reads the check as
                 # pedantry. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
+                #
+                # D27 AND D94 JOIN FOR `storage keys`, and both are load-bearing rather than
+                # illustrative. D27 is the carve-out the row enforces — which browser-storage
+                # keys are permitted and the promise, made in that entry, that they are named
+                # in the documentation. D94 is why the row says nothing about the PREFIX: the
+                # product is Banchi and everything beneath it keeps its name, so `banchi.*`
+                # and `pkmnscan.*` both stand and a row demanding one of them would be
+                # demanding a rename that silently discards what a browser holds under the
+                # old spelling.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D31", "D39", "D49", "D50",
-                                "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70", "D72",
-                                "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90", "D92",
-                                "D96", "D101", "D102", "D104"],
+                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D49",
+                                "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70",
+                                "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90",
+                                "D92", "D94", "D96", "D101", "D102", "D104"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1650,7 +1701,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D47", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1690,7 +1741,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
@@ -2328,7 +2379,9 @@ COMPONENTS = [
             # ---- the ground: what everything else reads ----
             "src/tokens.css": {"does": "BANCHI'S TOKENS, and the only file in app/ allowed to write a "
                                        "color. Named `--bn-*` and grouped by the job rather than by "
-                                       "the value: neutrals (bg, surface 1-3, glass), ink 1-4, three "
+                                       "the value: neutrals (bg, surface 1-3, glass, and `--bn-hover`, "
+                                       "the pointer's own step — an ALPHA so it rides whatever "
+                                       "ground it lands on, D110), ink 1-4, three "
                                        "line weights, brand (accent with hover/press/two tints, and "
                                        "`live`, the vermilion that means a camera or a capture), the "
                                        "four semantic pairs, three shadows plus an accent glow, the "
@@ -2350,7 +2403,7 @@ COMPONENTS = [
                                        "raises the three control heights to a thumb's 40-46px — the "
                                        "POINTER decides, not the width, because an iPad in portrait "
                                        "is 820px wide and all thumb.",
-                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94"],
+                               "governed_by": ["D5", "D13", "D18", "D32", "D50", "D94", "D110"],
                                "note": "`scripts/docs-audit.py`'s `design tokens` row reads "
                                        "docs/DESIGN.md's fenced block as hexes, three typefaces, a "
                                        "spacing row and one radius, and merges every `:root` in this "
@@ -2694,9 +2747,15 @@ COMPONENTS = [
                                             "two in `kit/index.tsx`; exempting either would "
                                             "have waved through anything those files ever "
                                             "store, and `App.tsx` is the shell. This module and "
-                                            "`src/useCamera.ts` are the two named exceptions "
-                                            "and between them hold every `localStorage` call in "
-                                            "the app. D27 permits only facts about THIS "
+                                            "`src/useCamera.ts` are the two named FILE "
+                                            "exceptions; `src/Orders.tsx` holds a third key at "
+                                            "two call sites carrying an inline disable, on the "
+                                            "owner's ruling of 2026-09-03, so the count is five "
+                                            "and not four. CLAUDE.md publishes the roster and "
+                                            "`make docs-audit`'s `storage keys` row reconciles "
+                                            "it against this directory in both directions — the "
+                                            "sentence said four and listed five for three days, "
+                                            "and named this file nowhere. D27 permits only facts about THIS "
                                             "MACHINE: a theme is chosen for the room the "
                                             "operator is sitting in, and D13 keeps everything "
                                             "about a card on the Mac so two devices cannot "
@@ -2707,7 +2766,13 @@ COMPONENTS = [
                                          "deviceId selection, never facingMode (v1 bug 3), the "
                                          "native resolution requested explicitly, and a "
                                          "remembered device that refuses to fall back to another",
-                                 "governed_by": ["D13"],
+                                 # D27 and D94 for the two `localStorage` keys this file holds
+                                 # and the argument beside them: D27 permits the store only for
+                                 # facts about THIS MACHINE, and D94 is what the 2026-09-06
+                                 # rename off the `pkmnscan.` prefix had to be argued against —
+                                 # the owner overruled it for storage keys specifically, and
+                                 # this file carries the whole account of what that cost.
+                                 "governed_by": ["D13", "D27", "D94"],
                                  "note": "`started`, `missing` and `error` are three different "
                                          "facts and the screen draws them differently: not "
                                          "asked for yet, not connected, and asked for and "
@@ -3823,7 +3888,7 @@ COMPONENTS = [
                                      "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
-                                          "`pkmnscan.run-scope`, D27's carve-out. NOT CLEARED BY "
+                                          "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "
                                           "BEING READ, because a reload during a live run is "
                                           "ordinary and a read-once handoff would silently widen "
                                           "what the next press pays for; cleared by the operator, "
