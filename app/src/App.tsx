@@ -1047,7 +1047,13 @@ function PhoneBar({ route, onMenu, onPalette }: { route: Route | undefined; onMe
       <a className="bn-topbar-brand" href="#/" aria-label="Banchi home">
         <Logo size={26} />
       </a>
-      <span className="bn-topbar-title">{route === undefined ? 'Not found' : 'Banchi'}</span>
+      {/* LOWERCASE, AND IT IS THE STRING RATHER THAN A `text-transform`. The owner set the
+          wordmark lowercase on 2026-09-06. A CSS transform would leave the DOM text and the
+          accessible name reading "Banchi" while the eye sees "banchi", which is a presentation
+          hack standing in for a copy decision — and this same word is what a screen reader
+          announces. The `aria-label` above keeps its capital on purpose: "Banchi home" is a
+          sentence naming the product, not the wordmark. */}
+      <span className="bn-topbar-title">{route === undefined ? 'Not found' : 'banchi'}</span>
       <Button variant="ghost" icon="search" iconOnly onClick={onPalette}>
         Search
       </Button>
@@ -1088,7 +1094,8 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: b
           <a className="bn-brand" href="#/" onClick={onClose}>
             <Logo size={30} />
             <span className="bn-brand-text">
-              <span className="bn-brand-name">Banchi</span>
+              {/* lowercase, like the phone bar above — one wordmark, one casing */}
+              <span className="bn-brand-name">banchi</span>
               <span className="bn-brand-tag">every card has an address</span>
             </span>
           </a>
