@@ -904,6 +904,10 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
    before React runs; there is no way to share a constant with static HTML. */
 const BROWSER_TITLE = '番地 banchi'
 
+/* How long each half of the tab title holds before the other takes over. The owner asked for a
+   second. Named rather than typed into the interval so it is one place to retune. */
+const TITLE_ALTERNATE_MS = 1000
+
 const SIDEBAR_KANJI = 40
 const RAIL_MARK = 32
 
@@ -1143,16 +1147,51 @@ export function App() {
   const [keysOpen, setKeysOpen] = useState(false)
   const { state: server, cards, retry } = useServerPresence(chrome)
 
+  /* THE BROWSER HEADER READS `番地 banchi`, AND ON A NAMED SCREEN IT ALTERNATES WITH THE SCREEN.
+     The tab's own vocabulary and nothing on screen: the sidebar draws the lockup, the phone bar
+     and the drawer keep their own wordmark, and the Fulfiller's tab still says what he is doing
+     rather than whose product it is. `app/index.html` carries the plain string for the moment
+     before React boots.
+
+     WHY ALTERNATE RATHER THAN CONCATENATE. `Inventory · 番地 banchi` is 20 characters and a
+     browser tab shows perhaps a dozen, so the concatenation truncates and the half that survives
+     is whichever came first. Alternating shows each in full, in turn — the owner's call, at the
+     one-second cadence they asked for.
+
+     TWO THINGS IT COSTS, and neither is hypothetical:
+     · A screen reader may announce the document title when it changes, so this can become a
+       repeating announcement. `prefers-reduced-motion` is the opt-out and falls back to the
+       concatenation — the standard signal for "stop moving things", and the same one `base.css`
+       already honours everywhere else in this product.
+     · Anything that samples the title once — a bookmark, a history entry, a screenshot — catches
+       whichever phase was showing. There is no way around that; it is what alternating means.
+
+     AND IT IS SUBJECT TO THE BROWSER'S BACKGROUND THROTTLING, which is exactly the case this is
+     for: a tab you are not looking at is the one whose strip you read. Chrome throttles timers in
+     hidden tabs, and harder still after some minutes hidden without interaction, so the cadence
+     there is the browser's to decide rather than ours. NOT MEASURED — the harness could not
+     reproduce a genuinely hidden tab, so this is a documented behaviour rather than one this repo
+     has observed, and it is written here as the first thing to check if the alternation ever
+     looks wrong in a background tab. */
+  const stillTitle = useMedia('(prefers-reduced-motion: reduce)')
+
   useEffect(() => {
     const name = route?.label ?? 'Not found'
-    /* THE BROWSER HEADER READS `番地 banchi` — the kanji, then the name in lowercase. It is the
-       tab's own vocabulary and nothing on screen: the sidebar draws the lockup, the phone bar and
-       the drawer keep their own wordmark, and the Fulfiller's tab still says what he is doing
-       rather than whose product it is. `app/index.html` carries the same string for the moment
-       before React boots. */
-    document.title = route?.persona === 'fulfiller' ? 'Cards to pull'
-      : route?.path === '/' ? BROWSER_TITLE : `${name} · ${BROWSER_TITLE}`
-  }, [route])
+    // The Fulfiller's tab names his task, and Home has nothing to alternate WITH — the screen and
+    // the product are the same word there. Both are one title and no timer.
+    if (route?.persona === 'fulfiller') { document.title = 'Cards to pull'; return }
+    if (route?.path === '/') { document.title = BROWSER_TITLE; return }
+    if (stillTitle) { document.title = `${name} · ${BROWSER_TITLE}`; return }
+
+    // the screen first: it is the half you are looking for when you scan a strip of tabs
+    let showName = true
+    document.title = name
+    const id = window.setInterval(() => {
+      showName = !showName
+      document.title = showName ? name : BROWSER_TITLE
+    }, TITLE_ALTERNATE_MS)
+    return () => window.clearInterval(id)
+  }, [route, stillTitle])
 
   useEffect(() => {
     setDrawer(false)

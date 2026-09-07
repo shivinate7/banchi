@@ -337,6 +337,94 @@ test('the chevron is quiet, and it is pinned to the row edge rather than floatin
   await expect(page.locator('.bn-brand-chevron')).toBeHidden()
 })
 
+/* THE TAB TITLE ALTERNATES, AND THE THREE PLACES IT MUST NOT.
+ *
+ * `Inventory · 番地 banchi` is twenty characters and a browser tab shows perhaps a dozen, so the
+ * concatenation truncates and the half that survives is whichever came first. The owner asked for
+ * the two to take turns instead. That is a `setInterval` on `document.title`, which is the kind of
+ * thing that breaks quietly: a stale timer surviving a route change fights the new one, and a
+ * cleanup that runs too eagerly leaves the tab frozen on one half. Neither shows up in a
+ * screenshot and neither throws.
+ *
+ * THE EXEMPTIONS ARE THE POINT AS MUCH AS THE ALTERNATION. Home has nothing to alternate WITH —
+ * the screen and the product are the same word. The Fulfiller's tab names his task, not whose
+ * product it is. And `prefers-reduced-motion` falls back to the concatenation, because a title
+ * that changes on a timer may be announced by a screen reader every time it changes, and that
+ * query is how this product is told to stop moving things.
+ *
+ * THE SCREENS ARE READ OFF THE NAV, NOT TYPED. `make docs-audit`'s `route rosters` row refused an
+ * earlier draft of this file for pinning four hashes, and it was right to: a list somebody typed
+ * goes stale silently, and the route added next month is simply not in it. What these cases need
+ * is not a roster but "some named screen" and "the Fulfiller's", and the sidebar knows both — his
+ * link is the only `.bn-nav-link` it draws outside `<nav>`, which is the same structural fact
+ * `cursor.spec.ts` harvests on. */
+async function screens(page: import('@playwright/test').Page) {
+  await page.goto('/#/')
+  await expect(page.locator('.bn-side a.bn-nav-link').first()).toBeVisible()
+  const found = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLAnchorElement>('.bn-side a.bn-nav-link')).map((a) => ({
+      href: a.getAttribute('href') ?? '',
+      label: (a.querySelector('.bn-nav-text') ?? a).textContent?.trim() ?? '',
+      outsideNav: a.closest('nav') === null,
+    })),
+  )
+  const named = found.find((r) => r.href !== '#/' && !r.outsideNav)
+  const fulfiller = found.find((r) => r.outsideNav)
+  expect(named, 'the sidebar drew no named screen to alternate on').toBeTruthy()
+  expect(fulfiller, "the sidebar drew no link outside <nav> — the Fulfiller's has moved").toBeTruthy()
+  return { named: named!, fulfiller: fulfiller! }
+}
+
+test('the tab title alternates on a named screen, and holds still where it should', async ({ page }) => {
+  const { named } = await screens(page)
+
+  await page.goto(`/${named.href}`)
+  await page.waitForTimeout(500)
+  // sample across more than one full cycle; both halves must appear IN FULL, never concatenated
+  const seen = new Set<string>()
+  for (let i = 0; i < 12; i++) { seen.add(await page.title()); await page.waitForTimeout(250) }
+  expect([...seen].sort(), 'the tab shows each half in turn, neither truncated into the other')
+    .toEqual([named.label, '番地 banchi'].sort())
+
+  // Home: one word for both the screen and the product, so nothing to take turns with
+  await page.goto('/#/')
+  await page.waitForTimeout(1400)
+  const home = await page.title()
+  await page.waitForTimeout(1400)
+  expect(await page.title(), 'Home has nothing to alternate with and must hold still').toBe(home)
+  expect(home).toBe('番地 banchi')
+
+  // and the timer from the screen we just left must not have survived to fight this one
+  const after = new Set<string>()
+  for (let i = 0; i < 6; i++) { after.add(await page.title()); await page.waitForTimeout(300) }
+  expect([...after], 'a timer from the previous route is still running').toEqual(['番地 banchi'])
+})
+
+test("the Fulfiller's tab names his task, not the product", async ({ page }) => {
+  const { fulfiller } = await screens(page)
+  await page.goto(`/${fulfiller.href}`)
+  await page.waitForTimeout(1400)
+  const first = await page.title()
+  await page.waitForTimeout(1400)
+  expect(first, 'his tab says what he is doing').toBe('Cards to pull')
+  expect(await page.title(), 'and it does not alternate at him').toBe(first)
+})
+
+/* `reducedMotion` is set on an explicit CONTEXT rather than through `test.use`, which this
+   Playwright's fixture types do not accept it in. */
+test('with reduced motion the tab stops taking turns and shows both at once', async ({ browser, baseURL }) => {
+  const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL })
+  const page = await ctx.newPage()
+  const { named } = await screens(page)
+  await page.goto(`/${named.href}`)
+  await page.waitForTimeout(600)
+  const seen = new Set<string>()
+  for (let i = 0; i < 8; i++) { seen.add(await page.title()); await page.waitForTimeout(300) }
+  await ctx.close()
+  expect([...seen], 'reduced motion gets one steady title, concatenated')
+    .toEqual([`${named.label} · 番地 banchi`])
+})
+
 /* THE BRAND IS THE CONTROL — the user's own instruction, after the 22px chevron proved
    unclickable. Nothing else in this suite presses it, and the whole affordance is one onClick. */
 test('pressing the brand collapses the sidebar and expands it again', async ({ page }) => {
