@@ -117,13 +117,17 @@
   .livecheck-top {
     padding-left: var(--bn-4);
   }
-  .livecheck-top .bn-btn-icon,
-  .livecheck-foot .bn-btn {
-    --btn-h: 40px;
-  }
   .livecheck-body,
   .livecheck-foot {
     padding-left: var(--bn-4);
     padding-right: var(--bn-4);
   }
+}
+
+/* THE THUMB FLOOR, ON THE POINTER (D117). These two lifts were inside this sheet's width-only
+   phone block and spelled `--btn-h: 40px` by hand — so an 820px tablet missed them, and the
+   literal could not follow `--bn-control-h*` if that token ever moved. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .livecheck-top .bn-btn-icon,
+  .livecheck-foot .bn-btn { --btn-h: var(--bn-control-h-sm); }
 }

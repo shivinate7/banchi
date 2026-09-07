@@ -25,19 +25,26 @@
    The kit's md control is 34px and sm is 28px — mouse sizes. Anything a thumb presses on
    this screen is lifted to 36–40px here, by descendant, because PageHeader, Segmented and
    Button are kit. (Kit gap: phone sizes for `.bn-btn-sm` and `.bn-seg-item`.) */
-@media (max-width: 767px) {
-  .runs .bn-head-actions .bn-btn { --btn-h: 40px; }
-  .run-readings .bn-seg-item { min-height: 40px; }
+/* THE ARM IS THE POINTER (D117). Every rule in this block is a control height, and until
+   2026-09-07 it read `max-width: 767px` alone — so an iPad in portrait, 820px wide and all
+   thumb, got none of it. The literals became `--bn-control-h-sm` at the same time: a number
+   typed here cannot follow the token if the token ever moves.
+   THE KIT GAP THIS PARAGRAPH USED TO NAME IS CLOSED. `.bn-btn-sm` and `.bn-seg-item` have
+   phone sizes in `kit.css` now, at the foot of that sheet where they beat their own base
+   rules, so these descendant lifts are belt-and-braces rather than the only cover. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .runs .bn-head-actions .bn-btn { --btn-h: var(--bn-control-h-sm); }
+  .run-readings .bn-seg-item { min-height: var(--bn-control-h-sm); }
   /* `.runslog-toggle`, `.runs-disclose` and the log well's Copy are lifted BESIDE THEIR BASE
      RULES further down this file, not here. At this position they lose: the base heights are
      written later at the same specificity, so a lift up here is dead the moment the cascade
      reaches them, which is what it was from the day it was written. */
-  .run-preview-walk .bn-btn-sm { --btn-h: 40px; }
-  .runs-composer-head .bn-btn-icon { --btn-h: 40px; }
+  .run-preview-walk .bn-btn-sm { --btn-h: var(--bn-control-h-sm); }
+  .runs-composer-head .bn-btn-icon { --btn-h: var(--bn-control-h-sm); }
   /* The presses that matter most — the step actions, Check cost, the file pickers. */
   .runs-step-body .bn-btn,
   .runs-filebtn,
-  .runs-composer-foot .bn-btn { --btn-h: 40px; }
+  .runs-composer-foot .bn-btn { --btn-h: var(--bn-control-h-sm); }
 }
 
 /* ---- stage bar (six segments) --------------------------------------------- */
@@ -103,9 +110,9 @@
    only one that ever took effect. That copy is deleted; this is unscoped, so it reaches the
    reconcile sheet, the composer, the run panel — and the markdown sheet, which took its own
    stylesheet to `#/pricing` (D105) but still renders a `LogWell` styled from here. */
-@media (max-width: 767px) {
-  .runslog-toggle { height: 40px; }
-  .runslog-head .bn-btn-sm { --btn-h: 40px; }
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .runslog-toggle { height: var(--bn-control-h-sm); }
+  .runslog-head .bn-btn-sm { --btn-h: var(--bn-control-h-sm); }
 }
 .runslog-chev { flex: none; transition: transform var(--bn-t) var(--bn-ease); }
 .runslog-closed .runslog-chev { transform: rotate(-90deg); }
@@ -308,7 +315,13 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   .runs-composer-head { padding: var(--bn-3) var(--bn-3) var(--bn-3) var(--bn-4); gap: var(--bn-2); }
   .runs-composer-title { font-size: var(--bn-fs-lg); white-space: normal; }
   .runs-stage-label { display: none; }
+  /* A DONE STAGE IS A BUTTON — `RunsComposer.tsx:473` renders one, so this is a target and not
+     an indicator, and 36px was under the floor (D117). The chip keeps its drawn size, which is
+     what lets six of them and their connectors sit on one line at 390; the hit area reaches past
+     it, the way BoxBrowse's tick does. */
   .runs-stage { height: 36px; min-width: 36px; padding: 0 2px; justify-content: center; }
+  button.runs-stage { position: relative; }
+  button.runs-stage::after { content: ''; position: absolute; inset: -3px -2px; }
   /* Shorter connectors, so the 36px chips leave the eyebrow its one line. */
   .runs-stages li + li::before { width: 8px; margin: 0 2px; }
   .runs-composer-body { padding: var(--bn-4); }
@@ -715,4 +728,14 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .livecheck-hint {
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
+}
+
+/* THE THUMB FLOOR (D117). Two controls in this sheet were never lifted at any width: the box
+   picker's tick at 18px, and the run preview's fold at 28px. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .runs-box-check { width: 22px; height: 22px; }
+  /* the tick's own hit area reaches past its drawn box, the way BoxBrowse's does */
+  .runs-box-check { position: relative; }
+  .runs-box-check::after { content: ''; position: absolute; inset: -11px; }
+  .run-preview-head { min-height: var(--bn-control-h-sm); }
 }

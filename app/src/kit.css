@@ -20,10 +20,6 @@
 }
 @media (max-width: 767px) {
   .bn-page { padding: var(--bn-4) var(--bn-4) var(--bn-10); }
-  .bn-seg-item { height: 36px; }
-  .bn-tab { height: 44px; }
-  .bn-menu-item { padding: var(--bn-3); }
-  .bn-list-row { min-height: 48px; }
 }
 @keyframes bn-page-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -942,3 +938,46 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    Gallery.tsx's dark one. It is kept for that, and there is deliberately no media query. */
 
 
+/* ================================================================================
+   THE THUMB FLOOR — LAST IN THIS SHEET ON PURPOSE.
+   Every rule below is a lift over a base rule ABOVE it, at the same specificity, so it has to
+   come after them or it does nothing at all. That is not hypothetical: `Markdown.css` records
+   the same mistake being made and shipped — "a phone lift written before the base rules at the
+   same specificity, dead on arrival" — and it cost two controls in that sheet.
+   ================================================================================ */
+/* THE THUMB FLOOR, IN THE KIT (D117). CLAUDE.md: "anything a thumb presses is 40px or more.
+   The control-height tokens raise themselves under 767px and on a coarse pointer, so do not
+   hand-roll a mouse-sized control on a phone." These four hand-rolled one anyway — they carry a
+   literal height rather than reading `--bn-control-h*`, so the token's own lift never reached
+   them, and `.bn-seg-item`'s phone value was 36px, which is under the floor it was written for.
+   IT IS THE POINTER AND NOT THE WIDTH that decides, which is `tokens.css`'s own rule and
+   docs/DESIGN.md's: an iPad in portrait is 820px wide and all thumb.
+   PATCHED AT ONE CALL SITE UNTIL NOW, WHICH IS HOW A KIT GAP HIDES. `Markdown.css` lifted
+   `.bn-check` inside its own sheet and said so — "the check is still somebody else's" — and
+   `BoxBrowse.css` did the same for `.bn-menu-item`. Both patches are deleted; every screen gets
+   these rather than the two that happened to notice. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .bn-seg-item { height: var(--bn-control-h-sm); }
+  .bn-tab { height: var(--bn-control-h); }
+  .bn-menu-item { min-height: var(--bn-control-h-sm); padding: var(--bn-2) var(--bn-3); }
+  .bn-list-row { min-height: 48px; }
+  /* THE LABEL IS THE TARGET, NOT THE BOX. `.bn-check`'s box is 16px by design — a checkbox that
+     grows to 40 is a different drawing — so the floor is met by the label that already wraps it
+     and already takes the tap. Measured at 390: 19.5px before this, on the control that decides
+     whether one import file is written or two. */
+  .bn-check { min-height: var(--bn-control-h-sm); }
+  .bn-toast-action { height: var(--bn-control-h-sm); }
+  .bn-toast-close { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); }
+  /* an icon-only button is square off `--btn-h`, but `.bn-btn` can still be squeezed narrower by
+     a flex parent — the drawer's and the palette's were 36px wide against a 42px height */
+  .bn-btn { min-width: var(--bn-control-h-sm); }
+
+  /* THE UNLABELLED UTILITY GOES LAST ON A PHONE (D117). A header's actions are written primary-
+     last and right-aligned, so on a desktop the icon-only Reload lands at the LEFT of a cluster
+     that ends in the primary — which reads as a utility beside it. The phone header is left-
+     aligned, so the same source order put a bare, unlabelled glyph at the head of the row, ahead
+     of `Identify a box` and `Reconcile`. Four screens drew it that way: Runs, Review, Codes and
+     Pricing. `order` and not a reordering of the JSX, because the source order is correct at the
+     width it was written for and the DOM order is what a screen reader follows. */
+  .bn-head-actions > .bn-btn-icon { order: 1; margin-left: auto; }
+}

@@ -980,3 +980,38 @@
   .review-done-empty { padding: var(--bn-7) var(--bn-3); }
   .review-group-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); max-height: none; min-height: 0; overflow: visible; }
 }
+
+/* THE THUMB FLOOR, THE ROWS THIS SHEET'S OWN COARSE BLOCK MISSED (D117). That block lifts the
+   filters and the actions; these three were left on their literals — the caption under the
+   photograph is a LINK to the card's place in the box, and it measured 30px. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .review-caption { min-height: var(--bn-control-h-sm); }
+  .review-details-summary { min-height: var(--bn-control-h-sm); }
+  .review-chip { height: var(--bn-control-h-sm); }
+}
+
+/* ---- THE SCROLLING CHIP ROW SAYS SO (D117) ----------------------------------------------------
+   Both of these rows scroll horizontally on a phone with `scrollbar-width: none`, so the third
+   chip was cut mid-word with nothing on screen to suggest a swipe would reach it. The fade is a
+   mask driven by the row's OWN scroll progress, so it says which way there is more: right edge
+   only at the start, left edge only at the end, both in the middle.
+   `scroll()` IS WHAT MAKES IT HONEST. A static fade would sit on a row that does not overflow and
+   read as a rendering fault; a scroll-progress timeline whose scroller has no overflow is INACTIVE,
+   and an inactive timeline applies no effect at all. So a short row gets nothing, with no
+   measurement and no class to keep in step. Behind `@supports` because the fallback — no fade,
+   which is today — is the correct one. */
+@supports (animation-timeline: scroll()) {
+  /* `black` IS AN ALPHA HERE, NOT PAINT, which is why no token is read for it. A mask uses only
+     the alpha channel of what it is given: `black` means "keep this pixel" and `transparent`
+     means "drop it", and neither has anything to do with the theme. `raw color` reads this sheet
+     for hex literals on the premise that a color must follow the theme; the premise does not
+     hold for a mask, and the keyword rather than `#000` is what says so at the call site. */
+  @keyframes bn-edgefade {
+    from { mask-image: linear-gradient(90deg, black 0, black calc(100% - 28px), transparent 100%); }
+    50% { mask-image: linear-gradient(90deg, transparent 0, black 28px, black calc(100% - 28px), transparent 100%); }
+    to { mask-image: linear-gradient(90deg, transparent 0, black 28px, black 100%); }
+  }
+  @media (max-width: 767px) {
+    .review-filters { animation: bn-edgefade linear both; animation-timeline: scroll(self inline); }
+  }
+}
