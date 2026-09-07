@@ -71,7 +71,7 @@ help:
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
-	@echo "  make ci-check     what a fresh clone can prove: everything in check but vale."
+	@echo "  make ci-check     what a fresh clone can prove: check minus harness and vale."
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
@@ -378,21 +378,22 @@ check:
 # nothing tracks — and no one noticed, because the only trees it was run in had made a recording.
 # A gate with no re-checker is the same defect D111 records one register up.
 #
-# ONE ROW IS ABSENT AND IT IS NOT AN OVERSIGHT:
+# TWO ROWS ARE ABSENT AND NEITHER IS AN OVERSIGHT:
 #   vale     needs a binary that is not on the runner, and it never gated a commit anyway.
-#
-# THE HARNESS IS HERE AS OF 2026-09-06 AND WAS NOT WHEN THIS TARGET WAS WRITTEN. It was
-# excluded because T1 needed `harness/.cache` (96K) and `harness/images` (133M), both
-# untracked, so a fresh runner could only fail it. D112 moved the LABELS out of the image
-# mirror — 40K of ground truth that had been filed with the pixels for the pixels' reason —
-# and gave the scorer a fingerprint, so an unmoved measurement is asserted rather than
-# re-derived. All nine tests now pass on a clone with no images and no cache, measured.
+#   harness  T7 FAILS ON LINUX and passes on the rig, so it cannot gate here until that is
+#            understood. Not T1's doing: D112 made T1 hermetic and all nine tests do pass on
+#            a fresh macOS clone with no images and no cache. The harness was added on the
+#            strength of that measurement and backed out the same hour, because "passes on a
+#            fresh clone" was measured on ONE PLATFORM and read as "passes anywhere".
+#            What actually fails is T7's shipping-stamp assertion — `NOTHING WAS PERSISTED BY
+#            ANY OF IT`, D61's rule that buyer PII passes through and is never kept — which
+#            is a real finding about T7 or about the runner, and is being followed up
+#            separately rather than rushed while main is red.
 #
 # Everything below answers from the tree alone, which is exactly what a re-checker can own.
 # IT IS A SUBSET AND CAN DRIFT FROM `check`. Kept adjacent to it deliberately, so the two are
 # read together; `make explain` still describes the full suite and this list adds no rows to it.
 ci-check:
-	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest

@@ -6550,12 +6550,20 @@ ever grows a cost again.
 rewrote it. Adding a field is not a re-measurement, and the timestamp on a score should name the
 run that produced it. The number, the model and every per-set figure are byte-identical.
 
-**A CONSEQUENCE WORTH ITS OWN LINE: the harness became hermetic, so CI now runs it.** All nine
-tests pass on a clone with no images and no cache — measured, not inferred — so
-`make ci-check` gained the `harness` row the day after it was written to exclude it. The
-workflow that guards this repo went from twelve of fourteen checks to thirteen, and the only
-one left out is `vale`, which needs a binary the runner does not have and has never gated a
-commit. Nothing there can spend money: a re-measurement needs an explicit flag AND a key.
+**THE HARNESS BECAME HERMETIC, CI GAINED IT, AND CI GAVE IT BACK THE SAME HOUR.** All nine
+tests pass on a fresh clone with no images and no cache, so `make ci-check` took the `harness`
+row it had been written to exclude — and the first run on Linux failed T7. Not T1: what fails
+is T7's shipping-stamp assertion, `NOTHING WAS PERSISTED BY ANY OF IT`, D61's rule that buyer
+PII passes through and is never kept. It passes on the rig and fails on the runner, which is
+a real finding about one of the two and is being followed up rather than rushed.
+
+**The mistake is worth more than the feature was.** "All nine pass on a fresh clone" was
+measured on macOS and reported as though it were a claim about anywhere; the harness was added
+to a gate on that basis without ever being run on the platform the gate runs on. That is the
+same defect this whole day was spent on — a check that passes for a reason nobody guaranteed —
+committed by the session that had just written two entries about it. The row is out, the
+comment in the Makefile says why, and T1's own work stands: it is still 3 ms, the labels are
+still tracked, and it still runs in a checkout that has no images.
 
 **What retires this:** a T1 whose inputs stop being frozen — a model that floats, or an eval set
 that regenerates — at which point re-deriving each run means something again.
