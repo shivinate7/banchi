@@ -225,13 +225,48 @@
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+  /* THIS OVERRIDES `base.css`'S RESPONSE FLOOR RATHER THAN ADDING TO IT — a component's own
+     `transition` replaces the floor's outright — so every property this row animates has to
+     be named HERE. `box-shadow` is in the list for the current-page hover below, and was
+     missing from the first draft of it, which snapped. */
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease),
+              box-shadow var(--bn-t-fast) var(--bn-ease);
 }
 .bn-nav-link:hover { background: var(--bn-hover); color: var(--bn-ink); text-decoration: none; }
 .bn-nav-link .bn-icon { flex: none; color: var(--bn-ink-3); transition: color var(--bn-t-fast), transform var(--bn-t) var(--bn-ease-spring); }
 .bn-nav-link:hover .bn-icon { color: var(--bn-ink); }
 .bn-nav-link[aria-current='page'] { color: var(--bn-accent); background: var(--bn-accent-tint); font-weight: 600; }
 .bn-nav-link[aria-current='page'] .bn-icon { color: var(--bn-accent); }
+/* THE PAGE YOU ARE ON STILL ANSWERS THE POINTER, and until 2026-09-07 it was the largest group
+   of controls in the product that did not — nine of the twenty-two, one per route, measured by
+   hovering all 315 controls the eleven routes draw (D50).
+
+   IT WAS NEVER A MISSING RULE. `.bn-nav-link:hover` is (0,2,0) and
+   `.bn-nav-link[aria-current='page']` is (0,2,0) as well — one class plus one pseudo-class
+   against one class plus one attribute — so the tie goes to source order, the selected rule sits
+   three lines below the hover rule, and selection silently outranked hover. A rule that loses a
+   tie does not look broken in a stylesheet; it looks like a rule.
+
+   ONE STEP, IN THE COLOUR IT ALREADY HAS. D110 made `--bn-hover` an alpha precisely so the same
+   name is one perceived step over any ground, so this layers it over the selection tint rather
+   than reaching for a second colour: the current row acknowledges the pointer without competing
+   with itself.
+
+   AN INSET SHADOW AND NOT A SECOND BACKGROUND LAYER, WHICH IS NOT A STYLE CHOICE. The obvious
+   spelling is `background: linear-gradient(var(--bn-hover), var(--bn-hover)), var(--bn-accent-tint)`
+   — a flat one-colour gradient is how CSS composites a layer over a background — and it was
+   written that way first. **`background-image` is not animatable.** Interpolation from `none` to
+   a gradient is discrete, so that version repainted correctly and SNAPPED: the very defect the
+   response floor was built to remove, reintroduced on the row that prompted it. An inset shadow
+   at a spread larger than the row paints the same alpha over the same ground and DOES
+   interpolate, so this eases like everything else. It only eases with `box-shadow` named in the
+   `transition` above, because a component's own transition replaces the floor's outright.
+
+   THE SELECTED TAB IS THE OTHER HALF OF THAT MEASUREMENT AND IS DELIBERATELY LEFT ALONE — see
+   `kit.css`. It is inert for a different reason and the owner ruled on it separately. */
+.bn-nav-link[aria-current='page']:hover {
+  box-shadow: inset 0 0 0 100vh var(--bn-hover);
+}
 .bn-nav-link[aria-current='page']::before {
   content: '';
   position: absolute;

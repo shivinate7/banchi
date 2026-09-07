@@ -2639,7 +2639,8 @@ COMPONENTS = [
                                     "The chord chip lights when the leader is armed; D51's step "
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
-                            "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D51", "D94", "D95"]},
+                            "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
+                                             "D95", "D110"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
