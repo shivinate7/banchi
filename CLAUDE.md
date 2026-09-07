@@ -181,7 +181,7 @@ make screen-freshness # every server write in app/src has a way back: a re-read,
 make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
-make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D110).
+make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
                     #   registration git itself disowns, a husk directory nothing is running
@@ -1089,7 +1089,7 @@ D106 The push and the publish are two presses, and the second one is the only th
 D107 The rule only ever marks down; the operator may point either way
 D108 The dock app is the page Chrome already renders, and the manifest is what makes it one
 D109 A price is a fact about a listing, and the store remembers listings it never photographed
-D110 Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
+D111 Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

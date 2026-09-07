@@ -6255,7 +6255,7 @@ be stored beside the stamp and arbitrated. D87's "newer wins" does not generalis
 is a quantity both parties observe, and an asking price is an instruction of ours as executed
 by them, which are not two readings of one fact.
 
-## D110 — Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
+## D111 — Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
 
 **Built 2026-09-06, after the owner asked why the janitorial step never works.** The question
 was put plainly — *"why is my janitorial cleanup part not better when i have these sessions

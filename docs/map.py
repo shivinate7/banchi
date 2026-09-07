@@ -1156,7 +1156,7 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D110"],
+                "governed_by": ["D18", "D33", "D42", "D111"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1718,7 +1718,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D110"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "

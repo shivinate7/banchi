@@ -841,7 +841,7 @@ def icloud() -> List[str]:
 
 
 def leftovers() -> List[str]:
-    """What a finished session left behind in this clone, counted and never acted on (D110).
+    """What a finished session left behind in this clone, counted and never acted on (D111).
 
     Reported here for icloud()'s reason exactly: it is a fact you should know and need not act
     on, and without a line like this it is invisible to every normal command. That invisibility
