@@ -87,7 +87,18 @@ IMAGES_DIR = (
     if _MIRROR
     else Path(__file__).resolve().parents[2] / "harness" / "images"
 )
-MANIFEST = IMAGES_DIR / "manifest.json"
+# THE LABELS, TRACKED, AND DELIBERATELY NOT INSIDE THE IMAGE MIRROR. Every field on an
+# EvalCard but `image` is ground truth, and `image` is a FILENAME rather than bytes — so this
+# 40K file is everything needed to SCORE a banked run, while the 133M of images beside it are
+# needed only to SUBMIT one. It lived in `harness/images/` and was therefore gitignored with
+# them, which is why T1 could not run in a fresh checkout, in a worktree before
+# `make worktree-setup`, or in CI at all: not because scoring needed the pixels, but because
+# the labels were filed with them (D112).
+MANIFEST = Path(__file__).resolve().parent / "manifest.json"
+
+# Where it used to live. Read as a fallback so a machine that already has one keeps working
+# and no re-download is provoked; never written, so the tracked copy is the only one that moves.
+LEGACY_MANIFEST = IMAGES_DIR / "manifest.json"
 SETS_DIR = IMAGES_DIR / ".sets"  # per-set API responses, banked so a flake is resumable
 
 _MEDIA_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
@@ -321,12 +332,35 @@ def _to_eval_card(card: dict) -> Tuple[EvalCard, str]:
 
 
 def _read_manifest() -> Optional[dict]:
-    if not MANIFEST.is_file():
+    for path in (MANIFEST, LEGACY_MANIFEST):
+        if not path.is_file():
+            continue
+        try:
+            return json.loads(path.read_text("utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
+
+
+def labels(sets: Sequence[SetSpec] = EVAL_SETS) -> Optional[List[EvalCard]]:
+    """The ground truth WITHOUT requiring a single image on disk.
+
+    `_cached` answers "can I submit these?" and so insists every file is present and non-empty.
+    This answers "what were these cards?", which is all that scoring a banked run has ever
+    needed — the model's answers are in `harness/.cache`, and comparing them to the truth
+    touches no pixels. Separating the two is what lets T1 assert its evidence anywhere while
+    keeping the 133M mirror a requirement only of an actual re-measurement (D112).
+    """
+    manifest = _read_manifest()
+    if not manifest or manifest.get("spec") != spec_key(sets):
         return None
     try:
-        return json.loads(MANIFEST.read_text("utf-8"))
-    except (json.JSONDecodeError, OSError):
+        cards = [EvalCard(**record) for record in manifest["cards"]]
+    except (KeyError, TypeError):
         return None
+    if len(cards) != sum(s.count for s in sets):
+        return None
+    return cards
 
 
 def _cached(sets: Sequence[SetSpec]) -> Optional[List[EvalCard]]:

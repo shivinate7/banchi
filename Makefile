@@ -71,7 +71,7 @@ help:
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
-	@echo "  make ci-check     what a fresh clone can prove: check minus harness and vale."
+	@echo "  make ci-check     what a fresh clone can prove: everything in check but vale."
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
@@ -378,18 +378,21 @@ check:
 # nothing tracks — and no one noticed, because the only trees it was run in had made a recording.
 # A gate with no re-checker is the same defect D111 records one register up.
 #
-# TWO ROWS ARE ABSENT AND NEITHER IS AN OVERSIGHT:
-#   harness  T1 replays a banked run from `harness/.cache` (96K, untracked) against
-#            `harness/images` (133M mirror, untracked, and a symlink D47 refuses to commit).
-#            A fresh clone has neither, and T1 REFUSES TO SUBMIT on a cold cache rather than
-#            spending — see its own message. So in CI it can only fail, never pass, and a
-#            permanently red gate teaches people to ignore the gate.
+# ONE ROW IS ABSENT AND IT IS NOT AN OVERSIGHT:
 #   vale     needs a binary that is not on the runner, and it never gated a commit anyway.
+#
+# THE HARNESS IS HERE AS OF 2026-09-06 AND WAS NOT WHEN THIS TARGET WAS WRITTEN. It was
+# excluded because T1 needed `harness/.cache` (96K) and `harness/images` (133M), both
+# untracked, so a fresh runner could only fail it. D112 moved the LABELS out of the image
+# mirror — 40K of ground truth that had been filed with the pixels for the pixels' reason —
+# and gave the scorer a fingerprint, so an unmoved measurement is asserted rather than
+# re-derived. All nine tests now pass on a clone with no images and no cache, measured.
 #
 # Everything below answers from the tree alone, which is exactly what a re-checker can own.
 # IT IS A SUBSET AND CAN DRIFT FROM `check`. Kept adjacent to it deliberately, so the two are
 # read together; `make explain` still describes the full suite and this list adds no rows to it.
 ci-check:
+	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory githooks-selftest

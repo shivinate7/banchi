@@ -76,6 +76,20 @@ per set and overall.
   had no key either, which is luck rather than a design. Submitting is now an act —
   `PKMNSCAN_RERUN_T1=1` — and `make worktree-setup` is how a worktree answers the refusal
   without paying for an answer this machine already holds.
+- **AN ORDINARY RUN REPLAYS NOTHING, AS OF 2026-09-06 (D112).** Between two turns the only
+  things about T1 that can change are its prompt, its eval set and its arithmetic; the model is
+  pinned and the answers are banked. All three now carry fingerprints, so when they agree with
+  what `harness/results/t1.json` was generated under, the test ASSERTS the committed
+  measurement against its own floor instead of re-deriving a number it cannot change. **It is
+  not a skip**: three hashes are compared and the floor is checked, and any mismatch falls
+  through to the real replay. Measured: **3 ms**, against a replay that needed every one of the
+  150 images on disk.
+- **The labels are tracked and the images are not, and that is the split that matters.**
+  `harness/eval/manifest.json` (40K) is the ground truth — every field of an `EvalCard` but
+  `image`, which is a FILENAME. The 133M mirror beside it is needed only to SUBMIT. Until this
+  was separated, the labels were filed with the pixels, which is why T1 failed in a fresh
+  checkout, in a worktree before `make worktree-setup`, and could not run in CI at all — not
+  because scoring needed the images, but because the labels were stored among them.
 - Rerun after any prompt change. Commit the score to `harness/results/` so regressions are
   visible in the diff. One file per configuration — a hinted run and an unhinted run are
   different measurements and must never share a filename. **No date in the name**: git
