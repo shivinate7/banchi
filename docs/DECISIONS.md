@@ -101,7 +101,17 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **Multiple copies of one card and variant collapse into ONE fixture row with `Add to Quantity` = copy count.** Inventory keeps every copy as its own position with its own photo; the app maps SKU to all positions holding it.
 
-**Live quantity caps at 4 per SKU** (a playset; configurable) regardless of copies owned. This blocks envelope-buster orders, and a price spike sells at most 4 stale-priced copies before repricing — the same rationale behind TCGplayer's own Buylist Max Listing feature.
+~~**Live quantity caps at 4 per SKU** (a playset; configurable) regardless of copies owned. This blocks envelope-buster orders, and a price spike sells at most 4 stale-priced copies before repricing — the same rationale behind TCGplayer's own Buylist Max Listing feature.~~
+
+**REWRITTEN IN PLACE 2026-09-07, ON THE OPERATOR'S INSTRUCTION. THERE IS NO STANDING CAP.** Every copy a run holds that TCGplayer does not already have goes out. A cap is something a SEND asks for — `emit --cap N`, and the field beside the other emit options on `#/pricing`'s ship bar — and the ordinary press asks for none.
+
+**Both reasons above were put to the operator by name and both were retired.** Asked whether an envelope-buster order or a stale-price spike still described a risk they carried, the answer was *"neither still applies"*. The struck text stays because it is the record of why the bound existed, and a reader who finds the cap gone deserves to find the argument it replaced rather than an absence.
+
+**WHAT THE CAP WAS NEVER DOING IS STOPPING A COPY BEING SENT TWICE**, and that is the fact which makes this safe. `add_to_quantity`'s own docstring separates the two jobs in as many words — *"`committed_positions` keeps the job it is good at — keeping a copy out of the sellable set… The cap reads a quantity."* Removing the bound removes exposure limiting and nothing else; `uncommitted_positions` is untouched and is still what makes a re-emit a no-op.
+
+**The figure survives as an offer, not a default.** `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is still what the press proposes; what it stopped being is something a send inherits without asking. `policy.live_cap` remains for a store that wants a standing answer, and reads `None` — no cap — when nothing has written one, which is the reversal this rewrite made.
+
+**Asked for at `emit` and not at `join`, deliberately.** `join` reports what the shelf holds; `emit` writes the file. A cap named at join time would be a promise a later emit could quietly break, which is the join/emit disagreement this entry's own `--split-threshold` history already paid for once.
 
 **"Configurable" became true on 2026-09-06, and it had been a promise with no reader for the whole life of this entry.** The parameter was threaded from the start — `SkuMatch.live_cap`,
 `join(live_cap=…)`, `resolve.load(live_cap=…)` — and **no caller ever passed anything but the module default**: no flag set it, no policy key held it, and `server/pipeline_routes.py` read

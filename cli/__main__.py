@@ -186,6 +186,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="the old pair back: import-listed.csv above the D9 threshold and "
         "import-subthreshold.csv below it, instead of one import.csv",
     )
+    # THE CAP, ASKED FOR PER SEND (D7, rewritten 2026-09-07). There is no standing bound any more:
+    # every copy this run holds that TCGplayer does not already have goes out, and this is how
+    # an operator says otherwise for ONE press. It is on `emit` and not on `join` because emit
+    # is what writes the file — `join` reports what the shelf holds, and a cap named at join
+    # time would be a promise a later emit could quietly break.
+    emit.add_argument(
+        "--cap",
+        type=int,
+        metavar="N",
+        help="send at most N copies of any one SKU. Omit for no cap, which is the default "
+        "since the standing playset bound was retired",
+    )
     _pricing_arguments(emit)
 
     # ------------------------------------------------------------------------ reconcile

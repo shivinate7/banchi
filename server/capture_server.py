@@ -7157,11 +7157,15 @@ def do_search(query: str) -> dict:
     not the one being looked for when a real match is on the same screen — and never dropped,
     because a card the pipeline could not name is exactly the card an operator searches for.
 
-    LOCK-FREE, like every read here. `cap` is `pipeline/join.py:LIVE_QUANTITY_CAP` imported
-    rather than restated, so the screen's "3 of 4 live" moves if D7's playset does.
+    LOCK-FREE, like every read here. `cap` is the STORE'S STANDING cap and is ordinarily
+    NULL (D7, rewritten 2026-09-07): the playset bound was retired, so most stores have none and
+    `listable` falls back to what the shelf holds. Read ONCE for the whole answer rather
+    than per group — it opens the corpus file, and a search over a hundred SKUs was about
+    to open it two hundred times.
     """
     text = _require_query(query)
     needle = text.lower()
+    cap_now = corpus.live_cap_for()
 
     inventory = Store().read().inventory
     places = _Places(inventory)
@@ -7225,7 +7229,7 @@ def do_search(query: str) -> dict:
                 "sold_here": int(getattr(listing, "sold_here", 0) or 0) if listing is not None else 0,
                 "live_as_of": getattr(listing, "live_as_of", None) if listing is not None else None,
                 "on_hand": on_hand,
-                "cap": corpus.live_cap_for(),
+                "cap": cap_now,
                 # D7 IN ONE FIELD: "listed quantity is min(cap, on hand)". The cap above is the
                 # RULE and this is what the rule comes to for THIS SKU, which are different
                 # numbers whenever the shelf holds fewer than a playset — and the screen wants
@@ -7238,7 +7242,11 @@ def do_search(query: str) -> dict:
                 # Computed HERE and not in the browser: `app/src/server.ts` records that the app
                 # is forbidden from computing the live cap, and a `Math.min` over `cap` in
                 # TypeScript is that rule living in two places.
-                "listable": min(corpus.live_cap_for(), on_hand),
+                # NO CAP MEANS EVERY COPY ON HAND IS LISTABLE (D7, rewritten). D7's `min(cap, on hand)`
+                # survives wherever a cap is set; with none, the shelf is the only bound and
+                # `listable` is `on_hand` — which is what the screen must draw, or it reports
+                # headroom against a ceiling nobody asked for.
+                "listable": on_hand if cap_now is None else min(cap_now, on_hand),
                 "copies": [_copy_row(places, card) for card in copies],
                 "_rank": rank,
             }
@@ -7275,11 +7283,11 @@ def do_search(query: str) -> dict:
                 "sold_here": 0,
                 "live_as_of": None,
                 "on_hand": loose_on_hand,
-                "cap": corpus.live_cap_for(),
+                "cap": cap_now,
                 # The same min as the keyed group above. Zero listing stages and no SKU to list
                 # under, so this can only ever be read as "what it WOULD be worth if identified"
                 # — which is the honest thing for it to say rather than a bare cap.
-                "listable": min(corpus.live_cap_for(), loose_on_hand),
+                "listable": loose_on_hand if cap_now is None else min(cap_now, loose_on_hand),
                 "copies": [_copy_row(places, card) for card in loose],
             }
         )

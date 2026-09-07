@@ -20304,10 +20304,22 @@ def check_pricing_reach(checks: Checks) -> None:
         "promise nothing read until 2026-09-06). This is also the first writer of the "
         "run-level override D86 named as its own reopening condition",
     )
+    # INVERTED AT D7's rewrite, AND IT IS THE ENTRY STATED AS A TEST. This asserted that a store which
+    # had never set a cap read D7's playset of four — a bound applied to every send whether or
+    # not anybody had asked for it. Both reasons D7 gave for it were retired by the operator,
+    # so the answer is now NO CAP, and a number here is something a store or a send says out
+    # loud. `LIVE_QUANTITY_CAP` survives as the figure the press offers, not as a fallback.
     checks.equal(
         corpus_mod.Corpus.parse({"skus": {}}).policy_for()["live_cap"],
-        pricing.LIVE_QUANTITY_CAP,
-        "a store that has never set one reads D7's playset of four",
+        None,
+        "a store that has never set one has NO CAP — the standing bound is retired, and four "
+        "is now something a send asks for rather than something it inherits",
+    )
+    checks.equal(
+        corpus_mod.Corpus.parse({"policy": {"live_cap": 4}, "skus": {}}).policy_for()["live_cap"],
+        4,
+        "while a store that HAS written one still gets it, in both `join` and `emit` — which "
+        "is the only way a report and the file it promises can agree about the same send",
     )
     for bad in ("four", 0, -1):
         checks.raises(

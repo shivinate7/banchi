@@ -1275,8 +1275,14 @@ export type SearchGroup = {
    *  refuses to draw `2 of 4 live` and says why: `pipeline/join.py:LIVE_QUANTITY_CAP` is a
    *  configurable Python constant, and writing the 4 in TypeScript is a copy nothing keeps in
    *  step. The condition it named — "settled by the server reporting the cap" — is met here,
-   *  so a screen holding this group may draw the denominator. */
-  cap: number
+   *  so a screen holding this group may draw the denominator.
+   *
+   *  NULL IS THE ORDINARY VALUE NOW (D7, rewritten 2026-09-07). The standing cap was retired:
+   *  every copy a run holds that TCGplayer does not already have goes out, and a bound is
+   *  something one send asks for. A screen drawing this must render null as "no cap" rather
+   *  than as a missing number — and `listable` below, which is what a screen usually wants,
+   *  is `on_hand` in that case and stays a plain number. */
+  cap: number | null
 
   /** What the cap above comes to for THIS SKU — D7's `min(cap, on hand)`, computed by the
    *  server.
@@ -1799,7 +1805,10 @@ export type PricingWorklist = {
    *  fail to draw because one directory predates `pricing.json`. */
   skipped: { run: string; code: string; message: string }[]
   asked: string[]
-  live_cap: number
+  /** The store's STANDING cap, or null for none — which is ordinary since D7 was rewritten.
+   *  Not the cap a send applies: that one is typed on the ship bar and travels on the emit
+   *  request, so nothing here can report it. Advisory; no screen reads it today. */
+  live_cap: number | null
   /** The two run-wide figures a row is drawn against, off the newest run in the list. Null
    *  where no table could be read, which the screen falls back on rather than blanks. */
   threshold: string | null

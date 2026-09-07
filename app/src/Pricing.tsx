@@ -877,6 +877,59 @@ export function Pricing() {
      `import-listed.csv` and `import-subthreshold.csv` — for the send that genuinely wants
      them staged separately. It is never on by default and never remembered. */
   const [splitFiles, setSplitFiles] = useState(false)
+  /* THIS SEND'S CAP, AND EMPTY IS THE ORDINARY ANSWER (D7, rewritten 2026-09-07). The standing bound
+     of four is retired — every copy this run holds that TCGplayer does not already have goes
+     out — so a figure here is the operator asking to send fewer, for this press only. Held as
+     the string it was typed as: the field's alphabet is digits, and a number would make an
+     empty field indistinguishable from a zero. */
+  const [sendCap, setSendCap] = useState('')
+  /* ONE CONTROL, BOTH SHIP BARS. `server/pipeline_routes.py`'s per-run step already refuses
+     this asymmetry in as many words — *"a screen that could ask for a split on a send of
+     three and not on a send of one would be answering a question about how many runs are
+     open"* — and a cap is that same kind of answer, so it is declared here and rendered in
+     both rather than written twice and drifting.
+
+     NOT `bn-check`, WHICH IT WORE FOR ONE BUILD AND WHICH ATE THE FIGURE. That class styles
+     ANY input under it as the box of a checkbox — `appearance: none`, 16px square,
+     `display: grid` — so a text field inside one renders as a small empty square with the
+     typed number clipped out of it. It typechecked, the wire assertion passed, and the
+     control was blank on screen; only looking at it said so. It borrows the check's type and
+     rhythm in CSS instead.
+
+     Blank means no cap, which is what the placeholder says, so the empty state reads as a
+     choice rather than a gap. It sits with the emit options because it is the same kind of
+     answer — a thing THIS press does differently — and not on the deck, which holds STANDING
+     policy. */
+  const capField = (
+    <label className="pricing-ship-cap">
+      at most
+      <input
+        className="bn-input pricing-ship-cap-input"
+        type="text"
+        inputMode="numeric"
+        placeholder="all"
+        aria-label="Send at most this many copies of any one SKU"
+        value={sendCap}
+        onChange={(event) => {
+          const text = event.currentTarget.value
+          if (/^\d{0,3}$/.test(text)) setSendCap(text)
+        }}
+      />
+      of each card
+    </label>
+  )
+  /* THE FIGURE THIS PRESS ASKS FOR, or null for none. Parsed in one place because two callers
+     read it and `Number.parseInt('')` is `NaN`, which is neither a cap nor obviously not one.
+
+     A `useCallback` BECAUSE ONE OF THOSE CALLERS IS AN EFFECT. The per-run send runs inside
+     the emit effect, whose dependency list already carries `splitFiles` for the same reason —
+     a send option the effect reads has to be in it, or the press fires with the value from
+     whichever render installed the handler. A bare function would be a new identity every
+     render and `react-hooks/exhaustive-deps` says so. */
+  const capAsked = useCallback((): number | null => {
+    const asked = Number.parseInt(sendCap, 10)
+    return Number.isFinite(asked) && asked > 0 ? asked : null
+  }, [sendCap])
 
   const toggleRun = useCallback((name: string) => {
     setPicked((held) => {
@@ -1183,7 +1236,7 @@ export function Pricing() {
     setShip('sending')
     void (async () => {
       try {
-        const result = await runStep(run, 'emit', { splitThreshold: splitFiles })
+        const result = await runStep(run, 'emit', { splitThreshold: splitFiles, cap: capAsked() })
         setReceipt({ ok: result.ok, console: result.console, files: result.files })
         setDetail((current) => (current === null ? current : { ...current, ...result.summary, files: result.files }))
         setShipTrouble(null)
@@ -1210,7 +1263,7 @@ export function Pricing() {
         setShip('idle')
       }
     })()
-  }, [ship, dirty, doc, book, run, saving, splitFiles])
+  }, [ship, dirty, doc, book, run, saving, splitFiles, capAsked])
 
   /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack. */
   const write = useCallback(
@@ -3305,8 +3358,18 @@ export function Pricing() {
               <Icon name="layers" size={12} />
               {loaded.length} runs · {boxesLoaded.length} {boxesLoaded.length === 1 ? 'box' : 'boxes'} · one file
             </span>
+            {/* WHAT THE MERGE IS FOR, AND IT STOPPED BEING THE CAP (D7, rewritten). This line
+                read "the cap is spent once across the send" unconditionally, which after the
+                standing bound went is a promise about a figure the ordinary press does not
+                carry. The dedupe is the half that was always true — a card in three boxes is
+                one row either way — and the cap sentence returns the moment one is asked for,
+                because THAT is when spending it once across the send is the load-bearing
+                property (D86: three separate emits over three real runs wrote two SKUs past
+                the cap of four; one merged emit wrote none). */}
             <span className="pricing-ready pricing-ship-says">
-              The cap is spent once across the send, so a card in three boxes gets one row.
+              {sendCap.trim() === ''
+                ? 'A card in three boxes gets one row, and every copy TCGplayer does not already hold goes out.'
+                : 'The cap is spent once across the send, so a card in three boxes gets one row.'}
             </span>
           </div>
           <div className="pricing-ship-act">
@@ -3326,6 +3389,7 @@ export function Pricing() {
               />
               split it in two, either side of the cut-off
             </label>
+            {capField}
             {receipt === null ? null : (
               <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
                 {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}
@@ -3343,7 +3407,11 @@ export function Pricing() {
                 setShipTrouble(null)
                 void (async () => {
                   try {
-                    const result = await emitMerged(loaded, { listedOnly, splitThreshold: splitFiles && !listedOnly })
+                    const result = await emitMerged(loaded, {
+                      listedOnly,
+                      splitThreshold: splitFiles && !listedOnly,
+                      cap: capAsked(),
+                    })
                     setReceipt({ ok: result.ok, console: result.console, files: result.files })
                     const imports = (result.files ?? []).filter((file) => file.is_import)
                     toast(
@@ -3453,6 +3521,7 @@ export function Pricing() {
               <input type="checkbox" checked={splitFiles} onChange={(event) => setSplitFiles(event.currentTarget.checked)} />
               split it in two, either side of the cut-off
             </label>
+            {capField}
             {receipt === null ? null : (
               <Button variant="ghost" icon={receipt.ok ? 'download' : 'alert'} onClick={() => setFilesOpen(true)}>
                 {receipt.ok ? `${receipt.files.filter((f) => f.is_import).length} files` : 'Refused'}

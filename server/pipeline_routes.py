@@ -1876,9 +1876,17 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         out_now = newest.get("copies_out")
         if out_now is None:
             out_now = newest.get("live_before") or 0
-        room = max(0, corpus.live_cap_for() - int(out_now))
+        # THE MERGED FIGURE, RE-DERIVED WITH OR WITHOUT A CAP (D7, rewritten). With no cap there is no
+        # `room` term at all — the bound is the positions the merge actually holds, which is
+        # the term that stops a copy being sent twice and is the only one that ever did.
+        cap_now = corpus.live_cap_for()
+        held = len(row.get("positions") or [])
         row["claimed_add"] = claimed
-        row["add_to_quantity"] = min(claimed, room, len(row.get("positions") or []))
+        if cap_now is None:
+            row["add_to_quantity"] = min(claimed, held)
+        else:
+            room = max(0, cap_now - int(out_now))
+            row["add_to_quantity"] = min(claimed, room, held)
         row["over_cap"] = claimed > row["add_to_quantity"]
         # A MERGED ROW THAT CAN ADD MUST NOT CARRY ONE RUN'S REASON FOR ADDING NOTHING.
         # `nothing_to_add` reads "every copy in this run is already listed or has left the
@@ -2831,6 +2839,42 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     }
 
 
+def _cap_flag(payload: dict) -> list:
+    """`--cap N` for a send that asked for one, or nothing at all (D7, rewritten 2026-09-07).
+
+    THERE IS NO STANDING CAP, so absent is the ordinary answer and means no bound: every copy
+    the run holds that TCGplayer does not already have goes out. A number here is one press
+    saying otherwise.
+
+    BOUNDED AND INTEGER-CHECKED HERE RATHER THAN PASSED THROUGH, for `max_edge`'s reason a few
+    routes over: this reaches a child process's argv, and a route that forwarded whatever
+    arrived would be an argv a request controls.
+
+    ONE PARSER FOR BOTH EMIT ROUTES. The per-run route's own comment already refuses the
+    asymmetry — *"a screen that could ask for a split on a send of three and not on a send of
+    one would be answering a question about how many runs are open"* — and a cap is that same
+    kind of answer. Two copies of this arithmetic is how they would come to disagree.
+    """
+    cap = payload.get("cap")
+    if cap is None:
+        return []
+    try:
+        asked = int(cap)
+    except (TypeError, ValueError):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "cap_invalid",
+            "`cap` must be a whole number of copies, or absent for no cap.",
+        ) from None
+    if asked < 1:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "cap_invalid",
+            f"A cap of {asked} would send nothing. Leave it out for no cap at all.",
+        )
+    return ["--cap", str(asked)]
+
+
 def do_pipeline_merged_emit(payload: dict) -> dict:
     """`POST /pipeline/emit` — one import file over several runs (D86).
 
@@ -2872,6 +2916,7 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
         argv.append("--split-games")
     if payload.get("split_threshold"):
         argv.append("--split-threshold")
+    argv += _cap_flag(payload)
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
     return {
         "ok": code == 0,
@@ -4184,6 +4229,10 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
             argv.append("--split-games")
         if payload.get("split_threshold"):
             argv.append("--split-threshold")
+        # AND THE CAP, FOR THE PARAGRAPH ABOVE'S OWN REASON (D7, rewritten). A cap offered on a
+        # send of three and withheld from a send of one would be exactly the question that
+        # comment refuses to answer.
+        argv += _cap_flag(payload)
     else:  # reconcile
         staged = payload.get("staged_export")
         if not isinstance(staged, dict):

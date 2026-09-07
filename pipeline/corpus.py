@@ -665,7 +665,7 @@ def _is_hold(value: object) -> bool:
     return str(value).strip().lower() == decisions_mod.pricing.UNLISTED
 
 
-def live_cap_for(run_name: Optional[str] = None) -> int:
+def live_cap_for(run_name: Optional[str] = None) -> Optional[int]:
     """The live cap standing right now, store-wide or for one run. Never raises.
 
     FOR THE READ PATHS, which are the servers. `#/pricing`, `#/runs` and the copy map all draw
@@ -679,7 +679,10 @@ def live_cap_for(run_name: Optional[str] = None) -> int:
             Corpus.read().policy_for(run_name).get("live_cap")
         )
     except Exception:  # noqa: BLE001 - a read surface never fails over an advisory figure
-        return pricing.LIVE_QUANTITY_CAP
+        # `None` — NO CAP — is the fallback since D7 was rewritten, and it matches what an unreadable
+        # policy most likely says: nothing. Falling back to a NUMBER here would invent a bound
+        # the operator did not set, on a screen, from a file this could not read.
+        return None
 
 
 def _token(value: object) -> str:

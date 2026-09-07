@@ -1412,7 +1412,11 @@ class SkuMatch:
     row: tcgcsv.Row
     positions: List[Position] = field(default_factory=list)
     stages: List[str] = field(default_factory=list)
-    live_cap: int = LIVE_QUANTITY_CAP
+    #: The cap this send asked for, or `None` for no bound (D7, rewritten 2026-09-07). `None` is the
+    #: ordinary value: the standing cap of four was retired and a cap is now something a send
+    #: asks for. `LIVE_QUANTITY_CAP` survives as the figure the PRESS offers, never as a
+    #: default anything falls back to.
+    live_cap: Optional[int] = None
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
     # The D9 cut-off this match was partitioned against — the operator's stored
@@ -1533,6 +1537,12 @@ class SkuMatch:
         `committed_positions` KEEPS THE JOB IT IS GOOD AT — keeping a copy out of the
         sellable set, which `uncommitted_positions` reads it for. The cap reads a quantity.
         """
+        # NO CAP IS THE ORDINARY CASE SINCE D7's rewrite, and it is not "a very large cap". The bound
+        # is simply absent: every copy this run holds that TCGplayer does not already have
+        # goes. `uncommitted_positions` is what still stops a copy being sent twice — this
+        # method's own docstring separates the two jobs, and only the second was retired.
+        if self.live_cap is None:
+            return len(self.uncommitted_positions)
         room = self.live_cap - self.copies_out
         return max(0, min(room, len(self.uncommitted_positions)))
 
@@ -1554,6 +1564,14 @@ class SkuMatch:
         # `live_now`, never `live_before`: the sentence names the reading the cap was
         # computed from, which is the newer of the store's and the export's (D87, amended).
         pending = self.copies_out - self.live_now
+        # EVERY SENTENCE BELOW NAMES A CAP, SO NONE OF THEM MAY BE REACHED WITHOUT ONE (D7, rewritten).
+        # With no cap `add_to_quantity` is `len(uncommitted_positions)`, so reaching this line
+        # at all means that list is empty — which the branch above already answered. The guard
+        # is here because an UNREACHABLE branch that would print "at the cap of None" is one
+        # refactor away from being reachable, and a false sentence is what this method's own
+        # docstring exists to prevent.
+        if self.live_cap is None:
+            return "every copy in this run is already listed or has left the box"
         if pending <= 0:
             return f"{self.live_now} live, at the cap of {self.live_cap}"
         # `min` because `copies_out` is not clamped to the cap and a store can exceed it —
@@ -1785,7 +1803,14 @@ class JoinReport:
         """Matched SKUs this run adds nothing for. The cap is only one of the reasons —
         `SkuMatch.nothing_to_add` names the actual one per SKU (D59). Not written to
         the import file, and reported rather than skipped — the copies are real cards
-        sitting at real positions."""
+        sitting at real positions.
+
+        THE NAME OUTLIVED THE RULE AND IS KEPT ANYWAY (D7, rewritten 2026-09-07). With no
+        standing cap the cap is usually not a reason at all: every one of these is a SKU
+        whose copies are already listed or have left the box, and the cap becomes a
+        reason again only for a send that asked for one. It stays `at_cap` because it is
+        a WIRE FIELD three screens read and `nothing_to_add` beside it has always been
+        what says which reason — renaming it would move a name and not a fact."""
         return [m for m in self.matches.values() if m.copies and m.add_to_quantity == 0]
 
     @property
@@ -1904,7 +1929,7 @@ def default_router(
 def join_batch(
     cards: Sequence[IdentifiedCard],
     catalog: Catalog,
-    live_cap: int = LIVE_QUANTITY_CAP,
+    live_cap: Optional[int] = None,
     router: Optional[Router] = None,
     rule: pricing.Rule = pricing.MATCH,
     basis: str = pricing.BASIS_MARKET,

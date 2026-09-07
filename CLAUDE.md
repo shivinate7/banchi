@@ -248,12 +248,22 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   ONE PRESS WRITES ONE SPREADSHEET (D99) — across runs,
                                    #   across games, and across the listed/sub-threshold
                                    #   split, which was two files per game per run until
-                                   #   2026-09-03. The live cap is spent ONCE across
-                                   #   everything it writes (D86): `add_to_quantity` is
-                                   #   per-run against a GLOBAL cap, so N separate emits over
-                                   #   one SKU is an over-push. Measured: three separate emits
-                                   #   over three real runs wrote 2 SKUs past the cap of 4;
-                                   #   one merged emit wrote 0.
+                                   #   2026-09-03. THERE IS NO STANDING CAP as of
+                                   #   2026-09-07 (D7, rewritten): every copy a run holds that
+                                   #   TCGplayer does not already have goes out, and a bound
+                                   #   is something ONE SEND asks for with `--cap`. When one
+                                   #   is asked for it is spent ONCE across everything the
+                                   #   press writes (D86): `add_to_quantity` is per-run
+                                   #   against a GLOBAL cap, so N separate emits over one SKU
+                                   #   is an over-push. Measured at the old cap of 4: three
+                                   #   separate emits over three real runs wrote 2 SKUs past
+                                   #   it; one merged emit wrote 0.
+                                   #   WHAT STOPS A COPY BEING SENT TWICE IS NOT THE CAP and
+                                   #   never was — `uncommitted_positions` is, and it is
+                                   #   untouched. Uncapped, six copies with three already live
+                                   #   offer THREE.
+                                   #   --cap N            send at most N copies of any one
+                                   #                      SKU. Omit for no cap, the default
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
@@ -724,11 +734,26 @@ A screen is not finished because it compiles.
   and not the key**, so it can say nothing about which keys exist or what they are called;
   that is what the `storage keys` audit row is for.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
-  by SKU with `Add to Quantity` = copy count, capped at the live cap. **That cap is
-  `policy.live_cap` in `inventory/prices.json` as of 2026-09-06** — store-wide, overridable
-  per run through `policy.per_run`, defaulting to D7's playset of four. It was a promise D7
-  made and nothing built: the parameter was threaded through `SkuMatch`, `join` and
-  `resolve.load` from the start and no caller ever passed anything but the module default.
+  by SKU with `Add to Quantity` = copy count. **THERE IS NO STANDING CAP ON THAT COUNT AS OF
+  2026-09-07** (D7, rewritten): every copy the run holds that TCGplayer does not already have
+  goes out. The operator retired both of D7's reasons for the playset bound by name — an
+  envelope-buster order, and how many copies a spike sells at a stale price — and the answer
+  to each was *"neither still applies"*.
+
+  **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
+  emit options on `#/pricing`'s ship bar. `policy.live_cap` in `inventory/prices.json` survives
+  for a store that wants a standing answer — store-wide, overridable per run through
+  `policy.per_run` — and **reads `None` when nothing has written one**, which is the reversal.
+  It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded
+  through `SkuMatch`, `join` and `resolve.load` from the start and no caller ever passed
+  anything but the module default. `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is
+  now the figure the press OFFERS, never one a send inherits.
+
+  **WHAT THE CAP WAS NEVER DOING IS STOPPING A COPY BEING SENT TWICE**, which is what makes
+  removing it safe: `add_to_quantity`'s own docstring separates the two jobs, and
+  `uncommitted_positions` — the half that does that job — is untouched. Measured on the
+  harness: uncapped, a SKU with six copies of which three are already live offers **3**, not
+  six.
 - **The pipeline is reachable from a screen as of 2026-08-24** (D33), **and lives on `#/runs`
   since 2026-08-29** (D39). Not folded (D33, amended): a free preflight, a two-step money gate
   with no typing, the three free steps, every command's stdout verbatim, and the import CSVs as
@@ -824,17 +849,23 @@ A screen is not finished because it compiles.
   (`GET /boxes/<box>/photos`) is on screen before the control that fires exists. What it gives
   up is named: D36's realign can no longer re-bind THOSE cards by digest, which is right for
   cards that have left the box, and the digest on the record is what the history keeps.
-- **`emit` OVER SEVERAL RUNS WRITES ONE FILE, AND THE CAP IS SPENT ONCE ACROSS THEM** (D86).
+- **`emit` OVER SEVERAL RUNS WRITES ONE FILE, AND A CAP IS SPENT ONCE ACROSS THEM** (D86).
   `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a cap that
   is GLOBAL, so runs joined before either emitted each believe the whole cap is theirs. This is
   D59's defect one register up — that entry fixed the per-BOX version inside one join, and the
   per-RUN version survived it because nothing had ever looked at two runs together.
 
-  **Measured, from an identical cleared ledger over three real runs**: three separate emits
-  wrote 6 files, 511 copies and **2 SKUs past the cap of 4** — the same two that sit at
-  `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and **none**.
-  `pipeline/merge.py` re-derives the figure over the union of positions, deduped on
-  `(box, index)`; **a merged file can never be a concatenation of the per-run CSVs.**
+  **The heading said THE cap until 2026-09-07 and now says A cap** (D7, rewritten): with no
+  standing bound this arithmetic does not run at all, and a merged send is still one file for
+  the OTHER reason D86 gives — `pipeline/merge.py` dedupes the union of positions on
+  `(box, index)`, so a card in three boxes is one row. The moment a send asks for `--cap N`
+  the paragraph above is live again, and `cli/cmd_emit.py:_cap_for` applies that one figure to
+  every leg for exactly this reason.
+
+  **Measured at the old standing cap of 4, from an identical cleared ledger over three real
+  runs**: three separate emits wrote 6 files, 511 copies and **2 SKUs past it** — the same two
+  that sit at `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and
+  **none**. **A merged file can never be a concatenation of the per-run CSVs.**
 
 - **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
