@@ -113,6 +113,52 @@ label:has(> input[type='file']) { cursor: pointer; }
 button:disabled, select:disabled, textarea:disabled, input:disabled,
 [aria-disabled='true'] { cursor: not-allowed; }
 
+/* RESPONSE FLOOR: A CONTROL THAT ANSWERS THE POINTER EASES INTO IT, and this is the second
+   half of D50 rather than a new idea. That entry is titled for an interactive element's
+   FEEDBACK, and only the cursor half reached this file: `cursor` was answered once, above,
+   while every hover response stayed with whichever sheet remembered to write a `transition`.
+   Most did. The ones that did not are not badly written — they are the sheets whose author had
+   no reason to think about it, which is the argument the cursor block one above already makes.
+
+   MEASURED IN A BROWSER, 2026-09-06, hovering all 315 controls the eleven routes draw against
+   `shell.ts`'s store with the transition allowed to settle: 293 respond, and 17 of them SNAPPED
+   while 276 eased. Ten of the seventeen were `.bn-brand` — the sidebar's rail toggle, on screen
+   on every route — whose 109px hover slab appeared in one frame beside nav links fading a much
+   smaller pill over 120ms. That is the report this floor was written for: the owner named the
+   control, and what reads as its border being wrong is a hard edge arriving with no ease under
+   a pointer that is still moving.
+
+   `a` IS HERE AND IS DELIBERATELY NOT IN THE CURSOR FLOOR, which is the one place these two
+   lists must differ. D50's own count records why: a bare `<a href>` was never a cursor defect
+   because the user agent already answers it. The user agent gives it no TRANSITION, so a link
+   that takes a hover colour snaps unless a sheet says otherwise — `.home-more` on Home was two
+   of the seventeen. A control the UA dresses correctly for the pointer is still undressed for
+   time.
+
+   FOUR PROPERTIES, AND THE OMISSIONS ARE THE POINT. `transform`, `padding`, `width` and
+   `font-size` are absent because D50 forbids a hover that reflows — D28's defect was the review
+   queue moving under a finger already travelling toward a target — and a blanket `transition:
+   all` would animate every one of them the first time a screen touched one. These four cannot
+   move a target: they repaint it. `opacity` is left out for a narrower reason, that mount and
+   unmount animations already own it and a floor would fight them.
+
+   A SCREEN THAT WANTS INSTANT STILL WINS, by cascade order rather than by specificity — the
+   same guarantee the cursor floor rests on and the same one D50 had to correct its own comment
+   about: `main.tsx` imports this file before every component sheet, so a tie goes to the
+   component and `transition: none` in a screen's own rule is all an exception costs.
+
+   REDUCED MOTION IS ALREADY ANSWERED thirty lines below, where `transition-duration` is crushed
+   to 0.01ms for everything. This floor adds no loop and carries no meaning, so it needs no
+   place on that block's exception list. */
+button, select, summary, a,
+input[type='checkbox'], input[type='radio'], input[type='file'], input[type='range'],
+[role='button'], [role='tab'], [role='option'], [role='menuitem'] {
+  transition: background-color var(--bn-t-fast) var(--bn-ease),
+              border-color var(--bn-t-fast) var(--bn-ease),
+              color var(--bn-t-fast) var(--bn-ease),
+              box-shadow var(--bn-t-fast) var(--bn-ease);
+}
+
 /* Details/summary — no default marker. */
 summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }

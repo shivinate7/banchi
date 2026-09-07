@@ -123,7 +123,11 @@
 .capture-row:hover { background: var(--bn-surface-3); }
 :root[data-theme='dark'] .capture-row:hover { background: var(--bn-surface-2); }
 .capture-row:hover .capture-k { color: var(--bn-accent); border-color: var(--bn-accent); }
-.capture-row .capture-k { justify-self: start; }
+.capture-row .capture-k {
+  justify-self: start;
+  /* the key cap repaints with its row; the floor reaches controls, not a <kbd> inside one. */
+  transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
 .capture-right { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }

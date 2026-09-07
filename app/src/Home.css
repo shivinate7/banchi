@@ -28,6 +28,8 @@
    pads its content by it, and the deck's own bottom margin clears the part that hangs out. */
 .home-deck { position: relative; width: 220px; height: 310px; margin: 0 auto 24px; --deck-chip: 30px; }
 .home-deck-card {
+  /* the deck lifts with the link it sits in — the response floor cannot reach a <div>. */
+  transition: box-shadow var(--bn-t-fast) var(--bn-ease);
   position: absolute;
   inset: 0;
   overflow: hidden;

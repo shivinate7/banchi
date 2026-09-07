@@ -2364,7 +2364,7 @@ COMPONENTS = [
             # kinds, `[role='button']` — so it can never reach a `.position-*` class, which is
             # what keeps D41's Fulfiller firewall and D45's walk-to scoping component-graph facts
             # rather than things a global rule could quietly breach.
-            "src/base.css": {"does": "reset and the page ground, and the four app-wide floors: the "
+            "src/base.css": {"does": "reset and the page ground, and the five app-wide floors: the "
                                      "`:focus-visible` ring, the cursor floor added 2026-08-29 after "
                                      "39 of 142 interactive elements were measured with no cursor "
                                      "rule any selector could reach, tabular figures on every table, "
@@ -2379,8 +2379,21 @@ COMPONENTS = [
                                      "the four loops that carry meaning (the busy ring, the skeleton "
                                      "shimmer, the live dot, the two capture spinners), slowed to "
                                      "1.4s rather than frozen, because a ring stopped at a partial "
-                                     "arc reads as a disabled button.",
-                             "governed_by": ["D5", "D41", "D45", "D50", "D94"]},
+                                     "arc reads as a disabled button. AND THE RESPONSE FLOOR, "
+                                     "added 2026-09-06 on the owner's report that hovering felt "
+                                     "wrong: a control that answers the pointer eases into it, "
+                                     "over background-color, border-color, color and box-shadow, "
+                                     "which is the half of D50 that never reached this file. "
+                                     "Measured first — 293 of 315 rendered controls responded to "
+                                     "a hover and 17 of them SNAPPED, ten being `.bn-brand`, the "
+                                     "sidebar rail toggle on every route; the floor took that to "
+                                     "0 of 294. `a` is in this list and deliberately NOT in the "
+                                     "cursor floor above: the user agent dresses a link for the "
+                                     "pointer and gives it no transition. `transform` and "
+                                     "`padding` are excluded because D28 forbids a hover that "
+                                     "moves a target under a finger already travelling toward "
+                                     "it, and a blanket `transition: all` would animate both.",
+                             "governed_by": ["D5", "D28", "D41", "D45", "D50", "D94"]},
 
             # ---- the kit: the primitives every screen is built from (D94, 2026-09) ----
             # D94 IS THE ENTRY, and D50 is the one it discharges: an interactive element's

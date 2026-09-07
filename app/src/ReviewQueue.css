@@ -249,14 +249,21 @@
   overflow: hidden;
 }
 .review-caption > .bn-icon { color: var(--bn-accent); flex: none; }
-.review-caption .position-run { font-size: var(--pos-slot); line-height: 1; letter-spacing: 0; }
+.review-caption .position-run {
+  font-size: var(--pos-slot); line-height: 1; letter-spacing: 0;
+  /* repainted by `.review-caption-link:hover`; a <span> is outside the floor's reach. */
+  transition: color var(--bn-t-fast) var(--bn-ease);
+}
 .review-caption .position-run-path,
 .review-caption .position-run-key { font-family: var(--bn-font-ui); letter-spacing: 0.04em; }
 /* The address is a link back to its box on Inventory. */
 .review-caption-link { text-decoration: none; transition: color var(--bn-t-fast) var(--bn-ease), box-shadow var(--bn-t-fast) var(--bn-ease); }
 .review-caption-link:hover { color: var(--bn-accent); box-shadow: var(--bn-shadow-2); }
 .review-caption-link:hover .position-run { color: inherit; }
-.review-caption-go { color: var(--bn-ink-3); flex: none; margin-left: -2px; }
+.review-caption-go {
+  color: var(--bn-ink-3); flex: none; margin-left: -2px;
+  transition: color var(--bn-t-fast) var(--bn-ease);
+}
 .review-caption-link:hover .review-caption-go { color: var(--bn-accent); }
 .review-stage-hint {
   position: absolute;
