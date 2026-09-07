@@ -383,6 +383,62 @@ test('a refused check keeps the check press and offers no write', async ({ page 
   await expect(page.getByRole('button', { name: 'Write the upload file' })).toHaveCount(0)
 })
 
+test('the cut-off is the run\'s own control, and on a lens it is spent by a press', async ({
+  page,
+}) => {
+  /* D103 AMENDED. The cut-off was drawn on the run door only, because "it decides which import
+     file a row is bound for and a live listing is bound for none" — right about the FILE and
+     wrong about the FIGURE, which D99 made one variable with the cheap price. So the same
+     panel, the same `policy.threshold` and the same `bucketAt` partition serve both doors, and
+     the ONLY difference is when the figure is spent: `emit` prices a run's cheap half at write
+     time, and a lens has no emit, so a press writes real answers. */
+  await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno', market: '22.03' }),
+      live({ sku: '8608464', name: 'Dunsparce', market: '0.20' }),
+    ],
+    counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
+  })
+
+  await expect(page.getByRole('region', { name: 'The cut-off' })).toHaveCount(1)
+  /* AND NOT THE RUN'S OVERRIDE. An override belongs to one lot and a lens is not a lot — it is
+     the whole live book out of one export — so there is no run to pick and the control that
+     would offer one is not drawn (D101: never a control this door cannot honour). */
+  await expect(page.getByRole('button', { name: 'Pick a run' })).toHaveCount(0)
+
+  const press = page.getByRole('button', { name: /under the line/ })
+  await expect(press).toContainText('Price 1 under the line')
+
+  /* ADDRESSED BY CARD AND NEVER BY INDEX: the cut-off MOVES a row between the sections, which
+     is the whole point of the partition, so an index here would assert against wherever the
+     row happened to land. */
+  const cheap = page.getByRole('textbox', { name: 'Price for Dunsparce' })
+  const dear = page.getByRole('textbox', { name: 'Price for Articuno' })
+
+  await press.click()
+  /* ONE ROW, AND IT IS THE ONE UNDER THE LINE. The $22.03 row is above the cut-off and must be
+     untouched: a press that priced the whole book would be a bulk write nobody asked for. */
+  await expect(cheap).toHaveValue('0.49')
+  await expect(dear).toHaveValue('')
+  await expect(press).toContainText('Nothing under the line to price')
+
+  /* ONE ACT, ONE REVERSAL. The per-SKU undo stack is ten deep (D28), so a press moving ninety
+     rows could not be undone through it at all. */
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(cheap).toHaveValue('')
+  await expect(press).toContainText('Price 1 under the line')
+})
+
+test('an untouched lens field ghosts the price the listing is live at', async ({ page }) => {
+  /* THE OPERATOR'S ASK: the current price in faint gray, replaced whole by the first digit
+     typed. A PLACEHOLDER and not a value, so there is nothing to select and nothing to
+     backspace — and nothing is written by looking at it. */
+  await open(page, { skus: [live({ sku: '8608859', asking: '20.0000' })] })
+  const field = page.locator('.pricing-input').first()
+  await expect(field).toHaveValue('')
+  await expect(field).toHaveAttribute('placeholder', '20.0000')
+})
+
 test('neither run ship bar is drawn on a lens', async ({ page }) => {
   await open(page)
   /* BY CONSTRUCTION RATHER THAN BY CARE: `loaded` derives from `work.runs`, which a lens never

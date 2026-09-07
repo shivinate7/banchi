@@ -30,22 +30,32 @@ WHAT "NOT SELLING" CAN HONESTLY MEAN HERE, and it is less than it sounds. Three 
 available and one is a proxy:
 
   1. LIVE NOW — `Total Quantity > 0` in the operator's My Pricing export. A fact, from
-     TCGplayer, at the moment the file was downloaded.
+     TCGplayer, at the moment the file was downloaded. A row that fails it is refused
+     `sold_out` and, since 2026-09-07, is left out of `survey.json` entirely: there is no live
+     listing for a price to edit, so it can never be answered and sits on the lens only as
+     something to scroll past. Measured on the owner's export: 372 of 759 rows. THE EXPORT IS
+     NOT NARROWED — `reconcile --live` needs those zero rows to see a SKU sell out — only the
+     worklist is.
   2. NO SALE HERE INSIDE THE WINDOW — `cards.state == "sold"` with its `state_at`, per SKU.
      A fact about THIS store's copies. Read from the card records and never from the event
      log: one of the 193 `sold` events on the owner's store carries no `sku` key, so a query
      over the log silently loses it, while all 186 sold CARD rows carry both a SKU and a
      `state_at`.
-  3. OWNED LONGER THAN THE WINDOW — the oldest `captured_at` of any card that ever carried
-     the SKU. **This is a proxy and it is the weak term.** It measures how long the card has
-     been OWNED, not how long the listing has been live. The store cannot measure the
-     second: `Listing` has no `first_listed_at`, and `live_as_of` is absent from all 443
-     stored listing payloads, while `Listing.at` means "last touched" and 346 of those 443
-     carry one timestamp — the D87 store-wide settlement. Every report this module produces
-     prints the substitution in its own header, because a proxy nobody is told about is a
-     lie.
+  3. LISTED LONGER THAN THE WINDOW — `store/master.py:Listing.first_seen_live`, the earliest
+     export observed holding the SKU live. **This is the real term, and it was a proxy until
+     D109 (2026-09-06).** `reconcile --live --write` records it, monotonically, for any SKU
+     the export carries — including one no card here has ever carried.
 
-  Term 3 counts every card that ever carried the SKU, departed ones included. A floor taken
+  3b. AND THE PROXY IT FALLS BACK TO, where no export has caught the SKU yet: the oldest
+     `captured_at` of any card that ever carried it. That measures how long the card has been
+     OWNED, not how long the listing has been live, and it is a FLOOR on the real age rather
+     than the age itself. It was the only term available while `Listing` had no first-listed
+     stamp, and on the owner's store it refused 184 of 387 live SKUs as `too_young` against an
+     oldest capture of 2026-08-23 — the window was measuring when this project got a camera.
+     Every report COUNTS BOTH CLOCKS and says which dated which rows, because a proxy nobody
+     is told about is a lie and so is one claimed where it is not being used.
+
+  Term 3b counts every card that ever carried the SKU, departed ones included. A floor taken
   over on-hand copies alone moves FORWARD as the oldest copy sells, so a listing would get
   younger the longer it sat.
 
@@ -328,7 +338,10 @@ class Plan:
         return [(code, self.skipped[code]) for code in SKIP_ORDER if self.skipped.get(code)]
 
     def surveyed(self) -> List[Tuple[Candidate, str]]:
-        """Every candidate this plan looked at, each with its standing. The lens's whole table.
+        """Every candidate still LIVE, each with its standing. The lens's whole table.
+
+        NOT every candidate the plan looked at — a `sold_out` row is dropped, and the block
+        below says why. `Plan.considered` is still the figure for what was examined.
 
         THE ORDER IS THE REPORT'S OWN — `rows` by `at_risk` desc, then `deferred`, then the
         refusals walked in `SKIP_ORDER` — so `skips`'s promise that two reports of one store
@@ -350,7 +363,22 @@ class Plan:
         """
         out: List[Tuple[Candidate, str]] = [(row, "offered") for row in self.rows]
         out.extend((row, "deferred") for row in self.deferred)
-        for _code, group in self.skips():
+        for code, group in self.skips():
+            # A ROW TCGPLAYER NO LONGER HOLDS IS NOT A ROW. `SOLD_OUT` is the one remaining
+            # member of `UNPRICEABLE_CODES` — there is no live listing for a price to edit —
+            # so these can never be answered, never be pushed, and exist on the lens only as
+            # something to scroll past. Measured on the owner's export, 2026-09-06: 372 of 759
+            # rows, so the screen drew nearly twice as many dead rows as live ones.
+            #
+            # THEY ARE DROPPED HERE AND NOT AT THE FETCH, WHICH IS THE WHOLE POINT. The same
+            # file feeds `reconcile --live`, and a SKU going from four copies to zero is how
+            # the store learns something sold — `pipeline/livecheck.py` distinguishes a
+            # zero-quantity row from a SKU `absent` from the export entirely, and narrowing
+            # the download would erase that difference. The export stays complete; the
+            # WORKLIST is what gets narrowed. `Plan.considered` and the `refused` tally still
+            # count them, so the operator is told how many there were.
+            if code == SOLD_OUT:
+                continue
             out.extend((row, "refused") for row in group)
         return out
 

@@ -152,6 +152,8 @@
   animation: bn-page-in var(--bn-t-fast) var(--bn-ease-out) both;
 }
 .pricing-custom-of { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+}
 .pricing-pct { height: 34px; padding-left: 0; }
 .pricing-pct-input { width: 58px; padding: 0 4px 0 var(--bn-2); font-size: var(--bn-fs-md); }
 .pricing-pct-sign { padding-right: var(--bn-2); font-size: var(--bn-fs-sm); }
@@ -313,6 +315,9 @@
 
 /* the figure IS the answer: one number, at size, with the statement it stands for beside it */
 .pricing-cheap-figure { display: flex; align-items: center; gap: var(--bn-4); flex-wrap: wrap; }
+/* THE LENS'S PRESS, UNDER THE FIGURE IT SPENDS. Full width so it reads as the panel's own
+   action rather than as a control sitting beside the number. */
+.pricing-cheap-apply { width: 100%; margin-top: var(--bn-3); }
 .pricing-cheap-amount {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-4xl);

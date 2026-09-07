@@ -233,15 +233,29 @@ const SECTIONS: SectionSpec[] = [
   },
 ]
 
-/* THE LENS DRAWS ONE BAND, because the three above are a JOIN's partition. `bucket` decides
-   which import file a row is bound for, and a live listing is bound for none — it is already
-   listed. One section, named for what these rows actually are. */
+/* THE LENS DRAWS TWO BANDS, AND IT DREW ONE UNTIL 2026-09-07. The reasoning then was that the
+   three above are a JOIN's partition — `bucket` decides which import file a row is bound for,
+   and a live listing is bound for none. True of the FILE and false of the FIGURE: D99 made the
+   cut-off one variable with the cheap price, so it also says what everything under it is worth,
+   and D103's amendment gives the lens the same control. A partition with a band missing is
+   worse than no partition at all — a row moving into `sub_threshold` had no section to render
+   in and VANISHED from the screen, which is what the specs caught.
+
+   `no_market_data` IS STILL ABSENT AND THAT IS CORRECT. `bucketAt` returns a row's existing
+   bucket when the market cell is blank, and every lens row arrives `listable`, so nothing can
+   reach that band here. A section nothing can enter is a heading that never draws. */
 const LIVE_SECTIONS: SectionSpec[] = [
   {
     bucket: 'listable',
     title: 'Live at TCGplayer',
     icon: 'tag',
-    note: () => 'Every listing this export reported live. Type a price on any of them; nothing is sent until you press.',
+    note: (cut) => `Market at or above $${cut}. Type a price on any of them; nothing is sent until you press.`,
+  },
+  {
+    bucket: 'sub_threshold',
+    title: 'Under the cut-off',
+    icon: 'minus',
+    note: (cut) => `Market below $${cut}. One press prices them all at $${cut} — or type a price on any row.`,
   },
 ]
 
@@ -1216,16 +1230,23 @@ export function Pricing() {
      has to be the list itself moving rather than a number that only comes true after a reload.
      `bucketAt` is `pipeline/pricing.py:is_listable` in the client's terms, so a cut-off equal to
      the stored one re-derives exactly the buckets the server sent. */
-  const rows = useMemo(
-    () =>
-      !source.repartition
-        ? (table ?? []).filter((sku) => lens === 'all' || standingOf.get(sku.sku) === lens)
-        : (table ?? []).map((sku) => {
-            const bucket = bucketAt(sku, cut)
-            return bucket === sku.bucket ? sku : { ...sku, bucket }
-          }),
-    [table, cut, source.repartition, lens, standingOf],
-  )
+  /* THE TWO NARROWINGS COMPOSE, AND THEY WERE MUTUALLY EXCLUSIVE BRANCHES UNTIL 2026-09-07.
+     While `repartition` was false for a lens and true for a run, "which branch" doubled as
+     "which door", and turning the partition on for the lens (D103, amended) silently took the
+     staleness filter off it — the specs caught it: `Not selling` stopped narrowing anything.
+     They answer different questions and both are real. `standingOf` is EMPTY on a run, which
+     is why the filter is gated on the data rather than on the door: a run's rows carry no
+     standing for a lens filter to be about, so the pass is a no-op there by construction. */
+  const rows = useMemo(() => {
+    const partitioned = source.repartition
+      ? (table ?? []).map((sku) => {
+          const bucket = bucketAt(sku, cut)
+          return bucket === sku.bucket ? sku : { ...sku, bucket }
+        })
+      : (table ?? [])
+    if (standingOf.size === 0) return partitioned
+    return partitioned.filter((sku) => lens === 'all' || standingOf.get(sku.sku) === lens)
+  }, [table, cut, source.repartition, lens, standingOf])
 
   /* READINESS READS THE PARTITION AS DRAWN, not the one the table arrived with: at a cut-off the
      operator has raised, rows that were listable are cheap now and `emit` will refuse over
@@ -1529,6 +1550,82 @@ export function Pricing() {
     [rows, table, answerFor],
   )
 
+  /** The rows a cut-off press would move: under the line, and nobody has answered them.
+   *
+   *  `bucket` AND NOT A PREDICATE OF ITS OWN. The partition is `bucketAt` — market under the
+   *  figure — and `rows` has already been through it, so the count under the line here is the
+   *  count the run panel shows for the same store policy. A second predicate would be a second
+   *  cut-off wearing the same number.
+   */
+  const cheapRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (row.bucket !== 'sub_threshold') return false
+        if (source.locked(row.sku) !== null) return false
+        const standing = answers[row.sku]
+        return !(typeof standing === 'string' && standing.trim() !== '') && !isWithheld(standing)
+      }),
+    [rows, answers, source],
+  )
+
+  /** Write the cut-off onto every unanswered row under it, in ONE press and ONE undo.
+   *
+   *  THE PRESS EXISTS ONLY ON A LENS, AND THE FIGURE IS THE RUN'S OWN. A run needs no press:
+   *  `emit` prices its cheap half from `sub_threshold` at write time (D9/D98), so those rows
+   *  are answered by policy and an untouched one still goes out right. A lens has no emit —
+   *  `reprice apply` sends typed answers and nothing else — so the identical intent has to
+   *  land as real answers, and that press is the only difference between the two paths.
+   *
+   *  DELIBERATELY NOT THE `undo` STACK. That stack is per-SKU and ten deep (D28), so a press
+   *  moving ninety rows would overflow it and need ninety presses to reverse. One act, one
+   *  reversal, carried on the receipt.
+   */
+  const applyCut = useCallback(() => {
+    const price = cut.trim()
+    if (price === '' || cheapRows.length === 0) return
+    const moved = cheapRows.map((row) => row.sku)
+    const before = new Map(moved.map((sku) => [sku, book?.skus?.[sku]]))
+    setBook((current) => {
+      if (current === null) return current
+      let next = current
+      for (const sku of moved) next = setAnswer(next, sku, price, 'price')
+      return next
+    })
+    for (const sku of moved) {
+      const input = inputs.current.get(sku)
+      if (!input) continue
+      input.value = price
+      flash(input)
+      touched.current.delete(sku)
+    }
+    toast({
+      kind: 'receipt',
+      title: `${moved.length} row(s) priced at $${price}`,
+      body: 'Every live row under the cut-off that you had not already answered.',
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          setBook((current) => {
+            if (current === null) return current
+            const skus = { ...(current.skus ?? {}) }
+            for (const sku of moved) {
+              const was = before.get(sku)
+              if (was === undefined) delete skus[sku]
+              else skus[sku] = was
+            }
+            return { ...current, skus }
+          })
+          for (const sku of moved) {
+            const input = inputs.current.get(sku)
+            if (!input) continue
+            input.value = ''
+            flash(input)
+          }
+        },
+      },
+    })
+  }, [cut, cheapRows, book])
+
   /** THE CUSTOM RULE, WRITTEN THE WAY A PRESET IS WRITTEN: `policy.rule` and `policy.basis`
    *  on the corpus, no per-SKU override, and the untyped fields walked to whatever figure the
    *  screen honestly has for the new rule. A bad percentage writes NOTHING and says why —
@@ -1608,6 +1705,13 @@ export function Pricing() {
      figure is already right, so nothing flashes on arrival. */
   const cheapNow = cheapDigits()
   useEffect(() => {
+    /* RUN ONLY, AND `proposes` IS THE SAME FLAG THAT DECIDES THE FIELD'S OPENING VALUE. On a
+       run the cheap rows are priced BY POLICY at emit time, so the figure in the field is what
+       will actually be written and walking it in keeps the deck and the list agreeing. A lens
+       has no emit: nothing prices a row there but an answer, so a figure shown without one
+       would claim a price that will not be sent — and it fought the press's own undo, refilling
+       every field the reversal had just cleared while `pushable` correctly counted none. */
+    if (!source.proposes) return
     for (const row of rows) {
       if (row.bucket !== 'sub_threshold') continue
       if (touched.current.has(row.sku)) continue
@@ -1618,7 +1722,7 @@ export function Pricing() {
       input.value = cheapNow
       flash(input)
     }
-  }, [cheapNow, rows, answerFor])
+  }, [cheapNow, rows, answerFor, source])
 
   const toggleHold = useCallback(
     (sku: PricingSku) => {
@@ -2391,15 +2495,22 @@ export function Pricing() {
             line, which was fine while the figure was only an answer ABOUT those cards — now that
             the figure IS the line, a cut-off typed low enough to empty the lower section would
             take its own control off the screen and leave no way back to it. */}
-        <div className="pricing-deck" ref={deckRef} data-cards={source.kind === 'markdown' ? 'one' : 'two'}>
-          {source.kind === 'markdown' ? (
-            /* ONE OF THE TWO PLACES THAT ASK WHICH DOOR IT WAS, and it earns it: the run deck
-               is a cut-off editor and a readiness verdict, and NEITHER is a fact about a live
-               listing. The cut-off decides which import file a row goes in and this row goes
-               in none; the verdict counts what `emit` would write and `emit` never runs here. */
+        <div className="pricing-deck" ref={deckRef} data-cards="two">
+          {/* THE CUT-OFF IS DRAWN ON BOTH DOORS, AND IT WAS RUN-ONLY UNTIL 2026-09-07. D103
+              withheld it because "the cut-off decides which import file a row goes in and this
+              row goes in none" — true of the FILE and false of the FIGURE. D99 made the line
+              and the price ONE variable, so the figure also says what everything under it is
+              worth, and that is as much a question about a live listing as about a card in a
+              drawer. What differs is only how it is spent: `emit` prices a run's cheap half
+              from policy at write time, and a lens has no emit, so the same figure is spent by
+              a press. Same panel, same store key, same `bucketAt` partition — the operator
+              gets one control and one number, which is what "uniform" has to mean here.
+
+              THE READINESS VERDICT STAYS RUN-ONLY, and that half of D103's argument stands: it
+              counts what `emit` would write, and `emit` never runs on a lens. */}
+          {source.kind !== 'markdown' ? null : (
             <MarkdownPanel table={sheet} rows={rows} answers={answers} />
-          ) : (
-            <>
+          )}
           <CutoffPanel
             count={subCount}
             above={rows.length - subCount}
@@ -2412,18 +2523,20 @@ export function Pricing() {
             onCut={setCut}
             onRunCut={setRunCut}
             onPickRun={() => setRunsOpen(true)}
+            applyCount={source.kind === 'markdown' ? cheapRows.length : null}
+            onApply={applyCut}
           />
-          <ReadyPanel
-            owes={owes}
-            progress={progress}
-            cheapMoney={cheapMoney}
-            queued={queued}
-            runCount={loaded.length}
-            boxCount={boxesLoaded.length}
-            readAge={readAge}
-            emitted={emitted}
-          />
-            </>
+          {source.kind === 'markdown' ? null : (
+            <ReadyPanel
+              owes={owes}
+              progress={progress}
+              cheapMoney={cheapMoney}
+              queued={queued}
+              runCount={loaded.length}
+              boxCount={boxesLoaded.length}
+              readAge={readAge}
+              emitted={emitted}
+            />
           )}
         </div>
 
@@ -2852,12 +2965,23 @@ export function Pricing() {
                             className="pricing-input"
                             type="text"
                             inputMode="decimal"
+                            /* THE GHOST IS WHAT YOU ARE ASKING NOW, on a lens.
+                               `snap.now` is the operator's own `TCG Marketplace Price` off
+                               the export, so an untouched field reads as the live listing
+                               rather than as an empty box — and because it is a PLACEHOLDER
+                               and not a value, the first digit typed replaces it whole. No
+                               selecting, no backspace, and nothing is written by looking at
+                               it. It falls back to the rule's figure only where the export
+                               carried no asking price at all, which is the `no_asking_price`
+                               row: there is no "now" to draw there. A run keeps `undefined`
+                               — its field opens FILLED with the rule's answer, which is a
+                               value and not a ghost (D109). */
                             placeholder={
                               sku.bucket === 'no_market_data'
                                 ? '—'
                                 : source.proposes
                                   ? undefined
-                                  : suggestion || undefined
+                                  : sku.snap.now ?? suggestion ?? undefined
                             }
                             aria-label={`Price for ${sku.name}`}
                             /* THE LENS OPENS EMPTY AND THE RUN OPENS FILLED, and the
@@ -3473,6 +3597,8 @@ function CutoffPanel({
   onCut,
   onRunCut,
   onPickRun,
+  applyCount,
+  onApply,
 }: {
   count: number
   above: number
@@ -3485,6 +3611,15 @@ function CutoffPanel({
   onCut: (figure: string) => void
   onRunCut: (figure: string | undefined) => void
   onPickRun: () => void
+  /** How many rows a press would move, or `null` where the figure is not spent by pressing.
+   *
+   *  NULL ON A RUN, AND THAT IS THE WHOLE DIFFERENCE BETWEEN THE TWO DOORS. `emit` prices a
+   *  run's cheap half from `sub_threshold` at write time (D9/D98), so those rows are answered
+   *  by policy and need no press — a button there would offer to do again what the pipeline
+   *  already does. A lens has no emit: `reprice apply` sends typed answers and nothing else,
+   *  so the identical figure has to be spent by hand or it is not spent at all. */
+  applyCount?: number | null
+  onApply?: () => void
 }) {
   const overridden = from === 'run'
   const written = from !== 'default'
@@ -3531,6 +3666,22 @@ function CutoffPanel({
         </span>
       </div>
 
+      {applyCount === null || applyCount === undefined || onApply === undefined ? null : (
+        /* THE PRESS, AND THE COUNT IS ON IT RATHER THAN BESIDE IT. A bulk write over a live
+           book is exactly the press that should say what it will do while it is still
+           refusable, which is the posture every money control on this screen takes. It fills
+           only rows nobody has answered, so pressing it twice is a no-op and it can never
+           overwrite a price the operator typed. */
+        <Button
+          className="pricing-cheap-apply"
+          icon="tag"
+          onClick={onApply}
+          disabled={applyCount === 0}
+        >
+          {applyCount === 0 ? 'Nothing under the line to price' : `Price ${applyCount} under the line`}
+        </Button>
+      )}
+
       {stranded === null ? null : (
         /* TWO FIGURES WHERE THERE IS NOW ONE. Reported rather than resolved on the operator's
            behalf: which of the two they meant is not a thing this screen can know, and typing
@@ -3546,6 +3697,12 @@ function CutoffPanel({
         </Notice>
       )}
 
+      {/* THE PER-RUN OVERRIDE IS RUN-ONLY, and it is the one part of this panel that is. The
+          FIGURE is a store policy and answers for both doors; an override belongs to one lot,
+          and a lens is not a lot — it is the operator's whole live book out of one export, so
+          there is nothing here for "this run only" to be about and no run to pick. Drawing it
+          on a lens offered a control that could not be honoured, which is D101's defect. */}
+      {applyCount !== null && applyCount !== undefined ? null : (
       <div className="pricing-cheap-run" data-on={overridden ? 'true' : undefined}>
         <div className="pricing-cheap-run-head">
           <span className="bn-label pricing-cheap-run-key">This run only</span>
@@ -3595,6 +3752,7 @@ function CutoffPanel({
           </>
         )}
       </div>
+      )}
     </section>
   )
 }

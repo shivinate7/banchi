@@ -394,9 +394,16 @@ sentence**, and see "the census" below for what enforces that.
                               from 387 live listings because none came out of a camera here. It
                               leads with "Price my live listings", which opens the sheet with the
                               fetch already running. A listing this store never photographed is
-                              PRICEABLE there; only a sold-out row is locked, and the lens's
-                              field opens EMPTY with the rule's figure as a placeholder, so a
-                              bulk press moves only what was touched.
+                              PRICEABLE there, and the field's ghost is the price you are asking
+                              NOW, so the first digit typed replaces it whole.
+                              THE CUT-OFF IS THE SAME CONTROL ON BOTH DOORS (D103, amended
+                              2026-09-07). `CutoffPanel`, `policy.threshold` and `bucketAt` are
+                              shared; the ONLY difference is when the figure is spent — `emit`
+                              prices a run's cheap half at write time, and a lens has no emit, so
+                              the press writes real answers in one act with one reversal.
+                              A SOLD-OUT ROW IS NOT SURVEYED at all: 372 of the owner's 759 rows,
+                              which can never be priced. The EXPORT still carries them, because
+                              `reconcile --live` reads a zero quantity to see a SKU sell out.
                               THE SHEET THAT MAKES ONE IS HERE TOO (D105), off the header —
                               read an export, write a worklist, price it without changing screen
 #/orders       Orders         which copies this buyer gets and where they are, ranked by how
