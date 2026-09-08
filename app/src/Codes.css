@@ -515,17 +515,22 @@
   .codes-photo-link { width: auto; height: 40px; padding: 0 8px; margin-right: -8px; }
   .codes-photo-word { display: inline; font-size: var(--bn-fs-sm); font-weight: 600; }
 }
-/* phones: a thumb needs 40px. The kit's buttons read the raised control tokens on their own;
-   these are the screen's own pressables, plus the segmented item, whose phone rule the kit
-   declares before its base rule and so loses the cascade at 28px. */
-@media (max-width: 767px) {
-  .codes-chip { height: 40px; padding: 0 14px; }
-  .codes-code-btn { min-height: 40px; margin: 0 0 0 -8px; }
-  .codes-dup-link { min-height: 40px; padding: 0 4px; }
-  .codes-photo-link, .codes-td-photo .codes-photo-link { min-width: 40px; min-height: 40px; }
-  .codes-sheet .bn-seg-item { height: 40px; }
-  .codes-sheet-head .bn-btn { min-width: 44px; min-height: 44px; }
-  .codes-failure .bn-btn { min-width: 40px; }
+/* A thumb needs 40px. The kit's buttons read the raised control tokens on their own; these are
+   the screen's own pressables.
+   THE ARM IS THE POINTER NOW, AND THE LITERALS ARE THE TOKEN (D117). This block was
+   `max-width: 767px` alone, so an 820px iPad in portrait — all thumb — got none of it.
+   The paragraph here used to name `.bn-seg-item` as a kit gap, "whose phone rule the kit
+   declares before its base rule and so loses the cascade at 28px". That is fixed at the foot of
+   `kit.css`, where the floor now sits after every base rule it lifts; the descendant rule below
+   is left as belt-and-braces rather than as the only cover. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .codes-chip { height: var(--bn-control-h-sm); padding: 0 14px; }
+  .codes-code-btn { min-height: var(--bn-control-h-sm); margin: 0 0 0 -8px; }
+  .codes-dup-link { min-height: var(--bn-control-h-sm); padding: 0 4px; }
+  .codes-photo-link, .codes-td-photo .codes-photo-link { min-width: var(--bn-control-h-sm); min-height: var(--bn-control-h-sm); }
+  .codes-sheet .bn-seg-item { height: var(--bn-control-h-sm); }
+  .codes-sheet-head .bn-btn { min-width: var(--bn-control-h); min-height: var(--bn-control-h); }
+  .codes-failure .bn-btn { min-width: var(--bn-control-h-sm); }
   .codes-stat-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 

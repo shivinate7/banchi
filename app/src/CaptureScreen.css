@@ -1070,15 +1070,22 @@
   .capture-open-lg > .capture-row { min-height: 44px; }
   .capture-opt { min-height: 42px; }
   .capture-cell { min-height: 40px; }
-  .capture-block-fix { --btn-h: 40px; padding-inline: var(--bn-4); font-size: var(--bn-fs-md); border-radius: var(--bn-r); }
+  .capture-block-fix { --btn-h: var(--bn-control-h-sm); padding-inline: var(--bn-4); font-size: var(--bn-fs-md); border-radius: var(--bn-r); }
   .capture-section .bn-btn,
   .capture-onward .bn-btn,
   .capture-frame-note .bn-btn,
   .capture-open-body .bn-btn,
   .capture-tuning-actions .bn-btn,
-  .capture-resume { --btn-h: 40px; }
+  .capture-resume { --btn-h: var(--bn-control-h-sm); }
   .capture-tuning > summary { height: 40px; padding: 0 var(--bn-3) 0 10px; }
   .capture-halt-details summary { min-height: 40px; }
   .capture-note-wrap .bn-input,
   .capture-filter.bn-input { min-height: 44px; }
+}
+
+/* THE THUMB FLOOR (D117). This sheet has a real coarse block and these two sat under it on
+   their own literals — both are fields the operator types a claim into, at the rig, standing up. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .capture-entrybox .capture-filter { min-height: var(--bn-control-h-sm); }
+  .capture-note-wrap .bn-input { min-height: var(--bn-control-h-sm); }
 }

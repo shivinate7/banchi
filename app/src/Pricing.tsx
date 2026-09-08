@@ -909,6 +909,16 @@ export function Pricing() {
      arithmetic is D59's and is right. */
   const capField = (
     <label className="pricing-ship-cap">
+      {/* THE SENTENCE SHORTENS ON A PHONE (D117), it does not go. This bar is sticky and owns
+          the foot of a 390px screen, and this control is a real answer THIS press gives — a
+          control that vanishes reads as one you imagined. What it can afford to lose there is
+          the second half of its own sentence: `hold to 4 live` says the same thing to somebody
+          already looking at a send.
+
+          THE WORDS CHANGED UNDER D117 AND ITS MECHANISM DID NOT (D7, amended 2026-09-08).
+          This read `at most N of each card`, which describes a send quantity; the figure is a
+          CEILING on copies live, so a SKU with seven already out and a figure of four adds
+          nothing. What shortens is still the second half. */}
       hold to
       <input
         className="bn-input pricing-ship-cap-input"
@@ -922,7 +932,8 @@ export function Pricing() {
           if (/^\d{0,3}$/.test(text)) setSendCap(text)
         }}
       />
-      live per card
+      <span className="pricing-hide-sm">live per card</span>
+      <span className="pricing-only-sm">live</span>
     </label>
   )
   /* THE FIGURE THIS PRESS ASKS FOR, or null for none. Parsed in one place because two callers
@@ -3373,16 +3384,21 @@ export function Pricing() {
                 because THAT is when spending it once across the send is the load-bearing
                 property (D86: three separate emits over three real runs wrote two SKUs past
                 the cap of four; one merged emit wrote none). */}
-            <span className="pricing-ready pricing-ship-says">
+            {/* AND HIDDEN ON A PHONE (D117), whichever of the two it is. This bar is sticky and owns the
+                foot of the screen; the pill beside it already says how many runs and boxes go in
+                one file, and both of these sentences are the reasoning rather than the fact.
+                Measured at 390 the bar stood 430px against an 844px viewport and covered `Pick a
+                run` outright — a control the operator could see and could not press. */}
+            <span className="pricing-ready pricing-ship-says pricing-hide-sm">
               {sendCap.trim() === ''
                 ? 'A card in three boxes gets one row, and every copy TCGplayer does not already hold goes out.'
-                : 'The cap is spent once across the send, so a card in three boxes gets one row.'}
-            </span>
+                : 'The cap is spent once across the send, so a card in three boxes gets one row.'}            </span>
           </div>
           <div className="pricing-ship-act">
             <label className="bn-check pricing-ship-only">
               <input type="checkbox" checked={listedOnly} onChange={(event) => setListedOnly(event.currentTarget.checked)} />
-              just the cards above the cut-off
+              <span className="pricing-hide-sm">just the cards above the cut-off</span>
+              <span className="pricing-only-sm">above the cut-off only</span>
             </label>
             {/* THE SPLIT IS MEANINGLESS OVER A FILTERED SEND — "listed only" has already left the
                 lower half out, so there is no second file to write. Disabled rather than hidden:
@@ -3394,7 +3410,8 @@ export function Pricing() {
                 disabled={listedOnly}
                 onChange={(event) => setSplitFiles(event.currentTarget.checked)}
               />
-              split it in two, either side of the cut-off
+              <span className="pricing-hide-sm">split it in two, either side of the cut-off</span>
+              <span className="pricing-only-sm">split in two</span>
             </label>
             {capField}
             {receipt === null ? null : (
@@ -3526,7 +3543,8 @@ export function Pricing() {
           <div className="pricing-ship-act">
             <label className="bn-check pricing-ship-only">
               <input type="checkbox" checked={splitFiles} onChange={(event) => setSplitFiles(event.currentTarget.checked)} />
-              split it in two, either side of the cut-off
+              <span className="pricing-hide-sm">split it in two, either side of the cut-off</span>
+              <span className="pricing-only-sm">split in two</span>
             </label>
             {capField}
             {receipt === null ? null : (

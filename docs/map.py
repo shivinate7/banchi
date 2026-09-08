@@ -481,7 +481,8 @@ COMPONENTS = [
             # `Position.layout` falls back to `(1,)`, so an undeclared box is one section and
             # `CARDS_PER_SECTION` is deleted rather than defaulted.
             "join.py": {"does": "catalog join by SKU, aggregation, bidirectional unmatched reporting",
-                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68", "D71", "D87"], "tested_by": ["T3"]},            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
+                        "governed_by": ["D2", "D4", "D7", "D9", "D10", "D11", "D16", "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35", "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59", "D67", "D68", "D71", "D87"], "tested_by": ["T3"]},
+            # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
             # are read out of games.py's `pokemon` entry, byte-identically, which is what
@@ -1424,10 +1425,10 @@ COMPONENTS = [
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D49",
-                                "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70",
-                                "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90",
-                                "D92", "D94", "D96", "D101", "D102", "D104"],
+                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
+                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
+                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1726,7 +1727,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D122"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1747,6 +1748,30 @@ COMPONENTS = [
                         "list: every field is rendered by `make explain`, and the NEEDS "
                         "vocabulary is checked for a token no entry uses.",
             },
+            "suite-lock.py": {
+                "does": "`make design-check`'s doorman, and `make suite-lock-selftest`. ONE "
+                        "BROWSER FLEET AT A TIME ON THIS MACHINE: an advisory flock on "
+                        "`~/.pkmnscan/locks/browsers.lock`, taken before the suite runs and "
+                        "released when the process ends. It is the one guard here that may NOT "
+                        "live per-checkout — D43 gave every tree its own ports and its own "
+                        "store, and the CPU is what it could not copy. Two fleets at once "
+                        "starve each other into failures that are not in the code: measured "
+                        "2026-09-07 at 18 of them across two worktrees, all 52 green on a "
+                        "re-run alone. IT REFUSES RATHER THAN QUEUES and exits 75, not 1 — "
+                        "`playwright test` exits 1 when tests fail, and a guard against false "
+                        "failures must not produce one. `ARGS=--wait` queues instead and says "
+                        "so every thirty seconds, because a silent wait reads as a hang. NO "
+                        "STALE-LOCK PATH EXISTS because flock has none: the OS releases what a "
+                        "holder took however the holder died, which is the whole reason this is "
+                        "not scripts/serve.py's pid-and-argv dance. The record inside the file "
+                        "is read only to name the holder in the refusal. Stdlib only, and "
+                        "python3 rather than $(PYTHON): a guard that needs `make venv` before "
+                        "it can refuse is one a fresh worktree runs without.",
+                # D122 is the entry that argues all of it, D43 the one it finishes. D18 is why
+                # the self-test is in `make check` and never in the git hook: it writes a lock
+                # directory under mktemp and kills the processes it spawns.
+                "governed_by": ["D18", "D43", "D122"],
+                "status": "built"},
             "status.py": {
                 "does": "`make status`. Holds no fact about the project: the step and the "
                         "gate come from this file, the T1 score from harness/results/, the "
@@ -1887,22 +1912,76 @@ COMPONENTS = [
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
-                "does": "headless Playwright render of a URL to captures/ui/<name>.png, or "
-                        "one per line of views.txt under --manifest. Returns non-zero "
-                        "unless a non-empty PNG lands on disk — an exit 0 from the CLI is "
-                        "not proof that anything was written.",
+                "does": "the manifest loop, THIS CHECKOUT'S DEV PORT, and every message a "
+                        "person reads; screenshot.mjs "
+                        "is the browser half. Renders one URL to captures/ui/<name>.png, or "
+                        "one per line of views.txt under --manifest, and returns non-zero on "
+                        "either of TWO failures now: no PNG on disk, or a PNG missing an "
+                        "element the manifest named. The second is new on 2026-09-07 and is "
+                        "the whole point — the old sentence here, `an exit 0 from the CLI is "
+                        "not proof that anything was written`, was right and stopped one step "
+                        "short: a written file was never proof that the PAGE was written, and "
+                        "a render with a screen's hero missing is a valid non-empty PNG. IT "
+                        "RENDERS THE TREE IT IS RUN FROM, ALSO SINCE 2026-09-07 (D43): "
+                        "views.txt names the main checkout's :5173 as a convention, this reads "
+                        "`server/ports.py:dev_port` — never a third spelling of that "
+                        "derivation — and substitutes a worktree's own port before rendering, "
+                        "saying so as it goes. Before that, `make screenshot` in a worktree "
+                        "photographed the MAIN tree's app over the owner's real store, and the "
+                        "renders looked perfectly correct. A linked worktree that cannot "
+                        "derive its port renders NOTHING rather than falling back to a port "
+                        "that would be another tree's.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
                 # screens that most need looking at are the second persona's. D13 is what
-                # it renders — Vite on :5173, a browser on the Mac. D18 is the rule that
-                # keeps it off `make check`: it writes, and nothing that writes may run on
-                # the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18"],
+                # it renders — Vite on the main tree's :5173, a browser on the Mac. D43 is
+                # why that number is a convention here and not an address: the port follows
+                # the store, and this script had been the one caller that did not follow it.
+                # D18 is the rule that keeps it off `make check`: it writes, and nothing
+                # that writes may run on the path that decides whether work is done.
+                "governed_by": ["D5", "D13", "D18", "D43"],
+            },
+            "screenshot.mjs": {
+                "does": "the browser half of `make screenshot`: one render, and the proof "
+                        "that it is complete. Drives app/node_modules's @playwright/test — "
+                        "the SAME pinned copy `make design-check` runs — rather than the "
+                        "`npx playwright@<pin>` download screenshot.sh used until "
+                        "2026-09-07, so the one-version rule those two files could only ask "
+                        "for politely is now MECHANICAL: EXPECTED_PLAYWRIGHT is checked "
+                        "against app/package.json and a disagreement fails the render. THE "
+                        "PROOF: for each selector the manifest names, capture its rectangle, "
+                        "hide it with `visibility: hidden`, capture again, and refuse the "
+                        "render when not one pixel changed — an element that painted nothing "
+                        "is exactly what a lost element looks like. Both comparison shots "
+                        "freeze animation and the artifact on disk does not, because two "
+                        "back-to-back captures of `#/`'s deck are NOT byte-identical while "
+                        "motion is live; the header names what that trade gives up. It also "
+                        "carries the argument for keeping `fullPage`, which a report "
+                        "proposed replacing with a viewport sized to scrollHeight: measured "
+                        "on this tree, the reported paint loss does not reproduce and the "
+                        "remedy silently crops every view, because the shell is "
+                        "`min-height: 100dvh` and a taller viewport makes a taller document.",
+                # D5 is who the render is for and D13 is what it renders. D18 is why it is
+                # not on the commit path: it writes. D16 is the shape of what was added —
+                # a mechanical check for a claim that would otherwise fail silently, which
+                # is the same reason demo-freshness exists two entries up.
+                "governed_by": ["D5", "D13", "D16", "D18"],
             },
             "views.txt": {
-                "does": "the manifest `make screenshot` walks: one `<name> <url>` line per "
-                        "view worth looking at. Tracked, unlike the renders — it used to "
-                        "live under captures/, which .gitignore excludes wholesale, so the "
-                        "list could not be committed and a fresh clone started with none.",
+                "does": "the manifest `make screenshot` walks: one "
+                        "`<name> <url> <selectors>` line per view worth looking at. Tracked, "
+                        "unlike the renders — it used to live under captures/, which "
+                        ".gitignore excludes wholesale, so the list could not be committed "
+                        "and a fresh clone started with none. THE THIRD FIELD ARRIVED "
+                        "2026-09-07: the elements that view's render must prove it drew, "
+                        "checked by screenshot.mjs. A selector named here has to hold with "
+                        "the capture server up, down, and up over an empty store — the three "
+                        "states this file's own header describes — so it is either "
+                        "shell-independent structure or something the screen draws from "
+                        "nothing, never an empty state's own class. The `:5173` in every URL "
+                        "is the MAIN checkout's port and a convention rather than an address "
+                        "(D43) — a tracked file cannot name a port derived from one "
+                        "directory's path — and screenshot.sh substitutes a worktree's own "
+                        "before rendering.",
                 # D5 is what the list is for: SEVEN owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
@@ -1923,7 +2002,7 @@ COMPONENTS = [
                 # rather than the screen. D86 is the same drift on the `pricing` line — the
                 # corpus made that screen's default the full cross-run worklist, and the
                 # paragraph beside it still described a run picker that draws nothing.
-                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D49", "D63", "D69", "D86"],
+                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86"],
             },
         },
     },
@@ -2401,7 +2480,6 @@ COMPONENTS = [
                                              "wait — never an assertion — was the whole of the "
                                              "flake DEBTS.md recorded on 2026-08-30",
                                      "governed_by": ["D5", "D16"]},
-
             # ---- the ground: what everything else reads ----
             "src/tokens.css": {"does": "BANCHI'S TOKENS, and the only file in app/ allowed to write a "
                                        "color. Named `--bn-*` and grouped by the job rather than by "
@@ -2486,7 +2564,6 @@ COMPONENTS = [
                                      "land on the frame the finger goes down. Disabled controls "
                                      "do not move, and a screen opts out with `translate: none`.",
                              "governed_by": ["D5", "D28", "D41", "D45", "D50", "D94"]},
-
             # ---- the kit: the primitives every screen is built from (D94, 2026-09) ----
             # D94 IS THE ENTRY, and D50 is the one it discharges: an interactive element's
             # feedback belongs to the product rather than to each stylesheet, and before the kit
@@ -2510,12 +2587,12 @@ COMPONENTS = [
                                     "containing block for fixed descendants. `forwards` is right in "
                                     "exactly one place, `[data-leaving]`, where the node is about to "
                                     "unmount.",
-                            "governed_by": ["D5", "D13", "D32", "D50", "D94"]},
+                            "governed_by": ["D5", "D13", "D32", "D50", "D94", "D117"]},
             "src/kit/markGeometry.ts": {"does": "the Banchi mark's two optical cuts as static path data, GENERATED by scripts/build-mark.mjs out of docs/specs/logo/sheets/small-cut.html. Never hand-edited: the sheet is the one implementation of the drawing, so the app cannot drift from the spec by being edited. Two cuts because a 1.7 stroke is a scratch at 32px and absent at 16px (logo.md section 3, swept in section 11) — `SMALL` is what ships, since every surface in this product is below 64px, and `DISPLAY` is what #/gallery shows. The geometry does not vary across the six marks; all six generate byte-identical paths.",
                                           "governed_by": ["D94", "D102"]},
             "src/kit/lockupGeometry.ts": {"does": "the lockup as static path data — 番地 and BANCHI OUTLINED, the bracket's arm and its two end discs, the block's dimensions and section 13's eleven settled parameters. GENERATED by scripts/build-lockup.mjs and never hand-edited. Every number is a ratio of the kanji size and the paths are drawn in a 319 x 233 box at kanji 100, so ONE geometry serves every size through a viewBox — which is not only smaller than per-size data but more correct, since a vector scaled by a viewBox cannot re-layout and live text could, and did: the width match had to be SOLVED per size. Carries no `fill`: the component's own <g> supplies it by inheritance so a stylesheet can switch section 16's dark metal, which a fill attribute on the child would make unreachable.",
                                  "governed_by": ["D102"]},
-            "src/kit/Lockup.tsx": {"does": "the lockup — 番地 over BANCHI inside the mark's own brackets, drawn entirely from lockupGeometry.ts. THE ACCESSIBILITY CONTRACT INVERTS `Logo`'s AND THEN INVERTS AGAIN: `Logo` is aria-hidden always because every call site names its wrapper, and the lockup IS the word so standing alone it carries role=img and a name — but inside the sidebar's brand control — a <button> that collapses the rail, which already carries its own label — a named child would announce the name twice over it, so that call site passes `decorative`. THE COLLAPSE IS A MORPH, and section 16 recorded it as impossible, a ~600-point filled taper against a 52-byte stroked wire. True of how the two are EXPRESSED and false of what they are: both are one L, `taperParts` emits that L at a fixed 301 samples, and the mark's small cut is the same call with `tip = 1`. So the generator emits both ends (BRACKET_ARM, RAIL_ARM) at identical topology and this lerps them point-wise; the rail's drawing is unchanged and the generator pixel-diffs it against markGeometry.ts to keep it that way. THE CLOCK IS THE BOX: the morph reads the slot's own animating width, so it cannot drift from the panel, needs no copy of --bn-ease, and honours prefers-reduced-motion with no branch. The `RailMark` component this replaced is deleted — two drawings crossfading was what the operator saw and reported. The dark bracket is section 16's `bluesteel` chrome and is switched in CSS, not here — the gradient's id is per-instance, which a stylesheet cannot name, so the instance publishes it as --bn-lockup-metal and App.css decides per theme.",
+            "src/kit/Lockup.tsx": {"does": "the lockup — 番地 over BANCHI inside the mark's own brackets, drawn entirely from lockupGeometry.ts. THE ACCESSIBILITY CONTRACT INVERTS `Logo`'s AND THEN INVERTS AGAIN: `Logo` is aria-hidden always because every call site names its wrapper, and the lockup IS the word so standing alone it carries role=img and a name — but inside the sidebar's brand control — a <button> that collapses the rail, which already carries its own label — a named child would announce the name twice over it, so that call site passes `decorative`. THE COLLAPSE IS A MORPH, and section 16 recorded it as impossible, a ~600-point filled taper against a 52-byte stroked wire. True of how the two are EXPRESSED and false of what they are: both are one L, `taperParts` emits that L at a fixed 301 samples, and the mark's small cut is the same call with `tip = 1`. So the generator emits both ends (BRACKET_ARM, RAIL_ARM) at identical topology and this lerps them point-wise; the rail's drawing is unchanged and the generator pixel-diffs it against markGeometry.ts to keep it that way. THE CLOCK IS THE BOX: the morph reads the slot's own animating width, so it cannot drift from the panel, needs no copy of --bn-ease, and honours prefers-reduced-motion with no branch. The `RailMark` component this replaced is deleted — two drawings crossfading was what the operator saw and reported. The dark bracket is section 16's `bluesteel` chrome and is switched in CSS, not here — the gradient's id is per-instance, which a stylesheet cannot name, so the instance publishes it as --bn-lockup-metal and App.css decides per theme. THE SIZE FLOOR IS A GUARD NOW (D120): section 15 asked for one — \"a lockup below kanji 32 must not render\" — and nothing built it until 2026-09-07. `LOCKUP_FLOOR = 32` and the component returns null under it, which can only fire on a call site that does not exist yet: every surface is at or over the floor, and the rail's 32 comes through `railSize`, which is the MARK rather than this drawing. THREE SURFACES DRAW THIS, not two: the sidebar, `#/gallery`, and — since D120 — the phone's top bar and drawer, which are the rail's case and the sidebar's case one breakpoint down.",
                                  "governed_by": ["D102"]},
             "src/kit/markPalettes.ts": {"does": "docs/specs/logo.md section 9's six locked marks — prism, bracket, ground and card base per variant, bluesteel the default. GENERATED, but NOT derived: the ground rule applied to the three gold prisms produces the espresso section 8 rejected in favor of true black, so a build that re-derives them redraws marks the spec eliminated. THE ONE FILE IN app/ OUTSIDE tokens.css THAT MAY NAME A COLOUR (D102) — the `raw color` audit row cannot see it, since its scope is app/src/*.css, and `logo parity` stands in its place by reconciling every hex here against section 9 in both directions.",
                                         "governed_by": ["D94", "D102"]},
@@ -2558,7 +2635,6 @@ COMPONENTS = [
                                           "server-restart notice went when `ServerReloaded` was "
                                           "deleted.",
                                   "governed_by": ["D5", "D28", "D53", "D57", "D94"]},
-
             # ---- the shell ----
             "src/main.tsx": {"does": "mounts App, and fixes the stylesheet order: tokens, then base, "
                                      "then the kit — every later sheet resolves against tokens, and "
@@ -2619,11 +2695,22 @@ COMPONENTS = [
                                     "keeping the screen; the ordinals kept in this file count "
                                     "the order routes were ADDED and not their place in the "
                                     "table, which is why `route census` checks the counts and "
-                                    "deliberately not these.",
+                                    "deliberately not these. "
+                                    "ONE BRAND, THREE SURFACES (D120, logo.md section 19): "
+                                    "`BrandSlot` is rendered by the sidebar, the phone's top "
+                                    "bar and the phone's drawer, and nothing here branches on "
+                                    "width — App.css sets --bn-brand-open per surface and the "
+                                    "morph reads the slot's own box, so the bar draws the rail's "
+                                    "empty brackets and the drawer draws the lockup from ONE "
+                                    "component. Until 2026-09-07 the phone drew a `Logo` tile "
+                                    "with a wordmark and the tagline beside it, so the shell "
+                                    "spoke a different brand depending on the window's width; "
+                                    "`every card has an address` left the product with that "
+                                    "edit and is no longer copy anywhere.",
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105"]},
+                                            "D95", "D100", "D105", "D120"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -2651,7 +2738,7 @@ COMPONENTS = [
                                       "roster did not list this route, and this checkout's "
                                       "store is empty (D43) so no disabled button renders for "
                                       "it to see even now that it does.",
-                              "governed_by": ["D14", "D32", "D43", "D50", "D58", "D70"]},
+                              "governed_by": ["D14", "D32", "D43", "D50", "D58", "D70", "D117"]},
             "src/App.css": {"does": "the shell's chrome: the sidebar and the rail it collapses "
                                     "to, the phone's top bar and its sheet, the bottom tab bar, "
                                     "the command palette, the which-key overlay, the "
@@ -2666,7 +2753,7 @@ COMPONENTS = [
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
-                                             "D95", "D110", "D118"]},
+                                             "D95", "D110", "D117", "D118"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -2701,8 +2788,13 @@ COMPONENTS = [
                                      "`clamp(36px, 5vw, 56px)`, the only place the type scale is "
                                      "left behind, because this page has one job and it is to "
                                      "orient.",
-                             "governed_by": ["D5", "D32", "D94"]},
-
+                             # D110 is the hover-as-alpha rule the standing line's row obeys;
+                             # D50 divides the press dip from a screen's own emphasis and D118
+                             # forbids a pointer state re-laying anything out, which is why the
+                             # standing rule thickens with `scale` and never with `width`;
+                             # D117 is the thumb floor this sheet answers to at phone width;
+                             # D121 is the hero the lede became.
+                             "governed_by": ["D5", "D32", "D50", "D94", "D110", "D117", "D118", "D121"]},
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
@@ -2882,7 +2974,6 @@ COMPONENTS = [
                                       "presenceK x dTypical on this rig, which D84 records as "
                                       "a debt rather than a design.",
                               "governed_by": ["D13", "D19", "D81", "D84"]},
-
             # ---- 7a's screens ----
             "src/CaptureScreen.tsx": {"does": "the capture screen, rebuilt 2026-08-23 to the owner-approved Pass D: "
                     "every control one hairline row at rest (key chip, label, value), one "
@@ -2940,7 +3031,7 @@ COMPONENTS = [
                                       # D65 for the two accent modifiers the set hint's verdict
                                       # draws — accent's "the system is unsure" job at text
                                       # weight, because nothing there refuses anything.
-                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65"]},
+                                      "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -3078,8 +3169,7 @@ COMPONENTS = [
                                   "NO BANNER SLOT: `.browse-banner` came with main's envelope walk "
                                   "(D90) and went with it (D96 amended 2026-09-04), along with the "
                                   "only stylesheet that ever filled it.",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118"]},
-
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118", "D119", "D117"]},
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
             # Every entry in this block describes a file that exists, typechecks, lints clean
@@ -3126,7 +3216,7 @@ COMPONENTS = [
                         "answers. The bands are still a guess: Gate B priced $0.04-$0.40 end "
                         "to end, so every queue row landed in one band and no mixed-value lot "
                         "has tested an edge.",
-                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50"],
+                "governed_by": ["D5", "D9", "D13", "D24", "D28", "D29", "D32", "D35", "D37", "D41", "D46", "D50", "D117"],
             },
             "src/Inventory.tsx": {
                 "does": "THE ONE OWNER VIEW OF STORED CARDS (D31). Not two modes — the owner's "
@@ -3307,11 +3397,10 @@ COMPONENTS = [
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5", "D118"]},
             "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
-                                "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95", "D102"],
+                                "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95", "D102", "D118", "D119", "D117"],
                                 "note": "THE SHEET DREW FOUR REAL CARDS OUT OF THE OWNER'S STORE UNTIL 2026-09-06. Its `CardLocations` fixtures carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the Fulfiller skin sourced each `<img>` from `photoUrl(box, index)` — so the one page whose entire purpose is being compared against a reference was the one page whose contents depended on which capture server was up and what was in boxes 3, 4 and 7 that day, and `GET /photo/<box>/<index>` serves stored bytes without knowing a code card from a Thievul (D24). The one-line fix — `has_photo: false` on all four — was NOT taken: it buys a closed sheet by deleting the photo-bearing shell from the page whose job is drawing every shell, which is the trade `app/tests/gallery.spec.ts` exists to refuse. The image names its own colors, which is the same exception `src/kit/markPalettes.ts` argues at D102: an illustration's colors, on stage ground that is dark in both themes."},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
-                                "governed_by": ["D5", "D94"]},
-
+                                "governed_by": ["D5", "D94", "D118", "D119", "D117"]},
             # ---- the search-and-sell core: one set of components, two densities ----
             #
             # D5 puts two audiences on one system, and these four are where that stops being a
@@ -3392,7 +3481,7 @@ COMPONENTS = [
                                              "and the stdout block is `white-space: pre` with "
                                              "its own overflow because the report draws "
                                              "fixed-width columns a wrap would break.",
-                                     "governed_by": ["D50", "D87"]},
+                                     "governed_by": ["D50", "D87", "D117"]},
             "src/Runs.tsx": {"does": "#/runs: the page chrome, the box picker, the composer, the "
                                      "store-wide reconcile and the stale-listing markdown, with "
                                      "RunPanel beneath them. Owns the SCOPE and nothing else — a strip of "
@@ -3415,7 +3504,7 @@ COMPONENTS = [
                                      "No fill on the selected chip — the solid accent is reserved "
                                      "for a screen with exactly one thing to do, and this screen's "
                                      "one fill is the spend button inside the panel.",
-                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104", "D105"]},
+                             "governed_by": ["D5", "D33", "D38", "D39", "D100", "D103", "D104", "D105", "D117"]},
             # ---- the runs screen's parts (Banchi, 2026-09) ----
             "src/RunsStage.tsx": {"does": "WHERE A RUN IS, in one vocabulary for the list, the "
                                           "run panel and Home. The server says which of the four "
@@ -3518,7 +3607,7 @@ COMPONENTS = [
                                          "`.runs-md-shortfall`, whose comment said it awaited a "
                                          "narrowing axis while app/src/types.ts says the field "
                                          "it draws cannot exist. `--bn-*` only.",
-                                 "governed_by": ["D50", "D94", "D100", "D103", "D105"]},
+                                 "governed_by": ["D50", "D94", "D100", "D103", "D105", "D117"]},
             "src/runsOverlay.ts": {"does": "dialog focus for the three runs overlays — the composer, "
                                            "the store-wide reconcile and the markdown sheet: focus lands "
                                            "inside on open, Tab and Shift-Tab stay inside, focus "
@@ -3565,7 +3654,7 @@ COMPONENTS = [
                                                 "D33", "D35", "D37", "D39", "D41", "D48",
                                                 "D49", "D51", "D54", "D56", "D58", "D59",
                                                 "D62", "D78", "D79", "D85", "D86", "D89",
-                                                "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115"]},
+                                                "D99", "D100", "D103", "D101", "D105", "D107", "D98", "D109", "D115", "D117"]},
             "src/Pricing.css": {"does": "the worklist at owner density. One grid template read by "
                                         "the caption AND every row, so the two cannot drift; a "
                                         "row height invariant across every state, because the "
@@ -3584,7 +3673,7 @@ COMPONENTS = [
                                         "control and nothing has to win a stacking order.",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85",
-                                                "D86", "D103", "D105"]},
+                                                "D86", "D103", "D105", "D117"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -3784,7 +3873,7 @@ COMPONENTS = [
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
-                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114"]},
+                               "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69", "D113", "D114", "D117"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -3850,6 +3939,42 @@ COMPONENTS = [
                                       "they always did. Carries the min-width:0 truncation fix a "
                                       "real TCGplayer export filename earned.",
                                "governed_by": ["D54"]},
+            "src/standing.ts": {"does": "WHAT THE STORE IS WAITING ON, RANKED, AS ONE "
+                                        "SENTENCE — the policy behind Home's standing line, in "
+                                        "its own module because a ranking buried in a component "
+                                        "is one nobody can find, argue with or test. It replaced "
+                                        "a lede that counted cards on hand, every figure of which "
+                                        "the six-stage spine already drew 24px below it. THE NULL "
+                                        "INVARIANT IS THE PART THAT IS EASY TO GET WRONG: loading, "
+                                        "failed and read-but-refused are three distinct "
+                                        "non-values, each ranked at the row it would have "
+                                        "answered, and `ok` is reachable only from a complete "
+                                        "reading — so green is never painted over a gap. "
+                                        "`queues.review` is `number | null` for exactly this "
+                                        "reason and the wire type says a reader must render the "
+                                        "gap rather than coerce it to zero.",
+                                # D121 is the entry; D69 owns the order ledger the rank-1
+                                # condition is read from; D63 is the two-map ledger behind it.
+                                "governed_by": ["D63", "D69", "D121"]},
+            "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
+                                            "`captured_at` by a 30-minute gap, and the ribbon "
+                                            "geometry Home's foot draws from them. The unit is a "
+                                            "SITTING and not a day (the operator shoots across "
+                                            "midnight in UTC, so day buckets move with the "
+                                            "timezone) and not a run (three real runs share one "
+                                            "`created_at`, which is the identify date; and "
+                                            "`counts.cards_in` is a box's running total rewritten "
+                                            "on every re-join, so nine real manifests sum to 1,908 "
+                                            "against 1,625 records). A block is as wide as its "
+                                            "minutes and as tall as its cards an hour, so its AREA "
+                                            "is its card count and the marks still sum to the "
+                                            "figure printed above them. `photographed` is "
+                                            "`status.cards - states.moved`, never the sum over "
+                                            "`boxes[].cards`, which counts both halves of D83's "
+                                            "move.",
+                                    # D121 is the entry; D58 is the box closing up behind a
+                                    # departed card; D83 is the move that would be double-counted.
+                                    "governed_by": ["D58", "D83", "D121"]},
             "src/readiness.ts": {"does": "what `emit` would refuse this run for, on this side of the "
                                         "wire — a second implementation of "
                                         "pipeline/decisions.py:blocking, chosen so the pricing "
@@ -3881,7 +4006,7 @@ COMPONENTS = [
                                         "is this card'. No fill; the control is drawn at "
                                         "BoxOps' own 32px so the two panels in this screen agree "
                                         "about how tall a control is.",
-                                "governed_by": ["D5", "D33", "D39"]},
+                                "governed_by": ["D5", "D33", "D39", "D117"]},
             "src/setHint.ts": {
                 "does": "WHETHER A TYPED SET HINT NAMES A REAL SET, ANSWERED AT THE RIG "
                         "(D65, amended 2026-08-31). The field always had rules and never drew "
@@ -4009,7 +4134,7 @@ COMPONENTS = [
                                          "makes 1200 and 900 look identical. Since D48 the chips are drawn "
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
-                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64", "D76", "D86"]},
+                                 "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48", "D50", "D54", "D64", "D76", "D86", "D117"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -4027,7 +4152,7 @@ COMPONENTS = [
                                             "hint; the Fulfiller gets neither — his screens are touch "
                                             "and show no keys.",
                                     "governed_by": ["D5", "D13"]},
-            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50"]},
+            "src/SearchField.css": {"does": "the field at two densities", "governed_by": ["D5", "D50", "D117"]},
             "src/keys.ts": {"does": "isEditableTarget, hoisted at its fourth copy — the one "
                                      "question every keyboard handler asks first. The three "
                                      "prior copies each recorded the hoist as due; this is "
@@ -4036,7 +4161,6 @@ COMPONENTS = [
             "src/useSearch.ts": {"does": "GET /search behind a debounce, with an out-of-order guard so a "
                                          "slow early answer cannot overwrite a fast later one",
                                  "governed_by": ["D5", "D13"]},
-
             # ---- what checks the above ----
             "eslint.config.js": {
                 "does": "the two v1-bug rules docs/DECISIONS.md's table has named as guards since "
@@ -4162,6 +4286,32 @@ COMPONENTS = [
                         "unchecked by either — the #/codes defect was found by reading the "
                         "sheet, not by the sweep — and closing that needs fixtures for ten "
                         "screens.",
+            },
+            "tests/phone.spec.ts": {
+                "does": "the owner's screens at 390 x 844: every interactive control's HIT AREA "
+                        "reaches the 40px thumb floor, no route scrolls sideways, no sticky bar "
+                        "leaves a control it sits over unpressable, and the shell's own three "
+                        "surfaces — the tab bar, the More drawer and the palette — hold the same "
+                        "floor. The roster comes off the drawer's own nav links rather than a "
+                        "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
+                        "not hold.",
+                "governed_by": ["D50", "D95", "D117"],
+                "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
+                        "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
+                        "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
+                        "that file cannot run at a phone width even in principle; and of twenty "
+                        "specs only `fulfillment.spec.ts` set a phone viewport, for one route. "
+                        "TWO PROPERTIES, AND THE KIT SHEET ANSWERS ONE. On an operating screen "
+                        "the question is whether a thumb landing 19px off centre still lands on "
+                        "the control — a fact about the control AND its neighbours, which is what "
+                        "proves a 22px tick with a negative-inset pad really answers at 46. On "
+                        "`#/gallery` that cannot be asked, because the page draws specimens side "
+                        "by side to be compared; there the BOX is asserted instead, and that is "
+                        "the sweep that makes a deleted kit floor findable at all. THE SWEEP "
+                        "SCROLLS. `elementFromPoint` answers about the viewport, so one pass at "
+                        "the top of a route measures the first 844px of it: `#/gallery` is 13,000 "
+                        "long and its checkbox sits at y=13124, and with one pass this file "
+                        "stayed green through three mutations that deleted kit floors outright.",
             },
             "tests/brand.spec.ts": {
                 "does": "the mark, in the browser that draws it: the sidebar brand names itself "
@@ -4357,7 +4507,7 @@ COMPONENTS = [
                                               "seventy-one cases measuring the uncropped "
                                               "fallback. Named by `app/tests/shell.ts`'s seal; "
                                               "all seventy-one pass against the cropped render.",
-                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D115"]},
+                                      "governed_by": ["D8", "D9", "D20", "D28", "D33", "D48", "D49", "D51", "D54", "D56", "D57", "D58", "D59", "D62", "D68", "D78", "D79", "D85", "D86", "D98", "D99", "D115", "D117"]},
             "tests/live-reconcile.spec.ts": {
                 "does": "the store-wide reconcile in a browser (D87): that it is reachable from "
                         "#/runs at all, that the preview asks for no write, and that the settle "

@@ -43,7 +43,9 @@
 .boxruns-go[aria-disabled='true'] { color: var(--bn-ink-4); pointer-events: none; }
 
 /* a thumb presses this one */
-@media (max-width: 767px) {
+/* THE POINTER AND NOT THE WIDTH (D117, tokens.css's own rule): every rule in this block is a
+   control height, so an iPad in portrait — 820px wide and all thumb — was missing all of it. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
   .boxruns { min-height: var(--bn-control-h-lg); }
   .boxruns-go { height: var(--bn-control-h-lg); padding: 0 var(--bn-3) 0 var(--bn-4); font-size: var(--bn-fs-md); border-radius: var(--bn-r); }
 }
