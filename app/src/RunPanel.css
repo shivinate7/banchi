@@ -27,10 +27,11 @@
    Pricing.css, Codes.css, Orders.css). This screen's is the scope picker in the Options well.
    The figures strip's two links are the other case: their pressable area was the digit alone,
    13x30px, which is the smallest target on the screen and routes off to the review queue. */
-@media (max-width: 767px) {
-  .runs-back { --btn-h: 40px; }
-  .runs-stepper-btn { min-height: 40px; }
-  .run-scope-choices .bn-seg-item { min-height: 40px; }
+/* THE ARM IS THE POINTER (D117) — see `Runs.css`'s own block for the argument. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .runs-back { --btn-h: var(--bn-control-h-sm); }
+  .runs-stepper-btn { min-height: var(--bn-control-h-sm); }
+  .run-scope-choices .bn-seg-item { min-height: var(--bn-control-h-sm); }
   /* Expanded by a pseudo-element rather than by min-height, so the digit keeps its place in
      the figures grid: growing the link's own box pushes its label down and the two rows of
      stats stop agreeing about where a label sits under a figure. */

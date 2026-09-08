@@ -175,9 +175,10 @@
 @media (max-width: 899px) { .home-grid2 { grid-template-columns: 1fr; } }
 .home-more { display: inline-flex; align-items: center; gap: 4px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-3); }
 .home-more:hover { color: var(--bn-accent); text-decoration: none; }
-@media (max-width: 767px) {
-  /* the only way into the full lists from here: the same words, a thumb's worth of hit area */
-  .home-more { min-height: 40px; padding: 0 var(--bn-2); margin: -11px calc(-1 * var(--bn-2)); }
+/* the only way into the full lists from here: the same words, a thumb's worth of hit area.
+   ON THE POINTER AND NOT THE WIDTH (D117) — an iPad in portrait is 820px and all thumb. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .home-more { min-height: var(--bn-control-h-sm); padding: 0 var(--bn-2); margin: -11px calc(-1 * var(--bn-2)); }
 }
 .home-boxes, .home-runs { display: flex; flex-direction: column; padding: var(--bn-2); }
 .home-skel-row { height: 44px; margin: 4px var(--bn-2); }

@@ -1240,18 +1240,23 @@ D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
 D115 The reading is what the export said, and what has sold since is counted beside it
 D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
+D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-width spec is what reads it
 D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
-D120 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
+D120 The shell speaks one brand at every width, and the phone bar is a rail
+D122 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 ```
 
-**THE INDEX SKIPS ONE NUMBER BETWEEN D116 AND D118, AND THE GAP IS DELIBERATE.** D118 was
-numbered while three branches were in flight over the two numbers above D115: two worktrees both
-claimed the lower one, main took one of those on 2026-09-07 and it is in this list, and a third
-holds the one between — which therefore exists in no tree that can be read from here and cannot
-be named here without this file citing a heading that is not in `docs/DECISIONS.md`. The rule is
-the one this repo has always kept: renumber your own, never another's. A gap that closes on the
-next merge is the cheaper of the two failures.
+**THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
+WOULD.** D118 was numbered while three branches were in flight over the two numbers above D115:
+two worktrees both claimed the lower one, main took one of those on 2026-09-07, and a third held
+the one between — which existed in no tree that could be read from main and so could not be named
+in this list without citing a heading `docs/DECISIONS.md` did not have. D117 is that third, and
+it arrives with this branch and slots into its own gap rather than appending after D119, because
+`decision index` reconciles this list against the headings IN ORDER. **The rule that produced all
+of it is the one this repo has always kept: renumber your own, never another's** — and the other
+of the two branches did exactly that, moving up rather than taking a number main had since
+filled.
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
 without being adopted: the envelope walk and the copies picker were declined in favor of this

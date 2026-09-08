@@ -22,10 +22,10 @@
 # re-measurement, which needs both an explicit flag and a key, and has neither.
 #
 # THE BROWSER ASSERTIONS RUN HERE NOW, AND THIS PARAGRAPH SAID THEY DID NOT UNTIL 2026-09-07
-# (D120). It said "every browser assertion still comes from a person at the Mac", which was
+# (D122). It said "every browser assertion still comes from a person at the Mac", which was
 # true and was also the gap: `make design-check` holds the Fulfiller's contractual floors —
 # 20px body, 44px targets, 320px photograph, 7:1 contrast — plus D50's cursor, response and
-# press floors and, since D120, the wide-viewport caps, and NONE of it had a re-checker. It
+# press floors and, since D122, the wide-viewport caps, and NONE of it had a re-checker. It
 # fired when somebody typed it. That is the same shape as the defect at the top of this file:
 # a mechanism that is thorough, correct and never re-evaluated. The `design-check` job below
 # closes it.

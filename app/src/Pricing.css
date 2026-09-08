@@ -1262,7 +1262,7 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   .pricing-held,
   .pricing-locked { height: 44px; }
   .pricing-actions { grid-area: act; align-self: start; }
-  .pricing-actions .bn-btn { --btn-h: 44px; width: 44px; }
+  .pricing-actions .bn-btn { --btn-h: var(--bn-control-h); width: var(--bn-control-h); }
   .pricing-holdpanel { left: var(--bn-2); right: var(--bn-2); width: auto; top: calc(100% - 8px); }
   .pricing-holdpanel[data-flip='up'] { top: auto; bottom: calc(100% - 8px); }
   .pricing-holdpanel-fields { grid-template-columns: 1fr; }
@@ -1291,6 +1291,13 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
     border-radius: var(--bn-r-2xl) var(--bn-r-2xl) 0 0;
     animation-name: bn-sheet-up;
   }
+  /* NO EXTRA FOOT PADDING HERE, AND THAT IS A MEASUREMENT RATHER THAN AN OVERSIGHT (D117). The
+     obvious fix for a bar that covered `Pick a run` was to pad the page by `--pricing-ship-h`,
+     which is measured and published already (D85). It was built, and then measured: with the bar
+     back to two rows, `.bn-page`'s own 64px foot already leaves the last row 24px clear, and the
+     padding added 172px of dead scroll under a list the operator is walking. The bar's HEIGHT was
+     the defect; padding sized to the old height is a second one. `pricing.spec.ts` asserts the
+     clearance geometrically, so whatever keeps it is free to change. */
   .pricing-ship {
     bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-2));
     padding: var(--bn-3);
@@ -1419,4 +1426,20 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
 }
 @media (min-width: 768px) {
   .pricing-only-sm { display: none; }
+}
+
+/* THE THUMB FLOOR, THE TWO THIS SHEET'S PHONE BLOCK MISSED (D117). It lifts `.pricing-field`
+   and `.pricing-locked` to 44 and left `.pricing-held` on 38 beside them — three controls in
+   one column, one of them short. The cut-off input measured 39, one pixel under. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .pricing-held { height: var(--bn-control-h); }
+  /* NO INTERPUNCTS ON A PHONE (D117). `.pricing-scope` separates its items with an `::after`
+     on every one but the last, which is right on one line and wrong on two: at 390 this line
+     wraps and the separator that belonged BETWEEN two items was left hanging at the end of the
+     first row — `… everything unpriced ·`, then a break. The items are already flex children,
+     so the gap can carry the separation and the glyph can go. */
+  .pricing-scope { gap: var(--bn-1) var(--bn-4); }
+  .pricing-scope > span:not(:last-child)::after { content: none; }
+  .pricing-cheap-input { min-height: var(--bn-control-h-sm); }
+  .pricing-hold-reason { min-height: var(--bn-control-h-sm); }
 }

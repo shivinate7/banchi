@@ -7096,7 +7096,6 @@ reading `at` was defensible; after it, a sale touches `at` while observing nothi
 **What would reopen this**: an operator who wants a price or a quantity they assert here to
 outrank what TCGplayer reports. This entry keeps the export as the authority on the figure and
 this store as the authority only on what it has done since.
-
 ## D116 — A card nobody has named is not a landmark, and the distance is what keeps the skip honest
 
 **The after/before ladder names the nearest NAMED card still in the box on each side.**
@@ -7179,6 +7178,88 @@ and this entry gives those cards a better rendering rather than reopening their 
 enough to be worth ranking rather than stating, or the neighbour row becoming a click target —
 which is D92's own reopening condition and would make the passed-over card reachable instead of
 merely counted.
+
+## D117 — The thumb floor is the kit's, the measurement is the hit area, and a phone-width spec is what reads it
+
+**Built 2026-09-07, on the owner's instruction to review the mobile build.** CLAUDE.md has
+published two floors for this width since the Banchi rebuild and neither had a reader: *"Look at
+it at 1440, 820 and 390 … No horizontal page scroll at 390"* and *"anything a thumb presses is
+40px or more. The control-height tokens raise themselves under 767px and on a coarse pointer, so
+do not hand-roll a mouse-sized control on a phone."* Twenty-five controls hand-rolled one.
+
+**NOTHING IN `app/tests/` COULD HAVE SEEN IT.** `nav.spec.ts` scopes itself to `.bn-side` on
+purpose. `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is
+`display: none` below 768 — so that file cannot run at a phone width even in principle, and its
+own comment names the phone drawer as a second copy it does not walk. Of twenty specs only
+`fulfillment.spec.ts` set a phone viewport, for the Fulfiller's one route.
+**The owner-side shell had no test at any width**, so every shortfall below was invisible to
+`make check` and `make design-check` together.
+
+**THE FLOOR BELONGS TO THE KIT, AND PATCHING IT PER SCREEN IS HOW IT HID.** `.bn-check` has no
+height at all — an `inline-flex` label around a fixed 16×16 box, measuring 19.5px at 390 — and
+`Markdown.css` lifted its own copy and said so in a comment: *"The check is still somebody
+else's."* `BoxBrowse.css` did the same for `.bn-menu-item`. Both are deleted; `kit.css` holds
+`.bn-check`, `.bn-seg-item`, `.bn-tab`, `.bn-menu-item`, `.bn-toast-action` and `.bn-toast-close`
+now, and every screen gets them rather than the two that happened to notice.
+
+**THE LIFT BLOCK IS LAST IN `kit.css`, AND THAT IS LOAD-BEARING.** Every rule in it lifts a base
+rule above it at the same specificity, so it has to come after them or it does nothing. That is
+not hypothetical: `Markdown.css` records the same mistake being made and shipped — *"a phone lift
+written before the base rules at the same specificity, dead on arrival"* — and the kit's own
+`.bn-seg-item` phone rule was written at the top of the sheet, where it lost the cascade at 28px.
+
+**THE ARM IS THE POINTER, NOT THE WIDTH.** `tokens.css` has raised `--bn-control-h*` on
+`(max-width: 767px), (hover: none) and (pointer: coarse)` since it was written, and
+`docs/DESIGN.md` says why: an iPad in portrait is 820px wide and all thumb. Ten stylesheets
+carried width-only blocks full of control heights, so a tablet got none of them.
+
+**THE MEASUREMENT IS THE HIT AREA, NOT THE BOX, WHICH IS WHAT REMOVES THE ALLOW-LIST.**
+`BoxBrowse`'s ticks draw at 22px and take the tap at 46 through an `::after`
+with a negative inset; the composer's stage chips do the same. A box-only assertion calls both
+of those failures and needs a list of names to forgive them — and a list of names is a list
+somebody adds to. Probing the four cardinal points of the required 40px box asks the question
+the floor is actually about: can a thumb landing 19px off centre still press it.
+**It found a pad that was there and did nothing**: the row button is a sibling in the same grid and paints
+later, so it took every press in the 12px to the tick's right, and the tick answered 46px tall
+and 34px wide until a `z-index` put the pad above the sibling it was drawn to overlap.
+
+**ONE SURFACE IS SWEPT FOR THE BOX INSTEAD, AND IT IS THE ONE THAT MATTERS MOST.** `#/gallery`
+draws specimens side by side to be compared, so every probe there lands on the next specimen and
+the probe cannot be asked. What can be asked is the box — CLAUDE.md's floor verbatim — and that
+sweep is the only thing in the product that draws every kit control. Measured: with the sheet
+swept for the box, deleting `.bn-check`'s floor turns `phone.spec.ts` red; swept for the probe,
+it does not.
+
+**AND THE SWEEP SCROLLS, because `elementFromPoint` answers about the viewport.** One pass at the
+top of a route measures the first 844px of it. `#/gallery` is thirteen thousand pixels long and
+its checkbox sits at y=13124, so a single-pass version of this file stayed green through three
+mutations that deleted kit floors outright.
+
+**A STICKY BAR MAY NOT LEAVE A CONTROL UNPRESSABLE.** `#/pricing`'s ship bar stood 430px of an 844px viewport — half the screen, four wrapped rows —
+with `Pick a run` underneath it: visible, and impossible to press at any scroll position. The cap
+sentence is hidden on a phone (the pill beside it already states the scope) and both split
+checkboxes have short forms, which is 152px.
+**The obvious second fix was built and then refused**: padding the page by the measured
+`--pricing-ship-h` added 172px of dead scroll under a
+list the operator is walking, and with the bar back to two rows `.bn-page`'s own 64px foot
+already leaves the last row 24px clear. `pricing.spec.ts` asserts that clearance geometrically,
+so whatever provides it is free to change.
+
+**THE FIXED CHROME IS NOT AN OBSTRUCTION, AND THE LIST IS NAMED RATHER THAN DERIVED.**
+Content scrolls under the top bar and the tab bar by design — `.bn-shell-main` pads its foot by
+the tab bar's height plus the safe area for exactly that. "Anything sticky" would excuse the ship
+bar, which is the case this file exists to catch; "anything fixed" would miss `#/gallery`'s own
+sticky index strip. Three strips are written out in the spec and a fourth is a deliberate edit.
+
+**What is NOT decided here.** D50's three interaction floors are still derived from a mouse:
+`base.css` has no coarse-pointer arm at all, its response floor argues entirely from a hover
+sweep of 315 controls, and its 1px press dip is a mouse-derived number applied to a finger. That
+is a real question and it is not this entry's.
+
+**What would reopen this:** a second Playwright project at a device profile rather than
+per-test viewports. `playwright.config.ts` has one chromium project today, and the phone width is
+set per case; a project would run every existing spec at both. It doubles `design-check`'s
+runtime, which is why it is named here rather than taken.
 
 ## D118 — A press changes what is on the screen, never where the rest of it is
 
@@ -7356,7 +7437,70 @@ a group with more than one copy in it.
 standing at the boxes. That is the one thing the hero did that a 22px row does not, and it is
 named here as the cost of the deletion rather than as a reason to keep a split hierarchy.
 
-## D120 — Above the desk a screen asks its column, and browser zoom is not the lever it looks like
+## D120 — The shell speaks one brand at every width, and the phone bar is a rail
+
+**Built 2026-09-07, on the owner's instruction, after they asked what the mobile build gets wrong.**
+The 2026-09 rebuild put the lockup in the desktop sidebar
+(D102, `docs/specs/logo.md` §16) and left the phone chrome exactly as it was before the lockup
+existed. Nothing was decided about the phone; it simply was not asked about.
+
+**SO THE PRODUCT WORE TWO BRANDS, AND WHICH ONE YOU SAW DEPENDED ON HOW WIDE THE WINDOW WAS.**
+Above 1023px: 番地 over BANCHI, in the mark's own brackets. Below 768px: a `Logo` tile beside a
+Manrope wordmark in the top bar, and the same tile beside a wordmark AND the tagline in the More
+drawer — three brand objects in one shell. On dark the bar's tile is a dark superellipse on
+`--bn-surface-glass` over a near-black page and very nearly disappears, which is the failure §16
+gave the sidebar's bracket a chrome gradient to avoid, at a size where it is worse.
+
+**THE LOCKUP CANNOT GO IN THE TOP BAR, AND THE ARITHMETIC WAS ALREADY WRITTEN DOWN.** Its floor
+is kanji 32 (§11), which is a 102 × 75 block; `--bn-topbar-h` is 52px. That is the same refusal
+the 64px rail takes and the same measurement behind it — 番's counters close at about kanji 30,
+before the roman gives out and long before the bracket does. A bar tall enough for it is 84px,
+which is 10% of an 844px viewport spent on a brand row on every screen; considered, refused.
+
+**SO THE BAR DRAWS WHAT THE RAIL DRAWS, AND THAT IS NOT A NEW RULING.** §18 settled the same
+question for the browser tab on the owner's own instruction — *"the tab should be what the
+collapsed sidebar is"* — citing §1: *"with the card removed the same brackets become an empty
+slot, which is the in-product mark."* The phone bar is the rail's case one breakpoint down, so it
+takes the rail's drawing and the rail's paint. Unlike the tab's flat gold, it is an in-app surface
+and keeps `--bn-lockup-metal`, which `kit.css` resolves per theme.
+
+**AND THE DRAWER IS THE SIDEBAR AT A PHONE'S WIDTH** — same nav, same groups, same foot, one tap
+away instead of always on — so it draws the sidebar's brand at the sidebar's number. Kanji 40 was
+taken over 32 by forced choice, drawn in the real drawer at 390 and 320 in both themes: both fit,
+both leave the nav clear of a scroll, and 40 is the sidebar's own value, so there is one number rather
+than two to keep in step.
+
+**ONE DRAWING, THREE SURFACES, NO BRANCH.** `BrandSlot` in `app/src/App.tsx` is rendered by all
+three; `--bn-brand-open` is inherited and `App.css` sets it to 0 on `.bn-topbar-brand`; the morph
+reads the slot's own width, so the bar gets the rail end from one declaration. `Lockup` did not
+change for any of this, which is what D102's generated geometry bought.
+
+**`every card has an address` LEFT THE PRODUCT, AS THE RULING AND NOT A SIDE EFFECT.**
+§16's rule is that the lockup replaces the mark, the wordmark and the tagline together;
+the drawer was the tagline's last home, since the sidebar dropped it when the lockup landed and
+`#/gallery` uses it only as a type specimen. The owner ruled to let it go. Home's lede still ends
+*"Every one has an address."*, which is the sentence a person actually reads and is bound to the
+count in front of it. `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag` are deleted.
+
+**THE DRAWER'S SERVER LINE GAINED THE CARD COUNT** the sidebar has always drawn. It said only
+`Server online` here, so a phone could not see how big the store it was answering for was.
+
+**WHY NOTHING CAUGHT ANY OF THIS.** `app/tests/nav.spec.ts` scopes itself to `.bn-side` on
+purpose; `app/tests/cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is
+`display: none` below 768, so that file cannot run at a phone width even in principle; and of
+twenty specs only `app/tests/fulfillment.spec.ts` sets a phone viewport at all. The shell had no
+test at any width. `app/tests/brand.spec.ts` covers the phone bar and the drawer now, and carries
+the size floor §15 asked for and nothing built — `Lockup` refuses below `LOCKUP_FLOOR = 32`.
+
+**WHAT IS NOT DECIDED HERE.** The owner-side thumb floor across the screens is a separate pass
+and a separate PR: `.bn-check` renders a ~20px target at 390 from the kit, and about two dozen
+screen-level controls hard-code a height instead of reading `--bn-control-h*`. This entry is the
+brand only.
+
+**What would reopen this:** a top bar tall enough for a kanji-32 lockup, or a compact horizontal
+cut of the lockup that fits 52px — which would be new §13 work, not a size change.
+
+## D122 — Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 
 **Built 2026-09-07, from the owner's question: their Claude Code sessions "look way nicer at like 80% zoom rather than 100%", and did that mean this app should have been drawn denser?**
 The question is worth answering precisely, because the intuition behind it is half right and the

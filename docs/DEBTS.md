@@ -1544,7 +1544,7 @@ raised, understood and deliberately left.
 ## 16 — Four blocks still ask the viewport a question only their column can answer
 
 **Named by `make docs-audit`'s `breakpoint columns` row on every run, ADVISORY, and left
-standing on purpose (D120, 2026-09-07).** The rule the register states is: below 1024px a
+standing on purpose (D122, 2026-09-07).** The rule the register states is: below 1024px a
 `@media` width is honest, because the shell is force-railed there and a viewport question and a
 column question differ by a constant. At or above 1024 they do not — every screen but the
 Fulfiller's draws inside `.bn-shell-main`, which is the viewport minus 236px, or minus 64px when

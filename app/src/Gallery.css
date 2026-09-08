@@ -306,3 +306,9 @@
   border-radius: var(--bn-r-lg);
   padding: var(--bn-5);
 }
+
+/* THE THUMB FLOOR (D117). The kit sheet is where a short control is most likely to be SEEN
+   first, and its own index strip was 32px. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .kit-index-link { height: var(--bn-control-h-sm); }
+}

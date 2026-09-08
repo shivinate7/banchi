@@ -451,10 +451,8 @@
 .browse-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px; }
 .browse-claims-who { font-size: var(--bn-fs-md); color: var(--bn-ink-3); overflow-wrap: anywhere; }
 .browse-menu-note { padding: var(--bn-2) var(--bn-3); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); max-width: 240px; }
-/* A thumb presses these; the kit's own phone rule leaves them at 36px. */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .browse-menu .bn-menu-item { min-height: 44px; }
-}
+/* The kit holds this floor now (D117) — it left `.bn-menu-item` at 36px and this sheet lifted
+   its own copy, which is a kit gap patched at one call site. Deleted rather than kept beside it. */
 .browse-claims-photo { display: flex; flex-direction: column; gap: var(--bn-2); align-items: flex-start; }
 
 /* the band: photograph beside the location and the copies */
@@ -752,9 +750,14 @@
   .browse-sectfold { min-height: 44px; }
   .browse-tick { width: 22px; height: 22px; border-radius: 5px; }
   .browse-tick::before { width: 10px; height: 10px; }
-  /* the tick's own hit area reaches past its drawn box */
+  /* THE TICK'S OWN HIT AREA REACHES PAST ITS DRAWN BOX — and until 2026-09-07 it only reached
+     three ways (D117). The row button is a SIBLING in the same grid and paints later, so it took
+     every press in the 12px to the tick's right: the pseudo-element was there, under the row,
+     doing nothing on that side. Measured at 390, the tick answered 46px tall and 34px wide.
+     `z-index` on a positioned element is what puts the pad above the sibling it was drawn to
+     overlap; without it the intent is in the stylesheet and not on the screen. */
   .browse-rowtick,
-  .browse-secttick { position: relative; }
+  .browse-secttick { position: relative; z-index: 1; }
   .browse-rowtick::after,
   .browse-secttick::after { content: ''; position: absolute; inset: -12px; }
   .browse-rowline .browse-rowtick { opacity: 0.8; }
@@ -774,4 +777,16 @@
   .browse-stepper-count { font-size: var(--bn-fs-base); }
   .browse-boxcell { min-height: 48px; }
   .browse-details-summary { min-height: 48px; }
+}
+
+/* THE THUMB FLOOR (D117). The walk's status line squeezes to 34px and carries `.browse-quiet`
+   controls inside it. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .browse-status { min-height: var(--bn-control-h-sm); }
+  /* AN INLINE LINK INSIDE A SENTENCE IS STILL A TARGET (D117). The queued notice ends with
+     `Open the review queue`, which is the only way out of a card the pipeline could not place —
+     and it measured 143 x 16 at 390. It cannot become a block without breaking the sentence it
+     ends, so it takes the padding as a pseudo-element the way the ticks do. */
+  .browse-queued .bn-notice a { position: relative; }
+  .browse-queued .bn-notice a::after { content: ''; position: absolute; inset: -12px -4px; }
 }
