@@ -11677,6 +11677,54 @@ def check_merged_emit_uncapped(checks: Checks) -> None:
         )
 
 
+def check_cap_flag_refusals(checks: Checks) -> None:
+    """`--cap 0` is a sentence, not a traceback — and it is parsed before any work.
+
+    THE ONLY DOOR HAS TO ANSWER FOR ITSELF (D7, amended 2026-09-08). `_cap_for` raises
+    `MalformedDecisions`, and the only `except` in `cli/cmd_emit.py` that names that type
+    wraps `Corpus.read()` — the call itself sat inside a `try` catching `join.EmptyCatalog`
+    alone. So `--cap 0` came back as a Python traceback. That was survivable while
+    `policy.live_cap` was the ordinary door and the flag an exception; with the standing key
+    deleted, this flag is the only way a cap is ever named.
+
+    PARSED BEFORE THE STORE IS READ, which is the half worth asserting separately: a refusal
+    that arrives after the run directory has been opened and the corpus read is a refusal that
+    already cost something, and on a slow store it arrives long after the press.
+    """
+    checks.note("")
+    checks.note("--cap — an unusable figure is refused")
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None)])
+        before = run_dir.path(runs.IMPORT_MERGED).exists()
+
+        from cli import __main__ as entry
+
+        for bad in ("0", "-1"):
+            # `command()` ASSERTS EXIT 0 and cannot be used for a refusal — the same reason
+            # every other refusal case here drives `entry.main` directly.
+            with quiet() as buf:
+                code = entry.main(["emit", str(run_dir.directory), "--cap", bad])
+            said = buf.getvalue()
+            checks.equal(code, 1, f"`--cap {bad}` exits 1")
+            checks.ok(
+                "Traceback" not in said,
+                f"`--cap {bad}` answers in a sentence rather than a traceback",
+            )
+            checks.ok(
+                "--cap" in said,
+                f"and the sentence names the flag that was wrong, not a policy key that no "
+                f"longer exists. Got: {said.strip()[:120]!r}",
+            )
+
+        checks.equal(
+            run_dir.path(runs.IMPORT_MERGED).exists(),
+            before,
+            "AND NOTHING WAS WRITTEN. The cap is parsed before the run is opened, so a "
+            "refusal costs nothing — the shape every refusal on this path takes",
+        )
+
+
 def check_merged_cap_is_the_tightest(checks: Checks) -> None:
     """Legs carrying different caps merge to the SMALLEST, and a leg with none does not win.
 
@@ -20765,6 +20813,7 @@ def run() -> Result:
     check_prices_adopt(checks)
     check_merged_emit_cap(checks)
     check_merged_emit_uncapped(checks)
+    check_cap_flag_refusals(checks)
     check_merged_cap_is_the_tightest(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)

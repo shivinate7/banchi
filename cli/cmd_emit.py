@@ -311,6 +311,19 @@ def _write_merged(resolved, priced, choice, run_dir, args, say):
 
 
 def run(args, say) -> int:
+    # THE CAP IS PARSED FIRST, SO AN UNUSABLE ONE IS A SENTENCE (D7, amended 2026-09-08).
+    # `_cap_for` raises `MalformedDecisions`, and the only `except` that names it wraps
+    # `Corpus.read()` — the call itself sits inside a `try` catching `join.EmptyCatalog`
+    # alone, so `--cap 0` came back as a traceback. Tolerable while `policy.live_cap` was the
+    # ordinary door and this flag was the exception; not on the ONLY door. Parsed here rather
+    # than defended at the call site because both paths need it and neither should do work
+    # first: a refusal after the store has been read is a refusal that already cost something.
+    try:
+        _cap_for(args)
+    except decisions.MalformedDecisions as refusal:
+        say(str(refusal))
+        return 1
+
     # ONE RUN OR SEVERAL, AND THE SINGLE-RUN PATH IS UNTOUCHED. A send of one still writes the
     # two per-game files it always did, so every run already on disk, every harness case and
     # every reconcile written before D86 behaves identically. `run_merged` is reached only by
@@ -384,10 +397,6 @@ def run(args, say) -> int:
             # something else would partition this run differently from the `join` that
             # produced the report they are looking at.
             threshold=pricing.check_threshold(policy["threshold"]),
-            # THE STORED CAP, FOR `threshold`'S REASON EXACTLY. It decides how many copies of
-            # a SKU go into the file, and `emit` re-derives the join — so reading the module
-            # constant here while the operator had set something else would push a different
-            # number of copies than the `join` report in front of them said it would.
             # THE SEND'S OWN CAP, AND THE ONLY PLACE ONE IS NAMED (D7, amended 2026-09-08).
             # `--cap N` or nothing; the standing policy key that used to sit between them is
             # deleted, and a store still holding one is refused when the corpus is opened.
@@ -751,12 +760,18 @@ def _legacy_refusal(run_dir, say) -> bool:
     return True
 
 
-def _resolve_one(run_dir, book, say, args=None):
+def _resolve_one(run_dir, book, say, args):
     """One run resolved the way `run` resolves it, for the merged path. Returns None on refusal.
 
-    `args` CARRIES THE SEND'S CAP AND NOTHING ELSE (D7, rewritten). A merged emit is ONE send, so the
-    `--cap` on it applies to every leg — the alternative is legs capped differently inside one
-    file, which is exactly the per-run-against-a-global-cap defect D86 measured.
+    `args` CARRIES THE SEND'S CAP AND NOTHING ELSE (D7, rewritten). A merged emit is ONE send,
+    so the `--cap` on it applies to every leg — the alternative is legs capped differently
+    inside one file, which is exactly the per-run-against-a-global-cap defect D86 measured.
+
+    NO DEFAULT, DELIBERATELY. It was `args=None`, which read as "no cap" — so a caller that
+    forgot the argument made one leg of a capped send uncapped, silently, with nothing raised
+    and the file written. Harmless while `policy.live_cap` sat behind it and answered anyway;
+    a hole once the flag became the only door. Required now, so the mistake is a TypeError at
+    the call rather than a quantity in a spreadsheet.
     """
     if _legacy_refusal(run_dir, say):
         return None
@@ -773,10 +788,6 @@ def _resolve_one(run_dir, book, say, args=None):
             rule=pricing.Rule.parse(policy["rule"]),
             basis=pricing.check_basis(policy["basis"]),
             threshold=pricing.check_threshold(policy["threshold"]),
-            # THE STORED CAP, FOR `threshold`'S REASON EXACTLY. It decides how many copies of
-            # a SKU go into the file, and `emit` re-derives the join — so reading the module
-            # constant here while the operator had set something else would push a different
-            # number of copies than the `join` report in front of them said it would.
             # THE SEND'S OWN CAP, AND THE ONLY PLACE ONE IS NAMED (D7, amended 2026-09-08).
             # `--cap N` or nothing; the standing policy key that used to sit between them is
             # deleted, and a store still holding one is refused when the corpus is opened.
