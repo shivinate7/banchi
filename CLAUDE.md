@@ -1232,6 +1232,7 @@ D114 The status requirement is answered by a remembered tick, not by an echo of 
 D115 The reading is what the export said, and what has sold since is counted beside it
 D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
 D118 A press changes what is on the screen, never where the rest of it is
+D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
 ```
 
 **THE INDEX SKIPS ONE NUMBER BETWEEN D116 AND D118, AND THE GAP IS DELIBERATE.** D118 was
