@@ -23,6 +23,23 @@
 #
 # The URLs assume `make dev` is already serving. It blocks, so background it first.
 #
+# THE `:5173` IN EVERY URL BELOW IS THE MAIN CHECKOUT'S PORT, AND IT IS A CONVENTION RATHER
+# THAN A FACT ABOUT YOUR MACHINE (D43). This file is tracked, so it cannot name a port that is
+# derived from one directory's path — and 5173 is what CLAUDE.md, the Makefile's help and
+# every spec name, true in the main tree by construction. A LINKED WORKTREE SERVES ITS OWN
+# PORT, over its own store, and `scripts/screenshot.sh` substitutes it here before rendering
+# and says so on the way past. Until 2026-09-07 it did not: `make screenshot` in a worktree
+# photographed the MAIN TREE'S APP — a branch's renders showing main's code, or the owner's
+# real inventory, with nothing saying so, which is the fault app/devPort.ts and
+# server/ports.py were both built to close arriving in the one file they never reached.
+# Measured the day it was fixed, with both servers up: `.home-spine` on this tree read 100.0%
+# of its own rectangle and the main tree's read 94.7% at a y-offset 44px away. Both renders
+# looked entirely correct.
+#
+# The substitution is the MANIFEST's only. A URL typed at `scripts/screenshot.sh` is obeyed
+# verbatim and warned about instead, because rendering a port nobody asked for is the same
+# disease as rendering the wrong tree.
+#
 # WHAT THESE RENDERS SHOW DEPENDS ON WHETHER `make server` IS UP, and that is worth knowing
 # before comparing one against docs/design-refs/locked.html. EVERY view below reads the
 # capture server, the gallery included: with it down they draw their failure panel, which is a

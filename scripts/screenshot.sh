@@ -37,6 +37,93 @@ WAIT_MS=600
 cd "$(dirname "$0")/.." || exit 1
 OUT_DIR="captures/ui"
 
+# WHICH APP THIS CHECKOUT RENDERS (D43).
+#
+# scripts/views.txt names the MAIN tree's dev origin, because that is what CLAUDE.md, the
+# Makefile's help and every spec name, and it is true there. A linked worktree serves its own
+# port off its own path, over its own store — so rendering the manifest VERBATIM from a
+# worktree photographs the MAIN TREE'S APP. That is D43's whole subject arriving in the one
+# file D43 never reached, and `server/ports.py`'s own header names this line while leaving it:
+# "scripts/views.txt points the screenshot runner at 5173".
+#
+# What it cost, before this: a branch's renders showed main's code with nothing saying so —
+# the exact shape of the design-check fault app/devPort.ts was built to close, where the only
+# signal a check gives is the one you were hoping for. Worse in the other direction, since the
+# main checkout's server is the owner's real inventory: `make screenshot` from a worktree drew
+# their store and wrote it into captures/ui/, which is where the `views exposure` row's whole
+# argument about bearer instruments lives.
+#
+# DERIVED FROM server/ports.py AND NEVER RE-IMPLEMENTED HERE. That module is the same
+# derivation `make dev`, `make server` and `make status` use, `app/devPort.ts` is its twin,
+# and `make port-agreement` is what keeps the two honest. A third spelling of the algorithm in
+# shell would be a third thing to keep in step — the risk ports.py names in its own header.
+# stdlib-only, so no venv, matching scripts/worktree-guard.sh's call shape exactly.
+read -r DEV_PORT DEV_BASE_PORT <<EOF
+$(python3 - <<'PORTS' 2>/dev/null
+import sys
+sys.path.insert(0, ".")
+from server import ports
+print(ports.dev_port(), ports.DEV_BASE_PORT)
+PORTS
+)
+EOF
+
+# A LINKED WORKTREE THAT CANNOT DERIVE ITS PORT RENDERS NOTHING. `.git` as a FILE is the
+# linked-worktree test, the same one fact app/devPort.ts, server/ports.py and
+# scripts/worktree-guard.sh all detect on. Refusing is the answer here rather than an
+# obstacle: falling back to the documented default would render the main checkout's app and
+# the renders would look fine, which is the failure being fixed and not a degraded version
+# of it. The main tree has nothing to derive and needs none of this.
+if [ -z "${DEV_PORT:-}" ]; then
+  if [ -f .git ]; then
+    echo "screenshot: this is a linked worktree and its dev port could not be derived." >&2
+    echo "  Without it the manifest's :5173 would render the MAIN checkout's app — a branch's" >&2
+    echo "  screenshots showing main's code, over the owner's real store (D43). Refusing." >&2
+    echo "  Fix: python3 must be able to import server/ports.py from $(pwd)" >&2
+    exit 1
+  fi
+  DEV_PORT=5173
+  DEV_BASE_PORT=5173
+fi
+
+# Says it once, and only when there is something to say. `make server` prints which port it
+# took and whose store it is serving for the same reason: a tool that quietly moved is
+# indistinguishable from one that did not.
+if [ "$DEV_PORT" != "$DEV_BASE_PORT" ]; then
+  echo "screenshot: this worktree serves :$DEV_PORT — rendering that, not the main tree's :$DEV_BASE_PORT."
+fi
+
+# Rewrites the MAIN tree's dev origin to this checkout's. Anchored at the start of the URL and
+# scoped to the origin, so a :5173 anywhere else in a URL is left alone — and any other origin
+# is passed through untouched, which is what keeps `make docs-audit`'s `views opsec` row the
+# authority on what a manifest line may address.
+#
+# THE MANIFEST ONLY, AND THE SPLIT IS THE POINT. scripts/views.txt's `:5173` is a CONVENTION —
+# every doc in this repo names that port and the file is tracked, so it cannot name a port that
+# is a property of one machine's directory layout. A URL typed on the command line is an
+# INSTRUCTION, and silently rendering a different port than the one someone typed is the same
+# disease in a new place. So the manifest is rewritten and a typed URL is obeyed and warned
+# about — which also leaves the one legitimate way to render the main tree from here.
+this_tree() {
+  if [ "$DEV_PORT" = "$DEV_BASE_PORT" ]; then
+    printf '%s' "$1"
+    return
+  fi
+  printf '%s' "$1" | sed -E "s#^http://(localhost|127\\.0\\.0\\.1):$DEV_BASE_PORT#http://\\1:$DEV_PORT#"
+}
+
+# The typed-URL half of that split: obeyed, never rewritten, and never silent about it.
+warn_other_tree() {
+  [ "$DEV_PORT" = "$DEV_BASE_PORT" ] && return 0
+  case "$1" in
+    http://localhost:"$DEV_BASE_PORT"/*|http://localhost:"$DEV_BASE_PORT"|\
+    http://127.0.0.1:"$DEV_BASE_PORT"/*|http://127.0.0.1:"$DEV_BASE_PORT")
+      echo "screenshot: :$DEV_BASE_PORT is the MAIN checkout's app, over a different store (D43)." >&2
+      echo "  This worktree serves :$DEV_PORT. Rendering what you asked for, not this tree." >&2
+      ;;
+  esac
+}
+
 usage() {
   echo "usage: scripts/screenshot.sh <url> <name> [<selector>[,<selector>...]]" >&2
   echo "       scripts/screenshot.sh --manifest <file>" >&2
@@ -66,7 +153,11 @@ fi
 # proof that anything was written" — was right and did not go far enough: a written file was
 # never proof that the PAGE was written.
 render() {
-  local url="$1" name="$2" want="${3:-}" dest="$OUT_DIR/$2.png" out status
+  local url name want dest out status
+  url="$1"
+  name="$2"
+  want="${3:-}"
+  dest="$OUT_DIR/$2.png"
 
   mkdir -p "$OUT_DIR" || return 1
   rm -f "$dest"
@@ -126,7 +217,7 @@ case "${1:-}" in
         failed=1
         continue
       fi
-      render "$url" "$name" "$want" || failed=1
+      render "$(this_tree "$url")" "$name" "$want" || failed=1
     done < "$manifest"
     exit $failed
     ;;
@@ -135,6 +226,7 @@ case "${1:-}" in
     ;;
   *)
     [ $# -eq 2 ] || [ $# -eq 3 ] || usage
+    warn_other_tree "$1"
     render "$1" "$2" "${3:-}"
     exit $?
     ;;

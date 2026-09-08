@@ -113,6 +113,13 @@ make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev
                     #   page and called a screen fine. Each manifest line may name the elements
                     #   its render must prove it drew; the renderer hides one, captures again,
                     #   and refuses the render when not a pixel changed.
+                    #   AND IT RENDERS THE TREE IT IS RUN FROM, since the same day (D43).
+                    #   scripts/views.txt names the main checkout's :5173 as a CONVENTION —
+                    #   a tracked file cannot name a port derived from one directory's path —
+                    #   and the script reads `server/ports.py:dev_port` and substitutes a
+                    #   worktree's own before rendering. Before this, `make screenshot` in a
+                    #   worktree photographed the MAIN tree's app over the owner's real store
+                    #   and the renders looked entirely correct.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make demo           # seed a demo store and record the wire into a fixture bundle.
                     #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE

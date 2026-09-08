@@ -1887,7 +1887,8 @@ COMPONENTS = [
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
-                "does": "the manifest loop and every message a person reads; screenshot.mjs "
+                "does": "the manifest loop, THIS CHECKOUT'S DEV PORT, and every message a "
+                        "person reads; screenshot.mjs "
                         "is the browser half. Renders one URL to captures/ui/<name>.png, or "
                         "one per line of views.txt under --manifest, and returns non-zero on "
                         "either of TWO failures now: no PNG on disk, or a PNG missing an "
@@ -1895,13 +1896,24 @@ COMPONENTS = [
                         "the whole point — the old sentence here, `an exit 0 from the CLI is "
                         "not proof that anything was written`, was right and stopped one step "
                         "short: a written file was never proof that the PAGE was written, and "
-                        "a render with a screen's hero missing is a valid non-empty PNG.",
+                        "a render with a screen's hero missing is a valid non-empty PNG. IT "
+                        "RENDERS THE TREE IT IS RUN FROM, ALSO SINCE 2026-09-07 (D43): "
+                        "views.txt names the main checkout's :5173 as a convention, this reads "
+                        "`server/ports.py:dev_port` — never a third spelling of that "
+                        "derivation — and substitutes a worktree's own port before rendering, "
+                        "saying so as it goes. Before that, `make screenshot` in a worktree "
+                        "photographed the MAIN tree's app over the owner's real store, and the "
+                        "renders looked perfectly correct. A linked worktree that cannot "
+                        "derive its port renders NOTHING rather than falling back to a port "
+                        "that would be another tree's.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
                 # screens that most need looking at are the second persona's. D13 is what
-                # it renders — Vite on :5173, a browser on the Mac. D18 is the rule that
-                # keeps it off `make check`: it writes, and nothing that writes may run on
-                # the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18"],
+                # it renders — Vite on the main tree's :5173, a browser on the Mac. D43 is
+                # why that number is a convention here and not an address: the port follows
+                # the store, and this script had been the one caller that did not follow it.
+                # D18 is the rule that keeps it off `make check`: it writes, and nothing
+                # that writes may run on the path that decides whether work is done.
+                "governed_by": ["D5", "D13", "D18", "D43"],
             },
             "screenshot.mjs": {
                 "does": "the browser half of `make screenshot`: one render, and the proof "
@@ -1940,7 +1952,11 @@ COMPONENTS = [
                         "the capture server up, down, and up over an empty store — the three "
                         "states this file's own header describes — so it is either "
                         "shell-independent structure or something the screen draws from "
-                        "nothing, never an empty state's own class.",
+                        "nothing, never an empty state's own class. The `:5173` in every URL "
+                        "is the MAIN checkout's port and a convention rather than an address "
+                        "(D43) — a tracked file cannot name a port derived from one "
+                        "directory's path — and screenshot.sh substitutes a worktree's own "
+                        "before rendering.",
                 # D5 is what the list is for: SEVEN owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
@@ -1961,7 +1977,7 @@ COMPONENTS = [
                 # rather than the screen. D86 is the same drift on the `pricing` line — the
                 # corpus made that screen's default the full cross-run worklist, and the
                 # paragraph beside it still described a run picker that draws nothing.
-                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D49", "D63", "D69", "D86"],
+                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86"],
             },
         },
     },
