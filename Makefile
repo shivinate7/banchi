@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -64,6 +64,7 @@ help:
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
+	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
@@ -76,9 +77,9 @@ help:
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + janitor-selftest + port-agreement +"
-	@echo "                    set-hint-agreement + screen-freshness + sigil-check +"
-	@echo "                    ignore-check + lint + vale + typecheck"
+	@echo "                    merge-selftest + janitor-selftest + suite-lock-selftest +"
+	@echo "                    port-agreement + set-hint-agreement + screen-freshness +"
+	@echo "                    sigil-check + ignore-check + lint + vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -95,7 +96,9 @@ help:
 	@echo "  make server       Python capture server. :8000 in the main tree, its own port in a"
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
-	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
+	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser. Takes"
+	@echo "                    a machine-wide lock: one browser fleet at a time, across every"
+	@echo "                    checkout (D121). ARGS=--wait queues instead of refusing."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
 	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
@@ -363,6 +366,7 @@ check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -398,6 +402,7 @@ ci-check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -639,9 +644,28 @@ screenshot:
 # Deliberately NOT part of `check`: it starts a browser and a dev server, which is a
 # different weight of check from the rest. That reason stood on its own even while `lint`
 # was a stub and `check` could not pass at all; it still stands now that lint runs.
+#
+# IT TAKES A MACHINE-WIDE LOCK FIRST, AND THAT IS THE ONE THING D43 COULD NOT MAKE
+# PER-CHECKOUT. Every tree has its own dev port, its own capture port and its own store; the
+# CPU is shared, and this is the target that spends all of it — `fullyParallel` at half the
+# cores, seven Chromium workers on this Mac, each with a Vite dev server compiling for it.
+# Two trees running this at once starve each other and BOTH report failures that are not in
+# the code: 18 of them on 2026-09-07, every one green on a re-run. See scripts/suite-lock.py
+# for the measurement and D121 for the argument.
+#
+# IT REFUSES RATHER THAN QUEUES, and exits 75 so the refusal cannot read as a failing suite.
+# `ARGS=--wait` queues instead, out loud. The `--` is what separates the guard's flags from
+# the command it guards, so `ARGS` can never reach npm.
 design-check:
 	$(NPM_GUARD)
-	@npm --prefix app run design-check
+	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check
+
+# The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
+# killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
+# spawns processes and writes a lock directory under `mktemp -d`, which is D18's line. Same
+# standing as janitor-selftest, merge-selftest and githooks-selftest.
+suite-lock-selftest:
+	@python3 scripts/suite-lock.py selftest
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`

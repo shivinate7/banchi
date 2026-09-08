@@ -161,6 +161,25 @@ CHECKS = (
         "governed_by": ("D18", "D44", "D53"),
     },
     {
+        "target": "suite-lock-selftest",
+        "runs": "python3 scripts/suite-lock.py selftest",
+        "asserts": "scripts/suite-lock.py, by violating it: a holder, a second run refused, a "
+                   "`--wait` that queues and announces itself, and a holder killed with -9 to "
+                   "prove the OS releases what it took. That last case is the whole argument "
+                   "for `flock` over a pidfile, and it is the one a reader would otherwise "
+                   "have to take on trust.",
+        "needs": ("python3",),
+        "writes": "a lock directory and lock files under `mktemp -d`, reached through "
+                  "PKMNSCAN_LOCK_DIR so the real lock is never touched — a self-test that "
+                  "took the real one would refuse a suite running in another checkout.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it spawns processes and kills them. It "
+                               "also holds a lock for a second or two, and the commit path is "
+                               "not a place to queue behind anything.",
+        "gates": True,
+        "governed_by": ("D18", "D43", "D121"),
+    },
+    {
         "target": "port-agreement",
         "runs": "python3 scripts/port-agreement.py",
         "asserts": "server/ports.py and app/devPort.ts answer the same port for the same "

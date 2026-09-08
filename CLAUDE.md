@@ -107,7 +107,25 @@ make dev            # Vite app. :5173 in the main tree, its own port in a worktr
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
-make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
+make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT TAKES A
+                    #   MACHINE-WIDE LOCK FIRST, AND IT IS THE ONE THING D43 COULD NOT MAKE
+                    #   PER-CHECKOUT (D121): every tree has its own ports and its own store,
+                    #   and the CPU is shared. This is the target that spends all of it —
+                    #   `fullyParallel` at half the cores, each worker a Chromium context over
+                    #   its own Vite server. Two trees running it at once starve each other and
+                    #   BOTH report failures that are not in the code: 18 of them on
+                    #   2026-09-07, all 52 green on a re-run alone.
+                    #   IT REFUSES rather than queues, naming the tree that holds the lock, and
+                    #   exits 75 so a refusal can never read as a failing suite. `ARGS=--wait`
+                    #   queues instead and says so every thirty seconds — a silent wait reads
+                    #   as a hang, which is the other half of what that session hit.
+                    #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
+                    #   refusal. `make harness` and `make check` deliberately do NOT take it;
+                    #   docs/DEBTS.md §16 is why, and which half of that is measured.
+make suite-lock-selftest # the lock, exercised by violating it — including a holder killed with
+                    #   -9, which is the whole argument for `flock` over a pidfile. In `check`,
+                    #   never in the git hook. `PKMNSCAN_LOCK_DIR` sends it at a throwaway
+                    #   directory so it never takes the real lock.
 make demo           # seed a demo store and record the wire into a fixture bundle.
                     #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE
                     #   `fetch` (`server.ts:request`) and addresses every photograph through
@@ -161,9 +179,9 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + janitor-selftest + port-agreement +
-                    #   set-hint-agreement + screen-freshness + sigil-check +
-                    #   ignore-check + lint + vale + typecheck.
+                    #   merge-selftest + janitor-selftest + suite-lock-selftest +
+                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   sigil-check + ignore-check + lint + vale + typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
@@ -1235,6 +1253,7 @@ D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-
 D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
 D120 The shell speaks one brand at every width, and the phone bar is a rail
+D121 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
