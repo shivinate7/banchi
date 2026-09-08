@@ -2057,7 +2057,8 @@ COMPONENTS = [
                                 "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
-                                "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115"],
+                                "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
+                                "D116"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2716,7 +2717,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113"]},
+                                              "D104", "D113", "D116"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -2774,7 +2775,8 @@ COMPONENTS = [
                                              "D53", "D54", "D56", "D58", "D59", "D61", "D62",
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
-                                             "D93", "D100", "D103", "D104", "D113", "D115"]},
+                                             "D93", "D100", "D103", "D104", "D113", "D115",
+                                             "D116"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, and which order statuses this "
                                             "device bothers fetching (D114) — and nothing else",
@@ -3002,8 +3004,12 @@ COMPONENTS = [
                         "a guess \u2014 for a pooled card, an older server, a degraded decoration, "
                         "or a box holding nothing else. THE FULFILLER NEVER IMPORTS IT: he keeps "
                         "the joined sentence at 20px body, and the firewall is the component "
-                        "graph rather than a selector.",
-                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92"]},
+                        "graph rather than a selector. A CARD NOBODY HAS NAMED IS NOT A "
+                        "LANDMARK (D116): the server walks past it to the nearest card it "
+                        "can name, so the bare `#270` the owner read as a sold card leaking "
+                        "into the ladder is gone \u2014 it never was one \u2014 and `Skipped` "
+                        "draws what the walk cost on the rows where it cost anything.",
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116"]},
             "src/PlaceNeighbors.css": {
                 "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
                         "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
@@ -3013,8 +3019,12 @@ COMPONENTS = [
                         "sentences a human reads) and undoes the borrow of "
                         "`.card-locations-boxname`, whose 10px uppercase tracked mono made the "
                         "only running English in the product a rectangle. A fixed key column so "
-                        "the two names cannot disagree about where they start.",
-                "governed_by": ["D30", "D31", "D41"]},
+                        "the two names cannot disagree about where they start. `.nb-name` is a "
+                        "COLUMN since D116, because the skip line sits under the name \u2014 and "
+                        "the truncation moved one element in with it, since `text-overflow` "
+                        "needs the nowrap on the box holding the text and a box holding two "
+                        "lines cannot be that box.",
+                "governed_by": ["D30", "D31", "D41", "D116"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -4440,7 +4450,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D118"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

@@ -26,13 +26,24 @@
   line-height: 1.45;
 }
 
+/* A COLUMN, BECAUSE THE SKIP LINE SITS UNDER THE NAME AND NOT AFTER IT (D116). The
+   truncation moved one element in with it: `text-overflow` needs the nowrap and the overflow
+   on the box holding the TEXT, and a container that also holds a second line cannot be that
+   box — the ellipsis would have been computed over both lines and neither would have got
+   one. */
 .nb-name {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   font-family: var(--bn-font-ui);
   font-size: var(--nb-name, 13px);
   line-height: 1.35;
   color: var(--bn-ink);
+}
+
+.nb-name-line {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -40,6 +51,18 @@
 
 .nb-name b { font-weight: 600; }
 .nb-rest { color: var(--bn-ink-3); }
+
+/* How many on-hand cards the walk passed over to reach this landmark, drawn only where that
+   is not zero. Muted and one step down, because it qualifies the name above it rather than
+   competing with it — and it is the row's SECOND line, so it may not read as a second name. */
+.nb-skip {
+  font-size: var(--nb-skip, 11px);
+  line-height: 1.4;
+  color: var(--bn-ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* The stack: the same rank on one axis. */
 .nb[data-flow='stack'] .nb-row { display: block; }

@@ -62,7 +62,7 @@ type Wire = { method: string; path: string; body: unknown }
    nameless neighbour draws, `index` is the store key and is never drawn bare. The fixtures
    below keep them UNEQUAL on purpose — a box with a departure in front is the case that
    tells a renderer reading the wrong field from one reading the right one. */
-type Neighbor = { index: number; slot: number; name: string | null }
+type Neighbor = { index: number; slot: number; name: string | null; skipped?: number }
 
 function card(input: {
   index: number
@@ -3419,6 +3419,24 @@ const NEIGHBOURLY: Cards = {
        at some other punctuation. */
     neighbors: { prev: null, next: { index: 4, slot: 3, name: 'Conscription' } },
   }),
+  /* D116'S ROW: a landmark the walk had to REACH. Two on-hand cards between this one and
+     Galio carry no name, so the nearest card that can be named is three along — which is
+     `after Galio` for a card a hand counting from Galio arrives at three cards early. The
+     row says so or the sentence is the wrong-slot claim D30 forbids. `next` skips nothing,
+     in the same fixture, so a renderer that drew the line unconditionally fails too. */
+  '2/5': card({
+    index: 5,
+    state: 'identified',
+    name: 'Bashful Bloom',
+    sku: '8937370',
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 6,
+    neighbors: {
+      prev: { index: 18, slot: 17, name: 'Galio, Indefaticable', skipped: 2 },
+      next: { index: 22, slot: 21, name: 'Conscription', skipped: 0 },
+    },
+  }),
 }
 
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
@@ -3521,6 +3539,150 @@ test('a card at the front of the box gets one row, not a pretend between', async
   await expect(front.locator('.nb-name b')).toHaveText(['Conscription'])
   await expect(front.locator('.nb-rest')).toHaveCount(0)
   await expect(front).toHaveAttribute('aria-label', 'before Conscription')
+})
+
+test('a landmark the walk had to reach says how far it reached (D116)', async ({ page }) => {
+  await open(page, BOXES, {
+    cards: NEIGHBOURLY,
+    search: (query) => searchAnswer(query, NEIGHBOURLY),
+  })
+
+  /* THE OWNER READ A BARE FIGURE IN THIS BLOCK AS A SOLD CARD (2026-09-07). It was not one —
+     the ladder has never named a departed card — it was a LIVE card at a real count that no
+     identification ever named, 7 of them on their store. The server now walks past such a card
+     to the nearest one it can name, so the figure is gone; what replaces it is the distance,
+     because `after Galio` naming a card three along is a sentence somebody counts slots
+     against and comes out two short, which is the one thing D30 says this block may not do.
+
+     THE THIRD COPY IS THE SUBJECT and its two sides are the case: `prev` reached across two
+     unnamed cards, `next` reached across none. A renderer that drew the line unconditionally
+     fails on the second row, and one that never drew it fails on the first. */
+  const reached = page.locator('.card-locations-owner .nb').nth(2)
+  await expect(reached).toBeVisible()
+  await expect(reached.locator('.nb-name b')).toHaveText(['Galio', 'Conscription'])
+  await expect(reached.locator('.nb-skip')).toHaveText(['2 unidentified cards between'])
+
+  /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px.
+     One clause covers both sides on purpose: every card the walk passed lies strictly between
+     the two landmarks, whichever side it was on. */
+  await expect(reached).toHaveAttribute(
+    'aria-label',
+    'between Galio, Indefaticable and Conscription, with 2 unidentified cards in between',
+  )
+
+  /* A ROW THAT SKIPPED NOTHING SAYS NOTHING, asserted on a DIFFERENT copy so it cannot pass by
+     the line simply never rendering: the first copy's neighbours are both adjacent. */
+  const adjacent = page.locator('.card-locations-owner .nb').first()
+  await expect(adjacent.locator('.nb-skip')).toHaveCount(0)
+  await expect(adjacent).toHaveAttribute(
+    'aria-label',
+    'between Galio, Indefaticable and Evelynn, Entrancing',
+  )
+})
+
+/** THE LADDER AFTER A SALE, as a mutable store — `sellableStore`'s trick one field over.
+ *
+ *  Three copies of one SKU at indices 1, 3 and 5. Copy 5's `after` names copy 3, so selling
+ *  copy 3 is a sale that MOVES ANOTHER ROW'S LANDMARK — and `sell` rewrites that landmark the
+ *  way the server computes it, which harness T7 proves it does against a real `do_mark_sold`.
+ *  Without the rewrite this case would rest on the optimistic overlay and pass against a stub
+ *  that contradicts the wire, which is the trap `sellableStore` was written for. */
+function laddersAfterSale(): { store: Store; sell: (key: string) => void } {
+  const cards: Cards = {
+    '2/1': card({
+      index: 1,
+      state: 'identified',
+      name: 'Bashful Bloom',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 6,
+      neighbors: { prev: { index: 0, slot: 0, name: 'Mantine', skipped: 0 }, next: null },
+    }),
+    '2/3': card({
+      index: 3,
+      state: 'identified',
+      name: 'Bashful Bloom',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 6,
+      neighbors: { prev: { index: 1, slot: 1, name: 'Mantine', skipped: 0 }, next: null },
+    }),
+    '2/5': card({
+      index: 5,
+      state: 'identified',
+      name: 'Bashful Bloom',
+      sku: '8937370',
+      section: 1,
+      sectionStart: 1,
+      sectionEnd: 6,
+      neighbors: {
+        prev: { index: 3, slot: 2, name: 'Bashful Bloom', skipped: 0 },
+        next: null,
+      },
+    }),
+  }
+  return {
+    store: { cards, search: (query) => searchAnswer(query, cards) },
+    sell: (key) => {
+      const held = cards[key]
+      if (held !== undefined) held.state = 'sold'
+      /* WHAT THE SERVER WOULD RECOMPUTE: copy 5's landmark was the card that just left, so it
+         moves outward to the next one still in the drawer. */
+      if (key === '2/3') {
+        const behind = cards['2/5']
+        if (behind !== undefined) {
+          behind.place.neighbors = {
+            prev: { index: 1, slot: 1, name: 'Mantine', skipped: 0 },
+            next: null,
+          }
+        }
+      }
+    },
+  }
+}
+
+test('selling a card moves the landmark on the rows beside it, with no reload', async ({
+  page,
+}) => {
+  const { store, sell } = laddersAfterSale()
+
+  /* COUNTED OFF THE REQUESTS THEMSELVES rather than off `open()`'s wire log, which records the
+     writes and the reads it has an opinion about — `GET /inventory` is stubbed there and not
+     recorded, and this case is about exactly that read happening a second time. */
+  const walkReads: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (request.method() === 'GET' && path === '/inventory') walkReads.push(path)
+  })
+
+  await open(page, BOXES, store)
+
+  /* Copy 5 counts from copy 3, which is about to be sold out from under it. */
+  const behind = copyRow(page, 'Box 2 · Section 1 · Card 3')
+  const ladder = page.locator('.card-locations-owner .nb').nth(2)
+  await expect(ladder.locator('.nb-name b')).toHaveText(['Bashful Bloom'])
+
+  const before = walkReads.length
+
+  await behind.getByRole('button', { name: 'Mark sold' }).click()
+  sell('2/3')
+
+  /* THE PRESS IS THE REFRESH. `Inventory.tsx:doSell` bumps `reloads`, which is `BoxBrowse`'s
+     `reloadToken` — so `GET /inventory` and the copies search both run again and every place
+     block on the screen is recomputed by the server. The operator presses nothing else and
+     reloads nothing: this is the question "does the ladder update, or do I refresh?" asserted
+     rather than reasoned about. */
+  await expect(ladder.locator('.nb-name b')).toHaveText(['Mantine'])
+  await expect(() => expect(walkReads.length).toBeGreaterThan(before)).toPass({ timeout: 5000 })
+
+  /* AND THE SOLD CARD IS NOT NAMED ANYWHERE IN THE LADDER — the whole complaint, at the site
+     it was made. Asserted over every ladder on the screen rather than the one row, because a
+     landmark that moved on the row being looked at and stayed on its neighbour is the shape
+     this would come back as. */
+  const ladders = await page.locator('.card-locations-owner .nb').allTextContents()
+  expect(ladders.join(' | ')).not.toContain('Bashful Bloom')
 })
 
 test('the gap clause is gone from every site that drew it', async ({ page }) => {

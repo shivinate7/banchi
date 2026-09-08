@@ -1230,14 +1230,17 @@ D112 The labels are tracked, the images are not, and an unmoved measurement is a
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
 D115 The reading is what the export said, and what has sold since is counted beside it
+D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
 D118 A press changes what is on the screen, never where the rest of it is
 ```
 
-**THE INDEX STEPS FROM 115 TO 118, AND THE GAP IS DELIBERATE.** The two numbers between them are
-claimed by branches in flight — two open worktrees carry the lower one between them and a third
-holds the higher — so neither entry exists in this tree and neither may be cited from it. The
-rule is the one this repo has always kept: renumber your own, never another's. A gap that closes
-on the next merge is the cheaper of the two failures.
+**THE INDEX SKIPS ONE NUMBER BETWEEN D116 AND D118, AND THE GAP IS DELIBERATE.** D118 was
+numbered while three branches were in flight over the two numbers above D115: two worktrees both
+claimed the lower one, main took one of those on 2026-09-07 and it is in this list, and a third
+holds the one between — which therefore exists in no tree that can be read from here and cannot
+be named here without this file citing a heading that is not in `docs/DECISIONS.md`. The rule is
+the one this repo has always kept: renumber your own, never another's. A gap that closes on the
+next merge is the cheaper of the two failures.
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
 without being adopted: the envelope walk and the copies picker were declined in favor of this
