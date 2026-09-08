@@ -2689,7 +2689,9 @@ COMPONENTS = [
                                      "`clamp(36px, 5vw, 56px)`, the only place the type scale is "
                                      "left behind, because this page has one job and it is to "
                                      "orient.",
-                             "governed_by": ["D5", "D32", "D94"]},
+                             # D110 is the hover-as-alpha rule the standing line's row obeys;
+                             # D115 is the hero the lede became.
+                             "governed_by": ["D5", "D32", "D94", "D110", "D115"]},
 
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
@@ -3826,6 +3828,42 @@ COMPONENTS = [
                                       "they always did. Carries the min-width:0 truncation fix a "
                                       "real TCGplayer export filename earned.",
                                "governed_by": ["D54"]},
+            "src/standing.ts": {"does": "WHAT THE STORE IS WAITING ON, RANKED, AS ONE "
+                                        "SENTENCE — the policy behind Home's standing line, in "
+                                        "its own module because a ranking buried in a component "
+                                        "is one nobody can find, argue with or test. It replaced "
+                                        "a lede that counted cards on hand, every figure of which "
+                                        "the six-stage spine already drew 24px below it. THE NULL "
+                                        "INVARIANT IS THE PART THAT IS EASY TO GET WRONG: loading, "
+                                        "failed and read-but-refused are three distinct "
+                                        "non-values, each ranked at the row it would have "
+                                        "answered, and `ok` is reachable only from a complete "
+                                        "reading — so green is never painted over a gap. "
+                                        "`queues.review` is `number | null` for exactly this "
+                                        "reason and the wire type says a reader must render the "
+                                        "gap rather than coerce it to zero.",
+                                # D115 is the entry; D69 owns the order ledger the rank-1
+                                # condition is read from; D63 is the two-map ledger behind it.
+                                "governed_by": ["D63", "D69", "D115"]},
+            "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
+                                            "`captured_at` by a 30-minute gap, and the ribbon "
+                                            "geometry Home's foot draws from them. The unit is a "
+                                            "SITTING and not a day (the operator shoots across "
+                                            "midnight in UTC, so day buckets move with the "
+                                            "timezone) and not a run (three real runs share one "
+                                            "`created_at`, which is the identify date; and "
+                                            "`counts.cards_in` is a box's running total rewritten "
+                                            "on every re-join, so nine real manifests sum to 1,908 "
+                                            "against 1,625 records). A block is as wide as its "
+                                            "minutes and as tall as its cards an hour, so its AREA "
+                                            "is its card count and the marks still sum to the "
+                                            "figure printed above them. `photographed` is "
+                                            "`status.cards - states.moved`, never the sum over "
+                                            "`boxes[].cards`, which counts both halves of D83's "
+                                            "move.",
+                                    # D115 is the entry; D58 is the box closing up behind a
+                                    # departed card; D83 is the move that would be double-counted.
+                                    "governed_by": ["D58", "D83", "D115"]},
             "src/readiness.ts": {"does": "what `emit` would refuse this run for, on this side of the "
                                         "wire — a second implementation of "
                                         "pipeline/decisions.py:blocking, chosen so the pricing "

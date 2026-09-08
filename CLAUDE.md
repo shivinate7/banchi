@@ -374,9 +374,15 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 sentence**, and see "the census" below for what enforces that.
 
 ```
-#/             Home           the product as a picture: the six-stage spine
-                              (Capture → Runs → Review → Pricing → Orders → Shipping) with the
-                              live figure under each stage, the boxes, the runs, one action.
+#/             Home           the product as a picture: ONE RANKED SENTENCE saying what the
+                              store is waiting on (D115, `standing.ts` — and the null invariant
+                              in it is the load-bearing part), one action, then the library
+                              drawn as the work that made it — sittings clustered from
+                              `captured_at`, each block as wide as its minutes and as tall as
+                              its cards an hour, so its area is its card count. Then the
+                              six-stage spine (Capture → Runs → Review → Pricing → Orders →
+                              Shipping) with the live figure under each stage, the boxes, the
+                              runs.
                               Every figure is the one that stage's own screen draws, read from
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
@@ -1171,6 +1177,7 @@ D111 Cleanup is a sweep, not a step in the merge, and liveness is read rather th
 D112 The labels are tracked, the images are not, and an unmoved measurement is asserted rather than re-derived
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
+D115 The front page says what is owed, and the library is drawn as the work that made it
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
