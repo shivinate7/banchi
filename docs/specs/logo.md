@@ -1887,3 +1887,263 @@ the tab and nothing else.
 `lockupGeometry.ts` rather than retyping them — that file is generated from §13's table and
 `make docs-audit`'s `lockup params` row reconciles the two, so the tab cannot drift from the
 lockup it is named after. Its `rail mark` row holds the tab to the mark's own L.
+
+## 19. The phone — the bar is a rail, and the drawer is the sidebar
+
+**Settled 2026-09-07, on the owner's instruction, against the running application at 390 and
+320 in both themes.** §15 said where the lockup goes and ended the list with *"Nowhere else. No
+marketing page exists to want one."* That sentence was written listing three surfaces — the
+sidebar, the rail, `#/gallery` — and the phone chrome was never among the things it was asked
+about. So the phone kept what it had before the lockup existed: a `Logo` tile in the top bar, and
+a tile with a wordmark and the tagline in the More drawer.
+
+**What that cost is not subtle.** The product wore two different brands depending on how wide the
+window was, and the drawer's brand was the only surface in the shell still drawing a wordmark. On
+dark the bar's tile — a dark superellipse on `--bn-surface-glass` over a near-black page — very
+nearly disappeared, which is the same failure §16 gave the sidebar's bracket a chrome gradient to
+avoid, at a size where it is worse.
+
+| surface | draws | size |
+| --- | --- | --- |
+| sidebar, expanded | the lockup | kanji 40 (§16) |
+| sidebar, railed | the empty slot | 32 |
+| **phone top bar** | **the empty slot** | **32** |
+| **phone drawer** | **the lockup** | **kanji 40** |
+| `#/gallery` | both, beside the mark | 32 / 40 / 56 |
+| browser tab | the empty slot, flat gold | §18 |
+
+### The bar is the rail's case, and the arithmetic is §11's
+
+**The lockup cannot go in the top bar and the reason is already written down.** Its floor is
+kanji 32 (§11), which is a 102 × 75 block; `--bn-topbar-h` is 52px. That is the same refusal the
+64px rail takes, for the same measurement — 番's counters close at about kanji 30, before the
+roman and long before the bracket.
+
+So the bar draws what the rail draws. **This is not a new ruling.** §18 settled it for the browser
+tab on the owner's own instruction — *"the tab should be what the collapsed sidebar is"* — citing
+§1: *"with the card removed the same brackets become an empty slot, which is the in-product
+mark."* §19 is that sentence reaching the third surface it was always about.
+
+**One difference from the tab, and it is deliberate.** §18's favicon is flat gold on no ground,
+because a tab is 16px of chrome the app does not paint. The phone bar is an in-app surface, so it
+takes the rail's own paint: `--bn-lockup-metal`, which `kit.css` resolves per theme — flat ink on
+light, the locked chrome gradient on dark.
+
+### The drawer takes the sidebar's number, and the tagline goes with it
+
+**The drawer IS the sidebar at a phone's width.** Same nav, same groups, same foot, one tap away
+instead of always on. So it draws the sidebar's brand at the sidebar's size, and §16's rule
+applies unchanged: **the lockup replaces the mark, the wordmark and the tagline together.**
+
+**Forced choice, kanji 32 against kanji 40**, drawn in the real drawer at 390 and at 320, in both
+themes, before this was written:
+
+| | kanji 32 | kanji 40 |
+| --- | --- | --- |
+| block | 102 × 75 | 128 × 93 |
+| fits the drawer (`min(300px, 86vw)`, ~268px usable) | yes | yes |
+| fits at 320 (drawer 275px) | yes | yes |
+| nav still reaches the foot without a scroll at 844 | yes | yes |
+| reads as | a smaller copy of the sidebar's | the sidebar's |
+
+**40 is taken.** 32 buys about 45px of drawer above the fold and nothing needs it — nine nav items
+and the foot reach the bottom of an 844px drawer at either size. What 40 buys is that there is one number, not
+two: the drawer and the sidebar are the same object and a second value is a second thing to keep
+in step, which is the defect §13 spent thirty-seven rounds learning.
+### The choice was made on WIDTH, and here is the height it was not made on
+
+**The head grows 60px to 121px, and on any phone shorter than about 800px the drawer's nav list
+scrolls.** That is worth writing down because the forced choice above was drawn at 390 and 320
+*wide*, both on tall viewports — §16's method applied to one axis. Measured afterwards, on the
+same demo store:
+
+| viewport | on main | at kanji 40 | at kanji 32 |
+| --- | --- | --- | --- |
+| 390 x 844 | no scroll | **no scroll** | no scroll |
+| 414 x 736 | 42px | **103px** | 85px |
+| 375 x 667 (SE) | 111px | **172px** | 154px |
+| 360 x 640 | 138px | **199px** | 181px |
+
+**Three things follow, and none of them reopens the size.** The nav ALREADY scrolled on every one
+of those phones — nine items, three group labels and a foot do not fit 667px of drawer, and did
+not before this. The lockup adds 61px to a scroll that existed. And **kanji 32 gives back 18 of
+those 61**, which is not a fix; it is the parity argument traded away for a sixth of the problem.
+
+**The foot never scrolls, and that is why this is a nuisance rather than a defect.** `.bn-drawer`
+is a flex column and `.bn-nav` is the only thing in it that scrolls, so `Cards to pull`, the theme
+toggle and the server line are pinned and reachable at every size measured above. Nothing became
+unreachable.
+
+### The phone bar's word IS the roman, and every value comes off the drawing
+
+**Amended 2026-09-07, on the owner's instruction: "the exact same look that we currently have as
+the roman subtext in the lockup, all caps with that faint aesthetic/spacing."**
+
+The bar drew `Banchi` in Manrope 700 at 16px — sentence case, no tracking, full ink — beside a
+mark whose own name is drawn in caps at 45% with a tracking a width-match solved for. The right
+face in the wrong voice.
+
+**It is set as TEXT, not drawn, and that is possible because the roman is Manrope.**
+`lockupGeometry.ts`'s own header says so: *"BANCHI — Manrope 700 at 0.25 of the kanji, tracked to
+0.75 of its advance"*, and Manrope is `--bn-font-display`, which this app already ships. The kanji
+could never be text — it is outlined precisely because IBM Plex Sans JP cannot ship (§14) — but
+the roman can be, and text is findable, selectable and announced.
+
+| what | where it comes from |
+| --- | --- |
+| face | Manrope 700, `--bn-font-display` — the face the generator outlines it in |
+| case | `text-transform: uppercase`; the DOM keeps `Banchi` |
+| tracking | `ROMAN_TRACK_SOLVED / PARAMS.romanSize` em — the SOLVED answer, not §13's seed |
+| ink | `PARAMS.romanOpacity`, 0.45, over `--bn-ink` |
+| size | **13px** (`--bn-fs-md`) — the one value the geometry does not decide |
+
+**Nothing above is typed into a stylesheet.** The element publishes the tracking and the opacity
+as custom properties the way `BrandSlot` publishes the block, so a re-solve of the width-match or
+a move of `romanSize` reaches the bar without anyone remembering to follow it. A number copied out
+of that file is the defect §13 spent thirty-seven rounds learning, and it is the same file it
+would have been copied from.
+
+**The size is a forced choice and the geometry cannot make it.** In the lockup the roman is a
+fraction of the kanji; in the bar there is no kanji to be a fraction of — the mark is the rail's
+bracket. Drawn at 11, 12, 13, 14 and 16px in the running bar, both themes: **11 reads as a
+caption and goes weak beside a 32px mark; 16 stops being faint and starts competing with it, a
+wide caps run at 45% turning into a banner; 13 sits with the bracket as one object.** For scale,
+the sidebar's own roman renders at about 10px — the bar's is a little larger because it carries
+the name alone rather than under 番地.
+
+**Two things went with it, both dead before this edit.** The bar's title said `Not found` for an
+unknown hash — a branch that cannot run, because `hasChrome` is false when `route` is undefined
+and the shell is never rendered for one. `PhoneBar` took a `route` prop only to feed it. And a
+`margin-right` compensating the trailing letter's tracking was written, kept, and then measured:
+the gap to the search button is 135px with it and 135px without, because the word is `flex: 1 1
+auto` and grows to fill the bar whatever its content measures. `brand.spec.ts` asserts the grow,
+so the day the word stops growing that reasoning fails loudly instead of leaving 5.8px of air.
+
+`app/tests/brand.spec.ts` asserts the face, the case, the tracking against the geometry's own
+arithmetic, the opacity and the grow. Four of five were observed red under mutation; the fifth
+(the margin) is what the measurement above deleted.
+
+**What would move it is the drawer's own density**, not the brand — the 44px rows, or the three
+group labels.
+
+### And that is what was done, on the owner's ruling: shrink the headings, do not drop them
+
+**Settled 2026-09-07, from renders of both.** The table above understates it, because it measures
+the phone's own height and Safari's toolbars take about 90px more. At 390 x 754 — an iPhone 14
+with the toolbars up — the nav ran 85px past the fold and showed **7 of its 9 rows**.
+
+Two builds were drawn side by side at that size, in both themes:
+
+| | rules | iPhone 14 | 15/16 | mini / 11 Pro | SE |
+| --- | --- | --- | --- | --- | --- |
+| as it stood | — | 7/9, 85px | 8/9, 77px | 7/9, 117px | 5/9, 262px |
+| headings dropped | 1 | **9/9 fits** | fits | **fits** | 5/9, 175px |
+| **headings shrunk** | 5 | **9/9 fits** | **fits** | 8/9, 29px | 5/9, 174px |
+
+**The owner chose to keep them**, and the arithmetic is why that costs five rules rather than
+one. The three label rows are about 70px of the 85; the last 15 come from the brand, so the
+drawer's lockup is **kanji 34 on a short screen** and 40 everywhere else.
+
+**The heading's own type is untouched** — same 10px, same caps, same 0.1em. What closes is the air
+around it: 4px of padding above and below each label, a line box of 1.5, the 12px between groups
+and the 4px between rows. **The rows keep their 44px.** A `font-size: 10px` was written into that
+block first and deleted: `--bn-fs-2xs` is already 10px, so it changed nothing and read as though
+it had.
+
+**What it costs, stated rather than buried:** the mini, X, XS and 11 Pro — 375 x 812, a real
+population — fit under the dropped build and are one row short under this one. That is the trade
+the ruling made.
+
+**THE SIZE IS CHOSEN IN JS HERE, AND IT IS THE ONE PLACE IN THIS SHELL THAT IS TRUE.** `Sidebar`'s
+own comment says a stylesheet should read the condition the layout does, and it is right for the
+rail. It is wrong here: `Lockup` interpolates the bracket between the slot's MEASURED width and
+the `size` it was handed, so a media query that shrank the slot without telling the component
+would leave the box at 34's width and the maths at 40's — measured, the bracket renders a fifth of
+the way toward the rail. One source decides and both read it.
+
+### A second step, because one leaves a whole family 29px short
+
+**The shrink above is a step, not a ramp, and one step is not enough.** 375 x 812 — the mini, the
+X, the XS, the 11 Pro — is 722px in Safari and the drawer needs 751. The rows are the only thing
+left with anything to give: nine of them at 44 against a 40px floor is 36px, which covers the 29.
+
+| | rows | iPhone 14 | 15/16 | mini / 11 Pro | 8 Plus | SE |
+| --- | --- | --- | --- | --- | --- | --- |
+| one step | 44 | fits | fits | 8/9, 29px | 7/9, 105px | 5/9, 174px |
+| **two steps** | 44 / 40 | **fits** | **fits** | **fits** | 7/9, 65px | 6/9, 134px |
+
+**The second step is at 740px and not lower, so it reaches the mini and does NOT reach the iPhone
+14 at 754** — that one already fits at 44 and has no reason to give up four pixels a thumb can
+feel.
+
+**A ramp was tried first and is worse.** `clamp(40px, 16.33px + 3.279vh, 44px)` interpolates
+smoothly between the two ends and lands the iPhone 14's rows on 41px: it shrinks the screen that
+already fits, to no purpose, **because a ramp cannot know whether the content fits.** A step can
+be put exactly where the arithmetic changes. That is the general form of it — a continuous
+function of the viewport is the wrong instrument for a threshold that is a property of the
+content.
+
+**40px IS THE FLOOR AND THIS SITS ON IT.** `--bn-control-h-sm` is 40 under a coarse pointer, which
+is CLAUDE.md's thumb rule exactly. **There is no third step**, and the next section says why.
+
+### The SE cannot fit, and no amount of shrinking changes that
+
+**Everything that could shrink is already against a floor**, so this is arithmetic rather than a
+judgement. Measured on an SE, the drawer needs 751px of content in 577px of screen. The smallest
+it could be made, with every value at its own floor and the group headings deleted entirely:
+
+| | |
+| --- | --- |
+| nine nav rows at the 40px thumb floor | 360 |
+| three foot rows at the same floor | 120 |
+| the lockup at kanji 32, §11's own floor | 75 |
+| the drawer's padding | 32 |
+| | **587px, against 577** |
+
+**Ten pixels over, with no headings, nothing left to give, and both floors already touched.** The
+375 x 667 phones — the SE 2 and 3, the 8, the 7, the 6s — cannot show this menu without scrolling,
+and neither could main. So the cut edge is made to say so.
+
+It ended on `.bn-side-foot`'s own rule, which reads as the bottom of the menu rather than the top
+of a fold — so four screens looked absent rather than below the line.
+
+**The fade is the mechanism the thumb-floor pass gives the scrolling chip rows, turned
+vertical**: a mask driven by the scroller's
+own progress, so the bottom edge dissolves while there is more to reach and the top edge does once
+you have scrolled. **A list that fits gets nothing at all** — a scroll-progress timeline whose
+scroller has no overflow is inactive and applies no effect, so there is no measurement and no
+class to keep in step. Behind `@supports`, because the fallback is what ships today.
+
+**`every card has an address` left the product with this edit**, on the owner's ruling, and that
+is worth stating plainly because it was not a side effect. The drawer was its last home — the
+sidebar dropped it when the lockup landed, and `#/gallery` uses it only as a type specimen.
+Home's own lede still ends *"Every one has an address."*, which is the sentence a person reads,
+grammatically bound to the count in front of it.
+
+### What is built
+
+One `BrandSlot` in `app/src/App.tsx`, rendered by the sidebar, the bar and the drawer.
+**There is no second drawing and no JSX branch**: `--bn-brand-open` is inherited, `App.css` sets
+it to 0 on `.bn-topbar-brand`, and the morph reads the slot's own width — so the bar gets the
+rail end from one declaration. `Lockup` did not change for any of this.
+
+`app/src/App.css` lost `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag`, whose last render
+site this was.
+
+### The floor is a guard now, four weeks after it was asked for
+
+§15 said *"`app/tests/brand.spec.ts` gains the floor — a lockup below kanji 32 must not
+render"*, and nothing built it. `Lockup` refuses below `LOCKUP_FLOOR = 32` and returns null.
+It can only fire on a call site that does not exist yet — every surface above is at or over the
+floor, and the rail's 32 comes through `railSize`, which is the mark rather than this drawing.
+
+`app/tests/brand.spec.ts` asserts the bar's bracket is `markGeometry.ts`'s own wire at 32 with no
+tile and its type at opacity 0; the drawer's lockup at 127.6 × 93.2 with the kanji at full opacity
+and no wordmark, tagline or `every card has an address` anywhere in the document; and that every
+lockup drawn at either width clears the floor's block. All three were observed red under mutation.
+
+### What would reopen this
+
+A bar tall enough for a kanji-32 lockup — 84px against today's 52 — is the only thing that would
+change the top half of the table, and it costs about 10% of an 844px viewport on every screen.
+It was considered and refused on that arithmetic, not overlooked.
