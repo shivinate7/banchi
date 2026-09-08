@@ -2,7 +2,10 @@
    ORDERS — the hub (Orders · Shipping) and the Pull stage. Tokens only; both themes free.
    ========================================================================== */
 
-.orders-hub { display: flex; flex-direction: column; gap: var(--bn-4); }
+/* The order pane is `1fr` beside a clamped index, so the page's surplus all lands in it: at
+   the shell's ceiling it is 1196px, and `.orders-line-top` puts the card name at one end of
+   that and the figure at the other. */
+.orders-hub { display: flex; flex-direction: column; gap: var(--bn-4); --bn-page-max: var(--bn-page-w-rows); }
 .orders-hub .bn-head { margin-bottom: 0; }
 .orders-hub .bn-lede strong { color: var(--bn-ink); font-weight: 600; }
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); }
@@ -337,6 +340,10 @@
    case it was built for. This one argues in two movements — what is wrong, then what the press
    does and does not do — and they must not run together as a wall. */
 .orders-backlog p + p { margin-top: var(--bn-2); }
+/* The backlog notice is two paragraphs of real prose and carried NO measure — measured at a
+   2560 viewport it was the widest text line in the product at 950px, against 632 for the
+   kit's own `.bn-lede` at its 72ch. Same 72ch, so it reads like every other lede here. */
+.orders-backlog p { max-width: 72ch; }
 .orders-backlog .orders-standdown-row { margin-top: var(--bn-3); }
 
 /* ---- the stand-down: the presses for a line no pull can reach (D113) -------------------- */
@@ -706,7 +713,7 @@
 .orders-store-note > .bn-icon { color: var(--bn-ink-4); flex: none; }
 .orders-store-note > span { min-width: 0; flex: 1 1 24ch; }
 
-@media (max-width: 560px) {
+@media (max-width: 559px) {
   .orders-pick { grid-template-columns: auto minmax(0, 1fr); row-gap: var(--bn-2); }
   .orders-pick > :last-child { grid-column: 1 / -1; justify-self: start; }
   .orders-pick-held { white-space: normal; }
@@ -946,7 +953,7 @@
 
 /* On a phone the clauses stack instead of wrapping mid-figure, and the dots between them go:
    a list of short lines reads as a receipt, a rewrapped sentence does not. */
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .orders-receipt { padding: var(--bn-4); }
   .orders-receipt-line,
   .orders-receipt-more { padding-left: 0; }

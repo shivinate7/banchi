@@ -76,18 +76,20 @@ from store import master, files
 from store.session import Store
 
 
-def _cap_for(args, policy):
-    """How many copies of one SKU this send may write, or `None` for no bound.
+def _cap_for(args):
+    """The ceiling this send asked for, or `None` for no cap.
 
-    THREE VOICES IN ORDER, AND THE ORDINARY ANSWER IS THE LAST ONE. `--cap N` is this press
-    speaking; `policy.live_cap` is a standing answer for a store that wants one; and `None` —
-    no cap — is what a store that has said nothing means since D7 was rewritten. D7 used to answer four
-    here whether or not anybody had asked, which is the bound that entry's rewrite retired.
+    ONE VOICE, AND IT IS THE FLAG (D7, amended 2026-09-08). There were three — `--cap`, then
+    `policy.live_cap`, then none — and the middle one was a standing bound the operator had
+    already retired, answering four on any store whose corpus had ever been saved. The policy
+    key is deleted; `pipeline/corpus.py:parse` refuses a store that still holds one rather
+    than ignoring it.
+
+    THE FIGURE IS A CEILING ON COPIES LIVE, not a send quantity, and every leg of a merged
+    send is bound by the same one — `pipeline/merge.py:_merged_cap` takes the tightest any
+    leg names, which under one flag is that flag.
     """
-    asked = getattr(args, "cap", None)
-    if asked is not None:
-        return decisions.parse_live_cap(asked)
-    return decisions.parse_live_cap(policy.get("live_cap"))
+    return decisions.parse_live_cap(getattr(args, "cap", None))
 
 
 def _warn_stale(run_dir, say) -> None:
@@ -309,6 +311,19 @@ def _write_merged(resolved, priced, choice, run_dir, args, say):
 
 
 def run(args, say) -> int:
+    # THE CAP IS PARSED FIRST, SO AN UNUSABLE ONE IS A SENTENCE (D7, amended 2026-09-08).
+    # `_cap_for` raises `MalformedDecisions`, and the only `except` that names it wraps
+    # `Corpus.read()` — the call itself sits inside a `try` catching `join.EmptyCatalog`
+    # alone, so `--cap 0` came back as a traceback. Tolerable while `policy.live_cap` was the
+    # ordinary door and this flag was the exception; not on the ONLY door. Parsed here rather
+    # than defended at the call site because both paths need it and neither should do work
+    # first: a refusal after the store has been read is a refusal that already cost something.
+    try:
+        _cap_for(args)
+    except decisions.MalformedDecisions as refusal:
+        say(str(refusal))
+        return 1
+
     # ONE RUN OR SEVERAL, AND THE SINGLE-RUN PATH IS UNTOUCHED. A send of one still writes the
     # two per-game files it always did, so every run already on disk, every harness case and
     # every reconcile written before D86 behaves identically. `run_merged` is reached only by
@@ -382,15 +397,10 @@ def run(args, say) -> int:
             # something else would partition this run differently from the `join` that
             # produced the report they are looking at.
             threshold=pricing.check_threshold(policy["threshold"]),
-            # THE STORED CAP, FOR `threshold`'S REASON EXACTLY. It decides how many copies of
-            # a SKU go into the file, and `emit` re-derives the join — so reading the module
-            # constant here while the operator had set something else would push a different
-            # number of copies than the `join` report in front of them said it would.
-            # THE SEND'S OWN CAP (D7, rewritten): `--cap N` if this press asked for one, else the
-            # store's standing key, else none at all. Three voices in order, the same shape
-            # `pipeline/games.py:export_scope` uses — and the ordinary answer is none, which
-            # is the bound D7 used to apply without being asked.
-            live_cap=_cap_for(args, policy),
+            # THE SEND'S OWN CAP, AND THE ONLY PLACE ONE IS NAMED (D7, amended 2026-09-08).
+            # `--cap N` or nothing; the standing policy key that used to sit between them is
+            # deleted, and a store still holding one is refused when the corpus is opened.
+            live_cap=_cap_for(args),
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
@@ -585,7 +595,10 @@ def run(args, say) -> int:
             # THE CAP BOUNDS THE LISTING, NOT THE IDENTITY, AND THIS LOOP READ IT AS BOTH.
             #
             # It iterated `live_positions` — `uncommitted_positions[:add_to_quantity]`, so
-            # bounded by D7's `live_cap` of 4 — and did the identity write inside it. D7 caps
+            # bounded by D7's THEN-STANDING `live_cap` of 4 — and did the identity write
+            # inside it. That bound is retired (no standing cap since 2026-09-08) but the
+            # defect it caused is the record here, so the figure stays named as it was at
+            # the time. D7 caps
             # how many copies a SKU may have LIVE, on the envelope-buster and stale-price
             # arguments it gives; it says nothing about how many copies we know the name of.
             # Every copy past the fourth was left wearing `sku: null`, which is not backstock
@@ -747,12 +760,18 @@ def _legacy_refusal(run_dir, say) -> bool:
     return True
 
 
-def _resolve_one(run_dir, book, say, args=None):
+def _resolve_one(run_dir, book, say, args):
     """One run resolved the way `run` resolves it, for the merged path. Returns None on refusal.
 
-    `args` CARRIES THE SEND'S CAP AND NOTHING ELSE (D7, rewritten). A merged emit is ONE send, so the
-    `--cap` on it applies to every leg — the alternative is legs capped differently inside one
-    file, which is exactly the per-run-against-a-global-cap defect D86 measured.
+    `args` CARRIES THE SEND'S CAP AND NOTHING ELSE (D7, rewritten). A merged emit is ONE send,
+    so the `--cap` on it applies to every leg — the alternative is legs capped differently
+    inside one file, which is exactly the per-run-against-a-global-cap defect D86 measured.
+
+    NO DEFAULT, DELIBERATELY. It was `args=None`, which read as "no cap" — so a caller that
+    forgot the argument made one leg of a capped send uncapped, silently, with nothing raised
+    and the file written. Harmless while `policy.live_cap` sat behind it and answered anyway;
+    a hole once the flag became the only door. Required now, so the mistake is a TypeError at
+    the call rather than a quantity in a spreadsheet.
     """
     if _legacy_refusal(run_dir, say):
         return None
@@ -769,15 +788,10 @@ def _resolve_one(run_dir, book, say, args=None):
             rule=pricing.Rule.parse(policy["rule"]),
             basis=pricing.check_basis(policy["basis"]),
             threshold=pricing.check_threshold(policy["threshold"]),
-            # THE STORED CAP, FOR `threshold`'S REASON EXACTLY. It decides how many copies of
-            # a SKU go into the file, and `emit` re-derives the join — so reading the module
-            # constant here while the operator had set something else would push a different
-            # number of copies than the `join` report in front of them said it would.
-            # THE SEND'S OWN CAP (D7, rewritten): `--cap N` if this press asked for one, else the
-            # store's standing key, else none at all. Three voices in order, the same shape
-            # `pipeline/games.py:export_scope` uses — and the ordinary answer is none, which
-            # is the bound D7 used to apply without being asked.
-            live_cap=_cap_for(args, policy),
+            # THE SEND'S OWN CAP, AND THE ONLY PLACE ONE IS NAMED (D7, amended 2026-09-08).
+            # `--cap N` or nothing; the standing policy key that used to sit between them is
+            # deleted, and a store still holding one is refused when the corpus is opened.
+            live_cap=_cap_for(args),
             review_below=run_dir.manifest.get("review_below_confidence", routing.CONFIDENCE_LOW),
         )
     except join.EmptyCatalog as refusal:
@@ -816,7 +830,12 @@ def _bucket_files(game, group, split_threshold):
 def run_merged(args, say) -> int:
     """`pkmnscan emit <run> <run> ...` — one import file over several runs (D86).
 
-    THE CAP IS THE WHOLE REASON THIS IS NOT A CONCATENATION OF THE FILES `emit` ALREADY WROTE.
+    THE DEDUPE IS WHY THIS IS NOT A CONCATENATION OF THE FILES `emit` ALREADY WROTE, and the
+    cap was the other half until the standing one went (D7, amended 2026-09-08). A card in
+    three boxes is ONE row because the union of positions is deduped on `(box, index)`,
+    which holds whether or not this send asked for a cap. When it does ask, the figure is
+    still spent once across the send rather than once per leg — which is D86's measurement
+    and the reason `--cap` reaches every leg through one `_cap_for`.
     `pipeline/join.py:SkuMatch.add_to_quantity` spends `live_cap - copies_out` per RUN against a
     cap that is global, so runs joined before either emitted each believe the whole cap is
     theirs. Measured on this store: five SKUs' per-run claims summed past four, and two reached
@@ -875,6 +894,25 @@ def run_merged(args, say) -> int:
         for sku, why in list(merged_plan.dropped.items())[:8]:
             say(f"  {sku} — {why}")
         return 1
+
+    # A SKU THAT ADDS NOTHING IS NAMED WHETHER OR NOT ANYTHING ELSE WRITES, which the branch
+    # above did only in the total case. `MergedSku.rows()` filters `add_to_quantity == 0` out
+    # of the file, so before this a PARTIAL send — ten SKUs going, forty adding nothing —
+    # wrote the file, reported `import  10 row(s)` and named the forty NOWHERE. That is the
+    # silent drop `CLAUDE.md` forbids by name, reached by the ordinary press.
+    #
+    # THE SINGLE-RUN PATH ALREADY DID THIS and the two had simply diverged: `no room` above
+    # walks `report.at_cap` and prints `match.nothing_to_add` per SKU. This is that block over
+    # the merged plan, reading the same property off the merged match so the two answers
+    # cannot differ.
+    silent = [row for row in merged_plan.skus if row.match.add_to_quantity == 0]
+    if silent:
+        say("")
+        say(f"{'no room':<16} {len(silent)} SKU(s) matched and added nothing")
+        for row in silent[:8]:
+            say(f"{'':<16} {row.sku} — {row.match.nothing_to_add}")
+        if len(silent) > 8:
+            say(f"{'':<16} ...and {len(silent) - 8} more")
 
     corrected = [row for row in merged_plan.skus if row.over_cap]
     if corrected:

@@ -109,7 +109,15 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **WHAT THE CAP WAS NEVER DOING IS STOPPING A COPY BEING SENT TWICE**, and that is the fact which makes this safe. `add_to_quantity`'s own docstring separates the two jobs in as many words — *"`committed_positions` keeps the job it is good at — keeping a copy out of the sellable set… The cap reads a quantity."* Removing the bound removes exposure limiting and nothing else; `uncommitted_positions` is untouched and is still what makes a re-emit a no-op.
 
-**The figure survives as an offer, not a default.** `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is still what the press proposes; what it stopped being is something a send inherits without asking. `policy.live_cap` remains for a store that wants a standing answer, and reads `None` — no cap — when nothing has written one, which is the reversal this rewrite made.
+**The figure survives as an offer, not a default.** `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is still the figure a press may propose; what it stopped being is something a send inherits without asking. ~~`policy.live_cap` remains for a store that wants a standing answer, and reads `None` — no cap — when nothing has written one, which is the reversal this rewrite made.~~
+
+**THE STANDING KEY IS DELETED (amended 2026-09-08, on the operator's instruction).** *"live cap should be null and yeah per send only is the only place caps should be now."* The struck clause above was the implementer's addition and not what the operator asked for: the option they chose was *"a control on the run that says 'cap this send at N' before you write the file — opt-in and per-send, so nothing standing changes"*. Keeping a standing key was a change.
+
+**`--cap N` IS NOW THE ONLY PLACE A CAP IS NAMED.** `Corpus.live_cap`, its `to_payload` write, its `policy_for` entry and `corpus.live_cap_for()` are gone; `Decisions.live_cap` with them. `cli/cmd_emit.py:_cap_for` has one voice where it had three. `decisions.parse_live_cap` survives as the validator for the flag — it is what refuses `0` and a negative with a sentence.
+
+**A STORE THAT STILL HOLDS THE KEY IS REFUSED BY NAME, NOT SILENTLY UNCAPPED.** Ignoring it would remove a bound the operator had asked for without saying so — D86's rule about a legacy `decisions.json`, applied to a legacy KEY, and for D86's reason: read as a fallback and ignored in silence are one defect in two coats. It is sharper here than there, because `Corpus.parse` rebuilds `policy` from named fields and `keep` preserves only unknown TOP-LEVEL keys — so an unrecognised policy key is destroyed on the next write rather than carried. Silence would have been irreversible as well as quiet. `null` passes and is dropped: it is what a store that cleared its cap holds.
+
+**What the deletion cost, checked rather than assumed.** `policy.per_run` survives with its other four keys — `policy_for` folds the override over a `standing` dict, and `#/pricing` writes a per-run `threshold` that would have been lost had the fold been narrowed instead. `SearchGroup.cap` and `PricingWorklist.live_cap` left the wire; neither had a reader in `app/src`, and `SearchGroup.listable` — which does have one — is the shelf count now rather than `min(cap, on hand)`. The `cap`/`listable` pair existed so a screen could draw either the rule or what the rule permitted here; there is no rule, so there is one field.
 
 **THAT LAST SENTENCE WAS TRUE OF THE PARSER AND FALSE OF THE STORE FOR A DAY (corrected 2026-09-08).** `Corpus.parse` read an absent key as `None` from the first hour, so a store with a file was answered right. But `Corpus.live_cap`'s own dataclass default stayed `LIVE_QUANTITY_CAP`, and `to_payload` writes that key unconditionally — so a DEFAULT-CONSTRUCTED corpus carried four and the first save of a fresh store wrote the retired bound into `policy`, where every later read would find it. `server/pipeline_routes.py`'s fallback for a corpus it could not read is the caller that mattered: it invented a cap nobody had set, which is the exact thing `live_cap_for`'s except arm had just been changed to stop doing.
 
@@ -117,12 +125,22 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **The merge also took the wrong cap, and that was not a typing error.** `max` returns the LOOSEST bound, so a send spanning a run held to 2 and a run at 4 offered 4 — discarding the more conservative answer on the one path that exists to be conservative, and the opposite of every other cross-run rule in that module. `_merged_cap` takes the smallest cap any leg names, and `None` never outranks a figure: the absence of a bound is not a large one.
 
+**THE FIGURE IS A CEILING ON COPIES LIVE, AND EVERY LABEL SAID OTHERWISE FOR A DAY (amended 2026-09-08).** `add_to_quantity` is `live_cap - copies_out`, which is D59's arithmetic and is right: a SKU with seven copies already at TCGplayer and a figure of four adds **nothing**. The control shipped reading *"at most N of each card"* and `--cap N` read *"send at most N copies"* — both of which describe a send quantity, which is a different control. Measured on a ten-copy SKU with seven out: **every figure from 1 to 7 wrote no row at all**.
+
+**The mismatch was survivable only while the cap was standing.** A bound of four sitting over everything kept `copies_out` near it, so the two readings agreed in practice. Making the cap per-send made uncapped the default, so `copies_out` grows with every press and the subtraction answers zero for any SKU that has ever been sent — the ordinary case rather than the corner.
+
+**The operator was asked which control they wanted and chose the ceiling**, having first picked the send-quantity reading on an estimate of implementation cost that was wrong: the ceiling needed four label edits and no test changes, while the send quantity needed one arithmetic line and **19 harness assertions rewritten**, because D59's tests encode the ceiling throughout. The estimate was corrected and the choice retaken; the wording is the fix and the arithmetic was never in question.
+
+**`min` WAS HIDING THE ONE FIGURE THAT EXPLAINS A REFUSAL.** `nothing_to_add` printed `min(copies_out, live_cap)`, so five copies out against a cap of two read as *"2 of the 2 this SKU may have out"* — true about the cap, false about the store, on the row whose entire question is why nothing is going out. The original argument was that *"6 of the 4 is not a sentence"*; that is a reason to WORD an overrun, not to suppress it. Both arms now name it: *"5 live, over the 2 this send asked for"*, and *"5 already out against the 2 this send asked for"*.
+
+**A merged send names what it dropped, which it did only in the total case.** `MergedSku.rows()` filters `add_to_quantity == 0` out of the file, and `cli/cmd_emit.py` printed the dropped list only inside `if not rows:` — so a partial capped send wrote the file, reported `import  10 row(s)` and named the other forty nowhere. The single-run path had a `no room` block doing exactly this and the two had simply diverged. That was the silent drop `CLAUDE.md` forbids by name, reachable from the ordinary press.
+
 **Asked for at `emit` and not at `join`, deliberately.** `join` reports what the shelf holds; `emit` writes the file. A cap named at join time would be a promise a later emit could quietly break, which is the join/emit disagreement this entry's own `--split-threshold` history already paid for once.
 
 **"Configurable" became true on 2026-09-06, and it had been a promise with no reader for the whole life of this entry.** The parameter was threaded from the start — `SkuMatch.live_cap`,
 `join(live_cap=…)`, `resolve.load(live_cap=…)` — and **no caller ever passed anything but the module default**: no flag set it, no policy key held it, and `server/pipeline_routes.py` read
 the constant directly in three places while `server/capture_server.py` read it in four. It is
-now `policy.live_cap` in `inventory/prices.json`, store-wide and overridable per run through
+now — **and until 2026-09-08** — `policy.live_cap` in `inventory/prices.json`, store-wide and overridable per run through
 `policy.per_run` like `rule`, `basis`, `sub_threshold` and `threshold` — **which makes it the first writer of the run-level override D86 named as its own reopening condition**, and a lot
 that genuinely wants a different exposure is exactly the case this entry's "configurable" was
 about. The figure itself moved to `pipeline/pricing.py`, which `join` and `corpus` both import
@@ -5803,7 +5821,7 @@ No check could have found it, because none sent the field: every `do_put_box_cla
 
 **The geometry is generated, never hand-written.** `scripts/build-mark.mjs` reads `docs/specs/logo/sheets/small-cut.html`, evaluates the drawing routine out of it, and writes `app/src/kit/markGeometry.ts`, `app/src/kit/markPalettes.ts` and `app/public/favicon.svg`. There is therefore exactly one implementation of the mark in this repo and the app cannot drift from the spec by being edited. The alternative — copying the paths across once and maintaining them — is the shape of defect `make docs-audit`'s `motion params` row already exists to catch: two copies of one rule, drifting for weeks, with nothing comparing them. Ten committed sheets carry byte-identical geometry, which is what makes reading one of them safe.
 
-**Two optical cuts, chosen by size, and the small one is the one that ships.** `logo.md` §3 requires a separate cut below 64px and had never drawn it; §11 swept it at 16, 28, 32 and 44px — the sizes this app actually draws — and locked stroke 4.2 with no taper. **Every surface in this product is below that boundary**: the sidebar and its rail at 32, the phone bar at 26, the drawer at 30, both crash pages at 40, the Fulfiller's header at 44, the favicon at 16 to 32. `DISPLAY` exists so the locked cut can be looked at on `#/gallery`, and for nothing else today.
+**Two optical cuts, chosen by size, and the small one is the one that ships.** `logo.md` §3 requires a separate cut below 64px and had never drawn it; §11 swept it at 16, 28, 32 and 44px — the sizes this app actually draws — and locked stroke 4.2 with no taper. **Every surface in this product is below that boundary**: both crash pages at 40, the Fulfiller's header at 44, the favicon at 16 to 32, and — since D120 — the shell's four brand surfaces through `Lockup`, whose bracket is this same mark, at 32 on the rail and the phone bar and at kanji 40 in the sidebar and the drawer. **This sentence listed four `Logo` call sites that no longer exist** — the sidebar and its rail at 32, the phone bar at 26, the drawer at 30 — until 2026-09-07, when D120 was already the ruling; the claim they were supporting held throughout, because the cut is chosen by `size` and every one of those figures is under 64. `DISPLAY` exists so the locked cut can be looked at on `#/gallery`, and for nothing else today.
 
 The small cut carries **no `feTurbulence`**, and that is a finding rather than a simplification: §11 measured the marbling at those sizes and it does not merely vanish, it loses to a flat prism gradient, which reads as a lit card where the displacement map reads as mush. That answers `logo.md` §10's open question about whether a favicon pipeline would keep the filter by removing the filter from every surface that has one. It also makes the bracket a constant-width wire, which a real stroked path draws in **52 bytes against the 8,989** the variable-width taper's outlined polygon needs.
 
@@ -6372,6 +6390,11 @@ be stored beside the stamp and arbitrated. D87's "newer wins" does not generalis
 is a quantity both parties observe, and an asking price is an instruction of ours as executed
 by them, which are not two readings of one fact.
 
+**THE RECORD IT CREATES COULD NOT BE SETTLED WHEN THE LISTING SOLD OUT (amended 2026-09-08).** Every record this entry writes carries `pushed = 0` — correct, because this pipeline sent none of it — and `pipeline/livecheck.py` bucketed on `claim`: a row at `claim == 0` reached `beyond` only `if live > 0`, so one reading **zero** fell into no bucket at all. `cli/cmd_reconcile.py` builds `settling` from `agreed + unexplained + beyond`, so `observe_live` was never called and the stored reading stood forever.
+
+**It took two exports to see, which is why it shipped.** The first records the listing; the second is where it goes wrong. On the owner's own book that is 47 live SKUs holding 127 copies — 26 of one booster pack — every one of which the first `--write` would have armed.
+
+**`row.ledger_live > 0` is the condition, and it is not `if True`.** A SKU neither side has anything on, reading zero, is genuinely nothing to say and still falls through; what earns a line is the store believing something the export contradicts. `beyond`'s printed sentence covers both directions now — it said "holds more than this pipeline ever sent", which is false of a row at zero.
 ## D110 — A hover is an alpha, because the same paint over three grounds is three different hovers
 
 **Built 2026-09-06, on the owner's question about the dark sidebar** — *"is that lighter grayish
@@ -7604,3 +7627,182 @@ keeps the rule, so the empty-state deck stays inert; `a.home-deck` restores it f
 **What retires this:** a second reader of the standing line's rank. It is a policy with one
 consumer today, and the moment a second screen wants "what is owed" the ranking should move to
 the server rather than being derived twice.
+
+## D122 — The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
+
+**Built 2026-09-07, after a session spent two re-runs on failures that were not in its code.**
+In the `magical-kalam-0230c3` worktree a full `make design-check` reported
+**18 failures, every one in `shipping.spec.ts` or `run-panel.spec.ts`** — with the WHOLE of
+shipping failing rather than individual assertions. Re-run alone, nothing else touched:
+**52 passed**. Another worktree, `cap-on-demand`, was running its own Playwright suite at the same
+moment — about **90 browser processes between them on a 15-core Mac**. Earlier
+in the same session the same collision produced one intermittent failure in `nav.spec.ts` and one
+in `capture-undo.spec.ts`, each of which also passed in isolation, and each of which cost its own
+re-run.
+
+**D43 IS THE ENTRY THIS ONE FINISHES.** That decision gave every checkout its own dev port, its
+own capture port and its own store, so two trees can be worked in at once without either
+answering for the other — and it closed a defect of exactly this shape, a green
+`make design-check` in a worktree that had asserted against the main tree's server.
+**The CPU is the one resource it could not give them a copy of.**
+`app/playwright.config.ts` is `fullyParallel`
+at Playwright's default worker count, which is half the cores — seven here — each worker a
+Chromium context, plus a Vite dev server compiling the module graph for every one of them. Two
+trees is 4x oversubscription against a rig sized for one.
+
+**THE REPO HAD ALREADY DIAGNOSED THE FAILURE AND STILL COULD NOT SEE IT.**
+`app/playwright.config.ts` records it against a deliberately starved rig — *"a context can fail to
+render at all rather than slowly: with the allowance raised to 120s, 10 of 80 still failed and one
+took 122s. A wait cannot answer that"* — and that comment is about oversubscription WITHIN one
+run, where the config can at least count its own workers. Across two runs in two checkouts there
+is nothing to count with. So the answer is not a longer timeout and not fewer workers; it is
+mutual exclusion, and it has to live somewhere both runs can see.
+
+**WHAT IS NOT THE CAUSE, so nobody re-derives it.** Not the capture server: `app/tests/shell.ts`'s
+`sealEveryTest` aborts every capture request, and D43 gives each checkout its own capture port, so
+two suites never touch one server. The contention is CPU and memory and nothing else — which is
+also why the lock must live outside every checkout, and why `.serve/` was the wrong home for it.
+
+**IT IS AN ADVISORY `flock`, WHICH IS WHY THIS FEATURE HAS NO STALE-LOCK PATH.**
+The file is `~/.pkmnscan/locks/browsers.lock`. `scripts/serve.py` proves a pid is still the process it
+recorded by comparing `ps -o command=` against the argv it stored, and it has to: a port is the
+resource there and it outlives the process that held it. Here the OS owns the whole question — an
+advisory lock is released when the holder exits, however it exits, including `kill -9`, a crashed
+session and a reboot. The pid, the tree, the command and the start time are written INTO the
+locked file and are read for one purpose only: naming the holder in the refusal. `make
+suite-lock-selftest` proves the point by killing a holder with -9 and asserting the lock is free.
+
+**IT REFUSES RATHER THAN QUEUES, AND THE REFUSAL EXITS 75.** A suite that silently waits for
+another tree looks hung, which is its own failure mode and one the 2026-09-07 session also hit —
+ten minutes pass before anybody suspects a queue rather than a wedge. So the default names the
+tree, the pid, how long it has been running and the command it is running, and offers three ways
+on. `make design-check ARGS=--wait` queues instead, out loud: it announces itself on the first
+line and says so again every thirty seconds.
+**75 rather than 1, because `playwright test` exits 1 when tests fail**
+— a guard built to stop false failures must not produce one. 75 is
+EX_TEMPFAIL, `make` prints `Error 75`, and nothing else in this repo returns it.
+
+**THE LOCK IS NAMED FOR THE RESOURCE, NOT FOR `design-check`.** It is `browsers`, so the second
+browser fleet to land here joins this lock rather than inventing a second one that excludes
+nothing. `scripts/docs-audit.py`'s `suite lock` row reads the RUNNER for the same reason: any npm
+script whose command is `playwright test` is a fleet, and every Makefile recipe reaching one has
+to go through the lock — because the guard is one line of one recipe, which is exactly the kind of
+line a new target gets written without. The row fails in both directions and refuses to go quiet
+if the runner is renamed past it.
+
+**`make screenshot` IS DELIBERATELY OUTSIDE IT.** `scripts/screenshot.sh` drives
+`playwright screenshot`, one page at a time in a shell loop — one browser, not a fleet, and it
+already needs a dev server somebody started by hand. Putting it behind the same lock would make a
+single render queue behind a ten-minute suite for no measured benefit. `playwright test` versus
+`playwright screenshot` is the line, and it is the line the audit row reads.
+
+**`make harness` AND `make check` DO NOT TAKE IT, AND EACH HAS ITS OWN REASON.** The harness runs
+at every turn end from the Stop hook: a refusal there is a false failure at exactly the moment a
+session is trying to finish, which is the thing this entry exists to stop, and its nine tests are
+one Python process rather than fourteen browsers. `make check` shells out to `tsc`, `eslint` and
+`ruff` — two concurrent runs is a handful of single-core processes against a 15-core machine, an
+order of magnitude off the load that produced the eighteen failures, and it is not a load anything
+here has measured a failure from.
+**That is reasoning and not a measurement, and `docs/DEBTS.md` §16 records it as such**,
+along with what would reopen it.
+
+**THE ESCAPE HATCH IS `PKMNSCAN_SUITE_LOCK=off` AND IT IS PRINTED IN EVERY REFUSAL**, in the shape
+`PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=ok` already use. A guard with no visible way past it
+is one somebody disarms by deleting the line from the Makefile, where nothing would catch it.
+`PKMNSCAN_LOCK_DIR` moves the lock directory and exists for the self-test alone — same shape as
+`scripts/janitor.py --sessions DIR`, and for the same reason: a self-test that took the real lock
+would refuse a suite running in another checkout.
+
+**What would reopen this:** a measurement showing two concurrent `make check`s producing a failure
+that is not in the code, which would put `lint` and `typecheck` behind a lock of their own; or a
+second Playwright fleet whose cost makes a queue better than a refusal, which is a change to the
+default rather than to the mechanism.
+## D123 — Above the desk a screen asks its column, and browser zoom is not the lever it looks like
+
+**Built 2026-09-07, from the owner's question: their Claude Code sessions "look way nicer at like 80% zoom rather than 100%", and did that mean this app should have been drawn denser?**
+The question is worth answering precisely, because the intuition behind it is half right and the
+half that is wrong points at a real defect.
+
+### Browser zoom is a similarity transform, so the density half is already solved
+
+Chromium zoom multiplies the CSS-px-to-device-px ratio and divides the layout viewport:
+`devicePixelRatio` becomes `2 x 0.8 = 1.6`, so a 14px glyph at 80% rasterises to 22.4 device
+pixels — exactly what an 11.2px glyph gives at 100%.
+**There is no rendering-quality advantage to reclaim and nothing unreproducible about the preference.**
+80% zoom is precisely: every length x 0.8, every breakpoint x 1.25.
+
+That settles the density question against changing the scale. Browser zoom already does it,
+per-device, reversibly, in 25 steps rather than 2, across every application the owner uses. A
+`banchi.density` token would buy exactly three things over it — it would not widen the viewport,
+it could be selective (shrink the chrome, keep the photograph; never touch the Fulfiller), and
+it would be a decision in the repo rather than a habit on one machine.
+**Deferred, not rejected** , and this paragraph is the record so it is a decision rather than an
+unwritten follow-up. It reopens if the owner wants the selectivity.
+
+### The layout half is a real defect, and zoom makes it worse
+
+Because zoom widens the effective viewport, the owner's habit buys MORE of the stretch, not
+less; it reads as an improvement only because the type shrank at the same rate. Measured before
+any of this landed:
+**124 `@media` and 16 `@container` blocks across 31 stylesheets, and above 1024 only 13 rules in 7 files.**
+The single widest breakpoint in the product, `@media (max-width: 1599px)`, hid
+`.pricing-ready-fine` — **a class no component renders.** The top of the ladder was a rule for
+an element that does not exist.
+
+The consequence, measured on `#/pricing` at a 1920 viewport with the sidebar open: nine of the
+row's ten tracks are fixed, so every pixel the page gains lands in one cell.
+**The card identity was 924px wide while the price field it decides — the hero of the row (D49) — was 68px, at the far end of that gap.**
+The ink in that cell reaches 257px at the median and 430px at the 90th percentile across 67
+rows.
+
+### The rule: below 1024, `@media`. Above 1024, a cap or a container.
+
+Every screen but the Fulfiller's draws inside `.bn-shell-main`, which is the viewport minus
+236px — or minus 64px when the rail is collapsed.
+**Those differ by 172px, wider than the gap between two ladder steps** , so a `min-width:
+1024px` fires in a 788px column and in a 960px one and cannot tell them apart. Below 1024 the
+shell is force-railed by media query, so a viewport question and a column question differ by a
+constant and either is answerable.
+
+A cap is preferred to a breakpoint wherever it will serve, because it is measured against the
+column the shell actually gave: correct beside the sidebar, beside the rail, and at any browser
+zoom, with no query to keep in step. `--bn-page-w` (1600) is the ceiling and `--bn-page-w-rows`
+(1344) is for a screen whose body is a list of rows; a screen lowers its own with
+`--bn-page-max`, which is deliberately **not** a token — it is a screen's word, never the
+system's. Pricing sets 1120, sized to the ink measured above rather than chosen.
+
+**`:not([data-rail='true'])` is not the mechanism and does not spread.** `ReviewQueue.css` is
+the one place that ever compensated for the rail, and it keeps its pattern only because
+`container-type` would capture the `position: fixed` sheet it controls. The attribute *lies*
+between 768 and 1023 — `App.css` rails the shell by media query there and sets nothing — it
+costs every declaration twice, and it hardcodes the 172px delta into every pair of numbers.
+
+### The vocabulary was unreadable, and that is what blocked a guard
+
+Four edges were spelled twice (559/560, 639/640, 899/900, 1099/1100) and three integers were
+used as both a floor and a ceiling. **None of it was a rendering defect** — the sheets that
+disagreed draw different screens, so nobody ever saw two layouts at once, and this entry says so
+rather than inflating it. What it was is a vocabulary no guard could enforce. The convention is
+now: **a `min-width` is the step, a `max-width` is the step minus one** , `@media` and
+`@container` are separate namespaces because a `pane` of 640px and a window of 640px are
+different quantities, and `docs/DESIGN.md` carries the register.
+
+`make docs-audit` reads it in two rows. **`breakpoints` is MECHANICAL** — a width is an integer
+in a stylesheet and the register is an integer in a document, which is D16's test.
+**`breakpoint columns` is ADVISORY**, and the severity is the finding's shape rather than its
+confidence: whether a `min-width` is asking the wrong thing depends on what the rule does, and
+a width that gates a `100dvh` stage or a fixed sheet is right as it stands. It names four
+blocks today, in `RunPanel.css` and `CaptureScreen.css`.
+
+### What was checked and found NOT to be a defect
+
+**`app/src/Fulfillment.css` reads `--bn-control-h*` zero times, and the missing coarse-pointer bump changes nothing.**
+The coupling is real; the consequence is not. Measured in his view at 820px: 25 controls,
+**none under 44px, the shortest 60px** — and the coarse arm raises those tokens only to
+42/46/40. Making that sheet read them would move no pixel and would couple his contractual
+floors to a token, which `app/tests/pull-confirm.spec.ts` argues against by name (*"a floor that
+reads its value from the thing it is checking checks nothing"*). **Left alone deliberately** ,
+recorded here so the next reader does not re-derive it.
+
+**What would reopen this** : a screen that genuinely needs more than 1536px of content, or an
+operator who wants the density lever after all.

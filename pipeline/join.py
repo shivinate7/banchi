@@ -1414,8 +1414,9 @@ class SkuMatch:
     stages: List[str] = field(default_factory=list)
     #: The cap this send asked for, or `None` for no bound (D7, rewritten 2026-09-07). `None` is the
     #: ordinary value: the standing cap of four was retired and a cap is now something a send
-    #: asks for. `LIVE_QUANTITY_CAP` survives as the figure the PRESS offers, never as a
-    #: default anything falls back to.
+    #: asks for, through `emit --cap N` and nothing else — the standing `policy.live_cap`
+    #: was deleted 2026-09-08. `LIVE_QUANTITY_CAP` survives as a figure a press MAY propose
+    #: and as the harness's fixture bound; nothing falls back to it.
     live_cap: Optional[int] = None
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
@@ -1573,13 +1574,27 @@ class SkuMatch:
         if self.live_cap is None:
             return "every copy in this run is already listed or has left the box"
         if pending <= 0:
+            if self.copies_out > self.live_cap:
+                return f"{self.live_now} live, over the {self.live_cap} this send asked for"
             return f"{self.live_now} live, at the cap of {self.live_cap}"
-        # `min` because `copies_out` is not clamped to the cap and a store can exceed it —
-        # "6 of the 4 this SKU may have out" is not a sentence, and the operator's question
-        # is how much of the cap is spoken for rather than by how much it is overrun.
+        # THE OVERRUN IS THE ANSWER WHEN THERE IS ONE, and `min` was hiding exactly that
+        # (D7, amended 2026-09-08). A cap is a ceiling on copies LIVE, so the reason this SKU
+        # adds nothing is that `copies_out` already meets or exceeds the figure asked for —
+        # and `min(copies_out, live_cap)` clamped the very number that explains it, printing
+        # "2 of the 2 this SKU may have out" where the true state was seven out against a cap
+        # of two. The original argument was that "6 of the 4 is not a sentence"; that is a
+        # reason to WORD the overrun, not to suppress it. Under a standing cap the two were
+        # rarely far apart and this read fine for months — with the cap asked for per send,
+        # an overrun is the ordinary case and the operator cannot act on a hidden figure.
+        if self.copies_out > self.live_cap:
+            return (
+                f"{self.copies_out} already out against the {self.live_cap} this send asked "
+                f"for — {self.live_now} live and {pending} on an import this pipeline has "
+                f"not seen land"
+            )
         return (
             f"{self.live_now} live and {pending} on an import this pipeline has not "
-            f"seen land — {min(self.copies_out, self.live_cap)} of the {self.live_cap} "
+            f"seen land — {self.copies_out} of the {self.live_cap} "
             f"this SKU may have out"
         )
 

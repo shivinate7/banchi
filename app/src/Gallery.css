@@ -81,7 +81,11 @@
 }
 .kit-spec-wide { grid-column: 1 / -1; }
 .kit-spec-body { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
-.kit-spec-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.kit-spec-note { font-size: var(--bn-fs-sm); color: var(--bn-ink-3);
+  /* Paragraphs of real argument, and they had no measure: at 2560 they ran to 1254px, the
+     widest prose in the product once `.orders-backlog p` was capped. */
+  max-width: 76ch;
+}
 .kit-row { display: flex; align-items: center; gap: var(--bn-3); }
 .kit-row-wrap { flex-wrap: wrap; }
 
@@ -218,16 +222,7 @@
 .kit-keycap-blank { color: var(--bn-ink-4); border-style: dashed; border-bottom-width: 1px; }
 .kit-toasts { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 380px; }
 .kit-menu-inline { width: 260px; }
-/* `--pos-slot` IS ONLY HALF OF WHAT A SITE SETS, AND THIS SPECIMEN SET ONLY THAT HALF (D119).
-   Every real site pairs the custom property with `font-size: var(--pos-slot)` —
-   `CardLocations.css`, `Orders.css`, `CaptureScreen.css`, `ReviewQueue.css`, and the location
-   card before it was deleted — because that font-size is what the component's own `em`-relative
-   derivations measure against. Without it the specimens drew at the inherited 14px, so
-   `PositionLabel.css`'s re-rank for a label with no figure (`clamp(11px, 0.45em, 20px)`,
-   0.45 x 14 = 6.3, clamped up) landed on exactly the 11px a LIVE path gets: the departed
-   specimen was drawn identically to the live one, on the page whose job is drawing the
-   difference. Measured 2026-09-07, and now asserted by `gallery.spec.ts`. */
-.kit-poslabel { display: inline-flex; font-size: var(--pos-slot); }
+.kit-poslabel { display: inline-flex; }
 
 /* ---- responsive ---------------------------------------------------------------- */
 @media (max-width: 1023px) {
@@ -257,7 +252,7 @@
   .kit-motions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kit-type-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .kit-grid { grid-template-columns: minmax(0, 1fr); }
   .kit-motions { grid-template-columns: minmax(0, 1fr); }
   .kit-swatches { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }

@@ -222,7 +222,7 @@
 .ff-start:active { transform: scale(0.98); }
 .ff-start-arrow { transition: transform var(--bn-t) var(--bn-ease-spring); }
 .ff-start:hover .ff-start-arrow { transform: translateX(3px); }
-@media (max-width: 560px) {
+@media (max-width: 559px) {
   .ff-today { padding: var(--bn-5); }
   .ff-today-num { font-size: 48px; }
   .ff-today-words { font-size: 24px; }
@@ -490,7 +490,7 @@
 .ff-order-count { color: var(--bn-ink-2); line-height: 1.35; }
 .ff-order-cards { padding: var(--bn-3); }
 .ff-orders-more { margin-top: var(--bn-4); }
-@media (max-width: 480px) {
+@media (max-width: 479px) {
   .ff-order-head { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
   .ff-order-cards { padding: var(--bn-2); }
 }
@@ -1031,7 +1031,7 @@
 .ff .ff-more-body .card-locations-fulfiller { animation: none; }
 .ff .ff-more-body .card-locations-head { display: none; }
 .ff .ff-more-body .card-locations-copy { background: var(--bn-bg); box-shadow: inset 0 0 0 1px var(--bn-line); }
-@media (max-width: 480px) {
+@media (max-width: 479px) {
   .ff-more-head { padding: var(--bn-3) var(--bn-4); gap: var(--bn-3); }
   .ff-more-body { padding: var(--bn-2) var(--bn-2) var(--bn-3); }
 }
@@ -1079,7 +1079,7 @@
 }
 
 /* ---- phone: the photograph reaches the card's edges, so it clears 320px ------------------- */
-@media (max-width: 480px) {
+@media (max-width: 479px) {
   .ff .card-locations-copy { padding: var(--bn-4); border-radius: 18px; }
   .ff .card-locations-photo {
     width: calc(100% + 2 * var(--bn-4));
@@ -1096,7 +1096,7 @@
 }
 
 /* ---- narrow: the place stacks on purpose, the card's number on its own line ------------- */
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .ff-row-place > span:last-child,
   .ff-place > span:last-child { display: block; }
   .ff-row-place > span:last-child .ff-place-sep,
@@ -1219,7 +1219,7 @@
 @media (prefers-reduced-motion: reduce) {
   .ff-receipt-bar::after { animation: none; transform: none; }
 }
-@media (max-width: 560px) {
+@media (max-width: 559px) {
   .fulfillment-panel, .ff-receipt {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas: 'icon text' 'undo undo' 'clock clock';
@@ -1240,7 +1240,7 @@
 .ff-receipt-compact .ff-receipt-said,
 .ff-receipt-compact .ff-receipt-bar { display: none; }
 .ff-receipt-compact .ff-receipt-note { margin: 0; }
-@media (max-width: 560px) {
+@media (max-width: 559px) {
   .ff-receipt-compact {
     grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas: 'icon text text' 'undo undo clock';

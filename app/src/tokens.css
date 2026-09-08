@@ -13,9 +13,13 @@
    switches every surface and ink together. Nothing in a component sheet may name a
    colour — components paint from these tokens only.
 
-   LEGACY ALIASES are at the bottom. The old sheet exported --ink/--muted/--line/--s1…
-   and 40 stylesheets read them; keeping the names live means every screen re-skins the
-   moment this file lands, and screens are then refined one by one.
+   LEGACY ALIASES are at the bottom, AND THEY ARE SPENT. The old sheet exported
+   --ink/--muted/--line/--s1…, and keeping the names live is what let every screen re-skin the
+   moment this file landed rather than being ported one by one. That migration is over:
+   measured 2026-09-07 across all 102 files under app/src, NOT ONE reads any of the twenty-four,
+   against 266 uses of var(--bn-ink) alone. This header claimed "40 stylesheets read them" until
+   that count was taken. They are kept rather than deleted — docs/DESIGN.md's call — and a new
+   rule may not read one.
    ========================================================================== */
 
 :root {
@@ -180,6 +184,24 @@
   --bn-sidebar-w: 236px;
   --bn-rail-w: 64px;
   --bn-topbar-h: 52px;
+
+  /* HOW WIDE A SCREEN MAY EVER BE, and it is a CAP rather than a breakpoint on purpose.
+     `.bn-page` is border-box with a 32px inset, so `--bn-page-w` is 1536px of content and
+     nothing the shell can hand a screen exceeds it — at any monitor, at any browser zoom.
+     A cap is measured against the column the shell actually gave, so it is correct beside
+     the 236px sidebar, beside the 64px rail, and at 80% zoom, with no query to keep in
+     step. That is the whole argument for preferring one to a `@media` width above 1024.
+     `--bn-page-w-rows` is for a screen whose body is a LIST OF ROWS. Those rows are almost
+     all fixed tracks with one flexible identity cell, so every pixel the page gains lands
+     in that cell and nowhere else: at 1536 the pricing row's card name is 784px wide for a
+     string that is never past 44 characters, with the price it is deciding a screen away.
+     1280px of content is that row's fixed tracks plus ~44ch for the name.
+     A screen asks for one by setting `--bn-page-max` on its own root; the kit reads it with
+     `--bn-page-w` as the fallback. `--bn-page-max` is deliberately NOT declared here — it
+     is a screen's word, never the system's, which is why it is not in docs/DESIGN.md. */
+  --bn-page-w: 1600px;
+  --bn-page-w-rows: 1344px;
+
   --bn-control-h: 34px;
   --bn-control-h-lg: 40px;
   --bn-control-h-sm: 28px;

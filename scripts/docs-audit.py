@@ -6811,6 +6811,30 @@ def token_value(kind: str, text: str) -> str:
     return " ".join(text.split()).lower()
 
 
+def fenced_block(text: str, heading: str) -> Optional[str]:
+    """The first fenced block under a `## ` HEADING (a regex, anchored after the hashes), or None.
+
+    Split out of `design_token_block` when `breakpoints` needed the same reader for its own
+    register. The scoping argument below is that row's and still holds for it; the mechanism is
+    general, and a second caller is the reason a heading is a parameter rather than a literal.
+    """
+    collecting = False
+    in_section = False
+    block: List[str] = []
+    for line in text.splitlines():
+        if not collecting and line.startswith("## "):
+            in_section = bool(re.match(r"^##\s+" + heading, line))
+            continue
+        if in_section and line.lstrip().startswith("```"):
+            if collecting:
+                return "\n".join(block)
+            collecting = True
+            continue
+        if collecting:
+            block.append(line)
+    return None
+
+
 def design_token_block(text: str) -> Optional[str]:
     """The fenced block under the `## Tokens` heading, or None.
 
@@ -6823,21 +6847,7 @@ def design_token_block(text: str) -> Optional[str]:
     next fence in the file would compare the button states against the stylesheet and find
     nothing wrong with either.
     """
-    collecting = False
-    in_section = False
-    block: List[str] = []
-    for line in text.splitlines():
-        if not collecting and line.startswith("## "):
-            in_section = bool(re.match(r"^##\s+Tokens\b", line))
-            continue
-        if in_section and line.lstrip().startswith("```"):
-            if collecting:
-                return "\n".join(block)
-            collecting = True
-            continue
-        if collecting:
-            block.append(line)
-    return None
+    return fenced_block(text, r"Tokens\b")
 
 
 class Claims(NamedTuple):
@@ -7280,6 +7290,334 @@ def check_raw_color(report: Report) -> None:
     report.add("raw color", MECHANICAL, findings, f"{len(findings)} literals outside tokens.css"
                if findings else "every color comes from a token")
 
+
+
+# --------------------------------------------------------------- the breakpoint vocabulary
+#
+# MEASURED BEFORE IT WAS WRITTEN, 2026-09-07: 124 `@media` and 16 `@container` blocks across
+# 31 stylesheets under `app/src`, and nothing had ever read them together. What the reading
+# found was NOT a rendering defect — the sheets that disagreed draw different screens, so no
+# person ever saw two layouts at once. It was a vocabulary nobody could read:
+#
+#   FOUR EDGES WERE SPELLED TWICE. `max-width: 559px` and `max-width: 560px` are one intention
+#   a pixel apart, and so were 639/640, 899/900 and 1099/1100. Nothing here reflows inside a
+#   one-pixel band, so the sheet that lost the coin toss folded a pixel later than the one
+#   beside it, forever.
+#
+#   THREE INTEGERS WERE USED ON BOTH SIDES — 560, 640 and 1100 were each a `min-width`
+#   somewhere and a `max-width` elsewhere, so at exactly those widths two blocks written to
+#   exclude each other both applied.
+#
+#   AND THE LADDER'S TOP RULE HAD NO ELEMENT. `@media (max-width: 1599px)` — the single widest
+#   breakpoint in the product, and the only thing above 1500 — hid `.pricing-ready-fine`, a
+#   class no component in `app/src` renders. It was deleted with the rest of that class.
+#
+# THE REGISTER IS `docs/DESIGN.md`, NOT THIS FILE, and that is the choice `design tokens`
+# makes. A ladder step is a design decision with an argument under it; a constant here would be
+# a design decision in a script, which is where they stop being argued.
+#
+# NO COUNTS ARE PUBLISHED IN THE REGISTER, deliberately. `docs/DESIGN.md` carried "54 media
+# blocks ... and six" until this row landed, and the six was seven — `scripts/checks.py`'s own
+# rule arriving on schedule. The counts are in this row's summary, taken at run time.
+
+# The sheets that ARE the shell. A width in one of them is asking about the window because the
+# window is its subject: `App.css` draws the sidebar, the rail, the phone bar and the tab bar;
+# `base.css` and `kit.css` load on every route; `tokens.css` raises the control heights by the
+# POINTER and by the width. Everything else under `app/src` is a screen.
+SHELL_SHEETS = frozenset({"App.css", "base.css", "kit.css", "tokens.css"})
+
+# At and above this the shell has a sidebar to subtract, and how much depends on `data-rail`.
+# Below it `App.css` rails unconditionally between 768 and 1023, so a viewport question and a
+# column question differ by a constant and either one is answerable.
+COLUMN_FLOOR = 1024
+
+_AT_RE = re.compile(r"@(media|container)([^{]*)\{")
+_WIDTH_RE = re.compile(r"\((max|min)-width:\s*(\d+)px\)")
+_CONTAINER_AT_RE = re.compile(r"@container\s+([A-Za-z][\w-]*)\s*\(")
+_CONTAINER_NAME_RE = re.compile(r"container-name:\s*([A-Za-z][\w-]*)")
+
+
+class Widths(NamedTuple):
+    """Every width condition in one stylesheet, and the container names it uses or declares."""
+
+    media: List[Tuple[str, int, int]]      # (side, value, line)
+    container: List[Tuple[str, int, int]]
+    blocks: int
+    queried: Set[str]
+    declared: Set[str]
+
+
+def read_widths(text: str) -> Widths:
+    """The widths and container names in one stylesheet's TEXT. Pure, so `--self-test` can drive
+    it with no repository — the filesystem is not where this can be wrong.
+
+    COMMENTS COME OFF FIRST, and here that matters more than anywhere else this file reads CSS:
+    these stylesheets argue in prose ABOUT their breakpoints. `App.css` writes "768-1023px" in
+    three comments that are not rules. `strip_css_comments` replaces a comment with as many
+    newlines as it spanned, so a `file:line` in a finding still points at the rule.
+    """
+    body = strip_css_comments(text)
+    media: List[Tuple[str, int, int]] = []
+    container: List[Tuple[str, int, int]] = []
+    blocks = 0
+    for at in _AT_RE.finditer(body):
+        blocks += 1
+        line = body[: at.start()].count("\n") + 1
+        into = media if at.group(1) == "media" else container
+        for side, value in _WIDTH_RE.findall(at.group(2)):
+            into.append((side, int(value), line))
+    queried = set(_CONTAINER_AT_RE.findall(body))
+    declared = set(_CONTAINER_NAME_RE.findall(body))
+    return Widths(media, container, blocks, queried, declared)
+
+
+class Ladder(NamedTuple):
+    steps: Dict[int, str]
+    refinements: Dict[int, str]
+    container: Set[int]
+    blind: Dict[str, str]
+
+
+def read_ladder(block: str) -> Ladder:
+    """The four sections of the register. Pure, for `read_widths`' reason.
+
+    THE FENCE IS PROSE LAID OUT AS A TABLE, exactly as the token block is, and this reads what
+    it unambiguously states and nothing else: an indented row whose first field is a bare
+    integer (LADDER, REFINEMENTS) or a `*.css` filename (COLUMN-BLIND), and whose reason is two
+    or more spaces away. A section heading starts at column zero, which is how the sections are
+    told apart — so a section RENAMED in the document does not silently become a fifth one and
+    take its rows out of the comparison.
+
+    CONTAINER rows carry a container name before the width and only their VALUES are collected:
+    a column's width is a measurement against one pane, not a step on a shared ladder, so it
+    gets no step arithmetic. Naming it is the whole requirement.
+    """
+    steps: Dict[int, str] = {}
+    refinements: Dict[int, str] = {}
+    container: Set[int] = set()
+    blind: Dict[str, str] = {}
+    into: Optional[str] = None
+    for line in block.splitlines():
+        head = re.match(r"^([A-Z][A-Z -]+?)\s{2,}", line)
+        if head is not None:
+            into = head.group(1).strip()
+            continue
+        row = re.match(r"^\s+(?:\(?[a-z][\w-]*\)?\s+)?(\d{3,4})\s{2,}(\S.*)$", line)
+        if row is not None and into in ("LADDER", "REFINEMENTS", "CONTAINER"):
+            value, why = int(row.group(1)), row.group(2).strip()
+            if into == "LADDER":
+                steps[value] = why
+            elif into == "REFINEMENTS":
+                refinements[value] = why
+            else:
+                container.add(value)
+            continue
+        # a CONTAINER line may carry several widths on one row (`520, 640`)
+        if into == "CONTAINER":
+            many = re.match(r"^\s+\(?[a-z][\w-]*\)?\s+((?:\d{3,4},\s*)+\d{3,4})\s{2,}", line)
+            if many is not None:
+                container.update(int(v) for v in re.findall(r"\d{3,4}", many.group(1)))
+                continue
+        row = re.match(r"^\s+([\w.-]+\.css)\s{2,}(\S.*)$", line)
+        if row is not None and into == "COLUMN-BLIND":
+            blind[row.group(1)] = row.group(2).strip()
+    return Ladder(steps, refinements, container, blind)
+
+
+def breakpoint_subject() -> Tuple[Optional[Tuple[Ladder, Dict[Path, Widths]]], List[Finding]]:
+    """The register and the stylesheets, or the findings saying which could not be read.
+
+    RETURNS its findings rather than reporting them, because `defined_checks` marks any
+    module-level function that calls `report.add` as a check — on purpose, so a check cannot
+    hide behind a helper. This is a helper genuinely shared by two rows, so it hands the
+    findings back and each row files them under its own name.
+
+    An unreadable subject is a FINDING and never a skip — the state docs/DEBTS.md calls this
+    auditor's worst failure mode, a check gone quiet.
+    """
+    if not exists(APP_STYLES) or not exists(DESIGN):
+        missing = [rel(p) for p in (APP_STYLES, DESIGN) if not exists(p)]
+        return None, [Finding(" ".join(missing),
+            "does not exist, so no stylesheet's widths are compared against the ladder that "
+            "governs them.")]
+    fence = fenced_block(read(DESIGN), r"Layout, density, and the widths")
+    if fence is None:
+        return None, [Finding(rel(DESIGN),
+            "has no fenced block under the layout heading, so there is no register to compare "
+            "against.\n"
+            "  That block is where a width stops being a number somebody typed. If it moved, "
+            "this row's reader has to move with it.")]
+    ladder = read_ladder(fence)
+    sheets = {p: read_widths(read(p)) for p in sorted(APP_STYLES.glob("*.css"))}
+    if not (ladder.steps or ladder.refinements) or not sheets:
+        return None, [Finding(f"{rel(DESIGN)} + {rel(APP_STYLES)}",
+            f"read {len(ladder.steps)} ladder steps and {len(ladder.refinements)} refinements "
+            f"from the register, and {len(sheets)} stylesheets. "
+            f"A side that parses to nothing compares nothing.")]
+    return (ladder, sheets), []
+
+
+def check_breakpoints(report: Report) -> None:
+    """Every `@media` width under `app/src`, against the ladder docs/DESIGN.md publishes.
+
+    **Blocking, on `raw color`'s reasoning exactly.** A width is an integer in a stylesheet and
+    the register is an integer in a document; either they agree or they do not, and there is no
+    context this script is missing. That is D16's test for a mechanical finding rather than a
+    printed question. The clause that WOULD have been a judgement — whether a rule is asking the
+    viewport a question only the column can answer — is a separate ADVISORY row below, because
+    answering it needs a reading of what the rule does.
+
+    Four claims, and none of them is "this breakpoint is a good idea":
+
+      1. ONE EDGE, ONE SPELLING. `max-width: N` and `max-width: N+1` may not both exist.
+      2. ONE SIDE. No integer is both a `max-width` and a `min-width`.
+      3. THE FORM. A `min-width` is a step the register names; a `max-width` is a step minus
+         one. This is what makes 1 and 2 hold by construction rather than by luck.
+      4. EVERY NAMED CONTAINER HAS A READER AND EVERY QUERY HAS A CONTAINER (D80, one register
+         down): a `container-name` nothing queries is a declaration with no reader, and an
+         `@container copies (...)` with no `copies` declared resolves against the nearest
+         container instead — a rule that fires somewhere else and never says so.
+
+    `@media` and `@container` are separate namespaces and 1-3 are asked of each on its own. A
+    `pane` of 640px and a viewport of 640px are different quantities, so an integer used as a
+    step in one and a measurement in the other is not a collision.
+
+    **What a green row means, exactly**: the vocabulary agrees. It says nothing about whether a
+    screen reflows WELL at any of these widths — `app/tests/wide.spec.ts` measures that above
+    1280 and `app/tests/phone.spec.ts` below 768.
+    """
+    subject, unreadable = breakpoint_subject()
+    if subject is None:
+        report.add("breakpoints", MECHANICAL, unreadable)
+        return
+    ladder, sheets = subject
+    named = dict(ladder.refinements)
+    named.update(ladder.steps)
+    findings: List[Finding] = []
+
+    for kind in ("media", "container"):
+        sides: Dict[Tuple[str, int], List[str]] = {}
+        for path, found in sheets.items():
+            for side, value, line in getattr(found, kind):
+                sides.setdefault((side, value), []).append(f"{rel(path)}:{line}")
+
+        for side, value in sorted(sides):
+            if (side, value + 1) in sides:
+                findings.append(Finding(", ".join(sides[(side, value)] + sides[(side, value + 1)]), (
+                    f"spells one edge two ways in `@{kind}`: `{side}-width: {value}px` and "
+                    f"`{side}-width: {value + 1}px`.\n"
+                    f"  Nothing in this product reflows inside a one-pixel band, so these are one "
+                    f"intention typed twice — and the sheet that loses folds a pixel later than "
+                    f"the one beside it, forever, invisibly.\n"
+                    f"  Move both onto whichever of the two the register names.")))
+
+        for value in sorted({v for _, v in sides}):
+            if ("min", value) in sides and ("max", value) in sides:
+                findings.append(Finding(", ".join(sides[("min", value)] + sides[("max", value)][:3]), (
+                    f"uses {value}px in `@{kind}` as BOTH a floor and a ceiling, so at exactly "
+                    f"{value}px two blocks written to exclude each other both apply.\n"
+                    f"  A `max-width` is the step MINUS ONE. Nothing else stops this recurring.")))
+
+        if kind == "container":
+            for (side, value), where in sorted(sides.items()):
+                if value not in ladder.container:
+                    findings.append(Finding(where[0], (
+                        f"queries a container at `{side}-width: {value}px`, which the register's "
+                        f"CONTAINER section does not name.\n"
+                        f"  A column's width is a measurement against one pane, so it needs no "
+                        f"step — but it does need naming, with its container and what it is for. "
+                        f"A width nobody argued for is a width nobody can move.")))
+            continue
+
+        for (side, value), where in sorted(sides.items()):
+            step = value if side == "min" else value + 1
+            if step in named:
+                continue
+            findings.append(Finding(where[0], (
+                f"opens a regime at `{side}-width: {value}px`, and the register names no "
+                f"{step}px step."
+                + (f"\n  It names {value}px. A `max-width` is the step MINUS ONE — this is the "
+                   f"off-by-one claims 1 and 2 exist to stop, arriving one sheet at a time."
+                   if side == "max" and value in named else
+                   "\n  Add it under LADDER if any sheet may use it, or under REFINEMENTS with "
+                   "the sheet that owns it and its reason."))))
+
+    queried = {n for f in sheets.values() for n in f.queried}
+    declared = {n for f in sheets.values() for n in f.declared}
+    for name in sorted(queried - declared):
+        where = next(rel(p) for p, f in sheets.items() if name in f.queried)
+        findings.append(Finding(where, (
+            f"queries `@container {name}` and no sheet under app/src declares "
+            f"`container-name: {name}`. The query resolves against the nearest container "
+            f"instead, or against none — and a rule that fires somewhere else never says so.")))
+    for name in sorted(declared - queried):
+        where = next(rel(p) for p, f in sheets.items() if name in f.declared)
+        findings.append(Finding(where, (
+            f"declares `container-name: {name}` and nothing queries it. Delete it or use it "
+            f"(D80) — and note `container-type` also makes the element a containing block for "
+            f"its `position: fixed` descendants, so an unused one is not free.")))
+
+    blocks = sum(f.blocks for f in sheets.values())
+    widths = {v for f in sheets.values() for _, v, _ in f.media}
+    report.add("breakpoints", MECHANICAL, findings, (
+        f"{blocks} blocks over {len(widths)} media widths in "
+        f"{sum(1 for f in sheets.values() if f.blocks)} sheets, all on the ladder; "
+        f"{len(declared)} named containers, each with a reader"))
+
+
+def check_breakpoint_columns(report: Report) -> None:
+    """A screen sheet asking the VIEWPORT a question only its COLUMN can answer.
+
+    ADVISORY, and the severity is the finding's shape rather than its confidence. Whether a
+    `min-width` is asking the wrong thing depends on what the rule DOES: a width that gates a
+    `100dvh` stage, a `position: fixed` sheet or an input modality is a viewport question and is
+    right as it stands. This row can see the width and not the intent, so it prints the question
+    and lets the commit through — D16's line, and the same call `coupling` makes.
+
+    THE MEASUREMENT UNDER IT. Every screen but the Fulfiller's draws inside `.bn-shell-main`,
+    which is the viewport minus `--bn-sidebar-w` (236px) or minus `--bn-rail-w` (64px) when the
+    rail is collapsed. Those differ by 172px — wider than the gap between two ladder steps — so
+    a `min-width: 1024px` fires in a 788px column and in a 960px one and cannot tell them apart.
+    Of the five blocks this row names today, `ReviewQueue.css` is the only place in the product
+    that ever compensated, and it does it by writing every declaration twice.
+
+    A sheet with a real reason is named under COLUMN-BLIND in the register and drops out here.
+    """
+    subject, unreadable = breakpoint_subject()
+    if subject is None:
+        report.add("breakpoint columns", ADVISORY, unreadable)
+        return
+    ladder, sheets = subject
+    findings: List[Finding] = []
+    for path, found in sheets.items():
+        if path.name in SHELL_SHEETS or path.name in ladder.blind:
+            continue
+        for side, value, line in found.media:
+            if side != "min" or value < COLUMN_FLOOR:
+                continue
+            findings.append(Finding(f"{rel(path)}:{line}", (
+                f"opens a regime at `min-width: {value}px` on the VIEWPORT.\n"
+                f"  This sheet draws inside `.bn-shell-main` — the viewport minus 236px, or "
+                f"minus 64px when the rail is collapsed. So this fires in a {value - 236}px "
+                f"column and in a {value - 64}px one and cannot tell them apart.\n"
+                f"  Discharge: ask the column instead — a cap (`--bn-page-max`) or a "
+                f"`container-type: inline-size` on an ancestor inside this screen, the way "
+                f"`Pricing.css` and `BoxBrowse.css` already do — or, if the rule is genuinely "
+                f"about the window (a `100dvh` stage, a fixed sheet, an input modality), name "
+                f"this sheet under COLUMN-BLIND in docs/DESIGN.md with that reason.")))
+    for name, why in sorted(ladder.blind.items()):
+        path = APP_STYLES / name
+        if not exists(path):
+            findings.append(Finding(rel(DESIGN), (
+                f"COLUMN-BLIND names `{name}`, which is not a stylesheet under app/src. "
+                f"Remove the line — a stale exemption reads as coverage.")))
+        elif not any(s == "min" and v >= COLUMN_FLOOR for s, v, _ in sheets[path].media):
+            findings.append(Finding(rel(DESIGN), (
+                f"COLUMN-BLIND excuses `{name}` from asking its column, and that sheet no "
+                f"longer opens a regime at or above {COLUMN_FLOOR}px. Drop the line: the reason "
+                f"it carries — {why} — is an argument nobody is making.")))
+    report.add("breakpoint columns", ADVISORY, findings,
+               f"{len(sheets)} sheets, {len(ladder.blind)} named column-blind")
 
 
 # ------------------------------------------------------------------ the mark (D102)
@@ -9431,6 +9769,107 @@ def _check_claim_text(target: Path) -> str:
     return "\n".join(out)
 
 
+# ------------------------------------------------ the browser fleet, and the lock it takes
+#
+# `make design-check` is the one target here that spends the whole machine — Playwright's
+# `fullyParallel` at half the cores, each worker a Chromium context over its own Vite dev
+# server. D43 gave every checkout its own ports and its own store; the CPU is what it could
+# not copy, and two trees running the fleet at once starve each other into failures that are
+# not in the code (D122, and `scripts/suite-lock.py` carries the 2026-09-07 measurement).
+#
+# THE GUARD IS ONE LINE OF ONE RECIPE, WHICH IS EXACTLY THE KIND OF LINE THAT GOES MISSING.
+# A second browser suite landing under its own target would be unguarded and green, and the
+# only symptom would be somebody else's re-run. So this row reads the RUNNER rather than the
+# target name: any npm script whose command is `playwright test` is a fleet, and every
+# Makefile recipe that reaches one has to go through the lock.
+SUITE_LOCK_SCRIPT = ROOT / "scripts" / "suite-lock.py"
+
+#: What makes a script a fleet. `playwright test` is the parallel runner; `playwright
+#: screenshot`, which `scripts/screenshot.sh` uses, drives one page at a time and is
+#: deliberately NOT covered — see D122 on where that line is drawn and why.
+_FLEET_RUNNER_RE = re.compile(r"\bplaywright\s+test\b")
+
+
+def _npm_run_re(script: str) -> "re.Pattern[str]":
+    """A recipe line reaching an npm script, with or without `--prefix`."""
+    return re.compile(r"\bnpm\b[^\n]*\brun\s+" + re.escape(script) + r"\b")
+
+
+def check_suite_lock(report: Report) -> None:
+    """Every Makefile recipe that starts a Playwright fleet goes through the lock.
+
+    MECHANICAL, and in both directions: a fleet script no recipe reaches is reported as much
+    as a recipe that reaches one without the lock. The first is the drift that would happen —
+    a new browser target, written from the old one, without the line that matters.
+
+    IT REFUSES TO GO QUIET, on `check census`'s reasoning. If `app/package.json` holds no
+    script this row recognises as a fleet, that is REPORTED rather than passed: the runner
+    was renamed or the suite moved, and either way a guard that silently starts covering
+    nothing is the failure it exists to prevent.
+
+    WHAT IT DOES NOT CHECK: that the lock WORKS. `make suite-lock-selftest` does that, by
+    violating it. This row settles only that the thing which spends the machine is behind it.
+    """
+    findings: List[Finding] = []
+
+    if not exists(SUITE_LOCK_SCRIPT):
+        report.add("suite lock", MECHANICAL, [Finding(
+            rel(SUITE_LOCK_SCRIPT),
+            "does not exist, and `make design-check` is written to run through it.")])
+        return
+
+    try:
+        package = json.loads(read(ROOT / "app" / "package.json"))
+        scripts = {str(k): str(v) for k, v in (package.get("scripts") or {}).items()}
+    except (OSError, ValueError) as exc:
+        report.add("suite lock", MECHANICAL, [Finding(
+            "app/package.json", "could not be read, so no fleet can be identified.\n%s" % exc)])
+        return
+
+    fleets = sorted(name for name, body in scripts.items() if _FLEET_RUNNER_RE.search(body))
+    if not fleets:
+        report.add("suite lock", MECHANICAL, [Finding(
+            "app/package.json", (
+                "holds no script that runs `playwright test`, so this row is watching\n"
+                "  nothing. Either the fleet moved or the runner was renamed — the pattern\n"
+                "  has to move with it, or the guard covers a suite that no longer exists."))])
+        return
+
+    lines = read(ROOT / "Makefile").splitlines()
+    for script in fleets:
+        pattern = _npm_run_re(script)
+        callers = [(n + 1, line) for n, line in enumerate(lines)
+                   if line.startswith("\t") and pattern.search(line)]
+        if not callers:
+            findings.append(Finding("app/package.json", (
+                "`{0}` runs a Playwright fleet and no Makefile recipe reaches it.\n"
+                "  A fleet nobody can start is dead, and a fleet started from somewhere this\n"
+                "  row cannot see is unguarded. Either is worth a look."
+            ).format(script)))
+            continue
+        for line_no, line in callers:
+            if "suite-lock.py" not in line:
+                findings.append(Finding("Makefile:{0}".format(line_no), (
+                    "starts the `{0}` fleet without taking the machine-wide lock.\n"
+                    "  Two fleets at once starve each other and BOTH report failures that are\n"
+                    "  not in the code. Run it through `python3 scripts/suite-lock.py run -- "
+                    "…` (D122)."
+                ).format(script)))
+
+    # The direct form, which no npm script mediates: a recipe calling the runner itself.
+    for n, line in enumerate(lines):
+        if not line.startswith("\t") or not _FLEET_RUNNER_RE.search(line):
+            continue
+        if "suite-lock.py" not in line:
+            findings.append(Finding("Makefile:{0}".format(n + 1), (
+                "runs `playwright test` directly without taking the machine-wide lock "
+                "(D122).")))
+
+    report.add("suite lock", MECHANICAL, findings,
+               "{0} fleet script{1}, every caller behind the lock".format(
+                   len(fleets), "" if len(fleets) == 1 else "s"))
+
+
 def check_check_census(report: Report) -> None:
     """Every published list of what `make check` runs, against scripts/checks.py.
 
@@ -10769,6 +11208,66 @@ def self_test() -> int:
         str(by_label["design tokens"]),
     )
 
+    print("\na breakpoint reader sees rules and not the prose about them")
+    _css = ("/* the 768-1023px media rail, and 640 here is wrong on purpose */\n"
+            "@media (max-width: 767px) { .a { color: red } }\n"
+            "@media (min-width: 768px) and (max-width: 1023px) { .b { color: red } }\n"
+            "@container pane (min-width: 560px) { .c { color: red } }\n"
+            ".d { container-name: pane; }\n")
+    _w = read_widths(_css)
+    ok(
+        _w.media == [("max", 767, 2), ("min", 768, 3), ("max", 1023, 3)],
+        "only the RULES' widths, with the line the rule is on",
+        str(_w.media),
+    )
+    ok(
+        not any(v == 640 for _, v, _ in _w.media),
+        "AND THE DEFECT: a comment naming 768-1023px and 640 contributes no widths",
+        str(_w.media),
+    )
+    ok(
+        _w.container == [("min", 560, 4)] and _w.queried == {"pane"} and _w.declared == {"pane"},
+        "a container query is its own namespace, and is read from both sides",
+        f"{_w.container} {_w.queried} {_w.declared}",
+    )
+
+    print("\nthe register is read as four sections, not as one list")
+    _reg = ("LADDER          the shared vocabulary\n"
+            "  768           the tablet\n"
+            "REFINEMENTS     one screen's own\n"
+            "  1500          ReviewQueue — the rail becomes a sheet\n"
+            "CONTAINER       measured against a column\n"
+            "  pane    560   BoxBrowse — the band splits\n"
+            "  (unnamed) 520, 640   RunPanel — the detail's own steps\n"
+            "COLUMN-BLIND    the exemptions\n"
+            "  Fulfillment.css   draws no shell of its own\n")
+    _l = read_ladder(_reg)
+    ok(_l.steps == {768: "the tablet"}, "a ladder step keeps its reason", str(_l.steps))
+    ok(
+        1500 in _l.refinements and 1500 not in _l.steps,
+        "AND THE DEFECT: a refinement is not silently promoted to a step every sheet may use",
+        str(_l.refinements),
+    )
+    ok(
+        _l.container == {560, 520, 640},
+        "a container row contributes its widths, including several on one line",
+        str(_l.container),
+    )
+    ok(
+        list(_l.blind) == ["Fulfillment.css"] and not any(
+            k in _l.steps or k in _l.refinements for k in (0,)),
+        "a sheet name under COLUMN-BLIND is not read as a width",
+        str(_l.blind),
+    )
+    report = Report()
+    check_breakpoints(report)
+    by_label = {check: findings for check, _, findings, _ in report.checks}
+    ok(
+        not by_label["breakpoints"],
+        "this repo's own stylesheets agree with the register",
+        str(by_label["breakpoints"]),
+    )
+
     print("\na color literal is found in CSS, and not in a comment about one")
     ok(
         strip_css_comments("a { color: #fff; } /* not #000 */").count("#") == 1,
@@ -11260,6 +11759,8 @@ def audit(staged_only: bool) -> Report:
     check_status_sources(report)
     check_design_tokens(report)
     check_raw_color(report)
+    check_breakpoints(report)
+    check_breakpoint_columns(report)
     check_storage_keys(report)
     check_views_opsec(report)
     check_doc_hygiene(report, docs)
@@ -11269,6 +11770,7 @@ def audit(staged_only: bool) -> Report:
     check_check_registry(report)
     check_commit_path(report)
     check_check_census(report)
+    check_suite_lock(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this

@@ -14,7 +14,10 @@
 /* ---- layout helpers ------------------------------------------------------ */
 .bn-page {
   padding: var(--bn-6) var(--bn-7) var(--bn-10);
-  max-width: 1600px;
+  /* THE PAGE'S CEILING IS THE SHELL'S, AND A SCREEN MAY SET A LOWER ONE by declaring
+     `--bn-page-max` on its own root. See `--bn-page-w` in tokens.css for why a cap rather
+     than a breakpoint, and for what `--bn-page-w-rows` is. */
+  max-width: var(--bn-page-max, var(--bn-page-w));
   margin: 0 auto;
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }

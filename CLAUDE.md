@@ -120,7 +120,25 @@ make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev
                     #   worktree's own before rendering. Before this, `make screenshot` in a
                     #   worktree photographed the MAIN tree's app over the owner's real store
                     #   and the renders looked entirely correct.
-make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
+make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT TAKES A
+                    #   MACHINE-WIDE LOCK FIRST, AND IT IS THE ONE THING D43 COULD NOT MAKE
+                    #   PER-CHECKOUT (D122): every tree has its own ports and its own store,
+                    #   and the CPU is shared. This is the target that spends all of it —
+                    #   `fullyParallel` at half the cores, each worker a Chromium context over
+                    #   its own Vite server. Two trees running it at once starve each other and
+                    #   BOTH report failures that are not in the code: 18 of them on
+                    #   2026-09-07, all 52 green on a re-run alone.
+                    #   IT REFUSES rather than queues, naming the tree that holds the lock, and
+                    #   exits 75 so a refusal can never read as a failing suite. `ARGS=--wait`
+                    #   queues instead and says so every thirty seconds — a silent wait reads
+                    #   as a hang, which is the other half of what that session hit.
+                    #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
+                    #   refusal. `make harness` and `make check` deliberately do NOT take it;
+                    #   docs/DEBTS.md §16 is why, and which half of that is measured.
+make suite-lock-selftest # the lock, exercised by violating it — including a holder killed with
+                    #   -9, which is the whole argument for `flock` over a pidfile. In `check`,
+                    #   never in the git hook. `PKMNSCAN_LOCK_DIR` sends it at a throwaway
+                    #   directory so it never takes the real lock.
 make demo           # seed a demo store and record the wire into a fixture bundle.
                     #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE
                     #   `fetch` (`server.ts:request`) and addresses every photograph through
@@ -174,9 +192,9 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + janitor-selftest + port-agreement +
-                    #   set-hint-agreement + screen-freshness + sigil-check +
-                    #   ignore-check + lint + vale + typecheck.
+                    #   merge-selftest + janitor-selftest + suite-lock-selftest +
+                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   sigil-check + ignore-check + lint + vale + typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
@@ -275,8 +293,11 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   never was — `uncommitted_positions` is, and it is
                                    #   untouched. Uncapped, six copies with three already live
                                    #   offer THREE.
-                                   #   --cap N            send at most N copies of any one
-                                   #                      SKU. Omit for no cap, the default
+                                   #   --cap N            hold this SKU to at most N copies
+                                   #                      LIVE, counting what is already out
+                                   #                      — a SKU at or over N adds nothing
+                                   #                      and the report says by how much.
+                                   #                      Omit for no cap, the default
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
@@ -492,9 +513,16 @@ they must NOT be theme-overridable, which is what moving them into `tokens.css` 
 That file is generated, never hand-edited, and `make docs-audit`'s `logo parity` row reconciles
 it against §9 in both directions — because `raw color` cannot see it at all, its scope being
 `app/src/*.css` and never a `.ts`. **An exception with no reader is how a rule stops being one.** Every token is `--bn-*` — color, type, spacing, radius, elevation, motion, the
-shell's own metrics — and the legacy names the old sheet exported (`--ink`, `--muted`,
-`--line`, `--s1…`, `--r`, `--util`) survive at the bottom as aliases so no stylesheet was
-orphaned. **Write new CSS with `--bn-*`.**
+shell's own metrics. **Write new CSS with `--bn-*`.**
+
+**The legacy aliases at the foot of that file are a migration seam that is already spent, and
+this paragraph said the opposite until 2026-09-07.** It said the old names — `--ink`, `--muted`,
+`--line`, `--s1…`, `--r`, `--util` — "survive so no stylesheet was orphaned", which read as a
+live dependency; `app/src/tokens.css`'s own header went further and said forty stylesheets read
+them. **Measured across all 102 files under `app/src`: not one reads any of the twenty-four,
+against 266 uses of `var(--bn-ink)` alone.** `docs/DESIGN.md` has recorded this correctly since
+2026-09-03 and both of these had drifted from it. They are kept rather than deleted, which is
+that file's stated call — and **a new rule may not read one.**
 
 **Both themes are real.** Light is the default; `:root[data-theme='dark']` redefines every
 surface and ink together, `app/index.html` applies a stored choice before first paint, and the
@@ -780,9 +808,9 @@ A screen is not finished because it compiles.
   to each was *"neither still applies"*.
 
   **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
-  emit options on `#/pricing`'s ship bar. `policy.live_cap` in `inventory/prices.json` survives
-  for a store that wants a standing answer — store-wide, overridable per run through
-  `policy.per_run` — and **reads `None` when nothing has written one**, which is the reversal.
+  emit options on `#/pricing`'s ship bar. **`policy.live_cap` IS DELETED as of 2026-09-08** —
+  `--cap` is the only place a cap is named, and a store still holding the key is refused by
+  name rather than silently uncapped. `policy.per_run` survives for its other four keys.
   It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded
   through `SkuMatch`, `join` and `resolve.load` from the start and no caller ever passed
   anything but the module default. `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is
@@ -982,11 +1010,13 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
 - **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
   a primitive the kit already has is not rewritten in a screen sheet; a screen is verified at
-  1440, 820 and 390, in light and in dark, before it is called done. **This rule replaces
-  `docs/DESIGN.md`'s locked token table as the thing a session designs against** — that table
-  still holds the Fulfillment view's floors, which are unchanged and still asserted by
-  `make design-check`, but its color and type block records a palette the app no longer
-  paints and `make docs-audit` says so on every run.
+  1440, 820 and 390, in light and in dark, before it is called done. **`docs/DESIGN.md` is
+  where that system is written down, and it describes this tree** — it was rewritten for Banchi
+  on 2026-09-03, its token block is the `--bn-*` set, and `make docs-audit`'s `design tokens`
+  row locks every name in both directions. These two paragraphs said the opposite until
+  2026-09-07: that the block recorded a palette the app no longer paints and that the audit
+  "says so on every run". It does not, and did not — the row prints `ok` and has since the
+  rewrite. **A claim that a check is red is worth checking against the check.**
 - **Main moves by pull request. A session never commits to it and never pushes it.**
   Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
   GitHub. `main` then advances in this clone by `git pull` and no other way.
@@ -1255,6 +1285,8 @@ D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
 D120 The shell speaks one brand at every width, and the phone bar is a rail
 D121 The front page says what is owed, and the library is drawn as the work that made it
+D122 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
+D123 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -1386,9 +1418,11 @@ was open** — the rule is renumber your own, never another's.
 - `docs/DESIGN.md` — **two halves, and only one of them still describes this tree.** The
   Fulfillment view's hard constraints table is live, binding and asserted in a browser by
   `make design-check`: 20px body, 32px position labels, a 320px photograph, 44px targets, 7:1
-  contrast, no jargon, and no route out of that view. The token block beside it records the
-  palette and type of the sheet Banchi replaced; `app/src/tokens.css` is the system now, and
-  `make docs-audit`'s `design tokens` row reports the disagreement on every run until the two
-  are reconciled by someone who owns that file.
+  contrast, no jargon, and no route out of that view. **The token block beside it is live
+  too**, and this pointer called it stale until 2026-09-07: it is the `--bn-*` set, rewritten
+  for Banchi on 2026-09-03, and `make docs-audit`'s `design tokens` row reconciles it against
+  `app/src/tokens.css` in both directions on every run — green, not red. That row locks every
+  token NAME and the hex VALUES; the scale numbers beside them are prose, which `docs/DEBTS.md`
+  carries as an open gap.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

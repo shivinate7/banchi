@@ -12,6 +12,26 @@
   display: flex;
   flex-direction: column;
   gap: var(--bn-5);
+  /* THE LIST STOPS BEFORE THE PAGE DOES. Nine of this row's ten tracks are fixed, so every
+     pixel the page gains lands in the card's name and nowhere else. MEASURED at a 1920
+     viewport with the sidebar open, before this line existed: the identity cell was 924px
+     wide while the price field it is deciding — the hero of the row (D49) — was 68px at the
+     far end of that gap.
+     THE FIGURE IS THE INK, NOT A PREFERENCE. Measured over all 67 rows of the demo store at
+     that same viewport: the identity ink reaches 257px at the median and 430px at the 90th
+     percentile, against a 668px cell even after `--bn-page-w-rows`. This row's other tracks
+     are 612px of fixed width and gap, so 1120 leaves the name 444px — past the 90th
+     percentile, with the longest few wrapping as they already do. It is narrower than
+     `--bn-page-w-rows` because Codes needs that width for a six-tile hero and this screen
+     has no such thing. */
+  --bn-page-max: 1120px;
+  /* AND THE SHIP BAR ASKS THIS COLUMN, NOT THE WINDOW. The two rules that used to hide the
+     fine print and wrap the key legend were `@media` widths, so they fired at the same
+     viewport whether the shell had given this screen 1204px or 1376px — a 172px swing they
+     could not see. The bar is a child of `main.pricing` and not of `.pricing-body`, which is
+     why the container is named here rather than reusing `pricing`. */
+  container-type: inline-size;
+  container-name: page;
 }
 
 /* ---- header ---------------------------------------------------------------- */
@@ -986,8 +1006,6 @@
 .pricing-ready { display: inline; font-size: var(--bn-fs-md); line-height: 1.4; color: var(--bn-ink-2); min-width: 0; }
 .pricing-ready .bn-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; }
 .pricing-ready strong { color: var(--bn-ink); font-weight: 600; }
-.pricing-ready-fine { color: var(--bn-ink-3); }
-@media (max-width: 1599px) { .pricing-ready-fine { display: none; } }
 .pricing-ready-warn { color: var(--bn-warn); font-weight: 500; }
 .pricing-ship-says { color: var(--bn-ink-3); }
 .pricing-keys { display: flex; align-items: center; gap: var(--bn-3); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; flex: none; }
@@ -1023,9 +1041,17 @@
    left the lower half out. */
 .pricing-ship-only[data-off='true'] { opacity: 0.42; cursor: not-allowed; }
 .pricing-ship-trouble { flex: 1 1 100%; order: 11; }
-/* under 1400 the legend takes a line of its own beneath the status and the press — the keys are
-   still how the rows that make the run ready get answered; under 1024 there is rarely a keyboard */
-@media (max-width: 1399px) { .pricing-keys { flex-basis: 100%; order: 10; padding-top: 2px; } }
+/* The legend takes a line of its own beneath the status and the press once the bar is too
+   narrow to hold all three — the keys are still how the rows that make a run ready get
+   answered, so they wrap rather than go.
+   IT ASKS THE COLUMN. This was `@media (max-width: 1399px)`, which fired at the same viewport
+   whether the shell had given this screen 1204px or 1376px — a 172px swing a window width
+   cannot see. 1099 is the content width that number meant beside an open sidebar
+   (1399 - 236 - 64), and it is now measured against the column itself, so it is right beside
+   the rail and at any browser zoom.
+   The 1024 rule stays a `@media` on purpose: "there is rarely a keyboard here" is a claim
+   about the DEVICE, not about how much room this column has. */
+@container page (max-width: 1099px) { .pricing-keys { flex-basis: 100%; order: 10; padding-top: 2px; } }
 @media (max-width: 1023px) { .pricing-keys { display: none; } }
 /* the kit's toast stack sits above the ship bar rather than on its primary — a kit gap (`--bn-toast-bottom`) */
 body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + var(--bn-4) + var(--bn-3)); }
@@ -1280,7 +1306,6 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   .pricing-ship-status { flex-basis: 100%; }
   .pricing-ship-act { width: 100%; margin-left: 0; }
   .pricing-ship-act .pricing-emit { flex: 1 1 auto; }
-  .pricing-ready-fine { display: none; }
   .pricing-head .bn-head-actions { position: relative; }
   .pricing-runs-anchor { position: static; }
   /* the picker is a bottom sheet over the tab bar, the way the hold panel is — anchored under the

@@ -1286,23 +1286,11 @@ export type SearchGroup = {
    *  there" reads this field; a screen wanting "how many rows to draw" reads the array. */
   on_hand: number
 
-  /** D7's live quantity cap — 4 today, and configurable there.
-   *
-   *  IT ARRIVES ON THE WIRE, WHICH IS WHAT `Inventory.tsx` SAID WOULD SETTLE IT. That screen
-   *  refuses to draw `2 of 4 live` and says why: `pipeline/join.py:LIVE_QUANTITY_CAP` is a
-   *  configurable Python constant, and writing the 4 in TypeScript is a copy nothing keeps in
-   *  step. The condition it named — "settled by the server reporting the cap" — is met here,
-   *  so a screen holding this group may draw the denominator.
-   *
-   *  NULL IS THE ORDINARY VALUE NOW (D7, rewritten 2026-09-07). The standing cap was retired:
-   *  every copy a run holds that TCGplayer does not already have goes out, and a bound is
-   *  something one send asks for. A screen drawing this must render null as "no cap" rather
-   *  than as a missing number — and `listable` below, which is what a screen usually wants,
-   *  is `on_hand` in that case and stays a plain number. */
-  cap: number | null
 
-  /** What the cap above comes to for THIS SKU — D7's `min(cap, on hand)`, computed by the
-   *  server.
+  /** How many copies of this SKU could be live — WHAT THE SHELF HOLDS, since D7's standing
+   *  cap was deleted (amended 2026-09-08). It was `min(cap, on hand)` while a cap existed,
+   *  and the pair `cap`/`listable` was on the wire so a screen could draw either the rule or
+   *  what the rule permitted here. There is no rule now, so there is one field.
    *
    *  THE DENOMINATOR A SCREEN ACTUALLY WANTS, AND `cap` IS NOT IT. The two differ whenever the
    *  shelf holds fewer than a playset, and that is most of the store: a card the owner has one
@@ -1822,10 +1810,6 @@ export type PricingWorklist = {
    *  fail to draw because one directory predates `pricing.json`. */
   skipped: { run: string; code: string; message: string }[]
   asked: string[]
-  /** The store's STANDING cap, or null for none — which is ordinary since D7 was rewritten.
-   *  Not the cap a send applies: that one is typed on the ship bar and travels on the emit
-   *  request, so nothing here can report it. Advisory; no screen reads it today. */
-  live_cap: number | null
   /** The two run-wide figures a row is drawn against, off the newest run in the list. Null
    *  where no table could be read, which the screen falls back on rather than blanks. */
   threshold: string | null
