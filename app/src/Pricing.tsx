@@ -899,23 +899,30 @@ export function Pricing() {
      Blank means no cap, which is what the placeholder says, so the empty state reads as a
      choice rather than a gap. It sits with the emit options because it is the same kind of
      answer — a thing THIS press does differently — and not on the deck, which holds STANDING
-     policy. */
+     policy.
+
+     IT IS A CEILING ON COPIES LIVE, NOT A SEND QUANTITY, and the label said the opposite for
+     a day (D7, amended 2026-09-08). `add_to_quantity` is `live_cap - copies_out`, so a SKU
+     with seven already out and a figure of four adds NOTHING — correct for a ceiling and
+     absurd under "at most 4 of each card", which is what this read. Measured on a ten-copy
+     SKU with seven out: every figure from 1 to 7 wrote no row. The wording is the fix; the
+     arithmetic is D59's and is right. */
   const capField = (
     <label className="pricing-ship-cap">
-      at most
+      hold to
       <input
         className="bn-input pricing-ship-cap-input"
         type="text"
         inputMode="numeric"
-        placeholder="all"
-        aria-label="Send at most this many copies of any one SKU"
+        placeholder="no cap"
+        aria-label="Hold each SKU to at most this many copies live at TCGplayer, counting what is already out"
         value={sendCap}
         onChange={(event) => {
           const text = event.currentTarget.value
           if (/^\d{0,3}$/.test(text)) setSendCap(text)
         }}
       />
-      of each card
+      live per card
     </label>
   )
   /* THE FIGURE THIS PRESS ASKS FOR, or null for none. Parsed in one place because two callers

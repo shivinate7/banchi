@@ -117,6 +117,16 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **The merge also took the wrong cap, and that was not a typing error.** `max` returns the LOOSEST bound, so a send spanning a run held to 2 and a run at 4 offered 4 — discarding the more conservative answer on the one path that exists to be conservative, and the opposite of every other cross-run rule in that module. `_merged_cap` takes the smallest cap any leg names, and `None` never outranks a figure: the absence of a bound is not a large one.
 
+**THE FIGURE IS A CEILING ON COPIES LIVE, AND EVERY LABEL SAID OTHERWISE FOR A DAY (amended 2026-09-08).** `add_to_quantity` is `live_cap - copies_out`, which is D59's arithmetic and is right: a SKU with seven copies already at TCGplayer and a figure of four adds **nothing**. The control shipped reading *"at most N of each card"* and `--cap N` read *"send at most N copies"* — both of which describe a send quantity, which is a different control. Measured on a ten-copy SKU with seven out: **every figure from 1 to 7 wrote no row at all**.
+
+**The mismatch was survivable only while the cap was standing.** A bound of four sitting over everything kept `copies_out` near it, so the two readings agreed in practice. Making the cap per-send made uncapped the default, so `copies_out` grows with every press and the subtraction answers zero for any SKU that has ever been sent — the ordinary case rather than the corner.
+
+**The operator was asked which control they wanted and chose the ceiling**, having first picked the send-quantity reading on an estimate of implementation cost that was wrong: the ceiling needed four label edits and no test changes, while the send quantity needed one arithmetic line and **19 harness assertions rewritten**, because D59's tests encode the ceiling throughout. The estimate was corrected and the choice retaken; the wording is the fix and the arithmetic was never in question.
+
+**`min` WAS HIDING THE ONE FIGURE THAT EXPLAINS A REFUSAL.** `nothing_to_add` printed `min(copies_out, live_cap)`, so five copies out against a cap of two read as *"2 of the 2 this SKU may have out"* — true about the cap, false about the store, on the row whose entire question is why nothing is going out. The original argument was that *"6 of the 4 is not a sentence"*; that is a reason to WORD an overrun, not to suppress it. Both arms now name it: *"5 live, over the 2 this send asked for"*, and *"5 already out against the 2 this send asked for"*.
+
+**A merged send names what it dropped, which it did only in the total case.** `MergedSku.rows()` filters `add_to_quantity == 0` out of the file, and `cli/cmd_emit.py` printed the dropped list only inside `if not rows:` — so a partial capped send wrote the file, reported `import  10 row(s)` and named the other forty nowhere. The single-run path had a `no room` block doing exactly this and the two had simply diverged. That was the silent drop `CLAUDE.md` forbids by name, reachable from the ordinary press.
+
 **Asked for at `emit` and not at `join`, deliberately.** `join` reports what the shelf holds; `emit` writes the file. A cap named at join time would be a promise a later emit could quietly break, which is the join/emit disagreement this entry's own `--split-threshold` history already paid for once.
 
 **"Configurable" became true on 2026-09-06, and it had been a promise with no reader for the whole life of this entry.** The parameter was threaded from the start — `SkuMatch.live_cap`,
@@ -7245,113 +7255,3 @@ The copies list is what absorbs the difference because it is the only part of th
 **A copy an open order was waiting on still moves the panel's contents by 46px when it is sold**, because `wantedOf` names only copies that are still on hand and the claim line goes with it. That is `Inventory.tsx`'s own documented behaviour — a pulled copy already reads `Sold` — and reserving 46px of blank on every unclaimed card to hold a line that is usually absent would be padding rather than stability. **Nothing outside the panel moves for it**, which is the floor this entry actually sets.
 
 **What would reopen this**: a card whose copies list is long enough that one and a half visible rows is the wrong trade, or an operator who would rather the panel grew than scrolled.
-## D119 — The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
-
-**Built 2026-09-07, on the owner's verdict about their own screen.** `#/inventory`'s card
-detail drew the copy the walk was standing on **twice**, about 150px apart, in two different
-registers: a `LOCATION` hero panel with a 40px address, its own position bar and a solid
-`Mark sold`; and again as the first row of *Every copy of this card*, where its bar was
-deliberately suppressed so the two lenses would not read as a rendering fault.
-
-Their words: *"I actually really hate this new setup where it highlights the current card in
-picture separately from the other copies. It's unintuitive. I want for Card 1 to have the exact
-same layout as cards 36 and 91 below it, frankly the entire top right blurb box can be
-deleted."*
-
-**The code had already conceded it.** `Inventory.tsx`'s own comment called the duplication "the
-trade", and what the trade bought was emphasis on a copy the UI elsewhere refuses to recommend
-— `CardLocations.css` says the current row's rail is neutral "deliberately not *take this
-one*". Emphasis nobody asked for, paid for in a second register.
-
-### What the deletion is, and what it is not
-
-`LocationCard` is gone. `noBar` drops its `current` term, so the copy the walk stands on draws
-its bar like every other row; **`goesTo` keeps its `current` term** (D45 — a walk-to on the row
-the walk already stands on goes nowhere). What marks that row is a `Viewing` pill in the cell
-every other row uses for its own pills, and a neutral rail. **The pill and the rail were put to the owner and kept**: with no hero, they are the only thing tying the ~450px photograph on the
-left to a row, and they change no part of the row's shape.
-
-**Nothing the hero drew is lost.** The `Wanted` claim, the pooled marker, `Mark sold` and
-`Retire` were already on every row; the box name moved from a separate element into the
-address itself, as `PositionLabel`'s `boxNote` — which is what every other row has always
-drawn. The missing-position-label `Notice` was **dropped rather than relocated**, and only
-after checking it could fire: `do_inventory` omits the flat label and the `place` block
-together, so that record arrives as `place === undefined`, which the lone-copy branch already
-names by key.
-
-### The card with no SKU and no name is a one-copy list, not a second panel
-
-`GET /search` matches on SKU or name and refuses an empty query, so a card the pipeline has
-never identified cannot be reached at all — that branch rendered the hero and a bare notice,
-and deleting the hero would have left it an explanation with no address, no bar and no doors.
-It builds the group instead: `Inventory.tsx:loneGroup`, shaped **field for field to be the answer `capture_server.py:do_search`'s own loose branch would have given** over a bag of one.
-`listable` stays what the server would send and is **not** rewritten to 0 — the client does not
-get to disagree with the store about a number the store computes. What changes is the
-**sentence**: a group with no SKU draws no live figure and no `Pushed · Staged · headroom`
-line, because `emit` has written no listing record and every one of those numbers is a
-structural zero under a `Room for 1 more live` nothing can keep. Derived from `sku` rather than
-passed as a prop, so it also reaches the 65 name-but-no-SKU cards already arriving through the
-search path's loose bag.
-
-**The measurement that decided the shape of this, and it corrects a stale one.**
-`app/tests/inventory.spec.ts` carried *"629 of 682 records are captured-and-never-identified —
-92% — … the branch 92% of the store draws through"*, and argued for coverage on it. Read out of
-`inventory/store.sqlite` on 2026-09-07: **1,625 cards, 1,553 carrying a SKU, 65 with a name and no SKU, and 7 with neither** — four tenths of one percent. The figure was true when written,
-against a store the pipeline had not yet run over. The branch is a real edge case and still
-worth its case; what it is not is the common screen, and the spec's title and comment now say
-the measured thing.
-
-### The undo lands where the sale was pressed, and it fits the slot D118 reserved
-
-A sale's undo — the draining twenty-second clock and the `Undo` — was the hero's alone; the row got a bare `Undo` with no clock. With the hero gone the row is where a sale is taken back, so the clock came with it (the owner: *"it'd be a shame to lose that animation work"*).
-
-**What could not come with it is the panel, and D118 is why.** That entry reserved `.card-locations-action` at the button pair's own 137x28 precisely so a press cannot resize the slot it lands in. The kit's `.bn-receipt` is ~268px wide and 36px tall and fits neither way, and both were measured on this branch rather than reasoned about: **given a grid row of its own it grew the row from 175px to 213px on the press** — main's own stability case caught it by name — and put in the action cell it grows the cell and shoves the address, which `CardLocations.css` forbids against D40's 231px wrap point.
-
-**So the row draws the clock and the button, at the size the buttons already were.** The sentence is not lost and is not duplicated: the state pill two cells to its left already reads `Sold`, and the toast this sale posted carries `Marked sold.` with the same clock and the same `Undo`. The drain's track is a **token** here where `kit.css` paints it as a white alpha — correct on an inverted panel, invisible on a row sitting on `--bn-surface`.
-
-`primary` survives as a **size**, not a shape, and it is now exactly one thing: the phone's sticky action bar, which has no state pill beside it and so still draws the whole receipt.
-
-**This is the second design this branch built for the receipt.** The first — a grid row under `:has(.bn-receipt)` — was written, looked at, and shipped nothing, because D118 landed on main while this branch was open and made it a defect. The measurement that killed it is recorded above rather than the design being quietly replaced.
-
-### What was measured and refused
-
-The right column loses roughly 235px flat: the hero's ~300px and its gap come out, and the
-current row gains ~81px back from the bar it now draws. The photograph is unchanged. **No balance fix was taken.** Shrinking the photo column is what D32 and D38 spend the pixel budget
-against — D38 *raised* it on the owner's own ask — and padding the void is the defect D40
-measured at 41.99%. The visible consequence is a ragged bottom under a one-copy card at a pane
-of 560px or more, which is the honest cost of removing content rather than a thing to fill.
-
-### What D71 loses, and where it went instead
-
-`.inventory-location-label` was one of `PositionLabel`'s site rules and **the last renderer in the product of `lead='path'` with a `.position-void`** — the combination its re-rank fires
-under. The copies list, the order picker and the walk are all `lead='slot'`. Re-pointing that
-assertion at the row would have compared 11px against 11px and passed for the wrong reason, so
-it moved to `app/tests/gallery.spec.ts`, where the two specimens sit side by side and the kit
-sheet is now the rule's only renderer. **D71 itself is not edited**: its "five sites" is a
-2026-08-30 measurement, and measurements are not rewritten to match a later tree.
-
-**Moving it found the sheet had never drawn the rule.** `.kit-poslabel` set `--pos-slot` without
-the `font-size: var(--pos-slot)` every real site pairs with it, so the re-rank's `0.45em`
-resolved against an inherited 14px and clamped to exactly the 11px a live path gets — the
-departed specimen was drawn identically to the live one, on the page whose job is drawing the
-difference. Fixed in `Gallery.css`, and now asserted.
-
-### What is not weakened
-
-`the copies of a card cannot be positioned by the pipeline console` guarded "the answer is above
-the fold" against `.inventory-location`; the answer is the current ROW now, and it re-points.
-`a copy row draws how far into the box AND how far into the section` counted **two** position
-bars — one hero, one list — and the total is still two for a two-copy card, for an entirely
-different reason; a total cannot tell "one per row" from "two on one row", so the claim is now
-per row with the total asserted after it. Both were observed red under their mutations before
-being kept, along with the two new gallery claims, the relocated re-rank, and the no-SKU list.
-
-**One assertion was written and then removed for failing that test.** A `Walk to` count of zero
-on the lone-copy branch stayed green when `onGoTo` was threaded onto it, because `OwnerRows`
-suppresses the walk-to on the current row anyway and the lone copy is always the current one. It
-is replaced by a comment saying so and pointing at the case that can fail: D45's real claim needs
-a group with more than one copy in it.
-
-**What would reopen this**: an operator who wants the address readable at arm's length while
-standing at the boxes. That is the one thing the hero did that a 22px row does not, and it is
-named here as the cost of the deletion rather than as a reason to keep a split hierarchy.
