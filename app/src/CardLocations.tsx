@@ -300,13 +300,18 @@ function OwnerRows({
 
           /* The walk-to for THIS copy, or null when there is nowhere to send anyone. */
           const goesTo = onGoTo === undefined || pooled || current ? null : () => onGoTo(copy)
-          /* No bar for a pooled copy (a count has no place), a departed one (a bar cannot draw
-             a card that is in no place) — or the copy the walk is STANDING ON, whose lens is
-             already drawn full size in the location card ~150px above this list, with the same
-             `#N of M` caption under it. Two identical bars a screen apart read as a rendering
-             fault, not as hero-and-list. The row itself stays, in full, with its own controls:
-             what goes is the duplicate widget, not the row. */
-          const noBar = pooled || departed || current
+          /* No bar for a pooled copy (a count has no place) — or for the copy the walk is
+             STANDING ON, whose lens is already drawn full size in the location card ~150px above
+             this list, with the same `#N of M` caption under it. Two identical bars a screen
+             apart read as a rendering fault, not as hero-and-list. The row itself stays, in
+             full, with its own controls: what goes is the duplicate widget, not the row.
+
+             A DEPARTED COPY IS NO LONGER ON THAT LIST (D118). It used to be, on the reasoning
+             that a bar cannot draw a card that is in no place — true of the MARK and not of the
+             lens, which draws the BOX. Dropping the row cost this list a line's height at the
+             moment a sale landed, so every row beneath the sold one moved under a pointer that
+             had just pressed. The bar stays and the mark falls out of it instead. */
+          const noBar = pooled || current
 
           return (
             <li

@@ -1215,6 +1215,7 @@ test('a card with no name and no SKU still offers both doors', async ({ page }) 
 function sellableStore(): {
   store: Store
   sell: (key: string) => void
+  depart: (key: string) => void
   unsell: (key: string) => void
 } {
   const cards: Cards = Object.fromEntries(
@@ -1231,6 +1232,33 @@ function sellableStore(): {
        after an undo as well as after a sale, so a stub that stayed sold hands the re-read a card
        the server has just put back — and the row would go on offering `Undo` for a copy that is
        on the shelf. */
+    /* AND THE PLACE THE STORE REWRITES WITH IT (D118). `sell` moves `state` and nothing else,
+       which is what every case before this one needed — but the server does more than that: a
+       departed copy comes back with `slot` and `card` null and `join.departed_label` in place of
+       the address (D58, D68), and `card()` above builds that shape at construction time from the
+       state it was handed. So a fixture that only moved `state` served a SOLD card that was
+       still in its slot, and every case measuring what the sale does to the panel was measuring
+       a state the server cannot produce. It cost the stability case its whole subject: deleting
+       the departed lens outright left it green.
+
+       SEPARATE FROM `sell` ON PURPOSE. The cases that came first assert on the row and the
+       receipt, both of which are answered by the optimistic overlay before any re-read lands,
+       and re-shaping the place under them would be changing what they test to fix a different
+       case. A caller that wants the whole write calls both. */
+    depart: (key) => {
+      const held = cards[key]
+      if (held === undefined) return
+      const place = held.place
+      const gone = {
+        ...place,
+        label: `Box ${place.box} · departed · B${place.box} #${place.index}`,
+        slot: null,
+        card: null,
+        fraction: null,
+      }
+      cards[key] = { ...held, label: gone.label, place: gone }
+      delete (cards[key] as { card?: number }).card
+    },
     unsell: (key) => {
       const held = cards[key]
       const before = was.get(key)
@@ -1284,6 +1312,159 @@ test('one press marks a copy sold, with no panel in between', async ({ page }) =
      that is not rendered has to be deliberately re-added. */
   await expect(page.locator('.bn-scrim')).toHaveCount(0)
   await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+})
+
+/* ---------------------------------------------------------------------- the stability floor
+ *
+ * A PRESS CHANGES WHAT IS ON THE SCREEN. IT MAY NOT CHANGE WHERE THE REST OF IT IS.
+ *
+ * The owner's report, 2026-09-07: "I am getting a lot of screen shake when I am in inventory and
+ * am marking something sold, things should not be moving around when I hit buttons". D118 is the
+ * entry. `cursor.spec.ts` carries the half of the floor that can be read off the stylesheets — a
+ * hover or a press that re-lays out a control — and it CANNOT see this half, because nothing here
+ * is a CSS rule: it is what the panel does when the write lands.
+ *
+ * MEASURED BEFORE ANY OF IT WAS FIXED, at 1440x900 against a seeded store: one press of
+ * `Mark sold` collapsed the card panel by 98px and moved 131 elements, and stepping the walk from
+ * one card to the next moved 39, 66 or 98px depending on the two cards. Three things were doing
+ * it and all three are now reserved — the position lens a departed copy stopped drawing (85px),
+ * the action slot whose button pair became a 22px pill (18px), and the copies list whose length
+ * is the card's rather than the box's.
+ *
+ * THE ANCHORS ARE OUTSIDE THE PANEL ON PURPOSE. What a press is allowed to change is what it
+ * wrote; what it may never do is move the things a person was not looking at. So this sweeps
+ * everything that is NOT inside the card panel and requires it to be where it was, and asserts
+ * the document's own height on top — the one number that catches a change nothing else sees. */
+
+/** Every element outside the card panel, by a stable id, with its box. Fixed-position furniture
+ *  is skipped: the toast stack a receipt posts to is `position: fixed`, so it is over the page
+ *  rather than in it, and a receipt arriving is the whole point of the press. */
+async function outsideThePanel(page: Page): Promise<Record<string, string>> {
+  return await page.evaluate(() => {
+    const out: Record<string, string> = {}
+    /* A COUNTER RESTARTING AT ZERO EACH SWEEP HANDS AN ID TWICE. The second sweep numbers the
+       elements it has to stamp from 0 again, so a node created by the press collides with one
+       the first sweep had already stamped, and the report pairs two unrelated elements. */
+    const stamp = () => `n${Math.random().toString(36).slice(2)}`
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+      if (el.closest('.browse-card') !== null) continue
+      let fixed = false
+      for (let a: HTMLElement | null = el; a !== null && a !== document.body; a = a.parentElement) {
+        if (getComputedStyle(a).position === 'fixed') { fixed = true; break }
+      }
+      if (fixed) continue
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) continue
+      if (el.dataset.stableId === undefined) el.dataset.stableId = stamp()
+      const cls = typeof el.className === 'string' && el.className !== '' ? `.${el.className.trim().split(/\s+/)[0]}` : ''
+      /* VIEWPORT COORDINATES, WITH THE SCROLL PINNED BY THE CALLER — and both halves of that are
+         load-bearing. Playwright scrolls a control into view before clicking it, so a sweep taken
+         before that scroll reports all 192 elements as moved and says nothing about the press;
+         switching to DOCUMENT coordinates does not fix it either, because the sidebar and the
+         shell are `position: sticky` and move the other way by the same amount. The case scrolls
+         the control into view first and then asserts the scroll did not move, which makes the
+         viewport and the document agree for the duration. */
+      /* POSITION AND HEIGHT, AND DELIBERATELY NOT WIDTH. What the owner reported is things
+         MOVING, and a width is only a move when it takes something with it — which shows up as
+         that thing's own `x` changing and is caught. The one case that is neither is the walk
+         row's name: selling a copy widens the slot prefix from `#1` to `B2 #1` and adds a badge,
+         so the name's `1fr` cell narrows from 183px to 163px while its left edge, its baseline
+         and its height all hold. It is `white-space: nowrap` with an ellipsis, so nothing in it
+         moves; a longer name simply clips one word sooner, which is the row carrying more
+         information rather than the page shaking. */
+      out[el.dataset.stableId] = `${el.tagName.toLowerCase()}${cls} @ ${Math.round(r.x)},${Math.round(r.y)} h${Math.round(r.height)}`
+    }
+    return out
+  })
+}
+
+function whatMoved(before: Record<string, string>, after: Record<string, string>): string[] {
+  const moved: string[] = []
+  for (const [id, was] of Object.entries(before)) {
+    const now = after[id]
+    if (now === undefined || now === was) continue
+    moved.push(`${was}   ->   ${now}`)
+  }
+  return moved
+}
+
+test('the press that sells a copy moves nothing outside the panel it lands in', async ({ page }) => {
+  const { store, sell, depart } = sellableStore()
+  await open(page, BOXES, store)
+
+  /* Bring the press into view BEFORE the sweep, so the click itself does not scroll. */
+  const row = copyRow(page, CARD_1)
+  const press = row.getByRole('button', { name: 'Mark sold' })
+  await press.scrollIntoViewIfNeeded()
+
+  const before = await outsideThePanel(page)
+  const height = await page.evaluate(() => document.documentElement.scrollHeight)
+  const at = await page.evaluate(() => window.scrollY)
+
+  /* AND THE TWO BOXES INSIDE THE PANEL THAT THE WRITE ITSELF REDRAWS. The sweep above cannot see
+     these — the panel holds one height (D118), so anything that changes inside it moves nothing
+     outside it — and they are where the defect actually was: the location card lost its position
+     lens (85px) and its button pair became a 22px pill (18px), and the copy row lost its lens and
+     its action slot. Mutating either fix passes the sweep and fails here, which is the whole
+     reason both are asserted. */
+  const location = page.locator('.inventory-location')
+  const locationBox = await location.boundingBox()
+  const rowBox = await row.boundingBox()
+
+  await press.click()
+  sell('2/1')
+  depart('2/1')
+  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+
+  /* AND THE RE-READ, WAITED FOR RATHER THAN ASSUMED. The receipt is optimistic — it is drawn from
+     `soldKeys` in the same continuation as the write — so measuring on it alone measures a frame
+     in which the store has not answered yet and the copy is still placed. The lens turning
+     departed is the re-read landing, and it is the state whose height the case is actually about:
+     without this wait, deleting the departed lens outright leaves this case green. */
+  await expect(page.locator('.inventory-location .position-bar')).toHaveAttribute('data-gone', 'true')
+
+  /* The panel itself keeps its height, which is what everything below it is standing on. */
+  const band = page.locator('.browse-band')
+  const after = await outsideThePanel(page)
+  const moved = whatMoved(before, after)
+  expect(moved, `${moved.length} elements outside the panel moved on the press:\n${moved.slice(0, 12).join('\n')}`)
+    .toHaveLength(0)
+  expect(await page.evaluate(() => document.documentElement.scrollHeight),
+    'the page changed height on a press').toBe(height)
+  expect(await page.evaluate(() => window.scrollY),
+    'the page scrolled under the press').toBe(at)
+  await expect(band).toBeVisible()
+
+  expect(Math.round((await location.boundingBox())?.height ?? -1),
+    'the location card changed height on the press').toBe(Math.round(locationBox?.height ?? -2))
+  expect(Math.round((await row.boundingBox())?.height ?? -1),
+    'the copy row changed height on the press').toBe(Math.round(rowBox?.height ?? -2))
+})
+
+test('the card panel holds one height for the whole walk', async ({ page }) => {
+  await open(page)
+  await expandAll(page)
+
+  /* THE FIXTURE BOX HOLDS BOTH KINDS, WHICH IS WHY THIS CASE CAN FAIL AT ALL. Two of its seven
+     records have left — card 4 sold, card 5 retired — so the walk crosses a departed copy and a
+     placed one, which is exactly the pair whose lens differed by 85px. A box of live cards alone
+     would pass this with the defect still in it. */
+  const rows = page.locator('.browse-row')
+  const count = await rows.count()
+  expect(count, 'the walk drew no cards — the fixture is not the subject').toBeGreaterThan(4)
+
+  const heights: string[] = []
+  for (let i = 0; i < count; i++) {
+    await rows.nth(i).click()
+    await expect(page.locator('.browse-band')).toBeVisible()
+    const box = await page.locator('.browse-band').boundingBox()
+    const label = (await rows.nth(i).getAttribute('aria-label')) ?? `card ${i + 1}`
+    heights.push(`${Math.round(box?.height ?? -1)}  ${label}`)
+  }
+
+  const distinct = [...new Set(heights.map((h) => h.split('  ')[0]))]
+  expect(distinct, `the panel took ${distinct.length} different heights across the walk:\n${heights.join('\n')}`)
+    .toHaveLength(1)
 })
 
 test('the row that sold the copy becomes the way to take it back', async ({ page }) => {
@@ -1891,7 +2072,7 @@ test('the card with no group gets both depths too — it is most of the store', 
   await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
 })
 
-test('a sold card with no group is ranked too, and draws no bar', async ({ page }) => {
+test('a sold card with no group is ranked too, and its lens keeps the box but loses the mark', async ({ page }) => {
   /* THE THIRD SCREEN THAT RENDERS "ONE COPY AND WHERE IT IS", AND THE ONE D68 MISSED (D71).
    * That entry deleted an empty track captioned `where this sits in the box is not known yet`
    * from the copies list, on the grounds that a bar cannot draw a card that is in no place and
@@ -1931,8 +2112,20 @@ test('a sold card with no group is ranked too, and draws no bar', async ({ page 
   await expect(page.locator('.inventory-location-label .position-void')).toHaveCount(1)
   await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
 
-  /* AND NO BAR, which is D68's ruling reaching its third screen. */
-  await expect(page.locator('.inventory-location .position-bar')).toHaveCount(0)
+  /* AND THE LENS, DRAWN AS A COPY THAT HAS LEFT (D118, amending D68). This assertion read
+     `toHaveCount(0)` until the owner reported the screen shaking under the sale, and what was
+     shaking was this: 85px of lens disappearing on the press collapsed the panel by 98 and moved
+     131 elements. D68 deleted an EMPTY TRACK captioned `where this sits in the box is not known
+     yet` — a measurement that had failed — and what stands here now is not that object. The
+     section the copy left is drawn, the caption says `no longer in the box`, the second scale
+     says the copy is in none of the section's slots, and the mark that would lie about a
+     position is the one thing removed. D68's ruling was about drawing a card where it is not;
+     this draws the box, which is still there. */
+  const lens = page.locator('.inventory-location .position-bar')
+  await expect(lens).toHaveCount(1)
+  await expect(lens).toHaveAttribute('data-gone', 'true')
+  /* Both scales, both unmarked — the box track and the section track it zooms into. */
+  await expect(lens.locator('.position-bar-marker[data-gone]')).toHaveCount(2)
 })
 
 test('a departed card draws no number, and the cards behind it count past it', async ({
@@ -1998,7 +2191,10 @@ test('a departed card draws no number, and the cards behind it count past it', a
   await expect(panel).toHaveCount(1)
   await expect(panel).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
   await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
-  await expect(page.locator('.inventory-location .position-bar')).toHaveCount(0)
+  /* The lens stays and its mark leaves (D118, amending D68) — see the case above for the whole
+     argument. What this case is about is the LABEL, and the lens is asserted here only so a
+     later change cannot take it away again without one of these two saying so. */
+  await expect(page.locator('.inventory-location .position-bar[data-gone]')).toHaveCount(1)
 
   /* NO FIGURE AT ALL, WHICH IS D58 AND D68 IN ONE ASSERTION. D58 refuses the slot number for a
    * card that has left; D68 adds that the store key must not take that number's place. Both are
@@ -4410,10 +4606,15 @@ test('two departed copies of one card draw two different rows', async ({ page })
    * the card having been sold, and which disagrees with the walk about the same card: that
    * screen has omitted the bar for a departed row since D58. Where those copies sat is known
    * exactly; it is the neighbours line still drawn above this. */
-  await expect(gone.locator('.position-bar')).toHaveCount(0)
+  /* Both rows keep a lens, both with the mark gone (D118, amending D68): a departed ROW that
+     lost its bar lost a line's height at the moment a sale landed, so every row under the one
+     just sold moved under the pointer that had pressed it. */
+  await expect(gone.locator('.position-bar[data-gone]')).toHaveCount(2)
+  await expect(gone.locator('.position-bar-marker[data-gone]')).toHaveCount(4)
 
-  /* The live copies keep theirs, so the case cannot pass by the bar disappearing everywhere. */
+  /* The live copies keep theirs UNMARKED, so the case cannot pass by every bar reading departed. */
   await expect(page.locator('.card-locations-row .position-bar').first()).toBeVisible()
+  await expect(page.locator('.card-locations-row .position-bar:not([data-gone])').first()).toBeVisible()
 })
 
 /** A box past 999 cards. The owner's largest holds 723 and he says a thousand is imminent, so
