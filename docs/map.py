@@ -659,7 +659,7 @@ COMPONENTS = [
                                      "physical ceiling. Measured: 405 of 443 SKUs read live 0 "
                                      "while carrying pushed copies, and the cap arithmetic went "
                                      "from seeing 93 live copies to 1,079.",
-                             "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87"],
+                             "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87", "D109"],
                              "tested_by": ["T7"]},
             "reprice.py": {"does": "which live listings are not selling, and what each would be "
                                    "re-priced to (D100). Pure — no I/O, no store import, no "

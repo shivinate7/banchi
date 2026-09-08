@@ -6390,6 +6390,11 @@ be stored beside the stamp and arbitrated. D87's "newer wins" does not generalis
 is a quantity both parties observe, and an asking price is an instruction of ours as executed
 by them, which are not two readings of one fact.
 
+**THE RECORD IT CREATES COULD NOT BE SETTLED WHEN THE LISTING SOLD OUT (amended 2026-09-08).** Every record this entry writes carries `pushed = 0` — correct, because this pipeline sent none of it — and `pipeline/livecheck.py` bucketed on `claim`: a row at `claim == 0` reached `beyond` only `if live > 0`, so one reading **zero** fell into no bucket at all. `cli/cmd_reconcile.py` builds `settling` from `agreed + unexplained + beyond`, so `observe_live` was never called and the stored reading stood forever.
+
+**It took two exports to see, which is why it shipped.** The first records the listing; the second is where it goes wrong. On the owner's own book that is 47 live SKUs holding 127 copies — 26 of one booster pack — every one of which the first `--write` would have armed.
+
+**`row.ledger_live > 0` is the condition, and it is not `if True`.** A SKU neither side has anything on, reading zero, is genuinely nothing to say and still falls through; what earns a line is the store believing something the export contradicts. `beyond`'s printed sentence covers both directions now — it said "holds more than this pipeline ever sent", which is false of a row at zero.
 ## D110 — A hover is an alpha, because the same paint over three grounds is three different hovers
 
 **Built 2026-09-06, on the owner's question about the dark sidebar** — *"is that lighter grayish

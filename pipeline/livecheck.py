@@ -186,9 +186,22 @@ def compare(
                 report.unknown.append(row)
             continue
         if row.claim == 0:
-            # The store knows the SKU but never pushed it — withheld, sub-threshold, or not
-            # yet emitted. A live quantity here came from somewhere else.
-            if live > 0:
+            # The store knows the SKU but never pushed it — withheld, sub-threshold, not yet
+            # emitted, or listed by hand and recorded by D109. Its quantity came from
+            # somewhere this pipeline cannot see, in EITHER direction.
+            #
+            # `ledger_live` IS THE HALF THAT WAS MISSING, and its absence was a trap D109
+            # armed rather than sprang. A row at `claim == 0` and quantity 0 fell through to
+            # no bucket at all — not `agreed`, not `beyond`, not `unknown`, not `absent` — so
+            # `settling` never held it and `observe_live` was never called for it. Every
+            # record D109 creates has `pushed = 0` by design, so the first `--write` over the
+            # owner's export made 43 of them: the day any one sold out, its stored `live`
+            # became unsettleable and every later reconcile skipped it in silence.
+            #
+            # THE STORE HAVING A READING IS WHAT MAKES IT WORTH SETTLING. A SKU nobody has
+            # ever recorded, reading zero, is genuinely nothing to say — that is the `continue`
+            # below, and it is why this is not simply `if True`.
+            if live > 0 or row.ledger_live > 0:
                 report.beyond.append(row)
             continue
         if live > row.claim + row.sold:

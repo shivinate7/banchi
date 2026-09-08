@@ -11717,6 +11717,100 @@ def check_merged_cap_is_the_tightest(checks: Checks) -> None:
     )
 
 
+def check_unsent_listing_sells_out(checks: Checks) -> None:
+    """A listing this pipeline never sent, selling out, is settled — the hole D109 armed.
+
+    THE TRAP TAKES TWO EXPORTS TO SPRING, which is why nothing caught it. `reconcile --live`
+    records a SKU TCGplayer holds that this store never sent (D109), and every record it makes
+    carries `pushed = 0` by design — `pushed` is the cumulative count of what THIS pipeline
+    wrote, and it wrote none of these. `pipeline/livecheck.py` then bucketed on `claim`:
+
+        if row.claim == 0:
+            if live > 0:
+                report.beyond.append(row)
+            continue
+
+    so a row at `claim == 0` reading quantity 0 landed in NO bucket — not `agreed`, not
+    `beyond`, not `unknown`, not `absent`. `cli/cmd_reconcile.py` builds `settling` from three
+    of those, so `observe_live` was never called and the stored reading stood forever. The
+    first export writes the record; the SECOND is where it goes wrong, and a single-pass case
+    cannot see it.
+
+    MEASURED ON THE OWNER'S OWN BOOK: their export carries 47 live SKUs this pipeline never
+    sent, holding 127 copies — 26 of one booster pack alone. The first `--write` would have
+    armed this on every one of them.
+
+    WHAT IS NOT SETTLED IS UNCHANGED. A SKU nobody has ever recorded, reading zero, is still
+    nothing to say and still falls through — `row.ledger_live > 0` is what separates "the
+    store believes something about this" from "neither side has anything".
+    """
+    checks.note("")
+    checks.note("UNSENT LISTING — sold out at TCGplayer, and the store hears about it")
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, [(3, 1, "Articuno", "161", None)])
+        stranger = "7654321"
+
+        # A LIVE EXPORT CARRYING ONE ROW THIS STORE HAS NEVER SEEN, built from the run's own
+        # so every column is the real shape. `write_export` cannot serve here — it emits the
+        # three seam SKUs and nothing else, and the whole case is about a SKU that is not one
+        # of them.
+        source = tcgcsv.read_export(run_dir.path("export.csv"))
+
+        def live_file(name, quantity):
+            row = dict(source.rows[0])
+            row[tcgcsv.SKU_COLUMN] = stranger
+            row[tcgcsv.LIVE_QUANTITY_COLUMN] = str(quantity)
+            path = run_dir.path(name)
+            tcgcsv.write_csv(path, source.header, [row])
+            return path
+
+        # PASS ONE: TCGplayer holds three of a SKU this store never sent. D109 records it.
+        command(checks, "reconcile", "--live", str(live_file("live-1.csv", 3)), "--write")
+        recorded = Store().read().inventory.listings.get(stranger)
+        checks.equal(
+            (getattr(recorded, "live", None), getattr(recorded, "pushed", None)),
+            (3, 0),
+            "D109 RECORDS IT: `live` is the export's reading and `pushed` stays 0, because "
+            "this pipeline sent none of it. That zero is what puts the row in the arm the "
+            "defect lived in",
+        )
+
+        # PASS TWO: it has sold out. The export still carries the row, at zero — which is
+        # what a real My Pricing export does: 372 of the owner's 772 rows read zero.
+        said = command(checks, "reconcile", "--live", str(live_file("live-2.csv", 0)), "--write")
+        settled = Store().read().inventory.listings.get(stranger)
+        checks.equal(
+            getattr(settled, "live", None),
+            0,
+            "AND SELLING OUT REACHES THE STORE. This is the assertion the hole fails: the row "
+            "fell into no bucket, `settling` never held it, and the store went on believing "
+            "three copies were for sale — on a listing it could not have sold, because it "
+            "never sent it",
+        )
+        checks.ok(
+            stranger in said,
+            "and the SKU is named in the report rather than settled in silence — a quantity "
+            "moving on a listing this pipeline does not manage is exactly the thing the "
+            "operator cannot find out any other way",
+        )
+
+        # AND THE OTHER HALF OF THE CONDITION, which is why it is not `if True`.
+        never = dict(source.rows[0])
+        never[tcgcsv.SKU_COLUMN] = "9999999"
+        never[tcgcsv.LIVE_QUANTITY_COLUMN] = "0"
+        empty = run_dir.path("live-3.csv")
+        tcgcsv.write_csv(empty, source.header, [never])
+        said = command(checks, "reconcile", "--live", str(empty), "--write")
+        checks.ok(
+            "9999999" not in said,
+            "A SKU NEITHER SIDE HAS ANYTHING ON IS STILL NOTHING TO SAY. The store holds no "
+            "record and the export reads zero, so there is no reading to settle and no line "
+            "to draw — reporting it would be the noise the `claim == 0` arm was written to "
+            "avoid in the first place",
+        )
+
+
 def check_pricing_route(checks: Checks) -> None:
     """`GET /pipeline/runs/<name>/pricing` — free, read-only, two files from one moment.
 
@@ -20674,6 +20768,7 @@ def run() -> Result:
     check_merged_cap_is_the_tightest(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
+    check_unsent_listing_sells_out(checks)
     check_pricing_reach(checks)
     check_markdown(checks)
     check_markdown_lens(checks)
