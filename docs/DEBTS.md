@@ -7,6 +7,17 @@ complete" — it means the checks that exist, passed.
 Not a backlog to burn down on sight. An entry leaves when someone argues it should, the way
 `docs/DECISIONS.md` entries are argued.
 
+**Section 15 left 2026-09-07, and its number is not reused.** It recorded that the lockup does not
+fit the 52px phone top bar, that the bar therefore kept `Logo` at 26 beside a "Banchi" title, and
+that three costed ways out were waiting on the owner. D120 answered it — the bar was not grown,
+the horizontal lockup was refused, and the bar took the collapsed rail's own drawing, so
+`App.tsx`'s `PhoneBar` renders `BrandSlot`. **The argument lives in D120 and `docs/specs/logo.md`
+section 19**, and nothing is left unfixed for this file to hold: the 2026-08-30 sweep below removed
+closure narrative for exactly this reason, and a third copy of a settled fact is what goes stale
+next. Sections 1 to 14 keep their numbers and section 16 keeps its own — a renumber leaves every
+citation pointing at a real section that is not the one meant, which is `docs/map.py`'s own rule
+for its step ids.
+
 **Grouped by the work that would close them, not by when they were found** (2026-08-30). The
 old chronological order hid the fact that five separate entries were one defect, and put two
 one-line UI questions eleven sections apart. Each cluster names what unblocks it.
@@ -1509,37 +1520,6 @@ through `scan`, so no pooled card is ever joined". It reads as a design constrai
 not enforced anywhere — the registry, `cli/cmd_identify.py:397` and
 `harness/tests/t7_store_and_seams.py:11336` each contradict it. If the owner wants it to be
 true, the place to make it true is `pipeline/games.py` or `cli/resolve.py`, not `CLAUDE.md`.
-
-## 15 — The lockup does not fit the phone, and the bar keeps the mark
-
-**Closed by a decision, not by work.** Three routes are drawn and costed; none is free, and which
-one is right is the owner's to say. Recorded 2026-09-06, when the lockup landed everywhere else.
-
-`docs/specs/logo.md` §16 carries the measurement and the three options in full — this is a pointer
-so a later session does not rediscover the conflict by trying it.
-
-**The numbers.** The phone top bar is **52px**. The lockup at §11's floor — kanji 32 — is a
-**102 × 75px** block, 23px taller than the whole bar. And that floor is not a preference: §11
-settled it because 番's counters close before the bracket does, so drawing it smaller makes the
-kanji mush at exactly the size a phone renders it.
-
-**So the bar keeps `Logo` at 26 beside a "Banchi" title**, which is what shipped before the lockup
-existed and reads correctly at that size. `App.tsx`'s `PhoneBar` is unchanged.
-
-**What each way out costs:**
-
-| route | cost |
-| --- | --- |
-| grow the bar to ~91px | 39px of vertical space on the device where it is scarcest, on every screen — and the top bar stops matching the 52px tab bar beneath it |
-| a horizontal lockup — 番地 beside BANCHI | a NEW artifact, not a re-use: the bracket proportions, the gap and the roman's fill would each need settling, which is another series of forced choices |
-| leave it | the phone spells the name in one script where every other surface spells it in two |
-
-**Why this is a debt and not a build-order step.** There is no deliverable to schedule until the
-route is chosen, and two of the three are design work rather than engineering. `docs/GATES.md`'s
-`OPEN` is for steps with deliverables; this is a question with three answers.
-
-**The owner asked to be reminded of this** — it is the one thing from the lockup's build that was
-raised, understood and deliberately left.
 
 ## 16 — The browser fleet is locked and the rest of the load is not, and only one of those was measured
 

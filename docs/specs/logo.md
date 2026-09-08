@@ -1690,16 +1690,21 @@ keeping the test rather than treating it as a one-off:
 ~80ms, so the test failed one run in three and passed the other two on identical code. Eight
 samples across the 320ms.
 
-### Still open: the phone
+### The phone — answered in §19, and none of the three ways out was taken
 
-**The phone top bar is 52px and the lockup at its floor is 102 × 75.** It is 23px taller than the
-whole bar, and §11's floor is a measurement rather than a preference. So the bar keeps the mark at
-26 beside a "Banchi" title, unchanged.
+**Settled 2026-09-07 (D120).** This subsection recorded the conflict and deferred it, and until
+that day it said the bar was unchanged. The arithmetic it rests on still holds and §19 restates
+it: the top bar is 52px, the lockup at §11's floor is a 102 × 75 block, and §11 is a measurement
+rather than a preference — so the lockup cannot go there.
 
-The three ways out, none of them free: **grow the bar to ~91px**, which costs 39px on the device
-where vertical space is scarcest and breaks its match with the 52px tab bar; **design a horizontal
-lockup**, which is a new artifact needing its own rounds; or **leave it**, which is what ships.
-Recorded as a decision deferred rather than a surface nobody looked at.
+What §19 rules is that the bar draws **what the 64px rail draws**: the empty slot at 32, in
+`--bn-lockup-metal`. The three ways out this subsection costed were each weighed and each
+declined — growing the bar to ~91px costs 39px on the device where vertical space is scarcest
+and breaks its match with the 52px tab bar; a horizontal lockup is a new artifact needing its
+own rounds; and leaving the `Logo`-and-wordmark pair that shipped before the lockup existed is
+what made the product wear two brands by window width. The drawer, which is the sidebar at a
+phone's width, takes the sidebar's lockup at kanji 40. **§19 has the measurements, the forced
+choice and the surface table**; a compact horizontal cut that fits 52px is what would reopen it.
 
 ## 17. The macOS app icon — the grid, and why the tile does not fill it
 
