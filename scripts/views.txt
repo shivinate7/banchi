@@ -1,5 +1,21 @@
-# Views `make screenshot` renders, one "<name> <url>" line each. Blank lines and # are
-# skipped. Renders land in captures/ui/<name>.png, which is gitignored.
+# Views `make screenshot` renders, one "<name> <url> <selectors>" line each. Blank lines and
+# # are skipped. Renders land in captures/ui/<name>.png, which is gitignored.
+#
+# THE THIRD FIELD IS WHAT THE RENDER MUST PROVE IT DREW, and it is why this file gained a
+# column on 2026-09-07. A render missing an element writes a perfectly valid non-empty PNG,
+# so `make screenshot` passed, a session looked at an incomplete page, and concluded a screen
+# was fine. Naming a comma-separated selector list here makes that a failure: the renderer
+# captures the page, hides those elements, captures again, and refuses the render when one of
+# them changed not a single pixel inside its own rectangle. See scripts/screenshot.mjs.
+#
+# A SELECTOR HERE MUST HOLD IN EVERY STATE THIS FILE'S NEXT PARAGRAPH DESCRIBES. The renders
+# differ with the capture server up, down, or up over an empty store, so a selector tied to
+# one of those — `.review-refusal`, `.runs-detail-empty`, an empty state's own class — is a
+# false alarm waiting for the owner's machine, where the server is up. What is named below is
+# either shell-independent structure (a screen root, its title, its stage strip) or something
+# the screen draws from nothing at all: `#/gallery` is the kit sheet, and `#/`'s deck draws
+# its ghost when there are no cards. A guard that fires on a healthy tree is one the next
+# session deletes.
 #
 # This file is an INPUT and is tracked. It used to live at captures/views.txt, inside the
 # directory .gitignore excludes wholesale — so the list of which views are worth looking at
@@ -44,7 +60,7 @@
 # renders the capture screen into captures/ui/pull-confirm.png — a screenshot that is named
 # after one view and shows another, which is worse than no screenshot, because the loop
 # docs/DESIGN.md calls mandatory is a human comparing this render against the reference.
-pull-confirm  http://localhost:5173/#/gallery
+pull-confirm  http://localhost:5173/#/gallery  .gallery,.kit-icons,.pull-confirm
 
 # Step 7a's two screens — now one. The capture screen renders without a camera in a headless
 # render — that is not a defect to work around, it is the first thing a person sees before
@@ -54,14 +70,23 @@ pull-confirm  http://localhost:5173/#/gallery
 # `pull-preview http://localhost:5173/#/pull` stood here until D31 merged that route into
 # #/inventory. The walk it rendered did not go anywhere — it is the browse mode of the
 # `inventory` line below, which is why this list lost a view without losing a render.
-capture       http://localhost:5173/#/
+#
+# `.home-deck-card-1` IS THE PROOF SELECTOR THAT EARNED THIS COLUMN. The deck's three cards
+# carry `transform: rotate(-9deg)` / `rotate(-4deg)` / `rotate(3deg)` (Home.css:42-45), and a
+# report of them vanishing from a full-page capture is what sent someone looking. That report
+# does not reproduce at the pinned Playwright — the deck renders, measured — but a transformed
+# element is exactly the kind a compositing change can drop without erroring, so it is named
+# here and the render now says so out loud rather than drawing blank background. `.home-spine`
+# is the six-stage strip below it, which is what a lost element looks like when the page is
+# taller than the fold.
+capture       http://localhost:5173/#/  .home,.home-deck-card-1,.home-spine
 
 # 7b's three screens, routed 2026-08-13. The review queue is the one to actually look at:
 # docs/DESIGN.md specifies its shape in more detail than any other screen in the product and
 # it held its first real cards on 2026-08-22: Gate B's 16 entries, every one answered here.
 # The render still earns its place — all 16 were one reason code and all were parked, so
 # most of what docs/DESIGN.md specifies has still only ever been drawn.
-review        http://localhost:5173/#/review
+review        http://localhost:5173/#/review  .review,.bn-title
 
 # `inventory http://localhost:5173/#/inventory` STOOD HERE UNTIL 2026-09-05, AND WHAT REMOVED
 # IT IS A RULING RATHER THAN A DEFECT. Unlike the `runs` and `pricing` paragraphs below, whose
@@ -107,7 +132,7 @@ review        http://localhost:5173/#/review
 # component subtree for reach and cannot read React control flow, which is exactly the judgement
 # its docstring declines to make. Reach is unchanged by this paragraph. The discharge it names is
 # a `pooled` assertion in `app/tests/runs.spec.ts` — which does not exist — not a sentence here.
-runs          http://localhost:5173/#/runs
+runs          http://localhost:5173/#/runs  .runs,.bn-title
 
 # Hand-pricing, on its own route since 2026-08-30 (D49). Rendered with no `?run=` parameter.
 #
@@ -138,7 +163,7 @@ runs          http://localhost:5173/#/runs
 # is a body-vocabulary match, not the proof in a Playwright assertion the Fulfillment view
 # earns, and it is what the exemption is being rewritten to refuse. Do not read this line's
 # silence in the audit as clearance.
-pricing       http://localhost:5173/#/pricing
+pricing       http://localhost:5173/#/pricing  .pricing,.pricing-title
 
 # The order screen and the shipping lane, both routed 2026-08-30 (D69). Two renders because
 # they are two questions asked at two moments: `#/orders` is "which copies does this buyer get
@@ -151,11 +176,11 @@ pricing       http://localhost:5173/#/pricing
 # first. Neither draws a buyer's name, address, city, state or postcode: the shipping screen is
 # typed so it cannot (see `ShippingRow`), and the buyer's details reach the browser exactly
 # once, as the CSV download, which no render can capture.
-orders        http://localhost:5173/#/orders
-shipping      http://localhost:5173/#/shipping
+orders        http://localhost:5173/#/orders  .orders,.orders-tabs
+shipping      http://localhost:5173/#/shipping  .shipping,.orders-tabs
 
 # The Fulfiller's, and the one render where the absence of something is the point: no nav
 # strip above it. app/tests/fulfillment.spec.ts asserts that in a browser, so this render is
 # not what enforces it — it is what lets a person see the view the assertions describe, at the
 # 1280px viewport `scripts/screenshot.sh` fixes. The spec measures it at 375px too.
-fulfillment   http://localhost:5173/#/fulfillment
+fulfillment   http://localhost:5173/#/fulfillment  .ff,.ff-title

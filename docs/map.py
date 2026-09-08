@@ -1887,10 +1887,15 @@ COMPONENTS = [
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
-                "does": "headless Playwright render of a URL to captures/ui/<name>.png, or "
-                        "one per line of views.txt under --manifest. Returns non-zero "
-                        "unless a non-empty PNG lands on disk — an exit 0 from the CLI is "
-                        "not proof that anything was written.",
+                "does": "the manifest loop and every message a person reads; screenshot.mjs "
+                        "is the browser half. Renders one URL to captures/ui/<name>.png, or "
+                        "one per line of views.txt under --manifest, and returns non-zero on "
+                        "either of TWO failures now: no PNG on disk, or a PNG missing an "
+                        "element the manifest named. The second is new on 2026-09-07 and is "
+                        "the whole point — the old sentence here, `an exit 0 from the CLI is "
+                        "not proof that anything was written`, was right and stopped one step "
+                        "short: a written file was never proof that the PAGE was written, and "
+                        "a render with a screen's hero missing is a valid non-empty PNG.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
                 # screens that most need looking at are the second persona's. D13 is what
                 # it renders — Vite on :5173, a browser on the Mac. D18 is the rule that
@@ -1898,11 +1903,44 @@ COMPONENTS = [
                 # the path that decides whether work is done.
                 "governed_by": ["D5", "D13", "D18"],
             },
+            "screenshot.mjs": {
+                "does": "the browser half of `make screenshot`: one render, and the proof "
+                        "that it is complete. Drives app/node_modules's @playwright/test — "
+                        "the SAME pinned copy `make design-check` runs — rather than the "
+                        "`npx playwright@<pin>` download screenshot.sh used until "
+                        "2026-09-07, so the one-version rule those two files could only ask "
+                        "for politely is now MECHANICAL: EXPECTED_PLAYWRIGHT is checked "
+                        "against app/package.json and a disagreement fails the render. THE "
+                        "PROOF: for each selector the manifest names, capture its rectangle, "
+                        "hide it with `visibility: hidden`, capture again, and refuse the "
+                        "render when not one pixel changed — an element that painted nothing "
+                        "is exactly what a lost element looks like. Both comparison shots "
+                        "freeze animation and the artifact on disk does not, because two "
+                        "back-to-back captures of `#/`'s deck are NOT byte-identical while "
+                        "motion is live; the header names what that trade gives up. It also "
+                        "carries the argument for keeping `fullPage`, which a report "
+                        "proposed replacing with a viewport sized to scrollHeight: measured "
+                        "on this tree, the reported paint loss does not reproduce and the "
+                        "remedy silently crops every view, because the shell is "
+                        "`min-height: 100dvh` and a taller viewport makes a taller document.",
+                # D5 is who the render is for and D13 is what it renders. D18 is why it is
+                # not on the commit path: it writes. D16 is the shape of what was added —
+                # a mechanical check for a claim that would otherwise fail silently, which
+                # is the same reason demo-freshness exists two entries up.
+                "governed_by": ["D5", "D13", "D16", "D18"],
+            },
             "views.txt": {
-                "does": "the manifest `make screenshot` walks: one `<name> <url>` line per "
-                        "view worth looking at. Tracked, unlike the renders — it used to "
-                        "live under captures/, which .gitignore excludes wholesale, so the "
-                        "list could not be committed and a fresh clone started with none.",
+                "does": "the manifest `make screenshot` walks: one "
+                        "`<name> <url> <selectors>` line per view worth looking at. Tracked, "
+                        "unlike the renders — it used to live under captures/, which "
+                        ".gitignore excludes wholesale, so the list could not be committed "
+                        "and a fresh clone started with none. THE THIRD FIELD ARRIVED "
+                        "2026-09-07: the elements that view's render must prove it drew, "
+                        "checked by screenshot.mjs. A selector named here has to hold with "
+                        "the capture server up, down, and up over an empty store — the three "
+                        "states this file's own header describes — so it is either "
+                        "shell-independent structure or something the screen draws from "
+                        "nothing, never an empty state's own class.",
                 # D5 is what the list is for: SEVEN owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,

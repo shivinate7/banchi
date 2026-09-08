@@ -107,6 +107,12 @@ make dev            # Vite app. :5173 in the main tree, its own port in a worktr
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
+                    #   IT CAN FAIL FOR THE RIGHT REASON SINCE 2026-09-07. Until then the only
+                    #   failure was an empty file, so a render MISSING AN ELEMENT — a valid,
+                    #   plausible-looking PNG — passed, and a session looked at an incomplete
+                    #   page and called a screen fine. Each manifest line may name the elements
+                    #   its render must prove it drew; the renderer hides one, captures again,
+                    #   and refuses the render when not a pixel changed.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make demo           # seed a demo store and record the wire into a fixture bundle.
                     #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE
