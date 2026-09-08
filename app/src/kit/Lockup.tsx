@@ -69,6 +69,20 @@ function draw(n: number[]): string {
   return s + 'Z'
 }
 
+/* THE SIZE FLOOR, §11: below kanji 32 the lockup does not render at all.
+ *
+ * The measurement is 番's own density — the tenth percentile of its interior whites, which
+ * reads 1.07 at 32 and 0.87 at 26, so the counters close before the bracket does. §11 settles
+ * the floor and §15 asked for this guard in as many words ("`app/tests/brand.spec.ts` gains the
+ * floor — a lockup below kanji 32 must not render"); it was never built until 2026-09-07.
+ *
+ * IT REFUSES RATHER THAN SHRINKING, and that is the safe direction here: every call site in the
+ * product is at or above the floor (the sidebar and the drawer at 40, `#/gallery` at 32/40/56),
+ * and the rail's 32px end comes through `railSize`, which is the MARK and not this drawing. So
+ * this can only fire on a call site that does not exist yet — which is what a floor is for.
+ * `app/tests/brand.spec.ts` asserts both arms: 26 draws nothing, and every real call site draws. */
+export const LOCKUP_FLOOR = 32
+
 export function Lockup({
   size = 40,
   className,
@@ -86,6 +100,7 @@ export function Lockup({
   // Per instance: the sidebar and #/gallery can be mounted at once, and two lockups sharing
   // `url(#m)` is silent — both references resolve, to the first one's gradient.
   const id = useId().replace(/:/g, '')
+  const belowFloor = size < LOCKUP_FLOOR
   const metal = MARKS.bluesteel.bracket
   const svg = useRef<SVGSVGElement>(null)
 
@@ -102,6 +117,7 @@ export function Lockup({
   useEffect(() => {
     const el = svg.current
     const slot = el?.parentElement
+    // null when the size floor refused the draw, which is the same bail as an unmounted ref
     if (!el || !slot) return
 
     const arms = el.querySelectorAll<SVGPathElement>('.bn-lockup-arm')
@@ -172,6 +188,8 @@ export function Lockup({
       ))}
     </>
   )
+
+  if (belowFloor) return null
 
   return (
     <svg

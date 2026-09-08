@@ -392,7 +392,7 @@ sentence**, and see "the census" below for what enforces that.
 
 ```
 #/             Home           the product as a picture: ONE RANKED SENTENCE saying what the
-                              store is waiting on (D120, `standing.ts` — and the null invariant
+                              store is waiting on (D121, `standing.ts` — and the null invariant
                               in it is the load-bearing part), one action, then the library
                               drawn as the work that made it — sittings clustered from
                               `captured_at`, each block as wide as its minutes and as tall as
@@ -1239,7 +1239,8 @@ D115 The reading is what the export said, and what has sold since is counted bes
 D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
 D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
-D120 The front page says what is owed, and the library is drawn as the work that made it
+D120 The shell speaks one brand at every width, and the phone bar is a rail
+D121 The front page says what is owed, and the library is drawn as the work that made it
 ```
 
 **THE INDEX SKIPS ONE NUMBER BETWEEN D116 AND D118, AND THE GAP IS DELIBERATE.** D118 was
