@@ -109,7 +109,7 @@ make server         # Python capture server. :8000 in the main tree, its own por
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT TAKES A
                     #   MACHINE-WIDE LOCK FIRST, AND IT IS THE ONE THING D43 COULD NOT MAKE
-                    #   PER-CHECKOUT (D121): every tree has its own ports and its own store,
+                    #   PER-CHECKOUT (D122): every tree has its own ports and its own store,
                     #   and the CPU is shared. This is the target that spends all of it —
                     #   `fullyParallel` at half the cores, each worker a Chromium context over
                     #   its own Vite server. Two trees running it at once starve each other and
@@ -409,9 +409,15 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 sentence**, and see "the census" below for what enforces that.
 
 ```
-#/             Home           the product as a picture: the six-stage spine
-                              (Capture → Runs → Review → Pricing → Orders → Shipping) with the
-                              live figure under each stage, the boxes, the runs, one action.
+#/             Home           the product as a picture: ONE RANKED SENTENCE saying what the
+                              store is waiting on (D121, `standing.ts` — and the null invariant
+                              in it is the load-bearing part), one action, then the library
+                              drawn as the work that made it — sittings clustered from
+                              `captured_at`, each block as wide as its minutes and as tall as
+                              its cards an hour, so its area is its card count. Then the
+                              six-stage spine (Capture → Runs → Review → Pricing → Orders →
+                              Shipping) with the live figure under each stage, the boxes, the
+                              runs.
                               Every figure is the one that stage's own screen draws, read from
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
@@ -1253,7 +1259,8 @@ D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-
 D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
 D120 The shell speaks one brand at every width, and the phone bar is a rail
-D121 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
+D121 The front page says what is owed, and the library is drawn as the work that made it
+D122 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

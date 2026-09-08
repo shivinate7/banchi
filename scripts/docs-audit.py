@@ -9437,7 +9437,7 @@ def _check_claim_text(target: Path) -> str:
 # `fullyParallel` at half the cores, each worker a Chromium context over its own Vite dev
 # server. D43 gave every checkout its own ports and its own store; the CPU is what it could
 # not copy, and two trees running the fleet at once starve each other into failures that are
-# not in the code (D121, and `scripts/suite-lock.py` carries the 2026-09-07 measurement).
+# not in the code (D122, and `scripts/suite-lock.py` carries the 2026-09-07 measurement).
 #
 # THE GUARD IS ONE LINE OF ONE RECIPE, WHICH IS EXACTLY THE KIND OF LINE THAT GOES MISSING.
 # A second browser suite landing under its own target would be unguarded and green, and the
@@ -9448,7 +9448,7 @@ SUITE_LOCK_SCRIPT = ROOT / "scripts" / "suite-lock.py"
 
 #: What makes a script a fleet. `playwright test` is the parallel runner; `playwright
 #: screenshot`, which `scripts/screenshot.sh` uses, drives one page at a time and is
-#: deliberately NOT covered — see D121 on where that line is drawn and why.
+#: deliberately NOT covered — see D122 on where that line is drawn and why.
 _FLEET_RUNNER_RE = re.compile(r"\bplaywright\s+test\b")
 
 
@@ -9515,7 +9515,7 @@ def check_suite_lock(report: Report) -> None:
                     "starts the `{0}` fleet without taking the machine-wide lock.\n"
                     "  Two fleets at once starve each other and BOTH report failures that are\n"
                     "  not in the code. Run it through `python3 scripts/suite-lock.py run -- "
-                    "…` (D121)."
+                    "…` (D122)."
                 ).format(script)))
 
     # The direct form, which no npm script mediates: a recipe calling the runner itself.
@@ -9525,7 +9525,7 @@ def check_suite_lock(report: Report) -> None:
         if "suite-lock.py" not in line:
             findings.append(Finding("Makefile:{0}".format(n + 1), (
                 "runs `playwright test` directly without taking the machine-wide lock "
-                "(D121).")))
+                "(D122).")))
 
     report.add("suite lock", MECHANICAL, findings,
                "{0} fleet script{1}, every caller behind the lock".format(

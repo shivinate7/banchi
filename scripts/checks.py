@@ -177,7 +177,7 @@ CHECKS = (
                                "also holds a lock for a second or two, and the commit path is "
                                "not a place to queue behind anything.",
         "gates": True,
-        "governed_by": ("D18", "D43", "D121"),
+        "governed_by": ("D18", "D43", "D122"),
     },
     {
         "target": "port-agreement",

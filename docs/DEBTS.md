@@ -1543,7 +1543,7 @@ raised, understood and deliberately left.
 
 ## 16 — The browser fleet is locked and the rest of the load is not, and only one of those was measured
 
-D121 puts `make design-check` behind a machine-wide `flock` so two checkouts cannot run Playwright
+D122 puts `make design-check` behind a machine-wide `flock` so two checkouts cannot run Playwright
 fleets at once. **That decision is measured; the scope of it is partly reasoned**, and this section
 is the difference between the two so no later session takes a green `make check` for coverage of
 concurrency it never looked at.
@@ -1558,7 +1558,7 @@ workers against 12 CPU hogs. Section 11 above carries the capture server's versi
 
 - **`make harness` is nine tests in one Python process, and it runs at every turn end from the
   Stop hook.** The second half is the real argument: a lock refusal there is a false failure at
-  the moment a session is trying to finish — the exact thing D121 exists to prevent — and two
+  the moment a session is trying to finish — the exact thing D122 exists to prevent — and two
   sessions ending a turn at the same moment is not rare, it is Tuesday.
 - **`make check` shells out to `tsc`, `eslint` and `ruff`.** Two concurrent runs is a handful of
   mostly single-core processes against fifteen cores, an order of magnitude off the load that
@@ -1574,7 +1574,7 @@ workers against 12 CPU hogs. Section 11 above carries the capture server's versi
   `make design-check` eight times, and it is what wedged the owner's capture server. The lock
   narrows the window; it does not close it.
 - **A checkout whose branch predates the lock.** The guard is a line in the `Makefile`, so a
-  worktree cut before D121 landed runs the fleet without taking anything, and the tree that
+  worktree cut before D122 landed runs the fleet without taking anything, and the tree that
   DOES take it is refused by nobody. Observed within the hour this was written: a session in
   `card-inventory-before-after-935912` started `make design-check` off an older branch while
   this one held the lock free. Nothing can fix that from here — every guard this repo installs
@@ -1587,7 +1587,7 @@ workers against 12 CPU hogs. Section 11 above carries the capture server's versi
 - **A second user, or a second machine over a shared filesystem.** The lock lives under `~`,
   which is where the contention is for a single-operator rig and is wrong the moment that stops
   being true.
-- **`make screenshot`.** Argued out of scope in D121 rather than overlooked: `playwright
+- **`make screenshot`.** Argued out of scope in D122 rather than overlooked: `playwright
   screenshot` renders one page at a time, and queueing a single render behind a ten-minute suite
   buys nothing measured. A render taken during a fleet run is slower, not wrong.
 

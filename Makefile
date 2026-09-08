@@ -98,7 +98,7 @@ help:
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser. Takes"
 	@echo "                    a machine-wide lock: one browser fleet at a time, across every"
-	@echo "                    checkout (D121). ARGS=--wait queues instead of refusing."
+	@echo "                    checkout (D122). ARGS=--wait queues instead of refusing."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
 	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
@@ -651,7 +651,7 @@ screenshot:
 # cores, seven Chromium workers on this Mac, each with a Vite dev server compiling for it.
 # Two trees running this at once starve each other and BOTH report failures that are not in
 # the code: 18 of them on 2026-09-07, every one green on a re-run. See scripts/suite-lock.py
-# for the measurement and D121 for the argument.
+# for the measurement and D122 for the argument.
 #
 # IT REFUSES RATHER THAN QUEUES, and exits 75 so the refusal cannot read as a failing suite.
 # `ARGS=--wait` queues instead, out loud. The `--` is what separates the guard's flags from
