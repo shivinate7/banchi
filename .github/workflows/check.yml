@@ -17,9 +17,38 @@
 # moving T1's 40K of labels out of the 133M image mirror they had been filed inside.
 #
 # SO A GREEN RUN HERE MEANS "the tree is self-consistent", NEVER "the rig is fine". T1 asserts a
-# committed measurement rather than taking a new one; the detector's numbers and every browser
-# assertion still come from a person at the Mac. Nothing here can spend money: the only step
-# that could is a re-measurement, which needs both an explicit flag and a key, and has neither.
+# committed measurement rather than taking a new one, and the detector's numbers still come from
+# a person at the Mac. Nothing here can spend money: the only step that could is a
+# re-measurement, which needs both an explicit flag and a key, and has neither.
+#
+# THE BROWSER ASSERTIONS RUN HERE NOW, AND THIS PARAGRAPH SAID THEY DID NOT UNTIL 2026-09-07
+# (D118, amended). It said "every browser assertion still comes from a person at the Mac", which
+# was true and was also the gap: `make design-check` holds the Fulfiller's contractual floors —
+# 20px body, 44px targets, 320px photograph, 7:1 contrast — plus D50's cursor, response and press
+# floors, D118's stability floor and D117's thumb floor, and NONE of it had a re-checker. It
+# fired when somebody typed it, on one Mac. That is the same shape as the defect at the top of
+# this file: a mechanism that is thorough, correct and never re-evaluated.
+#
+# AND THE ONE MAC WAS ANSWERING FOR THE FLOOR. The first run of the job below went red on arrival
+# over `inventory.spec.ts`'s D118 stability case, which passes on the rig every time: a departed
+# card's store key sets at 33.0px in macOS's monospace fallback and over 34px in Linux's, either
+# side of the slot column's 34px floor, so a real movement on the press was invisible on the only
+# platform that ever looked. That is not a platform bug and it was not fixed with a tolerance —
+# `BoxBrowse.css` reserves the key's width now — but a second platform is what found it.
+#
+# IT IS A SEPARATE JOB, NOT A STEP IN `check`. A chromium install is a real cost and the two
+# failures should be attributable to different things — a red `check` is a claim about the tree,
+# a red `design-check` is a claim about what a browser draws. The two run in parallel, so a red
+# `check` still lands in about ninety seconds; this one takes twelve to fifteen minutes and is
+# the last word rather than the first. And it stays out of `make check` and `make ci-check` for
+# the reason the Makefile already gives: it starts a browser and a dev server, which is a
+# different weight of check. It therefore gets no `scripts/checks.py` entry either — `check
+# registry` fails on an entry for a target `make check` does not run.
+#
+# ON `push: main` TOO, AT THAT PRICE, for the reason the `on:` block below already gives about
+# every other row: a merge can break what neither side broke alone, and two branches editing one
+# stylesheet is exactly the semantic conflict git merges cleanly. A browser floor is the kind of
+# claim that has no other reader.
 #
 # IT GATES AND NOTHING ELSE. No commit, no branch move, no publish — D42 keeps main moving by
 # pull request only, and a workflow that wrote would be a second way. It reads the repo.
@@ -86,3 +115,39 @@ jobs:
 
       - name: make ci-check
         run: make ci-check
+
+  # The browser half. Same tree, different question: what a person actually sees.
+  design-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm ci --prefix app
+
+      # Keyed on the lockfile, so the cache turns over exactly when the pinned Playwright does —
+      # `app/package.json` pins `@playwright/test` exactly and `scripts/screenshot.sh` carries the
+      # rule that the two move together or neither does. A third hand-typed copy of the version
+      # here would be a third thing to forget.
+      - name: Cache the browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
+
+      - name: Install chromium
+        working-directory: app
+        run: npx playwright install --with-deps chromium
+
+      # Playwright starts its own dev server here: `webServer.reuseExistingServer` finds nothing
+      # serving on a fresh runner, which is exactly the state it is written for. The port comes
+      # from `app/devPort.ts`, which vite.config.ts and playwright.config.ts both import so they
+      # cannot disagree — on a runner this is the main-tree 5173.
+      - name: make design-check
+        run: make design-check

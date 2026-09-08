@@ -1482,6 +1482,96 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
     'the copy row changed height on the press').toBe(Math.round(rowBox?.height ?? -2))
 })
 
+/* A KEY WIDE ENOUGH TO BE SEEN. The fixture above walks box 2 card 1, whose departed key is
+   `B2 #1` — five characters, 33px, and the slot column's floor is 34px, so the widening the case
+   below is about is absorbed and nothing moves however wrong the CSS is. That is not a property
+   of the product: it is the shortest key a store can produce. `B12 #133` is 46px, which is what
+   the owner's own boxes are already writing, and it is what makes the reservation assertable. */
+function wideKeyCard(state: string) {
+  return card({
+    index: 133,
+    box: 12,
+    boxName: 'RB epics',
+    boxTotal: 1,
+    state,
+    name: 'Thievul',
+    sku: '8937370',
+    section: 1,
+    sectionStart: 133,
+    sectionEnd: 133,
+  })
+}
+
+const WIDE_KEY_BOXES = {
+  boxes: [
+    {
+      box: 12,
+      name: 'RB epics',
+      sections: [133],
+      state: 'open',
+      capacity: null,
+      fill: 1,
+      next_index: 134,
+      cards: 1,
+      on_hand: 1,
+      sold: 0,
+      retired: 0,
+      moved: 0,
+      listed: 0,
+      sections_detail: [{ section: 1, start: 133, end: 133, count: 1 }],
+    },
+  ],
+}
+
+test('the slot column is already as wide as the key the sale will write into it', async ({ page }) => {
+  /* WHY THIS IS A SECOND CASE AND NOT AN ASSERTION IN THE ONE ABOVE (D118). The sweep up there
+     records position and height and deliberately not width, and the element that moves is the
+     NAME — so the thing that actually grows, the slot column, is invisible to it, and the move it
+     causes is invisible too whenever the growth stays under the column's 34px floor.
+
+     THAT FLOOR IS WHY `make design-check` WAS GREEN ON THE RIG AND RED IN CI ON THE SAME TREE.
+     `B2 #1` sets at 33.0px in macOS's monospace fallback and at over 34px in Linux's, so on one
+     platform the floor swallowed the widening and on the other the name moved a pixel. The
+     difference between the two was never the point: the movement is real on both, and `B12 #133`
+     — which this store already writes — moves the name twelve pixels on either. */
+  const cards: Cards = { '12/133': wideKeyCard('identified') }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, WIDE_KEY_BOXES, store)
+
+  const row = page.locator('.browse-row[aria-current="true"]')
+  const slot = row.locator('.browse-row-position')
+  const name = row.locator('.browse-row-name')
+
+  const press = page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' })
+  await press.scrollIntoViewIfNeeded()
+
+  const slotWas = (await slot.boundingBox())?.width ?? -1
+  const nameWas = (await name.boundingBox())?.x ?? -1
+
+  /* THE STORE IS MOVED BEFORE THE PRESS, NOT AFTER IT. Nothing re-reads until the press, so the
+     measurements above are taken against the state the operator is looking at either way — and
+     mutating afterwards is a race this case lost four times in five: the screen's re-read is in
+     flight from the moment of the click, and a stub still holding the placed card answers it. */
+  cards['12/133'] = wideKeyCard('sold')
+
+  await press.click()
+  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+  await expect(page.locator('.card-locations-row.is-current .position-bar')).toHaveAttribute('data-gone', 'true')
+
+  await expect(row.locator('.browse-row-slot')).toHaveText('B12 #133')
+
+  /* THE CASE READS ITS OWN SUBJECT BEFORE IT JUDGES IT. The key has to be wider than the
+     column's 34px floor for any of this to be about anything, and that is a property of the
+     fixture rather than of the fix — measured on the state the sale leaves, so a reservation
+     that had been deleted cannot answer for it. */
+  const slotNow = (await slot.boundingBox())?.width ?? -2
+  expect(slotNow, 'the key does not clear the column floor — the case has no subject')
+    .toBeGreaterThan(34)
+
+  expect(slotNow, 'the slot column grew on the press').toBe(slotWas)
+  expect((await name.boundingBox())?.x ?? -2, 'the name slid right on the press').toBe(nameWas)
+})
+
 test('the card panel holds one height for the whole walk', async ({ page }) => {
   await open(page)
   await expandAll(page)

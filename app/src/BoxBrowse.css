@@ -354,16 +354,44 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .browse-rowline:hover .browse-row { background: var(--bn-hover); color: var(--bn-ink); }
+/* THE SLOT CELL IS AS WIDE AS THE LABEL THE SALE WILL PUT IN IT, NOT AS WIDE AS THE ONE IN IT
+   NOW (D118). This column is `max-content`, and selling the copy rewrites the slot from `#1` to
+   the store key `B2 #1` in the mono face — wider, so the column grew and the name, the badges
+   and everything after them slid right ON THE PRESS. The 34px floor was absorbing it on the
+   rig and nowhere else: the key renders 33.0px in macOS's monospace fallback and over 34px in
+   Linux's, so `make design-check` was green here and red in CI on the same tree, over a real
+   movement. And the floor covers only the shortest key there is — box 2, card 1. `B3 #96`,
+   which the owner's own store draws, is 40px, so that sale moved the name six pixels on every
+   platform and no case ever saw it.
+   `::before` reserves the future label's length in the face it will be drawn in, so the track is
+   already that wide before the write and unchanged after it. A row whose key is wider than its
+   slot therefore starts its name further right than it used to; that is the price of the press
+   not moving anything, and it is paid once at render rather than at the moment of the sale. */
 .browse-row-position {
+  display: grid;
   font-size: var(--bn-fs-xs);
   font-weight: 600;
   color: var(--bn-ink-3);
   font-variant-numeric: tabular-nums;
+  max-width: 22ch;
+}
+.browse-row-position > * { grid-area: 1 / 1; }
+.browse-row-slot {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 22ch;
 }
+.browse-row-slotghost {
+  visibility: hidden;
+  height: 0;
+  white-space: nowrap;
+  /* The face and weight `.is-departed` will switch this cell to, so the ghost is set in the type
+     the key is about to be set in rather than in the UI font it is beside now. */
+  font-family: var(--bn-font-mono);
+  font-weight: 500;
+}
+.browse-row-slotghost::before { content: var(--bn-slot-key, ''); }
 .browse-row-name {
   font-size: var(--bn-fs-md);
   overflow: hidden;

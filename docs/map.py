@@ -3111,6 +3111,15 @@ COMPONENTS = [
                     "key, which is how a copy row on the right reaches the box on the left. It "
                     "drops the search filter rather than letting it swallow the jump, and opens "
                     "the landing's section itself so the scroll has a rendered row to find. "
+                    "A WALK ROW'S SLOT CELL RESERVES THE KEY THE SALE WILL WRITE INTO IT "
+                    "since 2026-09-07 (D118 amended): selling the copy rewrites that cell from "
+                    "`#1` to the store key `B2 #1` in the mono face, which is wider, so the "
+                    "column grew and the name slid right on the press. `.browse-row-slotghost` "
+                    "carries the future key as pseudo `content:` — aria-hidden, and out of the "
+                    "text content every locator and the row's accessible name read — so the "
+                    "track is already that wide. Found by CI: the shortest key a store can make "
+                    "sets at 33.0px in macOS's monospace fallback and over 34px in Linux's, "
+                    "either side of the column's own 34px floor. "
                     "IT SCROLLS ITS OWN COLUMN AND NEVER THE PAGE since 2026-08-29 "
                     "(`scrollWithin`): scrollIntoView reaches the document scroller, and on a "
                     "sticky column that moves the page without moving the row — measured at the "
@@ -3132,7 +3141,7 @@ COMPONENTS = [
             # D90 is main's order-driven mode, whose two props this file no longer carries; the
             # citation stays so a session reading main's history knows they were removed on
             # purpose rather than lost.
-            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92"]},
+            "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23", "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41", "D45", "D46", "D49", "D52", "D58", "D67", "D68", "D89", "D90", "D92", "D118"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
