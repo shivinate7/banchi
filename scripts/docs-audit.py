@@ -8846,6 +8846,173 @@ def _blank_ts_comments(text: str) -> str:
     return TS_COMMENT.sub(lambda found: "\n" * found.group(0).count("\n"), text)
 
 
+# --------------------------------------------------------------- the design-check verdict
+#
+# `make design-check` is the one target a session cannot wait for inside a tool call: ~2
+# minutes clean, 171s measured under load, against a 120s timeout. So it leaves a verdict at
+# `.serve/design-check.json` and CLAUDE.md tells the next session to read that file instead
+# of the 450-line stream. Four files have to agree for that instruction to be true, and
+# THREE OF THE FOUR WAYS THEY CAN DISAGREE ARE SILENT:
+#
+#   * the reporter dropped from `playwright.config.ts`'s reporter list — the suite runs, is
+#     green, and writes nothing;
+#   * `RESULT_FILE` moved in the reporter but not in the prose — the suite writes a verdict
+#     nobody reads;
+#   * the `rm -f` dropped from a Makefile recipe — and this is the worst of the three,
+#     because it is what makes a MISSING file mean "died before Playwright loaded its
+#     config". Without it a run that never started leaves the PREVIOUS run's `"pass"`
+#     sitting there for a session to believe. That is a false green reached by following
+#     the documented procedure, which is the shape this repo has the fewest defences
+#     against.
+#
+# Only the fourth is loud: delete `design-check-reporter.ts` while the config still names
+# it and Playwright refuses to start.
+#
+# THIS IS A STATIC AGREEMENT CHECK AND NOT A BEHAVIOURAL ONE, which is a real limit and is
+# recorded rather than papered over. It reads four files and reconciles one path and one
+# name across them; it cannot tell you the reporter still WORKS. Proving that needs a
+# Playwright run, which is the whole reason `design-check` is not in `make check` — a check
+# that starts a browser is a different weight of check from the rest. Same bargain
+# `check registry` records about itself: this row can only lie about agreement, and it
+# fails a commit when it does.
+_VERDICT_RESULT_FILE = re.compile(
+    r"RESULT_FILE\s*=\s*resolve\(\s*REPO_ROOT\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*\)"
+)
+_VERDICT_REPORTER = ROOT / "app" / "design-check-reporter.ts"
+_VERDICT_CONFIG = ROOT / "app" / "playwright.config.ts"
+_VERDICT_RECIPES = ("design-check", "design-check-quiet")
+
+
+def _make_recipe(text: str, target: str) -> Optional[List[str]]:
+    """The recipe lines of one Makefile target, or None where the target has no rule.
+
+    Pure, so `--self-test` can drive it without a Makefile.
+    """
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith(f"{target}:"):
+            continue
+        body: List[str] = []
+        for following in lines[index + 1:]:
+            if following.startswith("\t"):
+                body.append(following[1:])
+            elif following.strip() == "" or following.startswith("#"):
+                continue
+            else:
+                break
+        return body
+    return None
+
+
+def verdict_disagreements(
+    reporter: Optional[str],
+    config: Optional[str],
+    makefile: str,
+    published: str,
+) -> List[Finding]:
+    """The four-way agreement, as a pure function of four file bodies.
+
+    Split out from the file reading so `--self-test` can hand it each way of disagreeing
+    without a repository — the same split `check_dispatch` and `phony_gaps` already make.
+    """
+    findings: List[Finding] = []
+    if reporter is None:
+        findings.append(
+            Finding(
+                "app/design-check-reporter.ts",
+                "does not exist, but CLAUDE.md tells a session to read the file it writes.",
+            )
+        )
+        return findings
+
+    match = _VERDICT_RESULT_FILE.search(reporter)
+    if match is None:
+        findings.append(
+            Finding(
+                "app/design-check-reporter.ts",
+                "no `RESULT_FILE = resolve(REPO_ROOT, ...)` to read.\n"
+                "  That constant is what every claim below is reconciled against.",
+            )
+        )
+        return findings
+    path = f"{match.group(1)}/{match.group(2)}"
+
+    if config is None:
+        findings.append(Finding("app/playwright.config.ts", "does not exist."))
+    elif "design-check-reporter" not in _blank_ts_comments(config):
+        findings.append(
+            Finding(
+                "app/playwright.config.ts",
+                "its `reporter` setting no longer names `./design-check-reporter.ts`.\n"
+                "  The suite would run green and write no verdict at all, and a session "
+                "following CLAUDE.md would read the absent file as `the run died before "
+                "Playwright loaded its config` — a wrong diagnosis reached by following the "
+                "documented procedure.\n"
+                "  Comments do not count: this reads the config with them blanked.",
+            )
+        )
+
+    for target in _VERDICT_RECIPES:
+        body = _make_recipe(makefile, target)
+        if body is None:
+            findings.append(Finding("Makefile", f"no `{target}` rule to read."))
+            continue
+        removes = next((n for n, line in enumerate(body) if "rm -f" in line and path in line), None)
+        runs = next((n for n, line in enumerate(body) if "run design-check" in line), None)
+        if runs is None:
+            findings.append(
+                Finding("Makefile", f"`{target}` never invokes the design-check script.")
+            )
+            continue
+        if removes is None:
+            findings.append(
+                Finding(
+                    "Makefile",
+                    f"`{target}` does not delete `{path}` before it runs.\n"
+                    "  Deleting first is the whole reason a MISSING file means something. "
+                    "Without it, a run that dies before Playwright loads its config leaves "
+                    "the PREVIOUS run's verdict in place — a stale `\"pass\"` for the next "
+                    "session to believe.",
+                )
+            )
+        elif removes > runs:
+            findings.append(
+                Finding(
+                    "Makefile",
+                    f"`{target}` deletes `{path}` AFTER running the suite, which throws the "
+                    "verdict away instead of clearing a stale one.",
+                )
+            )
+
+    if path not in published:
+        findings.append(
+            Finding(
+                "CLAUDE.md",
+                f"the reporter writes `{path}`, which this file never names.\n"
+                "  The path is the whole instruction — a session told to read a verdict file "
+                "needs to be told which one.",
+            )
+        )
+    return findings
+
+
+def check_design_check_verdict(report: Report) -> None:
+    """`.serve/design-check.json` is named the same in the reporter, the config, make and the prose."""
+    reporter = read(_VERDICT_REPORTER) if exists(_VERDICT_REPORTER) else None
+    config = read(_VERDICT_CONFIG) if exists(_VERDICT_CONFIG) else None
+    makefile = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
+    published = read(ROOT / "CLAUDE.md") if exists(ROOT / "CLAUDE.md") else ""
+    findings = verdict_disagreements(reporter, config, makefile, published)
+    match = _VERDICT_RESULT_FILE.search(reporter or "")
+    where = f"{match.group(1)}/{match.group(2)}" if match else "unreadable"
+    report.add(
+        "verdict file",
+        MECHANICAL,
+        findings,
+        f"{where} agreed by the reporter, the config, {len(_VERDICT_RECIPES)} recipes and the prose",
+    )
+
+
 def check_spec_seal(report: Report) -> None:
     """Every spec that mounts the app seals this checkout's capture port, and seals it first.
 
@@ -10406,6 +10573,100 @@ def self_test() -> int:
         findings = by_label["check numbering"]
         ok(not findings, "naming the check by its label is fine", str(findings))
 
+    # THE VERDICT FILE'S FOUR-WAY AGREEMENT. Every case here is a way for the instruction in
+    # CLAUDE.md — "read `.serve/design-check.json`" — to become false with nothing else in
+    # the repo noticing: the suite still passes, the config still typechecks, and the prose
+    # still reads correctly. Three of the four are silent in exactly that way, which is why
+    # the row exists; the fourth (a deleted reporter) is loud at Playwright startup and is
+    # covered here anyway so the row cannot be half-wired.
+    print("\nthe design-check verdict file is named the same in four places")
+    good_reporter = "const X = 1\nexport const RESULT_FILE = resolve(REPO_ROOT, '.serve', 'design-check.json')\n"
+    good_config = "export default defineConfig({\n  reporter: [['list'], ['./design-check-reporter.ts']],\n})\n"
+    good_make = (
+        "design-check:\n\t$(NPM_GUARD)\n\t@rm -f .serve/design-check.json\n"
+        "\t@npm --prefix app run design-check\n\n"
+        "design-check-quiet:\n\t$(NPM_GUARD)\n\t@rm -f .serve/design-check.json\n"
+        "\t@DESIGN_CHECK_QUIET=1 npm --prefix app run design-check\n"
+    )
+    good_prose = "make design-check leaves .serve/design-check.json behind\n"
+    ok(
+        not verdict_disagreements(good_reporter, good_config, good_make, good_prose),
+        "four files agreeing is clean",
+        str(verdict_disagreements(good_reporter, good_config, good_make, good_prose)),
+    )
+
+    found = verdict_disagreements(good_reporter, "reporter: [['list']],\n", good_make, good_prose)
+    ok(
+        len(found) == 1 and "no longer names" in found[0].message,
+        "a config that stopped naming the reporter is reported — the suite would go green and write nothing",
+        str(found),
+    )
+    commented = "// design-check-reporter.ts writes the verdict\nreporter: [['list']],\n"
+    found = verdict_disagreements(good_reporter, commented, good_make, good_prose)
+    ok(
+        len(found) == 1 and "no longer names" in found[0].message,
+        "and a COMMENT naming the reporter does not satisfy it — a header that describes the "
+        "wiring is not the wiring",
+        str(found),
+    )
+
+    no_rm = good_make.replace("\t@rm -f .serve/design-check.json\n", "", 1)
+    found = verdict_disagreements(good_reporter, good_config, no_rm, good_prose)
+    ok(
+        len(found) == 1 and "does not delete" in found[0].message and "design-check`" in found[0].message,
+        "a recipe that stopped clearing the stale file is reported, and only that recipe",
+        str(found),
+    )
+
+    late_rm = good_make.replace(
+        "\t@rm -f .serve/design-check.json\n\t@npm --prefix app run design-check\n",
+        "\t@npm --prefix app run design-check\n\t@rm -f .serve/design-check.json\n",
+        1,
+    )
+    found = verdict_disagreements(good_reporter, good_config, late_rm, good_prose)
+    ok(
+        len(found) == 1 and "AFTER running" in found[0].message,
+        "a recipe that deletes the verdict AFTER the run is a different fault and says so",
+        str(found),
+    )
+
+    moved = good_reporter.replace("'design-check.json'", "'verdict.json'")
+    found = verdict_disagreements(moved, good_config, good_make, good_prose)
+    ok(
+        any(f.where == "CLAUDE.md" for f in found),
+        "a RESULT_FILE the prose does not name is reported",
+        str(found),
+    )
+    ok(
+        all("verdict.json" in f.message for f in found if f.where == "Makefile"),
+        "and the Makefile arm is reconciled against the MOVED path, not a hardcoded one",
+        str(found),
+    )
+
+    found = verdict_disagreements(None, good_config, good_make, good_prose)
+    ok(
+        len(found) == 1 and "does not exist" in found[0].message,
+        "a deleted reporter is one finding about the file, not four about its readers",
+        str(found),
+    )
+    found = verdict_disagreements("const RESULT_FILE = 'somewhere'\n", good_config, good_make, good_prose)
+    ok(
+        len(found) == 1 and "no `RESULT_FILE" in found[0].message,
+        "a reporter whose RESULT_FILE cannot be read reports THAT, rather than an empty agreement",
+        str(found),
+    )
+
+    # And the live tree, which is what the row actually asserts on every run.
+    ok(
+        not verdict_disagreements(
+            read(_VERDICT_REPORTER) if exists(_VERDICT_REPORTER) else None,
+            read(_VERDICT_CONFIG) if exists(_VERDICT_CONFIG) else None,
+            read(ROOT / "Makefile"),
+            read(ROOT / "CLAUDE.md"),
+        ),
+        "this repo's own four files agree",
+    )
+
     # A target absent from .PHONY is a green `make` that ran nothing, and nothing in the
     # prose is wrong when it happens — so no other check in this file can see it.
     print("\nevery make target is declared .PHONY")
@@ -11265,6 +11526,7 @@ def audit(staged_only: bool) -> Report:
     check_doc_hygiene(report, docs)
     check_route_rosters(report)
     check_spec_seal(report)
+    check_design_check_verdict(report)
     check_route_census(report)
     check_check_registry(report)
     check_commit_path(report)

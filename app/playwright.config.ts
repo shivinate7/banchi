@@ -23,7 +23,19 @@ import { DEV_URL } from './devPort'
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
-  reporter: [['list']],
+  // TWO REPORTERS, AND THE SECOND ONE IS FOR A READER WHO IS NOT WATCHING.
+  //
+  // `list` is the human's: 450 lines of progress, useful only live. `design-check-reporter`
+  // writes `.serve/design-check.json` — a verdict, the counts and the failing titles — which
+  // is what a session backgrounds this run to read afterwards. Its header carries the whole
+  // argument, including why piping this output through `tail` defeats it.
+  //
+  // DESIGN_CHECK_QUIET DROPS `list` AND NOTHING ELSE. Same tests, same assertions, same
+  // verdict file; what goes away is the progress stream, which is the part that makes the
+  // captured log unreadable. `make design-check-quiet` is what sets it.
+  reporter: process.env.DESIGN_CHECK_QUIET
+    ? [['./design-check-reporter.ts']]
+    : [['list'], ['./design-check-reporter.ts']],
   // THE FIRST OF THIS SUITE'S TWO RECORDED FLAKES WAS THIS NUMBER, AND IT IS A WAIT RATHER
   // THAN AN ASSERTION. Playwright's default is 5s, and under `fullyParallel` every worker's
   // first act is `await expect(page.locator(VIEW)).toBeVisible()` — a cold Vite dev server

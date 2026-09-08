@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -64,6 +64,7 @@ help:
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
+	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
 	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
@@ -76,9 +77,9 @@ help:
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + janitor-selftest + port-agreement +"
-	@echo "                    set-hint-agreement + screen-freshness + sigil-check +"
-	@echo "                    ignore-check + lint + vale + typecheck"
+	@echo "                    merge-selftest + janitor-selftest + verdict-selftest +"
+	@echo "                    port-agreement + set-hint-agreement + screen-freshness +"
+	@echo "                    sigil-check + ignore-check + lint + vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -96,6 +97,9 @@ help:
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
 	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
+	@echo "                    Leaves the verdict in .serve/design-check.json — read that,"
+	@echo "                    never a \`tail\` pipe, which buffers the whole run."
+	@echo "  make design-check-quiet  the same run without the per-test progress stream."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
 	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
@@ -363,6 +367,7 @@ check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -398,6 +403,7 @@ ci-check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory screen-freshness
@@ -411,6 +417,23 @@ ci-check:
 # state, and this asks about provisioning, so a fresh clone would fail a commit over nothing.
 ignore-check:
 	@sh scripts/ignore-check.sh
+
+# THE VERDICT REPORTER, PROVED BY RUNNING IT. `make docs-audit`'s `verdict file` row
+# reconciles the four files that NAME `.serve/design-check.json`; it is static and cannot
+# say the reporter still WORKS. This runs the real reporter file — copied into a throwaway
+# tree so it writes there and never over a verdict a session is about to read — against one
+# passing and one failing spec, and asserts the verdict, the counts, the failing title and
+# its location, and that the error text carries no ANSI and no NUL bytes.
+#
+# NO BROWSER AND NO DEV SERVER, which is why it is here and design-check is not: a test that
+# never touches the `page` fixture launches nothing, and the throwaway config has no
+# `webServer`. Measured at ~1s, and measured again with PLAYWRIGHT_BROWSERS_PATH pointed at
+# an empty directory — so it holds on the runner, which installs no browser binaries.
+#
+# In `check` and `ci-check`, never in the git hook: D18, it writes.
+verdict-selftest:
+	$(NPM_GUARD)
+	@python3 scripts/verdict-selftest.py
 
 # python3, not $(PYTHON): the script is stdlib-only so it must not need `make venv`.
 audit-self-test:
@@ -639,9 +662,40 @@ screenshot:
 # Deliberately NOT part of `check`: it starts a browser and a dev server, which is a
 # different weight of check from the rest. That reason stood on its own even while `lint`
 # was a stub and `check` could not pass at all; it still stands now that lint runs.
+# IT LEAVES A VERDICT BEHIND, AND THAT IS HOW A SESSION WAITS FOR IT. The suite is ~2
+# minutes clean and much longer under load, against the 120s tool timeout an agent session
+# runs under, so every invocation from one is backgrounded mid-run. `.serve/design-check.json`
+# is what to read when it lands: verdict, counts, failing titles, no ANSI and no NUL bytes.
+# It says `"verdict": "running"` from the moment the suite starts, so a reader can tell
+# "still going" from "died" — and a file still saying that after the process has exited
+# means the run died before the reporter could finish.
+#
+# NEVER PIPE THIS THROUGH `tail`. `... | tail -N > file` writes nothing at all until the
+# process exits, because tail buffers its whole input, so the obvious "run it and read the
+# tail" produces an empty file for the entire run and no way to tell it from a dead one.
+# Redirect to a file if you want the stream; read the verdict either way.
+# THE `rm` IS WHAT MAKES A MISSING FILE MEAN SOMETHING. The reporter writes the file at
+# `onBegin`, so it covers every way a run can die once Playwright is up — measured: a
+# `webServer` that never comes up and a spec that will not parse both leave a real
+# `"verdict": "fail"` with 0/0 counts. What it CANNOT cover is a failure before the config
+# loads at all (an unloadable config, a missing toolchain), because no reporter has been
+# constructed yet — and without this line that leaves the PREVIOUS run's `pass` sitting
+# there for a reader to believe. Deleting first makes that case "no file", which is
+# unambiguous.
+# app/design-check-reporter.ts carries the rest of the argument.
 design-check:
 	$(NPM_GUARD)
+	@rm -f .serve/design-check.json
 	@npm --prefix app run design-check
+
+# The same run with the 450-line progress stream dropped — same tests, same assertions,
+# same `.serve/design-check.json`. The progress is only useful to a human watching live,
+# and it is what makes a captured log unreadable, so a session that is going to read the
+# verdict file should ask for this one.
+design-check-quiet:
+	$(NPM_GUARD)
+	@rm -f .serve/design-check.json
+	@DESIGN_CHECK_QUIET=1 npm --prefix app run design-check
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`
