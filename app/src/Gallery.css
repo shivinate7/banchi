@@ -218,7 +218,16 @@
 .kit-keycap-blank { color: var(--bn-ink-4); border-style: dashed; border-bottom-width: 1px; }
 .kit-toasts { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 380px; }
 .kit-menu-inline { width: 260px; }
-.kit-poslabel { display: inline-flex; }
+/* `--pos-slot` IS ONLY HALF OF WHAT A SITE SETS, AND THIS SPECIMEN SET ONLY THAT HALF (D119).
+   Every real site pairs the custom property with `font-size: var(--pos-slot)` —
+   `CardLocations.css`, `Orders.css`, `CaptureScreen.css`, `ReviewQueue.css`, and the location
+   card before it was deleted — because that font-size is what the component's own `em`-relative
+   derivations measure against. Without it the specimens drew at the inherited 14px, so
+   `PositionLabel.css`'s re-rank for a label with no figure (`clamp(11px, 0.45em, 20px)`,
+   0.45 x 14 = 6.3, clamped up) landed on exactly the 11px a LIVE path gets: the departed
+   specimen was drawn identically to the live one, on the page whose job is drawing the
+   difference. Measured 2026-09-07, and now asserted by `gallery.spec.ts`. */
+.kit-poslabel { display: inline-flex; font-size: var(--pos-slot); }
 
 /* ---- responsive ---------------------------------------------------------------- */
 @media (max-width: 1023px) {

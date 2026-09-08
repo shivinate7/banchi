@@ -4,11 +4,11 @@ import type {
   BoxRecord,
   InventoryCard,
   Listing,
-  Place,
   RetireReason,
   RetireResult,
   SaleResult,
   SearchCopy,
+  SearchGroup,
   SectionDetail,
 } from './types'
 import type { Failure } from './server'
@@ -19,7 +19,6 @@ import {
   isDeparted,
   markSold,
   photoUrl,
-  positionLabel,
   retireCard,
   undoRetire,
   undoSale,
@@ -27,7 +26,6 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxRuns } from './BoxRuns'
 import { CardLocations } from './CardLocations'
-import { PlaceNeighbors } from './PlaceNeighbors'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { useSearch } from './useSearch'
@@ -42,9 +40,12 @@ import './Inventory.css'
  *
  * `BoxBrowse` owns the walk, the box operations, the photograph and the card-level
  * corrections; this file owns the one flow that writes a card — the sale, the retirement, their
- * receipts and their twenty-second undo — and draws the location card and the copies beside
- * the photograph. Nothing here holds a second copy of the inventory: every write is followed by
- * a re-read.
+ * receipts and their twenty-second undo — and draws the copies beside the photograph. Nothing
+ * here holds a second copy of the inventory: every write is followed by a re-read.
+ *
+ * IT DREW A LOCATION CARD ABOVE THAT LIST UNTIL D119, and the copy the walk stands on is an
+ * ordinary row of the list now. What that deletion moved here rather than losing is the
+ * receipt: a sale is taken back where it was pressed.
  */
 
 /** How long a receipt's undo stays. Fulfillment.tsx's number, kept in step. */
@@ -102,6 +103,18 @@ function reasonWord(reason: RetireReason): string {
 type Wanted = { order: string; key: string }
 const NOBODY: ReadonlyMap<string, Wanted> = new Map()
 
+/* The three states `store/master.py:TERMINAL_STATES` names — gone from the box, permanently.
+   `moved` is one of them and is not a retire reason: the card is fully sellable at a new key.
+   Written once because two readers here need it — which copies an open order can still be
+   waiting on, and whether the lone card below is still on hand.
+
+   TAKES A NULLABLE STATE because one of those readers has one: a resolver pick carries
+   `state: string | null`, and an unknown state is not a departure. */
+const GONE: ReadonlySet<string> = new Set(['sold', 'retired', 'moved'])
+function gone(state: string | null): boolean {
+  return state !== null && GONE.has(state)
+}
+
 /* Which on-hand copies an open order is waiting on, out of the resolver's own picks — so a copy
  * about to be pulled for an order says so before it is marked sold as a walk-in sale. A pulled
  * copy already reads `Sold`; only the ones still on hand are named. */
@@ -111,7 +124,7 @@ function wantedOf(payload: Awaited<ReturnType<typeof getOrders>>): ReadonlyMap<s
     for (const line of order.lines) {
       for (const pick of line.picks) {
         if (pick.held_by !== null) continue
-        if (pick.state === 'sold' || pick.state === 'retired' || pick.state === 'moved') continue
+        if (gone(pick.state)) continue
         const at = `${pick.box}/${pick.index}`
         if (!out.has(at)) out.set(at, { order: line.order, key: line.order_key })
       }
@@ -144,6 +157,45 @@ function loneCopy(row: Row): SearchCopy | null {
     capture_id: row.card.capture_id,
     has_photo: row.card.photo !== null,
     place,
+  }
+}
+
+/** The one-copy group for the card the search cannot reach, and IT IS A LOCAL FICTION — the
+ *  only `SearchGroup` in this app that no server sent.
+ *
+ *  SO IT IS SHAPED TO BE THE ANSWER THE SERVER WOULD HAVE GIVEN, field for field, rather than
+ *  to whatever this panel finds convenient. `capture_server.py:do_search` already builds a
+ *  SKU-less group — the loose bag, for cards that matched a query and carry no SKU — and every
+ *  value below is that branch's own expression evaluated over a bag of exactly one card. This
+ *  function exists only because that branch cannot be REACHED for these seven cards:
+ *  `GET /search` refuses an empty query, a card with no SKU and no name has no query, and so
+ *  the store cannot be asked a question whose answer it already knows how to compose.
+ *
+ *  NOTHING HERE IS COMPUTED THAT THE SERVER COMPUTES. `cap` is the store's standing cap, read
+ *  from the price corpus; this side has never seen it and says null, which `types.ts` states is
+ *  the ordinary value and reads as "no cap". `listable` is `on_hand`, which is what `do_search`
+ *  sends when there is no cap — NOT zero. Zero would be a truer-sounding sentence ("No copies
+ *  can go live") arrived at by inventing a number the store would contradict; the header stops
+ *  drawing that sentence instead (`CardLocations.tsx:OwnerRows`, keyed off `sku === null`),
+ *  which fixes the SKU-less bag on the search path in the same move. */
+function loneGroup(row: Row, copy: SearchCopy): SearchGroup {
+  const held = gone(row.card.state) ? 0 : 1
+  return {
+    sku: null,
+    /* `skuOrName` proved the name is null or blank, and `_distinct` over one blank is empty. */
+    names: [],
+    number: row.card.number,
+    printed_total: row.card.printed_total,
+    number_display: row.card.number_display ?? null,
+    set_hint: row.card.set_hint,
+    condition: row.card.condition,
+    listed: { pushed: 0, staged: 0, live: 0 },
+    sold_here: 0,
+    live_as_of: null,
+    on_hand: held,
+    cap: null,
+    listable: held,
+    copies: [copy],
   }
 }
 
@@ -204,8 +256,8 @@ export function Inventory() {
   const [sold, setSold] = useState<string[]>([])
   const [retired, setRetired] = useState<string[]>([])
 
-  /* The copy the walk is pointing at, as the search knows it — for the location card's own
-   * action and the phone's action bar. */
+  /* The copy the walk is pointing at, as the search knows it — for the phone's action bar,
+   * which is its one reader since D119 deleted the location card. */
   const [currentCopy, setCurrentCopy] = useState<SearchCopy | null>(null)
 
   /* The toast standing for each receipt, by copy key, so an undo from the row can take it down. */
@@ -496,7 +548,9 @@ export function Inventory() {
 }
 
 /* EVERY COPY OF THE SELECTED CARD, AND WHERE EACH ONE SITS — D7's SKU -> positions map, drawn
- * for the one card the walk is pointing at, beneath the location card for that card itself.
+ * for the one card the walk is pointing at. THE COPY IT IS POINTING AT IS ONE OF THE ROWS and
+ * not a card above them (D119): it carries a `Viewing` marker and a neutral rail, and nothing
+ * else separates it.
  *
  * `GET /search` stays the matcher and nothing here filters the inventory locally: the panel
  * asks with the card's own SKU, or its name when it has no SKU, and keeps the group whose
@@ -570,24 +624,45 @@ function CopiesPanel({
     onCurrent(current)
   }, [current, onCurrent])
 
-  const location = (
-    <LocationCard
-      row={row}
-      layouts={layouts}
-      wantedBy={wanted.get(row.key) ?? null}
-      action={current === null ? null : renderAction(current, true)}
-    />
-  )
+  /* The one-copy group, built only where the search cannot be asked. Null when the record
+     carries no place at all, which is the one shape that has no copy to put in a group. */
+  const solo = useMemo(() => (lone === null ? null : loneGroup(row, lone)), [row, lone])
 
   if (handle === null) {
     return (
       <section className="inventory-copies">
-        {location}
+        {solo === null ? null : (
+          <CardLocations
+            group={solo}
+            persona="owner"
+            sections={layouts}
+            currentKey={row.key}
+            /* No SKU, so no listing record and nothing to be the age OF. */
+            listedAt={null}
+            claims={wanted}
+            /* NO `onGoTo`, and that is D45 rather than an omission: the only copy in this group
+               is the one the walk is standing on, and a walk-to on it goes nowhere. */
+            onSell={onSell}
+            busyKey={busyKey}
+            soldKeys={soldKeys}
+            renderAction={(copy) => renderAction(copy, false)}
+          />
+        )}
+        {/* KEPT, AND UNDER THE GROUP RATHER THAN DELETED. The panel above answers "where is it
+            and what can I do with it"; this answers "why is there only one row and no listing
+            figures", which is context for the thing above it and reads wrong before it. */}
         <div className="inventory-lone">
-          <Notice tone="info" title="No name and no SKU yet, so there is no card group to show.">
-            This is one copy at one position. A SKU is written when <code className="inventory-inline">emit</code>{' '}
-            writes the card&rsquo;s row into an import file, and never before.
-            {lone === null ? <span className="inventory-machine">place: absent · key {row.key}</span> : null}
+          <Notice tone="info" title="No name and no SKU yet, so there is nothing to group this copy with.">
+            {lone === null ? (
+              <>
+                The store sent no position for this record, so there is no copy to draw.{' '}
+                <span className="inventory-machine">place: absent · key {row.key}</span>
+              </>
+            ) : (
+              <>This is one copy at one position, and the panel above is that copy alone.</>
+            )}{' '}
+            A SKU is written when <code className="inventory-inline">emit</code> writes the
+            card&rsquo;s row into an import file, and never before.
           </Notice>
         </div>
       </section>
@@ -596,8 +671,6 @@ function CopiesPanel({
 
   return (
     <section className="inventory-copies">
-      {location}
-
       {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
 
       {loading || !settled ? (
@@ -625,79 +698,13 @@ function CopiesPanel({
           onSell={onSell}
           busyKey={busyKey}
           soldKeys={soldKeys}
-          /* EVERY row draws its own controls, the copy the walk is standing on included. That
-             copy's controls appear twice — once at hero size in the location card above, once
-             at row size here — and that is the trade: a list where one row alone is inert is a
-             list that has quietly picked for you. */
+          /* EVERY row draws its own controls, the copy the walk is standing on included —
+             and since D119 there is no second place they could be drawn. `false` is the row
+             form: a quiet `Mark sold` and an icon-only `Retire`. The `true` form survives at
+             one call site, the phone's sticky action bar, and is phone-only from here. */
           renderAction={(copy) => renderAction(copy, false)}
         />
       )}
-    </section>
-  )
-}
-
-/* WHERE THIS CARD IS — the location card beside the photograph: the address, the neighbours a
- * hand counts by, the lens, and the one primary action for this copy. */
-function LocationCard({
-  row,
-  layouts,
-  wantedBy,
-  action,
-}: {
-  row: Row
-  layouts: ReadonlyMap<number, readonly SectionDetail[]>
-  wantedBy: Wanted | null
-  action: ReactNode
-}) {
-  const place: Place | undefined = row.card.place
-  const label = positionLabel(row.card)
-  const pooled = place?.located === false
-  const departed = isDeparted(place)
-
-  return (
-    <section className="inventory-location">
-      <div className="inventory-location-head">
-        <span className="bn-label">
-          <Icon name="pin" size={12} /> Location
-        </span>
-        {place?.box_name ? <span className="inventory-location-boxname">{place.box_name}</span> : null}
-      </div>
-
-      {pooled ? (
-        <p className="inventory-location-note">
-          Pooled — a count, not a location. This card has no box, section or card position; the key{' '}
-          <code className="inventory-inline">{row.key}</code> names its photo and sidecar on disk.
-        </p>
-      ) : label === null ? (
-        <Notice tone="warn" title="The capture server sent no position label for this card." code={`label: absent · key ${row.key}`}>
-          Either an older server is running — restart it and reload — or this record&rsquo;s box
-          or index is not a number, which <code className="inventory-inline">GET /status</code> reports.
-        </Notice>
-      ) : (
-        <>
-          <div className="inventory-location-label">
-            <PositionLabel label={label} />
-          </div>
-          <PlaceNeighbors place={place} />
-          {departed || place === undefined ? null : (
-            <PositionBar place={place} persona="owner" sections={layouts.get(place.box)} sectionDepth />
-          )}
-        </>
-      )}
-
-      {/* An open order is waiting on this copy: the pull belongs on the order screen, and a
-          walk-in sale here would take the card out from under it. */}
-      {wantedBy === null ? null : (
-        <a className="inventory-wanted" href="#/orders" title={`Order ${wantedBy.order} names this copy`}>
-          <Icon name="cart" size={14} />
-          <span className="inventory-wanted-text">
-            Wanted by order <span className="inventory-wanted-number">{wantedBy.order}</span>
-          </span>
-          <Icon name="arrowRight" size={13} className="inventory-wanted-go" />
-        </a>
-      )}
-
-      {action === null ? null : <div className="inventory-location-actions">{action}</div>}
     </section>
   )
 }
@@ -711,8 +718,13 @@ function skuOrName(card: InventoryCard): string | null {
   return null
 }
 
-/** What one copy offers: the word for the door it left by, or the two writes. `primary` is the
- *  location card's form — the one solid button on the screen; the rows draw the quiet one. */
+/** What one copy offers: the word for the door it left by, or the two writes.
+ *
+ *  `primary` IS A SIZE, NOT A SHAPE, AS OF D119. It used to mean "the location card's form —
+ *  the one solid button on the screen"; that card is gone, and its last caller is the phone's
+ *  sticky action bar (`actionBar` below → `BoxBrowse`, rendered only under `max-width: 767px`).
+ *  So `primary` is phone-only from here, and what it decides is emphasis and control size —
+ *  never whether a state is drawn at all. */
 function Action({
   copy,
   primary,
@@ -738,8 +750,10 @@ function Action({
   if (copy.state === 'sold' || soldKeys.has(copy.key)) {
     const standing = undoableSales.get(copy.key)
     /* After the undo window the state is a pill, in the register of every other state on the
-       screen. A copy row's own state pill already says `sold` once the re-read lands, so only
-       the location card and an optimistic sale still in flight draw one here. */
+       screen. UNCHANGED BY D119, AND DELIBERATELY: a copy row's own state pill already says
+       `sold` once the re-read lands, so the row draws a second one ONLY for an optimistic sale
+       still in flight. The phone bar has no state pill beside it and so always draws one. Two
+       `Sold` markers on one row is what this condition exists to prevent. */
     return standing === undefined ? (
       primary || copy.state !== 'sold' ? (
         <Pill tone="ok" icon="check">
@@ -747,13 +761,26 @@ function Action({
         </Pill>
       ) : null
     ) : (
+      /* THE CLOCK IS THE ROW'S TOO, SINCE D119, AND THE SENTENCE IS NOT — which is D118 deciding
+         the shape rather than taste. The location card drew the whole receipt and the row got a
+         bare `Undo`; with that card gone the row is where a sale is taken back, and an `Undo`
+         with no clock says what it does but not for how long. What could NOT come with it is the
+         panel: `.card-locations-action` reserves the button pair's own 137x28 so a press cannot
+         resize the slot it lands in, and a `bn-receipt` pill is 268px wide and 36px tall — put
+         in the cell it shoves the address, given a grid row of its own it grows the row 38px,
+         and either one is the screen shake D118 was built to end. Measured both ways.
+         SO THE ROW GETS THE DRAIN AND THE BUTTON, inside the slot, at the slot's size. The
+         sentence is not lost: the state pill beside it already reads `Sold`, and the toast this
+         sale posted carries `Marked sold.` with the same clock and the same Undo. The phone's
+         action bar is unchanged — it has no state pill beside it, and it is what `primary` now
+         means. */
       <span
-        className={primary ? 'bn-receipt inventory-receipt' : 'inventory-copy-actions'}
-        style={primary ? { ['--receipt-ms' as string]: `${UNDO_WINDOW_MS}ms` } : undefined}
+        className={primary ? 'bn-receipt inventory-receipt' : 'inventory-copy-actions inventory-receipt'}
+        style={{ ['--receipt-ms' as string]: `${UNDO_WINDOW_MS}ms` }}
       >
         {primary ? <span className="inventory-receipt-said">Marked sold.</span> : null}
         {/* The undo window draining, the same clock the toast for this sale shows. */}
-        {primary ? <span className="bn-receipt-bar" aria-hidden="true" /> : null}
+        <span className="bn-receipt-bar" aria-hidden="true" />
         <Button
           size={primary ? 'md' : 'sm'}
           icon="undo"

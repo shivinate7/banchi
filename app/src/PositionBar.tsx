@@ -1,5 +1,8 @@
+import { useRef } from 'react'
+
 import type { Place, SectionDetail } from './types'
 import { clamp, sentenceOf, sectionDepthOf, spansOf } from './position'
+import { isDeparted } from './server'
 import type { Persona, Span } from './position'
 import './PositionBar.css'
 
@@ -51,9 +54,23 @@ export function PositionBar({
   const sentence = sentenceOf(place, persona)
   const depth = sectionDepth && spans.length > 1 ? sectionDepthOf(place) : null
   const lens = depth === null ? null : lensOf(spans)
+  const gone = isDeparted(place)
 
   /* Drawn only when the server said where the card is. The clamp is for layout, not truth. */
   const marker = place.fraction === null ? null : clamp(place.fraction * 100, 0, 100)
+
+  /* WHERE THE MARK WAS STANDING WHEN IT LOST ITS PLACE (D118). The sale nulls `fraction` in the
+     same render that adds `data-gone`, and an absolutely positioned mark with no `left` snaps to
+     its static position — the far end of the track — so it would teleport and only then fade.
+     These refs are read ONLY on the way out: while the card is placed they are simply the value
+     being drawn. The component stays mounted across the write, which is what makes them the
+     previous frame's answer rather than a stale one from another card. */
+  const lastBox = useRef(50)
+  const lastSection = useRef(50)
+  if (marker !== null) lastBox.current = marker
+  if (depth?.marker != null) lastSection.current = depth.marker
+  const boxAt = marker ?? lastBox.current
+  const sectionAt = depth?.marker ?? lastSection.current
 
   return (
     <div
@@ -61,6 +78,7 @@ export function PositionBar({
       role="img"
       aria-label={depth === null ? sentence : `${sentence} · ${depth.sentence}`}
       data-place={place.label}
+      data-gone={gone ? 'true' : undefined}
     >
       <p className="position-bar-text position-bar-text-box">{sentence}</p>
       <div className="position-bar-track">
@@ -71,9 +89,17 @@ export function PositionBar({
             style={{ flexGrow: span.end - span.start + 1 }}
           />
         ))}
-        {marker === null ? null : (
-          <span className="position-bar-marker" style={{ left: `${marker}%` }} />
-        )}
+        {/* MOUNTED EVEN WITH NOWHERE TO STAND (D118), which is the whole of the animation the
+            owner asked for. React keeps this node across the render that sells the card, so the
+            mark eases out and drops instead of being deleted between two frames — and the row
+            it sits in keeps its height either way, which is the part the page below feels.
+            `left` holds its last value: an element on its way out may not also travel. */}
+        <span
+          className="position-bar-marker"
+          data-gone={marker === null ? 'true' : undefined}
+          style={{ left: `${boxAt}%` }}
+          aria-hidden="true"
+        />
       </div>
 
       {depth === null ? null : (
@@ -92,7 +118,12 @@ export function PositionBar({
             </svg>
           )}
           <div className="position-bar-track position-bar-sectiontrack">
-            <span className="position-bar-marker" style={{ left: `${depth.marker}%` }} />
+            <span
+              className="position-bar-marker"
+              data-gone={depth.marker === null ? 'true' : undefined}
+              style={{ left: `${sectionAt}%` }}
+              aria-hidden="true"
+            />
           </div>
           <p className="position-bar-text position-bar-text-section">{depth.sentence}</p>
         </div>

@@ -57,6 +57,15 @@
    replaced the hover lift outright, so this button sat 1px below rest then and does now. */
 .pull-confirm:active,
 [data-force-state='pressed'] .pull-confirm {
+  /* THE MOVEMENT LANDS ON THIS FRAME; THE REPAINT STILL EASES (D118). The rest rule above
+     transitions `transform` for the hover LIFT — a response to the pointer arriving, which is
+     right to ease — and that transition was also easing the squeeze below, 120ms behind the
+     instant 1px dip `base.css` supplies. Naming the two repaints here and leaving the movement
+     out is what splits them: the lift keeps its ease, the press lands at once, and the release
+     springs back because a released button no longer matches this rule. */
+  transition:
+    box-shadow var(--bn-t-fast) var(--bn-ease),
+    filter var(--bn-t-fast) var(--bn-ease);
   translate: 0 1px;
   transform: scale(0.985);
   box-shadow: var(--bn-shadow-1);
