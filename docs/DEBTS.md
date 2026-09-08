@@ -1646,6 +1646,8 @@ D124 carries the argument and the three non-obvious properties of the CSS.
 `docs/specs/logo/sheets/*.html` and `docs/specs/box-drawings/sheet.html` still fetch from Google
 Fonts. They are drawings a person opens by hand — not the product, not the suite, on no gate —
 and `docs/design-refs/README.md` already says they fall back to system faces offline. Vendoring
-for them would duplicate the binaries to buy nothing. **Neither the app nor `app/tests/` has any
-remaining outside dependency**, which is the claim section 16's second bullet and D43 both rest
-on.
+for them would duplicate the binaries to buy nothing. **The app now LOADS nothing from outside
+the origin it came from, and `app/tests/` asserts that on every case.** The one external URL left
+in `app/src` is an `href` in `Markdown.tsx` pointing at TCGplayer's pricing admin — a link the
+operator presses, not a resource the page fetches, and `sealOutside` would catch it the moment it
+became one.
