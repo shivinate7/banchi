@@ -759,6 +759,49 @@ test('the drawer fits an iPhone in Safari, with its headings intact', async ({ p
   expect(seen.lockup, 'the drawer draws the short-screen lockup').toBeCloseTo((34 * BLOCK.w) / BLOCK.ref, 0)
 })
 
+test('the second step reaches the mini, and stops short of the phone that already fits', async ({ page }) => {
+  /* THE FIRST STEP LEFT ONE FAMILY 29px SHORT. 375 x 812 — the mini, the X, the XS, the 11 Pro —
+     is 722px in Safari and the drawer needs 751. The rows were the only thing left with anything
+     to give: nine at 44 against a 40px floor is 36px, which covers it.
+     BOTH HALVES MATTER. A step that reached the iPhone 14 as well would take four pixels off a
+     thumb target on a screen that already fits, for nothing — which is exactly what a `clamp()`
+     ramp does, and why this is a step. */
+  await page.setViewportSize({ width: 375, height: 722 })
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  await expect(page.locator('.bn-drawer')).toBeVisible()
+  await page.waitForTimeout(400)
+
+  const mini = await page.evaluate(() => {
+    const nav = document.querySelector('.bn-drawer .bn-nav')!
+    const box = nav.getBoundingClientRect()
+    const links = [...document.querySelectorAll('.bn-drawer .bn-nav a.bn-nav-link')]
+    return {
+      overflow: nav.scrollHeight - nav.clientHeight,
+      shown: links.filter((l) => {
+        const r = l.getBoundingClientRect()
+        return r.top >= box.top - 1 && r.bottom <= box.bottom + 1
+      }).length,
+      total: links.length,
+      row: Math.round(links[0]!.getBoundingClientRect().height),
+    }
+  })
+  expect(mini.overflow, `the mini's nav runs ${mini.overflow}px past the fold`).toBeLessThanOrEqual(0)
+  expect(mini.shown).toBe(mini.total)
+  // 40 is `--bn-control-h-sm` under a coarse pointer — CLAUDE.md's thumb floor exactly, and the
+  // reason there is no third step: the next one would break it.
+  expect(mini.row, 'the rows sit ON the thumb floor, not under it').toBe(40)
+
+  // AND THE 14 IS UNTOUCHED, which is the half a threshold gets wrong when it is placed by feel
+  await page.setViewportSize(SHORT_PHONE)
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  await page.waitForTimeout(400)
+  const tall = await page.locator('.bn-drawer .bn-nav a.bn-nav-link').first()
+    .evaluate((el) => Math.round(el.getBoundingClientRect().height))
+  expect(tall, 'a phone that already fits keeps its 44px rows').toBe(44)
+})
+
 test('a tall phone keeps the full lockup, because it has the room', async ({ page }) => {
   /* THE CONDITION IS HEIGHT AND NOT WIDTH, and this is what says so: a Pro Max is a phone, gets
      the drawer, and has no reason to give up 6px of brand. Without the height arm this case

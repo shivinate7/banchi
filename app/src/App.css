@@ -846,6 +846,22 @@
   .bn-drawer .bn-nav-group { gap: 0; }
 }
 
+/* ---- AND A SECOND STEP, BECAUSE THE FIRST LEAVES ONE FAMILY 29px SHORT ------------------------
+   375 x 812 — the mini, the X, the XS, the 11 Pro — is 722px in Safari and needs 751. The rows
+   are the only thing left with anything to give: nine of them at 44 against a 40px floor is 36px,
+   which covers the 29.
+   THE STEP IS AT 740px AND NOT LOWER, so it reaches the mini and does NOT reach the iPhone 14 at
+   754 — that one already fits at 44 and has no reason to give up four pixels a thumb can feel.
+   A RAMP WAS TRIED FIRST AND IS WORSE. `clamp(40px, 16.33px + 3.279vh, 44px)` interpolates
+   smoothly between the two, and at 754 it lands the rows on 41px: it shrinks the screen that
+   already fits, to no purpose, because a ramp cannot know whether the content fits. A step can be
+   put exactly where the arithmetic changes.
+   40px IS THE FLOOR AND THIS SITS ON IT. `--bn-control-h-sm` is 40 under a coarse pointer, which
+   is CLAUDE.md's thumb rule exactly; there is no third step, because the next one would break it. */
+@media (max-width: 767px) and (max-height: 740px) {
+  .bn-drawer .bn-nav-link { height: var(--bn-control-h-sm); }
+}
+
 /* ---- and where it STILL does not fit, the cut edge says so ------------------------------------
    On an iPhone SE in Safari the drawer is 577px and nine rows cannot fit at any of these sizes —
    5 of 9 show, and they end on `.bn-side-foot`'s own rule, which reads as the bottom of the menu

@@ -2061,11 +2061,51 @@ the `size` it was handed, so a media query that shrank the slot without telling 
 would leave the box at 34's width and the maths at 40's — measured, the bracket renders a fifth of
 the way toward the rail. One source decides and both read it.
 
-### The SE cannot fit, so the cut edge says so
+### A second step, because one leaves a whole family 29px short
 
-Nine rows do not go into 577px at any size in that table, and on main they did not either — 5 of
-9, ending on `.bn-side-foot`'s own rule, which reads as the bottom of the menu rather than the top
-of a fold. Four screens looked absent rather than below the line.
+**The shrink above is a step, not a ramp, and one step is not enough.** 375 x 812 — the mini, the
+X, the XS, the 11 Pro — is 722px in Safari and the drawer needs 751. The rows are the only thing
+left with anything to give: nine of them at 44 against a 40px floor is 36px, which covers the 29.
+
+| | rows | iPhone 14 | 15/16 | mini / 11 Pro | 8 Plus | SE |
+| --- | --- | --- | --- | --- | --- | --- |
+| one step | 44 | fits | fits | 8/9, 29px | 7/9, 105px | 5/9, 174px |
+| **two steps** | 44 / 40 | **fits** | **fits** | **fits** | 7/9, 65px | 6/9, 134px |
+
+**The second step is at 740px and not lower, so it reaches the mini and does NOT reach the iPhone
+14 at 754** — that one already fits at 44 and has no reason to give up four pixels a thumb can
+feel.
+
+**A ramp was tried first and is worse.** `clamp(40px, 16.33px + 3.279vh, 44px)` interpolates
+smoothly between the two ends and lands the iPhone 14's rows on 41px: it shrinks the screen that
+already fits, to no purpose, **because a ramp cannot know whether the content fits.** A step can
+be put exactly where the arithmetic changes. That is the general form of it — a continuous
+function of the viewport is the wrong instrument for a threshold that is a property of the
+content.
+
+**40px IS THE FLOOR AND THIS SITS ON IT.** `--bn-control-h-sm` is 40 under a coarse pointer, which
+is CLAUDE.md's thumb rule exactly. **There is no third step**, and the next section says why.
+
+### The SE cannot fit, and no amount of shrinking changes that
+
+**Everything that could shrink is already against a floor**, so this is arithmetic rather than a
+judgement. Measured on an SE, the drawer needs 751px of content in 577px of screen. The smallest
+it could be made, with every value at its own floor and the group headings deleted entirely:
+
+| | |
+| --- | --- |
+| nine nav rows at the 40px thumb floor | 360 |
+| three foot rows at the same floor | 120 |
+| the lockup at kanji 32, §11's own floor | 75 |
+| the drawer's padding | 32 |
+| | **587px, against 577** |
+
+**Ten pixels over, with no headings, nothing left to give, and both floors already touched.** The
+375 x 667 phones — the SE 2 and 3, the 8, the 7, the 6s — cannot show this menu without scrolling,
+and neither could main. So the cut edge is made to say so.
+
+It ended on `.bn-side-foot`'s own rule, which reads as the bottom of the menu rather than the top
+of a fold — so four screens looked absent rather than below the line.
 
 **The fade is the mechanism the thumb-floor pass gives the scrolling chip rows, turned
 vertical**: a mask driven by the scroller's
