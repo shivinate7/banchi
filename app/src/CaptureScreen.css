@@ -969,7 +969,7 @@
 /* ---- 1280 to 1360: the hero must not be the narrowest column, and the rail must not be the
    tallest — at 800px of height the four stacked cards outgrew the viewfinder and took the
    whole page over the fold with them, so they give up 6px of padding each. ------------------ */
-@media (max-width: 1360px) and (min-width: 1280px) {
+@media (max-width: 1359px) and (min-width: 1280px) {
   .capture.bn-page { --cap-rail-w: 272px; --cap-last-w: 250px; --cap-gap: var(--bn-2); }
   .capture-shell { gap: var(--cap-gap) var(--bn-3); }
   .capture-card,

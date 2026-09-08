@@ -660,7 +660,18 @@
 .review-details-hint { font-weight: 400; color: var(--bn-ink-3); }
 .review-facts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* A COLUMN COUNT THAT IS A FIT RATHER THAN A NUMBER. Two was right beside an open queue rail
+     and wrong beside a collapsed one, and no media query can tell those apart — the delta is
+     292px of rail the operator opens and closes, inside a card whose own width also moves with
+     the sidebar. A track list is measured against the box, so it is right in every combination
+     of sidebar, rail and browser zoom, with no query to keep in step.
+     246px IS MEASURED, NOT CHOSEN: `.review-fact` is `92px minmax(0, 1fr)` with an 8px gap, and
+     across the demo store's ten facts the widest VALUE ink is 146px — so 92 + 8 + 146 is the
+     width at which the longest value stops wrapping. The fixed two-column grid gave each fact
+     185px at a 1440 viewport, which is below that, so those values were already wrapping; this
+     drops to one column there and fits them instead. `min(…, 100%)` so a container narrower
+     than one track shrinks rather than overflowing. */
+  grid-template-columns: repeat(auto-fit, minmax(min(246px, 100%), 1fr));
   gap: 6px var(--bn-6);
   padding: var(--bn-2) 0 var(--bn-2);
 }

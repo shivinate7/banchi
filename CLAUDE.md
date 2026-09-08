@@ -463,9 +463,16 @@ they must NOT be theme-overridable, which is what moving them into `tokens.css` 
 That file is generated, never hand-edited, and `make docs-audit`'s `logo parity` row reconciles
 it against §9 in both directions — because `raw color` cannot see it at all, its scope being
 `app/src/*.css` and never a `.ts`. **An exception with no reader is how a rule stops being one.** Every token is `--bn-*` — color, type, spacing, radius, elevation, motion, the
-shell's own metrics — and the legacy names the old sheet exported (`--ink`, `--muted`,
-`--line`, `--s1…`, `--r`, `--util`) survive at the bottom as aliases so no stylesheet was
-orphaned. **Write new CSS with `--bn-*`.**
+shell's own metrics. **Write new CSS with `--bn-*`.**
+
+**The legacy aliases at the foot of that file are a migration seam that is already spent, and
+this paragraph said the opposite until 2026-09-07.** It said the old names — `--ink`, `--muted`,
+`--line`, `--s1…`, `--r`, `--util` — "survive so no stylesheet was orphaned", which read as a
+live dependency; `app/src/tokens.css`'s own header went further and said forty stylesheets read
+them. **Measured across all 102 files under `app/src`: not one reads any of the twenty-four,
+against 266 uses of `var(--bn-ink)` alone.** `docs/DESIGN.md` has recorded this correctly since
+2026-09-03 and both of these had drifted from it. They are kept rather than deleted, which is
+that file's stated call — and **a new rule may not read one.**
 
 **Both themes are real.** Light is the default; `:root[data-theme='dark']` redefines every
 surface and ink together, `app/index.html` applies a stored choice before first paint, and the
@@ -912,11 +919,13 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
 - **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
   a primitive the kit already has is not rewritten in a screen sheet; a screen is verified at
-  1440, 820 and 390, in light and in dark, before it is called done. **This rule replaces
-  `docs/DESIGN.md`'s locked token table as the thing a session designs against** — that table
-  still holds the Fulfillment view's floors, which are unchanged and still asserted by
-  `make design-check`, but its color and type block records a palette the app no longer
-  paints and `make docs-audit` says so on every run.
+  1440, 820 and 390, in light and in dark, before it is called done. **`docs/DESIGN.md` is
+  where that system is written down, and it describes this tree** — it was rewritten for Banchi
+  on 2026-09-03, its token block is the `--bn-*` set, and `make docs-audit`'s `design tokens`
+  row locks every name in both directions. These two paragraphs said the opposite until
+  2026-09-07: that the block recorded a palette the app no longer paints and that the audit
+  "says so on every run". It does not, and did not — the row prints `ok` and has since the
+  rewrite. **A claim that a check is red is worth checking against the check.**
 - **Main moves by pull request. A session never commits to it and never pushes it.**
   Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
   GitHub. `main` then advances in this clone by `git pull` and no other way.
@@ -1179,6 +1188,7 @@ D112 The labels are tracked, the images are not, and an unmoved measurement is a
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
 D115 The reading is what the export said, and what has sold since is counted beside it
+D118 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
@@ -1299,9 +1309,11 @@ was open** — the rule is renumber your own, never another's.
 - `docs/DESIGN.md` — **two halves, and only one of them still describes this tree.** The
   Fulfillment view's hard constraints table is live, binding and asserted in a browser by
   `make design-check`: 20px body, 32px position labels, a 320px photograph, 44px targets, 7:1
-  contrast, no jargon, and no route out of that view. The token block beside it records the
-  palette and type of the sheet Banchi replaced; `app/src/tokens.css` is the system now, and
-  `make docs-audit`'s `design tokens` row reports the disagreement on every run until the two
-  are reconciled by someone who owns that file.
+  contrast, no jargon, and no route out of that view. **The token block beside it is live
+  too**, and this pointer called it stale until 2026-09-07: it is the `--bn-*` set, rewritten
+  for Banchi on 2026-09-03, and `make docs-audit`'s `design tokens` row reconciles it against
+  `app/src/tokens.css` in both directions on every run — green, not red. That row locks every
+  token NAME and the hex VALUES; the scale numbers beside them are prose, which `docs/DEBTS.md`
+  carries as an open gap.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

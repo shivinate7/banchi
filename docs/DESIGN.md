@@ -113,6 +113,8 @@ STAGE — DARK IN BOTH THEMES     the viewfinder and the photo heroes
 
 SHELL                           --bn-sidebar-w 236 · --bn-rail-w 64 · --bn-topbar-h 52
 --bn-control-h 34 · -lg 40 · -sm 28      → 42 · 46 · 40 under a coarse pointer
+PAGE WIDTH                      --bn-page-w 1600 · -rows 1344
+                                a CAP, not a breakpoint: 1536 and 1280 of content
 ```
 
 **Three registers, and the third one is two colors rather than one.** `--bn-accent` is
@@ -307,10 +309,67 @@ command palette over any of them and `?` opens the one keyboard reference sheet,
 where a binding is documented now that the inline key hints are gone.
 
 **The widths this build was walked at are 390, 820 and 1440.** A phone, an iPad in portrait,
-and the owner's Mac. The breakpoints that do the work are `767px` and its `min-width: 768px`
-partner — 54 media blocks under `app/src` hang on the first and six on the second — with
-`480`, `640` and `1023` refining below them and `1279` above. **820 is the width that catches the mistake**: it is above every
-phone breakpoint and all thumb, which is why the control heights follow the pointer instead.
+and the owner's Mac. **820 is the width that catches the mistake**: it is above every phone
+breakpoint and all thumb, which is why the control heights follow the pointer instead.
+
+**Every width the shell reacts at is named below, and `make docs-audit`'s `breakpoints` row
+reads this block.** It replaced a sentence that published two counts — "54 media blocks hang
+on the first and six on the second" — where the six was seven. A count beside a list is the
+drift this file exists about, so the counts now live in the row's summary, taken at run time.
+
+**The form: a `min-width` is the step, and a `max-width` is the step MINUS ONE.** That is what
+keeps a width from being both a floor and a ceiling, and it stops one edge being spelled two
+ways. Before this was written, four edges were spelled twice — 559/560, 639/640, 899/900,
+1099/1100 — and three integers were used on both sides. None of it was a rendering defect,
+because the sheets that disagreed drew different screens; it was a vocabulary nobody could
+read, and therefore one no guard could enforce.
+
+```
+LADDER          the shared vocabulary. Any sheet may use these.
+  480           the narrow phone
+  560           the wide phone: a receipt, a box bar and a hero fold here
+  640           the phone/tablet seam
+  768           the tablet, and the shell's own rail boundary
+  900           a two-column body becomes one, ahead of the tablet step
+  1024          the desk: at and above this the sidebar is 236px, or 64px railed
+  1280          the wide desk
+
+REFINEMENTS     a width ONE screen reflows at for a reason of its own, named with the sheet
+                that owns it. A refinement no sheet uses is a number nobody chose.
+  1100          Codes — the board loses its third column · Fulfillment — the wide column
+  1200          ReviewQueue — the card's photo column steps down
+  1320          ReviewQueue — the queue rail becomes a sheet, beside the RAIL
+  1360          CaptureScreen — the hero must not be the narrowest column
+  1500          ReviewQueue — the queue rail becomes a sheet, beside the SIDEBAR
+
+CONTAINER       widths measured against a COLUMN rather than the window, so they are not on
+                the ladder and carry no step arithmetic: a `pane` of 640px and a viewport of
+                640px are different quantities. Each is named with its container and sheet.
+  copies  470   CardLocations — the marker's track stops being 110px and starts being ~285
+  copies  479   CardLocations — the identity keeps every character, the stage triple drops
+  copies  619   CardLocations — the address takes the whole line
+  pane    479   BoxBrowse — the fact grid goes to one column
+  pane    559   BoxBrowse — the photograph stops short of the full width
+  pane    560   BoxBrowse — the photo/copies band splits in two
+  pane    760   BoxBrowse — the fact grid goes to two columns
+  page    1099  Pricing — the ship bar's key legend takes a line of its own
+  pricing 599   Pricing — the row becomes a card
+  pricing 880   Pricing — the deck takes two columns
+  pricing 939   Pricing — the row becomes a compact two-line row
+  pricing 1040  Pricing — the DIRECT column joins the table
+  (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
+
+COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
+  Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column
+```
+
+**Above 1024, prefer a cap or a container to a viewport width.** Every screen but the
+Fulfiller's is drawn inside `.bn-shell-main`, which is the viewport minus 236px — or minus
+64px when the rail is collapsed. Those differ by 172px, wider than the gap between two ladder
+steps, so a `min-width: 1024px` fires in a 788px column and in a 960px one and cannot tell
+them apart. `--bn-page-w` and `--bn-page-w-rows` are the caps; `@container` is the tier
+switch. The `breakpoints` row asks this as a QUESTION rather than blocking on it, because
+whether a given rule is asking the wrong thing needs a reading of what it does.
 
 **None of this reaches `#/fulfillment`.** That view keeps the 24-64 end of the scale and
 every floor in the constraints table, and those floors win wherever the two could be read as

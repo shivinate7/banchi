@@ -331,7 +331,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   gap: var(--bn-3);
 }
 /* Two across on a tablet and one on a phone, so the name being chosen is not the thing cut. */
-@media (max-width: 900px) {
+@media (max-width: 899px) {
   .runs-boxes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 559px) {

@@ -4098,6 +4098,37 @@ COMPONENTS = [
                         "would type-check, pass, and delete one card of three. Observed "
                         "failing against exactly that mutation before it was kept.",
             },
+            "tests/routes.ts": {
+                "does": "one helper, `routesFromNav`, which harvests the owner's route roster "
+                        "off `.bn-side a.bn-nav-link` and names `#/gallery` beside it. Moved "
+                        "out of `cursor.spec.ts` on 2026-09-07 when `wide.spec.ts` needed the "
+                        "same roster at the other end of the width ladder (D118), and put "
+                        "beside `fontsReady.ts` rather than into `shell.ts`, whose one argument "
+                        "is the capture-port seal. THE THREE GUARDS TRAVEL WITH IT and that is "
+                        "the point of there being one copy: a harvest floor of >3, `#/` present, "
+                        "and exactly one `.bn-nav-link` outside `<nav>` — the Fulfiller's. A "
+                        "second copy of an anti-vacuity contract is a copy that drifts. It "
+                        "cannot run below 768: the sidebar is `display: none` there, which is "
+                        "why the phone sweep harvests its own.",
+                "governed_by": ["D31", "D50", "D69", "D70", "D95", "D118"]},
+            "tests/wide.spec.ts": {
+                "does": "the owner's screens ABOVE the desk, which nothing in this suite had "
+                        "ever rendered. Of twenty-one specs, ten cases set 1440x900 and none "
+                        "went higher, so `.bn-page`'s own 1600px cap — the most consequential "
+                        "layout rule in the product — had never been drawn at a width where it "
+                        "bites. Two cases. The first walks the harvested roster at 1440, 1920 "
+                        "and 2560 in BOTH rail states — 172px of sidebar the operator toggles, "
+                        "wider than the gap between two ladder steps — and asserts the content "
+                        "column is capped and the page never scrolls sideways. It measures "
+                        "`.bn-page, .ff-column` rather than `main`, because the Fulfiller's "
+                        "route is deliberately full-bleed and its cap is on a child. The second "
+                        "measures the FIRST LINE BOX of every prose run at 2560 against 720px, "
+                        "which is the kit's own 72ch lede plus slack. Both were "
+                        "mutation-tested: raising `--bn-page-w` and dropping one `max-width` "
+                        "each took exactly one case red. What it found on its first run: "
+                        "`.orders-backlog p` inking 950px and six `.kit-spec-note` runs up to "
+                        "1254px, none of which carried a measure at all. D118.",
+                "governed_by": ["D27", "D50", "D95", "D118"]},
             "tests/cursor.spec.ts": {
                 "does": "what every control says to the pointer, in two cases that cover "
                         "different things. A live sweep walks EVERY registered route — the "
@@ -4281,7 +4312,7 @@ COMPONENTS = [
                                              "asserts NOTHING about the order walk; that is "
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
-                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114"]},
+                                     "governed_by": ["D24", "D27", "D28", "D36", "D49", "D58", "D63", "D69", "D73", "D90", "D91", "D96", "D113", "D114", "D118"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
