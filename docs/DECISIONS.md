@@ -5803,7 +5803,7 @@ No check could have found it, because none sent the field: every `do_put_box_cla
 
 **The geometry is generated, never hand-written.** `scripts/build-mark.mjs` reads `docs/specs/logo/sheets/small-cut.html`, evaluates the drawing routine out of it, and writes `app/src/kit/markGeometry.ts`, `app/src/kit/markPalettes.ts` and `app/public/favicon.svg`. There is therefore exactly one implementation of the mark in this repo and the app cannot drift from the spec by being edited. The alternative — copying the paths across once and maintaining them — is the shape of defect `make docs-audit`'s `motion params` row already exists to catch: two copies of one rule, drifting for weeks, with nothing comparing them. Ten committed sheets carry byte-identical geometry, which is what makes reading one of them safe.
 
-**Two optical cuts, chosen by size, and the small one is the one that ships.** `logo.md` §3 requires a separate cut below 64px and had never drawn it; §11 swept it at 16, 28, 32 and 44px — the sizes this app actually draws — and locked stroke 4.2 with no taper. **Every surface in this product is below that boundary**: the sidebar and its rail at 32, the phone bar at 26, the drawer at 30, both crash pages at 40, the Fulfiller's header at 44, the favicon at 16 to 32. `DISPLAY` exists so the locked cut can be looked at on `#/gallery`, and for nothing else today.
+**Two optical cuts, chosen by size, and the small one is the one that ships.** `logo.md` §3 requires a separate cut below 64px and had never drawn it; §11 swept it at 16, 28, 32 and 44px — the sizes this app actually draws — and locked stroke 4.2 with no taper. **Every surface in this product is below that boundary**: both crash pages at 40, the Fulfiller's header at 44, the favicon at 16 to 32, and — since D120 — the shell's four brand surfaces through `Lockup`, whose bracket is this same mark, at 32 on the rail and the phone bar and at kanji 40 in the sidebar and the drawer. **This sentence listed four `Logo` call sites that no longer exist** — the sidebar and its rail at 32, the phone bar at 26, the drawer at 30 — until 2026-09-07, when D120 was already the ruling; the claim they were supporting held throughout, because the cut is chosen by `size` and every one of those figures is under 64. `DISPLAY` exists so the locked cut can be looked at on `#/gallery`, and for nothing else today.
 
 The small cut carries **no `feTurbulence`**, and that is a finding rather than a simplification: §11 measured the marbling at those sizes and it does not merely vanish, it loses to a flat prism gradient, which reads as a lit card where the displacement map reads as mush. That answers `logo.md` §10's open question about whether a favicon pipeline would keep the filter by removing the filter from every surface that has one. It also makes the bracket a constant-width wire, which a real stroked path draws in **52 bytes against the 8,989** the variable-width taper's outlined polygon needs.
 
@@ -7591,7 +7591,96 @@ keeps the rule, so the empty-state deck stays inert; `a.home-deck` restores it f
 consumer today, and the moment a second screen wants "what is owed" the ranking should move to
 the server rather than being derived twice.
 
-## D122 — Above the desk a screen asks its column, and browser zoom is not the lever it looks like
+## D122 — The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
+
+**Built 2026-09-07, after a session spent two re-runs on failures that were not in its code.**
+In the `magical-kalam-0230c3` worktree a full `make design-check` reported
+**18 failures, every one in `shipping.spec.ts` or `run-panel.spec.ts`** — with the WHOLE of
+shipping failing rather than individual assertions. Re-run alone, nothing else touched:
+**52 passed**. Another worktree, `cap-on-demand`, was running its own Playwright suite at the same
+moment — about **90 browser processes between them on a 15-core Mac**. Earlier
+in the same session the same collision produced one intermittent failure in `nav.spec.ts` and one
+in `capture-undo.spec.ts`, each of which also passed in isolation, and each of which cost its own
+re-run.
+
+**D43 IS THE ENTRY THIS ONE FINISHES.** That decision gave every checkout its own dev port, its
+own capture port and its own store, so two trees can be worked in at once without either
+answering for the other — and it closed a defect of exactly this shape, a green
+`make design-check` in a worktree that had asserted against the main tree's server.
+**The CPU is the one resource it could not give them a copy of.**
+`app/playwright.config.ts` is `fullyParallel`
+at Playwright's default worker count, which is half the cores — seven here — each worker a
+Chromium context, plus a Vite dev server compiling the module graph for every one of them. Two
+trees is 4x oversubscription against a rig sized for one.
+
+**THE REPO HAD ALREADY DIAGNOSED THE FAILURE AND STILL COULD NOT SEE IT.**
+`app/playwright.config.ts` records it against a deliberately starved rig — *"a context can fail to
+render at all rather than slowly: with the allowance raised to 120s, 10 of 80 still failed and one
+took 122s. A wait cannot answer that"* — and that comment is about oversubscription WITHIN one
+run, where the config can at least count its own workers. Across two runs in two checkouts there
+is nothing to count with. So the answer is not a longer timeout and not fewer workers; it is
+mutual exclusion, and it has to live somewhere both runs can see.
+
+**WHAT IS NOT THE CAUSE, so nobody re-derives it.** Not the capture server: `app/tests/shell.ts`'s
+`sealEveryTest` aborts every capture request, and D43 gives each checkout its own capture port, so
+two suites never touch one server. The contention is CPU and memory and nothing else — which is
+also why the lock must live outside every checkout, and why `.serve/` was the wrong home for it.
+
+**IT IS AN ADVISORY `flock`, WHICH IS WHY THIS FEATURE HAS NO STALE-LOCK PATH.**
+The file is `~/.pkmnscan/locks/browsers.lock`. `scripts/serve.py` proves a pid is still the process it
+recorded by comparing `ps -o command=` against the argv it stored, and it has to: a port is the
+resource there and it outlives the process that held it. Here the OS owns the whole question — an
+advisory lock is released when the holder exits, however it exits, including `kill -9`, a crashed
+session and a reboot. The pid, the tree, the command and the start time are written INTO the
+locked file and are read for one purpose only: naming the holder in the refusal. `make
+suite-lock-selftest` proves the point by killing a holder with -9 and asserting the lock is free.
+
+**IT REFUSES RATHER THAN QUEUES, AND THE REFUSAL EXITS 75.** A suite that silently waits for
+another tree looks hung, which is its own failure mode and one the 2026-09-07 session also hit —
+ten minutes pass before anybody suspects a queue rather than a wedge. So the default names the
+tree, the pid, how long it has been running and the command it is running, and offers three ways
+on. `make design-check ARGS=--wait` queues instead, out loud: it announces itself on the first
+line and says so again every thirty seconds.
+**75 rather than 1, because `playwright test` exits 1 when tests fail**
+— a guard built to stop false failures must not produce one. 75 is
+EX_TEMPFAIL, `make` prints `Error 75`, and nothing else in this repo returns it.
+
+**THE LOCK IS NAMED FOR THE RESOURCE, NOT FOR `design-check`.** It is `browsers`, so the second
+browser fleet to land here joins this lock rather than inventing a second one that excludes
+nothing. `scripts/docs-audit.py`'s `suite lock` row reads the RUNNER for the same reason: any npm
+script whose command is `playwright test` is a fleet, and every Makefile recipe reaching one has
+to go through the lock — because the guard is one line of one recipe, which is exactly the kind of
+line a new target gets written without. The row fails in both directions and refuses to go quiet
+if the runner is renamed past it.
+
+**`make screenshot` IS DELIBERATELY OUTSIDE IT.** `scripts/screenshot.sh` drives
+`playwright screenshot`, one page at a time in a shell loop — one browser, not a fleet, and it
+already needs a dev server somebody started by hand. Putting it behind the same lock would make a
+single render queue behind a ten-minute suite for no measured benefit. `playwright test` versus
+`playwright screenshot` is the line, and it is the line the audit row reads.
+
+**`make harness` AND `make check` DO NOT TAKE IT, AND EACH HAS ITS OWN REASON.** The harness runs
+at every turn end from the Stop hook: a refusal there is a false failure at exactly the moment a
+session is trying to finish, which is the thing this entry exists to stop, and its nine tests are
+one Python process rather than fourteen browsers. `make check` shells out to `tsc`, `eslint` and
+`ruff` — two concurrent runs is a handful of single-core processes against a 15-core machine, an
+order of magnitude off the load that produced the eighteen failures, and it is not a load anything
+here has measured a failure from.
+**That is reasoning and not a measurement, and `docs/DEBTS.md` §16 records it as such**,
+along with what would reopen it.
+
+**THE ESCAPE HATCH IS `PKMNSCAN_SUITE_LOCK=off` AND IT IS PRINTED IN EVERY REFUSAL**, in the shape
+`PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=ok` already use. A guard with no visible way past it
+is one somebody disarms by deleting the line from the Makefile, where nothing would catch it.
+`PKMNSCAN_LOCK_DIR` moves the lock directory and exists for the self-test alone — same shape as
+`scripts/janitor.py --sessions DIR`, and for the same reason: a self-test that took the real lock
+would refuse a suite running in another checkout.
+
+**What would reopen this:** a measurement showing two concurrent `make check`s producing a failure
+that is not in the code, which would put `lint` and `typecheck` behind a lock of their own; or a
+second Playwright fleet whose cost makes a queue better than a refusal, which is a change to the
+default rather than to the mechanism.
+## D123 — Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 
 **Built 2026-09-07, from the owner's question: their Claude Code sessions "look way nicer at like 80% zoom rather than 100%", and did that mean this app should have been drawn denser?**
 The question is worth answering precisely, because the intuition behind it is half right and the

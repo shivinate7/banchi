@@ -1174,7 +1174,7 @@ async function remember(page: Page, statuses: string[] | null, skipKnown = false
            D114. Asserting how that key behaves means writing it, and a spec that reached it
            through the UI instead would be testing the panel's layout on the way past. One of
            TWO `localStorage` calls in `app/tests`, the other being `wide.spec.ts:withRail`,
-           which seeds the shell's rail state before first paint (D122). It said "the only"
+           which seeds the shell's rail state before first paint (D123). It said "the only"
            until 2026-09-07. */
         window.localStorage.setItem(key, value)
       } catch {

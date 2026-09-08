@@ -7,6 +7,17 @@ complete" — it means the checks that exist, passed.
 Not a backlog to burn down on sight. An entry leaves when someone argues it should, the way
 `docs/DECISIONS.md` entries are argued.
 
+**Section 15 left 2026-09-07, and its number is not reused.** It recorded that the lockup does not
+fit the 52px phone top bar, that the bar therefore kept `Logo` at 26 beside a "Banchi" title, and
+that three costed ways out were waiting on the owner. D120 answered it — the bar was not grown,
+the horizontal lockup was refused, and the bar took the collapsed rail's own drawing, so
+`App.tsx`'s `PhoneBar` renders `BrandSlot`. **The argument lives in D120 and `docs/specs/logo.md`
+section 19**, and nothing is left unfixed for this file to hold: the 2026-08-30 sweep below removed
+closure narrative for exactly this reason, and a third copy of a settled fact is what goes stale
+next. Sections 1 to 14 keep their numbers and section 16 keeps its own — a renumber leaves every
+citation pointing at a real section that is not the one meant, which is `docs/map.py`'s own rule
+for its step ids.
+
 **Grouped by the work that would close them, not by when they were found** (2026-08-30). The
 old chronological order hid the fact that five separate entries were one defect, and put two
 one-line UI questions eleven sections apart. Each cluster names what unblocks it.
@@ -1510,41 +1521,64 @@ not enforced anywhere — the registry, `cli/cmd_identify.py:397` and
 `harness/tests/t7_store_and_seams.py:11336` each contradict it. If the owner wants it to be
 true, the place to make it true is `pipeline/games.py` or `cli/resolve.py`, not `CLAUDE.md`.
 
-## 15 — The lockup does not fit the phone, and the bar keeps the mark
+## 16 — The browser fleet is locked and the rest of the load is not, and only one of those was measured
 
-**Closed by a decision, not by work.** Three routes are drawn and costed; none is free, and which
-one is right is the owner's to say. Recorded 2026-09-06, when the lockup landed everywhere else.
+D122 puts `make design-check` behind a machine-wide `flock` so two checkouts cannot run Playwright
+fleets at once. **That decision is measured; the scope of it is partly reasoned**, and this section
+is the difference between the two so no later session takes a green `make check` for coverage of
+concurrency it never looked at.
 
-`docs/specs/logo.md` §16 carries the measurement and the three options in full — this is a pointer
-so a later session does not rediscover the conflict by trying it.
+**WHAT WAS MEASURED.** 2026-09-07, `magical-kalam-0230c3` against `cap-on-demand`: two fleets, ~90
+browser processes on a 15-core Mac, 18 failures all in `shipping.spec.ts` and `run-panel.spec.ts`,
+52 passing on a re-run with nothing touched, and two earlier single-spec flakes from the same
+collision. `app/playwright.config.ts` carries the within-one-run version of the same finding at 40
+workers against 12 CPU hogs. Section 11 above carries the capture server's version of it.
 
-**The numbers.** The phone top bar is **52px**. The lockup at §11's floor — kanji 32 — is a
-**102 × 75px** block, 23px taller than the whole bar. And that floor is not a preference: §11
-settled it because 番's counters close before the bracket does, so drawing it smaller makes the
-kanji mush at exactly the size a phone renders it.
+**WHAT WAS REASONED.** That `make harness` and `make check` do not need the lock.
 
-**So the bar keeps `Logo` at 26 beside a "Banchi" title**, which is what shipped before the lockup
-existed and reads correctly at that size. `App.tsx`'s `PhoneBar` is unchanged.
+- **`make harness` is nine tests in one Python process, and it runs at every turn end from the
+  Stop hook.** The second half is the real argument: a lock refusal there is a false failure at
+  the moment a session is trying to finish — the exact thing D122 exists to prevent — and two
+  sessions ending a turn at the same moment is not rare, it is Tuesday.
+- **`make check` shells out to `tsc`, `eslint` and `ruff`.** Two concurrent runs is a handful of
+  mostly single-core processes against fifteen cores, an order of magnitude off the load that
+  produced the eighteen failures. **Nobody has run two at once and counted**, and that is the
+  honest state of it. If a session ever sees `make check` fail in a way a re-run clears, this is
+  the paragraph to come back to.
 
-**What each way out costs:**
+**WHAT THE LOCK CANNOT SEE, and none of it is fixable from inside this repo:**
 
-| route | cost |
-| --- | --- |
-| grow the bar to ~91px | 39px of vertical space on the device where it is scarcest, on every screen — and the top bar stops matching the 52px tab bar beneath it |
-| a horizontal lockup — 番地 beside BANCHI | a NEW artifact, not a re-use: the bracket proportions, the gap and the roman's fill would each need settling, which is another series of forced choices |
-| leave it | the phone spells the name in one script where every other surface spells it in two |
+- **A hand-rolled Playwright script.** `npx playwright test` from a shell, a `page.goto` from a
+  scratch file, the Browser pane driving the app — none of it goes through the Makefile, so none
+  of it takes the lock. Section 11 records a session that did exactly this while also running
+  `make design-check` eight times, and it is what wedged the owner's capture server. The lock
+  narrows the window; it does not close it.
+- **A checkout whose branch predates the lock.** The guard is a line in the `Makefile`, so a
+  worktree cut before D122 landed runs the fleet without taking anything, and the tree that
+  DOES take it is refused by nobody. Observed within the hour this was written: a session in
+  `card-inventory-before-after-935912` started `make design-check` off an older branch while
+  this one held the lock free. Nothing can fix that from here — every guard this repo installs
+  by copy has the same property (`make hooks`, `make janitor-install`), and it resolves itself
+  as branches merge. What it means in practice: for the first few days the lock is a courtesy
+  between up-to-date trees rather than an exclusion across all of them.
+- **Anything else on the machine.** A build, a video call, an `npm install`, a compile in
+  somebody's editor. The lock
+  serialises this repo against itself and claims nothing about the rest of the Mac.
+- **A second user, or a second machine over a shared filesystem.** The lock lives under `~`,
+  which is where the contention is for a single-operator rig and is wrong the moment that stops
+  being true.
+- **`make screenshot`.** Argued out of scope in D122 rather than overlooked: `playwright
+  screenshot` renders one page at a time, and queueing a single render behind a ten-minute suite
+  buys nothing measured. A render taken during a fleet run is slower, not wrong.
 
-**Why this is a debt and not a build-order step.** There is no deliverable to schedule until the
-route is chosen, and two of the three are design work rather than engineering. `docs/GATES.md`'s
-`OPEN` is for steps with deliverables; this is a question with three answers.
+**WHAT WOULD MAKE THIS SECTION SHORTER.** A measurement — two `make check`s side by side, timed
+and diffed for failures that are not in the code. It costs one session and would replace the
+second bullet above with a number in either direction. Nothing is blocked on it.
 
-**The owner asked to be reminded of this** — it is the one thing from the lockup's build that was
-raised, understood and deliberately left.
-
-## 16 — Four blocks still ask the viewport a question only their column can answer
+## 17 — Four blocks still ask the viewport a question only their column can answer
 
 **Named by `make docs-audit`'s `breakpoint columns` row on every run, ADVISORY, and left
-standing on purpose (D122, 2026-09-07).** The rule the register states is: below 1024px a
+standing on purpose (D123, 2026-09-07).** The rule the register states is: below 1024px a
 `@media` width is honest, because the shell is force-railed there and a viewport question and a
 column question differ by a constant. At or above 1024 they do not — every screen but the
 Fulfiller's draws inside `.bn-shell-main`, which is the viewport minus 236px, or minus 64px when

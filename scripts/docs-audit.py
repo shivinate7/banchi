@@ -9769,6 +9769,107 @@ def _check_claim_text(target: Path) -> str:
     return "\n".join(out)
 
 
+# ------------------------------------------------ the browser fleet, and the lock it takes
+#
+# `make design-check` is the one target here that spends the whole machine — Playwright's
+# `fullyParallel` at half the cores, each worker a Chromium context over its own Vite dev
+# server. D43 gave every checkout its own ports and its own store; the CPU is what it could
+# not copy, and two trees running the fleet at once starve each other into failures that are
+# not in the code (D122, and `scripts/suite-lock.py` carries the 2026-09-07 measurement).
+#
+# THE GUARD IS ONE LINE OF ONE RECIPE, WHICH IS EXACTLY THE KIND OF LINE THAT GOES MISSING.
+# A second browser suite landing under its own target would be unguarded and green, and the
+# only symptom would be somebody else's re-run. So this row reads the RUNNER rather than the
+# target name: any npm script whose command is `playwright test` is a fleet, and every
+# Makefile recipe that reaches one has to go through the lock.
+SUITE_LOCK_SCRIPT = ROOT / "scripts" / "suite-lock.py"
+
+#: What makes a script a fleet. `playwright test` is the parallel runner; `playwright
+#: screenshot`, which `scripts/screenshot.sh` uses, drives one page at a time and is
+#: deliberately NOT covered — see D122 on where that line is drawn and why.
+_FLEET_RUNNER_RE = re.compile(r"\bplaywright\s+test\b")
+
+
+def _npm_run_re(script: str) -> "re.Pattern[str]":
+    """A recipe line reaching an npm script, with or without `--prefix`."""
+    return re.compile(r"\bnpm\b[^\n]*\brun\s+" + re.escape(script) + r"\b")
+
+
+def check_suite_lock(report: Report) -> None:
+    """Every Makefile recipe that starts a Playwright fleet goes through the lock.
+
+    MECHANICAL, and in both directions: a fleet script no recipe reaches is reported as much
+    as a recipe that reaches one without the lock. The first is the drift that would happen —
+    a new browser target, written from the old one, without the line that matters.
+
+    IT REFUSES TO GO QUIET, on `check census`'s reasoning. If `app/package.json` holds no
+    script this row recognises as a fleet, that is REPORTED rather than passed: the runner
+    was renamed or the suite moved, and either way a guard that silently starts covering
+    nothing is the failure it exists to prevent.
+
+    WHAT IT DOES NOT CHECK: that the lock WORKS. `make suite-lock-selftest` does that, by
+    violating it. This row settles only that the thing which spends the machine is behind it.
+    """
+    findings: List[Finding] = []
+
+    if not exists(SUITE_LOCK_SCRIPT):
+        report.add("suite lock", MECHANICAL, [Finding(
+            rel(SUITE_LOCK_SCRIPT),
+            "does not exist, and `make design-check` is written to run through it.")])
+        return
+
+    try:
+        package = json.loads(read(ROOT / "app" / "package.json"))
+        scripts = {str(k): str(v) for k, v in (package.get("scripts") or {}).items()}
+    except (OSError, ValueError) as exc:
+        report.add("suite lock", MECHANICAL, [Finding(
+            "app/package.json", "could not be read, so no fleet can be identified.\n%s" % exc)])
+        return
+
+    fleets = sorted(name for name, body in scripts.items() if _FLEET_RUNNER_RE.search(body))
+    if not fleets:
+        report.add("suite lock", MECHANICAL, [Finding(
+            "app/package.json", (
+                "holds no script that runs `playwright test`, so this row is watching\n"
+                "  nothing. Either the fleet moved or the runner was renamed — the pattern\n"
+                "  has to move with it, or the guard covers a suite that no longer exists."))])
+        return
+
+    lines = read(ROOT / "Makefile").splitlines()
+    for script in fleets:
+        pattern = _npm_run_re(script)
+        callers = [(n + 1, line) for n, line in enumerate(lines)
+                   if line.startswith("\t") and pattern.search(line)]
+        if not callers:
+            findings.append(Finding("app/package.json", (
+                "`{0}` runs a Playwright fleet and no Makefile recipe reaches it.\n"
+                "  A fleet nobody can start is dead, and a fleet started from somewhere this\n"
+                "  row cannot see is unguarded. Either is worth a look."
+            ).format(script)))
+            continue
+        for line_no, line in callers:
+            if "suite-lock.py" not in line:
+                findings.append(Finding("Makefile:{0}".format(line_no), (
+                    "starts the `{0}` fleet without taking the machine-wide lock.\n"
+                    "  Two fleets at once starve each other and BOTH report failures that are\n"
+                    "  not in the code. Run it through `python3 scripts/suite-lock.py run -- "
+                    "…` (D122)."
+                ).format(script)))
+
+    # The direct form, which no npm script mediates: a recipe calling the runner itself.
+    for n, line in enumerate(lines):
+        if not line.startswith("\t") or not _FLEET_RUNNER_RE.search(line):
+            continue
+        if "suite-lock.py" not in line:
+            findings.append(Finding("Makefile:{0}".format(n + 1), (
+                "runs `playwright test` directly without taking the machine-wide lock "
+                "(D122).")))
+
+    report.add("suite lock", MECHANICAL, findings,
+               "{0} fleet script{1}, every caller behind the lock".format(
+                   len(fleets), "" if len(fleets) == 1 else "s"))
+
+
 def check_check_census(report: Report) -> None:
     """Every published list of what `make check` runs, against scripts/checks.py.
 
@@ -11669,6 +11770,7 @@ def audit(staged_only: bool) -> Report:
     check_check_registry(report)
     check_commit_path(report)
     check_check_census(report)
+    check_suite_lock(report)
     check_positional_references(report, docs)
     check_audit_invocation(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
