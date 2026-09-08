@@ -876,6 +876,25 @@ def run_merged(args, say) -> int:
             say(f"  {sku} — {why}")
         return 1
 
+    # A SKU THAT ADDS NOTHING IS NAMED WHETHER OR NOT ANYTHING ELSE WRITES, which the branch
+    # above did only in the total case. `MergedSku.rows()` filters `add_to_quantity == 0` out
+    # of the file, so before this a PARTIAL send — ten SKUs going, forty adding nothing —
+    # wrote the file, reported `import  10 row(s)` and named the forty NOWHERE. That is the
+    # silent drop `CLAUDE.md` forbids by name, reached by the ordinary press.
+    #
+    # THE SINGLE-RUN PATH ALREADY DID THIS and the two had simply diverged: `no room` above
+    # walks `report.at_cap` and prints `match.nothing_to_add` per SKU. This is that block over
+    # the merged plan, reading the same property off the merged match so the two answers
+    # cannot differ.
+    silent = [row for row in merged_plan.skus if row.match.add_to_quantity == 0]
+    if silent:
+        say("")
+        say(f"{'no room':<16} {len(silent)} SKU(s) matched and added nothing")
+        for row in silent[:8]:
+            say(f"{'':<16} {row.sku} — {row.match.nothing_to_add}")
+        if len(silent) > 8:
+            say(f"{'':<16} ...and {len(silent) - 8} more")
+
     corrected = [row for row in merged_plan.skus if row.over_cap]
     if corrected:
         # NAMED AND NOT COUNTED (D59). A row whose per-run claims summed past the cap is a row

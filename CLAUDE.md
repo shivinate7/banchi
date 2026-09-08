@@ -293,8 +293,11 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   never was — `uncommitted_positions` is, and it is
                                    #   untouched. Uncapped, six copies with three already live
                                    #   offer THREE.
-                                   #   --cap N            send at most N copies of any one
-                                   #                      SKU. Omit for no cap, the default
+                                   #   --cap N            hold this SKU to at most N copies
+                                   #                      LIVE, counting what is already out
+                                   #                      — a SKU at or over N adds nothing
+                                   #                      and the report says by how much.
+                                   #                      Omit for no cap, the default
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
