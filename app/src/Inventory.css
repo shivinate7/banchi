@@ -1,15 +1,23 @@
-/* The inventory view: the location card and the copies beside the photograph, the sale, the
-   retirement and its dialog. */
+/* The inventory view: the copies beside the photograph, the sale and its receipt, the
+   retirement and its dialog. THE LOCATION CARD IS GONE (D119) — the copy the walk stands on is
+   a row of the copies list like every other, so this file no longer draws an address, a lens or
+   a primary action of its own. What is left of the sale here is the receipt's sentence, which
+   the copy row and the phone action bar both render. */
 
 .inventory { display: flex; flex-direction: column; min-width: 0; }
 
 /* The node beside the photograph. A query container, so the copy rows answer to the width they
    actually get. */
+/* `min-height: 0` and `height: 100%` on both of these are the chain that carries `.browse-band`'s
+   fixed height (D118) down to the list that scrolls in it. Without the zero minimum a flex item
+   refuses to shrink below its content and the band grows back to the card's own size, silently. */
 .inventory-detail {
   display: flex;
   flex-direction: column;
   gap: var(--bn-4);
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   container-type: inline-size;
   container-name: copies;
 }
@@ -18,87 +26,21 @@
   flex-direction: column;
   gap: var(--bn-4);
   min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
 }
+/* The list takes what the band leaves it, and it is the only thing in this column that does
+   — D118 fixed the band's height and made the list the part that gives. The location card was
+   `flex: none` beside it until D119 deleted the card. */
+.inventory-copies > .card-locations { flex: 1 1 auto; min-height: 0; }
+/* The lone card's notice sits under the list and is its own size, not the list's. */
+.inventory-copies > .inventory-lone { flex: none; }
 
-/* ---- the location card ---- */
-.inventory-location {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-3);
-  padding: var(--bn-4);
-  border-radius: var(--bn-r-lg);
-  background: var(--bn-surface-2);
-  min-width: 0;
-}
-:root[data-theme='dark'] .inventory-location { background: var(--bn-surface-3); }
-.inventory-location-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bn-2);
-}
-.inventory-location-head .bn-label { display: inline-flex; align-items: center; gap: 5px; }
-.inventory-location-boxname {
-  font-size: var(--bn-fs-xs);
-  font-weight: 600;
-  color: var(--bn-ink-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.inventory-location-label {
-  color: var(--bn-ink);
-  --pos-slot: 40px;
-  --pos-gap: var(--bn-4);
-  font-size: var(--pos-slot);
-  line-height: 1;
-}
-.inventory-location .nb { --nb-key: 11px; --nb-name: 13px; }
-.inventory-location > .position-bar { margin-top: var(--bn-1); }
-.inventory-location-note { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
-.inventory-location-actions { margin-top: var(--bn-1); }
-.inventory-location-actions .inventory-copy-actions.is-primary { display: flex; align-items: center; gap: var(--bn-2); }
-.inventory-location-actions .inventory-copy-actions.is-primary .bn-btn-primary { flex: 1 1 auto; }
-.inventory-location-actions .bn-receipt { justify-content: space-between; }
 .inventory-receipt-said { font-weight: 600; flex: 1 1 auto; }
 
-/* An open order's claim on this copy — a line, not a pill, because it carries a whole
-   order number and a way over to the order screen. */
-.inventory-wanted {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-2);
-  min-height: 34px;
-  padding: var(--bn-1) var(--bn-3);
-  border-radius: var(--bn-r);
-  background: var(--bn-warn-tint, var(--bn-surface));
-  color: var(--bn-ink);
-  font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  text-decoration: none;
-  box-shadow: inset 0 0 0 1px var(--bn-line);
-  transition: background-color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
-}
-.inventory-wanted:hover { text-decoration: none; transform: translateY(-1px); }
-.inventory-wanted > .bn-icon:first-child { color: var(--bn-warn); flex: none; }
-.inventory-wanted-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.inventory-wanted-number { font-family: var(--bn-font-mono); font-weight: 500; font-size: var(--bn-fs-xs); color: var(--bn-ink-2); }
-.inventory-wanted-go { color: var(--bn-ink-4); flex: none; transition: transform var(--bn-t) var(--bn-ease-spring), color var(--bn-t-fast) var(--bn-ease); }
-.inventory-wanted:hover .inventory-wanted-go { color: var(--bn-accent); transform: translateX(2px); }
-
 @media (max-width: 767px) {
-  .inventory-location-label { --pos-slot: 36px; }
-  /* a thumb presses these: the ghost Retire beside Mark sold, and the dialogs' Cancel */
-  .inventory-location-actions .bn-btn { --btn-h: var(--bn-control-h-lg); }
+  /* a thumb presses this: the dialogs' Cancel */
   .inv-dialog-foot .bn-btn { --btn-h: var(--bn-control-h-lg); }
-}
-
-/* The claim line is a LINK to the order screen, so it takes the same floor as the buttons
-   under it. It follows the pointer rather than the width: an iPad in portrait is 820px wide
-   and all thumb, and 34px is a mouse size. */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .inventory-wanted { min-height: var(--bn-control-h-lg); padding: var(--bn-2) var(--bn-3); }
 }
 
 /* ---- the copy actions ---- */

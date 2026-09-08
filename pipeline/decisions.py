@@ -84,22 +84,31 @@ def _price(value, label: str) -> Decimal:
         raise MalformedDecisions(f"{label}: {value!r} is not a price") from exc
 
 
-def parse_live_cap(value) -> int:
-    """The live cap as an integer of at least 1. Absent or null is the D7 default.
+def parse_live_cap(value) -> Optional[int]:
+    """The live cap as an integer of at least 1, or `None` for NO CAP.
+
+    ABSENT OR NULL IS NO CAP, AND THAT REVERSED AT D7's rewrite. It used to read as D7's playset of
+    four, which was a standing bound on every emit whether or not anybody had asked for one.
+    The operator retired both reasons D7 gave for it — an envelope-buster order, and how many
+    copies a spike can sell at a stale price — so the bound is gone and a cap is now something
+    a send ASKS for. `None` is therefore the ordinary state of this key rather than an unset
+    one, and a store that wants a standing cap writes a number.
 
     REFUSED RATHER THAN CLAMPED where it is present and unusable, the same rule
-    `check_threshold` follows: a missing key is a store that has never set one, and a key
-    holding `"four"` or `0` is somebody who meant something this cannot do. A cap of zero
-    would emit nothing for every SKU and read as a silent pipeline rather than as a setting.
+    `check_threshold` follows: a key holding `"four"` or `0` is somebody who meant something
+    this cannot do. Zero in particular would emit nothing for every SKU and read as a silent
+    pipeline rather than as a setting — say `None` if the answer is "do not bound me".
     """
     if value is None:
-        return pricing.LIVE_QUANTITY_CAP
+        return None
     try:
         cap = int(str(value).strip())
     except (TypeError, ValueError):
         raise MalformedDecisions(f"live_cap must be a whole number, got {value!r}") from None
     if cap < 1:
-        raise MalformedDecisions(f"live_cap must be at least 1, got {cap}")
+        raise MalformedDecisions(
+            f"live_cap must be at least 1, got {cap} — leave it null for no cap at all"
+        )
     return cap
 
 
@@ -211,10 +220,11 @@ class Decisions:
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET
     sub_threshold: Optional[pricing.Disposition] = None
-    #: How many copies of one SKU may be live at TCGplayer at once (D7). A PROPERTY OF THE LOT
-    #: and so a policy key rather than a per-SKU answer — it decides how many copies leave the
-    #: drawer, never what any of them costs.
-    live_cap: int = pricing.LIVE_QUANTITY_CAP
+    #: How many copies of one SKU may go live at once, or `None` for no bound (D7, rewritten
+    #: 2026-09-07). A PROPERTY OF THE LOT and so a policy key rather than a per-SKU answer —
+    #: it decides how many copies leave the drawer, never what any of them costs. `None` is
+    #: the ordinary value: the standing cap was retired and a cap is now asked for per send.
+    live_cap: Optional[int] = None
     # A PRICE OR A `Withheld`, which is the exact widening `no_market_data` already
     # carries on the line below: that field has held `None | UNLISTED | Decimal` since D9.
     overrides: Dict[str, object] = field(default_factory=dict)

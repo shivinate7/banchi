@@ -49,12 +49,29 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
   const at = place.slot
   const holds = (start: number, end: number) => at !== null && at >= start && at <= end
 
+  /* A DEPARTED CARD STILL HAS A SECTION, AND THE DRAWING KEEPS IT (D118). `slot` is null the
+     moment a copy leaves, so `holds` is false for every span and the old picture had no subject
+     at all — which is why the whole lens was skipped, and why the panel collapsed 85px on the
+     press that sold the card. `section` survives on the wire (measured on a sold copy: `slot`
+     and `card` null, `section: 2`, `section_start`/`section_end` intact), so the section the
+     copy LEFT FROM is still nameable and is what the bracket zooms into.
+     `current` here therefore means "the section this drawing is about", not "the card is in
+     it" — and the two cannot be confused on screen, because a departed bar draws NO marker and
+     its caption reads `no longer in the box`. */
+  const left = isDeparted(place) ? place.section : null
+  const wasIn = (start: number, end: number) =>
+    left !== null && place.section_start >= start && place.section_start <= end
+
   if (sections !== undefined && sections.length > 0) {
     const spans: Span[] = []
     for (const detail of sections) {
       const start = clamp(detail.start, 1, total)
       const end = clamp(typeof detail.end === 'number' ? detail.end : total, start, total)
-      spans.push({ start, end, current: holds(start, end) })
+      spans.push({
+        start,
+        end,
+        current: holds(start, end) || (left !== null && detail.section === left),
+      })
     }
     if (spans.length > 0) return spans
   }
@@ -64,7 +81,7 @@ export function spansOf(place: Place, sections?: readonly SectionDetail[]): Span
 
   const spans: Span[] = []
   if (start > 1) spans.push({ start: 1, end: start - 1, current: holds(1, start - 1) })
-  spans.push({ start, end, current: holds(start, end) })
+  spans.push({ start, end, current: holds(start, end) || wasIn(start, end) })
   if (end < total) spans.push({ start: end + 1, end: total, current: holds(end + 1, total) })
   return spans
 }
@@ -98,14 +115,17 @@ export function sentenceOf(place: Place, persona: Persona = 'owner'): string {
 /** The second scale: how far into its own SECTION a card sits. Null when there is no honest
  *  answer — a pooled card, a degraded block, a box the server cannot size. */
 export type SectionDepth = {
-  /** `Place.card`, the server's own slot number inside the section. Never derived here. */
-  slot: number
+  /** `Place.card`, the server's own slot number inside the section. Never derived here.
+   *  NULL FOR A DEPARTED COPY, which has left every slot in the section it was in. */
+  slot: number | null
   /** The denominator, and `growing` is what says which of the two things it is. */
   of: number
   /** True when the far bound is not final, so the number can be larger tomorrow. */
   growing: boolean
-  /** 0..100 along the section track. */
-  marker: number
+  /** 0..100 along the section track, and NULL where there is no card to mark — a departed
+   *  copy. The bar keeps the mark mounted and animates it away rather than deleting it; see
+   *  `PositionBar.tsx`. */
+  marker: number | null
   sentence: string
 }
 
@@ -119,8 +139,14 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   if (place.located === false) return null
 
   const { card: slot, section, section_start: start, section_end: end, box_total: total } = place
-  if (slot === null || section === null) return null
-  if (!Number.isFinite(slot) || slot < 1) return null
+  const gone = isDeparted(place)
+  if (section === null) return null
+  /* A DEPARTED COPY KEEPS THE SECOND SCALE AND LOSES ONLY ITS MARK (D118). `card` is null the
+     moment it leaves, and returning null here used to take the whole zoom block with it — 40 of
+     the 85px the lens was worth, and the reason the panel changed size on the press that sold
+     the card. The section it was in is still a real run of slots and is still worth drawing;
+     what is not true any more is that this copy is at a number inside it. */
+  if (!gone && (slot === null || !Number.isFinite(slot) || slot < 1)) return null
   if (!Number.isFinite(total) || total <= 0) return null
   if (!Number.isFinite(start) || start < 1) return null
 
@@ -130,7 +156,19 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
 
   /* The same convention the server's own `fraction` uses — `(index - 1) / total` — so a card at
      the front of both tracks sits at the front of both. */
-  const marker = clamp(((slot - 1) / of) * 100, 0, 100)
+  const marker = gone || slot === null ? null : clamp(((slot - 1) / of) * 100, 0, 100)
+
+  if (gone || slot === null) {
+    return {
+      slot: null,
+      of,
+      growing,
+      marker: null,
+      sentence: growing
+        ? `Section ${section} · ${of} cards so far · this copy is not among them`
+        : `Section ${section} · ${of} slots · this copy is not in one`,
+    }
+  }
 
   return {
     slot,

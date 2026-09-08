@@ -342,7 +342,13 @@ def run(args, say) -> int:
             # THE STORED CAP (D7, configurable). `join` is where the report saying how many
             # copies would go out is produced, so it has to derive that figure from the same
             # policy `emit` will spend it against.
-            live_cap=decisions.parse_live_cap(corpus.Corpus.read().policy_for(run_dir.name).get("live_cap")),
+            # THE STORE'S STANDING CAP, WHICH IS ORDINARILY NONE (D7, rewritten). `join` reports what
+            # the shelf holds; the cap a SEND asks for is `emit --cap`, and naming one here
+            # would be a promise a later emit could quietly break. A store that has written a
+            # standing figure gets it in both places, which is the only way the two agree.
+            live_cap=decisions.parse_live_cap(
+                corpus.Corpus.read().policy_for(run_dir.name).get("live_cap")
+            ),
         )
     except join.EmptyCatalog as refusal:
         say(str(refusal))

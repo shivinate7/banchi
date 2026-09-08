@@ -1,0 +1,55 @@
+# Watch the action pins, because nothing did.
+#
+# WHY THIS EXISTS. On 2026-09-07 every `uses:` line in this repo was still on the Node 20
+# runtime — `checkout@v4`, `setup-python@v5`, `setup-node@v4`, `upload-pages-artifact@v3`,
+# `deploy-pages@v4` — and GitHub had been force-running all of them on Node 24 and printing a
+# deprecation annotation on every single run. Both workflows passed the whole time. Nobody
+# was looking, so nobody knew, and the fix landed only because somebody happened to read a
+# run's annotations.
+#
+# The pins going stale was the SYMPTOM. This file is the cause: there was no watcher. That is
+# `check.yml`'s own lesson one register up — a mechanism that is thorough, correct, and never
+# re-evaluated — and the same shape as D111's, which is why session exhaust is swept rather
+# than hoped about.
+#
+# IT OPENS PULL REQUESTS AND IT MERGES NOTHING. D42 keeps main moving by pull request on the
+# owner's word, and a bot that could merge would be a second way. Every update it proposes
+# arrives as a PR, runs `check.yml` like any other, and waits.
+#
+# A PR FROM HERE IS THE WATCH, NEVER THE DECISION. Dependabot always proposes the LATEST
+# version. This repo's rule, set by the owner the day the pins moved, is the opposite: take
+# the FIRST version that fixes the named problem and stop there, and if a bump cannot be
+# proven on a real run, do not take it at all — flag the risk at the pin instead, the way
+# `demo.yml`'s deploy step is flagged. So the right response to one of these is usually to
+# read what it found, apply the floor by hand, and close the bot's PR. DO NOT AUTO-MERGE
+# THESE.
+#
+# GITHUB-ACTIONS ONLY, AND THE OMISSIONS ARE DELIBERATE.
+#   - `pip` would propose bumping `zxing-cpp==2.3.0` on a schedule. That pin exists for the
+#     rig's Python 3.9.6 cp39 wheel and is argued in `requirements.txt` and both workflows;
+#     a monthly PR against it is a recurring fight with a settled decision.
+#   - `npm` would watch fifteen `app/` dependencies. App churn is not what rotted here.
+# Actions is the ecosystem that actually went stale, so it is the one that gets a watcher.
+# Add another when something in it goes stale, not before.
+#
+# MONTHLY, GROUPED, ONE PR AT A TIME. These majors move a few times a year; weekly would be
+# noise, and a guard that cries wolf is one somebody eventually switches off — the argument
+# `demo.yml`'s private-bundle gate already carries in its own comment.
+#
+# NOTE: this file does nothing until it is on the DEFAULT BRANCH. Dependabot reads it from
+# main, never from the branch it lives on, so a PR adding it cannot demonstrate itself.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    # `/` is where GitHub Actions updates are configured from; Dependabot reads every
+    # workflow under `.github/workflows/` from it. It is not a path to the workflows.
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: ci

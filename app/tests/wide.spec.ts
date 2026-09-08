@@ -11,7 +11,7 @@ import { sealEveryTest } from './shell'
  * NOTHING RAN ABOVE IT. `docs/DESIGN.md` says the build was walked at 390, 820 and 1440;
  * `phone.spec.ts` reads the first, and nothing read anything above the third — so `.bn-page`'s
  * own cap, the single most consequential layout rule in the product, had never been rendered at
- * a width where it bites. D118 is the entry.
+ * a width where it bites. D120 is the entry.
  *
  * WHAT THAT COST, MEASURED BEFORE THIS FILE EXISTED. At a 1920 viewport with the sidebar open,
  * `#/pricing`'s card-identity cell was 924px wide — nine of the row's ten tracks are fixed, so

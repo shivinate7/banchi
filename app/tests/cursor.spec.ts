@@ -444,6 +444,200 @@ test('no screen spells the press dip as a transform — the floor owns it', asyn
   ).toHaveLength(0)
 })
 
+/* ---------------------------------------------------------------------------- the stability floor
+ *
+ * A POINTER STATE MAY REPAINT A CONTROL. IT MAY NOT RE-LAY IT OUT.
+ *
+ * The owner's report, 2026-09-07: "I am getting a lot of screen shake when I am in inventory and
+ * am marking something sold, things should not be moving around when I hit buttons". D118 is the
+ * entry, and this is the half of it that is not about one screen: the three floors above answer
+ * what a control SAYS to the pointer and the finger, and nothing answered what the PAGE does
+ * around it.
+ *
+ * TWO CASES, AND THEY CATCH DIFFERENT HALVES. This one reads the rules — a hover or a press that
+ * changes a width, a padding, a border width, a type size or a gap re-flows everything beside it,
+ * under a pointer that is by definition already there. `inventory.spec.ts` carries the other
+ * half, which is about what a WRITE does to the panel it lands in, and needs that file's
+ * fixtures to see it.
+ *
+ * MEASURED FIRST, over the 3,422 rules the eleven routes load: exactly one rule reflowed on a
+ * pointer state — `.codes-task:hover .codes-task-go` grew a `gap` from 4px to 7px, moving the
+ * ellipsised meta line beside it. That is a small number and it is the point: the floors above
+ * did their work, and what remained was a rule nothing was watching. A second candidate,
+ * `.pricing-cheap-input:focus-visible`, is why this reads COMPUTED values rather than matching on
+ * property names — it sets `border-bottom` as a shorthand at the same 2px the rest state already
+ * has, so the CSSOM lists `border-bottom-width` among its properties and nothing changes.
+ *
+ * WHAT IT CANNOT SEE, said plainly: a rule whose selector matches nothing on any route (this
+ * worktree's store is empty, D43), and a reflow caused by JavaScript rather than by a rule. The
+ * second is exactly what `inventory.spec.ts`'s cases are for. */
+const REFLOWS = [
+  'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'font-size', 'font-weight', 'letter-spacing', 'line-height',
+  'row-gap', 'column-gap', 'flex-basis', 'flex-grow',
+] as const
+
+test('a pointer state repaints a control and never re-lays it out', async ({ page }) => {
+  const offenders: string[] = []
+  let walked = 0
+
+  for (const route of await routesFromNav(page)) {
+    await page.goto(`/${route}`)
+    await settleFonts(page)
+    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {})
+    await expect(page.locator('main').first()).toBeVisible()
+
+    const found = await page.evaluate((PROPS) => {
+      const collect = (list: CSSRuleList, out: CSSStyleRule[]) => {
+        for (const r of Array.from(list)) {
+          if (r instanceof CSSStyleRule) out.push(r)
+          else if ('cssRules' in r) { try { collect((r as CSSGroupingRule).cssRules, out) } catch { /* opaque */ } }
+        }
+      }
+      const rules: CSSStyleRule[] = []
+      for (const sheet of Array.from(document.styleSheets)) {
+        try { collect(sheet.cssRules, rules) } catch { /* cross-origin, not ours */ }
+      }
+
+      const bad: string[] = []
+      let seen = 0
+      for (const rule of rules) {
+        const sel = rule.selectorText
+        if (!sel || !/:(hover|active|focus|focus-visible|focus-within)\b/.test(sel)) continue
+        seen++
+        const declared = PROPS.filter((p) => rule.style.getPropertyValue(p) !== '')
+        if (!declared.length) continue
+
+        /* THE ELEMENT THE RULE PAINTS, not the one carrying the pseudo-class — the same read the
+           response floor above makes, and for the same reason: `.a:hover .b` moves `.b`.
+           IT IS USED ONLY TO EXONERATE, WHICH IS THE WAY ROUND THIS HAS TO BE. The first draft
+           skipped a rule whose selector matched nothing, and the mutation that put the real
+           defect back — `.codes-task:hover .codes-task-go { gap: 7px }` — went green, because
+           against this worktree's empty store (D43) `#/codes` draws no task card at all. A guard
+           that only sees what the fixture happens to render is the failure this file's own header
+           spends a paragraph on. So the DECLARATION is what convicts; a rendered element can
+           acquit it by already painting the same value, which is the `border-bottom: 2px solid`
+           over a 2px edge case and the only false positive this check has. */
+        const rest = sel.replace(/:(hover|active|focus-visible|focus-within|focus)\b/g, '')
+        let el: Element | null = null
+        try {
+          el = Array.from(document.querySelectorAll(rest)).find((t) => {
+            const b = t.getBoundingClientRect()
+            return b.width > 0 && b.height > 0
+          }) ?? null
+        } catch { el = null }
+        const cs = el === null ? null : getComputedStyle(el)
+
+        for (const prop of declared) {
+          const want = rule.style.getPropertyValue(prop).trim()
+          const now = cs === null ? '(not drawn on this route)' : cs.getPropertyValue(prop).trim()
+          if (want === '' || want === now) continue
+          bad.push(`${sel}  changes \`${prop}\` from \`${now}\` to \`${want}\` under the pointer — ` +
+            `that re-flows everything beside it. Composite the same movement with \`translate\`, ` +
+            `or paint it with a colour, a shadow or an inset ring.`)
+        }
+      }
+      return { bad, seen }
+    }, REFLOWS as unknown as string[])
+
+    walked += found.seen
+    offenders.push(...found.bad)
+  }
+
+  /* THE SUBJECT HAS TO BE ON THE PAGE, AND WHAT IS COUNTED IS EVERY POINTER-STATE RULE RATHER
+     THAN EVERY OFFENDING ONE. The first draft counted the rules that declared a layout property,
+     which is zero once the product is clean — a liveness check that goes to zero the moment the
+     thing it guards is fixed is not a liveness check. Measured over the eleven routes: 1,600-odd
+     pointer-state rules, so 50 is a floor a broken CSSOM read cannot clear. */
+  expect(walked, 'no pointer-state rule was walked at all — is the CSSOM read still valid?')
+    .toBeGreaterThan(50)
+  expect(
+    offenders,
+    `${offenders.length} pointer states re-lay out the page:\n${[...new Set(offenders)].join('\n')}`,
+  ).toHaveLength(0)
+})
+
+/* THE DIP AND THE SQUEEZE LAND ON THE SAME FRAME (D118). `base.css`'s press floor is deliberately
+ * not transitioned — its own comment says adding `translate` to the response floor's list "would
+ * put 120ms of lag between the finger and the feedback" — and `.bn-btn` then transitioned
+ * `transform`, which is where its `scale(0.99)` lives. So every button in the product dropped 1px
+ * instantly and eased into the squeeze over 120ms, and released the two the same way in reverse.
+ * One gesture on two clocks is what reads as a wobble.
+ *
+ * THE RULE IS A PAIR, NOT A PROPERTY BAN, and the difference is `.pull-confirm`. A control may
+ * legitimately ease a `transform` — that button's hover LIFT is one, and a lift is a response to
+ * the pointer arriving rather than to the finger landing. What may not happen is a control easing
+ * the movement its own `:active` rule makes. So this asks three things together: does an `:active`
+ * rule move the control, does that rule leave the transition alone, and does the element it
+ * matches transition that property at rest. All three, or it is not this defect.
+ *
+ * READ OFF THE CSSOM RATHER THAN OFF A REAL PRESS, which is the one shortcut here and is stated:
+ * a rule that cancels the transition inside `:active` is what the third arm looks for, and a
+ * control that cancelled it from JavaScript instead would pass this and fail a person. Nothing in
+ * this product does that; `app/eslint.config.js` would be the place to say so if one did. */
+test('a press lands on one frame — no control eases the movement its own press makes', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await settleFonts(page)
+  await expect(page.locator('main.gallery')).toBeVisible()
+
+  const found = await page.evaluate(() => {
+    const collect = (list: CSSRuleList, out: CSSStyleRule[]) => {
+      for (const r of Array.from(list)) {
+        if (r instanceof CSSStyleRule) out.push(r)
+        else if ('cssRules' in r) { try { collect((r as CSSGroupingRule).cssRules, out) } catch { /* opaque */ } }
+      }
+    }
+    const rules: CSSStyleRule[] = []
+    for (const sheet of Array.from(document.styleSheets)) {
+      try { collect(sheet.cssRules, rules) } catch { /* cross-origin, not ours */ }
+    }
+
+    const MOVES = ['transform', 'translate', 'scale', 'rotate']
+    const bad: string[] = []
+    let walked = 0
+    for (const rule of rules) {
+      const sel = rule.selectorText
+      if (!sel?.includes(':active')) continue
+      walked++
+      const moved = MOVES.filter((p) => {
+        const v = rule.style.getPropertyValue(p).trim()
+        return v !== '' && v !== 'none'
+      })
+      if (!moved.length) continue
+      /* The rule cancelling its own transition is the fix, so a rule that carries one is done. */
+      const own = rule.style.getPropertyValue('transition') + rule.style.getPropertyValue('transition-property')
+      if (own.trim() !== '') continue
+
+      const rest = sel.replace(/:active\b/g, '')
+      let el: Element | null = null
+      try { el = document.querySelector(rest) } catch { continue }
+      if (el === null) continue
+      /* The same exemption this file already states at its response-floor sweep: a
+         comma-separated CSS list out of `getComputedStyle`, where the browser has normalised the
+         separator and no field can carry a comma or a quote. Not a CSV. */
+      // eslint-disable-next-line no-restricted-syntax -- a CSS list from getComputedStyle, not a CSV
+      const props = getComputedStyle(el).transitionProperty.split(',').map((p) => p.trim())
+      const eased = moved.filter((p) => props.includes(p) || props.includes('all'))
+      if (!eased.length) continue
+      bad.push(`${sel}  moves \`${moved.join(', ')}\` on the press while the control eases ` +
+        `\`${eased.join(', ')}\` — the floor's dip lands on the frame the finger goes down and this ` +
+        `does not, so one gesture runs on two clocks. Drop the property from the control's own ` +
+        `\`transition\`, or cancel it inside the \`:active\` rule.`)
+    }
+    return { bad: [...new Set(bad)], walked }
+  })
+
+  expect(found.walked, 'no `:active` rule was walked at all — is the CSSOM read still valid?')
+    .toBeGreaterThan(10)
+  expect(
+    found.bad,
+    `${found.bad.length} controls ease their own press:\n${found.bad.join('\n')}`,
+  ).toHaveLength(0)
+})
+
 /* THE FLOOR ITSELF, PRESSED WITH A REAL MOUSE ON ELEMENTS THIS TEST BUILDS — and it has to be a
  * real press, because `:active` cannot be forced from script the way a class can. Bare elements
  * with no component class are the point, exactly as in the cursor floor's own case below: the

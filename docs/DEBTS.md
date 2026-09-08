@@ -417,6 +417,12 @@ a copy row's own state pill says the word once the re-read lands, so only the lo
 an optimistic sale still in flight draw one here. The per-call-site fix this item asked for is
 what shipped, and the D57 ruling it was waiting on was answered by building it.
 
+**The location card was the other site that sentence named, and D119 deleted it** (2026-09-07).
+`primary` is now the phone action bar alone, which has no state pill beside it and so still
+always draws one; the copy row is unchanged and still draws its second `Sold` only for an
+optimistic sale in flight. The closure is unaffected — there is one call site fewer. What moved
+into the row with the deletion is the RECEIPT, on a line of its own beneath it.
+
 **The original entry is kept below** because its argument is still the reason the code is
 shaped this way, and because a reader who greps for the duplication should find out where it
 went rather than finding nothing.
@@ -1538,7 +1544,7 @@ raised, understood and deliberately left.
 ## 16 — Four blocks still ask the viewport a question only their column can answer
 
 **Named by `make docs-audit`'s `breakpoint columns` row on every run, ADVISORY, and left
-standing on purpose (D118, 2026-09-07).** The rule the register states is: below 1024px a
+standing on purpose (D120, 2026-09-07).** The rule the register states is: below 1024px a
 `@media` width is honest, because the shell is force-railed there and a viewport question and a
 column question differ by a constant. At or above 1024 they do not — every screen but the
 Fulfiller's draws inside `.bn-shell-main`, which is the viewport minus 236px, or minus 64px when

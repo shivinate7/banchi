@@ -76,6 +76,20 @@ from store import master, files
 from store.session import Store
 
 
+def _cap_for(args, policy):
+    """How many copies of one SKU this send may write, or `None` for no bound.
+
+    THREE VOICES IN ORDER, AND THE ORDINARY ANSWER IS THE LAST ONE. `--cap N` is this press
+    speaking; `policy.live_cap` is a standing answer for a store that wants one; and `None` —
+    no cap — is what a store that has said nothing means since D7 was rewritten. D7 used to answer four
+    here whether or not anybody had asked, which is the bound that entry's rewrite retired.
+    """
+    asked = getattr(args, "cap", None)
+    if asked is not None:
+        return decisions.parse_live_cap(asked)
+    return decisions.parse_live_cap(policy.get("live_cap"))
+
+
 def _warn_stale(run_dir, say) -> None:
     """Name any import file left by an EARLIER emit, at the moment this one refuses.
 
@@ -372,7 +386,11 @@ def run(args, say) -> int:
             # a SKU go into the file, and `emit` re-derives the join — so reading the module
             # constant here while the operator had set something else would push a different
             # number of copies than the `join` report in front of them said it would.
-            live_cap=decisions.parse_live_cap(policy.get("live_cap")),
+            # THE SEND'S OWN CAP (D7, rewritten): `--cap N` if this press asked for one, else the
+            # store's standing key, else none at all. Three voices in order, the same shape
+            # `pipeline/games.py:export_scope` uses — and the ordinary answer is none, which
+            # is the bound D7 used to apply without being asked.
+            live_cap=_cap_for(args, policy),
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
@@ -729,8 +747,13 @@ def _legacy_refusal(run_dir, say) -> bool:
     return True
 
 
-def _resolve_one(run_dir, book, say):
-    """One run resolved the way `run` resolves it, for the merged path. Returns None on refusal."""
+def _resolve_one(run_dir, book, say, args=None):
+    """One run resolved the way `run` resolves it, for the merged path. Returns None on refusal.
+
+    `args` CARRIES THE SEND'S CAP AND NOTHING ELSE (D7, rewritten). A merged emit is ONE send, so the
+    `--cap` on it applies to every leg — the alternative is legs capped differently inside one
+    file, which is exactly the per-run-against-a-global-cap defect D86 measured.
+    """
     if _legacy_refusal(run_dir, say):
         return None
     try:
@@ -750,7 +773,11 @@ def _resolve_one(run_dir, book, say):
             # a SKU go into the file, and `emit` re-derives the join — so reading the module
             # constant here while the operator had set something else would push a different
             # number of copies than the `join` report in front of them said it would.
-            live_cap=decisions.parse_live_cap(policy.get("live_cap")),
+            # THE SEND'S OWN CAP (D7, rewritten): `--cap N` if this press asked for one, else the
+            # store's standing key, else none at all. Three voices in order, the same shape
+            # `pipeline/games.py:export_scope` uses — and the ordinary answer is none, which
+            # is the bound D7 used to apply without being asked.
+            live_cap=_cap_for(args, policy),
             review_below=run_dir.manifest.get("review_below_confidence", routing.CONFIDENCE_LOW),
         )
     except join.EmptyCatalog as refusal:
@@ -815,7 +842,7 @@ def run_merged(args, say) -> int:
     policies = {}
     matched = set()
     for run_dir in dirs:
-        resolved = _resolve_one(run_dir, book, say)
+        resolved = _resolve_one(run_dir, book, say, args)
         if resolved is None:
             say("REFUSING to write. Nothing was written.")
             return 1

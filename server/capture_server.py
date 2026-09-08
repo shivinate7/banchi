@@ -1740,6 +1740,17 @@ def _history(inventory: master.Inventory, event: str, key: Optional[str], **extr
 # --------------------------------------------------------------------------------- place
 
 
+# One box's walk, as `_Places._walk` caches it: the located non-terminal records ascending
+# as `(index, name)`, the located terminal indices — D30's permanent holes — and the
+# POSITIONS into the first tuple that carry a name, which is what D116's outward walk
+# bisects rather than scans.
+_Boxmates = Tuple[
+    Tuple[Tuple[int, Optional[str]], ...],
+    Tuple[int, ...],
+    Tuple[int, ...],
+]
+
+
 class _Places:
     """Every `place` block in this server, and one box lookup per box rather than per card.
 
@@ -1792,13 +1803,18 @@ class _Places:
     seventeenth SLOT, not the seventeenth card you can count, and once a section has holes
     (every sale and every retirement makes one, permanently — D10) the two stop being the
     same number and every label in the section becomes uncountable by hand. So a located
-    block also says what makes the label countable again: `neighbors` — the nearest
-    NON-TERMINAL records on either side in the same box, each as `{index, name}` with
-    `name` null for a card nothing has identified, null at the box's ends — and
+    block also says what makes the label countable again: `neighbors` — the nearest NAMED
+    non-terminal record on either side in the same box, each as `{index, slot, name,
+    skipped}`, null at the box's ends and null where nothing that way can be named — and
     `section_gaps`, how many indices inside this card's own section bounds hold a record
     that is sold or retired. Permanent gaps only: an unallocated tail index has no record
     and is not a gap, and counting terminal RECORDS is what makes that true by
     construction rather than by a bounds check.
+
+    A CARD NOBODY HAS NAMED IS NOT A LANDMARK, WHICH IS D116. The walk passes over an
+    unnamed on-hand card the way it passes over a departed one and keeps going, and
+    `skipped` says how many it passed so the row can state the distance rather than
+    quietly move a landmark. `_company` has the argument.
 
     THE DECORATION DEGRADES WHOLE, AND IT NEVER GUESSES. The walk that finds a neighbour
     is a scan over every record's own `box` and `index` — the same fields `box_fill`'s
@@ -1817,10 +1833,11 @@ class _Places:
         self._cache: Dict[
             int, Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]
         ] = {}
-        # D30's walk, one scan per instance, lazily: box -> (occupants, gaps), where
+        # D30's walk, one scan per instance, lazily: box -> (occupants, gaps, named), where
         # `occupants` is every located, non-terminal record as (index, name) sorted by
-        # index, and `gaps` is the sorted indices of the located TERMINAL records — the
-        # permanent holes. `_boxmates` is None after the scan has met a record it cannot
+        # index, `gaps` is the sorted indices of the located TERMINAL records — the
+        # permanent holes — and `named` is the positions into `occupants` that carry a
+        # name, which is D116's landmark set. `_boxmates` is None after the scan has met a record it cannot
         # read (the whole-store degrade the docstring argues); `_walked` says whether it
         # has run at all. Cached for the same reason `_cache` above is: this class is
         # instantiated per request, so `do_inventory` renders 5,000 rows against one walk
@@ -1832,9 +1849,7 @@ class _Places:
         # ANYWHERE, exactly as the scan it replaces did — so `_degraded` is one flag and
         # not one per box.
         self._degraded = False
-        self._boxmates: Dict[
-            int, Tuple[Tuple[Tuple[int, Optional[str]], ...], Tuple[int, ...]]
-        ] = {}
+        self._boxmates: Dict[int, _Boxmates] = {}
 
     def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]:
         """`(registry entry or None, validated layout, denominator, on-hand indices)`.
@@ -1914,10 +1929,8 @@ class _Places:
         except games.UnknownGame:
             return None
 
-    def _walk(
-        self, box: int
-    ) -> Optional[Tuple[Tuple[Tuple[int, Optional[str]], ...], Tuple[int, ...]]]:
-        """One box's `(occupants, gaps)` for D30's decoration, or None — degraded, whole.
+    def _walk(self, box: int) -> Optional[_Boxmates]:
+        """One box's `(occupants, gaps, named)` for D30's decoration, or None — degraded.
 
         The scan reads every record's own `box` and `index`, coerced the way the rest of
         this file coerces them (`int()` — a string-typed "3" counts, the regression T7
@@ -1926,6 +1939,14 @@ class _Places:
         precedent is `next_index`'s own rule that an unparsable record stops the scan
         rather than being skipped past. A pooled record is skipped by ruling, not by
         failure — it has no slot, so it is nobody's neighbour and no section's gap (D24).
+
+        `named` IS THE POSITIONS INTO `occupants` THAT CARRY A NAME, and it exists so
+        D116's outward walk is a bisect rather than a scan. Without it, the search for the
+        nearest NAMED neighbour is O(box) per card in the one case that matters most: a box
+        freshly off the feeder, where every card is unnamed until `join` has run, and where
+        `do_inventory` would then be O(n²) over 723 records. It is positions and not
+        indices because that is what both readers need — the slot is a position plus one,
+        and the count of cards skipped is a difference of positions.
         """
         if self._degraded:
             return None
@@ -1945,9 +1966,11 @@ class _Places:
             self._degraded = True
             self._boxmates = {}
             return None
+        occupants = tuple((i, name) for i, name, gone in sorted(rows) if not gone)
         cached = (
-            tuple((i, name) for i, name, gone in sorted(rows) if not gone),
+            occupants,
             tuple(i for i, _, gone in sorted(rows) if gone),
+            tuple(where for where, (_, name) in enumerate(occupants) if name is not None),
         )
         self._boxmates[number] = cached
         return cached
@@ -1958,10 +1981,31 @@ class _Places:
         """`(neighbors, section_gaps)` for one located card, both None when degraded.
 
         `neighbors` walks OUTWARD from `at` over the box's non-terminal records: the
-        nearest on each side, `{index, slot, name}` with `name` null for a card nothing has
-        identified, null past either end of the box. A sold or retired record is passed
-        over rather than named — a departed card cannot be the thing you count from,
-        which is the whole reason D30 wants the sentence.
+        nearest NAMED card on each side, `{index, slot, name, skipped}`, null past either
+        end of the box. A sold or retired record is passed over rather than named — a
+        departed card cannot be the thing you count from, which is the whole reason D30
+        wants the sentence.
+
+        AND SO IS A CARD NOBODY HAS NAMED, WHICH IS D116 AND IS NEW. This used to stop at
+        the nearest non-terminal record whatever it was, sending `name: null` for a card no
+        identification ever produced a name for, and the app drew `#270` for it. That
+        number is a real live card at a real count — the owner read it as a sold card
+        leaking into the ladder, which it never was — but a bare figure names nothing you
+        can recognise while flipping a box, which is the ladder's only job. So an unnamed
+        on-hand card is now passed over as a LANDMARK, exactly as a departed one is, and
+        the walk keeps going outward until it finds a card it can name.
+
+        `skipped` IS WHAT KEEPS THAT HONEST, and it is why the skip is a count rather than
+        a silence. D30 forbids a sentence that sends a hand to the wrong slot, and a
+        landmark two cards away instead of one does exactly that unless the row says so.
+        It is the number of on-hand cards passed over on that side — never the departed
+        ones, which are not between anything: the box closed up over them (D58) and
+        `section_gaps` is where they are counted.
+
+        A SIDE WITH NO NAMED CARD BEYOND IT IS NULL, the same answer the box's own edge
+        gives, and it is honest for the same reason: there is nothing over there this
+        sentence can name. A box straight off the feeder — every card captured, none
+        identified — therefore draws no ladder at all rather than a ladder of figures.
 
         BOTH NUMBERS, BECAUSE THE ROW DRAWS ONE AND A FUTURE CALLER WANTS THE OTHER (D92).
         `index` is the store key — `/inventory/<box>/<index>`, the `<index>.jpg` — and
@@ -1986,23 +2030,36 @@ class _Places:
         mates = self._walk(box)
         if mates is None:
             return None, None
-        occupants, gaps = mates
+        occupants, gaps, named = mates
 
         indices = [i for i, _ in occupants]
         before = bisect_left(indices, at) - 1
         after = bisect_right(indices, at)
 
-        # `at + 1` IS THE SLOT: `occupants` is ascending and holds only cards on hand, so a
-        # neighbour's ordinal in it is `Position.slot` by the same bisect that property runs.
-        def side(where: int) -> dict:
+        # `where + 1` IS THE SLOT: `occupants` is ascending and holds only cards on hand, so
+        # a neighbour's ordinal in it is `Position.slot` by the same bisect that property
+        # runs. `from_` is the position the search STARTED at, so the cards passed over are
+        # the distance between the two — one subtraction, in the space both numbers live in,
+        # rather than a second count of the same cards.
+        def side(where: int, from_: int) -> dict:
             return {
                 "index": occupants[where][0],
                 "slot": where + 1,
                 "name": occupants[where][1],
+                "skipped": abs(where - from_),
             }
 
-        prev_of = None if before < 0 else side(before)
-        next_of = None if after >= len(occupants) else side(after)
+        # The outward walk, as two bisects into `named` rather than a scan over `occupants`
+        # — see `_walk` for why: an unidentified box is the case where a scan is O(n²), and
+        # it is the case a box has just after the feeder and before `join`.
+        back = bisect_right(named, before) - 1
+        prev_of = None if before < 0 or back < 0 else side(named[back], before)
+        forward = bisect_left(named, after)
+        next_of = (
+            None
+            if after >= len(occupants) or forward >= len(named)
+            else side(named[forward], after)
+        )
 
         low = bisect_left(gaps, start)
         high = len(gaps) if end is None else bisect_right(gaps, end)
@@ -7157,11 +7214,15 @@ def do_search(query: str) -> dict:
     not the one being looked for when a real match is on the same screen — and never dropped,
     because a card the pipeline could not name is exactly the card an operator searches for.
 
-    LOCK-FREE, like every read here. `cap` is `pipeline/join.py:LIVE_QUANTITY_CAP` imported
-    rather than restated, so the screen's "3 of 4 live" moves if D7's playset does.
+    LOCK-FREE, like every read here. `cap` is the STORE'S STANDING cap and is ordinarily
+    NULL (D7, rewritten 2026-09-07): the playset bound was retired, so most stores have none and
+    `listable` falls back to what the shelf holds. Read ONCE for the whole answer rather
+    than per group — it opens the corpus file, and a search over a hundred SKUs was about
+    to open it two hundred times.
     """
     text = _require_query(query)
     needle = text.lower()
+    cap_now = corpus.live_cap_for()
 
     inventory = Store().read().inventory
     places = _Places(inventory)
@@ -7225,7 +7286,7 @@ def do_search(query: str) -> dict:
                 "sold_here": int(getattr(listing, "sold_here", 0) or 0) if listing is not None else 0,
                 "live_as_of": getattr(listing, "live_as_of", None) if listing is not None else None,
                 "on_hand": on_hand,
-                "cap": corpus.live_cap_for(),
+                "cap": cap_now,
                 # D7 IN ONE FIELD: "listed quantity is min(cap, on hand)". The cap above is the
                 # RULE and this is what the rule comes to for THIS SKU, which are different
                 # numbers whenever the shelf holds fewer than a playset — and the screen wants
@@ -7238,7 +7299,11 @@ def do_search(query: str) -> dict:
                 # Computed HERE and not in the browser: `app/src/server.ts` records that the app
                 # is forbidden from computing the live cap, and a `Math.min` over `cap` in
                 # TypeScript is that rule living in two places.
-                "listable": min(corpus.live_cap_for(), on_hand),
+                # NO CAP MEANS EVERY COPY ON HAND IS LISTABLE (D7, rewritten). D7's `min(cap, on hand)`
+                # survives wherever a cap is set; with none, the shelf is the only bound and
+                # `listable` is `on_hand` — which is what the screen must draw, or it reports
+                # headroom against a ceiling nobody asked for.
+                "listable": on_hand if cap_now is None else min(cap_now, on_hand),
                 "copies": [_copy_row(places, card) for card in copies],
                 "_rank": rank,
             }
@@ -7275,11 +7340,11 @@ def do_search(query: str) -> dict:
                 "sold_here": 0,
                 "live_as_of": None,
                 "on_hand": loose_on_hand,
-                "cap": corpus.live_cap_for(),
+                "cap": cap_now,
                 # The same min as the keyed group above. Zero listing stages and no SKU to list
                 # under, so this can only ever be read as "what it WOULD be worth if identified"
                 # — which is the honest thing for it to say rather than a bare cap.
-                "listable": min(corpus.live_cap_for(), loose_on_hand),
+                "listable": loose_on_hand if cap_now is None else min(cap_now, loose_on_hand),
                 "copies": [_copy_row(places, card) for card in loose],
             }
         )

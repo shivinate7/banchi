@@ -4,7 +4,7 @@ import { settleFonts } from './fontsReady'
 /* THE ROUTE ROSTER, DISCOVERED RATHER THAN TYPED, FOR EVERY SPEC THAT SWEEPS THE OWNER'S APP.
  *
  * Moved out of `cursor.spec.ts` on 2026-09-07 when `wide.spec.ts` needed the same harvest at
- * the other end of the width ladder (D118). It lives beside `fontsReady.ts` rather than inside
+ * the other end of the width ladder (D120). It lives beside `fontsReady.ts` rather than inside
  * `shell.ts`, whose one argument is the capture-port seal and whose map entry opens "one call,
  * `sealEveryTest()`" — a route harvester there blunts both.
  *
