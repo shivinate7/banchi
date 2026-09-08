@@ -1888,22 +1888,76 @@ COMPONENTS = [
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
-                "does": "headless Playwright render of a URL to captures/ui/<name>.png, or "
-                        "one per line of views.txt under --manifest. Returns non-zero "
-                        "unless a non-empty PNG lands on disk — an exit 0 from the CLI is "
-                        "not proof that anything was written.",
+                "does": "the manifest loop, THIS CHECKOUT'S DEV PORT, and every message a "
+                        "person reads; screenshot.mjs "
+                        "is the browser half. Renders one URL to captures/ui/<name>.png, or "
+                        "one per line of views.txt under --manifest, and returns non-zero on "
+                        "either of TWO failures now: no PNG on disk, or a PNG missing an "
+                        "element the manifest named. The second is new on 2026-09-07 and is "
+                        "the whole point — the old sentence here, `an exit 0 from the CLI is "
+                        "not proof that anything was written`, was right and stopped one step "
+                        "short: a written file was never proof that the PAGE was written, and "
+                        "a render with a screen's hero missing is a valid non-empty PNG. IT "
+                        "RENDERS THE TREE IT IS RUN FROM, ALSO SINCE 2026-09-07 (D43): "
+                        "views.txt names the main checkout's :5173 as a convention, this reads "
+                        "`server/ports.py:dev_port` — never a third spelling of that "
+                        "derivation — and substitutes a worktree's own port before rendering, "
+                        "saying so as it goes. Before that, `make screenshot` in a worktree "
+                        "photographed the MAIN tree's app over the owner's real store, and the "
+                        "renders looked perfectly correct. A linked worktree that cannot "
+                        "derive its port renders NOTHING rather than falling back to a port "
+                        "that would be another tree's.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
                 # screens that most need looking at are the second persona's. D13 is what
-                # it renders — Vite on :5173, a browser on the Mac. D18 is the rule that
-                # keeps it off `make check`: it writes, and nothing that writes may run on
-                # the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18"],
+                # it renders — Vite on the main tree's :5173, a browser on the Mac. D43 is
+                # why that number is a convention here and not an address: the port follows
+                # the store, and this script had been the one caller that did not follow it.
+                # D18 is the rule that keeps it off `make check`: it writes, and nothing
+                # that writes may run on the path that decides whether work is done.
+                "governed_by": ["D5", "D13", "D18", "D43"],
+            },
+            "screenshot.mjs": {
+                "does": "the browser half of `make screenshot`: one render, and the proof "
+                        "that it is complete. Drives app/node_modules's @playwright/test — "
+                        "the SAME pinned copy `make design-check` runs — rather than the "
+                        "`npx playwright@<pin>` download screenshot.sh used until "
+                        "2026-09-07, so the one-version rule those two files could only ask "
+                        "for politely is now MECHANICAL: EXPECTED_PLAYWRIGHT is checked "
+                        "against app/package.json and a disagreement fails the render. THE "
+                        "PROOF: for each selector the manifest names, capture its rectangle, "
+                        "hide it with `visibility: hidden`, capture again, and refuse the "
+                        "render when not one pixel changed — an element that painted nothing "
+                        "is exactly what a lost element looks like. Both comparison shots "
+                        "freeze animation and the artifact on disk does not, because two "
+                        "back-to-back captures of `#/`'s deck are NOT byte-identical while "
+                        "motion is live; the header names what that trade gives up. It also "
+                        "carries the argument for keeping `fullPage`, which a report "
+                        "proposed replacing with a viewport sized to scrollHeight: measured "
+                        "on this tree, the reported paint loss does not reproduce and the "
+                        "remedy silently crops every view, because the shell is "
+                        "`min-height: 100dvh` and a taller viewport makes a taller document.",
+                # D5 is who the render is for and D13 is what it renders. D18 is why it is
+                # not on the commit path: it writes. D16 is the shape of what was added —
+                # a mechanical check for a claim that would otherwise fail silently, which
+                # is the same reason demo-freshness exists two entries up.
+                "governed_by": ["D5", "D13", "D16", "D18"],
             },
             "views.txt": {
-                "does": "the manifest `make screenshot` walks: one `<name> <url>` line per "
-                        "view worth looking at. Tracked, unlike the renders — it used to "
-                        "live under captures/, which .gitignore excludes wholesale, so the "
-                        "list could not be committed and a fresh clone started with none.",
+                "does": "the manifest `make screenshot` walks: one "
+                        "`<name> <url> <selectors>` line per view worth looking at. Tracked, "
+                        "unlike the renders — it used to live under captures/, which "
+                        ".gitignore excludes wholesale, so the list could not be committed "
+                        "and a fresh clone started with none. THE THIRD FIELD ARRIVED "
+                        "2026-09-07: the elements that view's render must prove it drew, "
+                        "checked by screenshot.mjs. A selector named here has to hold with "
+                        "the capture server up, down, and up over an empty store — the three "
+                        "states this file's own header describes — so it is either "
+                        "shell-independent structure or something the screen draws from "
+                        "nothing, never an empty state's own class. The `:5173` in every URL "
+                        "is the MAIN checkout's port and a convention rather than an address "
+                        "(D43) — a tracked file cannot name a port derived from one "
+                        "directory's path — and screenshot.sh substitutes a worktree's own "
+                        "before rendering.",
                 # D5 is what the list is for: SEVEN owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
@@ -1924,7 +1978,7 @@ COMPONENTS = [
                 # rather than the screen. D86 is the same drift on the `pricing` line — the
                 # corpus made that screen's default the full cross-run worklist, and the
                 # paragraph beside it still described a run picker that draws nothing.
-                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D49", "D63", "D69", "D86"],
+                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86"],
             },
         },
     },
@@ -2710,7 +2764,13 @@ COMPONENTS = [
                                      "`clamp(36px, 5vw, 56px)`, the only place the type scale is "
                                      "left behind, because this page has one job and it is to "
                                      "orient.",
-                             "governed_by": ["D5", "D32", "D94", "D117"]},
+                             # D110 is the hover-as-alpha rule the standing line's row obeys;
+                             # D50 divides the press dip from a screen's own emphasis and D118
+                             # forbids a pointer state re-laying anything out, which is why the
+                             # standing rule thickens with `scale` and never with `width`;
+                             # D117 is the thumb floor this sheet answers to at phone width;
+                             # D121 is the hero the lede became.
+                             "governed_by": ["D5", "D32", "D50", "D94", "D110", "D117", "D118", "D121"]},
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
@@ -3886,6 +3946,42 @@ COMPONENTS = [
                                       "they always did. Carries the min-width:0 truncation fix a "
                                       "real TCGplayer export filename earned.",
                                "governed_by": ["D54"]},
+            "src/standing.ts": {"does": "WHAT THE STORE IS WAITING ON, RANKED, AS ONE "
+                                        "SENTENCE — the policy behind Home's standing line, in "
+                                        "its own module because a ranking buried in a component "
+                                        "is one nobody can find, argue with or test. It replaced "
+                                        "a lede that counted cards on hand, every figure of which "
+                                        "the six-stage spine already drew 24px below it. THE NULL "
+                                        "INVARIANT IS THE PART THAT IS EASY TO GET WRONG: loading, "
+                                        "failed and read-but-refused are three distinct "
+                                        "non-values, each ranked at the row it would have "
+                                        "answered, and `ok` is reachable only from a complete "
+                                        "reading — so green is never painted over a gap. "
+                                        "`queues.review` is `number | null` for exactly this "
+                                        "reason and the wire type says a reader must render the "
+                                        "gap rather than coerce it to zero.",
+                                # D121 is the entry; D69 owns the order ledger the rank-1
+                                # condition is read from; D63 is the two-map ledger behind it.
+                                "governed_by": ["D63", "D69", "D121"]},
+            "src/storeHistory.ts": {"does": "THE STORE'S OWN HISTORY — sittings recovered from "
+                                            "`captured_at` by a 30-minute gap, and the ribbon "
+                                            "geometry Home's foot draws from them. The unit is a "
+                                            "SITTING and not a day (the operator shoots across "
+                                            "midnight in UTC, so day buckets move with the "
+                                            "timezone) and not a run (three real runs share one "
+                                            "`created_at`, which is the identify date; and "
+                                            "`counts.cards_in` is a box's running total rewritten "
+                                            "on every re-join, so nine real manifests sum to 1,908 "
+                                            "against 1,625 records). A block is as wide as its "
+                                            "minutes and as tall as its cards an hour, so its AREA "
+                                            "is its card count and the marks still sum to the "
+                                            "figure printed above them. `photographed` is "
+                                            "`status.cards - states.moved`, never the sum over "
+                                            "`boxes[].cards`, which counts both halves of D83's "
+                                            "move.",
+                                    # D121 is the entry; D58 is the box closing up behind a
+                                    # departed card; D83 is the move that would be double-counted.
+                                    "governed_by": ["D58", "D83", "D121"]},
             "src/readiness.ts": {"does": "what `emit` would refuse this run for, on this side of the "
                                         "wire — a second implementation of "
                                         "pipeline/decisions.py:blocking, chosen so the pricing "

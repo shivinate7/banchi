@@ -50,13 +50,13 @@ export default defineConfig({
        with `toLocaleDateString(undefined, ...)` — 63 call sites — which resolves to the
        RUNTIME's zone and locale, and that is correct: a person should see their own. It makes
        a test that asserts a formatted date true only where it was written, and two do.
-       FOUND BY RUNNING IT SOMEWHERE ELSE, which is the whole argument for the CI job that
-       found it: `pricing.spec.ts` asserts `Box 2 · Aug 23` and a UTC runner drew `Aug 24`,
-       because the stamp behind it falls late on the 23rd in America/Chicago. Nothing in this
-       config, the Makefile or package.json had ever pinned either, so every date assertion in
-       this suite was a fact about one Mac. Reproduced locally with `TZ=UTC` before the pin and
-       green after it. The zone is the rig's, so what the suite asserts is still what the owner
-       reads over the boxes. */
+       FOUND BY RUNNING IT SOMEWHERE ELSE, which is the only way this class of defect surfaces:
+       `pricing.spec.ts` asserts `Box 2 · Aug 23` and a UTC machine draws `Aug 24`, because the
+       stamp behind it falls late on the 23rd in America/Chicago. Nothing in this config, the
+       Makefile or package.json had ever pinned either, so every date assertion in this suite
+       was a fact about one Mac. Reproduce it with `TZ=UTC npx playwright test pricing.spec.ts`,
+       which fails before this pin and passes after. The zone is the rig's, so what the suite
+       asserts is still what the owner reads over the boxes. */
     timezoneId: 'America/Chicago',
     locale: 'en-US',
   },

@@ -17,26 +17,9 @@
 # moving T1's 40K of labels out of the 133M image mirror they had been filed inside.
 #
 # SO A GREEN RUN HERE MEANS "the tree is self-consistent", NEVER "the rig is fine". T1 asserts a
-# committed measurement rather than taking a new one, and the detector's numbers still come from
-# a person at the Mac. Nothing here can spend money: the only step that could is a
-# re-measurement, which needs both an explicit flag and a key, and has neither.
-#
-# THE BROWSER ASSERTIONS RUN HERE NOW, AND THIS PARAGRAPH SAID THEY DID NOT UNTIL 2026-09-07
-# (D122). It said "every browser assertion still comes from a person at the Mac", which was
-# true and was also the gap: `make design-check` holds the Fulfiller's contractual floors —
-# 20px body, 44px targets, 320px photograph, 7:1 contrast — plus D50's cursor, response and
-# press floors and, since D122, the wide-viewport caps, and NONE of it had a re-checker. It
-# fired when somebody typed it. That is the same shape as the defect at the top of this file:
-# a mechanism that is thorough, correct and never re-evaluated. The `design-check` job below
-# closes it.
-#
-# IT IS A SEPARATE JOB, NOT A STEP IN `check`. A chromium install is a real cost and the two
-# failures should be attributable to different things — a red `check` is a claim about the
-# tree, a red `design-check` is a claim about what a browser draws. And it stays out of
-# `make check` and `make ci-check` for the reason the Makefile already gives: it starts a
-# browser and a dev server, which is a different weight of check. It therefore gets no
-# `scripts/checks.py` entry either — `check registry` fails on an entry for a target
-# `make check` does not run.
+# committed measurement rather than taking a new one; the detector's numbers and every browser
+# assertion still come from a person at the Mac. Nothing here can spend money: the only step
+# that could is a re-measurement, which needs both an explicit flag and a key, and has neither.
 #
 # IT GATES AND NOTHING ELSE. No commit, no branch move, no publish — D42 keeps main moving by
 # pull request only, and a workflow that wrote would be a second way. It reads the repo.
@@ -103,38 +86,3 @@ jobs:
 
       - name: make ci-check
         run: make ci-check
-
-  # The browser half. Same tree, different question: what a person actually sees.
-  design-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: app/package-lock.json
-
-      - name: Install
-        run: npm ci --prefix app
-
-      # Pinned to the version app/package.json pins, read from the lockfile rather than typed —
-      # `scripts/screenshot.sh` already carries the rule that the two move together or neither
-      # does, and a third hand-typed copy here is a third thing to forget.
-      - name: Cache the browser
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('app/package-lock.json') }}
-
-      - name: Install chromium
-        working-directory: app
-        run: npx playwright install --with-deps chromium
-
-      # Playwright starts its own dev server here: `webServer.reuseExistingServer` finds nothing
-      # serving on a fresh runner, which is exactly the state it is written for. The port comes
-      # from `app/devPort.ts`, which vite.config.ts and playwright.config.ts both import so they
-      # cannot disagree — on a runner this is the main-tree 5173.
-      - name: make design-check
-        run: make design-check

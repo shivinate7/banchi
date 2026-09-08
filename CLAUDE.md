@@ -107,6 +107,19 @@ make dev            # Vite app. :5173 in the main tree, its own port in a worktr
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
+                    #   IT CAN FAIL FOR THE RIGHT REASON SINCE 2026-09-07. Until then the only
+                    #   failure was an empty file, so a render MISSING AN ELEMENT — a valid,
+                    #   plausible-looking PNG — passed, and a session looked at an incomplete
+                    #   page and called a screen fine. Each manifest line may name the elements
+                    #   its render must prove it drew; the renderer hides one, captures again,
+                    #   and refuses the render when not a pixel changed.
+                    #   AND IT RENDERS THE TREE IT IS RUN FROM, since the same day (D43).
+                    #   scripts/views.txt names the main checkout's :5173 as a CONVENTION —
+                    #   a tracked file cannot name a port derived from one directory's path —
+                    #   and the script reads `server/ports.py:dev_port` and substitutes a
+                    #   worktree's own before rendering. Before this, `make screenshot` in a
+                    #   worktree photographed the MAIN tree's app over the owner's real store
+                    #   and the renders looked entirely correct.
 make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
 make demo           # seed a demo store and record the wire into a fixture bundle.
                     #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE
@@ -391,9 +404,15 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 sentence**, and see "the census" below for what enforces that.
 
 ```
-#/             Home           the product as a picture: the six-stage spine
-                              (Capture → Runs → Review → Pricing → Orders → Shipping) with the
-                              live figure under each stage, the boxes, the runs, one action.
+#/             Home           the product as a picture: ONE RANKED SENTENCE saying what the
+                              store is waiting on (D121, `standing.ts` — and the null invariant
+                              in it is the load-bearing part), one action, then the library
+                              drawn as the work that made it — sittings clustered from
+                              `captured_at`, each block as wide as its minutes and as tall as
+                              its cards an hour, so its area is its card count. Then the
+                              six-stage spine (Capture → Runs → Review → Pricing → Orders →
+                              Shipping) with the live figure under each stage, the boxes, the
+                              runs.
                               Every figure is the one that stage's own screen draws, read from
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
@@ -1244,6 +1263,7 @@ D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-
 D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
 D120 The shell speaks one brand at every width, and the phone bar is a rail
+D121 The front page says what is owed, and the library is drawn as the work that made it
 D122 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 ```
 
