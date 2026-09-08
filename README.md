@@ -205,7 +205,9 @@ neither watches anything — use them when you want a server you are looking at.
 beside `make up` fails loudly rather than quietly moving to another port, because a server that
 moved would be serving a **different** store (D43). `make screenshot` renders `scripts/views.txt`
 into `captures/ui/`, and `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a
-real browser.
+real browser — behind a machine-wide lock, because two checkouts running that suite at once
+starve each other into failures that are not in the code (D122). It refuses rather than queues
+and names the tree holding the lock; `ARGS=--wait` queues instead.
 
 **Gate B ran these screens on 2026-08-22** and most of the doubt about them is gone: the capture
 screen drove a real feeder session, the review queue held 16 real entries and every one was

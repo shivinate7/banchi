@@ -1425,10 +1425,10 @@ COMPONENTS = [
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D49",
-                                "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70",
-                                "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90",
-                                "D92", "D94", "D96", "D101", "D102", "D104"],
+                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
+                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
+                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1727,7 +1727,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D122"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1748,6 +1748,30 @@ COMPONENTS = [
                         "list: every field is rendered by `make explain`, and the NEEDS "
                         "vocabulary is checked for a token no entry uses.",
             },
+            "suite-lock.py": {
+                "does": "`make design-check`'s doorman, and `make suite-lock-selftest`. ONE "
+                        "BROWSER FLEET AT A TIME ON THIS MACHINE: an advisory flock on "
+                        "`~/.pkmnscan/locks/browsers.lock`, taken before the suite runs and "
+                        "released when the process ends. It is the one guard here that may NOT "
+                        "live per-checkout — D43 gave every tree its own ports and its own "
+                        "store, and the CPU is what it could not copy. Two fleets at once "
+                        "starve each other into failures that are not in the code: measured "
+                        "2026-09-07 at 18 of them across two worktrees, all 52 green on a "
+                        "re-run alone. IT REFUSES RATHER THAN QUEUES and exits 75, not 1 — "
+                        "`playwright test` exits 1 when tests fail, and a guard against false "
+                        "failures must not produce one. `ARGS=--wait` queues instead and says "
+                        "so every thirty seconds, because a silent wait reads as a hang. NO "
+                        "STALE-LOCK PATH EXISTS because flock has none: the OS releases what a "
+                        "holder took however the holder died, which is the whole reason this is "
+                        "not scripts/serve.py's pid-and-argv dance. The record inside the file "
+                        "is read only to name the holder in the refusal. Stdlib only, and "
+                        "python3 rather than $(PYTHON): a guard that needs `make venv` before "
+                        "it can refuse is one a fresh worktree runs without.",
+                # D122 is the entry that argues all of it, D43 the one it finishes. D18 is why
+                # the self-test is in `make check` and never in the git hook: it writes a lock
+                # directory under mktemp and kills the processes it spawns.
+                "governed_by": ["D18", "D43", "D122"],
+                "status": "built"},
             "status.py": {
                 "does": "`make status`. Holds no fact about the project: the step and the "
                         "gate come from this file, the T1 score from harness/results/, the "
@@ -1888,22 +1912,76 @@ COMPONENTS = [
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
-                "does": "headless Playwright render of a URL to captures/ui/<name>.png, or "
-                        "one per line of views.txt under --manifest. Returns non-zero "
-                        "unless a non-empty PNG lands on disk — an exit 0 from the CLI is "
-                        "not proof that anything was written.",
+                "does": "the manifest loop, THIS CHECKOUT'S DEV PORT, and every message a "
+                        "person reads; screenshot.mjs "
+                        "is the browser half. Renders one URL to captures/ui/<name>.png, or "
+                        "one per line of views.txt under --manifest, and returns non-zero on "
+                        "either of TWO failures now: no PNG on disk, or a PNG missing an "
+                        "element the manifest named. The second is new on 2026-09-07 and is "
+                        "the whole point — the old sentence here, `an exit 0 from the CLI is "
+                        "not proof that anything was written`, was right and stopped one step "
+                        "short: a written file was never proof that the PAGE was written, and "
+                        "a render with a screen's hero missing is a valid non-empty PNG. IT "
+                        "RENDERS THE TREE IT IS RUN FROM, ALSO SINCE 2026-09-07 (D43): "
+                        "views.txt names the main checkout's :5173 as a convention, this reads "
+                        "`server/ports.py:dev_port` — never a third spelling of that "
+                        "derivation — and substitutes a worktree's own port before rendering, "
+                        "saying so as it goes. Before that, `make screenshot` in a worktree "
+                        "photographed the MAIN tree's app over the owner's real store, and the "
+                        "renders looked perfectly correct. A linked worktree that cannot "
+                        "derive its port renders NOTHING rather than falling back to a port "
+                        "that would be another tree's.",
                 # D5 is why the loop exists: the agent cannot see its own output, and the
                 # screens that most need looking at are the second persona's. D13 is what
-                # it renders — Vite on :5173, a browser on the Mac. D18 is the rule that
-                # keeps it off `make check`: it writes, and nothing that writes may run on
-                # the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18"],
+                # it renders — Vite on the main tree's :5173, a browser on the Mac. D43 is
+                # why that number is a convention here and not an address: the port follows
+                # the store, and this script had been the one caller that did not follow it.
+                # D18 is the rule that keeps it off `make check`: it writes, and nothing
+                # that writes may run on the path that decides whether work is done.
+                "governed_by": ["D5", "D13", "D18", "D43"],
+            },
+            "screenshot.mjs": {
+                "does": "the browser half of `make screenshot`: one render, and the proof "
+                        "that it is complete. Drives app/node_modules's @playwright/test — "
+                        "the SAME pinned copy `make design-check` runs — rather than the "
+                        "`npx playwright@<pin>` download screenshot.sh used until "
+                        "2026-09-07, so the one-version rule those two files could only ask "
+                        "for politely is now MECHANICAL: EXPECTED_PLAYWRIGHT is checked "
+                        "against app/package.json and a disagreement fails the render. THE "
+                        "PROOF: for each selector the manifest names, capture its rectangle, "
+                        "hide it with `visibility: hidden`, capture again, and refuse the "
+                        "render when not one pixel changed — an element that painted nothing "
+                        "is exactly what a lost element looks like. Both comparison shots "
+                        "freeze animation and the artifact on disk does not, because two "
+                        "back-to-back captures of `#/`'s deck are NOT byte-identical while "
+                        "motion is live; the header names what that trade gives up. It also "
+                        "carries the argument for keeping `fullPage`, which a report "
+                        "proposed replacing with a viewport sized to scrollHeight: measured "
+                        "on this tree, the reported paint loss does not reproduce and the "
+                        "remedy silently crops every view, because the shell is "
+                        "`min-height: 100dvh` and a taller viewport makes a taller document.",
+                # D5 is who the render is for and D13 is what it renders. D18 is why it is
+                # not on the commit path: it writes. D16 is the shape of what was added —
+                # a mechanical check for a claim that would otherwise fail silently, which
+                # is the same reason demo-freshness exists two entries up.
+                "governed_by": ["D5", "D13", "D16", "D18"],
             },
             "views.txt": {
-                "does": "the manifest `make screenshot` walks: one `<name> <url>` line per "
-                        "view worth looking at. Tracked, unlike the renders — it used to "
-                        "live under captures/, which .gitignore excludes wholesale, so the "
-                        "list could not be committed and a fresh clone started with none.",
+                "does": "the manifest `make screenshot` walks: one "
+                        "`<name> <url> <selectors>` line per view worth looking at. Tracked, "
+                        "unlike the renders — it used to live under captures/, which "
+                        ".gitignore excludes wholesale, so the list could not be committed "
+                        "and a fresh clone started with none. THE THIRD FIELD ARRIVED "
+                        "2026-09-07: the elements that view's render must prove it drew, "
+                        "checked by screenshot.mjs. A selector named here has to hold with "
+                        "the capture server up, down, and up over an empty store — the three "
+                        "states this file's own header describes — so it is either "
+                        "shell-independent structure or something the screen draws from "
+                        "nothing, never an empty state's own class. The `:5173` in every URL "
+                        "is the MAIN checkout's port and a convention rather than an address "
+                        "(D43) — a tracked file cannot name a port derived from one "
+                        "directory's path — and screenshot.sh substitutes a worktree's own "
+                        "before rendering.",
                 # D5 is what the list is for: SEVEN owner screens and the Fulfiller's, which
                 # is the one render where the absence of the nav strip is the point. It said
                 # five while the file listed eight — the lines were added (pricing by D49,
@@ -1924,7 +2002,7 @@ COMPONENTS = [
                 # rather than the screen. D86 is the same drift on the `pricing` line — the
                 # corpus made that screen's default the full cross-run worklist, and the
                 # paragraph beside it still described a run picker that draws nothing.
-                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D49", "D63", "D69", "D86"],
+                "governed_by": ["D5", "D13", "D24", "D31", "D39", "D43", "D49", "D63", "D69", "D86"],
             },
         },
     },
