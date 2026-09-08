@@ -111,6 +111,12 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **The figure survives as an offer, not a default.** `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is still what the press proposes; what it stopped being is something a send inherits without asking. `policy.live_cap` remains for a store that wants a standing answer, and reads `None` — no cap — when nothing has written one, which is the reversal this rewrite made.
 
+**THAT LAST SENTENCE WAS TRUE OF THE PARSER AND FALSE OF THE STORE FOR A DAY (corrected 2026-09-08).** `Corpus.parse` read an absent key as `None` from the first hour, so a store with a file was answered right. But `Corpus.live_cap`'s own dataclass default stayed `LIVE_QUANTITY_CAP`, and `to_payload` writes that key unconditionally — so a DEFAULT-CONSTRUCTED corpus carried four and the first save of a fresh store wrote the retired bound into `policy`, where every later read would find it. `server/pipeline_routes.py`'s fallback for a corpus it could not read is the caller that mattered: it invented a cap nobody had set, which is the exact thing `live_cap_for`'s except arm had just been changed to stop doing.
+
+**It hid a second defect, which is the more interesting half.** `pipeline/merge.py` merged its legs' caps with `max(leg.match.live_cap for leg in legs)` — total while the field was an `int`, and a comparison against `None` from the moment this entry was rewritten. It raised `TypeError` on the one shape a merged send exists for, a SKU held by two or more runs. **Nine harness tests and a full `make check` were green through it**, because every case ran against a store whose corpus default still answered four, so no leg ever carried `None`. Correcting the default is what made the crash reachable, and `t7:check_merged_emit_uncapped` is the case that now reaches it.
+
+**The merge also took the wrong cap, and that was not a typing error.** `max` returns the LOOSEST bound, so a send spanning a run held to 2 and a run at 4 offered 4 — discarding the more conservative answer on the one path that exists to be conservative, and the opposite of every other cross-run rule in that module. `_merged_cap` takes the smallest cap any leg names, and `None` never outranks a figure: the absence of a bound is not a large one.
+
 **Asked for at `emit` and not at `join`, deliberately.** `join` reports what the shelf holds; `emit` writes the file. A cap named at join time would be a promise a later emit could quietly break, which is the join/emit disagreement this entry's own `--split-threshold` history already paid for once.
 
 **"Configurable" became true on 2026-09-06, and it had been a promise with no reader for the whole life of this entry.** The parameter was threaded from the start — `SkuMatch.live_cap`,
@@ -3317,7 +3323,7 @@ The label change alone was **worse than the defect on two of the three surfaces*
 **And two things the screen showed that the label never caused**, fixed here because they are the same rows:
 
 - **`where this sits in the box is not known yet`, under an empty track, on every departed row.** `Place.slot` is null for two different facts — a card that has left, and a box the server could not count — and `PositionBar:sentenceOf` answered both with the fault's words. Where those copies sat is known exactly. `app/src/server.ts:isDeparted` is the one predicate that tells the two apart (`located`, a null `slot`, and a label — the fault answers `label: null` with it), and the sentence now reads `no longer in the box`.
-- **The bar itself is gone from a departed row on the copies list**, which is `BoxBrowse.tsx`'s existing ruling applied to the other list of the same cards: `app/tests/inventory.spec.ts` has asserted since D58 that the walk draws none, on the grounds that a bar cannot draw a card that is in no place. The two screens disagreed about the same card.
+- **The bar itself is gone from a departed row on the copies list** — *and this is the half the second amendment below took back; the paragraph stands as the argument that was made.* It was `BoxBrowse.tsx`'s existing ruling applied to the other list of the same cards: `app/tests/inventory.spec.ts` has asserted since D58 that the walk draws none, on the grounds that a bar cannot draw a card that is in no place. The two screens disagreed about the same card.
 
 **What it does not cover, measured and left:** the copies list draws the state word twice on every departed row — once as `.card-locations-state` and once as `Inventory.tsx:Action`'s fallback — and the two can never disagree, because the second prints the first. Choosing which to delete is a D57 question and the lone-copy call site has no state span at all, so it is recorded in `docs/DEBTS.md` rather than repaired here.
 
@@ -3332,6 +3338,20 @@ The label change alone was **worse than the defect on two of the three surfaces*
 **Three composers moved and they are all the ones there are**: `join.departed_label`, `join.where_phrase`'s departed branch, and `BoxBrowse.departedKey` — the walk's short cell, which used to spend the row's `{box}/{index}` map key and now composes the server's spelling instead. `PositionLabel.STORE_KEY` is the reader and now matches both shapes; **a respelling that misses it does not fail, it silently draws the key as a position part**, which is why that regex carries the note it does. **Measured in the browser at the shipped 11px Martian Mono**: `departed · B3 #96` is **130.9px** against the old `departed · 3/96`'s 115.5px, inside a cell capped at `22ch` — **169.4px**, which is the same 169px D68 measured the full label overflowing at 177px. The two characters cost 15.4px and the cell has 38.5px spare, so nothing ellipsises.
 
 **What is deliberately unchanged:** the pooled label (`Pokémon code cards · pooled · 5/12`), the `no label · 3/31` fault row, and every `{box}/{index}` that is a KEY rather than a string a person reads — the inventory map, the photo route, `<index>.jpg`. Those are addresses machines resolve, and none of them is drawn next to a card number.
+
+### Amended 2026-09-07 — the lens comes back, because what it draws is the box and the box is still there
+
+**The bullet above deleted the position lens from a departed row on two screens, and D118 puts it back with its MARK removed instead.** The owner's report is the whole of the reason: *"I am getting a lot of screen shake when I am in inventory and am marking something sold."* Measured at 1440x900, the lens is **85px** of the location card, and it left on the press that sold the card — the panel collapsed 98px, 131 elements moved, and the same 85px came back the instant the walk stepped onto a placed copy. A departed ROW cost a line's height the moment a sale landed, so every row beneath the one just sold moved under the pointer that had pressed it.
+
+**This does not repeal what that bullet was right about, and the distinction is the whole amendment.** The rule it applied — *a bar cannot draw a card that is in no place* — is true of the **mark** and was over-applied to the **lens**. The picture is of the BOX, and the box does not go anywhere when a copy leaves it: the section the copy was in is still a real run of slots, still nameable from a `place` that keeps `section`, `section_start` and `section_end` after `slot` and `card` go null, and still the thing a person is looking at when they ask where this card used to sit. What stops being true is that this copy is at a number inside it, and the number is exactly what comes off.
+
+**The object that stands there now is not the object this entry deleted.** What D68 found on screen was `where this sits in the box is not known yet` under an **empty track** — its own words, *"a true sentence under an empty track that still reads as a measurement that failed"* — and that sentence is the OTHER bullet above, which is unchanged and is what the departed lens is captioned with today. The track is not empty: the section is drawn, the second scale reads `Section 1 · 10 slots · this copy is not in one`, and the mark eases out and drops rather than being deleted between two frames, which is what the owner asked for when they were shown the choice (*"a sentence or even better an animation"*). A deleted node cannot animate; the node that stays is also the one the row's height depends on, and those are the same fact.
+
+**D58 and D71 are untouched, and so is the rest of this entry.** No slot number is drawn for a card that has left, the void still holds the figure's column open, the label still ends on `B3 #96` in the muted register, and `join.departed_label` is still the one composer. **Three assertions across `inventory.spec.ts` and `gallery.spec.ts` said `toHaveCount(0)` about that bar and now say the opposite** — amended in place with this argument beside them rather than deleted, so the reversal is legible as one somebody made. `.card-locations-row.is-gone.is-nobar` was how the gallery recognised a departed row and no longer can: the row is `is-gone` with a lens that carries `data-gone`, and having no bar at all was only ever a proxy.
+
+**What would reopen it a second time:** an operator who reads the muted section as a claim that the copy is still in it. The two states are a marked track against an unmarked grey one, which is legible beside each other in the copies list and was checked in both themes; a store where every copy of a card has departed draws no marked track anywhere, and that is the case to look at first.
+
+**D118 carries the measurements, the other three movers and the four guards.** Nothing about the stability floor is restated here.
 
 
 ---
@@ -7076,7 +7096,267 @@ reading `at` was defensible; after it, a sale touches `at` while observing nothi
 **What would reopen this**: an operator who wants a price or a quantity they assert here to
 outrank what TCGplayer reports. This entry keeps the export as the authority on the figure and
 this store as the authority only on what it has done since.
-## D116 — The shell speaks one brand at every width, and the phone bar is a rail
+
+## D116 — A card nobody has named is not a landmark, and the distance is what keeps the skip honest
+
+**The after/before ladder names the nearest NAMED card still in the box on each side.**
+It walks past an on-hand card no identification has named exactly as it walks past a departed
+one, and it says how many it passed. Recorded and built 2026-09-07, on the owner's report that
+cards being sold "are showing up as just a number in the before and after".
+
+### The premise was wrong and the complaint was right
+
+**They read `#270` in the ladder as a sold card leaking in. It was not one, and none ever was.**
+`_Places._walk` has filtered `TERMINAL_STATES` out of `occupants` since D30 built the decoration
+on 2026-08-23. Asserted over their own store before anything was changed, over every located
+record in it and both sides of each: **1,625 place blocks, 0 terminal cards as a neighbour.**
+The owner's
+memory of the pre-Banchi build — *"the before and after was ONLY live cards that are remaining
+in inventory"* — was exactly right about the rule, and the rule had never lapsed.
+
+**What `#270` actually was: box 3, store index 425, on hand, photographed, and nameless.**
+The model returned nothing for it (`confidence: low`, blank name, number and sku), it was queued
+`no_catalog_row`, and it was closed without being answered under D37 — so it sits in the drawer
+with no identity. **Seven cards on that store are in this state**, five in box 3 and two in box
+5, and D92's own measurement already named them as the reason this row drew at all.
+
+| | |
+|---|---|
+| place blocks on the owner's store | 1,625 |
+| terminal cards named as a neighbour, before this entry | **0** |
+| on-hand cards carrying no name | **7** — 5 in box 3, 2 in box 5 |
+| neighbour rows that now reach past one | **27** |
+| the screenshot's row | `B3 #426`, sold, `prev` was `#270` and is now `Rell, Noxus` |
+
+**So the defect is not which cards qualify. It is that a figure is not a landmark.**
+This block has one job — let a hand flipping through a box find the card — and `#270` is nothing
+you can recognise between two pieces of cardboard. It also sat two lines under `B3 #426`, a
+store key, so one row carried two bare numbers in two different spaces; D92 rules which one owns
+the `#`, and a reader who has not read D92 sees two of them.
+
+### The skip is stated, because a silent one is the wrong-slot claim D30 forbids
+
+**`skipped` rides each side: how many ON-HAND cards the walk passed to reach that landmark.**
+`after Rell, Noxus` for a card two along is a sentence somebody counts slots against and comes
+out one short, and D30's whole rule is that a position claim may never send a hand to the wrong
+slot. So the ladder draws `1 unidentified card between` under the name, and `placeParts` puts
+one clause in `said` — the joined form the Fulfiller reads at 20px — covering both sides at
+once, which is exact rather than loose: every card the walk passed lies strictly between the two
+landmarks whichever side it was on.
+
+**Departed cards are never counted in it.** The box closed up over them (D58), so they lie
+between nothing; `section_gaps` is where they are counted, and the two numbers are pinned apart
+in T7 on one card.
+
+**A side with no named card beyond it is null, the same answer the box's own edge gives.**
+A box straight off the feeder — every card captured, none identified — therefore draws no ladder
+rather than a ladder of figures, which is the honest rendering of "nothing over there can be
+named".
+
+### What it cost, and the one thing that got faster
+
+**The walk could not stay a scan.** The nearest-named search is O(box) per card in exactly the
+case that is most common — a box before `join` has run, where every card is unnamed — so
+`do_inventory` over a 723-card box would have been O(n²). `_walk` now also caches the POSITIONS
+into `occupants` that carry a name, and `_company` bisects it twice. Measured on the owner's
+store: 1,625 records, one full pass in 0.09s.
+
+**The app's `#{slot}` fallback is now unreachable from a current server and stays anyway**, for
+an older one. `PlaceNeighbor.skipped` is optional for the same reason, and `?? 0` is the honest
+read of its absence: a server without it named the adjacent card because it had no other rule.
+
+### What this does not reopen
+
+**D92 is untouched.** The slot is still what a renderer draws, the index still rides unread for
+D45's click target, and `B<box> #` is still the only sigilled key. What changed is that the one
+render this entry's figure fired in — a nameless neighbour — no longer happens.
+
+**D37 is untouched, on the owner's word.** Asked whether the seven unnamed cards should be
+surfaced or left alone, they chose left alone: a closed question means the card is left alone,
+and this entry gives those cards a better rendering rather than reopening their identity.
+
+**What would reopen this**: a box where enough cards are unnamed that the skip counts get large
+enough to be worth ranking rather than stating, or the neighbour row becoming a click target —
+which is D92's own reopening condition and would make the passed-over card reachable instead of
+merely counted.
+
+## D118 — A press changes what is on the screen, never where the rest of it is
+
+**A control's response is the product's, not each screen's — and that has to cover what the PAGE does around the press, not only what the control says to the pointer.** Built 2026-09-07 on the owner's report: *"I am getting a lot of screen shake when I am in inventory and am marking something sold, things should not be moving around when I hit buttons it's too janky — how do we resolve this (not just inventory, but any/everywhere)."*
+
+D50 answered three questions about an interactive element — what the cursor says, whether a hover eases, whether the finger gets a dip — and `app/tests/cursor.spec.ts` guards all three. **None of them is about the thing the owner was looking at.** A control can obey every one of those floors and still sit in a panel that collapses 98px the moment its button is pressed.
+
+### Measured first, at 1440x900 against a seeded store
+
+| press | what moved |
+|---|---|
+| `Mark sold` on `#/inventory` | the card panel collapsed **98px**; **131 elements** moved |
+| stepping the walk one card | **39, 66 or 98px**, depending on which two cards |
+| every other route swept — review, pricing, orders, runs | 0 |
+
+**The concentration was not a coincidence and it was not the button.** Three things in one panel were sized by the card's own state, and a write changes that state:
+
+- **the position lens, 85px.** A departed copy drew none (D68), so the lens vanished on the press that sold the card and came back the moment the walk stepped onto a placed one.
+- **the action slot, 18px.** `Mark sold` + `Retire` is 40px, the receipt is 50px, the `Sold` pill is 22px, and the slot was whatever the current one needed.
+- **the copies list.** As long as the card has copies, so the panel was a different height for every card in the box.
+
+**And a fourth, found by the guard rather than by the eye:** `.browse-row` in the walk declares three grid columns and can draw four children — the slot, the name, a departed badge and a queued one — so a sold copy's badge was auto-placed onto a second grid ROW. Measured: a walk row is 32px until the copy is sold and **50px** after, which pushed every row beneath it 18px down the list.
+
+### The lens stays and its mark leaves, which amends D68
+
+**This reopens D68 and D71 deliberately, on the owner's answer.** Asked how a departed copy should fill the row its lens used to occupy, they said *"a sentence or even better an animation"*. **D68 carries the reversal in its own second amendment** — that entry's bullet is marked in place and the argument for why the lens is not the mark is stated there, beside the ruling it changes, rather than only here.
+
+D68 deleted an empty track captioned `where this sits in the box is not known yet` — its own words, *"a true sentence under an empty track that still reads as a measurement that failed"*. **That is not the object this entry puts back.** The picture is of the BOX, and the box is still there: the section the copy left is still drawn, the caption reads `no longer in the box`, the second scale reads `Section 1 · 10 slots · this copy is not in one`, and the one thing removed is the MARK — which is the only part that would lie about a position. D58's refusal of a slot number for a card that has left is untouched, and so is D71's void where the figure would be.
+
+**The mark leaves rather than being deleted, and that is the animation.** `PositionBar` keeps it mounted through the write with `data-gone`, holding the `left` it last stood at in a ref, and eases it out and down over `--bn-t-slow` while the section it was in fades to a muted ground. A deleted node cannot animate; a node that stays can, and it is the same node the row's height depends on.
+
+**Three assertions in two specs said `toHaveCount(0)` about that bar and now say the opposite.** They are amended in place with the argument rather than deleted, so a later session reads this as a reversal somebody made and not as drift.
+
+### One height for the whole walk, which is the owner's second answer
+
+**`.browse-band` takes a fixed height in its two-column form and the copies list scrolls inside it.** `min(720px, max(520px, calc(100dvh - 280px)))` — bounded by the VIEWPORT and not by the card, which is the whole point: every other candidate for the number is a fact about whichever card is selected, and that is what was moving.
+
+The copies list is what absorbs the difference because it is the only part of the band that is a LIST; scrolling a location card or a photograph would not be ordinary. Its bottom edge fades, the same treatment and the same argument `BoxBrowse.css`'s own scroller already carries — a clipped row with no fade reads as a rendering fault.
+
+**What it costs, named:** a card with more copies than the band holds shows about one and a half rows before it scrolls, where before the panel simply grew. The owner chose that trade over the panel changing size on every step. **What it protects:** `.browse-shot` is `align-self: start`, because a grid cell stretching to a fixed band is D38's `.browse-frame` defect by another name — that entry deleted a wrapper for exactly this reason, and `inventory.spec.ts`'s "never a card-shaped hole" case went red for 192px the first time this height landed without it.
+
+### The press itself was on two clocks
+
+`base.css`'s press floor lands `translate: 0 1px` on the frame the finger goes down and says so in its own comment. **Three rules then eased the movement they made on the same press**: `.bn-btn` transitioned `transform`, where its `scale(0.99)` lives, so every button in the product dipped instantly and eased into the squeeze over 120ms and released the two the same way in reverse; `.pull-confirm` and `.bn-tab-link .bn-icon` did the same, the latter over a 200ms spring.
+
+**The rule is a pair, not a property ban.** A control may ease a `transform` — `.pull-confirm`'s hover LIFT is one, and a lift answers the pointer ARRIVING rather than the finger landing. What may not happen is a control easing the movement its own `:active` rule makes. The two that need both name their repaints inside the `:active` rule and leave the movement out of the list.
+
+### What guards it
+
+**Two cases in `cursor.spec.ts`, where the other three floors are**, because these are the half that can be read off the stylesheets and are not about one screen:
+
+- *a pointer state repaints a control and never re-lays it out* — every `:hover` / `:active` / `:focus` rule across the eleven routes, flagged when it declares a layout longhand. **The DECLARATION convicts and a rendered element can only acquit it**, which is the way round it has to be: the first draft skipped a rule whose selector matched nothing, and the mutation that put the real defect back went green because this worktree's empty store draws no `#/codes` task card at all.
+- *a press lands on one frame* — an `:active` rule that moves the control, does not carry its own `transition`, and matches an element that eases that property.
+
+**Two more in `inventory.spec.ts`, which owns the fixtures**, because nothing here is a CSS rule — it is what the panel does when the write lands:
+
+- *the press that sells a copy moves nothing outside the panel it lands in* — a sweep of every element outside `.browse-card`, plus the document height, plus the scroll, plus the location card's and the copy row's own heights.
+- *the card panel holds one height for the whole walk*.
+
+**Ten mutations, one per fix, and two of them found holes rather than confirming one.** `sellableStore()` moved `state` and nothing else, so it served a sold card that was still in its slot — a shape the server cannot produce, and it cost the sale case its whole subject: deleting the departed lens outright left it green. And the sweep compared VIEWPORT coordinates while Playwright scrolls a control into view before clicking it, which reported all 192 elements as moved and said nothing about the press.
+
+### What is left, and why it is left
+
+**A copy an open order was waiting on still moves the panel's contents by 46px when it is sold**, because `wantedOf` names only copies that are still on hand and the claim line goes with it. That is `Inventory.tsx`'s own documented behaviour — a pulled copy already reads `Sold` — and reserving 46px of blank on every unclaimed card to hold a line that is usually absent would be padding rather than stability. **Nothing outside the panel moves for it**, which is the floor this entry actually sets.
+
+**What would reopen this**: a card whose copies list is long enough that one and a half visible rows is the wrong trade, or an operator who would rather the panel grew than scrolled.
+## D119 — The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
+
+**Built 2026-09-07, on the owner's verdict about their own screen.** `#/inventory`'s card
+detail drew the copy the walk was standing on **twice**, about 150px apart, in two different
+registers: a `LOCATION` hero panel with a 40px address, its own position bar and a solid
+`Mark sold`; and again as the first row of *Every copy of this card*, where its bar was
+deliberately suppressed so the two lenses would not read as a rendering fault.
+
+Their words: *"I actually really hate this new setup where it highlights the current card in
+picture separately from the other copies. It's unintuitive. I want for Card 1 to have the exact
+same layout as cards 36 and 91 below it, frankly the entire top right blurb box can be
+deleted."*
+
+**The code had already conceded it.** `Inventory.tsx`'s own comment called the duplication "the
+trade", and what the trade bought was emphasis on a copy the UI elsewhere refuses to recommend
+— `CardLocations.css` says the current row's rail is neutral "deliberately not *take this
+one*". Emphasis nobody asked for, paid for in a second register.
+
+### What the deletion is, and what it is not
+
+`LocationCard` is gone. `noBar` drops its `current` term, so the copy the walk stands on draws
+its bar like every other row; **`goesTo` keeps its `current` term** (D45 — a walk-to on the row
+the walk already stands on goes nowhere). What marks that row is a `Viewing` pill in the cell
+every other row uses for its own pills, and a neutral rail. **The pill and the rail were put to the owner and kept**: with no hero, they are the only thing tying the ~450px photograph on the
+left to a row, and they change no part of the row's shape.
+
+**Nothing the hero drew is lost.** The `Wanted` claim, the pooled marker, `Mark sold` and
+`Retire` were already on every row; the box name moved from a separate element into the
+address itself, as `PositionLabel`'s `boxNote` — which is what every other row has always
+drawn. The missing-position-label `Notice` was **dropped rather than relocated**, and only
+after checking it could fire: `do_inventory` omits the flat label and the `place` block
+together, so that record arrives as `place === undefined`, which the lone-copy branch already
+names by key.
+
+### The card with no SKU and no name is a one-copy list, not a second panel
+
+`GET /search` matches on SKU or name and refuses an empty query, so a card the pipeline has
+never identified cannot be reached at all — that branch rendered the hero and a bare notice,
+and deleting the hero would have left it an explanation with no address, no bar and no doors.
+It builds the group instead: `Inventory.tsx:loneGroup`, shaped **field for field to be the answer `capture_server.py:do_search`'s own loose branch would have given** over a bag of one.
+`listable` stays what the server would send and is **not** rewritten to 0 — the client does not
+get to disagree with the store about a number the store computes. What changes is the
+**sentence**: a group with no SKU draws no live figure and no `Pushed · Staged · headroom`
+line, because `emit` has written no listing record and every one of those numbers is a
+structural zero under a `Room for 1 more live` nothing can keep. Derived from `sku` rather than
+passed as a prop, so it also reaches the 65 name-but-no-SKU cards already arriving through the
+search path's loose bag.
+
+**The measurement that decided the shape of this, and it corrects a stale one.**
+`app/tests/inventory.spec.ts` carried *"629 of 682 records are captured-and-never-identified —
+92% — … the branch 92% of the store draws through"*, and argued for coverage on it. Read out of
+`inventory/store.sqlite` on 2026-09-07: **1,625 cards, 1,553 carrying a SKU, 65 with a name and no SKU, and 7 with neither** — four tenths of one percent. The figure was true when written,
+against a store the pipeline had not yet run over. The branch is a real edge case and still
+worth its case; what it is not is the common screen, and the spec's title and comment now say
+the measured thing.
+
+### The undo lands where the sale was pressed, and it fits the slot D118 reserved
+
+A sale's undo — the draining twenty-second clock and the `Undo` — was the hero's alone; the row got a bare `Undo` with no clock. With the hero gone the row is where a sale is taken back, so the clock came with it (the owner: *"it'd be a shame to lose that animation work"*).
+
+**What could not come with it is the panel, and D118 is why.** That entry reserved `.card-locations-action` at the button pair's own 137x28 precisely so a press cannot resize the slot it lands in. The kit's `.bn-receipt` is ~268px wide and 36px tall and fits neither way, and both were measured on this branch rather than reasoned about: **given a grid row of its own it grew the row from 175px to 213px on the press** — main's own stability case caught it by name — and put in the action cell it grows the cell and shoves the address, which `CardLocations.css` forbids against D40's 231px wrap point.
+
+**So the row draws the clock and the button, at the size the buttons already were.** The sentence is not lost and is not duplicated: the state pill two cells to its left already reads `Sold`, and the toast this sale posted carries `Marked sold.` with the same clock and the same `Undo`. The drain's track is a **token** here where `kit.css` paints it as a white alpha — correct on an inverted panel, invisible on a row sitting on `--bn-surface`.
+
+`primary` survives as a **size**, not a shape, and it is now exactly one thing: the phone's sticky action bar, which has no state pill beside it and so still draws the whole receipt.
+
+**This is the second design this branch built for the receipt.** The first — a grid row under `:has(.bn-receipt)` — was written, looked at, and shipped nothing, because D118 landed on main while this branch was open and made it a defect. The measurement that killed it is recorded above rather than the design being quietly replaced.
+
+### What was measured and refused
+
+The right column loses roughly 235px flat: the hero's ~300px and its gap come out, and the
+current row gains ~81px back from the bar it now draws. The photograph is unchanged. **No balance fix was taken.** Shrinking the photo column is what D32 and D38 spend the pixel budget
+against — D38 *raised* it on the owner's own ask — and padding the void is the defect D40
+measured at 41.99%. The visible consequence is a ragged bottom under a one-copy card at a pane
+of 560px or more, which is the honest cost of removing content rather than a thing to fill.
+
+### What D71 loses, and where it went instead
+
+`.inventory-location-label` was one of `PositionLabel`'s site rules and **the last renderer in the product of `lead='path'` with a `.position-void`** — the combination its re-rank fires
+under. The copies list, the order picker and the walk are all `lead='slot'`. Re-pointing that
+assertion at the row would have compared 11px against 11px and passed for the wrong reason, so
+it moved to `app/tests/gallery.spec.ts`, where the two specimens sit side by side and the kit
+sheet is now the rule's only renderer. **D71 itself is not edited**: its "five sites" is a
+2026-08-30 measurement, and measurements are not rewritten to match a later tree.
+
+**Moving it found the sheet had never drawn the rule.** `.kit-poslabel` set `--pos-slot` without
+the `font-size: var(--pos-slot)` every real site pairs with it, so the re-rank's `0.45em`
+resolved against an inherited 14px and clamped to exactly the 11px a live path gets — the
+departed specimen was drawn identically to the live one, on the page whose job is drawing the
+difference. Fixed in `Gallery.css`, and now asserted.
+
+### What is not weakened
+
+`the copies of a card cannot be positioned by the pipeline console` guarded "the answer is above
+the fold" against `.inventory-location`; the answer is the current ROW now, and it re-points.
+`a copy row draws how far into the box AND how far into the section` counted **two** position
+bars — one hero, one list — and the total is still two for a two-copy card, for an entirely
+different reason; a total cannot tell "one per row" from "two on one row", so the claim is now
+per row with the total asserted after it. Both were observed red under their mutations before
+being kept, along with the two new gallery claims, the relocated re-rank, and the no-SKU list.
+
+**One assertion was written and then removed for failing that test.** A `Walk to` count of zero
+on the lone-copy branch stayed green when `onGoTo` was threaded onto it, because `OwnerRows`
+suppresses the walk-to on the current row anyway and the lone copy is always the current one. It
+is replaced by a comment saying so and pointing at the case that can fail: D45's real claim needs
+a group with more than one copy in it.
+
+**What would reopen this**: an operator who wants the address readable at arm's length while
+standing at the boxes. That is the one thing the hero did that a 22px row does not, and it is
+named here as the cost of the deletion rather than as a reason to keep a split hierarchy.
+
+## D120 — The shell speaks one brand at every width, and the phone bar is a rail
 
 **Built 2026-09-07, on the owner's instruction, after they asked what the mobile build gets wrong.**
 The 2026-09 rebuild put the lockup in the desktop sidebar

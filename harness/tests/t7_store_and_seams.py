@@ -204,6 +204,7 @@ from pipeline import (  # noqa: E402
     corpus,
     games,
     join,
+    merge,
     orders,
     pirateship,
     pricehistory,
@@ -347,6 +348,26 @@ def isolated_home():
                 os.environ.pop(files.HOME_ENV, None)
             else:
                 os.environ[files.HOME_ENV] = previous
+
+
+def cap_the_store(cap: int = join.LIVE_QUANTITY_CAP) -> None:
+    """Write a standing `live_cap` into the isolated store's corpus.
+
+    EVERY CASE BELOW THAT ASSERTS CAP ARITHMETIC HAS TO CALL THIS, and until 2026-09-08 none
+    of them did — `pipeline/corpus.py`'s dataclass default was `LIVE_QUANTITY_CAP`, so a
+    store that had never been asked anything answered four and twelve assertions inherited a
+    figure nobody had set. D7's rewrite retired the standing bound on 2026-09-07 and left
+    that default behind; the moment it was corrected, those twelve read seven.
+
+    THE FIX IS NOT TO RESTORE THE DEFAULT BUT TO SAY WHICH STORE THE CASE IS ABOUT. A cap is
+    something a store or a send now ASKS for, so a case about the cap sets one, and a case
+    that sets none is testing the ordinary uncapped send. Putting this inside
+    `isolated_home` instead would put the ambient default straight back — and would reach
+    the cases that exist to prove a fresh store's own answers.
+    """
+    book = corpus.Corpus.read()
+    book.live_cap = cap
+    book.write()
 
 
 def store_tables() -> dict:
@@ -6078,6 +6099,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
 
     # --- GET /search: D7's SKU -> positions map, finally served to a screen -------------
     with isolated_home():
+        cap_the_store()  # this case is about the cap, so the store sets one
         for _ in range(3):
             capture_server.do_capture(capture_payload(8, set_hint="me01"))
         capture_server.do_capture(capture_payload(8, game="misc"))
@@ -6707,14 +6729,16 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/3"]["place"]["neighbors"],
             {
-                "prev": {"index": 1, "slot": 1, "name": "Mantine"},
-                "next": {"index": 5, "slot": 3, "name": None},
+                "prev": {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
+                "next": None,
             },
-            "a card between two gaps names the nearest NON-TERMINAL records — the sold "
-            "card at 2 and the retired card at 4 are skipped as landmarks, never named: "
-            "a departed card cannot be the thing you count from (D30) — and each side "
-            "carries BOTH numbers (D92): the store key and D58's count, which this box "
-            "has already pulled apart (index 5 is the third card you can count to)",
+            "a card between two gaps names the nearest NON-TERMINAL, NAMED record — the "
+            "sold card at 2 and the retired card at 4 are skipped as landmarks, never "
+            "named: a departed card cannot be the thing you count from (D30) — and each "
+            "side carries BOTH numbers (D92): the store key and D58's count, which this "
+            "box has already pulled apart. `next` is NULL and not the unnamed card at 5: "
+            "past that card there is nothing this box can name, and a side with no "
+            "landmark answers the same null the box's own edge does (D116)",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -6735,14 +6759,63 @@ def check_place_neighbors(checks: Checks) -> None:
         )
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
-            {"index": 3, "slot": 2, "name": None},
-            "a neighbour nothing has identified sends BOTH numbers and no name: `name` is "
-            "null ON THE WIRE, and the null is the wire's whole job — the `#2` a screen "
-            "shows for it is the app's rendering, and a placeholder string minted here "
-            "would be a second vocabulary nothing audits. THE TWO NUMBERS DIVERGE HERE "
-            "(D92) and that is the point of asserting them together: the card at index 3 "
-            "is the SECOND card in this box, because the sale at 2 closed up in front of "
-            "it, and `#3` was what the neighbour row drew until D92",
+            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 1},
+            "AND A CARD NOBODY HAS NAMED IS SKIPPED AS A LANDMARK TOO, WHICH IS D116 AND "
+            "IS THE REVERSE OF WHAT THIS CASE ASSERTED. It pinned `{index: 3, slot: 2, "
+            "name: None}` — the adjacent card, sent nameless for the app to draw as `#2` "
+            "— and the owner read that figure on their own store as a sold card leaking "
+            "into the ladder. It never was one: index 425 in box 3 is a live card at "
+            "count 270, one of 7 the model returned no name for. But a figure names "
+            "nothing you can recognise while flipping a box, so the walk passes it and "
+            "names Mantine instead. THE TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED "
+            "TOGETHER (D92): the card at index 3 is the SECOND card in this box. And "
+            "`skipped: 1` is the price — one on-hand card lies between Mantine and this "
+            "one, so a hand counting from Mantine lands one short unless the row says so",
+        )
+        checks.equal(
+            [
+                rows["4/3"]["place"]["neighbors"]["prev"]["skipped"],
+                rows["4/3"]["place"]["section_gaps"],
+            ],
+            [0, 2],
+            "and `skipped` COUNTS THE ON-HAND CARDS PASSED OVER AND NEVER THE DEPARTED "
+            "ONES: card 3 reaches Mantine across a sold record at 2 and answers 0, while "
+            "the same two departed records are its section's gaps. The box closed up over "
+            "them (D58), so they lie between nothing and a hand counting from Mantine "
+            "arrives at card 3 exactly — the two numbers count different things and this "
+            "pins them apart",
+        )
+
+        # --- a sold card is not a landmark, and the sale is what proves it ---------------
+        # THE OWNER ASKED THIS QUESTION OF A REAL SCREEN (2026-09-07) — "sold cards should
+        # anyway not be in the before/after" — reading a `#270` in the ladder as a departed
+        # card that had leaked in. It had not: the ladder had never named one, and the
+        # figure was an unnamed LIVE card, which is what D116 above is about. This case is
+        # the claim they could not see, made in the one place it can be seen: a card is
+        # named as a landmark, then SOLD through its own route, and the neighbour that used
+        # to name it must move to the next named card rather than keep pointing at it.
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(6))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["6/1"].name = "Mantine"
+            snapshot.inventory.cards["6/2"].name = "Thievul"
+        before_sale = capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]
+        checks.equal(
+            before_sale["prev"],
+            {"index": 2, "slot": 2, "name": "Thievul", "skipped": 0},
+            "with every card on hand, card 3's `prev` is the card next to it — the "
+            "landmark this case is about to sell",
+        )
+        capture_server.do_mark_sold(6, 2, {})
+        checks.equal(
+            capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]["prev"],
+            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
+            "AND SELLING IT MOVES THE LANDMARK RATHER THAN NAMING A SOLD CARD. Thievul is "
+            "not in that drawer any more, so a sentence naming him sends a hand to a slot "
+            "the card has left (D30) — the walk names Mantine, who has closed up to be "
+            "the card in front (D58), and `skipped` stays 0 because a departed card lies "
+            "between nothing at all",
         )
 
         # --- an unallocated tail is not a gap --------------------------------------------
@@ -6781,6 +6854,12 @@ def check_place_neighbors(checks: Checks) -> None:
         # sidecar are named after it — but it has no slot, so its block carries the pooled
         # nulls and the located cards' sentences never mention it.
         capture_server.do_capture(capture_payload(4, game="pokemon_code"))
+        # NAMED, AND THAT IS LOAD-BEARING SINCE D116. The walk now passes over an unnamed
+        # card as well as a pooled one, so an unnamed code card would be skipped for either
+        # reason and the case below could no longer tell the two rulings apart. Named, the
+        # only thing keeping it out of card 5's sentence is D24.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/6"].name = "Rare Candy"
         pooled = capture_server.do_inventory()["cards"]["4/6"]["place"]
         checks.ok(
             not pooled["located"],
@@ -9682,6 +9761,7 @@ def check_emit_identity_stamp(checks: Checks) -> None:
     cards = [(3, i, "Articuno", "161", None) for i in range(1, copies + 1)]
 
     with isolated_home():
+        cap_the_store()  # this case is about the cap, so the store sets one
         run_dir, _ = seam_run(checks, cards)
         command(checks, "emit", str(run_dir.directory))
 
@@ -11483,6 +11563,7 @@ def check_merged_emit_cap(checks: Checks) -> None:
     checks.note("MERGED EMIT — one cap across the send")
 
     with isolated_home():
+        cap_the_store()  # this case is about the cap, so the store sets one
         # Four copies of one SKU in one box and three in another: seven copies of a card whose
         # cap is four. Each run alone is under the cap; together they are not.
         first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 5)])
@@ -11548,6 +11629,109 @@ def check_merged_emit_cap(checks: Checks) -> None:
             "same over-listing one seam further on — and the first build of this command did "
             "exactly that, stamping every copy once per run that held it",
         )
+
+
+def check_merged_emit_uncapped(checks: Checks) -> None:
+    """The same send with no cap asked for — the shape that raised `TypeError` (D7, rewritten).
+
+    THIS CRASHED FOR A DAY AND NOTHING SAW IT. `pipeline/merge.py` merged the legs' caps with
+    `max(leg.match.live_cap for leg in legs)`, which was total while `live_cap` was an int and
+    became a comparison against `None` the moment D7's rewrite made no-cap the ordinary value.
+    It fired on exactly the shape a merged send exists for — one SKU held by two runs — and
+    every existing case missed it because all of them ran against a store whose corpus default
+    still answered four.
+
+    WHAT IS ASSERTED IS THE COPY COUNT, NOT MERELY THE ABSENCE OF A CRASH. Seven copies over
+    two runs go out as seven on one row: the merge still dedupes the union of positions on
+    `(box, index)`, which is D86's other reason for one file and is untouched by the bound.
+    """
+    checks.note("")
+    checks.note("MERGED EMIT — no cap asked for")
+
+    with isolated_home():
+        # Deliberately NOT `cap_the_store()`: this case is the ordinary send.
+        first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 5)])
+        second, _ = seam_run(checks, [(4, i, "Articuno", "161", None) for i in range(1, 4)])
+
+        book = corpus.Corpus.read()
+        checks.equal(
+            book.live_cap,
+            None,
+            "A STORE THAT HAS SAID NOTHING HAS NO CAP. This is the assertion the corpus "
+            "default failed: `Corpus.live_cap` read `LIVE_QUANTITY_CAP`, so a fresh store "
+            "answered four and `to_payload` wrote that figure into `policy` on the first "
+            "save — putting the retired bound back where every later read would find it",
+        )
+        book.sub_threshold = "floor"
+        book.write()
+
+        said = command(checks, "emit", str(first.directory), str(second.directory))
+        checks.ok(
+            "Traceback" not in said,
+            "THE MERGED SEND COMPLETES. `max()` over two `None` caps raises `TypeError: '>' "
+            "not supported between instances of 'NoneType' and 'NoneType'`, and this is the "
+            "one shape that reaches it — a SKU in a single run never merges two legs",
+        )
+        rows = tcgcsv.read_export(second.path(runs.IMPORT_MERGED)).rows
+        ids = [row[tcgcsv.SKU_COLUMN] for row in rows]
+        checks.equal(
+            len(ids),
+            len(set(ids)),
+            "still ONE row for the SKU — the union is deduped on (box, index), which is the "
+            "half of D86 the cap never had anything to do with",
+        )
+        checks.equal(
+            int(
+                next(row for row in rows if row[tcgcsv.SKU_COLUMN] == ARTICUNO_SKU)[
+                    tcgcsv.QUANTITY_COLUMN
+                ]
+            ),
+            7,
+            "AND IT CARRIES ALL SEVEN COPIES. Under a cap of four the same send writes four; "
+            "the difference between those two numbers is the exposure bound and nothing else, "
+            "because `uncommitted_positions` — what actually stops a copy going twice — is "
+            "the same list in both",
+        )
+
+
+def check_merged_cap_is_the_tightest(checks: Checks) -> None:
+    """Legs carrying different caps merge to the SMALLEST, and a leg with none does not win.
+
+    THE OLD `max` TOOK THE LOOSEST, which is the opposite of every other cross-run rule in
+    `pipeline/merge.py`. A send spanning a run deliberately held to 2 and a run at 4 offered
+    4 — discarding the more conservative answer on the one path that exists to be
+    conservative. Asserted on the merge directly rather than through a command, because
+    `policy.per_run` is the only writer of a differing cap today and nothing sets one.
+    """
+    checks.note("")
+    checks.note("MERGED EMIT — two caps, and no cap")
+
+    row = {tcgcsv.SKU_COLUMN: ARTICUNO_SKU}
+
+    def leg(cap):
+        return merge.Leg(
+            run="r%s" % cap,
+            game="riftbound",
+            match=join.SkuMatch(sku=ARTICUNO_SKU, row=row, live_cap=cap),
+        )
+
+    checks.equal(
+        merge._merged_cap([leg(4), leg(2)]),
+        2,
+        "TWO CAPS MERGE TO THE TIGHTER ONE. A cap is a ceiling, and merging two ceilings "
+        "takes the lower — `max` gave the run that wanted less exposure the other run's",
+    )
+    checks.equal(
+        merge._merged_cap([leg(None), leg(2)]),
+        2,
+        "AND NO-CAP NEVER OUTRANKS A REAL FIGURE. `None` is the absence of a bound rather "
+        "than a very large one, so a leg that names nothing must not lift a leg that does",
+    )
+    checks.equal(
+        merge._merged_cap([leg(None), leg(None)]),
+        None,
+        "no cap only when NO leg names one — the ordinary send, and the case that raised",
+    )
 
 
 def check_pricing_route(checks: Checks) -> None:
@@ -13054,6 +13238,7 @@ def check_listing_commands(checks: Checks) -> None:
     # is zero however the room is computed, so a four-copy fixture could not fail; the
     # refill only exists where there is real backstock behind the cap.
     with isolated_home():
+        cap_the_store()  # this case is about the cap, so the store sets one
         six = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 7)]
         run_dir, _ = seam_run(checks, six)
         command(checks, "emit", str(run_dir.directory))
@@ -13238,6 +13423,7 @@ def check_listing_commands(checks: Checks) -> None:
     # honest one, and any "fix" that makes the refill above work by trusting `live` alone
     # takes this case red.
     with isolated_home():
+        cap_the_store()  # this case is about the cap, so the store sets one
         eight = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 9)]
         run_dir, _ = seam_run(checks, eight)
         command(checks, "emit", str(run_dir.directory))
@@ -20454,6 +20640,8 @@ def run() -> Result:
     check_pricing_authority(checks)
     check_prices_adopt(checks)
     check_merged_emit_cap(checks)
+    check_merged_emit_uncapped(checks)
+    check_merged_cap_is_the_tightest(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
     check_pricing_reach(checks)

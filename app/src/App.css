@@ -629,7 +629,11 @@
     transition: color var(--bn-t-fast) var(--bn-ease);
   }
   .bn-tab-link .bn-icon { transition: transform var(--bn-t) var(--bn-ease-spring); }
-  .bn-tab-link:active .bn-icon { transform: scale(0.9); }
+  /* THE SQUEEZE LANDS ON THE FRAME THE FINGER DOES (D118), and the spring above still carries
+     the release and the current-page lift. Without this line the tab dipped 1px instantly under
+     `base.css`'s press floor while its icon sprang into the squeeze over 200ms — one gesture on
+     two clocks, which is what a press reads as janky. */
+  .bn-tab-link:active .bn-icon { transform: scale(0.9); transition: none; }
   .bn-tab-link[aria-current='page'] { color: var(--bn-accent); }
   .bn-tab-link[aria-current='page'] .bn-icon { transform: translateY(-1px); }
 }
