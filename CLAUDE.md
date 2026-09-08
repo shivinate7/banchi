@@ -1234,6 +1234,7 @@ D116 A card nobody has named is not a landmark, and the distance is what keeps t
 D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-width spec is what reads it
 D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
+D120 The shell speaks one brand at every width, and the phone bar is a rail
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

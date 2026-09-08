@@ -188,14 +188,11 @@
 .bn-brand:hover .bn-brand-chevron,
 .bn-brand:focus-visible .bn-brand-chevron { opacity: 1; color: var(--bn-ink); }
 
-.bn-brand-text { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; }
-.bn-brand-name {
-  font-family: var(--bn-font-display);
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.bn-brand-tag { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); font-weight: 500; letter-spacing: 0.02em; white-space: nowrap; }
+/* `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag` were deleted on 2026-09-07 (logo.md
+   section 19). The sidebar stopped drawing them when the lockup landed and the phone drawer was
+   their last render site; the lockup replaces the mark, the wordmark and the tagline together,
+   which is section 16's rule and now holds at every width. `every card has an address` is no
+   longer copy anywhere in the product — Home's lede carries the sentence a person reads. */
 
 
 .bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
@@ -296,7 +293,6 @@
    width cannot reach into. Same resting positions, to the pixel. */
 .bn-shell[data-rail='true'] .bn-side { padding: var(--bn-3) var(--bn-2); }
 .bn-shell[data-rail='true'] .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
-.bn-shell[data-rail='true'] .bn-side .bn-brand-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-text,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-link .bn-kbd,
 .bn-shell[data-rail='true'] .bn-side .bn-nav-badge,
@@ -375,7 +371,7 @@
   .bn-side { padding: var(--bn-3) var(--bn-2); }
   /* the spine, again — see the rail block above. This breakpoint has no `data-rail` at all. */
   .bn-side .bn-brand { justify-content: flex-start; padding: var(--bn-2); }
-  .bn-side .bn-brand-text, .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge,
+  .bn-side .bn-nav-text, .bn-side .bn-nav-link .bn-kbd, .bn-side .bn-nav-badge,
   .bn-side .bn-side-foot-text, .bn-side .bn-brand-chevron { display: none; }
   .bn-side .bn-nav-group-label { opacity: 0; height: 8px; padding: 0; overflow: hidden; }
   .bn-side .bn-nav-link { justify-content: center; padding: 0; width: 48px; height: 44px; margin: 0; }
@@ -404,8 +400,39 @@
     border-bottom: 1px solid var(--bn-line);
     padding-top: env(safe-area-inset-top);
   }
-  .bn-topbar-title { font-family: var(--bn-font-display); font-weight: 700; font-size: var(--bn-fs-lg); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bn-topbar-brand { display: flex; align-items: center; justify-content: center; gap: var(--bn-2); min-width: 40px; min-height: 40px; margin-left: -7px; color: var(--bn-ink); text-decoration: none; font-family: var(--bn-font-display); font-weight: 800; font-size: var(--bn-fs-lg); letter-spacing: -0.02em; }
+  /* THE WORDMARK IS THE LOCKUP'S ROMAN, SET AS TEXT. Manrope 700 is what the generator outlines
+     it in; the caps, the tracking and the 45% are the drawing's own, published as custom
+     properties by the element so nothing is typed twice.
+     `text-transform` RATHER THAN THE STRING: the DOM keeps `Banchi`, so find-in-page finds it and
+     a screen reader is not handed six letters to spell. */
+  .bn-topbar-wordmark {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--bn-font-display);
+    font-weight: 700;
+    font-size: var(--bn-fs-md);
+    text-transform: uppercase;
+    letter-spacing: var(--bn-roman-track);
+    /* NO NEGATIVE MARGIN FOR THE TRAILING TRACKING, and that is measured rather than assumed.
+       CSS puts the letter-spacing after the LAST letter too, so the word's ink ends 5.8px inside
+       its own box — which is invisible here because this element is `flex: 1 1 auto` and grows to
+       fill the bar whatever its content measures. A `margin-right: calc(-1 * ...)` was written,
+       kept, and then measured: the gap to the search button is 135px with it and 135px without.
+       It would be needed the day this stops growing — if the word is ever right-aligned or set
+       `flex: none`, take the trailing track back off. */
+    color: var(--bn-ink);
+    opacity: var(--bn-roman-opacity);
+  }
+  /* THE BAR IS THE RAIL, ONE BREAKPOINT DOWN (logo.md section 19). `--bn-brand-open: 0` is what
+     makes the shared slot draw the empty brackets rather than the lockup — the variable is
+     inherited, so this one declaration reaches `.bn-brand-slot` and every rule keyed on it, and
+     there is no second drawing and no JSX branch. The type is at opacity 0 by the same token, so
+     nothing here has to know the lockup has type at all.
+     The typography that used to sit on this rule went with the wordmark it styled. */
+  .bn-topbar-brand { --bn-brand-open: 0; display: flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; margin-left: -4px; color: var(--bn-ink); text-decoration: none; }
 }
 .bn-drawer {
   width: min(300px, 86vw);
@@ -417,7 +444,13 @@
 .bn-drawer .bn-nav-link { height: 44px; font-size: var(--bn-fs-base); }
 .bn-drawer .bn-nav-link .bn-kbd { opacity: 1; }
 .bn-drawer .bn-side-foot .bn-btn, .bn-drawer .bn-server { height: 44px; }
-.bn-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--bn-2) var(--bn-3); }
+/* THE HEAD HOLDS A BLOCK, NOT A ROW. It was a 30px mark beside two lines of type, so
+   `align-items: center` was right; the lockup is 128 x 93 and the Close button belongs at the
+   top of it rather than halfway down its side. `.bn-brand` keeps `width: 100%` from its own
+   reset, which would push Close off the edge here — the drawer's brand is a link to `#/` and
+   not the collapse control, so it takes only the width its slot needs. */
+.bn-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--bn-2); padding: 0 var(--bn-2) var(--bn-3); }
+.bn-drawer-head .bn-brand { width: auto; min-height: 0; }
 
 /* ---- command palette ---------------------------------------------------------- */
 .bn-cmdk {
@@ -771,12 +804,91 @@
 }
 
 
-/* A phone has no rail, and `Drawer` mounts INSIDE .bn-shell — so without this a user who collapsed
-   on desktop would inherit a railed switch into the mobile drawer's own brand row. */
+/* THE SHELL'S DEFAULT AT THIS WIDTH IS OPEN, AND THE BAR OPTS OUT OF IT. `Drawer` mounts INSIDE
+   .bn-shell, so without this a user who collapsed the sidebar on desktop would inherit a railed
+   switch into the drawer's brand row. What changed on 2026-09-07 is that a phone DOES have a
+   rail now — the top bar is one (logo.md section 19) — and it says so itself, on
+   `.bn-topbar-brand`, rather than being carved out here. Two surfaces, one variable, each
+   naming its own state where that state is read. */
 @media (max-width: 767px) {
   .bn-shell, .bn-shell[data-rail='true'] { --bn-brand-open: 1; }
 }
 
+/* ================================================================================
+   THE DRAWER ON A SHORT SCREEN (logo.md section 19, amended)
+
+   A phone in Safari gets about 90px less than its own height, and the drawer holds nine nav
+   rows, three group headings and a foot. Measured at 390 x 754 — an iPhone 14 with the toolbars
+   up — the list ran 85px past the fold and showed 7 of the 9.
+
+   THE OWNER RULED TO SHRINK THE HEADINGS RATHER THAN DROP THEM, and the arithmetic is why this
+   is five rules and not one: the label row is 23px and three of them plus their group gaps are
+   about 70px of the 85. Dropping them outright would have been a single rule and 85px; keeping
+   them costs the type, the gaps, the head's padding and 6px of the brand (App.tsx picks kanji 34
+   here, and cannot do it from a stylesheet — the morph reads the size it was given).
+
+   THE CONDITION IS HEIGHT, NOT WIDTH. A 430 x 932 Pro Max is a phone with the room to spare, and
+   a short window on a desktop is not a phone at all — but the drawer only exists below 768px
+   wide, so this query cannot reach one.
+   ================================================================================ */
+@media (max-width: 767px) and (max-height: 820px) {
+  .bn-drawer-head { padding-bottom: var(--bn-2); }
+  /* THE HEADING ITSELF IS UNTOUCHED — same 10px, same caps, same 0.1em. What closes is the AIR
+     around it: 4px of padding above and below, and a line box that was 1.5. Measured, the three
+     labels' own padding is 24px of the 70 these rules recover, the line-height is 6, the group
+     gaps 12 and the row gaps the rest.
+     A `font-size: 10px` was written here first and deleted: `--bn-fs-2xs` is already 10px, so it
+     changed nothing and read as though it had. */
+  .bn-drawer .bn-nav-group-label {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1.3;
+  }
+  .bn-drawer .bn-nav-group + .bn-nav-group { margin-top: var(--bn-2); }
+  /* the rows keep their 44px; what closes is the air between them */
+  .bn-drawer .bn-nav,
+  .bn-drawer .bn-nav-group { gap: 0; }
+}
+
+/* ---- AND A SECOND STEP, BECAUSE THE FIRST LEAVES ONE FAMILY 29px SHORT ------------------------
+   375 x 812 — the mini, the X, the XS, the 11 Pro — is 722px in Safari and needs 751. The rows
+   are the only thing left with anything to give: nine of them at 44 against a 40px floor is 36px,
+   which covers the 29.
+   THE STEP IS AT 740px AND NOT LOWER, so it reaches the mini and does NOT reach the iPhone 14 at
+   754 — that one already fits at 44 and has no reason to give up four pixels a thumb can feel.
+   A RAMP WAS TRIED FIRST AND IS WORSE. `clamp(40px, 16.33px + 3.279vh, 44px)` interpolates
+   smoothly between the two, and at 754 it lands the rows on 41px: it shrinks the screen that
+   already fits, to no purpose, because a ramp cannot know whether the content fits. A step can be
+   put exactly where the arithmetic changes.
+   40px IS THE FLOOR AND THIS SITS ON IT. `--bn-control-h-sm` is 40 under a coarse pointer, which
+   is CLAUDE.md's thumb rule exactly; there is no third step, because the next one would break it. */
+@media (max-width: 767px) and (max-height: 740px) {
+  .bn-drawer .bn-nav-link { height: var(--bn-control-h-sm); }
+}
+
+/* ---- and where it STILL does not fit, the cut edge says so ------------------------------------
+   On an iPhone SE in Safari the drawer is 577px and nine rows cannot fit at any of these sizes —
+   5 of 9 show, and they end on `.bn-side-foot`'s own rule, which reads as the bottom of the menu
+   rather than the top of a fold. Four screens look absent rather than below the line. That was
+   true on main before any of this.
+   THE FADE IS THE CHIP ROWS' MECHANISM TURNED VERTICAL: a mask driven by the scroller's own
+   progress, so the top edge fades once you have scrolled and the bottom edge fades while there
+   is more to reach — and a list that FITS gets nothing at all, because a scroll-progress
+   timeline whose scroller has no overflow is inactive and applies no effect. No measurement, no
+   class to keep in step. Behind `@supports` because the fallback is what ships today. */
+@supports (animation-timeline: scroll()) {
+  @keyframes bn-navfade {
+    from { mask-image: linear-gradient(180deg, black 0, black calc(100% - 32px), transparent 100%); }
+    50% { mask-image: linear-gradient(180deg, transparent 0, black 32px, black calc(100% - 32px), transparent 100%); }
+    to { mask-image: linear-gradient(180deg, transparent 0, black 32px, black 100%); }
+  }
+  @media (max-width: 767px) {
+    .bn-drawer .bn-nav {
+      animation: bn-navfade linear both;
+      animation-timeline: scroll(self block);
+    }
+  }
+}
 
 /* ================================================================================
    THE THUMB FLOOR OVER THE SHELL (D117). Last in this sheet for the reason `kit.css`'s own
