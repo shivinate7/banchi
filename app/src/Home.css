@@ -18,11 +18,109 @@
   letter-spacing: -0.035em;
   line-height: 1;
 }
-.home-lede { font-size: var(--bn-fs-xl); color: var(--bn-ink-3); }
-.home-lede strong { color: var(--bn-ink); font-weight: 700; }
+/* ── THE STANDING LINE ─────────────────────────────────────────────────────────────────
+   One sentence naming what the store is waiting on, ranked by `standing.ts`. The emphasis
+   floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
+   so a danger condition comes out the same cheerful blue as a clear one. */
+.home-standing { margin-top: var(--bn-4); max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
+.home-standing-skel { margin-top: var(--bn-4); max-width: 620px; height: 58px; border-radius: var(--bn-r-lg); }
+.home-standing[data-tone='danger'] { --tone: var(--bn-danger); --tone-tint: var(--bn-danger-tint); }
+.home-standing[data-tone='warn']   { --tone: var(--bn-warn);   --tone-tint: var(--bn-warn-tint); }
+.home-standing[data-tone='live']   { --tone: var(--bn-live);   --tone-tint: var(--bn-live-tint); }
+.home-standing[data-tone='ok']     { --tone: var(--bn-ok);     --tone-tint: var(--bn-ok-tint); }
+.home-standing[data-tone='none']   { --tone: var(--bn-line-strong); --tone-tint: var(--bn-surface-2); }
+
+.home-standing-row {
+  position: relative; display: flex; align-items: center; gap: var(--bn-3);
+  min-height: 58px; padding: var(--bn-3) var(--bn-4) var(--bn-3) var(--bn-5);
+  border-radius: var(--bn-r-lg); background: var(--bn-surface); color: var(--bn-ink);
+  text-decoration: none; overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--bn-line), var(--bn-shadow-1);
+  transition: box-shadow var(--bn-t) var(--bn-ease), background-color var(--bn-t) var(--bn-ease),
+              color var(--bn-t) var(--bn-ease);
+}
+/* D110: a hover is an ALPHA over whatever ground is already there — an inset shadow spread
+   wider than the element. Never a second background-image, which cannot animate from `none`. */
+a.home-standing-row:hover { box-shadow: inset 0 0 0 1px var(--bn-line-strong), inset 0 0 0 200px var(--bn-hover), var(--bn-shadow-2); }
+a.home-standing-row:active { translate: 0 1px; }
+/* A row that cannot be pressed is prose, not a control. */
+.home-standing-row[data-press='no'] { background: transparent; box-shadow: none; min-height: 34px; padding-top: 0; padding-bottom: 0; }
+.home-standing-row[data-press='no'] .home-standing-rule { top: 2px; bottom: 2px; width: 3px; border-radius: var(--bn-r-full); }
+
+/* D118: a pointer state repaints, it never re-lays out. The rule thickens on hover with
+   `scale` rather than `width` — D50's own division, where the press dip is `translate` and a
+   screen's emphasis is a transform, so the two compose instead of fighting. */
+.home-standing-rule { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone);
+  transform-origin: left center; transition: scale var(--bn-t) var(--bn-ease); }
+a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
+.home-standing-ic { width: 34px; height: 34px; border-radius: var(--bn-r-sm); flex: none; display: grid;
+  place-items: center; background: var(--tone-tint); color: var(--tone); }
+.home-standing-ic-live { animation: home-standing-pulse var(--bn-t-pulse) ease-in-out infinite; }
+@keyframes home-standing-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+.home-standing-say { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-lg); line-height: 1.35; color: var(--bn-ink-2); }
+.home-standing-lead { font-weight: 700; color: var(--tone); }
+.home-standing-say strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.home-standing-go { display: inline-flex; align-items: center; gap: var(--bn-2); flex: none; color: var(--bn-ink-4);
+  transition: color var(--bn-t) var(--bn-ease), translate var(--bn-t) var(--bn-ease); }
+a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate: 2px 0; }
+.home-standing-behind { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-md); color: var(--bn-ink-3);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-2) var(--bn-4); }
+.home-standing-behind b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+.home-standing-behind-lab { color: var(--bn-ink-4); }
+.home-standing-problem { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-warn);
+  display: flex; align-items: center; gap: var(--bn-2); }
+
+/* ── THE FOOT: the library, and how it was made ────────────────────────────────────────
+   Below the button, behind a hairline. Achromatic but for the pace ramp, whose hue is
+   redundant with the block's height, so colour is never the only carrier of anything —
+   and the standing line above keeps the only status colour in the region. */
+.home-foot { margin-top: var(--bn-7); padding-top: var(--bn-4); border-top: 1px solid var(--bn-line);
+  max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
+.home-foot-sum { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+.home-foot-sum b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.home-foot-sum i { font-style: normal; color: var(--bn-ink-4); padding: 0 5px; }
+.home-foot-quiet { color: var(--bn-ink-4); }
+.home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }
+.home-foot-last b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+.home-foot-last em { font-style: normal; color: var(--bn-ink-4); }
+
+.home-ribbon { width: 100%; height: 56px; display: block; }
+.home-ribbon-axis { stroke: var(--bn-line-strong); stroke-width: 1; }
+/* The rig's own ceiling. Without it a 1.5px block reads as a MISSING block rather than as a
+   slow sitting, which is the opposite of the truth. */
+.home-ribbon-ceil { stroke: var(--bn-line); stroke-width: 1; stroke-dasharray: 2 4; }
+/* The pace ramp: the faster the sitting, the closer to accent. Composited against the page
+   ground rather than left transparent — stacked alpha at sub-pixel widths paints a false
+   solid that reads as a real data point. */
+.home-ribbon-blk {
+  fill: color-mix(in srgb, var(--bn-accent) calc(var(--pace) * 1%),
+        color-mix(in srgb, var(--bn-ink-4) 30%, var(--bn-bg)));
+  transform-box: fill-box; transform-origin: bottom;
+  animation: home-ribbon-grow 520ms var(--bn-ease-spring) backwards;
+  animation-delay: calc(140ms + var(--n) * 70ms);
+  transition: fill var(--bn-t-fast) var(--bn-ease);
+}
+@keyframes home-ribbon-grow { from { scale: 1 0; opacity: 0 } to { scale: 1 1; opacity: 1 } }
+/* Vermilion means LIVE everywhere else in this product. It is spent here only while a run is
+   actually running, and never to mark a sitting for being recent. */
+.home-ribbon-blk-live { fill: var(--bn-live); animation: home-ribbon-grow 520ms var(--bn-ease-spring) backwards,
+  home-standing-pulse var(--bn-t-pulse) ease-in-out infinite; }
+.home-ribbon:hover .home-ribbon-blk { fill: color-mix(in srgb, var(--bn-ink-4) 22%, var(--bn-bg)); }
+.home-ribbon .home-ribbon-blk:hover { fill: var(--bn-ink); }
+.home-ribbon-tick { fill: color-mix(in srgb, var(--bn-ink-4) 55%, var(--bn-bg)); }
+.home-ribbon-tick-now { fill: var(--bn-ink); }
+@media (prefers-reduced-motion: reduce) {
+  .home-ribbon-blk, .home-ribbon-blk-live { animation: none }
+  .home-standing-ic-live { animation: none }
+}
 .home-actions { display: flex; gap: var(--bn-3); margin-top: var(--bn-3); flex-wrap: wrap; }
 
+/* `pointer-events: none` on the WRAPPER keeps the empty-state deck (a <div>) inert, which
+   is right — there is nothing to open. The link below restores it for itself. Without that
+   line the <a> at `a.home-deck`, its hover lift and its focus ring were all reachable by
+   keyboard only, for as long as the deck has been a link. */
 .home-hero-art { display: block; padding-right: var(--bn-6); margin-top: -8px; pointer-events: none; }
+a.home-deck { pointer-events: auto; }
 /* The chip hangs off the bottom-left corner, so the card's own caption has to end above it or
    the number line is read through a pill. `--deck-chip` is that reserved band: the front card
    pads its content by it, and the deck's own bottom margin clears the part that hangs out. */
