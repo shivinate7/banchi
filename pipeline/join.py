@@ -1414,8 +1414,9 @@ class SkuMatch:
     stages: List[str] = field(default_factory=list)
     #: The cap this send asked for, or `None` for no bound (D7, rewritten 2026-09-07). `None` is the
     #: ordinary value: the standing cap of four was retired and a cap is now something a send
-    #: asks for. `LIVE_QUANTITY_CAP` survives as the figure the PRESS offers, never as a
-    #: default anything falls back to.
+    #: asks for, through `emit --cap N` and nothing else — the standing `policy.live_cap`
+    #: was deleted 2026-09-08. `LIVE_QUANTITY_CAP` survives as a figure a press MAY propose
+    #: and as the harness's fixture bound; nothing falls back to it.
     live_cap: Optional[int] = None
     rule: pricing.Rule = pricing.MATCH
     basis: str = pricing.BASIS_MARKET

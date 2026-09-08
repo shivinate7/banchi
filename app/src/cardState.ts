@@ -83,7 +83,7 @@ export function stateLabel(state: string): string {
  *  ONE HELPER RATHER THAN SIX SUBTRACTIONS. `store/master.py:Listing.live_estimate` is the
  *  same expression server-side, and a derived value never rides a payload — so the two
  *  numbers travel and the client subtracts. Six inline `Math.max(0, …)` is the rule living in
- *  six places, which is what `SearchGroup.listable` exists to avoid for the cap.
+ *  six places, which is what `SearchGroup.listable` exists to avoid for the shelf count.
  *
  *  FLOORED, AND THE FLOOR IS NOT AN ERROR CASE. A counter above the reading is the ordinary
  *  state of a store whose reading predates its sales, and the honest answer there is "we

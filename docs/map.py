@@ -389,8 +389,9 @@ COMPONENTS = [
                                     "named since D7 was rewritten 2026-09-07 — omit it and "
                                     "every copy the run holds that TCGplayer does not already "
                                     "have goes out. `_cap_for` picks between three voices in "
-                                    "order: --cap, the store's standing policy.live_cap, then "
-                                    "none; the flag applies to every leg of a merged send "
+                                    "one voice since 2026-09-08 — the standing policy key is "
+                                    "deleted and a store still holding it is refused by name; "
+                                    "the flag applies to every leg of a merged send "
                                     "because that send is ONE file. The cut-off that decides "
                                     "the buckets is the corpus's stored `policy.threshold`. Prices "
                                     "from inventory/prices.json (D86) rather than from the run manifest (D49); "
@@ -659,7 +660,7 @@ COMPONENTS = [
                                      "physical ceiling. Measured: 405 of 443 SKUs read live 0 "
                                      "while carrying pushed copies, and the cap arithmetic went "
                                      "from seeing 93 live copies to 1,079.",
-                             "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87"],
+                             "governed_by": ["D7", "D8", "D11", "D49", "D54", "D59", "D87", "D109"],
                              "tested_by": ["T7"]},
             "reprice.py": {"does": "which live listings are not selling, and what each would be "
                                    "re-priced to (D100). Pure — no I/O, no store import, no "

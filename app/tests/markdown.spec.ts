@@ -176,7 +176,7 @@ async function stub(page: Page): Promise<Wire[]> {
       contentType: 'application/json',
       body: JSON.stringify({
         runs: [], roster: [], skus: [], written_at: {}, skipped: [], asked: [],
-        live_cap: 4, threshold: null, floor: null,
+ threshold: null, floor: null,
       }),
     })
   })

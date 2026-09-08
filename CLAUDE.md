@@ -801,9 +801,9 @@ A screen is not finished because it compiles.
   to each was *"neither still applies"*.
 
   **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
-  emit options on `#/pricing`'s ship bar. `policy.live_cap` in `inventory/prices.json` survives
-  for a store that wants a standing answer — store-wide, overridable per run through
-  `policy.per_run` — and **reads `None` when nothing has written one**, which is the reversal.
+  emit options on `#/pricing`'s ship bar. **`policy.live_cap` IS DELETED as of 2026-09-08** —
+  `--cap` is the only place a cap is named, and a store still holding the key is refused by
+  name rather than silently uncapped. `policy.per_run` survives for its other four keys.
   It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded
   through `SkuMatch`, `join` and `resolve.load` from the start and no caller ever passed
   anything but the module default. `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is

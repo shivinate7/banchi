@@ -271,7 +271,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from codes import products  # noqa: E402
-from pipeline import corpus, games, join, tcgcsv  # noqa: E402
+from pipeline import games, join, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
 from store import Store, files, master, queues  # noqa: E402
@@ -7214,15 +7214,14 @@ def do_search(query: str) -> dict:
     not the one being looked for when a real match is on the same screen — and never dropped,
     because a card the pipeline could not name is exactly the card an operator searches for.
 
-    LOCK-FREE, like every read here. `cap` is the STORE'S STANDING cap and is ordinarily
-    NULL (D7, rewritten 2026-09-07): the playset bound was retired, so most stores have none and
-    `listable` falls back to what the shelf holds. Read ONCE for the whole answer rather
-    than per group — it opens the corpus file, and a search over a hundred SKUs was about
-    to open it two hundred times.
+    LOCK-FREE, like every read here. THERE IS NO `cap` FIELD ANY MORE (D7, amended
+    2026-09-08): the standing cap is deleted, so the only bound on a SKU is the shelf and
+    `listable` is what the box holds. It stays on the wire as its own field rather than
+    leaving the client to read `on_hand` twice — `app/src/CardLocations.tsx:headroom` is its
+    reader and the arithmetic there is unchanged.
     """
     text = _require_query(query)
     needle = text.lower()
-    cap_now = corpus.live_cap_for()
 
     inventory = Store().read().inventory
     places = _Places(inventory)
@@ -7286,7 +7285,6 @@ def do_search(query: str) -> dict:
                 "sold_here": int(getattr(listing, "sold_here", 0) or 0) if listing is not None else 0,
                 "live_as_of": getattr(listing, "live_as_of", None) if listing is not None else None,
                 "on_hand": on_hand,
-                "cap": cap_now,
                 # D7 IN ONE FIELD: "listed quantity is min(cap, on hand)". The cap above is the
                 # RULE and this is what the rule comes to for THIS SKU, which are different
                 # numbers whenever the shelf holds fewer than a playset — and the screen wants
@@ -7303,7 +7301,7 @@ def do_search(query: str) -> dict:
                 # survives wherever a cap is set; with none, the shelf is the only bound and
                 # `listable` is `on_hand` — which is what the screen must draw, or it reports
                 # headroom against a ceiling nobody asked for.
-                "listable": on_hand if cap_now is None else min(cap_now, on_hand),
+                "listable": on_hand,
                 "copies": [_copy_row(places, card) for card in copies],
                 "_rank": rank,
             }
@@ -7340,11 +7338,10 @@ def do_search(query: str) -> dict:
                 "sold_here": 0,
                 "live_as_of": None,
                 "on_hand": loose_on_hand,
-                "cap": cap_now,
                 # The same min as the keyed group above. Zero listing stages and no SKU to list
                 # under, so this can only ever be read as "what it WOULD be worth if identified"
                 # — which is the honest thing for it to say rather than a bare cap.
-                "listable": loose_on_hand if cap_now is None else min(cap_now, loose_on_hand),
+                "listable": loose_on_hand,
                 "copies": [_copy_row(places, card) for card in loose],
             }
         )
@@ -10246,11 +10243,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # and raises `pushed`; the route that can cause money to be spent is the one
                 # directly below and is still named for it.
                 #
-                # A LIST AND NOT A WIDENED PER-RUN ROUTE, because the cap has to be re-derived
-                # across the send: `pipeline/join.py` spends `live_cap - copies_out` per run
-                # against a cap that is global, so N per-run presses ARE the over-push this
-                # exists to prevent. Measured, three separate emits over three real runs wrote
-                # two SKUs past the cap of four.
+                # A LIST AND NOT A WIDENED PER-RUN ROUTE, because the copies are deduped
+                # across the send — a card in three runs is ONE row over the union of
+                # positions, which holds with or without a cap. A cap this send asks for is
+                # spent once across it too: `pipeline/join.py` spends `live_cap - copies_out`
+                # per run, so N per-run presses at one cap ARE the over-push this prevents.
+                # Measured at the old standing cap of four: three separate emits over three
+                # real runs wrote two SKUs past it.
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_merged_emit(self._body())
                 )

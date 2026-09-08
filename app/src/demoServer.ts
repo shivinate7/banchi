@@ -128,7 +128,7 @@ const CANNOT: ReadonlyArray<readonly [string, string, string]> = [
     '/pipeline/emit',
     'demo_no_export',
     'Emit writes an import CSV from a TCGplayer export this demo has no live copy of. The ' +
-      'pricing table and the cap arithmetic beside it are real.',
+      'pricing table and the copies-out arithmetic beside it are real.',
   ],
   [
     '/pipeline/reconcile-live',

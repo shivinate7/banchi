@@ -109,7 +109,15 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **WHAT THE CAP WAS NEVER DOING IS STOPPING A COPY BEING SENT TWICE**, and that is the fact which makes this safe. `add_to_quantity`'s own docstring separates the two jobs in as many words — *"`committed_positions` keeps the job it is good at — keeping a copy out of the sellable set… The cap reads a quantity."* Removing the bound removes exposure limiting and nothing else; `uncommitted_positions` is untouched and is still what makes a re-emit a no-op.
 
-**The figure survives as an offer, not a default.** `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is still what the press proposes; what it stopped being is something a send inherits without asking. `policy.live_cap` remains for a store that wants a standing answer, and reads `None` — no cap — when nothing has written one, which is the reversal this rewrite made.
+**The figure survives as an offer, not a default.** `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is still the figure a press may propose; what it stopped being is something a send inherits without asking. ~~`policy.live_cap` remains for a store that wants a standing answer, and reads `None` — no cap — when nothing has written one, which is the reversal this rewrite made.~~
+
+**THE STANDING KEY IS DELETED (amended 2026-09-08, on the operator's instruction).** *"live cap should be null and yeah per send only is the only place caps should be now."* The struck clause above was the implementer's addition and not what the operator asked for: the option they chose was *"a control on the run that says 'cap this send at N' before you write the file — opt-in and per-send, so nothing standing changes"*. Keeping a standing key was a change.
+
+**`--cap N` IS NOW THE ONLY PLACE A CAP IS NAMED.** `Corpus.live_cap`, its `to_payload` write, its `policy_for` entry and `corpus.live_cap_for()` are gone; `Decisions.live_cap` with them. `cli/cmd_emit.py:_cap_for` has one voice where it had three. `decisions.parse_live_cap` survives as the validator for the flag — it is what refuses `0` and a negative with a sentence.
+
+**A STORE THAT STILL HOLDS THE KEY IS REFUSED BY NAME, NOT SILENTLY UNCAPPED.** Ignoring it would remove a bound the operator had asked for without saying so — D86's rule about a legacy `decisions.json`, applied to a legacy KEY, and for D86's reason: read as a fallback and ignored in silence are one defect in two coats. It is sharper here than there, because `Corpus.parse` rebuilds `policy` from named fields and `keep` preserves only unknown TOP-LEVEL keys — so an unrecognised policy key is destroyed on the next write rather than carried. Silence would have been irreversible as well as quiet. `null` passes and is dropped: it is what a store that cleared its cap holds.
+
+**What the deletion cost, checked rather than assumed.** `policy.per_run` survives with its other four keys — `policy_for` folds the override over a `standing` dict, and `#/pricing` writes a per-run `threshold` that would have been lost had the fold been narrowed instead. `SearchGroup.cap` and `PricingWorklist.live_cap` left the wire; neither had a reader in `app/src`, and `SearchGroup.listable` — which does have one — is the shelf count now rather than `min(cap, on hand)`. The `cap`/`listable` pair existed so a screen could draw either the rule or what the rule permitted here; there is no rule, so there is one field.
 
 **THAT LAST SENTENCE WAS TRUE OF THE PARSER AND FALSE OF THE STORE FOR A DAY (corrected 2026-09-08).** `Corpus.parse` read an absent key as `None` from the first hour, so a store with a file was answered right. But `Corpus.live_cap`'s own dataclass default stayed `LIVE_QUANTITY_CAP`, and `to_payload` writes that key unconditionally — so a DEFAULT-CONSTRUCTED corpus carried four and the first save of a fresh store wrote the retired bound into `policy`, where every later read would find it. `server/pipeline_routes.py`'s fallback for a corpus it could not read is the caller that mattered: it invented a cap nobody had set, which is the exact thing `live_cap_for`'s except arm had just been changed to stop doing.
 
@@ -132,7 +140,7 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 **"Configurable" became true on 2026-09-06, and it had been a promise with no reader for the whole life of this entry.** The parameter was threaded from the start — `SkuMatch.live_cap`,
 `join(live_cap=…)`, `resolve.load(live_cap=…)` — and **no caller ever passed anything but the module default**: no flag set it, no policy key held it, and `server/pipeline_routes.py` read
 the constant directly in three places while `server/capture_server.py` read it in four. It is
-now `policy.live_cap` in `inventory/prices.json`, store-wide and overridable per run through
+now — **and until 2026-09-08** — `policy.live_cap` in `inventory/prices.json`, store-wide and overridable per run through
 `policy.per_run` like `rule`, `basis`, `sub_threshold` and `threshold` — **which makes it the first writer of the run-level override D86 named as its own reopening condition**, and a lot
 that genuinely wants a different exposure is exactly the case this entry's "configurable" was
 about. The figure itself moved to `pipeline/pricing.py`, which `join` and `corpus` both import
@@ -6382,6 +6390,11 @@ be stored beside the stamp and arbitrated. D87's "newer wins" does not generalis
 is a quantity both parties observe, and an asking price is an instruction of ours as executed
 by them, which are not two readings of one fact.
 
+**THE RECORD IT CREATES COULD NOT BE SETTLED WHEN THE LISTING SOLD OUT (amended 2026-09-08).** Every record this entry writes carries `pushed = 0` — correct, because this pipeline sent none of it — and `pipeline/livecheck.py` bucketed on `claim`: a row at `claim == 0` reached `beyond` only `if live > 0`, so one reading **zero** fell into no bucket at all. `cli/cmd_reconcile.py` builds `settling` from `agreed + unexplained + beyond`, so `observe_live` was never called and the stored reading stood forever.
+
+**It took two exports to see, which is why it shipped.** The first records the listing; the second is where it goes wrong. On the owner's own book that is 47 live SKUs holding 127 copies — 26 of one booster pack — every one of which the first `--write` would have armed.
+
+**`row.ledger_live > 0` is the condition, and it is not `if True`.** A SKU neither side has anything on, reading zero, is genuinely nothing to say and still falls through; what earns a line is the store believing something the export contradicts. `beyond`'s printed sentence covers both directions now — it said "holds more than this pipeline ever sent", which is false of a row at zero.
 ## D110 — A hover is an alpha, because the same paint over three grounds is three different hovers
 
 **Built 2026-09-06, on the owner's question about the dark sidebar** — *"is that lighter grayish
