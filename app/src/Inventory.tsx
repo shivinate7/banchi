@@ -652,7 +652,6 @@ function LocationCard({
   const place: Place | undefined = row.card.place
   const label = positionLabel(row.card)
   const pooled = place?.located === false
-  const departed = isDeparted(place)
 
   return (
     <section className="inventory-location">
@@ -679,7 +678,13 @@ function LocationCard({
             <PositionLabel label={label} />
           </div>
           <PlaceNeighbors place={place} />
-          {departed || place === undefined ? null : (
+          {/* THE LENS IS DRAWN FOR A DEPARTED COPY TOO (D118), and `departed` no longer gates it.
+              The picture is of the BOX and the box is still there; what stops being true is that
+              this copy is at a number in it, which the bar says by letting its mark fall out and
+              muting the section it left. Skipping the block cost 85px of this card's height on
+              the press that sold it — the panel collapsed 98px, 131 elements moved, and the same
+              85px came back the moment the walk stepped onto a placed card. */}
+          {place === undefined ? null : (
             <PositionBar place={place} persona="owner" sections={layouts.get(place.box)} sectionDepth />
           )}
         </>

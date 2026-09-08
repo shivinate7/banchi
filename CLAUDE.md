@@ -519,7 +519,8 @@ put a `border-radius` on it**: the tile is a superellipse and a CSS radius clips
 **`base.css` ANSWERS WHAT A CONTROL DOES UNDER THE POINTER AND THE FINGER, IN THREE FLOORS, SO A
 SCREEN NEVER HAS TO.** D50 is the entry and `app/tests/cursor.spec.ts` is the guard — every one
 of these is mutation-tested, so deleting a floor turns `make design-check` red rather than going
-quietly green:
+quietly green. **A FOURTH FLOOR IS BELOW THEM AND IS NOT IN THIS FILE**, because it cannot be
+written as a rule: see "a press may not move what is around it" after the three:
 
 - **cursor** — a clickable says `pointer`, a text field `text`, and anything DISABLED says
   `not-allowed`. That last arm was 30 of the 41 defects the floor was built for.
@@ -528,6 +529,18 @@ quietly green:
   snapped, ten of them the sidebar's rail toggle.
 - **press** — a control answers the finger too: `translate: 0 1px`, and never when it is
   disabled. Measured the same day: 190 of 311 controls were silent under a press.
+
+- **stability** — a press changes WHAT IS ON THE SCREEN and never where the rest of it is (D118).
+  This one is a rule rather than a declaration: the movement it forbids is caused by the panel a
+  write lands in, not by a stylesheet, so `base.css` cannot supply it and two guards enforce it
+  instead. `cursor.spec.ts` reads every `:hover` / `:active` / `:focus` rule for a layout property
+  and every `:active` rule that eases the movement it makes; `inventory.spec.ts` presses
+  `Mark sold` and requires that nothing outside the card panel moved, that the page did not change
+  height or scroll, and that the panel holds one height for the whole box walk. **A slot whose
+  control becomes its own result reserves the tallest of its states** — the location card's action
+  slot holds a 40px button pair, a 50px receipt and a 22px pill, and floors at `max()` of the
+  tokens they are built from. Measured before it existed: one `Mark sold` collapsed the panel 98px
+  and moved 131 elements, and stepping the walk moved 39, 66 or 98px depending on the two cards.
 
 **Three things follow, and getting any of them wrong is silent:**
 
@@ -547,6 +560,13 @@ properties on purpose, because they COMPOSE. Spelling the dip as `transform: tra
 silently doubles it to 2px, which six rules were doing. And an opt-out must be written in the
 property the floor actually uses: three rules opting out with `transform: none` were silently
 repealed the day the dip moved to `translate`.
+
+**A CONTROL MAY NOT EASE THE MOVEMENT ITS OWN `:active` RULE MAKES** (D118). The dip lands on the
+frame the finger goes down; a squeeze on a 120ms transition beside it is one gesture on two
+clocks, which is what a press reads as janky. Three rules were doing it — `.bn-btn`,
+`.pull-confirm` and the phone tab bar's icon. A control that legitimately eases a `transform` for
+a HOVER lift keeps it and names its repaints inside the `:active` rule instead, leaving the
+movement out of that list.
 
 **Motion is part of the system, not decoration.** Durations and easing curves are tokens; the page
 enters, list rows stagger off `--bn-stagger`, selection changes and receipts and progress
@@ -1210,7 +1230,14 @@ D112 The labels are tracked, the images are not, and an unmoved measurement is a
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
 D115 The reading is what the export said, and what has sold since is counted beside it
+D118 A press changes what is on the screen, never where the rest of it is
 ```
+
+**THE INDEX STEPS FROM 115 TO 118, AND THE GAP IS DELIBERATE.** The two numbers between them are
+claimed by branches in flight — two open worktrees carry the lower one between them and a third
+holds the higher — so neither entry exists in this tree and neither may be cited from it. The
+rule is the one this repo has always kept: renumber your own, never another's. A gap that closes
+on the next merge is the cheaper of the two failures.
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
 without being adopted: the envelope walk and the copies picker were declined in favor of this

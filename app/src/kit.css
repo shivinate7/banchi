@@ -142,16 +142,22 @@
   color: var(--bn-ink);
   background: var(--bn-btn-bg);
   box-shadow: var(--bn-btn-shadow);
+  /* NO `transform` HERE, AND THAT IS THE SQUEEZE'S OWN CLOCK RATHER THAN AN OMISSION.
+     `base.css`'s press floor lands `translate: 0 1px` on the frame the finger goes down, and
+     said so in as many words — "adding `translate` to that list would put 120ms of lag between
+     the finger and the feedback". The squeeze one line below is the same gesture and was on the
+     other clock: measured, a press dropped the button 1px instantly and then eased into
+     `scale(0.99)` over 120ms, and the release snapped back up while easing out of the scale for
+     another 120ms. Two timings on one press is what a wobble IS. */
   transition:
     background-color var(--bn-t-fast) var(--bn-ease),
     color var(--bn-t-fast) var(--bn-ease),
     box-shadow var(--bn-t-fast) var(--bn-ease),
-    transform var(--bn-t-fast) var(--bn-ease),
     opacity var(--bn-t-fast) var(--bn-ease);
   user-select: none;
 }
 .bn-btn:hover { background: var(--bn-btn-bg-hover); }
-/* the dip belongs to base.css's press floor; the squeeze is the button's own. */
+/* the dip belongs to base.css's press floor; the squeeze is the button's own, on the same frame. */
 .bn-btn:active { transform: scale(0.99); }
 .bn-btn:disabled, .bn-btn[aria-disabled='true'] { opacity: var(--bn-disabled); transform: none; }
 .bn-btn .bn-icon { flex: none; }

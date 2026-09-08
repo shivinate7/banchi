@@ -3,7 +3,7 @@
    in the Fulfillment constraints table (20px text, 32px position labels, 44px targets, a
    photo at least 320px on its short edge). */
 
-.card-locations { min-width: 0; }
+.card-locations { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-3); }
 .card-locations-rows,
 .card-locations-copies { list-style: none; }
 
@@ -128,6 +128,10 @@
 /* ---- the rows ---- */
 /* EVERY copy, drawn the same way. Nothing here folds a row away, reorders one, or dresses one
    up as the recommended stop: the owner picks the copy he reaches for. */
+/* THE LIST IS WHAT SCROLLS INSIDE THE FIXED BAND (D118). `#/inventory`'s hero holds one height
+   for the whole walk, and this is the part that gives: a list is the one thing in the panel a
+   person already expects to scroll, where a photograph or a location card is not. `overflow-y`
+   rather than `overflow`, so a wide row still clips to the panel's radius as it always did. */
 .card-locations-owner .card-locations-rows {
   display: flex;
   flex-direction: column;
@@ -135,6 +139,17 @@
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1 1 auto;
+  /* THE BOTTOM EDGE READS AS A FADE RATHER THAN AS A CUT ROW — `BoxBrowse.css`'s own scroller
+     makes the same argument in the same words, and the padding is what keeps the last row whole
+     once the list is scrolled to its end. Without it a card with more copies than the band holds
+     looks like a rendering fault rather than a list with more in it. */
+  padding-bottom: 18px;
+  mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
   /* ONE SLOT COLUMN FOR THE LIST, DECLARED WHERE THE LIST IS — which is the only place the
      decision can be made honestly. A row's slot holds `CARD 17`, or, for a copy that has left
      the box, a void where the figure would be (D58, D71); the two reserve different widths, and
@@ -275,12 +290,24 @@
   min-width: 0;
   white-space: nowrap;
 }
+/* THE SLOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118). `Mark sold` is a
+   28px `sm` button and what stands here afterwards is a pill, an `Undo` or nothing at all — so
+   the row lost 6px on the press, and every row beneath it moved under a pointer that had just
+   clicked. A press changes what a slot holds; it may not change how big the slot is. */
 .card-locations-owner .card-locations-action {
   grid-area: action;
   justify-self: end;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--bn-2);
+  min-height: var(--bn-control-h-sm);
+  /* AND ITS WIDTH, WHICH IS THE HALF THAT MOVED THE MOST. The pair this cell holds — `Mark sold`
+     beside an icon-only `Retire` — measures 137px at this density; a sold copy draws nothing here
+     at all, so the cell collapsed to 0 and the state pills beside it slid 137px right on the
+     press. The reservation is that measurement, taken on the real screen at 1440 with fonts
+     settled, and it is a `min-width` so a longer label in another language still fits. */
+  min-width: 137px;
 }
 
 /* The position label. `--pos-slot` is the one number this site chooses. */
