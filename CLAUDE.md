@@ -248,12 +248,22 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   ONE PRESS WRITES ONE SPREADSHEET (D99) — across runs,
                                    #   across games, and across the listed/sub-threshold
                                    #   split, which was two files per game per run until
-                                   #   2026-09-03. The live cap is spent ONCE across
-                                   #   everything it writes (D86): `add_to_quantity` is
-                                   #   per-run against a GLOBAL cap, so N separate emits over
-                                   #   one SKU is an over-push. Measured: three separate emits
-                                   #   over three real runs wrote 2 SKUs past the cap of 4;
-                                   #   one merged emit wrote 0.
+                                   #   2026-09-03. THERE IS NO STANDING CAP as of
+                                   #   2026-09-07 (D7, rewritten): every copy a run holds that
+                                   #   TCGplayer does not already have goes out, and a bound
+                                   #   is something ONE SEND asks for with `--cap`. When one
+                                   #   is asked for it is spent ONCE across everything the
+                                   #   press writes (D86): `add_to_quantity` is per-run
+                                   #   against a GLOBAL cap, so N separate emits over one SKU
+                                   #   is an over-push. Measured at the old cap of 4: three
+                                   #   separate emits over three real runs wrote 2 SKUs past
+                                   #   it; one merged emit wrote 0.
+                                   #   WHAT STOPS A COPY BEING SENT TWICE IS NOT THE CAP and
+                                   #   never was — `uncommitted_positions` is, and it is
+                                   #   untouched. Uncapped, six copies with three already live
+                                   #   offer THREE.
+                                   #   --cap N            send at most N copies of any one
+                                   #                      SKU. Omit for no cap, the default
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
@@ -271,7 +281,14 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   by default. Reports BOTH directions — copies this
                                    #   pipeline sent that TCGplayer no longer holds, and SKUs
                                    #   it holds that were never sent from here.
-                                   #   WHAT IT WRITES IS `live`, AND ONLY `live`. `pushed` is
+                                   #   WHAT IT WRITES IS `live`, AND THE COUNTER IT CLEARS
+                                   #   (D115). `live` is the export's READING; a sale no
+                                   #   longer edits it but counts beside it in
+                                   #   `sold_here`, and what a screen draws is the
+                                   #   difference. This clears that counter where it
+                                   #   adopts a reading taken after those sales — which
+                                   #   is why the order stopped mattering: mark sold
+                                   #   whenever, reconcile whenever. `pushed` is
                                    #   the cumulative record of what was sent, and
                                    #   `cli/resolve.py:_copies_out` already corrects a stuck
                                    #   one against the physical ceiling. Nothing had ever
@@ -375,7 +392,7 @@ sentence**, and see "the census" below for what enforces that.
 
 ```
 #/             Home           the product as a picture: ONE RANKED SENTENCE saying what the
-                              store is waiting on (D115, `standing.ts` — and the null invariant
+                              store is waiting on (D120, `standing.ts` — and the null invariant
                               in it is the load-bearing part), one action, then the library
                               drawn as the work that made it — sittings clustered from
                               `captured_at`, each block as wide as its minutes and as tall as
@@ -508,7 +525,8 @@ put a `border-radius` on it**: the tile is a superellipse and a CSS radius clips
 **`base.css` ANSWERS WHAT A CONTROL DOES UNDER THE POINTER AND THE FINGER, IN THREE FLOORS, SO A
 SCREEN NEVER HAS TO.** D50 is the entry and `app/tests/cursor.spec.ts` is the guard — every one
 of these is mutation-tested, so deleting a floor turns `make design-check` red rather than going
-quietly green:
+quietly green. **A FOURTH FLOOR IS BELOW THEM AND IS NOT IN THIS FILE**, because it cannot be
+written as a rule: see "a press may not move what is around it" after the three:
 
 - **cursor** — a clickable says `pointer`, a text field `text`, and anything DISABLED says
   `not-allowed`. That last arm was 30 of the 41 defects the floor was built for.
@@ -517,6 +535,18 @@ quietly green:
   snapped, ten of them the sidebar's rail toggle.
 - **press** — a control answers the finger too: `translate: 0 1px`, and never when it is
   disabled. Measured the same day: 190 of 311 controls were silent under a press.
+
+- **stability** — a press changes WHAT IS ON THE SCREEN and never where the rest of it is (D118).
+  This one is a rule rather than a declaration: the movement it forbids is caused by the panel a
+  write lands in, not by a stylesheet, so `base.css` cannot supply it and two guards enforce it
+  instead. `cursor.spec.ts` reads every `:hover` / `:active` / `:focus` rule for a layout property
+  and every `:active` rule that eases the movement it makes; `inventory.spec.ts` presses
+  `Mark sold` and requires that nothing outside the card panel moved, that the page did not change
+  height or scroll, and that the panel holds one height for the whole box walk. **A slot whose
+  control becomes its own result reserves the tallest of its states** — the location card's action
+  slot holds a 40px button pair, a 50px receipt and a 22px pill, and floors at `max()` of the
+  tokens they are built from. Measured before it existed: one `Mark sold` collapsed the panel 98px
+  and moved 131 elements, and stepping the walk moved 39, 66 or 98px depending on the two cards.
 
 **Three things follow, and getting any of them wrong is silent:**
 
@@ -536,6 +566,13 @@ properties on purpose, because they COMPOSE. Spelling the dip as `transform: tra
 silently doubles it to 2px, which six rules were doing. And an opt-out must be written in the
 property the floor actually uses: three rules opting out with `transform: none` were silently
 repealed the day the dip moved to `translate`.
+
+**A CONTROL MAY NOT EASE THE MOVEMENT ITS OWN `:active` RULE MAKES** (D118). The dip lands on the
+frame the finger goes down; a squeeze on a 120ms transition beside it is one gesture on two
+clocks, which is what a press reads as janky. Three rules were doing it — `.bn-btn`,
+`.pull-confirm` and the phone tab bar's icon. A control that legitimately eases a `transform` for
+a HOVER lift keeps it and names its repaints inside the `:active` rule instead, leaving the
+movement out of that list.
 
 **Motion is part of the system, not decoration.** Durations and easing curves are tokens; the page
 enters, list rows stagger off `--bn-stagger`, selection changes and receipts and progress
@@ -723,11 +760,26 @@ A screen is not finished because it compiles.
   and not the key**, so it can say nothing about which keys exist or what they are called;
   that is what the `storage keys` audit row is for.
 - **Never emit duplicate SKU rows** in an import file — undefined behavior. Aggregate
-  by SKU with `Add to Quantity` = copy count, capped at the live cap. **That cap is
-  `policy.live_cap` in `inventory/prices.json` as of 2026-09-06** — store-wide, overridable
-  per run through `policy.per_run`, defaulting to D7's playset of four. It was a promise D7
-  made and nothing built: the parameter was threaded through `SkuMatch`, `join` and
-  `resolve.load` from the start and no caller ever passed anything but the module default.
+  by SKU with `Add to Quantity` = copy count. **THERE IS NO STANDING CAP ON THAT COUNT AS OF
+  2026-09-07** (D7, rewritten): every copy the run holds that TCGplayer does not already have
+  goes out. The operator retired both of D7's reasons for the playset bound by name — an
+  envelope-buster order, and how many copies a spike sells at a stale price — and the answer
+  to each was *"neither still applies"*.
+
+  **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
+  emit options on `#/pricing`'s ship bar. `policy.live_cap` in `inventory/prices.json` survives
+  for a store that wants a standing answer — store-wide, overridable per run through
+  `policy.per_run` — and **reads `None` when nothing has written one**, which is the reversal.
+  It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded
+  through `SkuMatch`, `join` and `resolve.load` from the start and no caller ever passed
+  anything but the module default. `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is
+  now the figure the press OFFERS, never one a send inherits.
+
+  **WHAT THE CAP WAS NEVER DOING IS STOPPING A COPY BEING SENT TWICE**, which is what makes
+  removing it safe: `add_to_quantity`'s own docstring separates the two jobs, and
+  `uncommitted_positions` — the half that does that job — is untouched. Measured on the
+  harness: uncapped, a SKU with six copies of which three are already live offers **3**, not
+  six.
 - **The pipeline is reachable from a screen as of 2026-08-24** (D33), **and lives on `#/runs`
   since 2026-08-29** (D39). Not folded (D33, amended): a free preflight, a two-step money gate
   with no typing, the three free steps, every command's stdout verbatim, and the import CSVs as
@@ -823,17 +875,23 @@ A screen is not finished because it compiles.
   (`GET /boxes/<box>/photos`) is on screen before the control that fires exists. What it gives
   up is named: D36's realign can no longer re-bind THOSE cards by digest, which is right for
   cards that have left the box, and the digest on the record is what the history keeps.
-- **`emit` OVER SEVERAL RUNS WRITES ONE FILE, AND THE CAP IS SPENT ONCE ACROSS THEM** (D86).
+- **`emit` OVER SEVERAL RUNS WRITES ONE FILE, AND A CAP IS SPENT ONCE ACROSS THEM** (D86).
   `pipeline/join.py:add_to_quantity` spends `live_cap - copies_out` per RUN against a cap that
   is GLOBAL, so runs joined before either emitted each believe the whole cap is theirs. This is
   D59's defect one register up — that entry fixed the per-BOX version inside one join, and the
   per-RUN version survived it because nothing had ever looked at two runs together.
 
-  **Measured, from an identical cleared ledger over three real runs**: three separate emits
-  wrote 6 files, 511 copies and **2 SKUs past the cap of 4** — the same two that sit at
-  `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and **none**.
-  `pipeline/merge.py` re-derives the figure over the union of positions, deduped on
-  `(box, index)`; **a merged file can never be a concatenation of the per-run CSVs.**
+  **The heading said THE cap until 2026-09-07 and now says A cap** (D7, rewritten): with no
+  standing bound this arithmetic does not run at all, and a merged send is still one file for
+  the OTHER reason D86 gives — `pipeline/merge.py` dedupes the union of positions on
+  `(box, index)`, so a card in three boxes is one row. The moment a send asks for `--cap N`
+  the paragraph above is live again, and `cli/cmd_emit.py:_cap_for` applies that one figure to
+  every leg for exactly this reason.
+
+  **Measured at the old standing cap of 4, from an identical cleared ledger over three real
+  runs**: three separate emits wrote 6 files, 511 copies and **2 SKUs past it** — the same two
+  that sit at `pushed: 6` in the store today. One merged emit wrote 1 file, 437 copies and
+  **none**. **A merged file can never be a concatenation of the per-run CSVs.**
 
 - **There is no automatic sectioning, and `CARDS_PER_SECTION` NO LONGER EXISTS** (D10,
   amended 2026-08-29 by the owner). A box's sections are the dividers somebody put in it and
@@ -1177,8 +1235,20 @@ D111 Cleanup is a sweep, not a step in the merge, and liveness is read rather th
 D112 The labels are tracked, the images are not, and an unmoved measurement is asserted rather than re-derived
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
-D115 The front page says what is owed, and the library is drawn as the work that made it
+D115 The reading is what the export said, and what has sold since is counted beside it
+D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
+D118 A press changes what is on the screen, never where the rest of it is
+D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
+D120 The front page says what is owed, and the library is drawn as the work that made it
 ```
+
+**THE INDEX SKIPS ONE NUMBER BETWEEN D116 AND D118, AND THE GAP IS DELIBERATE.** D118 was
+numbered while three branches were in flight over the two numbers above D115: two worktrees both
+claimed the lower one, main took one of those on 2026-09-07 and it is in this list, and a third
+holds the one between — which therefore exists in no tree that can be read from here and cannot
+be named here without this file citing a heading that is not in `docs/DECISIONS.md`. The rule is
+the one this repo has always kept: renumber your own, never another's. A gap that closes on the
+next merge is the cheaper of the two failures.
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
 without being adopted: the envelope walk and the copies picker were declined in favor of this

@@ -337,6 +337,113 @@ test('the chevron is quiet, and it is pinned to the row edge rather than floatin
   await expect(page.locator('.bn-brand-chevron')).toBeHidden()
 })
 
+/* THE TAB TITLE ALTERNATES, AND THE THREE PLACES IT MUST NOT.
+ *
+ * `Inventory · 番地 banchi` is twenty characters and a browser tab shows perhaps a dozen, so the
+ * concatenation truncates and the half that survives is whichever came first. The owner asked for
+ * the two to take turns instead. That is a `setInterval` on `document.title`, which is the kind of
+ * thing that breaks quietly: a stale timer surviving a route change fights the new one, and a
+ * cleanup that runs too eagerly leaves the tab frozen on one half. Neither shows up in a
+ * screenshot and neither throws.
+ *
+ * THE EXEMPTIONS ARE THE POINT AS MUCH AS THE ALTERNATION. Home has nothing to alternate WITH —
+ * the screen and the product are the same word. The Fulfiller's tab names his task, not whose
+ * product it is. And `prefers-reduced-motion` falls back to the concatenation, because a title
+ * that changes on a timer may be announced by a screen reader every time it changes, and that
+ * query is how this product is told to stop moving things.
+ *
+ * THE SCREENS ARE READ OFF THE NAV, NOT TYPED. `make docs-audit`'s `route rosters` row refused an
+ * earlier draft of this file for pinning four hashes, and it was right to: a list somebody typed
+ * goes stale silently, and the route added next month is simply not in it. What these cases need
+ * is not a roster but "some named screen" and "the Fulfiller's", and the sidebar knows both — his
+ * link is the only `.bn-nav-link` it draws outside `<nav>`, which is the same structural fact
+ * `cursor.spec.ts` harvests on. */
+async function screens(page: import('@playwright/test').Page) {
+  await page.goto('/#/')
+  await expect(page.locator('.bn-side a.bn-nav-link').first()).toBeVisible()
+  const found = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLAnchorElement>('.bn-side a.bn-nav-link')).map((a) => ({
+      href: a.getAttribute('href') ?? '',
+      label: (a.querySelector('.bn-nav-text') ?? a).textContent?.trim() ?? '',
+      outsideNav: a.closest('nav') === null,
+    })),
+  )
+  const named = found.find((r) => r.href !== '#/' && !r.outsideNav)
+  const fulfiller = found.find((r) => r.outsideNav)
+  expect(named, 'the sidebar drew no named screen to alternate on').toBeTruthy()
+  expect(fulfiller, "the sidebar drew no link outside <nav> — the Fulfiller's has moved").toBeTruthy()
+  return { named: named!, fulfiller: fulfiller! }
+}
+
+test('the tab title alternates on a named screen, and holds still where it should', async ({ page }) => {
+  /* A LONGER BUDGET, AND IT IS THE CADENCE THAT NEEDS IT. One cycle is now 6s + 4s, and a case
+     that proves alternation has to watch more than one of them — then prove the timer STOPPED,
+     which means waiting past the longer dwell twice. That sums past Playwright's 30s default.
+     Set explicitly rather than raised globally: every other spec in this suite should still fail
+     fast, and a default nudged up to suit one file hides a hang in all of them. */
+  test.setTimeout(90_000)
+  const { named } = await screens(page)
+
+  await page.goto(`/${named.href}`)
+  await page.waitForTimeout(400)
+  /* Sampled across more than one full cycle. The dwell is ASYMMETRIC — the screen holds longer
+     than the name — so the window has to clear the sum of both, not twice the shorter one. Sixteen
+     seconds at 500ms covers a 6s + 4s cycle with room for the machine to be slow, and it is
+     deliberately not derived from the constants: a test that reads the value it is checking
+     passes when that value is wrong. */
+  const seen = new Set<string>()
+  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.waitForTimeout(500) }
+  expect([...seen].sort(), 'the tab shows each half in turn, neither truncated into the other')
+    .toEqual([named.label.toLowerCase(), '番地 banchi'].sort())
+
+  // Home: one word for both the screen and the product, so nothing to take turns with
+  await page.goto('/#/')
+  await page.waitForTimeout(8000)   // past the longer dwell, so a timer would have shown by now
+  const home = await page.title()
+  await page.waitForTimeout(8000)
+  expect(await page.title(), 'Home has nothing to alternate with and must hold still').toBe(home)
+  expect(home).toBe('番地 banchi')
+
+  // and the timer from the screen we just left must not have survived to fight this one
+  const after = new Set<string>()
+  for (let i = 0; i < 26; i++) { after.add(await page.title()); await page.waitForTimeout(500) }
+  expect([...after], 'a timer from the previous route is still running').toEqual(['番地 banchi'])
+
+  /* THE TAB IS LOWERCASE AND THE NAV IS NOT, which is the whole shape of this change. The label
+     is one string drawn by the sidebar, the palette and the keyboard sheet; lowercasing it at the
+     source would have rewritten all three. Asserting the nav's casing here is what stops the
+     cheap fix from passing. */
+  expect(named.label, 'the nav keeps Title Case — only the tab speaks lowercase')
+    .not.toBe(named.label.toLowerCase())
+})
+
+test("the Fulfiller's tab names his task, not the product", async ({ page }) => {
+  test.setTimeout(60_000)   // two waits past the longer dwell, to prove it does not move
+  const { fulfiller } = await screens(page)
+  await page.goto(`/${fulfiller.href}`)
+  await page.waitForTimeout(8000)
+  const first = await page.title()
+  await page.waitForTimeout(8000)
+  expect(first, 'his tab says what he is doing, lowercase like every other tab').toBe('cards to pull')
+  expect(await page.title(), 'and it does not alternate at him').toBe(first)
+})
+
+/* `reducedMotion` is set on an explicit CONTEXT rather than through `test.use`, which this
+   Playwright's fixture types do not accept it in. */
+test('with reduced motion the tab stops taking turns and shows both at once', async ({ browser, baseURL }) => {
+  test.setTimeout(60_000)   // a full cycle's worth of samples, to prove none of them differ
+  const ctx = await browser.newContext({ reducedMotion: 'reduce', baseURL })
+  const page = await ctx.newPage()
+  const { named } = await screens(page)
+  await page.goto(`/${named.href}`)
+  await page.waitForTimeout(600)
+  const seen = new Set<string>()
+  for (let i = 0; i < 32; i++) { seen.add(await page.title()); await page.waitForTimeout(500) }
+  await ctx.close()
+  expect([...seen], 'reduced motion gets one steady title, concatenated')
+    .toEqual([`${named.label.toLowerCase()} · 番地 banchi`])
+})
+
 /* THE BRAND IS THE CONTROL — the user's own instruction, after the 22px chevron proved
    unclickable. Nothing else in this suite presses it, and the whole affordance is one onClick. */
 test('pressing the brand collapses the sidebar and expands it again', async ({ page }) => {

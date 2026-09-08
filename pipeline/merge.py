@@ -167,7 +167,7 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
         row=newest.match.row,
         positions=_union(legs, lambda m: m.positions),
         stages=list(newest.match.stages),
-        live_cap=max(leg.match.live_cap for leg in legs),
+        live_cap=_merged_cap(legs),
         rule=newest.match.rule,
         basis=newest.match.basis,
         # THE NEWEST LEG'S, LIKE THE ROW AND THE RULE. `_agree_policy` has already refused a
@@ -187,6 +187,29 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
             else max(leg.match.live_out or 0 for leg in legs)
         ),
     )
+
+
+def _merged_cap(legs) -> Optional[int]:
+    """The cap a merged send spends across its legs, or `None` for no bound.
+
+    A `max` HERE RAISED `TypeError` FROM THE DAY D7 WAS REWRITTEN (2026-09-07), and this is
+    the fix. `live_cap` became `Optional[int]` with `None` — no cap — as the ordinary value,
+    and `max(None, None)` is not a comparison Python will make. It fired on the one shape a
+    merged send exists for: a SKU held by two or more runs. `held_out` and `live_out` below
+    were already written in this idiom; only this line was not.
+
+    NO CAP ONLY WHEN NO LEG NAMES ONE. `None` is the absence of a bound, not a very large
+    one, so it may never outrank a real figure — a leg carrying a per-run override of 2
+    beside a leg carrying nothing must still bound this send at 2.
+
+    AND THE TIGHTEST BOUND WINS, WHICH IS A CHANGE OF ANSWER AS WELL AS OF TYPE. `max` took
+    the loosest, so a send spanning a run deliberately held to 2 and a run at 4 offered 4 —
+    discarding the more conservative answer, which is the opposite of what every other
+    cross-run rule in this module does. A cap is a ceiling; merging two ceilings takes the
+    lower one.
+    """
+    caps = [leg.match.live_cap for leg in legs if leg.match.live_cap is not None]
+    return min(caps) if caps else None
 
 
 class Disagreement(Exception):

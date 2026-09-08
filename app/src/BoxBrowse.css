@@ -67,6 +67,33 @@
 .browse-boxcell-mini:hover { background: var(--bn-surface-3); transform: translateY(-1px); }
 .browse-boxcell-mini[aria-current='true'] { background: var(--bn-ink); color: var(--bn-bg); }
 
+/* ---- the selection marker -------------------------------------------------------------------
+   ONE MARK, ON BOTH LISTS, AND IT IS A PILL INSET FROM THE ROW RATHER THAN A RAIL FLUSH AGAINST
+   IT. Both of these rows sit 4px inside their scroller and carried `inset 3px 0 0` — which put
+   the accent 4px from the panel's own border and 1px from the number tile beside it, so it read
+   as a second border the panel had grown rather than as a mark on the row, and the box cell's
+   `--bn-r` corners clipped its ends into wedges. The pill clears both sides: 4px of gutter to
+   its left, 5px of padding to the content on its right.
+
+   ABSOLUTE, BECAUSE BOTH ROWS ARE GRIDS — a static `::before` on either becomes a grid item and
+   takes a column. And the clearance is on the row at EVERY state, never only the selected one,
+   so selecting a row marks it without moving a word of it. */
+.browse-boxcell::before,
+.browse-row::before {
+  position: absolute;
+  left: var(--bn-1);
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-accent);
+  opacity: 0;
+  scale: 1 0.4;
+  /* `scale` and not `transform`: base.css's press floor owns `translate` and a screen's own
+     emphasis owns `transform`, and this is a third property so it composes with both. */
+  transition: opacity var(--bn-t-fast) var(--bn-ease), scale var(--bn-t) var(--bn-ease-spring);
+}
+
 /* ---- the box list ---- */
 .browse-boxes {
   display: flex;
@@ -77,12 +104,13 @@
   flex: none;
 }
 .browse-boxcell {
+  position: relative;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--bn-2);
   min-height: 42px;
-  padding: var(--bn-1) var(--bn-2) var(--bn-1) var(--bn-1);
+  padding: var(--bn-1) var(--bn-2) var(--bn-1) var(--bn-3);
   border-radius: var(--bn-r);
   text-align: left;
   color: var(--bn-ink);
@@ -90,10 +118,9 @@
 }
 .browse-boxcell:hover:not(:disabled) { background: var(--bn-hover); }
 .browse-boxcell:disabled { opacity: 0.45; }
-.browse-boxcell[aria-current='true'] {
-  background: var(--bn-accent-tint);
-  box-shadow: inset 3px 0 0 0 var(--bn-accent);
-}
+.browse-boxcell[aria-current='true'] { background: var(--bn-accent-tint); }
+.browse-boxcell::before { content: ''; }
+.browse-boxcell[aria-current='true']::before { opacity: 1; scale: 1 1; }
 .browse-boxcell-num {
   width: 30px;
   height: 30px;
@@ -302,6 +329,15 @@
 .browse-row {
   display: grid;
   grid-template-columns: minmax(34px, max-content) minmax(0, 1fr) auto;
+  /* THREE COLUMNS AND UP TO FOUR CHILDREN, SO THE OVERFLOW HAS TO GO SIDEWAYS (D118). A row
+     draws the slot, the name, and then a badge for a departed copy and another for a queued one
+     — four items into three declared tracks, and by default the fourth is auto-placed onto a
+     second grid ROW. Measured: a walk row is 32px until the copy is sold and 50px after, so
+     selling a card pushed every row beneath it 18px down the list, in the panel the operator's
+     eye is in. `column` sends the extras into implicit COLUMNS instead; declaring two more
+     explicit `auto` tracks would have cost every row two empty ones and 16px of gap. */
+  grid-auto-flow: column;
+  grid-auto-columns: auto;
   gap: var(--bn-2);
   align-items: center;
   width: 100%;
@@ -309,8 +345,9 @@
   text-align: left;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 5px var(--bn-2) 5px var(--bn-1);
+  padding: 5px var(--bn-2) 5px var(--bn-3);
   border-radius: var(--bn-r-sm) 0 0 var(--bn-r-sm);
+  position: relative;
   color: var(--bn-ink-2);
   scroll-margin-top: 36px;
   scroll-margin-bottom: var(--bn-1);
@@ -344,8 +381,9 @@
 .browse-row[aria-current='true'] {
   background: var(--bn-accent-tint);
   color: var(--bn-ink);
-  box-shadow: inset 3px 0 0 0 var(--bn-accent);
 }
+.browse-row::before { content: ''; }
+.browse-row[aria-current='true']::before { opacity: 1; scale: 1 1; }
 .browse-row[aria-current='true'] .browse-row-position { color: var(--bn-accent); }
 .browse-row[aria-current='true'] .browse-row-name { font-weight: 600; }
 .browse-row:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: -2px; }
@@ -427,11 +465,40 @@
   padding: 0 var(--bn-5) var(--bn-5);
   min-width: 0;
 }
+/* ONE HEIGHT FOR THE WHOLE WALK (D118), AND IT IS THE ONE THING ON THIS SCREEN THAT MAY NOT
+   COME FROM THE CARD. Everything in this band is data-sized — the location card is 275px or
+   341px depending on whether an order is waiting on the copy, the copies list is as long as the
+   card has copies — so the panel was a different height for every card in the box and the
+   Details panel under it moved by the difference on every step of the walk. Measured at 1440 on
+   the demo store: 551..656px across three boxes, and 39, 66 and 98px jumps between consecutive
+   cards, EVERY ONE of them a press.
+
+   BOUNDED BY THE VIEWPORT AND NOT BY THE CONTENT, which is what makes it a height at all rather
+   than a taller way of following the card. `100dvh` minus the shell's own furniture is the fold
+   the operator is walking inside; 520 and 720 keep it sane on a laptop lid and on a 27-inch
+   panel, and neither bound was picked over a card. `dvh` because the phone form below never
+   reaches this rule and the tablet one should not resize when a URL bar retracts.
+
+   THE COPIES LIST IS WHAT ABSORBS THE DIFFERENCE, and it is the right one: it is the only part
+   of the band that is a LIST, so scrolling it is ordinary, while scrolling a location card or a
+   photograph would not be. `CardLocations.css` and `Inventory.css` carry that half. */
 @container pane (min-width: 560px) {
-  .browse-band { grid-template-columns: minmax(220px, 34%) minmax(0, 1fr); }
+  .browse-band {
+    grid-template-columns: minmax(220px, 34%) minmax(0, 1fr);
+    height: min(720px, max(520px, calc(100dvh - 280px)));
+  }
 }
-.browse-shot { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-2); }
-.browse-under { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-4); }
+.browse-shot { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--bn-2); }
+.browse-under { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--bn-4); }
+/* THE PHOTOGRAPH COLUMN IS CONTENT-SIZED AND DOES NOT STRETCH TO THE BAND, WHICH IS D38's OWN
+   RULING HELD ACROSS D118's FIXED HEIGHT. D38 deleted a `.browse-frame` wrapper for exactly this
+   — a reservation on a wrapper is given to everything else that wrapper can hold, and a card
+   with a missing file got a card-shaped box around a paragraph. A grid cell stretching to a
+   fixed band is the same reservation by another name: `align-self: start` is what keeps it off.
+   `app/tests/inventory.spec.ts`'s "never a card-shaped hole" case is the guard, and it went red
+   for 192px the first time this height landed without these two lines. */
+.browse-shot { align-self: start; }
+.browse-shot > * { flex: none; }
 
 /* the photograph */
 .browse-photo-frame {
@@ -444,7 +511,12 @@
   transition: transform var(--bn-t) var(--bn-ease), box-shadow var(--bn-t) var(--bn-ease);
 }
 .browse-photo-frame:hover { transform: translateY(-2px); box-shadow: var(--bn-shadow-3); }
-.browse-photo {
+/* Selected on the FRAME as well as the photo, at 0-2-0, and that is the whole point of the extra
+   class: the kit's `.bn-photo img` default is `contain` at 0-1-1, so it silently outranked this
+   rule's bare 0-1-0 the day the frame gained `bn-photo` in the Banchi rebuild. The rig shoots
+   2160x3840 into a 63/88 window, so `contain` fitted the photograph by its height and left
+   `--bn-stage-bg` showing as a bar down each side — 10.7% of the frame's width, twice over. */
+.browse-photo-frame .browse-photo {
   display: block;
   width: 100%;
   height: 100%;
@@ -662,7 +734,8 @@
 .browse-actionbar-slot { flex: 1 1 auto; min-width: 0; display: flex; justify-content: flex-end; }
 .browse-actionbar-slot .inventory-copy-actions { width: 100%; justify-content: flex-end; min-width: 0; }
 .browse-actionbar-slot .bn-btn-primary { flex: 1 1 auto; min-width: 0; }
-/* the bar carries the one press; Retire stays in the location card above */
+/* the bar carries the one press. Retire is in the copy ROW since D119 — it was in the location
+   card above until that was deleted — where it is the icon-only ghost beside `Mark sold`. */
 .browse-actionbar-slot .bn-btn-ghost { display: none; }
 
 @media (max-width: 767px) {
@@ -694,6 +767,9 @@
   .browse-cardops > .bn-btn { --btn-h: var(--bn-control-h-lg); }
   .card-locations-owner .inventory-copy-actions .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
   .card-locations-owner .inventory-copy-actions .bn-btn-icon { padding: 0; }
+  /* The receipt's Undo is the same press as the `Mark sold` it replaced, so it is the same
+     height — `sm` alone is 40px, which is the thumb FLOOR and not this row's size (D119). */
+  .card-locations-owner .bn-receipt .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
   .browse-stepper-btn { width: 44px; height: 40px; }
   .browse-stepper-count { font-size: var(--bn-fs-base); }
   .browse-boxcell { min-height: 48px; }

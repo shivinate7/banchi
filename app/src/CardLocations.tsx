@@ -10,7 +10,7 @@ import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
 import { Button, Icon, Pill } from './kit'
 import './CardLocations.css'
-import { readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
+import { forSale, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
 
 /* One card, every copy of it, and where each copy physically is.
  *
@@ -78,7 +78,11 @@ function count(n: number, one: string, many: string): string {
  * lines above it, and the two sentences could not be told apart — is three live, or may three
  * be? Headroom is the same fact in terms nothing else on the panel is measured in. */
 function headroom(group: SearchGroup): string {
-  const room = group.listable - group.listed.live
+  // THE ESTIMATE, NOT THE READING (D115). Headroom is what may still GO live, so it has to
+  // count against what is live NOW — a SKU read at 4 with 2 sold here has room for 2, and
+  // computing off the raw reading would say `At the ceiling of 4` and refuse a relist the
+  // shelf can support. It would also put a third number on a panel that now draws two.
+  const room = group.listable - forSale(group.listed.live, group.sold_here)
   if (group.listable === 0) return 'No copies can go live'
   if (room > 0) return `Room for ${room} more live`
   if (room === 0) return `At the ceiling of ${group.listable}`
@@ -202,6 +206,23 @@ function OwnerRows({
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
 
+  /* A GROUP WITH NO SKU HAS NO LISTING TO REPORT, AND THE HEADER MUST NOT INVENT ONE (D119).
+     `capture_server.py:do_search` sends the SKU-less bag `listed: {0,0,0}`, `sold_here: 0` and
+     `live_as_of: null` — structurally, not because nothing has happened yet: `emit` is what
+     creates a listing record and it cannot run for a card the pipeline has not identified.
+     Drawn anyway that reads `0 live on TCGplayer · not read yet` and `Pushed 0 · Staged 0 ·
+     Room for 1 more live` — a promise of headroom on a card that cannot be listed at all.
+
+     WHAT GOES IS THE SENTENCE, NEVER THE FIGURE. `group.listable` stays exactly what the server
+     sent; rewriting it to 0 here would make this the one thing in the product that answers a
+     question differently from the store.
+
+     DERIVED FROM `sku` AND NOT TAKEN AS A PROP: a prop is a second place the same fact can be
+     told, and one caller forgetting it is a header that lies. Derived, it also reaches the
+     search path — the 65 cards this store holds with a name and no SKU already land in the
+     loose bag and already draw this. */
+  const listing = group.sku !== null
+
   /* HOW MANY DIGITS THIS LIST'S SLOT COLUMN HAS TO HOLD, which is the one term of that column
      that is DATA rather than typography (`CardLocations.css`'s `--pos-slot-key` is the other).
      A row cannot compute it — it cannot see what its siblings drew — so the list does, over the
@@ -245,15 +266,28 @@ function OwnerRows({
             <span className="bn-stat-label">in the boxes</span>
           </div>
           {/* THE LIVE FIGURE NEVER STANDS ALONE. It is what this store last believed, so its
-              reading age sits under it, quieter than the count itself. */}
-          <div className="bn-stat card-locations-stat card-locations-live">
-            <span className="bn-stat-value">
-              <span className="bn-dot bn-dot-live" aria-hidden="true" />
-              {group.listed.live}
-            </span>
-            <span className="bn-stat-label">live on TCGplayer</span>
-            <ReadingAge at={listedAt} />
-          </div>
+              reading age sits under it, quieter than the count itself.
+              AND SINCE D115 IT IS TWO NUMBERS. The big one is the ESTIMATE — the reading less
+              what has sold here since — because that is the figure that must agree with the
+              shelf the operator is standing at (D7). The split under it is drawn only when
+              there is a difference: `4 when read · 2 sold here since` on 3 of 443 SKUs is
+              information, and `· 0 sold here since` on the other 440 is noise that trains the
+              eye to skip the line. */}
+          {listing ? (
+            <div className="bn-stat card-locations-stat card-locations-live">
+              <span className="bn-stat-value">
+                <span className="bn-dot bn-dot-live" aria-hidden="true" />
+                {forSale(group.listed.live, group.sold_here)}
+              </span>
+              <span className="bn-stat-label">live on TCGplayer</span>
+              <ReadingAge at={listedAt} />
+              {group.sold_here > 0 ? (
+                <span className="card-locations-since">
+                  {group.listed.live} when read · {group.sold_here} sold here since
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <p className="card-locations-meta">
@@ -266,9 +300,11 @@ function OwnerRows({
             sat two lines under `3 live on TCGplayer` and used the same figure to mean the
             other thing, so a reader could not tell whether three ARE live or three MAY be.
             Headroom is the honest form of the same fact. */}
-        <p className="card-locations-counts">
-          Pushed {group.listed.pushed} · Staged {group.listed.staged} · {headroom(group)}
-        </p>
+        {listing ? (
+          <p className="card-locations-counts">
+            Pushed {group.listed.pushed} · Staged {group.listed.staged} · {headroom(group)}
+          </p>
+        ) : null}
       </header>
 
       <ul
@@ -285,13 +321,23 @@ function OwnerRows({
 
           /* The walk-to for THIS copy, or null when there is nowhere to send anyone. */
           const goesTo = onGoTo === undefined || pooled || current ? null : () => onGoTo(copy)
-          /* No bar for a pooled copy (a count has no place), a departed one (a bar cannot draw
-             a card that is in no place) — or the copy the walk is STANDING ON, whose lens is
-             already drawn full size in the location card ~150px above this list, with the same
-             `#N of M` caption under it. Two identical bars a screen apart read as a rendering
-             fault, not as hero-and-list. The row itself stays, in full, with its own controls:
-             what goes is the duplicate widget, not the row. */
-          const noBar = pooled || departed || current
+          /* No bar for a pooled copy, and for nothing else — BOTH of the other terms that
+             stood here were removed on 2026-09-07, by two branches, for two unrelated reasons,
+             and this is the merge of them.
+
+             THE COPY THE WALK IS STANDING ON (D119). Its lens used to be drawn full size in the
+             location card ~150px above this list with the same `#N of M` caption, and two
+             identical bars a screen apart read as a rendering fault rather than as hero-and-list.
+             That card is deleted, so the duplication is gone and the exception with it.
+
+             A DEPARTED COPY (D118). It was excluded on the reasoning that a bar cannot draw a
+             card that is in no place — true of the MARK and not of the lens, which draws the BOX.
+             Dropping the row cost this list a line's height at the moment a sale landed, so every
+             row beneath the sold one moved under a pointer that had just pressed. The bar stays
+             and the mark falls out of it instead.
+
+             What is left is the one copy that has no coordinate at all: a pool is a count. */
+          const noBar = pooled
 
           return (
             <li
@@ -366,7 +412,8 @@ function OwnerRows({
                     Wanted
                     {/* The order number itself is 21 characters. It is drawn where the panel is
                         wide enough to hold it, and the mark alone where it is not — the number
-                        is on the location card above, in the title, and one press away. */}
+                        is in the title and one press away. It used to be on the location card
+                        above as well, which D119 deleted. */}
                     <span className="card-locations-claim-id">{claim.order}</span>
                   </a>
                 )}
@@ -374,8 +421,10 @@ function OwnerRows({
               </span>
 
               {/* The action, or what stands where one would. A sold copy's own state pill
-                  already says so; only an optimistic sale whose re-read is still in flight
-                  needs a word. */}
+                  already says so; an optimistic sale whose re-read is still in flight needs a
+                  word, and a sale whose undo window is still running draws its draining clock
+                  and an `Undo` here since D119 — inside this cell, at the size the cell already
+                  reserves (D118), because a press may not resize the slot it lands in. */}
               <span className="card-locations-action">
                 {renderAction !== undefined ? (
                   renderAction(copy)
@@ -441,9 +490,23 @@ function FulfillerCard({
             "not read yet" is a sentence about plumbing and he is owed none of those.
             `Fulfillment.tsx` has to pass `listedAt` for this half to appear. */}
         <p className="card-locations-say">
-          {count(group.on_hand, 'copy here', 'copies here')} · {group.listed.live} for sale
+          {count(group.on_hand, 'copy here', 'copies here')} ·{' '}
+          {forSale(group.listed.live, group.sold_here)} for sale
           {readingAgo(listedAt) === null ? '' : `, counted ${readingAgo(listedAt)}`}
         </p>
+        {/* AND WHY IT MOVED, IN HIS WORDS (D115, and the owner's ruling that BOTH figures are
+            drawn everywhere — I argued for the estimate alone here and was overruled). The
+            count above is the estimate, so it drops the moment he pulls a card; without this
+            line the number simply changes under him with no reason given, which is the one
+            thing `docs/DESIGN.md`'s constraints table will not have on this view.
+            "sold", "counted" and "since" are all clear of the banned-word list
+            (`app/tests/fulfillment.spec.ts`), and it is ONE sentence, so D5's "nothing is
+            explained twice" holds. Drawn only when there is something to explain. */}
+        {group.sold_here > 0 ? (
+          <p className="card-locations-say">
+            {count(group.sold_here, 'copy', 'copies')} sold here since we last counted.
+          </p>
+        ) : null}
       </header>
 
       <ul className="card-locations-copies">

@@ -307,11 +307,19 @@ def _export_file(path, export, live_quantity=None):
     return Path(path)
 
 
-def _resolve_in(home, copies, export_path, *, name="Dunsparce", number="120"):
-    """`cli/resolve.py:load` over `copies` positions, against the store this home holds."""
+def _resolve_in(
+    home, copies, export_path, *, name="Dunsparce", number="120", live_cap=LIVE_QUANTITY_CAP
+):
+    """`cli/resolve.py:load` over `copies` positions, against the store this home holds.
+
+    IT ASKS FOR A CAP OF FOUR BY DEFAULT, AND THAT DEFAULT MOVED HERE AT D7's rewrite. The standing
+    cap was retired — a send is unbounded unless it asks — so the cases below, every one of
+    which is ABOUT the cap arithmetic, have to ask for it or they would be testing its
+    absence. Pass `live_cap=None` for a case about the ordinary uncapped send.
+    """
     run = runs.Run(directory=home, manifest={})
     run.write_identifications(_identifications(copies, name, number))
-    return resolve.load(run, export_path)
+    return resolve.load(run, export_path, live_cap=live_cap)
 
 
 def _command(c, *argv):
@@ -510,6 +518,31 @@ def _check_committed_from_counts(c, export) -> None:
     # `_stock` dates its `live` reading now, as a sale would. The file is dated an hour on
     # either side of that with `os.utime`, so the case asserts the ordering rather than
     # relying on the order the fixture happened to write things in.
+    # THE SAME SHELF WITH NO CAP ASKED FOR (D7, rewritten 2026-09-07), and this is the case
+    # that says removing the bound is safe. Six copies, three of them already live at
+    # TCGplayer: the send offers THREE, not six — `_copies_out` commits the live ones and
+    # `uncommitted_positions` keeps them out, exactly as it does under a cap. The bound that
+    # went was the one on EXPOSURE; the one that stops a copy being sent twice never was the
+    # cap, and is untouched.
+    with _isolated_home() as home:
+        _stock(SEVEN_COPY_SKU, "Near Mint", 6, live=3)
+        resolved = _resolve_in(
+            home, 6, _export_file(home / "export.csv", export, live_quantity=3), live_cap=None
+        )
+        free = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            free.add_to_quantity,
+            3,
+            "uncapped, the send offers every copy TCGplayer does not already hold — three of "
+            "six — rather than all six. Under a cap of four it offered one; the difference is "
+            "the exposure bound and nothing else",
+        )
+        c.equal(
+            len(free.committed_positions),
+            3,
+            "and the three live copies are still committed, which is the guard that survived",
+        )
+
     with _isolated_home() as home:
         _stock(SEVEN_COPY_SKU, "Near Mint", 6, live=3)
         path = _export_file(home / "export.csv", export, live_quantity=0)
@@ -663,12 +696,12 @@ def _check_committed_from_counts(c, export) -> None:
         export_path = _export_file(run.path("export.csv"), export)
         _command(c, "join", str(run.directory), "--export", str(export_path))
 
-        first = resolve.load(runs.open_run(run.directory), export_path)
+        first = resolve.load(runs.open_run(run.directory), export_path, live_cap=LIVE_QUANTITY_CAP)
         seven = first.report.matches[SEVEN_COPY_SKU]
         c.equal(seven.add_to_quantity, 4, "the first join offers four copies, the live cap")
         c.equal(seven.backstock, 3, "and holds three as backstock")
 
-        _command(c, "emit", str(run.directory))
+        _command(c, "emit", str(run.directory), "--cap", "4")
         listing = Store().read().inventory.listing_for(SEVEN_COPY_SKU)
         c.equal(
             (listing.pushed, listing.staged, listing.live),
@@ -701,7 +734,7 @@ def _check_committed_from_counts(c, export) -> None:
         # CAPTURED BEFORE THE SECOND EMIT — the claim below is that this file is not touched,
         # which cannot be checked against a file the assertion's own command rewrote.
         sent = run.path(runs.IMPORT_MERGED).read_bytes()
-        _command(c, "emit", str(run.directory))
+        _command(c, "emit", str(run.directory), "--cap", "4")
 
         after = Store().read().inventory.listing_for(SEVEN_COPY_SKU)
         c.equal(
@@ -1651,12 +1684,36 @@ def run() -> Result:
 
     # --- D7 refill: live quantity already on TCGplayer ------------------------------------
     partly_live = dict(by_sku[SEVEN_COPY_SKU], **{tcgcsv.LIVE_QUANTITY_COLUMN: "3"})
+    # ASKING FOR THE CAP, WHICH IS WHAT D7's rewrite MADE THIS CASE DO. The refill arithmetic is
+    # unchanged and still worth pinning — it is simply no longer applied to a send that did
+    # not ask. The uncapped answer for this same match is asserted immediately below.
     refill = join.SkuMatch(
         sku=SEVEN_COPY_SKU,
         row=partly_live,
         positions=[join.Position(BOX, i) for i in range(1, 8)],
+        live_cap=LIVE_QUANTITY_CAP,
     )
     c.equal(refill.add_to_quantity, 1, "refill tops up to the cap, not past it")
+    # AND THE ORDINARY SEND, WHICH ASKS FOR NO CAP AT ALL (D7, rewritten 2026-09-07). Same
+    # match, same three copies already live at TCGplayer, no bound: every copy this run holds
+    # that TCGplayer does not already have goes. Four, not seven — `uncommitted_positions` is
+    # what keeps the three live ones out, and it is untouched by the rewrite. That distinction
+    # is the whole reason removing the bound is safe: the cap read a QUANTITY, and something
+    # else has always done the work of not sending a copy twice.
+    uncapped = join.SkuMatch(
+        sku=SEVEN_COPY_SKU,
+        row=partly_live,
+        positions=[join.Position(BOX, i) for i in range(1, 8)],
+    )
+    c.equal(
+        uncapped.add_to_quantity, 7,
+        "with no cap asked for, every position this match holds is offered — a bare match has "
+        "committed none, so seven. The real path commits the live ones first; see below",
+    )
+    c.equal(
+        uncapped.live_cap, None,
+        "and `live_cap` is None rather than a large number: the bound is ABSENT, not loose",
+    )
     c.equal(refill.backstock, 6, "the rest stays backstock")
 
     # --- unmatched in both directions, output suppressed ---------------------------------

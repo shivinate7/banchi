@@ -429,13 +429,20 @@ export type InventoryCard = {
  * `store/master.py:check_state` now refuses them as card states — which is why a screen that
  * wants "how many of this are listed" reads it here and cannot count it off the copies.
  *
- * `live` IS THE STORE'S LAST OBSERVATION, WITH ITS TIME. D8 and D11 put the authority in the
- * TCGplayer export's `Total Quantity`, which `./pkmnscan join` and `reconcile --live` read; a
- * sale decrements this locally and stamps it now, and an export corrects it only where the
- * export was read LATER than `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
- * Do not render it as a fact about the marketplace — render it as what this store last saw,
- * and `live_as_of` is when. Null on a record nothing has read `live` for yet — an emit's
- * record before any join or reconcile — and the export then answers whatever its age. */
+ * `live` IS THE EXPORT'S READING AND NOTHING ELSE, WITH ITS TIME (D115). D8 and D11 put the
+ * authority in the TCGplayer export's `Total Quantity`, which `./pkmnscan join` and
+ * `reconcile --live` read, and an export corrects it only where the export was read LATER than
+ * `live_as_of` (D87 amended, `store/master.py:Listing.observe_live`).
+ *
+ * A SALE NO LONGER TOUCHES IT. It used to decrement this locally and stamp it now — a delta
+ * wearing a reading's clothes — which is how one copy came to be subtracted twice: once by an
+ * export that already knew, once by the sale. What has sold here since the reading is
+ * `sold_here`, and the number to DRAW is the two together.
+ *
+ * Do not render `live` as a fact about the marketplace — render the estimate as what this
+ * store believes now, `live` as what it last read, and `live_as_of` as when. `live_as_of` is
+ * null on a record nothing has read `live` for yet — an emit's record before any join or
+ * reconcile — and the export then answers whatever its age. */
 export type Listing = {
   sku: string
   condition: string | null
@@ -445,6 +452,12 @@ export type Listing = {
   at: string | null
   staged_at: string | null
   live_as_of: string | null
+  /** Copies sold HERE since `live_as_of`. A delta this store made, never a reading — see the
+   *  block above. `reconcile --live` clears it when it adopts a reading taken after them. */
+  sold_here: number
+  /** When the newest counted sale happened. What stops an export fetched BEFORE a sale from
+   *  cancelling it — the protection the old restamp of `live_as_of` used to buy. */
+  sold_here_at: string | null
 }
 
 export type Inventory = {
@@ -1097,13 +1110,15 @@ export type Place = {
    *  place to send somebody. The same rule `ServerStatus.queues` states for its own nulls. */
   fraction: number | null
 
-  /** The nearest records that are still physically in the box on either side of this one —
-   *  D30's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you can
-   *  count, and once a section has holes those two stop being the same number; the neighbours
-   *  are what make the label countable by hand again. Sold and retired records are passed
-   *  over, never named — a departed card cannot be the thing you count from. `prev`/`next`
-   *  are null past the box's ends; a neighbour's `name` is null when nothing has identified
-   *  it yet, and the screen degrades to its index (`#41`), never to a blank.
+  /** The nearest NAMED records that are still physically in the box on either side of this
+   *  one — D30's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you
+   *  can count, and once a section has holes those two stop being the same number; the
+   *  neighbours are what make the label countable by hand again. Sold and retired records are
+   *  passed over, never named — a departed card cannot be the thing you count from — and
+   *  SINCE D116 so is an on-hand card nothing has named, because a figure is not something you
+   *  recognise while flipping a box. `prev`/`next` are null past the box's ends AND where
+   *  nothing that way carries a name; `PlaceNeighbor.skipped` says how many cards the walk
+   *  passed over to get there.
    *
    *  THE WHOLE FIELD IS NULL WHEN THE SERVER DEGRADED IT — a record in the store whose
    *  position will not read, the same event that nulls the denominator — and ABSENT on an
@@ -1141,6 +1156,21 @@ export type PlaceNeighbor = {
   /** D10's allocator number: `/inventory/<box>/<index>`, the `<index>.jpg`. Never drawn bare. */
   index: number
   name: string | null
+
+  /** How many on-hand cards the walk passed over to reach this one, because nothing has named
+   *  them (D116). Zero on a neighbour that really is the next card along, which is every row
+   *  in a fully identified box — 27 rows on the owner's store carry a skip.
+   *
+   *  IT IS DRAWN WHENEVER IT IS NONZERO, and that is not decoration. D30 forbids a sentence
+   *  that sends a hand to the wrong slot, and a landmark two cards away rather than one does
+   *  exactly that if the row does not say so. Departed cards are never counted here: the box
+   *  closed up over them (D58) so they are between nothing, and `Place.section_gaps` is where
+   *  they are counted instead.
+   *
+   *  Optional for the reason every late field in this file is — an older server sends a
+   *  neighbour without it, and `?? 0` is the honest read of that: it named the adjacent card
+   *  because it had no other rule. */
+  skipped?: number
 }
 
 // ------------------------------------------------------------------------------- the search
@@ -1232,6 +1262,21 @@ export type SearchGroup = {
    *  quantity at all. Merging them here would hide exactly the box that is not earning. */
   listed: { pushed: number; staged: number; live: number }
 
+  /** Copies sold HERE since the reading in `listed.live` was taken (D115).
+   *
+   *  BESIDE `listed` AND NOT INSIDE IT, because it is not a stage: `store/master.py` keeps it
+   *  out of `LISTING_STAGES` so D34's box-delete release cannot surrender it and it is not
+   *  summed into the store's stage totals. What a screen draws is `listed.live - sold_here`,
+   *  floored — see `app/src/cardState.ts:forSale`. */
+  sold_here: number
+
+  /** When `listed.live` was read, or null where nothing has read it. Drawn beside the figure:
+   *  a live count is never shown without its age (the owner, 2026-09-03). This is the stamp to
+   *  use rather than `Listing.at`, which every writer touches — including a sale, which after
+   *  D115 observes nothing about `live` and would make the age look fresher as the figure got
+   *  staler. */
+  live_as_of: string | null
+
   /** Copies still in the boxes — D7: "copies on hand is a count of UNSOLD positions".
    *
    *  NOT `copies.length`, AND THE TWO MUST NOT BE USED INTERCHANGEABLY. `copies` carries the
@@ -1247,8 +1292,14 @@ export type SearchGroup = {
    *  refuses to draw `2 of 4 live` and says why: `pipeline/join.py:LIVE_QUANTITY_CAP` is a
    *  configurable Python constant, and writing the 4 in TypeScript is a copy nothing keeps in
    *  step. The condition it named — "settled by the server reporting the cap" — is met here,
-   *  so a screen holding this group may draw the denominator. */
-  cap: number
+   *  so a screen holding this group may draw the denominator.
+   *
+   *  NULL IS THE ORDINARY VALUE NOW (D7, rewritten 2026-09-07). The standing cap was retired:
+   *  every copy a run holds that TCGplayer does not already have goes out, and a bound is
+   *  something one send asks for. A screen drawing this must render null as "no cap" rather
+   *  than as a missing number — and `listable` below, which is what a screen usually wants,
+   *  is `on_hand` in that case and stays a plain number. */
+  cap: number | null
 
   /** What the cap above comes to for THIS SKU — D7's `min(cap, on hand)`, computed by the
    *  server.
@@ -1628,7 +1679,10 @@ export type PricingSku = {
    *  caller draws instead is the caller's decision, and `#/pricing` follows `BoxBrowse`'s
    *  `no label · <key>`. */
   positions: { box: number; index: number; label: string | null }[]
-  listing: { pushed: number; staged: number; live: number } | null
+  /** The listing record as it stood WHEN THE RUN WAS JOINED, frozen into `pricing.json`.
+   *  `sold_here` rides with it since D115: `live` is the export's reading, and a screen
+   *  drawing the reading alone would over-report by exactly the copies sold since. */
+  listing: { pushed: number; staged: number; live: number; sold_here: number } | null
 }
 
 export type PricingTable = {
@@ -1768,7 +1822,10 @@ export type PricingWorklist = {
    *  fail to draw because one directory predates `pricing.json`. */
   skipped: { run: string; code: string; message: string }[]
   asked: string[]
-  live_cap: number
+  /** The store's STANDING cap, or null for none — which is ordinary since D7 was rewritten.
+   *  Not the cap a send applies: that one is typed on the ship bar and travels on the emit
+   *  request, so nothing here can report it. Advisory; no screen reads it today. */
+  live_cap: number | null
   /** The two run-wide figures a row is drawn against, off the newest run in the list. Null
    *  where no table could be read, which the screen falls back on rather than blanks. */
   threshold: string | null

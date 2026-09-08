@@ -315,7 +315,7 @@ function refuses(code: string, message: string): Sold {
  * field. The other three things that route searches on — number, SKU and set hint — are the
  * server's business and not this view's; nothing on his screen offers him a way to type one.
  */
-function searchAnswer(q: string, states: Store) {
+function searchAnswer(q: string, states: Store, soldHere = 0) {
   const text = q.trim().toLowerCase()
 
   const byName = new Map<string, FixtureCard[]>()
@@ -371,6 +371,11 @@ function searchAnswer(q: string, states: Store) {
       set_hint: null,
       condition: 'Near Mint',
       listed: { pushed: 0, staged: 0, live: onHand },
+      // D115: the stages and the counter travel apart, the way the wire sends them. Zero here
+      // keeps every existing case drawing exactly what it drew; the case at the end of this
+      // file overrides it.
+      sold_here: soldHere,
+      live_as_of: null,
       on_hand: onHand,
       cap: 4,
       /* D7's `min(cap, on hand)`, mirroring `capture_server.py`. Derived from `onHand` above so
@@ -406,6 +411,10 @@ type Mood = {
    *  two different parts of one screen: the cards can load while the search does not, and the
    *  list he already has must survive that. */
   searchFail?: boolean
+  /** Copies sold HERE since the store's last reading of `live` (D115). The instrument for the
+   *  one sentence this view gained: his count is the estimate, so it moves the moment a copy
+   *  is pulled, and the sentence is what says why. */
+  soldHere?: number
   /** THE LEDGER, WHICH THIS VIEW NOW READS BESIDE THE CARDS. `GET /orders` resolves every open
    *  order to the copies that fill it, and the view draws those as "Orders to fill" above the
    *  boxes. It defaults to a ledger with nothing open — the world every case below was written
@@ -595,7 +604,7 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(searchAnswer(asked, states)),
+      body: JSON.stringify(searchAnswer(asked, states, mood.soldHere ?? 0)),
     })
   })
 
@@ -2417,4 +2426,23 @@ test('a pooled card is never on his screen — not on the walk, not in a search,
   // The way back is intact, and the walk comes back without the pooled card, as always.
   await page.getByRole('button', { name: 'Show every card' }).click()
   await expectWalk(page, WALK)
+})
+
+test('a copy sold here since the count is said in his words', async ({ page }) => {
+  /* THE OWNER'S RULING, OVER MY OBJECTION (D115). I argued the Fulfiller should see the
+     estimate alone — `docs/DESIGN.md` bans jargon on this view and D5 says he gets no vote on
+     owner-side bookkeeping — and was overruled: both figures are drawn everywhere.
+
+     It earns its place. The count beside "for sale" is the ESTIMATE, so it moves the instant a
+     copy is pulled; without this sentence the number simply changes under him with no reason
+     given, which is the one thing this view's constraints table will not have. One sentence,
+     so D5's "nothing is explained twice" holds, and every word of it clears the banned-word
+     walk this file already runs. */
+  await openSearch(page, 'Eiscue', 2, [], { soldHere: 1 })
+  await expect(view(page)).toContainText('1 copy sold here since we last counted.')
+  /* AND THE COUNT BESIDE "for sale" IS THE ESTIMATE — two copies on hand, two read live, one
+     sold here since, so one is for sale. Drawing the raw reading would say two while he holds
+     one, which is the shelf disagreement D7 exists to prevent, on the one screen where a
+     person is standing at the shelf. */
+  await expect(view(page)).toContainText('1 for sale')
 })

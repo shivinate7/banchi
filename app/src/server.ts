@@ -402,15 +402,17 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
  * void. Measured on the owner's store before it went: it cost 15px on every copy row in a box
  * that had ever had a sale, and it was the reason the line wrapped to three lines at all.
  *
- * A NEIGHBOUR NOTHING HAS IDENTIFIED DEGRADES TO ITS SLOT — `#41`, never a blank. IT
- * DEGRADED TO THE INDEX UNTIL D92, and this paragraph recorded that as a known hazard for
- * two days rather than fixing it: `PlaceNeighbor.index` is the STORE key and D58 made the
- * drawn number a count of cards, so on a box with departures those diverge and the `#41`
- * named something that is not the slot you would count to. The note ended "widening it is a
- * decision about what the server sends", and that is the decision D92 took — `_company` now
- * sends `slot` beside `index`, this composes the slot, and nothing renders a bare `#` over a
- * store key. Measured when it went: box 3 was 76 apart, and 5 of its on-hand cards carry no
- * name, so those rows were the ones actually drawing it. */
+ * A NEIGHBOUR NOTHING HAS IDENTIFIED IS NO LONGER A NEIGHBOUR AT ALL (D116). It used to
+ * degrade to its slot — `#41`, and to its INDEX before D92 — which is a live card at a real
+ * count and was read as a sold card leaking into the ladder. It is neither: it is a card on
+ * the shelf that no identification ever named, seven of them on the owner's store, all seven
+ * queued and closed under D37. The server now walks past it to the nearest card it CAN name
+ * and says how many it passed, so the fallback below fires only for an older server.
+ *
+ * THE SKIP IS SAID RATHER THAN SWALLOWED. A landmark two cards away instead of one is a
+ * sentence somebody counts slots against and comes out one short, which is the one thing
+ * D30 says this sentence may never cause — so `said` carries the count, in the joined form
+ * the Fulfiller reads at 20px, and the ranked block draws it per side. */
 export type PlaceParts = {
   prev: PlaceNeighbor | null
   next: PlaceNeighbor | null
@@ -430,9 +432,20 @@ export function placeParts(place: Place | undefined): PlaceParts | null {
   if (prev !== null && next !== null) said = `between ${name(prev)} and ${name(next)}`
   else if (prev !== null) said = `after ${name(prev)}`
   else if (next !== null) said = `before ${name(next)}`
-  /* The one card whose box holds nothing else. No neighbours is no content, and null lets a
-     screen render nothing rather than chrome. */
+  /* The one card whose box holds nothing else — and, since D116, a card with no NAMED card
+     either side of it. No neighbours is no content, and null lets a screen render nothing
+     rather than chrome. */
   else return null
+
+  /* THE SKIPPED CARDS ARE STATED, AND ONE CLAUSE COVERS BOTH SIDES: every card the walk
+     passed over lies strictly between the two landmarks named above, whichever side it was
+     on, so "with 1 unidentified card in between" is exact for a one-sided skip and for a
+     two-sided one alike. Drawn only when it fires — 27 rows on the owner's store — because a
+     clause on every row is the gap clause the owner had removed in 2026-08-30. */
+  const skipped = (prev?.skipped ?? 0) + (next?.skipped ?? 0)
+  if (skipped > 0) {
+    said += `, with ${skipped} unidentified card${skipped === 1 ? '' : 's'} in between`
+  }
 
   return { prev, next, said }
 }
@@ -2184,7 +2197,16 @@ export async function emitMerged(
   runs: readonly string[],
   /* `splitThreshold` restores the old pair of files — `import-listed.csv` and
      `import-subthreshold.csv` — around D9's cut-off. Emit writes ONE `import.csv` without it. */
-  options: { listedOnly?: boolean; splitGames?: boolean; splitThreshold?: boolean } = {},
+  /* `cap` IS THIS SEND'S OWN BOUND AND ORDINARILY ABSENT (D7, rewritten 2026-09-07). There is no
+     standing cap any more: every copy this run holds that TCGplayer does not already have
+     goes out, and this is how one press says otherwise. Omitted rather than sent as a
+     sentinel, so "no cap" is the absence of a claim rather than a number meaning none. */
+  options: {
+    listedOnly?: boolean
+    splitGames?: boolean
+    splitThreshold?: boolean
+    cap?: number | null
+  } = {},
 ): Promise<RunStepResult & { runs: string[] }> {
   return (await request('/pipeline/emit', {
     method: 'POST',
@@ -2194,6 +2216,7 @@ export async function emitMerged(
       listed_only: Boolean(options.listedOnly),
       split_games: Boolean(options.splitGames),
       split_threshold: Boolean(options.splitThreshold),
+      ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
     }),
   })) as RunStepResult & { runs: string[] }
 }
@@ -2415,6 +2438,11 @@ export async function runStep(
     listedOnly?: boolean
     splitGames?: boolean
     splitThreshold?: boolean
+    /* THIS SEND'S CAP, ORDINARILY ABSENT (D7, rewritten 2026-09-07) — and here for the same
+       reason the three flags above are: a send of one and a send of three are the same
+       command, so an option offered on one and not the other would be answering a question
+       about how many runs happen to be open. */
+    cap?: number | null
   } = {},
 ): Promise<RunStepResult> {
   return (await request(`/pipeline/runs/${encodeURIComponent(name)}/${step}`, {
@@ -2431,6 +2459,10 @@ export async function runStep(
       listed_only: options.listedOnly,
       split_games: options.splitGames,
       split_threshold: options.splitThreshold,
+      /* Spread rather than sent as `undefined`, so "no cap" is the ABSENCE of a claim. The
+         route refuses `cap: 0` by name, and a screen spelling "none" as a number would turn
+         the ordinary press into a refusal. */
+      ...(typeof options.cap === 'number' ? { cap: options.cap } : {}),
     }),
   })) as RunStepResult
 }

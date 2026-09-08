@@ -130,15 +130,25 @@ would clamp to zero, and the SKU would never refill to D7's cap again. Counting 
 the right answer — two committed, room for two more, exactly what the per-position model
 computed before it was removed.
 
-### 2.4 — The optimistic decrement
+### 2.4 — The optimistic estimate
 
-A sale decrements the SKU's `live` count, floored at zero, before any join runs. That is an
-estimate, and D7 is explicit that this is not a weakness of it: D8 and D11 already put the
-authority in the export's `Total Quantity`, which `join` reads every run, so this number was
-never a second source of truth competing with the export. A run corrects whatever drift a
-between-run sale introduced — where its export was read AFTER the sale: the sale stamps
-`live_as_of`, and an export older than that stamp is kept out rather than putting the sold
-copy back (D87 amended).
+A sale takes the SKU's count down before any join runs, and since D115 it does that by being
+COUNTED rather than by decrementing. `live` is what the last export read and `sold_here` is
+what has sold here since it; the number a screen draws is the difference, floored at zero.
+
+That is an estimate, and D7 is explicit that this is not a weakness of it: D8 and D11 already
+put the authority in the export's `Total Quantity`, which `join` reads every run, so this
+number was never a second source of truth competing with the export. A run corrects whatever
+drift a between-run sale introduced.
+
+**Where that correction comes from is the part D115 inverted.** It used to be that the sale
+stamped `live_as_of` and an export older than that stamp was kept out rather than putting the
+sold copy back (D87 amended). A sale no longer stamps a reading at all — it observed nothing
+about TCGplayer — so an older export is no longer kept out; it is **adopted, and the counter
+simply survives it**, because `sales_pending` refuses to let a file cancel a sale it cannot be
+shown to postdate. The same answer by the opposite route, and it is the least obvious
+consequence of the change: the figure the operator sees is identical, and what moved is which
+of the two numbers underneath it the export was allowed to touch.
 
 The failure the ordering prevents is the opposite one. Holding the count back until a join
 would make the app disagree with the shelf the operator is standing in front of, which is the

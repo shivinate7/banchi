@@ -47,9 +47,12 @@ a.home-standing-row:active { translate: 0 1px; }
 .home-standing-row[data-press='no'] { background: transparent; box-shadow: none; min-height: 34px; padding-top: 0; padding-bottom: 0; }
 .home-standing-row[data-press='no'] .home-standing-rule { top: 2px; bottom: 2px; width: 3px; border-radius: var(--bn-r-full); }
 
+/* D118: a pointer state repaints, it never re-lays out. The rule thickens on hover with
+   `scale` rather than `width` — D50's own division, where the press dip is `translate` and a
+   screen's emphasis is a transform, so the two compose instead of fighting. */
 .home-standing-rule { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--tone);
-  transition: width var(--bn-t) var(--bn-ease); }
-a.home-standing-row:hover .home-standing-rule { width: 6px; }
+  transform-origin: left center; transition: scale var(--bn-t) var(--bn-ease); }
+a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
 .home-standing-ic { width: 34px; height: 34px; border-radius: var(--bn-r-sm); flex: none; display: grid;
   place-items: center; background: var(--tone-tint); color: var(--tone); }
 .home-standing-ic-live { animation: home-standing-pulse var(--bn-t-pulse) ease-in-out infinite; }

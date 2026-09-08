@@ -67,11 +67,19 @@ const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
  * than it — so it can understate freshness and can never overstate it, and it is worded as a
  * bound (`read within 4 days`) so it is not mistaken for a reading taken then. The per-SKU
  * age, which is exact and box-scoped, is on every line of the plan below. */
+/** The oldest `live_as_of` in the store — a BOUND on staleness, not any one SKU's age.
+ *
+ *  `live_as_of` AND NOT `at` SINCE D115, and the switch matters more than it looks. `at` is
+ *  stamped by every writer of every field, so before D115 a sale dragged this bound forward
+ *  and understated how stale the store's readings were; after D115 a sale writes the counter
+ *  and touches `at` while observing nothing at all about `live`, which would make the age look
+ *  FRESHER exactly as the figure got STALER. `live_as_of` is the field that means "when this
+ *  reading was taken" and it is the only honest source for a reading age. */
 function oldestReading(listings: Readonly<Record<string, Listing>>): string | null {
   let oldest: string | null = null
   let when = Number.POSITIVE_INFINITY
   for (const entry of Object.values(listings)) {
-    const at = entry?.at
+    const at = entry?.live_as_of
     if (typeof at !== 'string') continue
     const parsed = Date.parse(at)
     if (Number.isNaN(parsed) || parsed >= when) continue
@@ -1404,7 +1412,7 @@ function ReleaseListings({
           )}
         </Notice>
         {receipt.listings.map((row) => (
-          <ListingLine key={row.sku} row={row} at={listings[row.sku]?.at} />
+          <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} />
         ))}
       </div>
     )
@@ -1456,7 +1464,7 @@ function ReleaseListings({
               </Notice>
               <div className="boxops-lines">
                 {plan.listings.map((row) => (
-                  <ListingLine key={row.sku} row={row} at={listings[row.sku]?.at} />
+                  <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} />
                 ))}
               </div>
             </>

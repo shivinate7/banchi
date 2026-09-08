@@ -299,8 +299,14 @@
 .codes-task-body { font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.45; }
 .codes-task-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); padding-top: var(--bn-3); border-top: 1px solid var(--bn-line); }
 .codes-task-meta { font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.codes-task-go { display: inline-flex; align-items: center; gap: 4px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-accent); white-space: nowrap; transition: gap var(--bn-t-fast) var(--bn-ease); }
-.codes-task:hover .codes-task-go { gap: 7px; }
+/* THE ARROW TRAVELS; THE LABEL DOES NOT. This was a `gap` from 4px to 7px on hover, which is a
+   3px reflow of the whole footer — `.codes-task-meta` beside it is an ellipsised single line, so
+   it re-measures under a pointer that is still moving. `translate` on the mark alone composites
+   and says the same thing. `base.css`'s response floor makes the same omission for the same
+   reason, and the stability guard reads this shape by name. */
+.codes-task-go { display: inline-flex; align-items: center; gap: 4px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-accent); white-space: nowrap; }
+.codes-task-go > .bn-icon { transition: translate var(--bn-t-fast) var(--bn-ease); }
+.codes-task:hover .codes-task-go > .bn-icon { translate: 3px 0; }
 .codes-task-go, .codes-task-go > * { flex: none; }
 @media (max-width: 1099px) {
   .codes-task-foot { align-items: flex-start; }

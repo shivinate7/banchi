@@ -543,17 +543,34 @@ def _copies_out(
         # (a recorded export fetched fifteen minutes before its emit), and it now loses to
         # the newer settlement instead of overwriting it.
         reading = live_by_sku.get(sku)
-        live = (
-            entry.live_reading(
-                reading.quantity if reading else None, reading.as_of if reading else None
-            )
+        offered = reading.quantity if reading else None
+        as_of = reading.as_of if reading else None
+        read = (
+            entry.live_reading(offered, as_of)
             if entry is not None
             else (reading.quantity if reading else 0)
         )
-        live = max(0, int(live))
+        read = max(0, int(read))
+        # THE ESTIMATE, ARBITRATED BY THE SAME TWO RULES THE STORE WRITES BY (D115).
+        # `live_reading` picks which READING to believe and `sales_pending` picks which SALES
+        # survive it, so this line and `Listing.observe_live` cannot answer differently about
+        # one file — the property `_copies_out` has shared with the store since D87's
+        # amendment, extended to the second fact rather than abandoned for it.
+        #
+        # THE CAP READS THE ESTIMATE AND NOT THE READING, and `check_listing_commands` pins
+        # why: once an import has landed and `join` has drawn `staged` to zero, `claim` is 0
+        # and the estimate is the ONLY arm of the `max` below that can refill a SKU after a
+        # sale. On the reading alone, four live and two sold gives `max(4, -2) = 4`, no room,
+        # and D7's refill is silently retired.
+        live = max(0, read - (entry.sales_pending(as_of) if entry is not None else 0))
         live_now[sku] = live
         claim = entry.held if entry is not None else 0
-        if live <= 0 and claim <= 0:
+        # THE SKIP READS THE READING, SO THIS MAP'S KEY SET DOES NOT MOVE. A SKU whose reading
+        # is 1 and whose estimate is 0 must be RECORDED as zero rather than dropped: absent
+        # from this map, `SkuMatch.held_out` and `live_out` are None and `copies_out`/
+        # `live_now` fall back to the export row's own column — the pre-D87 answer, restored
+        # silently, on exactly the rows a sale just touched.
+        if read <= 0 and claim <= 0:
             continue
         # THE CEILING IS THE SALES, NOT THE STAMPED COPIES, AND THAT CHANGED UNDER THIS
         # BRANCH. It was `max(live, len(copies_not_sold(sku)))`, on the premise that we
@@ -577,9 +594,13 @@ def _copies_out(
         # double-count every sale the export has already decremented for us, and it takes
         # `check_listing_commands`' own re-emit idempotence case red: four pushed, one sold,
         # export silent, and the claim would drop to three and offer a fifth row.
+        # AND SO DOES THE CORROBORATION GATE. "Did the export report our copies live" is a
+        # fact about the FILE, and an estimate is not a file. Driven by the estimate this gate
+        # would switch off the moment the counted sales met the reading, taking
+        # `check_listing_commands`' re-emit idempotence case with it.
         sold = (
             len(inventory.positions_for_sku(sku)) - len(inventory.copies_not_sold(sku))
-            if live > 0
+            if read > 0
             else 0
         )
         out[sku] = max(live, claim - sold)
@@ -1238,7 +1259,7 @@ def load(
     rule: pricing.Rule = pricing.MATCH,
     basis: str = pricing.BASIS_MARKET,
     review_below: str = routing.CONFIDENCE_LOW,
-    live_cap: int = join.LIVE_QUANTITY_CAP,
+    live_cap: Optional[int] = None,
     threshold: Decimal = pricing.THRESHOLD,
 ) -> Resolved:
     """Read the run, build one catalog per game, walk the ladder, route every card.
