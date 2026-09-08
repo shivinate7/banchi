@@ -6707,14 +6707,16 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/3"]["place"]["neighbors"],
             {
-                "prev": {"index": 1, "slot": 1, "name": "Mantine"},
-                "next": {"index": 5, "slot": 3, "name": None},
+                "prev": {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
+                "next": None,
             },
-            "a card between two gaps names the nearest NON-TERMINAL records — the sold "
-            "card at 2 and the retired card at 4 are skipped as landmarks, never named: "
-            "a departed card cannot be the thing you count from (D30) — and each side "
-            "carries BOTH numbers (D92): the store key and D58's count, which this box "
-            "has already pulled apart (index 5 is the third card you can count to)",
+            "a card between two gaps names the nearest NON-TERMINAL, NAMED record — the "
+            "sold card at 2 and the retired card at 4 are skipped as landmarks, never "
+            "named: a departed card cannot be the thing you count from (D30) — and each "
+            "side carries BOTH numbers (D92): the store key and D58's count, which this "
+            "box has already pulled apart. `next` is NULL and not the unnamed card at 5: "
+            "past that card there is nothing this box can name, and a side with no "
+            "landmark answers the same null the box's own edge does (D116)",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -6735,14 +6737,63 @@ def check_place_neighbors(checks: Checks) -> None:
         )
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["prev"],
-            {"index": 3, "slot": 2, "name": None},
-            "a neighbour nothing has identified sends BOTH numbers and no name: `name` is "
-            "null ON THE WIRE, and the null is the wire's whole job — the `#2` a screen "
-            "shows for it is the app's rendering, and a placeholder string minted here "
-            "would be a second vocabulary nothing audits. THE TWO NUMBERS DIVERGE HERE "
-            "(D92) and that is the point of asserting them together: the card at index 3 "
-            "is the SECOND card in this box, because the sale at 2 closed up in front of "
-            "it, and `#3` was what the neighbour row drew until D92",
+            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 1},
+            "AND A CARD NOBODY HAS NAMED IS SKIPPED AS A LANDMARK TOO, WHICH IS D116 AND "
+            "IS THE REVERSE OF WHAT THIS CASE ASSERTED. It pinned `{index: 3, slot: 2, "
+            "name: None}` — the adjacent card, sent nameless for the app to draw as `#2` "
+            "— and the owner read that figure on their own store as a sold card leaking "
+            "into the ladder. It never was one: index 425 in box 3 is a live card at "
+            "count 270, one of 7 the model returned no name for. But a figure names "
+            "nothing you can recognise while flipping a box, so the walk passes it and "
+            "names Mantine instead. THE TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED "
+            "TOGETHER (D92): the card at index 3 is the SECOND card in this box. And "
+            "`skipped: 1` is the price — one on-hand card lies between Mantine and this "
+            "one, so a hand counting from Mantine lands one short unless the row says so",
+        )
+        checks.equal(
+            [
+                rows["4/3"]["place"]["neighbors"]["prev"]["skipped"],
+                rows["4/3"]["place"]["section_gaps"],
+            ],
+            [0, 2],
+            "and `skipped` COUNTS THE ON-HAND CARDS PASSED OVER AND NEVER THE DEPARTED "
+            "ONES: card 3 reaches Mantine across a sold record at 2 and answers 0, while "
+            "the same two departed records are its section's gaps. The box closed up over "
+            "them (D58), so they lie between nothing and a hand counting from Mantine "
+            "arrives at card 3 exactly — the two numbers count different things and this "
+            "pins them apart",
+        )
+
+        # --- a sold card is not a landmark, and the sale is what proves it ---------------
+        # THE OWNER ASKED THIS QUESTION OF A REAL SCREEN (2026-09-07) — "sold cards should
+        # anyway not be in the before/after" — reading a `#270` in the ladder as a departed
+        # card that had leaked in. It had not: the ladder had never named one, and the
+        # figure was an unnamed LIVE card, which is what D116 above is about. This case is
+        # the claim they could not see, made in the one place it can be seen: a card is
+        # named as a landmark, then SOLD through its own route, and the neighbour that used
+        # to name it must move to the next named card rather than keep pointing at it.
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(6))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["6/1"].name = "Mantine"
+            snapshot.inventory.cards["6/2"].name = "Thievul"
+        before_sale = capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]
+        checks.equal(
+            before_sale["prev"],
+            {"index": 2, "slot": 2, "name": "Thievul", "skipped": 0},
+            "with every card on hand, card 3's `prev` is the card next to it — the "
+            "landmark this case is about to sell",
+        )
+        capture_server.do_mark_sold(6, 2, {})
+        checks.equal(
+            capture_server.do_inventory()["cards"]["6/3"]["place"]["neighbors"]["prev"],
+            {"index": 1, "slot": 1, "name": "Mantine", "skipped": 0},
+            "AND SELLING IT MOVES THE LANDMARK RATHER THAN NAMING A SOLD CARD. Thievul is "
+            "not in that drawer any more, so a sentence naming him sends a hand to a slot "
+            "the card has left (D30) — the walk names Mantine, who has closed up to be "
+            "the card in front (D58), and `skipped` stays 0 because a departed card lies "
+            "between nothing at all",
         )
 
         # --- an unallocated tail is not a gap --------------------------------------------
@@ -6781,6 +6832,12 @@ def check_place_neighbors(checks: Checks) -> None:
         # sidecar are named after it — but it has no slot, so its block carries the pooled
         # nulls and the located cards' sentences never mention it.
         capture_server.do_capture(capture_payload(4, game="pokemon_code"))
+        # NAMED, AND THAT IS LOAD-BEARING SINCE D116. The walk now passes over an unnamed
+        # card as well as a pooled one, so an unnamed code card would be skipped for either
+        # reason and the case below could no longer tell the two rulings apart. Named, the
+        # only thing keeping it out of card 5's sentence is D24.
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["4/6"].name = "Rare Candy"
         pooled = capture_server.do_inventory()["cards"]["4/6"]["place"]
         checks.ok(
             not pooled["located"],
