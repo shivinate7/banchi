@@ -1110,13 +1110,15 @@ export type Place = {
    *  place to send somebody. The same rule `ServerStatus.queues` states for its own nulls. */
   fraction: number | null
 
-  /** The nearest records that are still physically in the box on either side of this one —
-   *  D30's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you can
-   *  count, and once a section has holes those two stop being the same number; the neighbours
-   *  are what make the label countable by hand again. Sold and retired records are passed
-   *  over, never named — a departed card cannot be the thing you count from. `prev`/`next`
-   *  are null past the box's ends; a neighbour's `name` is null when nothing has identified
-   *  it yet, and the screen degrades to its index (`#41`), never to a blank.
+  /** The nearest NAMED records that are still physically in the box on either side of this
+   *  one — D30's digital half. `Card 17` is the seventeenth SLOT, not the seventeenth card you
+   *  can count, and once a section has holes those two stop being the same number; the
+   *  neighbours are what make the label countable by hand again. Sold and retired records are
+   *  passed over, never named — a departed card cannot be the thing you count from — and
+   *  SINCE D116 so is an on-hand card nothing has named, because a figure is not something you
+   *  recognise while flipping a box. `prev`/`next` are null past the box's ends AND where
+   *  nothing that way carries a name; `PlaceNeighbor.skipped` says how many cards the walk
+   *  passed over to get there.
    *
    *  THE WHOLE FIELD IS NULL WHEN THE SERVER DEGRADED IT — a record in the store whose
    *  position will not read, the same event that nulls the denominator — and ABSENT on an
@@ -1154,6 +1156,21 @@ export type PlaceNeighbor = {
   /** D10's allocator number: `/inventory/<box>/<index>`, the `<index>.jpg`. Never drawn bare. */
   index: number
   name: string | null
+
+  /** How many on-hand cards the walk passed over to reach this one, because nothing has named
+   *  them (D116). Zero on a neighbour that really is the next card along, which is every row
+   *  in a fully identified box — 27 rows on the owner's store carry a skip.
+   *
+   *  IT IS DRAWN WHENEVER IT IS NONZERO, and that is not decoration. D30 forbids a sentence
+   *  that sends a hand to the wrong slot, and a landmark two cards away rather than one does
+   *  exactly that if the row does not say so. Departed cards are never counted here: the box
+   *  closed up over them (D58) so they are between nothing, and `Place.section_gaps` is where
+   *  they are counted instead.
+   *
+   *  Optional for the reason every late field in this file is — an older server sends a
+   *  neighbour without it, and `?? 0` is the honest read of that: it named the adjacent card
+   *  because it had no other rule. */
+  skipped?: number
 }
 
 // ------------------------------------------------------------------------------- the search

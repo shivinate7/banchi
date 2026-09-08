@@ -1210,6 +1210,7 @@ D112 The labels are tracked, the images are not, and an unmoved measurement is a
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
 D115 The reading is what the export said, and what has sold since is counted beside it
+D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
