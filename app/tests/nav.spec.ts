@@ -482,6 +482,12 @@ test('the sheet is reachable from the palette, and lists every letter the sideba
   }
 })
 
+/* `App.tsx`'s own `CHORD_MS`, mirrored rather than imported — a spec that imports the shell
+ * pulls React into the test process for one integer. What the case below needs from it is a
+ * BOUND that separates the two ways an arm can end, and half the window does that with room to
+ * spare. If `CHORD_MS` ever drops near this figure, move it. */
+const CHORD_MS = 1000
+
 test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
   await open(page, RING[0])
 
@@ -490,33 +496,70 @@ test('the armed leader is disarmed by arriving somewhere', async ({ page }) => {
      Arm the leader, step away with the other keyboard, and the sidebar must not still be
      claiming the next press.
 
-     READ AT THE MOMENT OF ARRIVAL, AND THAT IS THE WHOLE OF WHY THIS CASE IS WRITTEN THIS WAY.
-     The arm expires on its own after CHORD_MS, so an auto-retrying `not.toHaveAttribute` here
-     passes as soon as that timer fires whatever the code does — observed: with the disarm
-     deleted, the plain assertion went green. Two frames after the hash changes is long after
-     React has committed the arrival and its effects, and ~30ms into a 1000ms window. */
-  await page.evaluate((selector) => {
-    ;(window as unknown as { __armed?: string | null }).__armed = 'not read'
-    window.addEventListener(
-      'hashchange',
-      () => {
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            ;(window as unknown as { __armed?: string | null }).__armed =
-              document.querySelector(selector)?.getAttribute('data-armed') ?? null
-          }),
-        )
-      },
-      { once: true },
-    )
-  }, NAV)
+     WHAT IS MEASURED IS WHEN THE ARM ENDED, NOT WHETHER IT HAS ENDED YET, and that is the whole
+     of why this case is written this way. The arm expires on its own after CHORD_MS, so a plain
+     auto-retrying `not.toHaveAttribute` passes the moment that timer fires whatever the code
+     does — observed: with the disarm deleted, it went green. The first fix for that sampled at a
+     FIXED POINT instead, two animation frames after the hash changed, on the reasoning that
+     React would certainly have committed by then. IT IS NOT CERTAIN: measured on this tree, that
+     read fails ~3% of runs at fourteen workers, because under load the arrival's effect has not
+     committed two frames later and the case then reports a disarm that works as broken.
+
+     A FRAME COUNT IS A DURATION IN DISGUISE. So this waits for the disarm to actually happen —
+     no deadline of its own — and then asks the question the fixed sample was really asking:
+     did it happen because we ARRIVED, or because the clock ran out? A disarm on arrival lands in
+     a frame or two; an expiry lands at CHORD_MS. Half the window tells them apart, and the
+     deleted-disarm mutation this case exists to catch still fails it. */
+  await page.evaluate(
+    ({ selector, chord }) => {
+      const w = window as unknown as { __disarmMs?: number | null }
+      w.__disarmMs = null
+      window.addEventListener(
+        'hashchange',
+        () => {
+          const nav = document.querySelector(selector)
+          /* The shell going missing is not a disarm. Reported as a figure no bound can accept
+             rather than as a silent null, which would hang the poll below on the wrong subject. */
+          if (nav === null) {
+            w.__disarmMs = chord * 10
+            return
+          }
+          const t0 = performance.now()
+          if (nav.getAttribute('data-armed') === null) {
+            w.__disarmMs = 0
+            return
+          }
+          const seen = new MutationObserver(() => {
+            if (nav.getAttribute('data-armed') === null) {
+              w.__disarmMs = performance.now() - t0
+              seen.disconnect()
+            }
+          })
+          seen.observe(nav, { attributes: true, attributeFilter: ['data-armed'] })
+        },
+        { once: true },
+      )
+    },
+    { selector: NAV, chord: CHORD_MS },
+  )
 
   await page.keyboard.press(',')
   await expect(page.locator(NAV)).toHaveAttribute('data-armed', 'true')
 
   await page.keyboard.press('Meta+ArrowRight')
   await expect(page.locator(VIEW['#/capture'])).toBeVisible()
+
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __armed?: string | null }).__armed))
-    .toBeNull()
+    .poll(() => page.evaluate(() => (window as unknown as { __disarmMs?: number | null }).__disarmMs), {
+      message: 'the leader never disarmed at all after arriving',
+    })
+    .not.toBeNull()
+  const ms = await page.evaluate(
+    () => (window as unknown as { __disarmMs?: number | null }).__disarmMs as number,
+  )
+  expect(
+    ms,
+    `the arm outlived the arrival by ${Math.round(ms)}ms — at or near ${CHORD_MS}ms it was not ` +
+      'spent on arriving at all, it expired on its own clock.',
+  ).toBeLessThan(CHORD_MS / 2)
 })
