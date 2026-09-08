@@ -1587,9 +1587,12 @@ workers against 12 CPU hogs. Section 11 above carries the capture server's versi
 - **A second user, or a second machine over a shared filesystem.** The lock lives under `~`,
   which is where the contention is for a single-operator rig and is wrong the moment that stops
   being true.
-- **`make screenshot`.** Argued out of scope in D122 rather than overlooked: `playwright
-  screenshot` renders one page at a time, and queueing a single render behind a ten-minute suite
-  buys nothing measured. A render taken during a fleet run is slower, not wrong.
+- **`make screenshot`.** Argued out of scope in D122 rather than overlooked: it renders one page
+  at a time — a serial loop over the manifest, one `chromium.launch()` per view — and queueing a
+  single render behind a ten-minute suite buys nothing measured. A render taken during a fleet run
+  is slower, not wrong. (D122 named `playwright screenshot` here for a day; #223 had replaced that
+  CLI with `scripts/screenshot.mjs` hours earlier. The shape is what the exclusion rests on, so
+  the shape is what both documents say now.)
 
 **WHAT WOULD MAKE THIS SECTION SHORTER.** A measurement — two `make check`s side by side, timed
 and diffed for failures that are not in the code. It costs one session and would replace the

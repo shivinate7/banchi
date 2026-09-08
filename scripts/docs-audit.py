@@ -9446,10 +9446,17 @@ def _check_claim_text(target: Path) -> str:
 # Makefile recipe that reaches one has to go through the lock.
 SUITE_LOCK_SCRIPT = ROOT / "scripts" / "suite-lock.py"
 
-#: What makes a script a fleet. `playwright test` is the parallel runner; `playwright
-#: screenshot`, which `scripts/screenshot.sh` uses, drives one page at a time and is
-#: deliberately NOT covered — see D122 on where that line is drawn and why.
+#: What makes a script a fleet: `playwright test`, the only runner here that draws pages in
+#: PARALLEL. `scripts/screenshot.sh` and `scripts/screenshot.mjs` render one page at a time and
+#: are deliberately NOT covered — see D122, which argues the exclusion on the SHAPE of the run
+#: rather than on a command name, having named a stale one for a day and been corrected.
 _FLEET_RUNNER_RE = re.compile(r"\bplaywright\s+test\b")
+
+#: The runners this row reads besides the Makefile and app/package.json. A fleet does not have to
+#: arrive as an npm script: `scripts/screenshot.sh` is a shell script that shells out to a node
+#: script that drives Playwright, and either could grow `playwright test` without touching a
+#: recipe. Reading them is what makes the previous comment a checked claim rather than a promise.
+FLEET_RUNNER_SCRIPTS = ("screenshot.sh", "screenshot.mjs")
 
 
 def _npm_run_re(script: str) -> "re.Pattern[str]":
@@ -9468,6 +9475,13 @@ def check_suite_lock(report: Report) -> None:
     script this row recognises as a fleet, that is REPORTED rather than passed: the runner
     was renamed or the suite moved, and either way a guard that silently starts covering
     nothing is the failure it exists to prevent.
+
+    IT READS THE OTHER RUNNERS TOO, AND THAT IS THE DIRECTION D122 GOT WRONG ONCE. A fleet does
+    not have to arrive as an npm script — `scripts/screenshot.sh` shells out to
+    `scripts/screenshot.mjs`, which drives Playwright directly, and either could grow
+    `playwright test` without a recipe changing. D122's first draft excluded that path by NAME
+    (`playwright screenshot`), and the name was stale the day it merged. Reading the files is
+    what turns "those render one page at a time" from a promise into a checked claim.
 
     WHAT IT DOES NOT CHECK: that the lock WORKS. `make suite-lock-selftest` does that, by
     violating it. This row settles only that the thing which spends the machine is behind it.
@@ -9527,9 +9541,27 @@ def check_suite_lock(report: Report) -> None:
                 "runs `playwright test` directly without taking the machine-wide lock "
                 "(D122).")))
 
+    # The runners D122 excludes by SHAPE. Each is expected to exist and to stay serial; a
+    # `playwright test` appearing in one is a fleet that reaches no recipe this row can read.
+    for name in FLEET_RUNNER_SCRIPTS:
+        target = ROOT / "scripts" / name
+        if not exists(target):
+            findings.append(Finding("scripts/{0}".format(name), (
+                "does not exist, and D122 excludes `make screenshot` from the lock on the\n"
+                "  strength of what this file does. Either it moved, or the exclusion needs\n"
+                "  re-arguing against whatever replaced it.")))
+            continue
+        for n, line in enumerate(read(target).splitlines()):
+            if _FLEET_RUNNER_RE.search(line) and "suite-lock.py" not in line:
+                findings.append(Finding("scripts/{0}:{1}".format(name, n + 1), (
+                    "runs `playwright test`, so it is a fleet. D122 excludes this file from\n"
+                    "  the machine-wide lock because it renders one page at a time; that\n"
+                    "  argument does not survive a parallel runner. Take the lock, or reopen\n"
+                    "  D122's exclusion.")))
+
     report.add("suite lock", MECHANICAL, findings,
-               "{0} fleet script{1}, every caller behind the lock".format(
-                   len(fleets), "" if len(fleets) == 1 else "s"))
+               "{0} fleet script{1} behind the lock, {2} serial renderers still serial".format(
+                   len(fleets), "" if len(fleets) == 1 else "s", len(FLEET_RUNNER_SCRIPTS)))
 
 
 def check_check_census(report: Report) -> None:
