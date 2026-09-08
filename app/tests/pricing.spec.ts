@@ -2542,6 +2542,140 @@ const SPAN = {
   ],
 }
 
+/* THE SAME BAR AT A PHONE'S WIDTH, WHICH NOTHING HAD LOOKED AT (D117).
+ *
+ * `app/tests/phone.spec.ts` sweeps every route at 390 and cannot reach this: the ship bar needs a
+ * loaded run and that file carries no pricing fixtures, so its own bar case was silently vacuous
+ * — it guarded on `if (await bar.count())` and the bar was never there. The fixtures are here, so
+ * the case is here, which is `fulfillment.spec.ts`'s WIDTHS idiom: assert at the second width in
+ * the spec that owns the data.
+ *
+ * MEASURED BEFORE THE FIX: 430px of an 844px viewport, and `Pick a run` underneath it — a control
+ * the operator could see and could not press. The bar wrapped to four rows because the cap
+ * sentence and two long checkbox labels each took one; the sentence is hidden on a phone now and
+ * the labels have short forms. */
+test('the ship bar leaves the phone a screen to work on, and covers no control', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  /* TWO RUNS, WHICH IS THE BAR THIS IS ABOUT. `#/pricing` draws two different ship bars: a
+     single-run one, and — at `loaded.length >= 2` — the one carrying the cap sentence and both
+     split checkboxes. That second bar is what stood 430px tall. A one-run fixture renders the
+     short bar and every mutation of the fix passes against it, which is how this case was
+     vacuous the first time it was written. */
+  await open(page, {
+    worklist: {
+      runs: SPAN.runs,
+      /* FORTY ROWS, so the list runs past the fold and the header's own controls sit behind the
+         bar rather than above it. Two rows is a fixture where nothing CAN be covered and every
+         mutation of the fix passes against it — which is what this case did on its first run,
+         in 2.5 seconds. */
+      skus: Array.from({ length: 40 }, (_, at) => ({
+        ...sku({ sku: `9${String(at).padStart(6, '0')}`, name: `Card ${at}` }),
+        in: [{ run: SPAN.runs[0]!.run, add_to_quantity: 1 }],
+        claimed_add: 1,
+        over_cap: false,
+      })),
+    },
+  })
+  await expect(page.locator('.pricing-ship')).toBeVisible()
+
+  /* THE BOUND IS A MEASUREMENT, AND IT MOVED ONCE ON PURPOSE. It was 180 — the bar was the
+     status, the two split checkboxes, and the primary — and D7's rewrite added a real control
+     to it: `at most [ ] each`, the cap this press asks for. That does not fit beside the two
+     checkboxes at 390 (160 + 90 + 148 against 334 of usable width), so the bar is genuinely a
+     row taller and the honest number is 210, not 180.
+     WHAT IS NOT NEGOTIABLE IS THE REST OF THIS CASE. 204px is 24% of the viewport and covers
+     nothing; the defect this was written for was 430px — half the screen — with `Pick a run`
+     unpressable underneath it. A bound that only ever moves up is worthless, so the two
+     assertions below are the ones that bite, and this one is the early warning.
+     Measured on this fixture: 152 before the cap control, 204 with it, 430 on the owner's own
+     store before the cap sentence and the checkbox labels had phone forms. */
+  const height = await page.locator('.pricing-ship').evaluate((el) => el.getBoundingClientRect().height)
+  expect(height, `the ship bar is ${Math.round(height)}px tall at 390 — it is meant to be three rows`).toBeLessThan(210)
+
+  // its own controls answer for themselves
+  expect(await barControlsBlocked(page)).toEqual([])
+
+  /* AND NOTHING ELSE ON THE SCREEN IS PERMANENTLY UNDERNEATH IT. `barControlsBlocked` looks
+     inside the bar; what failed was a control OUTSIDE it — `Pick a run` and `Give this run its
+     own cut-off`, both visible and both unpressable.
+     THE TEST IS "CAN IT BE SCROLLED CLEAR", NOT "IS IT CLEAR RIGHT NOW", which is the property
+     that actually separates a sticky bar from the tab bar. Content passes under the tab bar all
+     day and that is fine, because `.bn-shell-main` pads its foot and a scroll brings anything
+     out. The ship bar had no such padding, so a control under it stayed under it. Each candidate
+     is scrolled to and asked again. */
+  const look = async () =>
+    page.evaluate(() => {
+      const out: string[] = []
+      for (const el of document.querySelectorAll('button, a[href]')) {
+        const r = el.getBoundingClientRect()
+        if (r.width === 0 || r.top < 0 || r.bottom > window.innerHeight) continue
+        const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+        /* THE SHELL'S OWN FIXED CHROME IS NOT THIS BAR'S DOING. Content scrolls under the phone
+           top bar and the tab bar by design — `.bn-shell-main` pads its foot for exactly that —
+           so a row that happens to sit under the app bar at the moment of the sweep is not a
+           finding, and counting it made this case fail one run in three. */
+        if (at !== null && at.closest('.bn-topbar, .bn-tabbar') !== null) continue
+        if (at !== null && !el.contains(at) && !at.contains(el)) {
+          out.push(`${(el.textContent ?? '').trim().slice(0, 30)} <- ${at.className}`)
+        }
+      }
+      return out
+    })
+
+  /* A CONTROL UNDER THE BAR RIGHT NOW IS NOT THE DEFECT — one that stays there is. The tab bar
+     covers content all day and that is fine, because a scroll brings it out. So each candidate
+     is scrolled to and asked again, and only the ones still underneath are reported. `Pick a
+     run` failed that second question: the bar was 430px, the header sat inside it, and no
+     scroll position existed where the control was clear. */
+  const stuck = await page.evaluate(async () => {
+    const out: string[] = []
+    const rest = () => new Promise((go) => setTimeout(go, 60))
+    for (const el of document.querySelectorAll('button, a[href]')) {
+      const first = el.getBoundingClientRect()
+      if (first.width === 0 || first.height === 0) continue
+      const at0 = document.elementFromPoint(first.left + first.width / 2, first.top + first.height / 2)
+      if (at0 === null || el.contains(at0) || at0.contains(el)) continue
+      el.scrollIntoView({ block: 'center' })
+      await rest()
+      const r = el.getBoundingClientRect()
+      if (r.top < 0 || r.bottom > window.innerHeight) continue
+      const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      if (at !== null && at.closest('.bn-topbar, .bn-tabbar') !== null) continue
+      if (at !== null && !el.contains(at) && !at.contains(el)) {
+        out.push(`${(el.textContent ?? '').trim().slice(0, 30)} <- ${at.className}`)
+      }
+    }
+    return out
+  })
+  expect(stuck, stuck.join('\n')).toEqual([])
+
+  /* AND AT THE FOOT, which is the position the foot padding is for. The shell pads
+     `.bn-shell-main` by the tab bar's height so anything can be scrolled clear of it; this
+     screen pads by `--pricing-ship-h` for the same reason, and without it the last rows of a
+     forty-row list have nowhere to go. */
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await page.waitForTimeout(250)
+  /* AT MAX SCROLL THERE IS NOWHERE FURTHER TO GO, so what is under the bar here is under it for
+     good. The assertion is geometric rather than a hit test: the last row has to END above the
+     bar's top edge. A hit test at the centre passes while a row is half-covered, and half a row
+     under a glass panel is the state this padding exists to prevent. Measured with the padding:
+     the last row ends at 432 and the bar starts at 456. */
+  const gap = await page.evaluate(() => {
+    const bar = document.querySelector('.pricing-ship')!.getBoundingClientRect()
+    const rows = [...document.querySelectorAll('.pricing-row')]
+    const last = rows[rows.length - 1]!.getBoundingClientRect()
+    return Math.round(bar.top - last.bottom)
+  })
+  expect(gap, `at the foot of the list the last row runs ${-gap}px into the ship bar`).toBeGreaterThanOrEqual(0)
+  const foot = await look()
+  expect(foot, foot.join('\n')).toEqual([])
+
+  // no sideways scroll, which is the other floor CLAUDE.md publishes for this width
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(over, `the pricing screen scrolls sideways by ${over}px at 390`).toBeLessThanOrEqual(0)
+})
+
+
 test('one answer is written once, for the store, however many runs hold the card', async ({
   page,
 }) => {

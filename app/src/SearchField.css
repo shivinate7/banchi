@@ -109,3 +109,11 @@
   font-size: 24px;
   padding: var(--bn-3) var(--bn-1);
 }
+
+/* THE THUMB FLOOR (D117). This sheet had no breakpoint of any kind — the box reads
+   `--bn-control-h-lg` so it lifts, but the input a thumb taps into and the clear button beside
+   it carried literals: 37px and 24px at 390. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .search-field-input { min-height: var(--bn-control-h-sm); }
+  .search-field-clear { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); }
+}

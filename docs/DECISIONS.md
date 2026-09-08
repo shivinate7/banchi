@@ -7119,7 +7119,6 @@ reading `at` was defensible; after it, a sale touches `at` while observing nothi
 **What would reopen this**: an operator who wants a price or a quantity they assert here to
 outrank what TCGplayer reports. This entry keeps the export as the authority on the figure and
 this store as the authority only on what it has done since.
-
 ## D116 — A card nobody has named is not a landmark, and the distance is what keeps the skip honest
 
 **The after/before ladder names the nearest NAMED card still in the box on each side.**
@@ -7203,6 +7202,88 @@ enough to be worth ranking rather than stating, or the neighbour row becoming a 
 which is D92's own reopening condition and would make the passed-over card reachable instead of
 merely counted.
 
+## D117 — The thumb floor is the kit's, the measurement is the hit area, and a phone-width spec is what reads it
+
+**Built 2026-09-07, on the owner's instruction to review the mobile build.** CLAUDE.md has
+published two floors for this width since the Banchi rebuild and neither had a reader: *"Look at
+it at 1440, 820 and 390 … No horizontal page scroll at 390"* and *"anything a thumb presses is
+40px or more. The control-height tokens raise themselves under 767px and on a coarse pointer, so
+do not hand-roll a mouse-sized control on a phone."* Twenty-five controls hand-rolled one.
+
+**NOTHING IN `app/tests/` COULD HAVE SEEN IT.** `nav.spec.ts` scopes itself to `.bn-side` on
+purpose. `cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is
+`display: none` below 768 — so that file cannot run at a phone width even in principle, and its
+own comment names the phone drawer as a second copy it does not walk. Of twenty specs only
+`fulfillment.spec.ts` set a phone viewport, for the Fulfiller's one route.
+**The owner-side shell had no test at any width**, so every shortfall below was invisible to
+`make check` and `make design-check` together.
+
+**THE FLOOR BELONGS TO THE KIT, AND PATCHING IT PER SCREEN IS HOW IT HID.** `.bn-check` has no
+height at all — an `inline-flex` label around a fixed 16×16 box, measuring 19.5px at 390 — and
+`Markdown.css` lifted its own copy and said so in a comment: *"The check is still somebody
+else's."* `BoxBrowse.css` did the same for `.bn-menu-item`. Both are deleted; `kit.css` holds
+`.bn-check`, `.bn-seg-item`, `.bn-tab`, `.bn-menu-item`, `.bn-toast-action` and `.bn-toast-close`
+now, and every screen gets them rather than the two that happened to notice.
+
+**THE LIFT BLOCK IS LAST IN `kit.css`, AND THAT IS LOAD-BEARING.** Every rule in it lifts a base
+rule above it at the same specificity, so it has to come after them or it does nothing. That is
+not hypothetical: `Markdown.css` records the same mistake being made and shipped — *"a phone lift
+written before the base rules at the same specificity, dead on arrival"* — and the kit's own
+`.bn-seg-item` phone rule was written at the top of the sheet, where it lost the cascade at 28px.
+
+**THE ARM IS THE POINTER, NOT THE WIDTH.** `tokens.css` has raised `--bn-control-h*` on
+`(max-width: 767px), (hover: none) and (pointer: coarse)` since it was written, and
+`docs/DESIGN.md` says why: an iPad in portrait is 820px wide and all thumb. Ten stylesheets
+carried width-only blocks full of control heights, so a tablet got none of them.
+
+**THE MEASUREMENT IS THE HIT AREA, NOT THE BOX, WHICH IS WHAT REMOVES THE ALLOW-LIST.**
+`BoxBrowse`'s ticks draw at 22px and take the tap at 46 through an `::after`
+with a negative inset; the composer's stage chips do the same. A box-only assertion calls both
+of those failures and needs a list of names to forgive them — and a list of names is a list
+somebody adds to. Probing the four cardinal points of the required 40px box asks the question
+the floor is actually about: can a thumb landing 19px off centre still press it.
+**It found a pad that was there and did nothing**: the row button is a sibling in the same grid and paints
+later, so it took every press in the 12px to the tick's right, and the tick answered 46px tall
+and 34px wide until a `z-index` put the pad above the sibling it was drawn to overlap.
+
+**ONE SURFACE IS SWEPT FOR THE BOX INSTEAD, AND IT IS THE ONE THAT MATTERS MOST.** `#/gallery`
+draws specimens side by side to be compared, so every probe there lands on the next specimen and
+the probe cannot be asked. What can be asked is the box — CLAUDE.md's floor verbatim — and that
+sweep is the only thing in the product that draws every kit control. Measured: with the sheet
+swept for the box, deleting `.bn-check`'s floor turns `phone.spec.ts` red; swept for the probe,
+it does not.
+
+**AND THE SWEEP SCROLLS, because `elementFromPoint` answers about the viewport.** One pass at the
+top of a route measures the first 844px of it. `#/gallery` is thirteen thousand pixels long and
+its checkbox sits at y=13124, so a single-pass version of this file stayed green through three
+mutations that deleted kit floors outright.
+
+**A STICKY BAR MAY NOT LEAVE A CONTROL UNPRESSABLE.** `#/pricing`'s ship bar stood 430px of an 844px viewport — half the screen, four wrapped rows —
+with `Pick a run` underneath it: visible, and impossible to press at any scroll position. The cap
+sentence is hidden on a phone (the pill beside it already states the scope) and both split
+checkboxes have short forms, which is 152px.
+**The obvious second fix was built and then refused**: padding the page by the measured
+`--pricing-ship-h` added 172px of dead scroll under a
+list the operator is walking, and with the bar back to two rows `.bn-page`'s own 64px foot
+already leaves the last row 24px clear. `pricing.spec.ts` asserts that clearance geometrically,
+so whatever provides it is free to change.
+
+**THE FIXED CHROME IS NOT AN OBSTRUCTION, AND THE LIST IS NAMED RATHER THAN DERIVED.**
+Content scrolls under the top bar and the tab bar by design — `.bn-shell-main` pads its foot by
+the tab bar's height plus the safe area for exactly that. "Anything sticky" would excuse the ship
+bar, which is the case this file exists to catch; "anything fixed" would miss `#/gallery`'s own
+sticky index strip. Three strips are written out in the spec and a fourth is a deliberate edit.
+
+**What is NOT decided here.** D50's three interaction floors are still derived from a mouse:
+`base.css` has no coarse-pointer arm at all, its response floor argues entirely from a hover
+sweep of 315 controls, and its 1px press dip is a mouse-derived number applied to a finger. That
+is a real question and it is not this entry's.
+
+**What would reopen this:** a second Playwright project at a device profile rather than
+per-test viewports. `playwright.config.ts` has one chromium project today, and the phone width is
+set per case; a project would run every existing spec at both. It doubles `design-check`'s
+runtime, which is why it is named here rather than taken.
+
 ## D118 — A press changes what is on the screen, never where the rest of it is
 
 **A control's response is the product's, not each screen's — and that has to cover what the PAGE does around the press, not only what the control says to the pointer.** Built 2026-09-07 on the owner's report: *"I am getting a lot of screen shake when I am in inventory and am marking something sold, things should not be moving around when I hit buttons it's too janky — how do we resolve this (not just inventory, but any/everywhere)."*
@@ -7268,3 +7349,357 @@ The copies list is what absorbs the difference because it is the only part of th
 **A copy an open order was waiting on still moves the panel's contents by 46px when it is sold**, because `wantedOf` names only copies that are still on hand and the claim line goes with it. That is `Inventory.tsx`'s own documented behaviour — a pulled copy already reads `Sold` — and reserving 46px of blank on every unclaimed card to hold a line that is usually absent would be padding rather than stability. **Nothing outside the panel moves for it**, which is the floor this entry actually sets.
 
 **What would reopen this**: a card whose copies list is long enough that one and a half visible rows is the wrong trade, or an operator who would rather the panel grew than scrolled.
+## D119 — The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
+
+**Built 2026-09-07, on the owner's verdict about their own screen.** `#/inventory`'s card
+detail drew the copy the walk was standing on **twice**, about 150px apart, in two different
+registers: a `LOCATION` hero panel with a 40px address, its own position bar and a solid
+`Mark sold`; and again as the first row of *Every copy of this card*, where its bar was
+deliberately suppressed so the two lenses would not read as a rendering fault.
+
+Their words: *"I actually really hate this new setup where it highlights the current card in
+picture separately from the other copies. It's unintuitive. I want for Card 1 to have the exact
+same layout as cards 36 and 91 below it, frankly the entire top right blurb box can be
+deleted."*
+
+**The code had already conceded it.** `Inventory.tsx`'s own comment called the duplication "the
+trade", and what the trade bought was emphasis on a copy the UI elsewhere refuses to recommend
+— `CardLocations.css` says the current row's rail is neutral "deliberately not *take this
+one*". Emphasis nobody asked for, paid for in a second register.
+
+### What the deletion is, and what it is not
+
+`LocationCard` is gone. `noBar` drops its `current` term, so the copy the walk stands on draws
+its bar like every other row; **`goesTo` keeps its `current` term** (D45 — a walk-to on the row
+the walk already stands on goes nowhere). What marks that row is a `Viewing` pill in the cell
+every other row uses for its own pills, and a neutral rail. **The pill and the rail were put to the owner and kept**: with no hero, they are the only thing tying the ~450px photograph on the
+left to a row, and they change no part of the row's shape.
+
+**Nothing the hero drew is lost.** The `Wanted` claim, the pooled marker, `Mark sold` and
+`Retire` were already on every row; the box name moved from a separate element into the
+address itself, as `PositionLabel`'s `boxNote` — which is what every other row has always
+drawn. The missing-position-label `Notice` was **dropped rather than relocated**, and only
+after checking it could fire: `do_inventory` omits the flat label and the `place` block
+together, so that record arrives as `place === undefined`, which the lone-copy branch already
+names by key.
+
+### The card with no SKU and no name is a one-copy list, not a second panel
+
+`GET /search` matches on SKU or name and refuses an empty query, so a card the pipeline has
+never identified cannot be reached at all — that branch rendered the hero and a bare notice,
+and deleting the hero would have left it an explanation with no address, no bar and no doors.
+It builds the group instead: `Inventory.tsx:loneGroup`, shaped **field for field to be the answer `capture_server.py:do_search`'s own loose branch would have given** over a bag of one.
+`listable` stays what the server would send and is **not** rewritten to 0 — the client does not
+get to disagree with the store about a number the store computes. What changes is the
+**sentence**: a group with no SKU draws no live figure and no `Pushed · Staged · headroom`
+line, because `emit` has written no listing record and every one of those numbers is a
+structural zero under a `Room for 1 more live` nothing can keep. Derived from `sku` rather than
+passed as a prop, so it also reaches the 65 name-but-no-SKU cards already arriving through the
+search path's loose bag.
+
+**The measurement that decided the shape of this, and it corrects a stale one.**
+`app/tests/inventory.spec.ts` carried *"629 of 682 records are captured-and-never-identified —
+92% — … the branch 92% of the store draws through"*, and argued for coverage on it. Read out of
+`inventory/store.sqlite` on 2026-09-07: **1,625 cards, 1,553 carrying a SKU, 65 with a name and no SKU, and 7 with neither** — four tenths of one percent. The figure was true when written,
+against a store the pipeline had not yet run over. The branch is a real edge case and still
+worth its case; what it is not is the common screen, and the spec's title and comment now say
+the measured thing.
+
+### The undo lands where the sale was pressed, and it fits the slot D118 reserved
+
+A sale's undo — the draining twenty-second clock and the `Undo` — was the hero's alone; the row got a bare `Undo` with no clock. With the hero gone the row is where a sale is taken back, so the clock came with it (the owner: *"it'd be a shame to lose that animation work"*).
+
+**What could not come with it is the panel, and D118 is why.** That entry reserved `.card-locations-action` at the button pair's own 137x28 precisely so a press cannot resize the slot it lands in. The kit's `.bn-receipt` is ~268px wide and 36px tall and fits neither way, and both were measured on this branch rather than reasoned about: **given a grid row of its own it grew the row from 175px to 213px on the press** — main's own stability case caught it by name — and put in the action cell it grows the cell and shoves the address, which `CardLocations.css` forbids against D40's 231px wrap point.
+
+**So the row draws the clock and the button, at the size the buttons already were.** The sentence is not lost and is not duplicated: the state pill two cells to its left already reads `Sold`, and the toast this sale posted carries `Marked sold.` with the same clock and the same `Undo`. The drain's track is a **token** here where `kit.css` paints it as a white alpha — correct on an inverted panel, invisible on a row sitting on `--bn-surface`.
+
+`primary` survives as a **size**, not a shape, and it is now exactly one thing: the phone's sticky action bar, which has no state pill beside it and so still draws the whole receipt.
+
+**This is the second design this branch built for the receipt.** The first — a grid row under `:has(.bn-receipt)` — was written, looked at, and shipped nothing, because D118 landed on main while this branch was open and made it a defect. The measurement that killed it is recorded above rather than the design being quietly replaced.
+
+### What was measured and refused
+
+The right column loses roughly 235px flat: the hero's ~300px and its gap come out, and the
+current row gains ~81px back from the bar it now draws. The photograph is unchanged. **No balance fix was taken.** Shrinking the photo column is what D32 and D38 spend the pixel budget
+against — D38 *raised* it on the owner's own ask — and padding the void is the defect D40
+measured at 41.99%. The visible consequence is a ragged bottom under a one-copy card at a pane
+of 560px or more, which is the honest cost of removing content rather than a thing to fill.
+
+### What D71 loses, and where it went instead
+
+`.inventory-location-label` was one of `PositionLabel`'s site rules and **the last renderer in the product of `lead='path'` with a `.position-void`** — the combination its re-rank fires
+under. The copies list, the order picker and the walk are all `lead='slot'`. Re-pointing that
+assertion at the row would have compared 11px against 11px and passed for the wrong reason, so
+it moved to `app/tests/gallery.spec.ts`, where the two specimens sit side by side and the kit
+sheet is now the rule's only renderer. **D71 itself is not edited**: its "five sites" is a
+2026-08-30 measurement, and measurements are not rewritten to match a later tree.
+
+**Moving it found the sheet had never drawn the rule.** `.kit-poslabel` set `--pos-slot` without
+the `font-size: var(--pos-slot)` every real site pairs with it, so the re-rank's `0.45em`
+resolved against an inherited 14px and clamped to exactly the 11px a live path gets — the
+departed specimen was drawn identically to the live one, on the page whose job is drawing the
+difference. Fixed in `Gallery.css`, and now asserted.
+
+### What is not weakened
+
+`the copies of a card cannot be positioned by the pipeline console` guarded "the answer is above
+the fold" against `.inventory-location`; the answer is the current ROW now, and it re-points.
+`a copy row draws how far into the box AND how far into the section` counted **two** position
+bars — one hero, one list — and the total is still two for a two-copy card, for an entirely
+different reason; a total cannot tell "one per row" from "two on one row", so the claim is now
+per row with the total asserted after it. Both were observed red under their mutations before
+being kept, along with the two new gallery claims, the relocated re-rank, and the no-SKU list.
+
+**One assertion was written and then removed for failing that test.** A `Walk to` count of zero
+on the lone-copy branch stayed green when `onGoTo` was threaded onto it, because `OwnerRows`
+suppresses the walk-to on the current row anyway and the lone copy is always the current one. It
+is replaced by a comment saying so and pointing at the case that can fail: D45's real claim needs
+a group with more than one copy in it.
+
+**What would reopen this**: an operator who wants the address readable at arm's length while
+standing at the boxes. That is the one thing the hero did that a 22px row does not, and it is
+named here as the cost of the deletion rather than as a reason to keep a split hierarchy.
+
+## D120 — The shell speaks one brand at every width, and the phone bar is a rail
+
+**Built 2026-09-07, on the owner's instruction, after they asked what the mobile build gets wrong.**
+The 2026-09 rebuild put the lockup in the desktop sidebar
+(D102, `docs/specs/logo.md` §16) and left the phone chrome exactly as it was before the lockup
+existed. Nothing was decided about the phone; it simply was not asked about.
+
+**SO THE PRODUCT WORE TWO BRANDS, AND WHICH ONE YOU SAW DEPENDED ON HOW WIDE THE WINDOW WAS.**
+Above 1023px: 番地 over BANCHI, in the mark's own brackets. Below 768px: a `Logo` tile beside a
+Manrope wordmark in the top bar, and the same tile beside a wordmark AND the tagline in the More
+drawer — three brand objects in one shell. On dark the bar's tile is a dark superellipse on
+`--bn-surface-glass` over a near-black page and very nearly disappears, which is the failure §16
+gave the sidebar's bracket a chrome gradient to avoid, at a size where it is worse.
+
+**THE LOCKUP CANNOT GO IN THE TOP BAR, AND THE ARITHMETIC WAS ALREADY WRITTEN DOWN.** Its floor
+is kanji 32 (§11), which is a 102 × 75 block; `--bn-topbar-h` is 52px. That is the same refusal
+the 64px rail takes and the same measurement behind it — 番's counters close at about kanji 30,
+before the roman gives out and long before the bracket does. A bar tall enough for it is 84px,
+which is 10% of an 844px viewport spent on a brand row on every screen; considered, refused.
+
+**SO THE BAR DRAWS WHAT THE RAIL DRAWS, AND THAT IS NOT A NEW RULING.** §18 settled the same
+question for the browser tab on the owner's own instruction — *"the tab should be what the
+collapsed sidebar is"* — citing §1: *"with the card removed the same brackets become an empty
+slot, which is the in-product mark."* The phone bar is the rail's case one breakpoint down, so it
+takes the rail's drawing and the rail's paint. Unlike the tab's flat gold, it is an in-app surface
+and keeps `--bn-lockup-metal`, which `kit.css` resolves per theme.
+
+**AND THE DRAWER IS THE SIDEBAR AT A PHONE'S WIDTH** — same nav, same groups, same foot, one tap
+away instead of always on — so it draws the sidebar's brand at the sidebar's number. Kanji 40 was
+taken over 32 by forced choice, drawn in the real drawer at 390 and 320 in both themes: both fit,
+both leave the nav clear of a scroll, and 40 is the sidebar's own value, so there is one number rather
+than two to keep in step.
+
+**ONE DRAWING, THREE SURFACES, NO BRANCH.** `BrandSlot` in `app/src/App.tsx` is rendered by all
+three; `--bn-brand-open` is inherited and `App.css` sets it to 0 on `.bn-topbar-brand`; the morph
+reads the slot's own width, so the bar gets the rail end from one declaration. `Lockup` did not
+change for any of this, which is what D102's generated geometry bought.
+
+**`every card has an address` LEFT THE PRODUCT, AS THE RULING AND NOT A SIDE EFFECT.**
+§16's rule is that the lockup replaces the mark, the wordmark and the tagline together;
+the drawer was the tagline's last home, since the sidebar dropped it when the lockup landed and
+`#/gallery` uses it only as a type specimen. The owner ruled to let it go. Home's lede still ends
+*"Every one has an address."*, which is the sentence a person actually reads and is bound to the
+count in front of it. `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag` are deleted.
+
+**THE DRAWER'S SERVER LINE GAINED THE CARD COUNT** the sidebar has always drawn. It said only
+`Server online` here, so a phone could not see how big the store it was answering for was.
+
+**WHY NOTHING CAUGHT ANY OF THIS.** `app/tests/nav.spec.ts` scopes itself to `.bn-side` on
+purpose; `app/tests/cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is
+`display: none` below 768, so that file cannot run at a phone width even in principle; and of
+twenty specs only `app/tests/fulfillment.spec.ts` sets a phone viewport at all. The shell had no
+test at any width. `app/tests/brand.spec.ts` covers the phone bar and the drawer now, and carries
+the size floor §15 asked for and nothing built — `Lockup` refuses below `LOCKUP_FLOOR = 32`.
+
+**WHAT IS NOT DECIDED HERE.** The owner-side thumb floor across the screens is a separate pass
+and a separate PR: `.bn-check` renders a ~20px target at 390 from the kit, and about two dozen
+screen-level controls hard-code a height instead of reading `--bn-control-h*`. This entry is the
+brand only.
+
+**What would reopen this:** a top bar tall enough for a kanji-32 lockup, or a compact horizontal
+cut of the lockup that fits 52px — which would be new §13 work, not a size change.
+## D121 — The front page says what is owed, and the library is drawn as the work that made it
+
+**Built 2026-09-07, on the owner's instruction.** The lede under Home's greeting read
+*"100 cards on hand in 4 boxes · 19 sold. Every one has an address."* Six replacements were
+drawn and all six were rejected at once; the owner's verdict was that none of them were doing
+it. They were right, and the reason is structural rather than a matter of treatment.
+
+**THE PAYLOAD WAS THE PROBLEM, NOT THE PRESENTATION.** Every one of the six restated the store's
+aggregate size, and that figure is (a) drawn again by the six-stage spine 24px below and by the
+Boxes panel below that, (b) already known to the only person who ever writes to this store, and
+(c) unchanged between most two consecutive openings of the page. Duplicated, already known and
+static is not information; it is furniture. Six pieces of furniture in six shapes. The test the
+replacement had to pass is whether reading it changes what the operator does in the next ten
+minutes.
+
+**WHAT THE SLOT SAYS NOW IS WHAT WILL NOT FIX ITSELF**, ranked, in one sentence, with the verb
+in it. `app/src/standing.ts` holds the order and nothing else decides it: copies an order has
+already sold that the store cannot find, then copies to pull, then the review queue, then runs
+owing a price, then a live run, then cards photographed and never sent to a run, then clear. It
+is a module and not a component branch because a ranking that decides the front page of this
+product every time it opens has to be somewhere a person can find, argue with and test.
+
+**THE NULL INVARIANT IS THE LOAD-BEARING PART.** Three distinct non-values — loading, failed,
+and read-but-refused — are each ranked at the row they would have answered, and `ok` is
+reachable only from a complete reading, so green can never be painted over a gap.
+`ServerStatus.queues.review` is `number | null` for exactly this reason, and that type's own
+comment already said a reader must render the gap and never coerce the null to zero, because a
+count that is wrong in the direction of "there is nothing to do" is worse than no count at all.
+
+**THE HERO ENDS IN ONE BUTTON.** "Find a card" is gone: it duplicated `,I`, the palette, the nav
+item and the whole Inventory screen, and existed to stop the primary being lonely. `CLAUDE.md`
+described this screen as ending in *one action* while it drew two; that sentence is now true
+rather than needing an edit. The standing line is CONDITIONAL and the button is STANDING, which
+is why the line joins them rather than replacing them — on a fresh store the line has nothing
+to press.
+
+**THE LIBRARY CAME BACK, BUT AS THE GROUND AND NOT THE HEADLINE.** The owner's amendment was
+that the replacement lacked *"the library at a glance — no way of seeing my prior session nor
+entirety of library."* Both now sit BELOW the button, behind a hairline, in `--bn-ink-3`, so a
+reader's eye lands on what to do first. The figure is `status.cards - states.moved` — two
+integers already on Home's critical path — and never `Σ boxes[].cards`, which counts both halves
+of D83's move, nor a sum over `boxes[].on_hand`, whose member is null exactly when a box could
+not be counted. The code this replaced summed that nullable field behind
+`b.cards - b.sold - b.retired - b.moved`, inventing a figure in precisely the case where the
+server had refused to give one.
+
+**THE UNIT IS A SITTING, AND IT IS NEITHER A DAY NOR A RUN.** A day is wrong because the
+operator shoots across midnight in UTC — two of six real sittings fall on a different local day
+than their UTC day, so every bucket moves with the timezone, and one real UTC day held two
+sittings eighteen hours apart. A run is wrong three times over: three of the owner's nine runs
+share one `created_at`; that stamp is the IDENTIFY date rather than the capture date; and
+`counts.cards_in` is not what a run photographed at all — `pipeline/join.py` builds it as
+`len(cards)` over the run's whole `identifications.json`, so it is the box's running total,
+rewritten on every re-join, and nine real manifests sum to 1,908 against 1,625 real records.
+A sitting is recovered from `captured_at`, which is present on all 1,625 of them.
+**The 30-minute gap is a measurement and not a preference**: 5 minutes gives 12 sittings,
+15 gives 7, and 30, 60, 120 and 240 all give 6.
+
+**THE DRAWING IS A RIBBON AND A RUG, AND ITS AREA IS ITS CARDS.** Each block is as wide as the
+minutes that sitting took and as tall as the cards an hour it ran at, so `minutes × rate ÷ 60 =
+cards` is an identity and the marks still sum to the figure printed above them while the height
+carries something that figure cannot. Read back off the drawn geometry the six blocks give
+543 / 172 / 152 / 138 / 555 / 65, which are the true counts. The axis is CUMULATIVE MINUTES
+because 113 minutes inside 9.4 days is 0.84% of the width — a calendar axis draws every block
+as a hairline, 2.1px at the widest and 0.04px at the newest. The calendar is not dropped but
+demoted to the rug below the rule, where a constant-size tick is the only mark that survives
+that scale. The window is bounded — a plinth for everything older, then the last eight sittings
+— so the drawing never grows with history: nine marks at six sittings and nine at two hundred.
+
+**COLOUR IS SPENT ON PACE, AND IT IS REDUNDANT ON PURPOSE.** The ramp runs from ink to
+`--bn-accent`, which is this system's ACTION hue and not a status, so the foot makes no claim
+about whether anything is wrong — the standing line above owns warn, live and ok, and that
+separation is the whole reason the foot was achromatic to begin with. Hue and height both carry
+the pace, so a reader who cannot separate the hues loses nothing.
+**Vermilion is spent only while a run is actually running**, because vermilion means live
+everywhere else in this product; marking a sitting live for being recent would be the one
+dishonest paint available here.
+
+**The ceiling is a physical fact.** Full height is 5,906 cards an hour — the rig's own measured
+0.6095 s per card. Without the ceiling drawn, a block 1.5px tall reads as a MISSING block rather
+than as a slow sitting, which is the opposite of the truth.
+
+**Fixed in the same change, because it ships into this hero either way**: `Home.css` set
+`pointer-events: none` on `.home-hero-art` with nothing restoring it, so the deck's own `<a>`,
+its hover lift and its focus ring were reachable by keyboard alone — for as long as the deck has
+been a link, under fifteen lines of comment saying it opens the card it is showing. The wrapper
+keeps the rule, so the empty-state deck stays inert; `a.home-deck` restores it for itself.
+
+**What retires this:** a second reader of the standing line's rank. It is a policy with one
+consumer today, and the moment a second screen wants "what is owed" the ranking should move to
+the server rather than being derived twice.
+
+## D122 — The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
+
+**Built 2026-09-07, after a session spent two re-runs on failures that were not in its code.**
+In the `magical-kalam-0230c3` worktree a full `make design-check` reported
+**18 failures, every one in `shipping.spec.ts` or `run-panel.spec.ts`** — with the WHOLE of
+shipping failing rather than individual assertions. Re-run alone, nothing else touched:
+**52 passed**. Another worktree, `cap-on-demand`, was running its own Playwright suite at the same
+moment — about **90 browser processes between them on a 15-core Mac**. Earlier
+in the same session the same collision produced one intermittent failure in `nav.spec.ts` and one
+in `capture-undo.spec.ts`, each of which also passed in isolation, and each of which cost its own
+re-run.
+
+**D43 IS THE ENTRY THIS ONE FINISHES.** That decision gave every checkout its own dev port, its
+own capture port and its own store, so two trees can be worked in at once without either
+answering for the other — and it closed a defect of exactly this shape, a green
+`make design-check` in a worktree that had asserted against the main tree's server.
+**The CPU is the one resource it could not give them a copy of.**
+`app/playwright.config.ts` is `fullyParallel`
+at Playwright's default worker count, which is half the cores — seven here — each worker a
+Chromium context, plus a Vite dev server compiling the module graph for every one of them. Two
+trees is 4x oversubscription against a rig sized for one.
+
+**THE REPO HAD ALREADY DIAGNOSED THE FAILURE AND STILL COULD NOT SEE IT.**
+`app/playwright.config.ts` records it against a deliberately starved rig — *"a context can fail to
+render at all rather than slowly: with the allowance raised to 120s, 10 of 80 still failed and one
+took 122s. A wait cannot answer that"* — and that comment is about oversubscription WITHIN one
+run, where the config can at least count its own workers. Across two runs in two checkouts there
+is nothing to count with. So the answer is not a longer timeout and not fewer workers; it is
+mutual exclusion, and it has to live somewhere both runs can see.
+
+**WHAT IS NOT THE CAUSE, so nobody re-derives it.** Not the capture server: `app/tests/shell.ts`'s
+`sealEveryTest` aborts every capture request, and D43 gives each checkout its own capture port, so
+two suites never touch one server. The contention is CPU and memory and nothing else — which is
+also why the lock must live outside every checkout, and why `.serve/` was the wrong home for it.
+
+**IT IS AN ADVISORY `flock`, WHICH IS WHY THIS FEATURE HAS NO STALE-LOCK PATH.**
+The file is `~/.pkmnscan/locks/browsers.lock`. `scripts/serve.py` proves a pid is still the process it
+recorded by comparing `ps -o command=` against the argv it stored, and it has to: a port is the
+resource there and it outlives the process that held it. Here the OS owns the whole question — an
+advisory lock is released when the holder exits, however it exits, including `kill -9`, a crashed
+session and a reboot. The pid, the tree, the command and the start time are written INTO the
+locked file and are read for one purpose only: naming the holder in the refusal. `make
+suite-lock-selftest` proves the point by killing a holder with -9 and asserting the lock is free.
+
+**IT REFUSES RATHER THAN QUEUES, AND THE REFUSAL EXITS 75.** A suite that silently waits for
+another tree looks hung, which is its own failure mode and one the 2026-09-07 session also hit —
+ten minutes pass before anybody suspects a queue rather than a wedge. So the default names the
+tree, the pid, how long it has been running and the command it is running, and offers three ways
+on. `make design-check ARGS=--wait` queues instead, out loud: it announces itself on the first
+line and says so again every thirty seconds.
+**75 rather than 1, because `playwright test` exits 1 when tests fail**
+— a guard built to stop false failures must not produce one. 75 is
+EX_TEMPFAIL, `make` prints `Error 75`, and nothing else in this repo returns it.
+
+**THE LOCK IS NAMED FOR THE RESOURCE, NOT FOR `design-check`.** It is `browsers`, so the second
+browser fleet to land here joins this lock rather than inventing a second one that excludes
+nothing. `scripts/docs-audit.py`'s `suite lock` row reads the RUNNER for the same reason: any npm
+script whose command is `playwright test` is a fleet, and every Makefile recipe reaching one has
+to go through the lock — because the guard is one line of one recipe, which is exactly the kind of
+line a new target gets written without. The row fails in both directions and refuses to go quiet
+if the runner is renamed past it.
+
+**`make screenshot` IS DELIBERATELY OUTSIDE IT.** `scripts/screenshot.sh` drives
+`playwright screenshot`, one page at a time in a shell loop — one browser, not a fleet, and it
+already needs a dev server somebody started by hand. Putting it behind the same lock would make a
+single render queue behind a ten-minute suite for no measured benefit. `playwright test` versus
+`playwright screenshot` is the line, and it is the line the audit row reads.
+
+**`make harness` AND `make check` DO NOT TAKE IT, AND EACH HAS ITS OWN REASON.** The harness runs
+at every turn end from the Stop hook: a refusal there is a false failure at exactly the moment a
+session is trying to finish, which is the thing this entry exists to stop, and its nine tests are
+one Python process rather than fourteen browsers. `make check` shells out to `tsc`, `eslint` and
+`ruff` — two concurrent runs is a handful of single-core processes against a 15-core machine, an
+order of magnitude off the load that produced the eighteen failures, and it is not a load anything
+here has measured a failure from.
+**That is reasoning and not a measurement, and `docs/DEBTS.md` §16 records it as such**,
+along with what would reopen it.
+
+**THE ESCAPE HATCH IS `PKMNSCAN_SUITE_LOCK=off` AND IT IS PRINTED IN EVERY REFUSAL**, in the shape
+`PKMNSCAN_MAIN=off` and `PKMNSCAN_FOREGROUND=ok` already use. A guard with no visible way past it
+is one somebody disarms by deleting the line from the Makefile, where nothing would catch it.
+`PKMNSCAN_LOCK_DIR` moves the lock directory and exists for the self-test alone — same shape as
+`scripts/janitor.py --sessions DIR`, and for the same reason: a self-test that took the real lock
+would refuse a suite running in another checkout.
+
+**What would reopen this:** a measurement showing two concurrent `make check`s producing a failure
+that is not in the code, which would put `lint` and `typecheck` behind a lock of their own; or a
+second Playwright fleet whose cost makes a queue better than a refusal, which is a change to the
+default rather than to the mechanism.

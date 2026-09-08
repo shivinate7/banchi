@@ -155,21 +155,16 @@
 }
 @media (max-width: 767px) {
   .markdown-top { padding-left: var(--bn-4); }
-  .markdown-top .bn-btn-icon,
-  .markdown-foot .bn-btn,
-  .markdown-step .bn-btn,
-  .markdown-step a.bn-btn { --btn-h: 40px; }
   .markdown-body,
   .markdown-foot { padding-left: var(--bn-4); padding-right: var(--bn-4); }
-  /* ONE THUMB TARGET THIS SHEET STILL INHERITS SHORT, and it is a kit gap of the kind named
-     beside `.bn-btn-sm` up there: `.bn-check`'s label measured 19.5px at 390 against CLAUDE.md's
-     40. The other two were the log well's fold toggle at 28px and its Copy at 36px, and they were
-     a rule-order defect in this very file rather than a kit gap — a phone lift written before the
-     base rules at the same specificity, dead on arrival. They are fixed at their own sites now
-     (see `.runslog-toggle`), so every `LogWell` in the product gets them and not only this one. */
-  /* The log well's toggle and its Copy are lifted at their own sites now, unscoped, so every
-     `LogWell` gets them rather than only this sheet's. The check is still somebody else's. */
-  .markdown .bn-check { min-height: 40px; }
+  /* THE CHECK IS NOBODY'S ORPHAN ANY MORE (D117). This sheet carried `.markdown .bn-check
+     { min-height: 40px }` and a comment saying the gap was "still somebody else's" — a kit
+     control lifted at one call site, which is exactly how a kit gap hides. `kit.css` holds the
+     floor now, on the pointer rather than the width, so every `.bn-check` in the product gets
+     it and this scoped copy is deleted rather than left to disagree.
+     The log well's toggle and its Copy were a rule-order defect in this very file rather than a
+     kit gap — a phone lift written before the base rules at the same specificity, dead on
+     arrival — and they are fixed at their own sites (see `.runslog-toggle`). */
   /* One column: two number fields side by side at 390 leave neither a readable label. */
   .markdown-fields { grid-template-columns: minmax(0, 1fr); }
   /* The files drop to their own line rather than squeezing the stamp beside them. */
@@ -212,4 +207,13 @@
   padding-top: var(--bn-4);
   margin-top: var(--bn-2);
   border-top: 1px solid var(--bn-line);
+}
+
+/* THE THUMB FLOOR, ON THE POINTER (D117). Lifted out of this sheet's width-only phone block and
+   off its 40px literal, for the reason `kit.css`'s own floor block gives. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  .markdown-top .bn-btn-icon,
+  .markdown-foot .bn-btn,
+  .markdown-step .bn-btn,
+  .markdown-step a.bn-btn { --btn-h: var(--bn-control-h-sm); }
 }

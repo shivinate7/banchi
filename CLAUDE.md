@@ -107,7 +107,38 @@ make dev            # Vite app. :5173 in the main tree, its own port in a worktr
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
-make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser
+                    #   IT CAN FAIL FOR THE RIGHT REASON SINCE 2026-09-07. Until then the only
+                    #   failure was an empty file, so a render MISSING AN ELEMENT — a valid,
+                    #   plausible-looking PNG — passed, and a session looked at an incomplete
+                    #   page and called a screen fine. Each manifest line may name the elements
+                    #   its render must prove it drew; the renderer hides one, captures again,
+                    #   and refuses the render when not a pixel changed.
+                    #   AND IT RENDERS THE TREE IT IS RUN FROM, since the same day (D43).
+                    #   scripts/views.txt names the main checkout's :5173 as a CONVENTION —
+                    #   a tracked file cannot name a port derived from one directory's path —
+                    #   and the script reads `server/ports.py:dev_port` and substitutes a
+                    #   worktree's own before rendering. Before this, `make screenshot` in a
+                    #   worktree photographed the MAIN tree's app over the owner's real store
+                    #   and the renders looked entirely correct.
+make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT TAKES A
+                    #   MACHINE-WIDE LOCK FIRST, AND IT IS THE ONE THING D43 COULD NOT MAKE
+                    #   PER-CHECKOUT (D122): every tree has its own ports and its own store,
+                    #   and the CPU is shared. This is the target that spends all of it —
+                    #   `fullyParallel` at half the cores, each worker a Chromium context over
+                    #   its own Vite server. Two trees running it at once starve each other and
+                    #   BOTH report failures that are not in the code: 18 of them on
+                    #   2026-09-07, all 52 green on a re-run alone.
+                    #   IT REFUSES rather than queues, naming the tree that holds the lock, and
+                    #   exits 75 so a refusal can never read as a failing suite. `ARGS=--wait`
+                    #   queues instead and says so every thirty seconds — a silent wait reads
+                    #   as a hang, which is the other half of what that session hit.
+                    #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
+                    #   refusal. `make harness` and `make check` deliberately do NOT take it;
+                    #   docs/DEBTS.md §16 is why, and which half of that is measured.
+make suite-lock-selftest # the lock, exercised by violating it — including a holder killed with
+                    #   -9, which is the whole argument for `flock` over a pidfile. In `check`,
+                    #   never in the git hook. `PKMNSCAN_LOCK_DIR` sends it at a throwaway
+                    #   directory so it never takes the real lock.
 make demo           # seed a demo store and record the wire into a fixture bundle.
                     #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE
                     #   `fetch` (`server.ts:request`) and addresses every photograph through
@@ -161,9 +192,9 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + janitor-selftest + port-agreement +
-                    #   set-hint-agreement + screen-freshness + sigil-check +
-                    #   ignore-check + lint + vale + typecheck.
+                    #   merge-selftest + janitor-selftest + suite-lock-selftest +
+                    #   port-agreement + set-hint-agreement + screen-freshness +
+                    #   sigil-check + ignore-check + lint + vale + typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
@@ -394,9 +425,15 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 sentence**, and see "the census" below for what enforces that.
 
 ```
-#/             Home           the product as a picture: the six-stage spine
-                              (Capture → Runs → Review → Pricing → Orders → Shipping) with the
-                              live figure under each stage, the boxes, the runs, one action.
+#/             Home           the product as a picture: ONE RANKED SENTENCE saying what the
+                              store is waiting on (D121, `standing.ts` — and the null invariant
+                              in it is the load-bearing part), one action, then the library
+                              drawn as the work that made it — sittings clustered from
+                              `captured_at`, each block as wide as its minutes and as tall as
+                              its cards an hour, so its area is its card count. Then the
+                              six-stage spine (Capture → Runs → Review → Pricing → Orders →
+                              Shipping) with the live figure under each stage, the boxes, the
+                              runs.
                               Every figure is the one that stage's own screen draws, read from
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
@@ -1234,16 +1271,24 @@ D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
 D115 The reading is what the export said, and what has sold since is counted beside it
 D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
+D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-width spec is what reads it
 D118 A press changes what is on the screen, never where the rest of it is
+D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
+D120 The shell speaks one brand at every width, and the phone bar is a rail
+D121 The front page says what is owed, and the library is drawn as the work that made it
+D122 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
 ```
 
-**THE INDEX SKIPS ONE NUMBER BETWEEN D116 AND D118, AND THE GAP IS DELIBERATE.** D118 was
-numbered while three branches were in flight over the two numbers above D115: two worktrees both
-claimed the lower one, main took one of those on 2026-09-07 and it is in this list, and a third
-holds the one between — which therefore exists in no tree that can be read from here and cannot
-be named here without this file citing a heading that is not in `docs/DECISIONS.md`. The rule is
-the one this repo has always kept: renumber your own, never another's. A gap that closes on the
-next merge is the cheaper of the two failures.
+**THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
+WOULD.** D118 was numbered while three branches were in flight over the two numbers above D115:
+two worktrees both claimed the lower one, main took one of those on 2026-09-07, and a third held
+the one between — which existed in no tree that could be read from main and so could not be named
+in this list without citing a heading `docs/DECISIONS.md` did not have. D117 is that third, and
+it arrives with this branch and slots into its own gap rather than appending after D119, because
+`decision index` reconciles this list against the headings IN ORDER. **The rule that produced all
+of it is the one this repo has always kept: renumber your own, never another's** — and the other
+of the two branches did exactly that, moving up rather than taking a number main had since
+filled.
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here
 without being adopted: the envelope walk and the copies picker were declined in favor of this

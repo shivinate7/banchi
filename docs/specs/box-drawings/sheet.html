@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Banchi — the store as a drawing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../../../app/src/tokens.css" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 48px 64px;
+    background: var(--bn-bg); color: var(--bn-ink);
+    font-family: var(--bn-font-ui); font-size: var(--bn-fs-base);
+    -webkit-font-smoothing: antialiased;
+  }
+  .sheet { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+
+  .opt { display: flex; flex-direction: column; gap: 14px; }
+  .opt-tag {
+    font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); letter-spacing: var(--bn-tracking-caps);
+    text-transform: uppercase; color: var(--bn-ink-4);
+    border-top: 1px solid var(--bn-line); padding-top: 10px;
+    display: flex; gap: 10px; align-items: baseline;
+  }
+  .opt-tag b { font-family: var(--bn-font-ui); font-weight: 600; color: var(--bn-ink-2); letter-spacing: 0; text-transform: none; font-size: var(--bn-fs-md); }
+
+  /* the hero context every option is drawn inside */
+  .hero { display: flex; flex-direction: column; gap: var(--bn-3); }
+  .bn-eyebrow {
+    font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps);
+    text-transform: uppercase; color: var(--bn-ink-4);
+  }
+  .home-title {
+    font-family: var(--bn-font-display); font-size: 44px; font-weight: 800;
+    letter-spacing: -0.035em; line-height: 1; margin: 0;
+  }
+  .home-lede { font-size: var(--bn-fs-xl); color: var(--bn-ink-3); margin: 0; }
+  .home-lede strong { color: var(--bn-ink); font-weight: 700; }
+
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--bn-font-mono); font-variant-numeric: tabular-nums; }
+
+  /* ── A. ledger strip ─────────────────────────────────────────── */
+  .ledger { display: flex; align-items: stretch; gap: 0; }
+  .ledger-cell { display: flex; flex-direction: column; gap: 2px; padding: 0 18px; }
+  .ledger-cell:first-child { padding-left: 0; }
+  .ledger-cell + .ledger-cell { border-left: 1px solid var(--bn-line); }
+  .ledger-fig {
+    font-family: var(--bn-font-display); font-size: 30px; font-weight: 800;
+    letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .ledger-lab {
+    font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps);
+    text-transform: uppercase; color: var(--bn-ink-4);
+  }
+  .ledger-cell[data-quiet] .ledger-fig { color: var(--bn-ink-3); font-weight: 700; font-size: 26px; }
+
+  /* ── B. occupancy bar ────────────────────────────────────────── */
+  .occ { display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
+  .occ-head { display: flex; align-items: baseline; gap: 8px; font-size: var(--bn-fs-lg); color: var(--bn-ink-3); }
+  .occ-head strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .occ-bar { display: flex; gap: 3px; height: 34px; }
+  .occ-seg {
+    border-radius: var(--bn-r-sm); background: var(--bn-accent-tint);
+    box-shadow: inset 0 0 0 1px var(--bn-accent-tint-2);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); font-weight: 600;
+    color: var(--bn-accent); letter-spacing: 0.02em;
+  }
+  .occ-seg[data-sold] { background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line); color: var(--bn-ink-4); }
+  .occ-legend { display: flex; gap: 16px; font-size: var(--bn-fs-sm); color: var(--bn-ink-4); }
+  .occ-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .occ-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--bn-accent-tint-2); }
+  .occ-dot[data-sold] { background: var(--bn-surface-2); box-shadow: inset 0 0 0 1px var(--bn-line-strong); }
+
+  /* ── C. address readout ──────────────────────────────────────── */
+  .addr { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .addr-plate {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 14px; border-radius: var(--bn-r-full);
+    background: var(--bn-surface); border: 1px solid var(--bn-line);
+    box-shadow: var(--bn-shadow-1);
+    font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); font-weight: 500;
+    color: var(--bn-ink-2); letter-spacing: 0.02em;
+  }
+  .addr-plate .sep { color: var(--bn-ink-4); }
+  .addr-plate .live { width: 7px; height: 7px; border-radius: 50%; background: var(--bn-live); }
+  .addr-rest { font-size: var(--bn-fs-lg); color: var(--bn-ink-3); }
+  .addr-rest strong { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* ── D. big figure ───────────────────────────────────────────── */
+  .big { display: flex; align-items: flex-end; gap: 22px; }
+  .big-fig {
+    font-family: var(--bn-font-display); font-size: 68px; font-weight: 800;
+    letter-spacing: -0.045em; line-height: 0.85; font-variant-numeric: tabular-nums;
+  }
+  .big-unit { display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
+  .big-unit .u { font-size: var(--bn-fs-lg); font-weight: 600; color: var(--bn-ink-2); }
+  .big-side { display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; border-left: 1px solid var(--bn-line); padding-left: 22px; }
+  .big-side div { font-size: var(--bn-fs-md); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+  .big-side b { color: var(--bn-ink-2); font-weight: 700; }
+
+  /* ── E. segmented pill ───────────────────────────────────────── */
+  .strip {
+    display: inline-flex; align-items: stretch;
+    border: 1px solid var(--bn-line); border-radius: var(--bn-r-full);
+    background: var(--bn-surface); box-shadow: var(--bn-shadow-1); overflow: hidden;
+  }
+  .strip-cell { display: flex; align-items: baseline; gap: 7px; padding: 9px 18px; }
+  .strip-cell + .strip-cell { border-left: 1px solid var(--bn-line); }
+  .strip-fig { font-size: var(--bn-fs-2xl); font-weight: 700; font-family: var(--bn-font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .strip-lab { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-weight: 500; }
+  .strip-cell[data-accent] { background: var(--bn-accent-tint); }
+  .strip-cell[data-accent] .strip-fig { color: var(--bn-accent); }
+
+  /* ── F. flow meter ───────────────────────────────────────────── */
+  .flow { display: flex; flex-direction: column; gap: 9px; max-width: 520px; }
+  .flow-track { height: 10px; border-radius: var(--bn-r-full); overflow: hidden; display: flex; background: var(--bn-surface-2); }
+  .flow-on { background: var(--bn-accent); }
+  .flow-sold { background: var(--bn-ok); }
+  .flow-row { display: flex; gap: 20px; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
+  .flow-row span { display: inline-flex; align-items: center; gap: 7px; }
+  .flow-row b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; font-size: var(--bn-fs-lg); }
+  .flow-key { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="opt">
+    <div class="opt-tag">sheet <b>Three drawings of the store — parked, not shipped</b></div>
+    <p style="max-width:62ch;color:var(--bn-ink-2);font-size:var(--bn-fs-lg);line-height:1.55;margin:0">
+      Drawn 2026-09-07 while looking for a replacement for the Home hero's lede. They were not what
+      that slot needed, and the owner parked them here rather than spend them. Nothing in
+      <code>app/</code> renders any of this. <code>docs/specs/box-drawings.md</code> carries the
+      argument, the build cost of each, and the D58 finding that shaped all three.
+    </p>
+  </div>
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   J — the store drawn as a physical thing. Three drawings, one rule: every
+   mark is a card, a divider, or a box, and nothing is a bar.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── J1 · the shelf ─────────────────────────────────────────────────────────
+   Four drawers seen from the front. Card spines at 1:1, dividers as tabs that
+   stand above the lip, the cards that have left as hollow ghosts just past the
+   run, and one common drawer length so the four rows are a true small-multiple.
+   The right edge fades because a box's real capacity is not known — the drawing
+   refuses to claim one. */
+.j1 { display: flex; flex-direction: column; gap: var(--bn-3); max-width: 560px; }
+.j1-rows { display: flex; flex-direction: column; gap: 3px; }
+
+.j1-row {
+  display: grid;
+  grid-template-columns: 148px 1fr 26px;
+  align-items: center;
+  gap: var(--bn-3);
+  min-height: 28px;
+  padding: 2px var(--bn-2);
+  margin: 0 calc(var(--bn-2) * -1);
+  border-radius: var(--bn-r-sm);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color var(--bn-t) var(--bn-ease);
+}
+.j1-row:hover { background: var(--bn-hover); }
+.j1-row:active { translate: 0 1px; }
+.j1-row:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 1px; }
+
+.j1-label {
+  display: flex; align-items: center; gap: var(--bn-2);
+  font-size: var(--bn-fs-md); color: var(--bn-ink-2);
+  white-space: nowrap; overflow: hidden;
+}
+.j1-name { overflow: hidden; text-overflow: ellipsis; }
+.j1-label em { font-style: normal; color: var(--bn-ink-4); }
+.j1-no {
+  flex: none;
+  min-width: 17px; height: 17px; padding: 0 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--bn-r-xs);
+  background: var(--bn-surface-2);
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-2xs); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* THE DRAWER. A sunken well the length of the fullest box, so the four rows are one
+   scale and the empty part of a half-used drawer is empty AIR rather than absent ink.
+   The far end dissolves because a box's real capacity is not known and the drawing
+   refuses to claim one. Spines are percentage-width against this well, so the whole
+   small-multiple rescales with the column and never needs a breakpoint. */
+.j1-drawer {
+  position: relative;
+  display: flex; align-items: flex-end;
+  width: 100%; height: 24px;
+  padding: 0 0 2px 3px;
+  border-radius: 2px;
+  background: var(--bn-surface-2);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  -webkit-mask-image: linear-gradient(90deg, var(--bn-mask) 95%, transparent 100%);
+  mask-image: linear-gradient(90deg, var(--bn-mask) 95%, transparent 100%);
+}
+.j1-drawer[data-empty='true'] { box-shadow: inset 0 0 0 1px var(--bn-line); background: none; }
+
+.j1-card, .j1-gone, .j1-div {
+  flex: none;
+  width: calc(100% / var(--frame) * 0.56);
+  margin-right: calc(100% / var(--frame) * 0.44);
+  border-radius: 0.5px;
+}
+.j1-card { height: 16px; background: var(--bn-ink-2); }
+/* a card that has left: the space it stood in, kept open */
+.j1-gone { height: 16px; box-shadow: inset 0 0 0 1px var(--bn-ink-4); opacity: 0.7; border-radius: 1px; }
+/* a divider is thicker than a card and stands proud of the lip */
+.j1-div {
+  height: 22px;
+  width: calc(100% / var(--frame) * 0.8);
+  margin-right: calc(100% / var(--frame) * 0.44);
+  background: var(--bn-accent);
+  opacity: 0.6;
+  border-radius: 1px 1px 0 0;
+}
+.j1-card, .j1-div { transition: background-color var(--bn-t) var(--bn-ease); }
+.j1-row:hover .j1-card { background: var(--bn-ink); }
+
+.j1-n {
+  text-align: right;
+  font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.j1-key { display: flex; flex-wrap: wrap; gap: var(--bn-4); margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.j1-k { display: inline-flex; align-items: center; gap: 6px; }
+.j1-swatch { width: 3px; height: 12px; border-radius: 0.5px; }
+.j1-swatch[data-k='card'] { background: var(--bn-ink-2); }
+.j1-swatch[data-k='gone'] { box-shadow: inset 0 0 0 1px var(--bn-ink-4); opacity: 0.7; border-radius: 1px; }
+.j1-swatch[data-k='div'] { width: 4px; height: 15px; background: var(--bn-accent); opacity: 0.6; }
+.j1-empty-line { color: var(--bn-ink-3); }
+/* no boxes: the drawer is the whole width, because there is no name to sit beside it */
+.j1[data-empty='true'] .j1-row { grid-template-columns: 1fr; }
+.j1[data-empty='true'] .j1-label, .j1[data-empty='true'] .j1-n { display: none; }
+
+/* ── J2 · the setting ───────────────────────────────────────────────────────
+   The whole address space set as running text: one glyph per card, a hair of
+   space at every divider, a word-space and a box number at every box. It wraps
+   like a paragraph, so 4 boxes and 40 boxes are the same drawing. */
+.j2 { display: flex; flex-direction: column; gap: var(--bn-3); max-width: 560px; }
+.j2-field {
+  --j2-pitch: clamp(3.8px, 0.74vw, 8px);
+  display: flex; flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--bn-3) var(--bn-5);
+}
+.j2-box {
+  display: inline-flex; flex-direction: column; align-items: stretch; gap: 3px;
+  padding: 4px var(--bn-1) 2px var(--bn-1);
+  margin: -4px calc(var(--bn-1) * -1) -2px;
+  border-radius: var(--bn-r-xs);
+  text-decoration: none;
+  transition: background-color var(--bn-t) var(--bn-ease);
+}
+.j2-box:hover { background: var(--bn-hover); }
+.j2-box:active { translate: 0 1px; }
+.j2-box:focus-visible { outline: 2px solid var(--bn-line-focus); outline-offset: 1px; }
+
+.j2-run {
+  display: inline-flex; align-items: flex-end;
+  gap: calc(var(--j2-pitch) * 0.9);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--bn-line-strong);
+}
+.j2-sec { display: inline-flex; align-items: flex-end; }
+.j2-m {
+  position: relative;
+  flex: none;
+  width: calc(var(--j2-pitch) * 0.5);
+  margin-right: calc(var(--j2-pitch) * 0.5);
+  height: 18px;
+  border-radius: 0.5px;
+  background: var(--bn-ink-2);
+  transition: background-color var(--bn-t) var(--bn-ease);
+}
+.j2-sec .j2-m:last-child { margin-right: 0; }
+.j2-box:hover .j2-m { background: var(--bn-ink); }
+.j2-m[data-here='true'], .j2-box:hover .j2-m[data-here='true'] { background: var(--bn-live); height: 23px; }
+.j2-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.j2-foot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--bn-3); }
+.j2-tag { font-size: var(--bn-fs-2xs); font-weight: 600; color: var(--bn-ink-4); letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
+.j2-cnt { font-size: var(--bn-fs-2xs); font-weight: 700; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+
+.j2-rule { display: block; width: 100%; height: 18px; border-bottom: 1px solid var(--bn-line); }
+
+.j2-key { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
+.j2-dot { color: var(--bn-ink-4); }
+.j2-here-k { display: inline-flex; align-items: center; gap: 5px; }
+.j2-here-k .j2-m { --j2-pitch: 7px; height: 12px; margin-right: 0; }
+
+/* ── J3 · plan ──────────────────────────────────────────────────────────────
+   The store as a measured drawing seen from above: every compartment is a
+   divider-to-divider run, drawn at its true length, with its count inside it,
+   and one dimension line across the whole shelf. No fill anywhere. */
+.j3 { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 560px; }
+.j3-svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* the object: compartments, the cards standing in them, the divider walls */
+.j3-cell { fill: none; stroke: var(--bn-ink-3); stroke-width: 1; }
+.j3-cell[data-empty='true'] { stroke-dasharray: 4 5; stroke: var(--bn-line-strong); }
+.j3-hatch { stroke: var(--bn-ink-4); stroke-width: 1; opacity: 0.5; }
+.j3-wall { stroke: var(--bn-ink-2); stroke-width: 2; }
+
+/* what is written about it, all of it outside the object */
+.j3-num {
+  fill: var(--bn-ink-3);
+  font-family: var(--bn-font-ui); font-size: 13px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.j3-balloon circle { fill: none; stroke: var(--bn-ink-4); stroke-width: 1; }
+.j3-balloon text {
+  fill: var(--bn-ink-2);
+  font-family: var(--bn-font-ui); font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.j3-ext, .j3-dim { stroke: var(--bn-ink-4); stroke-width: 1; opacity: 0.65; }
+.j3-dimnum {
+  fill: var(--bn-ink);
+  font-family: var(--bn-font-display); font-size: 22px; font-weight: 800;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.j3-here line { stroke: var(--bn-live); stroke-width: 1.5; }
+.j3-here path { fill: var(--bn-live); }
+
+.j3-key { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.j3-dot { color: var(--bn-ink-4); }
+.j3-here-k { color: var(--bn-live); font-weight: 600; }
+.j3-here-k::before { content: ''; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid var(--bn-live); display: inline-block; margin-right: 5px; }
+
+/* ── entry, tokenised ───────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .j1-row, .j2-box { animation: j-in var(--bn-t-slow) var(--bn-ease-out) both; animation-delay: calc(var(--i) * var(--bn-stagger)); }
+  .j3-svg { animation: j-in var(--bn-t-emphasis) var(--bn-ease-out) both; }
+}
+@keyframes j-in { from { opacity: 0; translate: 0 4px; } to { opacity: 1; translate: 0 0; } }
+
+/* ── narrow ─────────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  .j1-row { grid-template-columns: 100px 1fr 24px; min-height: 44px; gap: var(--bn-2); }
+  .j1-label { font-size: var(--bn-fs-sm); }
+  .j1-drawer { height: 26px; }
+  .j1-card, .j1-gone { height: 18px; }
+  .j1-div { height: 25px; }
+  .j2-box { min-height: 44px; justify-content: flex-end; }
+  .j2-field { gap: var(--bn-2) var(--bn-4); }
+  .j3-num { font-size: 18px; }
+  .j3-balloon text { font-size: 18px; }
+  .j3-dimnum { font-size: 29px; }
+}
+@media (max-width: 460px) {
+  /* the compartment dimensions are the first thing to go; the object and its
+     total survive, which is the honest order to lose things in */
+  .j3-num { display: none; }
+}
+</style>
+
+<div class="opt">
+  <div class="opt-tag">J1 <b>The shelf — four drawers, one spine per card, drawn to one scale</b></div>
+  <div class="hero">
+    <span class="bn-eyebrow">Sunday, September 7</span>
+    <h1 class="home-title">Good evening.</h1>
+    <div class="j1">
+      <div class="j1-rows">
+      <a class="j1-row" href="#/inventory?box=1" style="--i:0">
+        <span class="j1-label"><span class="j1-no">1</span><span class="j1-name">Riftbound Epics</span></span>
+        <span class="j1-drawer" style="--frame:54"><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-div"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-div"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i></span>
+        <span class="j1-n">41</span>
+      </a>
+      <a class="j1-row" href="#/inventory?box=2" style="--i:1">
+        <span class="j1-label"><span class="j1-no">2</span><span class="j1-name">Pokemon Base Set</span></span>
+        <span class="j1-drawer" style="--frame:54"><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-div"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i></span>
+        <span class="j1-n">28</span>
+      </a>
+      <a class="j1-row" href="#/inventory?box=3" style="--i:2">
+        <span class="j1-label"><span class="j1-no">3</span><span class="j1-name"><em>unnamed</em></span></span>
+        <span class="j1-drawer" style="--frame:54"><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i><i class="j1-gone"></i></span>
+        <span class="j1-n">22</span>
+      </a>
+      <a class="j1-row" href="#/inventory?box=4" style="--i:3">
+        <span class="j1-label"><span class="j1-no">4</span><span class="j1-name">One Piece OP-15</span></span>
+        <span class="j1-drawer" style="--frame:54"><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-div"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-card"></i><i class="j1-gone"></i></span>
+        <span class="j1-n">9</span>
+      </a>
+      </div>
+      <p class="j1-key"><span class="j1-k"><i class="j1-swatch" data-k="card"></i>100 on hand</span><span class="j1-k"><i class="j1-swatch" data-k="gone"></i>19 gone</span><span class="j1-k"><i class="j1-swatch" data-k="div"></i>8 dividers</span></p>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-tag">J2 <b>The setting — the whole address space as running text, one glyph per card</b></div>
+  <div class="hero">
+    <span class="bn-eyebrow">Sunday, September 7</span>
+    <h1 class="home-title">Good evening.</h1>
+    <div class="j2">
+      <div class="j2-field">
+        <a class="j2-box" href="#/inventory?box=1" style="--i:0" title="Box 1 · Riftbound Epics — 41 on hand"><span class="j2-run"><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i></span><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i></span><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i></span></span><span class="j2-foot"><span class="j2-tag">Box 1</span><span class="j2-cnt">41</span></span></a>
+        <a class="j2-box" href="#/inventory?box=2" style="--i:1" title="Box 2 · Pokemon Base Set — 28 on hand"><span class="j2-run"><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i></span><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i></span></span><span class="j2-foot"><span class="j2-tag">Box 2</span><span class="j2-cnt">28</span></span></a>
+        <a class="j2-box" href="#/inventory?box=3" style="--i:2" title="Box 3 — 22 on hand"><span class="j2-run"><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i></span></span><span class="j2-foot"><span class="j2-tag">Box 3</span><span class="j2-cnt">22</span></span></a>
+        <a class="j2-box" href="#/inventory?box=4" style="--i:3" title="Box 4 · One Piece OP-15 — 9 on hand"><span class="j2-run"><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i></span><span class="j2-sec"><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m"></i><i class="j2-m" data-here="true"><span class="j2-sr">the last card you photographed</span></i></span></span><span class="j2-foot"><span class="j2-tag">Box 4</span><span class="j2-cnt">9</span></span></a>
+      </div>
+      <p class="j2-key">100 cards · 8 sections · 4 boxes<span class="j2-dot">·</span><span class="j2-here-k"><i class="j2-m" data-here="true" aria-hidden="true"></i>newest</span><span class="j2-dot">·</span>19 gone</p>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-tag">J3 <b>Plan — the store as a measured drawing, compartment by compartment</b></div>
+  <div class="hero">
+    <span class="bn-eyebrow">Sunday, September 7</span>
+    <h1 class="home-title">Good evening.</h1>
+    <div class="j3">
+      <svg class="j3-svg" viewBox="0 0 549 132" role="img" aria-label="Plan of the store: 4 boxes holding 100 cards in 8 compartments. The newest card is in box 4.">
+      <g class="j3-object">
+<rect class="j3-cell" x="12.0" y="36" width="69.0" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="14.3" y1="41" x2="14.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="18.9" y1="41" x2="18.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="23.5" y1="41" x2="23.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="28.1" y1="41" x2="28.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="32.7" y1="41" x2="32.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="37.3" y1="41" x2="37.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="41.9" y1="41" x2="41.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="46.5" y1="41" x2="46.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="51.1" y1="41" x2="51.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="55.7" y1="41" x2="55.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="60.3" y1="41" x2="60.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="64.9" y1="41" x2="64.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="69.5" y1="41" x2="69.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="74.1" y1="41" x2="74.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="78.7" y1="41" x2="78.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-wall" x1="82.7" y1="31" x2="82.7" y2="82" vector-effect="non-scaling-stroke" />
+<rect class="j3-cell" x="84.4" y="36" width="69.0" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="86.7" y1="41" x2="86.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="91.3" y1="41" x2="91.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="95.9" y1="41" x2="95.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="100.5" y1="41" x2="100.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="105.1" y1="41" x2="105.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="109.7" y1="41" x2="109.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="114.3" y1="41" x2="114.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="118.9" y1="41" x2="118.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="123.5" y1="41" x2="123.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="128.1" y1="41" x2="128.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="132.7" y1="41" x2="132.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="137.3" y1="41" x2="137.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="141.9" y1="41" x2="141.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="146.5" y1="41" x2="146.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="151.1" y1="41" x2="151.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-wall" x1="155.1" y1="31" x2="155.1" y2="82" vector-effect="non-scaling-stroke" />
+<rect class="j3-cell" x="156.8" y="36" width="50.6" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="159.1" y1="41" x2="159.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="163.7" y1="41" x2="163.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="168.3" y1="41" x2="168.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="172.9" y1="41" x2="172.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="177.5" y1="41" x2="177.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="182.1" y1="41" x2="182.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="186.7" y1="41" x2="186.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="191.3" y1="41" x2="191.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="195.9" y1="41" x2="195.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="200.5" y1="41" x2="200.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="205.1" y1="41" x2="205.1" y2="77" vector-effect="non-scaling-stroke" />
+<rect class="j3-cell" x="224.4" y="36" width="64.4" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="226.7" y1="41" x2="226.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="231.3" y1="41" x2="231.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="235.9" y1="41" x2="235.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="240.5" y1="41" x2="240.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="245.1" y1="41" x2="245.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="249.7" y1="41" x2="249.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="254.3" y1="41" x2="254.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="258.9" y1="41" x2="258.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="263.5" y1="41" x2="263.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="268.1" y1="41" x2="268.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="272.7" y1="41" x2="272.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="277.3" y1="41" x2="277.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="281.9" y1="41" x2="281.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="286.5" y1="41" x2="286.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-wall" x1="290.5" y1="31" x2="290.5" y2="82" vector-effect="non-scaling-stroke" />
+<rect class="j3-cell" x="292.2" y="36" width="64.4" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="294.5" y1="41" x2="294.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="299.1" y1="41" x2="299.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="303.7" y1="41" x2="303.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="308.3" y1="41" x2="308.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="312.9" y1="41" x2="312.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="317.5" y1="41" x2="317.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="322.1" y1="41" x2="322.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="326.7" y1="41" x2="326.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="331.3" y1="41" x2="331.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="335.9" y1="41" x2="335.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="340.5" y1="41" x2="340.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="345.1" y1="41" x2="345.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="349.7" y1="41" x2="349.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="354.3" y1="41" x2="354.3" y2="77" vector-effect="non-scaling-stroke" />
+<rect class="j3-cell" x="373.6" y="36" width="101.2" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="375.9" y1="41" x2="375.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="380.5" y1="41" x2="380.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="385.1" y1="41" x2="385.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="389.7" y1="41" x2="389.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="394.3" y1="41" x2="394.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="398.9" y1="41" x2="398.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="403.5" y1="41" x2="403.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="408.1" y1="41" x2="408.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="412.7" y1="41" x2="412.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="417.3" y1="41" x2="417.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="421.9" y1="41" x2="421.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="426.5" y1="41" x2="426.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="431.1" y1="41" x2="431.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="435.7" y1="41" x2="435.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="440.3" y1="41" x2="440.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="444.9" y1="41" x2="444.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="449.5" y1="41" x2="449.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="454.1" y1="41" x2="454.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="458.7" y1="41" x2="458.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="463.3" y1="41" x2="463.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="467.9" y1="41" x2="467.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="472.5" y1="41" x2="472.5" y2="77" vector-effect="non-scaling-stroke" />
+<rect class="j3-cell" x="491.8" y="36" width="23.0" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="494.1" y1="41" x2="494.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="498.7" y1="41" x2="498.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="503.3" y1="41" x2="503.3" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="507.9" y1="41" x2="507.9" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="512.5" y1="41" x2="512.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-wall" x1="516.5" y1="31" x2="516.5" y2="82" vector-effect="non-scaling-stroke" />
+<rect class="j3-cell" x="518.2" y="36" width="18.4" height="46" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="520.5" y1="41" x2="520.5" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="525.1" y1="41" x2="525.1" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="529.7" y1="41" x2="529.7" y2="77" vector-effect="non-scaling-stroke" />
+<line class="j3-hatch" x1="534.3" y1="41" x2="534.3" y2="77" vector-effect="non-scaling-stroke" />
+      </g>
+      <g class="j3-notes">
+<text class="j3-num" x="46.5" y="98" text-anchor="middle">15</text>
+<text class="j3-num" x="118.9" y="98" text-anchor="middle">15</text>
+<text class="j3-num" x="182.1" y="98" text-anchor="middle">11</text>
+<g class="j3-balloon"><circle cx="22.0" cy="21" r="9.5" vector-effect="non-scaling-stroke" /><text x="22.0" y="25.5" text-anchor="middle">1</text></g>
+<text class="j3-num" x="256.6" y="98" text-anchor="middle">14</text>
+<text class="j3-num" x="324.4" y="98" text-anchor="middle">14</text>
+<g class="j3-balloon"><circle cx="234.4" cy="21" r="9.5" vector-effect="non-scaling-stroke" /><text x="234.4" y="25.5" text-anchor="middle">2</text></g>
+<text class="j3-num" x="424.2" y="98" text-anchor="middle">22</text>
+<g class="j3-balloon"><circle cx="383.6" cy="21" r="9.5" vector-effect="non-scaling-stroke" /><text x="383.6" y="25.5" text-anchor="middle">3</text></g>
+<text class="j3-num" x="503.3" y="98" text-anchor="middle">5</text>
+<text class="j3-num" x="527.4" y="98" text-anchor="middle">4</text>
+<g class="j3-balloon"><circle cx="501.8" cy="21" r="9.5" vector-effect="non-scaling-stroke" /><text x="501.8" y="25.5" text-anchor="middle">4</text></g>
+      </g>
+      <line class="j3-ext" x1="12" y1="104" x2="12" y2="122" vector-effect="non-scaling-stroke" />
+      <line class="j3-ext" x1="536.6" y1="104" x2="536.6" y2="122" vector-effect="non-scaling-stroke" />
+      <line class="j3-dim" x1="12" y1="116" x2="250.3" y2="116" vector-effect="non-scaling-stroke" />
+      <line class="j3-dim" x1="298.3" y1="116" x2="536.6" y2="116" vector-effect="non-scaling-stroke" />
+      <line class="j3-dim" x1="12" y1="111.5" x2="18" y2="120.5" vector-effect="non-scaling-stroke" />
+      <line class="j3-dim" x1="536.6" y1="111.5" x2="530.6" y2="120.5" vector-effect="non-scaling-stroke" />
+      <text class="j3-dimnum" x="274.3" y="123" text-anchor="middle">100</text>
+      <g class="j3-here">
+        <line x1="530.6" y1="16" x2="530.6" y2="33" vector-effect="non-scaling-stroke" />
+        <path d="M 526.6 27 L 534.6 27 L 530.6 35 Z" />
+      </g>
+    </svg>
+      <p class="j3-key">Cards standing in each compartment<span class="j3-dot">·</span>19 gone<span class="j3-dot">·</span><span class="j3-here-k">newest</span></p>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-tag">J1 <b>— empty store</b></div>
+  <div class="hero">
+    <span class="bn-eyebrow">Sunday, September 7</span>
+    <h1 class="home-title">Good evening.</h1>
+    <div class="j1" data-empty="true">
+      <div class="j1-rows">
+        <div class="j1-row" aria-hidden="true"><span class="j1-label"></span><span class="j1-drawer" data-empty="true" style="--frame:54"></span><span class="j1-n"></span></div>
+      </div>
+      <p class="j1-key"><span class="j1-empty-line">No boxes yet. The first photograph makes one.</span></p>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-tag">J2 <b>— empty store</b></div>
+  <div class="hero">
+    <span class="bn-eyebrow">Sunday, September 7</span>
+    <h1 class="home-title">Good evening.</h1>
+    <div class="j2" data-empty="true">
+      <div class="j2-field"><span class="j2-rule"></span></div>
+      <p class="j2-key">No cards photographed yet.</p>
+    </div>
+  </div>
+</div>
+
+<div class="opt">
+  <div class="opt-tag">J3 <b>— empty store</b></div>
+  <div class="hero">
+    <span class="bn-eyebrow">Sunday, September 7</span>
+    <h1 class="home-title">Good evening.</h1>
+    <div class="j3" data-empty="true">
+      <svg class="j3-svg" viewBox="0 0 520 132" role="img" aria-label="Plan of the store: nothing photographed yet.">
+        <g class="j3-plan"><rect class="j3-cell" data-empty="true" x="12" y="36" width="496" height="46" vector-effect="non-scaling-stroke" /></g>
+        <line class="j3-ext" x1="12" y1="104" x2="12" y2="122" vector-effect="non-scaling-stroke" />
+        <line class="j3-ext" x1="508" y1="104" x2="508" y2="122" vector-effect="non-scaling-stroke" />
+        <line class="j3-dim" x1="12" y1="116" x2="236" y2="116" vector-effect="non-scaling-stroke" />
+        <line class="j3-dim" x1="284" y1="116" x2="508" y2="116" vector-effect="non-scaling-stroke" />
+        <line class="j3-dim" x1="12" y1="111.5" x2="18" y2="120.5" vector-effect="non-scaling-stroke" />
+        <line class="j3-dim" x1="508" y1="111.5" x2="502" y2="120.5" vector-effect="non-scaling-stroke" />
+        <text class="j3-dimnum" x="260" y="123" text-anchor="middle">0</text>
+      </svg>
+      <p class="j3-key">Nothing photographed yet.</p>
+    </div>
+  </div>
+</div>
+
+</div>
+
+</div>
+</body>
+</html>

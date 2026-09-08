@@ -808,6 +808,13 @@ export function Gallery() {
                     <button type="button" className="bn-toast-action">
                       Undo <kbd className="bn-kbd">U</kbd>
                     </button>
+                    {/* THE DISMISS IS PART OF THE COMPONENT AND THE SPECIMEN LEFT IT OUT (D117).
+                        A sheet that draws a control's other half is the only place a floor over
+                        the kit can be measured — `.bn-toast-close` was 24px and this page could
+                        not say so, because nothing here drew one. */}
+                    <button type="button" className="bn-toast-close" aria-label="Dismiss">
+                      <Icon name="x" size={14} />
+                    </button>
                   </div>
                   <div className="bn-toast bn-toast-ok">
                     <Icon name="check" size={16} className="bn-toast-icon" />
