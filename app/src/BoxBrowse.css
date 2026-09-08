@@ -606,7 +606,7 @@
   border-top: 1px solid var(--bn-line);
 }
 @container pane (max-width: 760px) { .browse-about { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container pane (max-width: 480px) { .browse-about { grid-template-columns: minmax(0, 1fr); gap: var(--bn-4); padding: var(--bn-2) var(--bn-4) var(--bn-4); } }
+@container pane (max-width: 479px) { .browse-about { grid-template-columns: minmax(0, 1fr); gap: var(--bn-4); padding: var(--bn-2) var(--bn-4) var(--bn-4); } }
 .browse-factgroup { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; }
 .browse-factgroup > .bn-label { padding-top: var(--bn-2); }
 .browse-facts { display: flex; flex-direction: column; min-width: 0; }

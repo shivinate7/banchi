@@ -186,7 +186,7 @@
 .inventory-confirm-boxname { font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); }
 
 .inventory-retire-reasons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-2); }
-@media (max-width: 480px) { .inventory-retire-reasons { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 479px) { .inventory-retire-reasons { grid-template-columns: minmax(0, 1fr); } }
 .inventory-retire-reason {
   display: flex;
   flex-direction: column;

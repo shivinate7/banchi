@@ -87,7 +87,7 @@
   flex-wrap: wrap;
 }
 .inv-dialog-foot .bn-btn { min-width: 0; }
-@media (max-width: 480px) {
+@media (max-width: 479px) {
   .inv-dialog-foot { flex-direction: column-reverse; }
   .inv-dialog-foot .bn-btn { width: 100%; }
 }

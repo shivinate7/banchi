@@ -5,7 +5,11 @@
    Every colour is a token; every code string is body-size mono, masked until asked.
    ========================================================================== */
 
-.codes { display: flex; flex-direction: column; gap: var(--bn-5); }
+/* THE LEDGER STOPS BEFORE THE PAGE DOES — a seven-column table at `width: 100%` with several
+   short-token columns, spread over 1536px, is mostly gap. 1280px of content is a FLOOR rather
+   than a preference: `.codes-stats` is six `1fr` tiles carrying a --bn-fs-4xl figure, and
+   narrowing the page further breaks the hero to fix the ledger. */
+.codes { display: flex; flex-direction: column; gap: var(--bn-5); --bn-page-max: var(--bn-page-w-rows); }
 .codes .bn-head { margin-bottom: var(--bn-1); }
 
 /* ---- failure ------------------------------------------------------------- */
@@ -37,7 +41,7 @@
 /* two controls on one banner: the inline fix and the route out. They travel together, so the
    pair is what indents under the icon on a phone rather than each button separately. */
 .codes-banner-acts { display: flex; align-items: center; gap: var(--bn-2); flex: none; }
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .codes-banner { flex-wrap: wrap; }
   .codes-banner-text { flex-basis: calc(100% - 30px); }
   .codes-banner .bn-btn { margin-left: 30px; }
@@ -91,13 +95,13 @@
 .codes-fix-adrift { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); line-height: 1.5; max-width: 76ch; }
 /* One column below the tablet: the box says which stack, and the controls answer it underneath,
    still on one line of their own until the phone breakpoint takes them apart. */
-@media (max-width: 900px) {
+@media (max-width: 899px) {
   .codes-fix-row { grid-template-columns: minmax(0, 1fr); }
   /* The picker starts at the box name's own left edge and the press holds the right edge — a
      group merely pushed right leaves the "Product" label floating in the middle of the row. */
   .codes-fix-do > .bn-btn { margin-left: auto; }
 }
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .codes-fix-do { flex-wrap: wrap; align-items: stretch; }
   .codes-fix-field { flex: 1 1 100%; }
   /* the lane pill takes its own line under the picker rather than a fixed column */
@@ -347,7 +351,7 @@
 }
 @media (max-width: 767px) { .codes-toolbar { padding: var(--bn-3) var(--bn-4); } }
 .codes-toolbar-sep { width: 1px; height: 20px; background: var(--bn-line-strong); }
-@media (max-width: 640px) { .codes-toolbar-sep { display: none; } }
+@media (max-width: 639px) { .codes-toolbar-sep { display: none; } }
 .codes-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .codes-chip {
   display: inline-flex;
@@ -374,7 +378,7 @@
 .codes-table-wrap { overflow-x: auto; }
 .codes-table { min-width: 0; }
 .codes-table td[data-th='Product'], .codes-table td[data-th='Order'] { white-space: nowrap; }
-@media (min-width: 641px) and (max-width: 1023px) {
+@media (min-width: 640px) and (max-width: 1023px) {
   .codes-entries th:nth-child(4), .codes-entries td[data-th='Set'] { display: none; }
   .codes-table th, .codes-table td { padding-left: var(--bn-2); padding-right: var(--bn-2); }
   .codes-table th:first-child, .codes-table td:first-child { padding-left: var(--bn-4); }
@@ -457,7 +461,7 @@
 .codes-code-btn[aria-pressed='true'] { color: var(--bn-accent); }
 
 /* ---- phones: the ledger becomes cards -------------------------------------------- */
-@media (max-width: 640px) {
+@media (max-width: 639px) {
   .codes-table thead { display: none; }
   .codes-table, .codes-table tbody { display: block; }
   .codes-table tr {
@@ -574,7 +578,7 @@
 }
 .codes-form { display: flex; flex-direction: column; gap: var(--bn-4); }
 .codes-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--bn-4); }
-@media (max-width: 480px) { .codes-form-row { grid-template-columns: 1fr; } }
+@media (max-width: 479px) { .codes-form-row { grid-template-columns: 1fr; } }
 .codes-form-actions { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
 .codes-seg { width: 100%; }
 .codes-seg .bn-seg-item { flex: 1 1 0; }
@@ -600,7 +604,7 @@
 .codes-block-notice { padding: var(--bn-3) var(--bn-3) 0; }
 .codes-block-list { list-style: none; margin: 0; padding: var(--bn-2) var(--bn-4); max-height: 320px; overflow-y: auto; columns: 2; column-gap: var(--bn-4); }
 .codes-block-list li { padding: 3px 0; break-inside: avoid; }
-@media (max-width: 480px) { .codes-block-list { columns: 1; } }
+@media (max-width: 479px) { .codes-block-list { columns: 1; } }
 
 .codes-pre {
   margin: 0;

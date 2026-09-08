@@ -595,7 +595,7 @@
 .bn-whichkey-item { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-md); font-weight: 500; white-space: nowrap; }
 .bn-whichkey .bn-kbd { background: transparent; color: var(--bn-accent); border-color: currentColor; }
 .bn-whichkey-drain { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--bn-accent); transform-origin: left; animation: bn-drain linear forwards; }
-@media (max-width: 640px) { .bn-whichkey-grid { grid-template-columns: repeat(2, auto); } }
+@media (max-width: 639px) { .bn-whichkey-grid { grid-template-columns: repeat(2, auto); } }
 
 /* ---- bottom tab bar (phones) --------------------------------------------------------- */
 .bn-tabbar { display: none; }
@@ -795,7 +795,7 @@
   .app-keys-body { padding: var(--bn-4); }
   .app-keys-foot { padding: var(--bn-3) var(--bn-4); }
 }
-@media (max-width: 480px) {
+@media (max-width: 479px) {
   /* The caps keep their own column even here — the widest run in any group is about 100px,
      which still leaves a readable measure, and stacking every row made the nine jump keys
      eighteen lines long. */
