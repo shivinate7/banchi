@@ -605,7 +605,6 @@ function searchAnswer(query: string, cards: Cards = CARDS) {
         sold_here: listed.sold_here,
         live_as_of: null,
         on_hand,
-        cap: 4,
         /* D7's `min(cap, on hand)`, mirroring what `capture_server.py` computes — the shelf
            binds below a playset, which is most of the store. Derived here rather than written
            as a number so the fixture cannot claim a denominator its own `on_hand` contradicts. */

@@ -100,7 +100,6 @@ const GROUP: SearchGroup = {
      so the header's figures and the rows it sits over cannot disagree on a sheet whose whole
      purpose is being looked at. */
   on_hand: 4,
-  cap: 4,
   listable: 4,
   /* `capture_id` ON EVERY ROW BUT ONE, and the null is the specimen (D93): a record written
      before ids were kept cannot be aimed at, so the order walk draws a reason where the take

@@ -1733,7 +1733,6 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             "roster": [],
             "skipped": [],
             "asked": list(wanted),
-            "live_cap": corpus.live_cap_for(),
             "threshold": None,
             "floor": None,
         }
@@ -1872,21 +1871,15 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # REPORTED HERE, CORRECTED IN `emit`. This route writes nothing, so the honest thing it
         # can do is show the true figure and flag that the runs disagree with it.
         claimed = sum(leg.get("add_to_quantity") or 0 for leg in row["in"])
-        newest = row["in"][-1]
-        out_now = newest.get("copies_out")
-        if out_now is None:
-            out_now = newest.get("live_before") or 0
-        # THE MERGED FIGURE, RE-DERIVED WITH OR WITHOUT A CAP (D7, rewritten). With no cap there is no
-        # `room` term at all — the bound is the positions the merge actually holds, which is
-        # the term that stops a copy being sent twice and is the only one that ever did.
-        cap_now = corpus.live_cap_for()
+        # THE MERGED FIGURE IS THE POSITIONS THE MERGE HOLDS (D7, amended 2026-09-08). There is
+        # no standing cap to re-derive against any more, and the cap a SEND asks for is not on
+        # this request — this route previews the worklist, and `--cap` is spent when the file
+        # is written. What survives is the term that always did the work: a card in three runs
+        # is one row over the deduped union, so the claims summing past it is the over-claim
+        # D86 exists to correct and `over_cap` still names it.
         held = len(row.get("positions") or [])
         row["claimed_add"] = claimed
-        if cap_now is None:
-            row["add_to_quantity"] = min(claimed, held)
-        else:
-            room = max(0, cap_now - int(out_now))
-            row["add_to_quantity"] = min(claimed, room, held)
+        row["add_to_quantity"] = min(claimed, held)
         row["over_cap"] = claimed > row["add_to_quantity"]
         # A MERGED ROW THAT CAN ADD MUST NOT CARRY ONE RUN'S REASON FOR ADDING NOTHING.
         # `nothing_to_add` reads "every copy in this run is already listed or has left the
@@ -1926,7 +1919,6 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # question each run had to be asked separately, and offered it as a LABEL because D9
         # forbade defaulting it. There is one answer now — the corpus's policy, with a default
         # (D9 amended) — so nothing has to be remembered and no screen offers anything.
-        "live_cap": corpus.live_cap_for(),
     }
 
 
@@ -2883,10 +2875,13 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
     to be spent is still `POST /pipeline/identify` and is still named for it.
 
     IT IS NOT `POST /pipeline/runs/<name>/emit` WIDENED, and the difference is the point. That
-    route is per run and stays; this one takes a LIST, because the cap has to be re-derived
-    across it — `pipeline/join.py` spends `live_cap - copies_out` per run against a global cap,
-    so N per-run presses are exactly the over-push a merged file exists to prevent. Measured:
-    three separate emits over three real runs wrote two SKUs past the cap of four.
+    route is per run and stays; this one takes a LIST because the copies are deduped across
+    it — a card in three runs is ONE row over the union of positions, keyed on `(box, index)`,
+    which holds whether or not this send asked for a cap. When it does ask, the figure is also
+    spent once across the send rather than once per leg: `pipeline/join.py` spends
+    `live_cap - copies_out` per run, so N per-run presses at one cap are exactly the over-push
+    a merged file prevents. Measured at the old standing cap of four: three separate emits over
+    three real runs wrote two SKUs past it, and one merged emit wrote none.
 
     THE OUTPUT IS THE COMMAND'S OWN STDOUT, VERBATIM (D33). It names the file, the runs, and
     every SKU whose runs over-claimed; a screen summarising that would be deciding what

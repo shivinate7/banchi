@@ -350,26 +350,6 @@ def isolated_home():
                 os.environ[files.HOME_ENV] = previous
 
 
-def cap_the_store(cap: int = join.LIVE_QUANTITY_CAP) -> None:
-    """Write a standing `live_cap` into the isolated store's corpus.
-
-    EVERY CASE BELOW THAT ASSERTS CAP ARITHMETIC HAS TO CALL THIS, and until 2026-09-08 none
-    of them did — `pipeline/corpus.py`'s dataclass default was `LIVE_QUANTITY_CAP`, so a
-    store that had never been asked anything answered four and twelve assertions inherited a
-    figure nobody had set. D7's rewrite retired the standing bound on 2026-09-07 and left
-    that default behind; the moment it was corrected, those twelve read seven.
-
-    THE FIX IS NOT TO RESTORE THE DEFAULT BUT TO SAY WHICH STORE THE CASE IS ABOUT. A cap is
-    something a store or a send now ASKS for, so a case about the cap sets one, and a case
-    that sets none is testing the ordinary uncapped send. Putting this inside
-    `isolated_home` instead would put the ambient default straight back — and would reach
-    the cases that exist to prove a fresh store's own answers.
-    """
-    book = corpus.Corpus.read()
-    book.live_cap = cap
-    book.write()
-
-
 def store_tables() -> dict:
     """Every table of the isolated store, as ordered rows. What is compared where a case
     used to compare a file's bytes (D88): 'byte-identical' on a document becomes
@@ -6099,7 +6079,6 @@ def check_box_routes_and_search(checks: Checks) -> None:
 
     # --- GET /search: D7's SKU -> positions map, finally served to a screen -------------
     with isolated_home():
-        cap_the_store()  # this case is about the cap, so the store sets one
         for _ in range(3):
             capture_server.do_capture(capture_payload(8, set_hint="me01"))
         capture_server.do_capture(capture_payload(8, game="misc"))
@@ -6144,24 +6123,26 @@ def check_box_routes_and_search(checks: Checks) -> None:
                 "and `on_hand` EXCLUDES the sold copy while `copies` still lists it: a sale "
                 "leaves a permanent gap that the operator still needs to see (D10)",
             )
-            checks.equal(
-                group["cap"],
-                join.LIVE_QUANTITY_CAP,
-                "and `cap` is pipeline/join.py's playset imported, never the literal 4 — "
-                "the screen's '2 of 4 live' moves the day D7's cap does",
+            checks.ok(
+                "cap" not in group,
+                "AND THERE IS NO `cap` ON THE WIRE (D7, amended 2026-09-08). The field carried "
+                "the store's standing bound, which is deleted — a wire field for a rule that "
+                "no longer exists is a claim with no reader and no way of being contradicted "
+                "(D80). Asserted as an absence rather than a null, because a null would leave "
+                "every screen still deciding what to draw for it",
             )
-            # D7: "listed quantity is min(cap, on hand)". THE SHELF BINDS HERE, WHICH IS THE
-            # WHOLE POINT OF THE FIELD: two copies on hand against a cap of four, so the most
-            # this SKU can ever have live is two. The screen drew the bare `cap` as the
-            # denominator of `listed N of ...` until 2026-08-25, so a card the owner had one of
-            # read `listed 0 of 4` — three copies of headroom that do not exist. Asserted
-            # against the arithmetic rather than the literal 2, so it moves with the cap.
+            # THE SHELF IS THE ONLY BOUND NOW, and this field is what says so. It was
+            # `min(cap, on hand)` while a cap existed, and the pair was on the wire so a
+            # screen could draw either the rule or what the rule permitted here. The screen
+            # drew the bare `cap` as the denominator of `listed N of ...` until 2026-08-25, so
+            # a card the owner had one of read `listed 0 of 4` — three copies of headroom that
+            # do not exist. That defect cannot recur: there is one field and it is the shelf.
             checks.equal(
                 group["listable"],
-                min(join.LIVE_QUANTITY_CAP, 2),
-                "and `listable` is what that cap COMES TO for this SKU — min(cap, on hand), "
-                "so the shelf binds it to 2 and the screen cannot promise a playset the "
-                "boxes do not hold",
+                2,
+                "and `listable` is what the SHELF holds — two copies on hand, so the most "
+                "this SKU can ever have live is two, and the screen cannot promise a playset "
+                "the boxes do not hold",
             )
             checks.equal(
                 group["listed"],
@@ -9761,9 +9742,10 @@ def check_emit_identity_stamp(checks: Checks) -> None:
     cards = [(3, i, "Articuno", "161", None) for i in range(1, copies + 1)]
 
     with isolated_home():
-        cap_the_store()  # this case is about the cap, so the store sets one
         run_dir, _ = seam_run(checks, cards)
-        command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP, because the store no longer can (D7, amended
+        # 2026-09-08). This case is about the cap arithmetic, so it asks for one.
+        command(checks, "emit", str(run_dir.directory), "--cap", "4")
 
         inventory = Store().read().inventory
         stamped = [
@@ -9816,7 +9798,9 @@ def check_emit_identity_stamp(checks: Checks) -> None:
             "cannot be misread as the re-emit having done it",
         )
 
-        command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        command(checks, "emit", str(run_dir.directory), "--cap", "4")
         after = Store().read().inventory
         checks.equal(
             after.get(master.position_key(3, 1)).state,
@@ -11563,7 +11547,6 @@ def check_merged_emit_cap(checks: Checks) -> None:
     checks.note("MERGED EMIT — one cap across the send")
 
     with isolated_home():
-        cap_the_store()  # this case is about the cap, so the store sets one
         # Four copies of one SKU in one box and three in another: seven copies of a card whose
         # cap is four. Each run alone is under the cap; together they are not.
         first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 5)])
@@ -11586,7 +11569,9 @@ def check_merged_emit_cap(checks: Checks) -> None:
             f"state a concatenation of their two import files would write",
         )
 
-        said = command(checks, "emit", str(first.directory), str(second.directory))
+        said = command(
+            checks, "emit", str(first.directory), str(second.directory), "--cap", "4"
+        )
         target = second.path(runs.IMPORT_MERGED)
         checks.ok(
             target.is_file() and not first.path(runs.IMPORT_MERGED).exists(),
@@ -11649,18 +11634,16 @@ def check_merged_emit_uncapped(checks: Checks) -> None:
     checks.note("MERGED EMIT — no cap asked for")
 
     with isolated_home():
-        # Deliberately NOT `cap_the_store()`: this case is the ordinary send.
         first, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 5)])
         second, _ = seam_run(checks, [(4, i, "Articuno", "161", None) for i in range(1, 4)])
 
         book = corpus.Corpus.read()
-        checks.equal(
-            book.live_cap,
-            None,
-            "A STORE THAT HAS SAID NOTHING HAS NO CAP. This is the assertion the corpus "
-            "default failed: `Corpus.live_cap` read `LIVE_QUANTITY_CAP`, so a fresh store "
-            "answered four and `to_payload` wrote that figure into `policy` on the first "
-            "save — putting the retired bound back where every later read would find it",
+        checks.ok(
+            "live_cap" not in book.to_payload()["policy"],
+            "A STORE CANNOT HOLD A CAP AT ALL (D7, amended 2026-09-08). The key is gone from "
+            "`policy`, not merely defaulted to None — which is what makes the retirement "
+            "stick: `to_payload` wrote it unconditionally, so any default it carried was "
+            "stamped into the file on the first save and found by every later read",
         )
         book.sub_threshold = "floor"
         book.write()
@@ -13122,7 +13105,9 @@ def check_listing_commands(checks: Checks) -> None:
     # --- reconcile on a landed SKU this pipeline never pushed ------------------------------
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
-        command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        command(checks, "emit", str(run_dir.directory), "--cap", "4")
         with Store().write() as snapshot:
             del snapshot.inventory.listings[ARTICUNO_SKU]
 
@@ -13140,7 +13125,9 @@ def check_listing_commands(checks: Checks) -> None:
     # --- join sets `live` from the export, absolutely ---------------------------------------
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
-        command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        command(checks, "emit", str(run_dir.directory), "--cap", "4")
 
         # Hand-set, because what is under test is the direction of the write and not how the
         # numbers got there. Dunsparce is the rise case, Articuno the no-change case.
@@ -13238,10 +13225,11 @@ def check_listing_commands(checks: Checks) -> None:
     # is zero however the room is computed, so a four-copy fixture could not fail; the
     # refill only exists where there is real backstock behind the cap.
     with isolated_home():
-        cap_the_store()  # this case is about the cap, so the store sets one
         six = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 7)]
         run_dir, _ = seam_run(checks, six)
-        command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        command(checks, "emit", str(run_dir.directory), "--cap", "4")
         checks.equal(
             Store().read().inventory.listing_for(DUNSPARCE_SKU).pushed,
             4,
@@ -13373,7 +13361,9 @@ def check_listing_commands(checks: Checks) -> None:
             "in an import file again",
             refilled,
         )
-        refill = command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        refill = command(checks, "emit", str(run_dir.directory), "--cap", "4")
         checks.ok(
             "1 row(s), 2 card(s)" in refill,
             "and the emit sends exactly the two the cap has room for",
@@ -13423,26 +13413,43 @@ def check_listing_commands(checks: Checks) -> None:
     # honest one, and any "fix" that makes the refill above work by trusting `live` alone
     # takes this case red.
     with isolated_home():
-        cap_the_store()  # this case is about the cap, so the store sets one
         eight = [(3, i, "Dunsparce", "120", "normal") for i in range(1, 9)]
         run_dir, _ = seam_run(checks, eight)
-        command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        command(checks, "emit", str(run_dir.directory), "--cap", "4")
         untouched = run_dir.path(runs.IMPORT_MERGED).read_bytes()
 
         partial = write_export(run_dir.path("partial.csv"), live={DUNSPARCE_SKU: 2})
         said = command(checks, "join", str(run_dir.directory), "--export", str(partial))
+        # `join` NAMES NO CAP ANY MORE (D7, amended 2026-09-08), because there is no standing
+        # one to read and the figure a send asks for is not known until `emit --cap`. This
+        # asserted the report's cap sentence — "4 of the 4 this SKU may have out" — and with
+        # no cap the SKU is not `at_cap` at all, so the `no room` section it lived in does not
+        # print. That sentence is covered at the unit level now, in
+        # `t3:_check_overrun_is_named`, over BOTH arms and including the overrun `min` hid.
+        #
+        # WHAT THIS CASE IS ACTUALLY FOR SURVIVES INTACT, and is asserted where it is a number
+        # rather than a sentence: `pushed=4, live=2` must be read as FOUR out, not two.
         checks.ok(
-            "8608459 Dunsparce copies=8 — 2 live and 2 on an import this pipeline has not "
-            "seen land — 4 of the 4 this SKU may have out" in said,
-            "TWO LIVE AND TWO STILL PENDING IS FOUR OUT, so eight copies in the box add "
-            "nothing — and the sentence names BOTH halves. `at_cap` said `already at the "
-            "live cap` for every zero, which under an operator who does not reconcile is "
-            "almost never the reason: a card that stops appearing in import files is the "
-            "silent drop `CLAUDE.md` forbids, and a count under a false sentence is worse "
-            "than no count",
+            "4 of the 4" not in said,
+            "`join` does NOT invent a cap — reporting a bound the send has not chosen is a "
+            "promise a later emit could quietly break, which is the argument that keeps "
+            "`--rule` and `--basis` off `#/runs` too",
             said,
         )
-        again = command(checks, "emit", str(run_dir.directory))
+        offered = json.loads(run_dir.path(runs.PRICING).read_text())
+        row = next(r for r in offered["skus"] if r["sku"] == DUNSPARCE_SKU)
+        checks.equal(
+            row["add_to_quantity"],
+            4,
+            "AND FOUR COPIES ARE OFFERED, NOT SIX. Eight in the box against four already out "
+            "leaves four — the conservative reading of `pushed=4, live=2`. The fix this case "
+            "exists to refute trusts `live` alone, reads two out, and offers six",
+        )
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        again = command(checks, "emit", str(run_dir.directory), "--cap", "4")
         checks.ok(
             "nothing new to send" in again,
             "and the re-emit says so rather than writing a file",
@@ -13465,15 +13472,20 @@ def check_listing_commands(checks: Checks) -> None:
         # and the six unstamped copies behind it are exactly what would pour through.
         for index in (1, 2):
             capture_server.do_retire(3, index, {"reason": "damaged"})
-        retired = command(checks, "join", str(run_dir.directory), "--export", str(partial))
-        checks.ok(
-            "8608459 Dunsparce copies=8 — 2 live and 2 on an import this pipeline has not "
-            "seen land — 4 of the 4 this SKU may have out" in retired,
-            "two copies leaving the box changes nothing about what TCGplayer is holding, so "
-            "the answer and the sentence are identical to the line above it",
-            retired,
+        command(checks, "join", str(run_dir.directory), "--export", str(partial))
+        after = json.loads(run_dir.path(runs.PRICING).read_text())
+        row = next(r for r in after["skus"] if r["sku"] == DUNSPARCE_SKU)
+        checks.equal(
+            row["add_to_quantity"],
+            2,
+            "TWO COPIES LEAVING THE BOX CHANGES NOTHING ABOUT WHAT TCGPLAYER IS HOLDING. Six "
+            "copies remain against the same four already out, so two are offered — a "
+            "retirement that wrongly lowered `copies_out` to two would offer four, and the "
+            "six unstamped copies behind it are exactly what would pour through",
         )
-        command(checks, "emit", str(run_dir.directory))
+        # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
+        # arithmetic, and the store cannot hold a standing figure any more.
+        command(checks, "emit", str(run_dir.directory), "--cap", "4")
         checks.equal(
             run_dir.path(runs.IMPORT_MERGED).read_bytes(),
             untouched,
@@ -20478,41 +20490,59 @@ def check_pricing_reach(checks: Checks) -> None:
         "report prints",
     )
 
-    # -------------------------------------------------- the cap is configurable (D7)
-    book = corpus_mod.Corpus.parse(
-        {"policy": {"live_cap": 6, "per_run": {"r1": {"live_cap": 2}}}, "skus": {}}
+    # ------------------------------------------ a store may not hold a cap at all (D7)
+    # RETIRED IN THREE STEPS AND THIS IS THE LAST. D7's playset was a standing bound applied to
+    # every send whether or not anybody asked; 2026-09-07 made it opt-in but left
+    # `policy.live_cap` readable, so a corpus that had ever been saved carried four; 2026-09-08
+    # deletes the key. `LIVE_QUANTITY_CAP` survives only as the figure a press may offer.
+    checks.ok(
+        "live_cap" not in corpus_mod.Corpus.parse({"skus": {}}).to_payload()["policy"],
+        "A STORE CANNOT HOLD A STANDING CAP. The key is gone from `policy` rather than "
+        "defaulted to None, which is what makes the retirement stick: `to_payload` wrote it "
+        "unconditionally, so any default it carried was stamped into the file on the first "
+        "save and found by every later read",
+    )
+    refusal = checks.raises(
+        decisions_mod.MalformedDecisions,
+        lambda: corpus_mod.Corpus.parse({"policy": {"live_cap": 4}, "skus": {}}),
+        "AND A STORE THAT STILL HOLDS ONE IS REFUSED BY NAME rather than silently uncapped. "
+        "Ignoring the key would remove a bound the operator had asked for, without saying so "
+        "— D86's rule about a legacy file, applied to a legacy KEY: read as a fallback and "
+        "ignored in silence are one defect wearing two coats. `Corpus.parse` rebuilds "
+        "`policy` from named fields and `keep` preserves only unknown TOP-LEVEL keys, so an "
+        "unrecognised policy key is destroyed on the next write — which is what makes silence "
+        "here irreversible as well as quiet",
+    )
+    checks.ok(
+        "--cap" in str(refusal or ""),
+        "and the refusal NAMES THE WAY FORWARD — `--cap N` — rather than only reporting that "
+        "the key is unwelcome, which is the shape every refusal in this pipeline takes",
+    )
+    checks.ok(
+        "live_cap" not in corpus_mod.Corpus.parse(
+            {"policy": {"live_cap": None}, "skus": {}}
+        ).to_payload()["policy"],
+        "`null` PASSES AND IS DROPPED — it is what a store that cleared its cap holds, and "
+        "what `to_payload` wrote for as long as the key existed, so refusing it would refuse "
+        "every store this change has already touched",
     )
     checks.equal(
-        (book.policy_for()["live_cap"], book.policy_for("r1")["live_cap"],
-         book.policy_for("other")["live_cap"]),
-        (6, 2, 6),
-        "THE LIVE CAP IS STORE-WIDE WITH A PER-RUN OVERRIDE (D7, whose 'configurable' was a "
-        "promise nothing read until 2026-09-06). This is also the first writer of the "
-        "run-level override D86 named as its own reopening condition",
-    )
-    # INVERTED AT D7's rewrite, AND IT IS THE ENTRY STATED AS A TEST. This asserted that a store which
-    # had never set a cap read D7's playset of four — a bound applied to every send whether or
-    # not anybody had asked for it. Both reasons D7 gave for it were retired by the operator,
-    # so the answer is now NO CAP, and a number here is something a store or a send says out
-    # loud. `LIVE_QUANTITY_CAP` survives as the figure the press offers, not as a fallback.
-    checks.equal(
-        corpus_mod.Corpus.parse({"skus": {}}).policy_for()["live_cap"],
-        None,
-        "a store that has never set one has NO CAP — the standing bound is retired, and four "
-        "is now something a send asks for rather than something it inherits",
-    )
-    checks.equal(
-        corpus_mod.Corpus.parse({"policy": {"live_cap": 4}, "skus": {}}).policy_for()["live_cap"],
-        4,
-        "while a store that HAS written one still gets it, in both `join` and `emit` — which "
-        "is the only way a report and the file it promises can agree about the same send",
+        sorted(corpus_mod.Corpus.parse(
+            {"policy": {"per_run": {"r1": {"threshold": "2.00"}}}, "skus": {}}
+        ).policy_for("r1").keys()),
+        ["basis", "rule", "sub_threshold", "threshold"],
+        "AND THE PER-RUN OVERRIDE SURVIVES ITS OTHER KEYS. `policy_for` folds the override "
+        "over a `standing` dict, so removing one member had to leave the other four alone — "
+        "`#/pricing` writes a per-run `threshold` and would lose it if the fold had been "
+        "narrowed instead",
     )
     for bad in ("four", 0, -1):
         checks.raises(
             decisions_mod.MalformedDecisions,
             lambda bad=bad: decisions_mod.parse_live_cap(bad),
             f"a present-and-unusable cap ({bad!r}) is REFUSED rather than clamped — a cap of "
-            f"zero emits nothing for every SKU and would read as a broken pipeline",
+            f"zero emits nothing for every SKU and would read as a broken pipeline. The "
+            f"parser survives the key's deletion because `--cap` still runs through it",
         )
 
     # -------------------------------------------------- the channel is an allow-list

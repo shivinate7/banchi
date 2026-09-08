@@ -164,7 +164,6 @@ async function stub(page: Page, cards: unknown[] = []) {
       skipped: [],
       asked: [],
       remembered_sub_threshold: null,
-      live_cap: 4,
       defaults: {},
       threshold: null,
       floor: null,
