@@ -400,7 +400,32 @@
     border-bottom: 1px solid var(--bn-line);
     padding-top: env(safe-area-inset-top);
   }
-  .bn-topbar-title { font-family: var(--bn-font-display); font-weight: 700; font-size: var(--bn-fs-lg); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* THE WORDMARK IS THE LOCKUP'S ROMAN, SET AS TEXT. Manrope 700 is what the generator outlines
+     it in; the caps, the tracking and the 45% are the drawing's own, published as custom
+     properties by the element so nothing is typed twice.
+     `text-transform` RATHER THAN THE STRING: the DOM keeps `Banchi`, so find-in-page finds it and
+     a screen reader is not handed six letters to spell. */
+  .bn-topbar-wordmark {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--bn-font-display);
+    font-weight: 700;
+    font-size: var(--bn-fs-md);
+    text-transform: uppercase;
+    letter-spacing: var(--bn-roman-track);
+    /* NO NEGATIVE MARGIN FOR THE TRAILING TRACKING, and that is measured rather than assumed.
+       CSS puts the letter-spacing after the LAST letter too, so the word's ink ends 5.8px inside
+       its own box — which is invisible here because this element is `flex: 1 1 auto` and grows to
+       fill the bar whatever its content measures. A `margin-right: calc(-1 * ...)` was written,
+       kept, and then measured: the gap to the search button is 135px with it and 135px without.
+       It would be needed the day this stops growing — if the word is ever right-aligned or set
+       `flex: none`, take the trailing track back off. */
+    color: var(--bn-ink);
+    opacity: var(--bn-roman-opacity);
+  }
   /* THE BAR IS THE RAIL, ONE BREAKPOINT DOWN (logo.md section 19). `--bn-brand-open: 0` is what
      makes the shared slot draw the empty brackets rather than the lockup — the variable is
      inherited, so this one declaration reaches `.bn-brand-slot` and every rule keyed on it, and

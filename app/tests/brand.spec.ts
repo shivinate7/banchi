@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { PARAMS, ROMAN_TRACK_SOLVED } from '../src/kit/lockupGeometry'
 
 /* THE MARK, IN THE BROWSER THAT DRAWS IT.
  *
@@ -651,4 +652,62 @@ test('every lockup the product draws clears the size floor', async ({ page }) =>
       }
     }
   }
+})
+
+test('the phone wordmark is the lockup roman, set as text', async ({ page }) => {
+  /* IT WAS THE RIGHT FACE IN THE WRONG VOICE. `Banchi` in Manrope 700 at 16px, sentence case, no
+     tracking, full ink — beside a mark whose own name is drawn in caps at 45% with the tracking a
+     width-match solved for. The owner asked for the bar's word to BE that roman, so every value
+     here comes off `lockupGeometry.ts` and none of it is typed into a stylesheet.
+     WHAT THIS CATCHES is the copy drifting from the drawing: the generator can re-solve the
+     tracking, or §13 can move `romanSize`, and a hand-typed em in App.css would go on saying the
+     old number with nothing to contradict it. */
+  await page.setViewportSize(PHONE)
+  await page.goto('/')
+
+  const mark = page.locator('.bn-topbar-wordmark')
+  const seen = await mark.evaluate((el) => {
+    const cs = getComputedStyle(el)
+    return {
+      text: el.textContent,
+      transform: cs.textTransform,
+      /* THE FIRST FAMILY IN THE STACK, WITHOUT `split(',')` — `app/eslint.config.js` bans that
+         call outright as v1's CSV bug, and an inline disable on a guard is how a guard stops
+         being one. A font stack is not a CSV row, but it is also one regex away from not
+         needing the exemption. */
+      family: (/^\s*["']?([^,"']+)/.exec(cs.fontFamily)?.[1] ?? '').trim(),
+      weight: cs.fontWeight,
+      trackPx: Number.parseFloat(cs.letterSpacing),
+      sizePx: Number.parseFloat(cs.fontSize),
+      opacity: Number(cs.opacity),
+    }
+  })
+
+  // THE DOM KEEPS THE WORD. `text-transform` rather than a capitalised string, so find-in-page
+  // finds `Banchi` and a screen reader is not handed six letters to spell out.
+  expect(seen.text, 'the DOM text is the word, not the caps').toBe('Banchi')
+  expect(seen.transform).toBe('uppercase')
+
+  // Manrope 700 is what `scripts/build-lockup.mjs` outlines the roman in — its own header says so.
+  expect(seen.family).toBe('Manrope')
+  expect(seen.weight).toBe('700')
+
+  /* THE TRACKING IS THE SOLVED ONE, CONVERTED. `ROMAN_TRACK_SOLVED` is a fraction of the KANJI's
+     size and `letter-spacing` is a fraction of the element's own, so the em is the ratio of the
+     two. Half a pixel, because the assertion is that this IS the drawing's tracking rather than
+     that it resembles it. */
+  const wantEm = ROMAN_TRACK_SOLVED / PARAMS.romanSize
+  expect(
+    Math.abs(seen.trackPx - wantEm * seen.sizePx),
+    `the wordmark tracks ${seen.trackPx.toFixed(2)}px against the roman's ${(wantEm * seen.sizePx).toFixed(2)}`,
+  ).toBeLessThan(0.5)
+
+  expect(seen.opacity, 'the roman is drawn at section 13’s own opacity').toBeCloseTo(PARAMS.romanOpacity, 3)
+
+  /* AND THE WORD IS THE ONLY THING IN THE BAR THAT GROWS, which is why no negative margin is
+     needed for the trailing letter's tracking — asserted here so the reasoning in App.css has a
+     reader, and so that right-aligning this word later fails loudly rather than quietly leaving
+     5.8px of air after the I. */
+  const grows = await mark.evaluate((el) => getComputedStyle(el).flexGrow)
+  expect(grows, 'the wordmark fills the bar, so its trailing tracking is invisible').toBe('1')
 })

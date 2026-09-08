@@ -6,7 +6,7 @@ import { getStatus, onServerBoot } from './server'
 import { Button, Icon, Kbd, Lockup,
   Logo,
   applyTheme, readTheme, useLeave, type IconName, type Theme } from './kit'
-import { BLOCK } from './kit/lockupGeometry'
+import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
 
 import { Home } from './Home'
@@ -1077,19 +1077,44 @@ function Sidebar({
 /* ---- phone chrome ------------------------------------------------------------------------------- */
 /* Every owner screen draws its own h1 directly under this bar, so the bar carries the
    wordmark rather than repeating (or, on Codes, contradicting) the screen's name.
+   IT SAID `Not found` FOR AN UNKNOWN HASH, AND THAT BRANCH COULD NOT RUN. `hasChrome` is false
+   when `route` is undefined, so the shell — this bar included — is never rendered for one;
+   `NoSuchView` draws standing alone. The ternary was dead when it was written and `route` was
+   the prop that fed it, so both are gone rather than carried.
    THE MARK HERE IS THE EMPTY SLOT, NOT THE TILE (logo.md section 19). This bar is the rail's
    own case one breakpoint down — 52px of height against the rail's 64px width — and the lockup
    is refused by both for the same arithmetic: its floor is kanji 32, which is a 102 x 75 block
    (section 11). So the bar draws what the rail draws, off the same `Lockup`, and App.css pins
    the slot railed. It was a `Logo` tile until 2026-09-07, which made the shell speak two brands
    depending on how wide the window was, and sank into the bar on dark. */
-function PhoneBar({ route, onMenu, onPalette }: { route: Route | undefined; onMenu: () => void; onPalette: () => void }) {
+function PhoneBar({ onMenu, onPalette }: { onMenu: () => void; onPalette: () => void }) {
   return (
     <header className="bn-topbar">
       <a className="bn-topbar-brand" href="#/" aria-label="Banchi home">
         <BrandSlot />
       </a>
-      <span className="bn-topbar-title">{route === undefined ? 'Not found' : 'Banchi'}</span>
+      {/* THE WORDMARK IS THE LOCKUP'S OWN ROMAN, SET AS TEXT (logo.md section 19, amended). It was
+          `Banchi` in Manrope 700 at 16px — the right face and the wrong voice: sentence case, no
+          tracking, full ink, beside a mark whose own name is drawn in caps at 45%.
+          EVERY VALUE COMES FROM THE GEOMETRY, and none is typed here. The roman is Manrope 700
+          (`lockupGeometry.ts`'s own header says so), its tracking is the width-match's SOLVED
+          answer rather than section 13's seed, and both are published to CSS the way `BrandSlot`
+          publishes the block. A number copied out of that file is the defect section 13 spent
+          thirty-seven rounds learning, and this is the same file it would be copied from.
+          THE TRACKING IS CONVERTED, WHICH IS THE ONE ARITHMETIC STEP. `ROMAN_TRACK_SOLVED` is a
+          fraction of the KANJI's size; `letter-spacing` is a fraction of the element's own. The
+          roman is `romanSize` of the kanji, so the em value is the ratio of the two.
+          THE TRAILING TRACKING IS LEFT IN THE BOX ON PURPOSE — see App.css, where it is measured
+          at 135px of gap either way, because this element grows to fill the bar. */}
+      <span
+          className="bn-topbar-wordmark"
+          style={{
+            ['--bn-roman-track' as string]: `${ROMAN_TRACK_SOLVED / PARAMS.romanSize}em`,
+            ['--bn-roman-opacity' as string]: String(PARAMS.romanOpacity),
+          }}
+        >
+          Banchi
+        </span>
       <Button variant="ghost" icon="search" iconOnly onClick={onPalette}>
         Search
       </Button>
@@ -1334,7 +1359,7 @@ export function App() {
         onPalette={() => setPalette(true)}
       />
       <div className="bn-shell-main">
-        <PhoneBar route={route} onMenu={() => setDrawer(true)} onPalette={() => setPalette(true)} />
+        <PhoneBar onMenu={() => setDrawer(true)} onPalette={() => setPalette(true)} />
         {server === 'offline' ? (
           <div className="bn-banner" role="alert">
             <Icon name="alert" size={16} />

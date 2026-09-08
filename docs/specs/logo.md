@@ -1974,6 +1974,55 @@ is a flex column and `.bn-nav` is the only thing in it that scrolls, so `Cards t
 toggle and the server line are pinned and reachable at every size measured above. Nothing became
 unreachable.
 
+### The phone bar's word IS the roman, and every value comes off the drawing
+
+**Amended 2026-09-07, on the owner's instruction: "the exact same look that we currently have as
+the roman subtext in the lockup, all caps with that faint aesthetic/spacing."**
+
+The bar drew `Banchi` in Manrope 700 at 16px — sentence case, no tracking, full ink — beside a
+mark whose own name is drawn in caps at 45% with a tracking a width-match solved for. The right
+face in the wrong voice.
+
+**It is set as TEXT, not drawn, and that is possible because the roman is Manrope.**
+`lockupGeometry.ts`'s own header says so: *"BANCHI — Manrope 700 at 0.25 of the kanji, tracked to
+0.75 of its advance"*, and Manrope is `--bn-font-display`, which this app already ships. The kanji
+could never be text — it is outlined precisely because IBM Plex Sans JP cannot ship (§14) — but
+the roman can be, and text is findable, selectable and announced.
+
+| what | where it comes from |
+| --- | --- |
+| face | Manrope 700, `--bn-font-display` — the face the generator outlines it in |
+| case | `text-transform: uppercase`; the DOM keeps `Banchi` |
+| tracking | `ROMAN_TRACK_SOLVED / PARAMS.romanSize` em — the SOLVED answer, not §13's seed |
+| ink | `PARAMS.romanOpacity`, 0.45, over `--bn-ink` |
+| size | **13px** (`--bn-fs-md`) — the one value the geometry does not decide |
+
+**Nothing above is typed into a stylesheet.** The element publishes the tracking and the opacity
+as custom properties the way `BrandSlot` publishes the block, so a re-solve of the width-match or
+a move of `romanSize` reaches the bar without anyone remembering to follow it. A number copied out
+of that file is the defect §13 spent thirty-seven rounds learning, and it is the same file it
+would have been copied from.
+
+**The size is a forced choice and the geometry cannot make it.** In the lockup the roman is a
+fraction of the kanji; in the bar there is no kanji to be a fraction of — the mark is the rail's
+bracket. Drawn at 11, 12, 13, 14 and 16px in the running bar, both themes: **11 reads as a
+caption and goes weak beside a 32px mark; 16 stops being faint and starts competing with it, a
+wide caps run at 45% turning into a banner; 13 sits with the bracket as one object.** For scale,
+the sidebar's own roman renders at about 10px — the bar's is a little larger because it carries
+the name alone rather than under 番地.
+
+**Two things went with it, both dead before this edit.** The bar's title said `Not found` for an
+unknown hash — a branch that cannot run, because `hasChrome` is false when `route` is undefined
+and the shell is never rendered for one. `PhoneBar` took a `route` prop only to feed it. And a
+`margin-right` compensating the trailing letter's tracking was written, kept, and then measured:
+the gap to the search button is 135px with it and 135px without, because the word is `flex: 1 1
+auto` and grows to fill the bar whatever its content measures. `brand.spec.ts` asserts the grow,
+so the day the word stops growing that reasoning fails loudly instead of leaving 5.8px of air.
+
+`app/tests/brand.spec.ts` asserts the face, the case, the tracking against the geometry's own
+arithmetic, the opacity and the grow. Four of five were observed red under mutation; the fifth
+(the margin) is what the measurement above deleted.
+
 **What would move it is the drawer's own density**, not the brand — the 44px rows, or the three
 group labels. That is a separate question and it is not this section's.
 
