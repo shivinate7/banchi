@@ -1172,8 +1172,10 @@ async function remember(page: Page, statuses: string[] | null, skipKnown = false
            the one file whose subject it is. The rule bans the STORE so that a new device-local
            key lands in `app/src/deviceMemory.ts` in front of a reviewer, and this one did — see
            D114. Asserting how that key behaves means writing it, and a spec that reached it
-           through the UI instead would be testing the panel's layout on the way past. This is
-           the only `localStorage` call in `app/tests`. */
+           through the UI instead would be testing the panel's layout on the way past. One of
+           TWO `localStorage` calls in `app/tests`, the other being `wide.spec.ts:withRail`,
+           which seeds the shell's rail state before first paint (D123). It said "the only"
+           until 2026-09-07. */
         window.localStorage.setItem(key, value)
       } catch {
         /* a browser refusing storage reads as never chosen, which is the other case */

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
 import type {
@@ -1359,7 +1359,31 @@ export function BoxBrowse({
                                 title={departed ? 'Departed — no longer in this box' : undefined}
                                 onClick={() => pickRow(row.key)}
                               >
-                                <span className="browse-row-position">{rowSlot(row)}</span>
+                                {/* THE WIDTH THE SALE WILL NEED, RESERVED BEFORE IT IS SPENT
+                                    (D118). Selling this copy rewrites the slot from `#1` to the
+                                    store key `B2 #1`, which is wider — so the column grew and
+                                    the name and the badges slid right ON THE PRESS. The ghost
+                                    holds that exact string, in the face it will be set in, so
+                                    the track is already that wide and the write changes only
+                                    which of the two is painted.
+                                    IT IS `content:` AND NOT A TEXT NODE, AND IT IS
+                                    `aria-hidden`. A hidden twin in the DOM would put `B2 #1`
+                                    into every row's text content, where the census, the walk's
+                                    locators and this button's own accessible name all read;
+                                    pseudo content is in none of those, and the attribute keeps
+                                    the pseudo out of the accessibility tree as well. And it is
+                                    the STRING rather than a `ch` count of it: the count was the
+                                    first build and it is an estimate — a face whose weight is
+                                    synthesized does not set five characters at five times the
+                                    advance of `0`, which is the register the whole 1px is in. */}
+                                <span className="browse-row-position">
+                                  <span className="browse-row-slot">{rowSlot(row)}</span>
+                                  <span
+                                    className="browse-row-slotghost"
+                                    aria-hidden="true"
+                                    style={{ '--bn-slot-key': JSON.stringify(departedKey(row.card)) } as CSSProperties}
+                                  />
+                                </span>
                                 {/* NEVER the state word here: the row would read `#1
                                     Identified` while the hero for the same card reads `Not
                                     identified yet`. One phrase, dimmed, on every surface that

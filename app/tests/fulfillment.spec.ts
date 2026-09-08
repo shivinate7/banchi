@@ -377,7 +377,6 @@ function searchAnswer(q: string, states: Store, soldHere = 0) {
       sold_here: soldHere,
       live_as_of: null,
       on_hand: onHand,
-      cap: 4,
       /* D7's `min(cap, on hand)`, mirroring `capture_server.py`. Derived from `onHand` above so
          the fixture cannot promise a denominator its own copy count contradicts. */
       listable: Math.min(4, onHand),

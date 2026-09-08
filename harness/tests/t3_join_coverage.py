@@ -770,6 +770,96 @@ def _check_committed_from_counts(c, export) -> None:
         )
 
 
+def _check_overrun_is_named(c, export) -> None:
+    """A SKU already past the cap says BY HOW MUCH, and `min` used to hide exactly that.
+
+    THE CAP IS A CEILING ON COPIES LIVE (D7, amended 2026-09-08 on the operator's ruling),
+    so the reason a matched SKU adds nothing is that `copies_out` already meets or exceeds
+    the figure the send asked for. The sentence that says so printed
+    `min(copies_out, live_cap)` — clamping the very number that explains the refusal to the
+    cap itself, so seven copies out against a cap of two read as "2 of the 2 this SKU may
+    have out". The operator's next question is "then why is nothing going out", and the
+    answer had been rounded away.
+
+    IT WAS SURVIVABLE UNDER A STANDING CAP and is not under a per-send one. With a bound of
+    four standing over everything, `copies_out` rarely ran far past it; with the figure typed
+    per press, asking for two while seven are out is the ordinary case, and D7's rewrite made
+    uncapped the default so `copies_out` grows without a ceiling to hold it down.
+
+    ASSERTED ON THE SENTENCE AND NOT ON THE COUNT. That `add_to_quantity` is zero here is
+    D59's arithmetic and is already covered; what this pins is that the report can be acted
+    on, which is the property `nothing_to_add`'s own docstring exists for.
+    """
+    c.note("")
+    c.note("OVERRUN — a SKU past the cap names the figure that explains it")
+
+    with _isolated_home() as home:
+        # SEVEN ON THE SHELF, FIVE OF THEM LIVE. Two copies have never been sent, so
+        # `uncommitted_positions` is NOT empty — which is what makes this the overrun case
+        # rather than the "every copy is already listed" one. A fixture where every copy is
+        # committed answers the first branch and never reaches the sentence under test.
+        _stock(SEVEN_COPY_SKU, "Near Mint", 7, live=5)
+        resolved = _resolve_in(
+            home, 7, _export_file(home / "export.csv", export, live_quantity=5), live_cap=2
+        )
+        match = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            len(match.uncommitted_positions),
+            2,
+            "two copies have never been sent — stated first, because a fixture that "
+            "committed all seven would answer a different branch and pass for the wrong "
+            "reason",
+        )
+        c.equal(
+            match.add_to_quantity,
+            0,
+            "five already live against a cap of two adds nothing, even though two copies sit "
+            "unsent on the shelf — the ceiling reading, which is D59's arithmetic and right",
+        )
+        said = match.nothing_to_add or ""
+        # ASSERTED ON THE WORD, NOT THE DIGITS. Both the old sentence and the new one contain
+        # a 5 and a 2 — "5 live, at the cap of 2" against "5 live, over the 2 this send asked
+        # for" — so a check for the figures passes against the defect. What was wrong is the
+        # CLAIM: five out under a cap of two is not "at the cap", it is past it, and an
+        # operator reading "at the cap" has been told the state is the one they asked for.
+        c.ok(
+            "over the 2" in said,
+            f"THE SENTENCE SAYS THE STATE IS PAST THE FIGURE. Got: {said!r}",
+        )
+        c.ok(
+            "at the cap" not in said,
+            f"and it does NOT claim to be AT the cap, which is the false sentence: it reads "
+            f"as compliance when the store is over by three. Got: {said!r}",
+        )
+
+    # THE OTHER ARM, where copies are out that this pipeline has not seen land. `pending > 0`
+    # takes a different sentence, and that is the one `min(copies_out, live_cap)` was written
+    # into — the arm the operator meets after an import they have not reconciled.
+    with _isolated_home() as home:
+        _stock(SEVEN_COPY_SKU, "Near Mint", 7, pushed=5, live=2)
+        resolved = _resolve_in(
+            home, 7, _export_file(home / "export.csv", export, live_quantity=2), live_cap=2
+        )
+        match = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            match.add_to_quantity,
+            0,
+            "five out against a cap of two adds nothing on this arm too",
+        )
+        said = match.nothing_to_add or ""
+        c.ok(
+            "5 already out" in said,
+            f"AND IT NAMES THE FIVE THAT ARE OUT. `min(copies_out, live_cap)` printed the CAP "
+            f"here — '2 of the 2 this SKU may have out' — which is a true statement about the "
+            f"cap and a false one about the store, on the row whose whole question is why "
+            f"nothing is going. Got: {said!r}",
+        )
+        c.ok(
+            "of the 2 this SKU may have out" not in said,
+            f"and the clamped phrasing is gone rather than merely joined. Got: {said!r}",
+        )
+
+
 def _check_answer_off_the_record(c, export) -> None:
     """D3 rung 0, read off the LIVE INVENTORY rather than handed in as a field.
 
@@ -1466,6 +1556,7 @@ def run() -> Result:
     # answer is read back off the card record.
     _check_set_valued_claim(c, export)
     _check_committed_from_counts(c, export)
+    _check_overrun_is_named(c, export)
     _check_answer_off_the_record(c, export)
     _check_game_partition(c, export)
 

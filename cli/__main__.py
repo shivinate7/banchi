@@ -195,8 +195,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--cap",
         type=int,
         metavar="N",
-        help="send at most N copies of any one SKU. Omit for no cap, which is the default "
-        "since the standing playset bound was retired",
+        help="hold this SKU to at most N copies LIVE at TCGplayer, counting what is already "
+        "out — a SKU at or over N adds nothing and the report says by how much. Omit for no "
+        "cap, which is the default since the standing bound was retired",
     )
     _pricing_arguments(emit)
 

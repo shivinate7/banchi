@@ -107,32 +107,61 @@ make dev            # Vite app. :5173 in the main tree, its own port in a worktr
 make server         # Python capture server. :8000 in the main tree, its own port in a
                     #   worktree — it prints which, and whose store it is serving. Blocks.
 make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev` running.
-make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser.
-                    #   ~2 MINUTES CLEAN AND LONGER UNDER LOAD, against a 120s tool timeout —
-                    #   so a session ALWAYS backgrounds it, and the answer is a file rather
-                    #   than the stream. IT LEAVES `.serve/design-check.json`: verdict,
-                    #   counts, and every failing title with its location and error, no ANSI
-                    #   and no NUL bytes. Read that ONCE when the run lands. It says
-                    #   `"verdict": "running"` from the moment the suite starts, so a reader
-                    #   can tell STILL GOING from DIED — and a file still saying that after
-                    #   the process has exited means the run died between the two writes (a
-                    #   crashed worker, an OOM, a kill). NO FILE AT ALL means it died before
-                    #   Playwright loaded its config; the target deletes the file before it
-                    #   runs, so that can never show you the LAST run's pass. Measured: a
-                    #   dead `webServer` and an unparseable spec both land a real `fail` with
-                    #   0/0 counts, which is its own recognisable signature.
-                    #   AND DO NOT POLL FOR IT. A backgrounded command re-invokes the
-                    #   session when it EXITS, so the sequence is: background it, do other
-                    #   work, read the file once when the notification lands. An `until`
-                    #   loop over this file buys nothing and produces one notification per
-                    #   poll, none of which carry the result — that was half of what the
-                    #   dozen turns below were spent on.
-                    #   NEVER PIPE IT THROUGH `tail`: `... | tail -N > file` writes
-                    #   NOTHING until the process exits, because tail buffers its whole
-                    #   input — so the obvious "run it and read the tail" gives an empty file
-                    #   for the entire run and no way to tell it from a dead one. Those two
-                    #   traps together cost a session about a dozen turns on 2026-09-07,
-                    #   before the owner killed the background tasks by hand.
+                    #   IT CAN FAIL FOR THE RIGHT REASON SINCE 2026-09-07. Until then the only
+                    #   failure was an empty file, so a render MISSING AN ELEMENT — a valid,
+                    #   plausible-looking PNG — passed, and a session looked at an incomplete
+                    #   page and called a screen fine. Each manifest line may name the elements
+                    #   its render must prove it drew; the renderer hides one, captures again,
+                    #   and refuses the render when not a pixel changed.
+                    #   AND IT RENDERS THE TREE IT IS RUN FROM, since the same day (D43).
+                    #   scripts/views.txt names the main checkout's :5173 as a CONVENTION —
+                    #   a tracked file cannot name a port derived from one directory's path —
+                    #   and the script reads `server/ports.py:dev_port` and substitutes a
+                    #   worktree's own before rendering. Before this, `make screenshot` in a
+                    #   worktree photographed the MAIN tree's app over the owner's real store
+                    #   and the renders looked entirely correct.
+make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT TAKES A
+                    #   MACHINE-WIDE LOCK FIRST, AND IT IS THE ONE THING D43 COULD NOT MAKE
+                    #   PER-CHECKOUT (D122): every tree has its own ports and its own store,
+                    #   and the CPU is shared. This is the target that spends all of it —
+                    #   `fullyParallel` at half the cores, each worker a Chromium context over
+                    #   its own Vite server. Two trees running it at once starve each other and
+                    #   BOTH report failures that are not in the code: 18 of them on
+                    #   2026-09-07, all 52 green on a re-run alone.
+                    #   IT REFUSES rather than queues, naming the tree that holds the lock, and
+                    #   exits 75 so a refusal can never read as a failing suite. `ARGS=--wait`
+                    #   queues instead and says so every thirty seconds — a silent wait reads
+                    #   as a hang, which is the other half of what that session hit.
+                    #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
+                    #   refusal. `make harness` and `make check` deliberately do NOT take it;
+                    #   docs/DEBTS.md §16 is why, and which half of that is measured.
+                    #   AND IT LEAVES A VERDICT, WHICH IS HOW A SESSION WAITS FOR IT. 89-175s
+                    #   measured across five runs, against a 120s tool timeout — so a session
+                    #   ALWAYS backgrounds it, and the answer is a file rather than the
+                    #   stream. `.serve/design-check.json` holds the verdict, the counts, and
+                    #   every failing title with its location and error, no ANSI and no NUL
+                    #   bytes. Read it ONCE when the run lands. It says `"verdict": "running"`
+                    #   from the moment the suite starts, so a reader can tell STILL GOING
+                    #   from DIED — a file still saying that after the process has exited
+                    #   means the run died between the two writes (a crashed worker, an OOM,
+                    #   a kill). NO FILE AT ALL means the run never reached Playwright's
+                    #   config: an unloadable config, a missing toolchain, or the lock
+                    #   refusing it. All three are LOUD — a refusal prints and exits 75 — and
+                    #   the target deletes the file first so none of them can ever show you
+                    #   the LAST run's pass, which is the only silent one of the four.
+                    #   Measured: a dead `webServer` and an unparseable spec both land a real
+                    #   `fail` with 0/0 counts, their own recognisable signature.
+                    #   AND DO NOT POLL FOR IT. A backgrounded command re-invokes the session
+                    #   when it EXITS, so the sequence is: background it, do other work, read
+                    #   the file once when the notification lands. An `until` loop over this
+                    #   file buys nothing and produces one notification per poll, none of
+                    #   which carry the result.
+                    #   NEVER PIPE IT THROUGH `tail`: `... | tail -N > file` writes NOTHING
+                    #   until the process exits, because tail buffers its whole input — so
+                    #   the obvious "run it and read the tail" gives an empty file for the
+                    #   entire run and no way to tell it from a dead one. Those two traps
+                    #   together cost a session about a dozen turns on 2026-09-07, before the
+                    #   owner killed the background tasks by hand.
                     #   IT IS GUARDED TWICE, BECAUSE THE NAMES AND THE BEHAVIOUR FAIL
                     #   SEPARATELY. `make docs-audit`'s `verdict file` row reconciles the
                     #   reporter's own RESULT_FILE against the config's reporter list, both
@@ -143,11 +172,17 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser.
                     #   title, and no ANSI or NUL in the error. That one catches a
                     #   @playwright/test bump moving the Reporter API, where every name stays
                     #   right and every count goes wrong. Both mutation-tested — five arms and
-                    #   four. NO BROWSER AND NO DEV SERVER, which is why the behavioural half
-                    #   is in `check` and `ci-check` while design-check is in neither.
-make design-check-quiet  # the same run with the 450-line progress stream dropped. Same
-                    #   tests, same verdict file. The progress is only useful to a human
-                    #   watching live and is what makes a captured log unreadable.
+                    #   four. It launches NO BROWSER and NO DEV SERVER, so it is in `check`
+                    #   and `ci-check` and takes no lock.
+make design-check-quiet  # the same run with the 450-line progress stream dropped. Same tests,
+                    #   same verdict file, and THE SAME MACHINE-WIDE LOCK — a quiet variant
+                    #   that skipped it would be D122's starvation reachable by typing a
+                    #   different target name. The progress is only useful to a human watching
+                    #   live and is what makes a captured log unreadable.
+make suite-lock-selftest # the lock, exercised by violating it — including a holder killed with
+                    #   -9, which is the whole argument for `flock` over a pidfile. In `check`,
+                    #   never in the git hook. `PKMNSCAN_LOCK_DIR` sends it at a throwaway
+                    #   directory so it never takes the real lock.
 make demo           # seed a demo store and record the wire into a fixture bundle.
                     #   THE PRODUCT, SHAREABLE, WITHOUT A FORK. This app makes exactly ONE
                     #   `fetch` (`server.ts:request`) and addresses every photograph through
@@ -201,9 +236,10 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + janitor-selftest + verdict-selftest +
-                    #   port-agreement + set-hint-agreement + screen-freshness +
-                    #   sigil-check + ignore-check + lint + vale + typecheck.
+                    #   merge-selftest + janitor-selftest + suite-lock-selftest +
+                    #   verdict-selftest + port-agreement + set-hint-agreement +
+                    #   screen-freshness + sigil-check + ignore-check + lint +
+                    #   vale + typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
@@ -310,8 +346,11 @@ make merge          # merge a PR and move main onto it — BOTH HALVES, on your 
                                    #   never was — `uncommitted_positions` is, and it is
                                    #   untouched. Uncapped, six copies with three already live
                                    #   offer THREE.
-                                   #   --cap N            send at most N copies of any one
-                                   #                      SKU. Omit for no cap, the default
+                                   #   --cap N            hold this SKU to at most N copies
+                                   #                      LIVE, counting what is already out
+                                   #                      — a SKU at or over N adds nothing
+                                   #                      and the report says by how much.
+                                   #                      Omit for no cap, the default
                                    #   --listed-only      above-threshold rows only (a filter,
                                    #                      not a split — the rest wait)
                                    #   --split-threshold  the old pair back: import-listed.csv
@@ -439,9 +478,15 @@ client call is written and `app/src/types.ts` the only place the wire's shapes a
 sentence**, and see "the census" below for what enforces that.
 
 ```
-#/             Home           the product as a picture: the six-stage spine
-                              (Capture → Runs → Review → Pricing → Orders → Shipping) with the
-                              live figure under each stage, the boxes, the runs, one action.
+#/             Home           the product as a picture: ONE RANKED SENTENCE saying what the
+                              store is waiting on (D121, `standing.ts` — and the null invariant
+                              in it is the load-bearing part), one action, then the library
+                              drawn as the work that made it — sittings clustered from
+                              `captured_at`, each block as wide as its minutes and as tall as
+                              its cards an hour, so its area is its card count. Then the
+                              six-stage spine (Capture → Runs → Review → Pricing → Orders →
+                              Shipping) with the live figure under each stage, the boxes, the
+                              runs.
                               Every figure is the one that stage's own screen draws, read from
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
@@ -521,9 +566,16 @@ they must NOT be theme-overridable, which is what moving them into `tokens.css` 
 That file is generated, never hand-edited, and `make docs-audit`'s `logo parity` row reconciles
 it against §9 in both directions — because `raw color` cannot see it at all, its scope being
 `app/src/*.css` and never a `.ts`. **An exception with no reader is how a rule stops being one.** Every token is `--bn-*` — color, type, spacing, radius, elevation, motion, the
-shell's own metrics — and the legacy names the old sheet exported (`--ink`, `--muted`,
-`--line`, `--s1…`, `--r`, `--util`) survive at the bottom as aliases so no stylesheet was
-orphaned. **Write new CSS with `--bn-*`.**
+shell's own metrics. **Write new CSS with `--bn-*`.**
+
+**The legacy aliases at the foot of that file are a migration seam that is already spent, and
+this paragraph said the opposite until 2026-09-07.** It said the old names — `--ink`, `--muted`,
+`--line`, `--s1…`, `--r`, `--util` — "survive so no stylesheet was orphaned", which read as a
+live dependency; `app/src/tokens.css`'s own header went further and said forty stylesheets read
+them. **Measured across all 102 files under `app/src`: not one reads any of the twenty-four,
+against 266 uses of `var(--bn-ink)` alone.** `docs/DESIGN.md` has recorded this correctly since
+2026-09-03 and both of these had drifted from it. They are kept rather than deleted, which is
+that file's stated call — and **a new rule may not read one.**
 
 **Both themes are real.** Light is the default; `:root[data-theme='dark']` redefines every
 surface and ink together, `app/index.html` applies a stored choice before first paint, and the
@@ -809,9 +861,9 @@ A screen is not finished because it compiles.
   to each was *"neither still applies"*.
 
   **A cap is now something a SEND asks for**: `emit --cap N`, and the field beside the other
-  emit options on `#/pricing`'s ship bar. `policy.live_cap` in `inventory/prices.json` survives
-  for a store that wants a standing answer — store-wide, overridable per run through
-  `policy.per_run` — and **reads `None` when nothing has written one**, which is the reversal.
+  emit options on `#/pricing`'s ship bar. **`policy.live_cap` IS DELETED as of 2026-09-08** —
+  `--cap` is the only place a cap is named, and a store still holding the key is refused by
+  name rather than silently uncapped. `policy.per_run` survives for its other four keys.
   It was a promise D7 made and nothing built until 2026-09-06: the parameter was threaded
   through `SkuMatch`, `join` and `resolve.load` from the start and no caller ever passed
   anything but the module default. `pipeline/pricing.py:LIVE_QUANTITY_CAP` is still 4 and is
@@ -1011,11 +1063,13 @@ apostrophes in names) live in the `tcgplayer-csv` skill. It loads on demand.
   photo in a listing, README, screenshot, or commit. Enforced by pre-commit hook.
 - **A screen answers to the system.** New CSS reads `--bn-*` tokens and never names a color;
   a primitive the kit already has is not rewritten in a screen sheet; a screen is verified at
-  1440, 820 and 390, in light and in dark, before it is called done. **This rule replaces
-  `docs/DESIGN.md`'s locked token table as the thing a session designs against** — that table
-  still holds the Fulfillment view's floors, which are unchanged and still asserted by
-  `make design-check`, but its color and type block records a palette the app no longer
-  paints and `make docs-audit` says so on every run.
+  1440, 820 and 390, in light and in dark, before it is called done. **`docs/DESIGN.md` is
+  where that system is written down, and it describes this tree** — it was rewritten for Banchi
+  on 2026-09-03, its token block is the `--bn-*` set, and `make docs-audit`'s `design tokens`
+  row locks every name in both directions. These two paragraphs said the opposite until
+  2026-09-07: that the block recorded a palette the app no longer paints and that the audit
+  "says so on every run". It does not, and did not — the row prints `ok` and has since the
+  rewrite. **A claim that a check is red is worth checking against the check.**
 - **Main moves by pull request. A session never commits to it and never pushes it.**
   Work goes on a branch, the branch is pushed, `gh pr create` opens the PR, and it is merged on
   GitHub. `main` then advances in this clone by `git pull` and no other way.
@@ -1283,6 +1337,9 @@ D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-
 D118 A press changes what is on the screen, never where the rest of it is
 D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
 D120 The shell speaks one brand at every width, and the phone bar is a rail
+D121 The front page says what is owed, and the library is drawn as the work that made it
+D122 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
+D123 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
@@ -1414,9 +1471,11 @@ was open** — the rule is renumber your own, never another's.
 - `docs/DESIGN.md` — **two halves, and only one of them still describes this tree.** The
   Fulfillment view's hard constraints table is live, binding and asserted in a browser by
   `make design-check`: 20px body, 32px position labels, a 320px photograph, 44px targets, 7:1
-  contrast, no jargon, and no route out of that view. The token block beside it records the
-  palette and type of the sheet Banchi replaced; `app/src/tokens.css` is the system now, and
-  `make docs-audit`'s `design tokens` row reports the disagreement on every run until the two
-  are reconciled by someone who owns that file.
+  contrast, no jargon, and no route out of that view. **The token block beside it is live
+  too**, and this pointer called it stale until 2026-09-07: it is the `--bn-*` set, rewritten
+  for Banchi on 2026-09-03, and `make docs-audit`'s `design tokens` row reconciles it against
+  `app/src/tokens.css` in both directions on every run — green, not red. That row locks every
+  token NAME and the hex VALUES; the scale numbers beside them are prose, which `docs/DEBTS.md`
+  carries as an open gap.
 - `code-card-fork/CLAUDE.md` — the code-card track. Separate schema, separate channel.
 - `fixtures/` — real TCGplayer exports. Ground truth. Never modify.

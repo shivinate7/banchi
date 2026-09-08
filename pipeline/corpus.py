@@ -151,22 +151,6 @@ class Corpus:
     #: asymmetric for a day — a defaulted cheap price beside a constant threshold — and the
     #: pair inverted. One figure, one fallback.
     threshold: object = DEFAULT_CUTOFF
-    #: How many copies of one SKU may be live at TCGplayer at once, or `None` for NO CAP —
-    #: which is the ordinary value since D7 was rewritten (2026-09-07). Store-wide, and
-    #: overridable per run through `policy.per_run` like the four keys above it — the run-level
-    #: override D86 named as its own reopening condition, and this is its FIRST WRITER. A lot
-    #: that genuinely wants a different exposure is exactly the case D7's "configurable" was
-    #: about, and the store-wide figure is the one that answers for everything else.
-    #:
-    #: THE DEFAULT WAS STILL `LIVE_QUANTITY_CAP` UNTIL 2026-09-08, WHICH LEFT D7's REWRITE
-    #: UNFINISHED. `Corpus.parse` reads an absent key as `None` correctly, so a store with a
-    #: file was answered right — but a DEFAULT-CONSTRUCTED corpus carried four, and
-    #: `to_payload` writes this key unconditionally, so the first save of a fresh store wrote
-    #: the retired bound into `policy` where every later read would find it. The one caller
-    #: that matters is `server/pipeline_routes.py`'s fallback for a corpus it could not read:
-    #: it invented a cap nobody had set, which is exactly what `live_cap_for`'s own except
-    #: arm was changed to stop doing.
-    live_cap: object = None
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the
     #: standing policy, which is expected to be almost all of them.
@@ -217,10 +201,24 @@ class Corpus:
         # discarded like the two above, but a MISSING key is the store that has never set one
         # and reads `DEFAULT_CUTOFF`, where a present-and-unusable one is refused by name.
         pricing.check_threshold(policy.get("threshold"))
-        # VALIDATED AT READ TIME LIKE THE OTHERS, and by the same parser `Decisions.parse`
-        # uses, so a store whose policy holds `live_cap: 0` refuses when the file is opened
-        # rather than emitting nothing for every SKU and looking like a broken pipeline.
-        decisions_mod.parse_live_cap(policy.get("live_cap"))
+        # THE STANDING CAP IS RETIRED, AND A STORE THAT STILL HOLDS ONE IS REFUSED BY NAME
+        # (D7, amended 2026-09-08). Ignoring the key would silently UNCAP a store that had
+        # asked to be bounded — the same defect D86 refuses a legacy `decisions.json` for,
+        # and for its reason: "a legacy file read as a fallback" and "a legacy file ignored
+        # in silence" are one defect wearing two coats. `Corpus.parse` rebuilds `policy` from
+        # named fields and `keep` below preserves only unknown TOP-LEVEL keys, so an
+        # unrecognised POLICY key is destroyed on the next write rather than carried — which
+        # is what makes silence here irreversible as well as quiet.
+        #
+        # `null` IS NOT A LEFTOVER AND PASSES. It is what a store that has cleared its cap
+        # holds, and what `to_payload` wrote for as long as the key existed.
+        if policy.get("live_cap") is not None:
+            raise decisions_mod.MalformedDecisions(
+                f"this store holds policy.live_cap = {policy['live_cap']!r}, and the standing "
+                f"cap was retired on 2026-09-07. A cap is asked for per send now: pass "
+                f"`--cap N` to `pkmnscan emit`, or type it into the ship bar on #/pricing. "
+                f"Remove the key from inventory/prices.json — or set it to null — to continue."
+            )
         # THE ONE KEY WITH A DEFAULT VALUE, AND ONLY WHERE THE FILE IS SILENT. Absent or `null`
         # reads as `DEFAULT_SUB_THRESHOLD`; `"floor"` and a written flat price are what they
         # say. Validated ONCE here, by the parser `Decisions.parse` uses, for the argument the
@@ -239,7 +237,6 @@ class Corpus:
                 if policy.get("threshold") is None
                 else str(policy["threshold"]).strip()
             ),
-            live_cap=decisions_mod.parse_live_cap(policy.get("live_cap")),
             answers=answers,
             overrides={
                 str(name): dict(over)
@@ -279,10 +276,6 @@ class Corpus:
             # `policy.threshold` to draw the control, and a key that appears only once
             # somebody has changed it is a control that cannot draw its own current value.
             "threshold": self.threshold,
-            # WRITTEN ALWAYS, FOR `threshold`'S REASON. A screen that lets the operator set
-            # the cap has to be able to draw the figure standing now, and a key that appears
-            # only after somebody changes it cannot show its own current value.
-            "live_cap": self.live_cap,
         }
         if self.overrides:
             policy["per_run"] = self.overrides
@@ -397,7 +390,6 @@ class Corpus:
             "basis": self.basis,
             "sub_threshold": self.sub_threshold,
             "threshold": self.threshold,
-            "live_cap": self.live_cap,
         }
         return {
             key: (over[key] if over.get(key) is not None else value)
@@ -673,26 +665,6 @@ def _is_hold(value: object) -> bool:
     if isinstance(value, dict):
         return decisions_mod.WITHHELD_KEY in value
     return str(value).strip().lower() == decisions_mod.pricing.UNLISTED
-
-
-def live_cap_for(run_name: Optional[str] = None) -> Optional[int]:
-    """The live cap standing right now, store-wide or for one run. Never raises.
-
-    FOR THE READ PATHS, which are the servers. `#/pricing`, `#/runs` and the copy map all draw
-    the cap, and a screen that cannot draw it because the corpus is momentarily unreadable is
-    worse than one drawing D7's default — the figure is advisory on those surfaces, and the
-    write paths (`join`, `emit`) parse the policy properly and refuse a bad one. So a malformed
-    or missing file falls back here rather than taking a read route down.
-    """
-    try:
-        return decisions_mod.parse_live_cap(
-            Corpus.read().policy_for(run_name).get("live_cap")
-        )
-    except Exception:  # noqa: BLE001 - a read surface never fails over an advisory figure
-        # `None` — NO CAP — is the fallback since D7 was rewritten, and it matches what an unreadable
-        # policy most likely says: nothing. Falling back to a NUMBER here would invent a bound
-        # the operator did not set, on a screen, from a file this could not read.
-        return None
 
 
 def _token(value: object) -> str:

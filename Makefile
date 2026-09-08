@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
+.PHONY: help status map explain harness check ignore-check docs-audit vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest port-agreement set-hint-agreement screen-freshness sigil-check suite-lock-selftest icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup hooks up down restart launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -64,6 +64,7 @@ help:
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
+	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
 	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
@@ -77,9 +78,10 @@ help:
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + janitor-selftest + verdict-selftest +"
-	@echo "                    port-agreement + set-hint-agreement + screen-freshness +"
-	@echo "                    sigil-check + ignore-check + lint + vale + typecheck"
+	@echo "                    merge-selftest + janitor-selftest + suite-lock-selftest +"
+	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
+	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
+	@echo "                    vale + typecheck"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -96,7 +98,9 @@ help:
 	@echo "  make server       Python capture server. :8000 in the main tree, its own port in a"
 	@echo "                    worktree (D43) — it prints which. Blocks — background it."
 	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
-	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser."
+	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser. Takes"
+	@echo "                    a machine-wide lock: one browser fleet at a time, across every"
+	@echo "                    checkout (D122). ARGS=--wait queues instead of refusing."
 	@echo "                    Leaves the verdict in .serve/design-check.json — read that,"
 	@echo "                    never a \`tail\` pipe, which buffers the whole run."
 	@echo "  make design-check-quiet  the same run without the per-test progress stream."
@@ -367,6 +371,7 @@ check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -403,6 +408,7 @@ ci-check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -662,31 +668,46 @@ screenshot:
 # Deliberately NOT part of `check`: it starts a browser and a dev server, which is a
 # different weight of check from the rest. That reason stood on its own even while `lint`
 # was a stub and `check` could not pass at all; it still stands now that lint runs.
-# IT LEAVES A VERDICT BEHIND, AND THAT IS HOW A SESSION WAITS FOR IT. The suite is ~2
-# minutes clean and much longer under load, against the 120s tool timeout an agent session
-# runs under, so every invocation from one is backgrounded mid-run. `.serve/design-check.json`
-# is what to read when it lands: verdict, counts, failing titles, no ANSI and no NUL bytes.
-# It says `"verdict": "running"` from the moment the suite starts, so a reader can tell
-# "still going" from "died" — and a file still saying that after the process has exited
-# means the run died before the reporter could finish.
+# IT TAKES A MACHINE-WIDE LOCK FIRST, AND THAT IS THE ONE THING D43 COULD NOT MAKE
+# PER-CHECKOUT. Every tree has its own dev port, its own capture port and its own store; the
+# CPU is shared, and this is the target that spends all of it — `fullyParallel` at half the
+# cores, seven Chromium workers on this Mac, each with a Vite dev server compiling for it.
+# Two trees running this at once starve each other and BOTH report failures that are not in
+# the code: 18 of them on 2026-09-07, every one green on a re-run. See scripts/suite-lock.py
+# for the measurement and D122 for the argument.
+#
+# IT REFUSES RATHER THAN QUEUES, and exits 75 so the refusal cannot read as a failing suite.
+# `ARGS=--wait` queues instead, out loud. The `--` is what separates the guard's flags from
+# the command it guards, so `ARGS` can never reach npm.
+#
+# AND IT LEAVES A VERDICT BEHIND, WHICH IS HOW A SESSION WAITS FOR IT. The suite is ~90-175s
+# against the 120s tool timeout an agent session runs under, so every invocation from one is
+# backgrounded mid-run. `.serve/design-check.json` is what to read when it lands: verdict,
+# counts, failing titles, no ANSI and no NUL bytes. It says `"verdict": "running"` from the
+# moment the suite starts, so a reader can tell "still going" from "died".
 #
 # NEVER PIPE THIS THROUGH `tail`. `... | tail -N > file` writes nothing at all until the
 # process exits, because tail buffers its whole input, so the obvious "run it and read the
 # tail" produces an empty file for the entire run and no way to tell it from a dead one.
 # Redirect to a file if you want the stream; read the verdict either way.
-# THE `rm` IS WHAT MAKES A MISSING FILE MEAN SOMETHING. The reporter writes the file at
-# `onBegin`, so it covers every way a run can die once Playwright is up — measured: a
-# `webServer` that never comes up and a spec that will not parse both leave a real
-# `"verdict": "fail"` with 0/0 counts. What it CANNOT cover is a failure before the config
-# loads at all (an unloadable config, a missing toolchain), because no reporter has been
-# constructed yet — and without this line that leaves the PREVIOUS run's `pass` sitting
-# there for a reader to believe. Deleting first makes that case "no file", which is
-# unambiguous.
-# app/design-check-reporter.ts carries the rest of the argument.
+#
+# THE `rm` IS WHAT MAKES A MISSING FILE MEAN SOMETHING, and it runs BEFORE the lock, so
+# "no file" now covers two cases rather than one: the run died before Playwright loaded its
+# config, or the lock refused it. Both are loud — a refusal prints and exits 75 — and neither
+# can be mistaken for a verdict. What the `rm` buys is that the PREVIOUS run's `pass` is
+# never left sitting there for a reader to believe, which is the only silent failure of the
+# three. app/design-check-reporter.ts carries the rest of the argument.
 design-check:
 	$(NPM_GUARD)
 	@rm -f .serve/design-check.json
-	@npm --prefix app run design-check
+	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check
+
+# The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
+# killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
+# spawns processes and writes a lock directory under `mktemp -d`, which is D18's line. Same
+# standing as janitor-selftest, merge-selftest and githooks-selftest.
+suite-lock-selftest:
+	@python3 scripts/suite-lock.py selftest
 
 # The same run with the 450-line progress stream dropped — same tests, same assertions,
 # same `.serve/design-check.json`. The progress is only useful to a human watching live,
@@ -695,7 +716,7 @@ design-check:
 design-check-quiet:
 	$(NPM_GUARD)
 	@rm -f .serve/design-check.json
-	@DESIGN_CHECK_QUIET=1 npm --prefix app run design-check
+	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`

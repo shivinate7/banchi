@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   cropPreview,
   getBoxes,
@@ -18,6 +18,8 @@ import type {
   ServerStatus,
 } from './types'
 import { Button, cropStyle, Icon, type Crop, type IconName } from './kit'
+import { standing, type Standing } from './standing'
+import { photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { hubState } from './OrdersHubStore'
 import './Home.css'
@@ -181,6 +183,195 @@ type Stage = {
   readonly tone?: 'accent' | 'warn' | 'ok'
 }
 
+/** The ranked sentence. Renders what `standing.ts` decided and judges nothing itself. */
+function StandingLine({ standing: say }: { readonly standing: Standing | null }) {
+  if (say === null) return <div className="home-standing-skel bn-skeleton" />
+  /* A row that cannot be pressed is PROSE, not a control: it drops the surface, the ring and
+     the shadow, so the shape says whether there is work before the colour or the words do. */
+  const body = (
+    <>
+      <span className="home-standing-rule" />
+      {say.icon === null ? null : (
+        <span className={`home-standing-ic${say.running ? ' home-standing-ic-live' : ''}`}>
+          <Icon name={say.icon} size={17} />
+        </span>
+      )}
+      <span className="home-standing-say">
+        <span className="home-standing-lead">{say.lead}</span>
+        {say.say.map((part, i) =>
+          part.em ? (
+            <strong key={i}>{part.text}</strong>
+          ) : (
+            <span key={i}>{part.text}</span>
+          ),
+        )}
+      </span>
+      {say.href === null ? null : (
+        <span className="home-standing-go">
+          {say.kbd === null ? null : <kbd className="bn-kbd">{say.kbd}</kbd>}
+          <Icon name="chevronRight" size={16} />
+        </span>
+      )}
+    </>
+  )
+  return (
+    <div className="home-standing" data-tone={say.tone}>
+      {say.href === null ? (
+        <div className="home-standing-row" data-press="no">
+          {body}
+        </div>
+      ) : (
+        <a className="home-standing-row" href={say.href}>
+          {body}
+        </a>
+      )}
+      {say.behind.length === 0 && say.problem === null ? null : (
+        <p className="home-standing-behind">
+          {say.behind.some((b) => b.figure !== null) ? <span className="home-standing-behind-lab">Behind that:</span> : null}
+          {say.behind.map((b, i) => (
+            <span key={i}>
+              {b.figure === null ? (
+                <span className="home-standing-behind-lab">{b.label}</span>
+              ) : (
+                <>
+                  <b>{b.figure}</b> {b.label}
+                </>
+              )}
+            </span>
+          ))}
+        </p>
+      )}
+      {/* The server's own words, verbatim. Never paraphrased and never swallowed. */}
+      {say.problem === null ? null : (
+        <p className="home-standing-problem">
+          <Icon name="alert" size={13} /> <span className="bn-mono">{say.problem}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** The library, and how it was made. Achromatic but for the pace ramp — see `storeHistory.ts`
+ *  for why width is minutes and height is cards an hour. */
+function HistoryFoot({
+  status,
+  boxes,
+  sold,
+  shelf,
+  live,
+}: {
+  readonly status: ServerStatus | null
+  readonly boxes: number | null
+  readonly sold: number | null
+  readonly shelf: Record<string, InventoryCard> | null
+  readonly live: boolean
+}) {
+  const plot: Ribbon | null = useMemo(() => ribbon(sittings(shelf)), [shelf])
+  if (status === null) return <div className="home-foot" />
+  const total = photographed(status)
+  if (total === 0) {
+    return (
+      <div className="home-foot">
+        <p className="home-foot-sum home-foot-quiet">No cards yet. The library starts with the first box.</p>
+      </div>
+    )
+  }
+  /* ON HAND, from `states` alone. Not `Σ boxes[].on_hand`, whose nullable member is null
+     exactly when a box could not be counted — a sum with a null in it is not a sum, and the
+     fallback this replaced (`cards - sold - retired - moved` per box) invented a figure in
+     precisely the case where the server had refused to give one. And not `states.identified`
+     either: a card photographed and not yet identified is still on the shelf. */
+  const onHand =
+    total - (status.states.sold ?? 0) - (status.states.retired ?? 0)
+  const since = plot?.from ? new Date(plot.from).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : null
+  const newest = plot?.blocks[plot.blocks.length - 1]?.sitting ?? null
+  return (
+    <div className="home-foot">
+      <p className="home-foot-sum">
+        <b>{total.toLocaleString()}</b> photographed
+        {plot === null ? null : (
+          <>
+            {' over '}
+            <b>{plot.blocks.length + (plot.plinth?.sittings ?? 0)}</b>
+            {plot.blocks.length + (plot.plinth?.sittings ?? 0) === 1 ? ' sitting' : ' sittings'}
+            {since === null ? null : ` since ${since}`}
+          </>
+        )}
+        <i>·</i>
+        {/* `on_hand` is nullable BECAUSE a box could not be counted. A sum with a null in it is
+            not a sum, so the clause degrades and the sentence does not. */}
+        <b>{onHand.toLocaleString()}</b> on hand
+        {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
+        {sold === null || sold === 0 ? null : <><i>·</i><b>{sold.toLocaleString()}</b> sold</>}
+      </p>
+      {plot === null ? null : <Ribbon plot={plot} live={live} />}
+      {newest === null ? null : (
+        <p className="home-foot-last">
+          <b>{new Date(newest.from).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}</b>
+          {' — '}
+          <b>{newest.cards.toLocaleString()}</b> {newest.cards === 1 ? 'card' : 'cards'}
+          {newest.box === null ? null : <> into Box {newest.box}</>}
+          {newest.rate === null ? '.' : (
+            <>
+              {' in '}
+              <b>{newest.minutes < 2 ? `${Math.round(newest.minutes * 60)} seconds` : `${Math.round(newest.minutes)} minutes`}</b>
+              {'. '}
+              <em>{Math.round(newest.rate).toLocaleString()} an hour.</em>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** The drawing itself. Every number in it comes from `storeHistory.ribbon`. */
+function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean }) {
+  return (
+    <svg
+      className="home-ribbon"
+      viewBox="0 0 620 56"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={`${plot.blocks.length} sittings. Each block is as wide as the minutes it took and as tall as the cards an hour it ran at, so its area is its card count. Below the rule, a tick a sitting on the real calendar.`}
+    >
+      <line className="home-ribbon-ceil" x1="0" y1="0.5" x2="620" y2="0.5" />
+      <g className="home-ribbon-blocks">
+        {plot.blocks.map((b, i) =>
+          b.durationless || b.w <= 0 ? null : (
+            <rect
+              key={b.key}
+              className={b.newest && live ? 'home-ribbon-blk home-ribbon-blk-live' : 'home-ribbon-blk'}
+              style={{ '--n': i, '--pace': Math.round(b.pace * 100) } as CSSProperties}
+              x={b.x}
+              y={b.y}
+              width={b.w}
+              height={b.h}
+              rx={1}
+            >
+              <title>{`${b.sitting.cards} cards, ${Math.round(b.sitting.minutes)} min`}</title>
+            </rect>
+          ),
+        )}
+      </g>
+      <line className="home-ribbon-axis" x1="0" y1="40.5" x2="620" y2="40.5" />
+      <g>
+        {plot.ticks.map((t) => (
+          <rect
+            key={t.key}
+            className={t.newest ? 'home-ribbon-tick home-ribbon-tick-now' : 'home-ribbon-tick'}
+            x={t.x}
+            y={44}
+            width={t.newest ? 2.5 : 2}
+            height={8}
+            rx={1}
+          />
+        ))}
+      </g>
+    </svg>
+  )
+}
+
 export function Home() {
   const status = useLoad<ServerStatus>(getStatus)
   const boxes = useLoad<BoxRecord[]>(async () => (await getBoxes()).boxes)
@@ -222,7 +413,6 @@ export function Home() {
   }, [frontKey])
 
   const boxCount = boxes.state === 'ready' ? boxes.value.length : null
-  const onHand = boxes.state === 'ready' ? boxes.value.reduce((n, b) => n + (b.on_hand ?? b.cards - b.sold - b.retired - b.moved), 0) : null
   const sold = boxes.state === 'ready' ? boxes.value.reduce((n, b) => n + b.sold, 0) : null
   const review = status.state === 'ready' ? status.value.queues.review : null
   const parked = status.state === 'ready' ? status.value.queues.parked : null
@@ -239,6 +429,20 @@ export function Home() {
 
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? pricing.value.roster.filter((r) => r.open && r.owes.length > 0).length : null
+
+  /* THE STANDING LINE. The policy is `standing.ts`; this only hands it the readings and
+     keeps the three non-values apart, which is the whole of what that module needs to obey
+     its null invariant. */
+  const say = standing({
+    status: status.state === 'ready' ? status.value : null,
+    statusFailed: status.state === 'failed',
+    orders: orders.state === 'ready' ? orders.value : null,
+    ordersFailed: orders.state === 'failed',
+    pricing: pricing.state === 'ready' ? pricing.value : null,
+    pricingFailed: pricing.state === 'failed',
+    runs: runs.state === 'ready' ? runs.value : null,
+    runsFailed: runs.state === 'failed',
+  })
 
   /* Shipping: the export the hub last read, if one is in hand. */
   const batch = hubState().batch
@@ -308,30 +512,19 @@ export function Home() {
         <div className="home-hero-text">
           <span className="bn-eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
           <h1 className="home-title">{greeting()}.</h1>
-          <p className="home-lede">
-            {onHand === null || boxCount === null || sold === null ? (
-              <span className="bn-skeleton" style={{ display: 'inline-block', width: 260, height: 18 }} />
-            ) : (
-              <>
-                <strong>{onHand.toLocaleString()}</strong> cards on hand in <strong>{boxCount}</strong> {boxCount === 1 ? 'box' : 'boxes'}
-                {sold > 0 ? (
-                  <>
-                    {' '}
-                    · <strong>{sold.toLocaleString()}</strong> sold
-                  </>
-                ) : null}
-                . Every one has an address.
-              </>
-            )}
-          </p>
+          <StandingLine standing={say} />
           <div className="home-actions">
-            <Button variant="primary" size="lg" icon="camera" kbd=",C" onClick={() => (window.location.hash = '#/capture')}>
-              Start capturing
-            </Button>
-            <Button size="lg" icon="search" onClick={() => (window.location.hash = '#/inventory')}>
-              Find a card
+            <Button
+              variant="primary"
+              size="lg"
+              icon="camera"
+              kbd=",C"
+              onClick={() => (window.location.hash = '#/capture')}
+            >
+              {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Start capturing'}
             </Button>
           </div>
+          <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
         </div>
         <div className="home-hero-art">
           {front === undefined || deckBox === null ? (

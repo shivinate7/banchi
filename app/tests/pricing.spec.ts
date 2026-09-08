@@ -385,7 +385,6 @@ async function open(
         written_at: {},
         skipped: [],
         asked: [],
-        live_cap: 4,
         threshold: '0.40',
         floor: '0.40',
       }),
@@ -1527,7 +1526,6 @@ test('a hold taken now does not move its row, and has moved it by the next load'
         written_at: {},
         skipped: [],
         asked: [],
-        live_cap: 4,
         threshold: '0.40',
         floor: '0.40',
       }),
@@ -2798,7 +2796,7 @@ test('a figure typed into the cap rides the send, and the bar names what it now 
 }) => {
   const wire = await open(page, { worklist: SPAN })
 
-  await page.getByLabel('Send at most this many copies of any one SKU').fill('2')
+  await page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out').fill('2')
   /* THE SENTENCE FOLLOWS THE FIELD, before anything is pressed — the operator learns what the
      figure MEANS at the moment they type it rather than from a receipt afterwards. */
   await expect(page.locator('.pricing-ship-says')).toContainText('spent once across the send')
@@ -2820,7 +2818,7 @@ test('a send of ONE carries the cap too, which is the asymmetry the route refuse
   const wire = await open(page, { skus: [sku()] })
   await expect(page.getByRole('region', { name: 'Ship this run' })).toHaveCount(1)
 
-  await page.getByLabel('Send at most this many copies of any one SKU').fill('3')
+  await page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out').fill('3')
   await page.getByRole('button', { name: 'Write the import file' }).click()
 
   const emits = () => wire.filter((r) => r.method === 'POST' && r.path.endsWith('/emit'))
@@ -2839,7 +2837,7 @@ test('typing in the cap does not reach the row keys, which own bare letters here
      the cap would write an answer the operator never gave. */
   const wire = await open(page, { worklist: SPAN })
 
-  const cap = page.getByLabel('Send at most this many copies of any one SKU')
+  const cap = page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out')
   await cap.focus()
   await page.keyboard.type('h4u')
   await expect(cap).toHaveValue('4')
@@ -2858,7 +2856,7 @@ test('the cap field takes digits and nothing else, so a send cannot carry a word
      number this screen composes into a request. It reaches a child process's argv — the route
      integer-checks it for exactly that reason — and a control that accepted `2; rm` would be
      leaning on the far side of the wire to be the only reader. */
-  const cap = page.getByLabel('Send at most this many copies of any one SKU')
+  const cap = page.getByLabel('Hold each SKU to at most this many copies live at TCGplayer, counting what is already out')
   await cap.fill('2')
   await cap.pressSequentially('x9')
   await expect(cap).toHaveValue('29')

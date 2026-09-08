@@ -138,7 +138,9 @@ def run_live(args, say) -> int:
     _say_rows(
         say, report.beyond,
         f"beyond this pipeline  {len(report.beyond)} SKU(s)",
-        "TCGplayer holds more than this pipeline ever sent. Left alone — it did not put it there.",
+        "TCGplayer's own quantity for a SKU this pipeline never sent — more than it sent, or "
+        "none at all where the store still holds a reading. The READING is written either "
+        "way; the copies are left alone, because this pipeline did not put them there.",
     )
     _say_rows(
         say, report.unknown,

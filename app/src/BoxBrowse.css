@@ -354,16 +354,44 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .browse-rowline:hover .browse-row { background: var(--bn-hover); color: var(--bn-ink); }
+/* THE SLOT CELL IS AS WIDE AS THE LABEL THE SALE WILL PUT IN IT, NOT AS WIDE AS THE ONE IN IT
+   NOW (D118). This column is `max-content`, and selling the copy rewrites the slot from `#1` to
+   the store key `B2 #1` in the mono face — wider, so the column grew and the name, the badges
+   and everything after them slid right ON THE PRESS. The 34px floor was absorbing it on the
+   rig and nowhere else: the key renders 33.0px in macOS's monospace fallback and over 34px in
+   Linux's, so `make design-check` was green here and red in CI on the same tree, over a real
+   movement. And the floor covers only the shortest key there is — box 2, card 1. `B3 #96`,
+   which the owner's own store draws, is 40px, so that sale moved the name six pixels on every
+   platform and no case ever saw it.
+   `::before` reserves the future label's length in the face it will be drawn in, so the track is
+   already that wide before the write and unchanged after it. A row whose key is wider than its
+   slot therefore starts its name further right than it used to; that is the price of the press
+   not moving anything, and it is paid once at render rather than at the moment of the sale. */
 .browse-row-position {
+  display: grid;
   font-size: var(--bn-fs-xs);
   font-weight: 600;
   color: var(--bn-ink-3);
   font-variant-numeric: tabular-nums;
+  max-width: 22ch;
+}
+.browse-row-position > * { grid-area: 1 / 1; }
+.browse-row-slot {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 22ch;
 }
+.browse-row-slotghost {
+  visibility: hidden;
+  height: 0;
+  white-space: nowrap;
+  /* The face and weight `.is-departed` will switch this cell to, so the ghost is set in the type
+     the key is about to be set in rather than in the UI font it is beside now. */
+  font-family: var(--bn-font-mono);
+  font-weight: 500;
+}
+.browse-row-slotghost::before { content: var(--bn-slot-key, ''); }
 .browse-row-name {
   font-size: var(--bn-fs-md);
   overflow: hidden;
@@ -606,7 +634,7 @@
   border-top: 1px solid var(--bn-line);
 }
 @container pane (max-width: 760px) { .browse-about { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container pane (max-width: 480px) { .browse-about { grid-template-columns: minmax(0, 1fr); gap: var(--bn-4); padding: var(--bn-2) var(--bn-4) var(--bn-4); } }
+@container pane (max-width: 479px) { .browse-about { grid-template-columns: minmax(0, 1fr); gap: var(--bn-4); padding: var(--bn-2) var(--bn-4) var(--bn-4); } }
 .browse-factgroup { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 0; }
 .browse-factgroup > .bn-label { padding-top: var(--bn-2); }
 .browse-facts { display: flex; flex-direction: column; min-width: 0; }
@@ -732,8 +760,7 @@
 .browse-actionbar-slot { flex: 1 1 auto; min-width: 0; display: flex; justify-content: flex-end; }
 .browse-actionbar-slot .inventory-copy-actions { width: 100%; justify-content: flex-end; min-width: 0; }
 .browse-actionbar-slot .bn-btn-primary { flex: 1 1 auto; min-width: 0; }
-/* the bar carries the one press. Retire is in the copy ROW since D119 — it was in the location
-   card above until that was deleted — where it is the icon-only ghost beside `Mark sold`. */
+/* the bar carries the one press; Retire stays in the location card above */
 .browse-actionbar-slot .bn-btn-ghost { display: none; }
 
 @media (max-width: 767px) {
@@ -770,9 +797,6 @@
   .browse-cardops > .bn-btn { --btn-h: var(--bn-control-h-lg); }
   .card-locations-owner .inventory-copy-actions .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
   .card-locations-owner .inventory-copy-actions .bn-btn-icon { padding: 0; }
-  /* The receipt's Undo is the same press as the `Mark sold` it replaced, so it is the same
-     height — `sm` alone is 40px, which is the thumb FLOOR and not this row's size (D119). */
-  .card-locations-owner .bn-receipt .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
   .browse-stepper-btn { width: 44px; height: 40px; }
   .browse-stepper-count { font-size: var(--bn-fs-base); }
   .browse-boxcell { min-height: 48px; }
