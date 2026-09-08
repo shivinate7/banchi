@@ -931,6 +931,15 @@ const RAIL_MARK = 32
    reads as a smaller copy, 40 owns the head the way it owns the sidebar's. */
 const DRAWER_KANJI = 40
 
+/* AND 34 WHERE THE SCREEN IS SHORT (section 19, amended). The forced choice above was made on
+   WIDTH; on a phone in Safari, whose toolbars take about 90px, the drawer's nav list runs past
+   the fold — 7 of 9 rows on an iPhone 14. The owner's ruling was to shrink the group labels to
+   fit rather than drop them, and the labels alone recover about 70px of the 85 needed; the last
+   15 come from here.
+   THE HEIGHT IS THE CONDITION, not the width: a 430x932 Pro Max is a phone and has the room. */
+const DRAWER_KANJI_SHORT = 34
+const SHORT_SCREEN = '(max-height: 820px)'
+
 /* ONE BRAND SLOT, THREE PLACES (logo.md section 19). The sidebar, the phone's top bar and the
    phone's drawer all draw the SAME `Lockup` — what differs is `--bn-brand-open`, which App.css
    sets per surface, and which the morph reads as the slot's own width. There is no second
@@ -1145,6 +1154,14 @@ function TabBar({ path, onMore }: { path: string; onMore: () => void }) {
 
 function Drawer({ open, path, onClose, theme, onToggleTheme, server, cards }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState; cards: number | null }) {
   const leave = useLeave(open)
+  /* THE ONE PLACE IN THIS SHELL WHERE THE SIZE IS CHOSEN IN JS RATHER THAN IN A STYLESHEET, and
+     the reason is the morph. `Lockup` reads the SLOT's measured width against the `size` it was
+     handed and interpolates the bracket between the two ends — so a media query that shrank the
+     slot without telling the component would leave the box at 34's width and the maths at 40's,
+     and the bracket would render a fifth of the way toward the rail. Measured: t = 0.2.
+     Everywhere else the stylesheet reads the condition the layout does (see `Sidebar`); here the
+     two cannot be allowed to disagree, so one source decides and both read it. */
+  const short = useMedia(SHORT_SCREEN)
   if (!leave.mounted) return null
   const leaving = leave.leaving ? 'true' : undefined
   return (
@@ -1159,7 +1176,7 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server, cards }: { 
               address` left the product with this edit, on the owner's ruling; the lockup says the
               name twice already, and Home's own lede still ends "Every one has an address." */}
           <a className="bn-brand" href="#/" onClick={onClose} aria-label="Banchi home">
-            <BrandSlot kanji={DRAWER_KANJI} />
+            <BrandSlot kanji={short ? DRAWER_KANJI_SHORT : DRAWER_KANJI} />
           </a>
           <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
             Close

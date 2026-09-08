@@ -2024,7 +2024,55 @@ arithmetic, the opacity and the grow. Four of five were observed red under mutat
 (the margin) is what the measurement above deleted.
 
 **What would move it is the drawer's own density**, not the brand — the 44px rows, or the three
-group labels. That is a separate question and it is not this section's.
+group labels.
+
+### And that is what was done, on the owner's ruling: shrink the headings, do not drop them
+
+**Settled 2026-09-07, from renders of both.** The table above understates it, because it measures
+the phone's own height and Safari's toolbars take about 90px more. At 390 x 754 — an iPhone 14
+with the toolbars up — the nav ran 85px past the fold and showed **7 of its 9 rows**.
+
+Two builds were drawn side by side at that size, in both themes:
+
+| | rules | iPhone 14 | 15/16 | mini / 11 Pro | SE |
+| --- | --- | --- | --- | --- | --- |
+| as it stood | — | 7/9, 85px | 8/9, 77px | 7/9, 117px | 5/9, 262px |
+| headings dropped | 1 | **9/9 fits** | fits | **fits** | 5/9, 175px |
+| **headings shrunk** | 5 | **9/9 fits** | **fits** | 8/9, 29px | 5/9, 174px |
+
+**The owner chose to keep them**, and the arithmetic is why that costs five rules rather than
+one. The three label rows are about 70px of the 85; the last 15 come from the brand, so the
+drawer's lockup is **kanji 34 on a short screen** and 40 everywhere else.
+
+**The heading's own type is untouched** — same 10px, same caps, same 0.1em. What closes is the air
+around it: 4px of padding above and below each label, a line box of 1.5, the 12px between groups
+and the 4px between rows. **The rows keep their 44px.** A `font-size: 10px` was written into that
+block first and deleted: `--bn-fs-2xs` is already 10px, so it changed nothing and read as though
+it had.
+
+**What it costs, stated rather than buried:** the mini, X, XS and 11 Pro — 375 x 812, a real
+population — fit under the dropped build and are one row short under this one. That is the trade
+the ruling made.
+
+**THE SIZE IS CHOSEN IN JS HERE, AND IT IS THE ONE PLACE IN THIS SHELL THAT IS TRUE.** `Sidebar`'s
+own comment says a stylesheet should read the condition the layout does, and it is right for the
+rail. It is wrong here: `Lockup` interpolates the bracket between the slot's MEASURED width and
+the `size` it was handed, so a media query that shrank the slot without telling the component
+would leave the box at 34's width and the maths at 40's — measured, the bracket renders a fifth of
+the way toward the rail. One source decides and both read it.
+
+### The SE cannot fit, so the cut edge says so
+
+Nine rows do not go into 577px at any size in that table, and on main they did not either — 5 of
+9, ending on `.bn-side-foot`'s own rule, which reads as the bottom of the menu rather than the top
+of a fold. Four screens looked absent rather than below the line.
+
+**The fade is the mechanism the thumb-floor pass gives the scrolling chip rows, turned
+vertical**: a mask driven by the scroller's
+own progress, so the bottom edge dissolves while there is more to reach and the top edge does once
+you have scrolled. **A list that fits gets nothing at all** — a scroll-progress timeline whose
+scroller has no overflow is inactive and applies no effect, so there is no measurement and no
+class to keep in step. Behind `@supports`, because the fallback is what ships today.
 
 **`every card has an address` left the product with this edit**, on the owner's ruling, and that
 is worth stating plainly because it was not a side effect. The drawer was its last home — the

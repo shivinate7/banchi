@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
-import { PARAMS, ROMAN_TRACK_SOLVED } from '../src/kit/lockupGeometry'
+import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from '../src/kit/lockupGeometry'
 
 /* THE MARK, IN THE BROWSER THAT DRAWS IT.
  *
@@ -710,4 +710,65 @@ test('the phone wordmark is the lockup roman, set as text', async ({ page }) => 
      5.8px of air after the I. */
   const grows = await mark.evaluate((el) => getComputedStyle(el).flexGrow)
   expect(grows, 'the wordmark fills the bar, so its trailing tracking is invisible').toBe('1')
+})
+
+/* THE DRAWER ON A SHORT SCREEN (logo.md section 19, amended) --------------------------------
+ *
+ * A phone in Safari gets about 90px less than its own height, and the lockup's head is 61px
+ * taller than the wordmark block it replaced. Measured at 390 x 754 — an iPhone 14 with the
+ * toolbars up — the nav ran 85px past the fold and showed 7 of its 9 rows.
+ *
+ * THE OWNER RULED TO SHRINK THE GROUP HEADINGS RATHER THAN DROP THEM. Both were built and drawn
+ * side by side; dropping them was one rule and 85px, keeping them costs five and lands the
+ * drawer's own lockup at kanji 34. This case is what stops the five drifting back apart.
+ */
+const SHORT_PHONE = { width: 390, height: 754 }
+
+test('the drawer fits an iPhone in Safari, with its headings intact', async ({ page }) => {
+  await page.setViewportSize(SHORT_PHONE)
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  await expect(page.locator('.bn-drawer')).toBeVisible()
+  await page.waitForTimeout(400)
+
+  const seen = await page.evaluate(() => {
+    const drawer = document.querySelector('.bn-drawer')!
+    const nav = drawer.querySelector('.bn-nav')!
+    const box = nav.getBoundingClientRect()
+    const links = [...drawer.querySelectorAll('.bn-nav a.bn-nav-link')]
+    return {
+      overflow: nav.scrollHeight - nav.clientHeight,
+      shown: links.filter((l) => {
+        const r = l.getBoundingClientRect()
+        return r.top >= box.top - 1 && r.bottom <= box.bottom + 1
+      }).length,
+      total: links.length,
+      headings: drawer.querySelectorAll('.bn-nav-group-label').length,
+      lockup: Number(drawer.querySelector('.bn-lockup')!.getAttribute('width')),
+    }
+  })
+
+  // every screen the drawer offers is on the screen, with nothing to scroll to reach it
+  expect(seen.overflow, `the nav runs ${seen.overflow}px past the fold`).toBeLessThanOrEqual(0)
+  expect(seen.shown, `${seen.shown} of ${seen.total} rows are on screen`).toBe(seen.total)
+
+  // AND THE HEADINGS SURVIVED, which is the whole reason this is five rules and not one
+  expect(seen.headings, 'the four groups still name themselves').toBeGreaterThan(2)
+
+  // kanji 34 — 34 * BLOCK.w / BLOCK.ref
+  expect(seen.lockup, 'the drawer draws the short-screen lockup').toBeCloseTo((34 * BLOCK.w) / BLOCK.ref, 0)
+})
+
+test('a tall phone keeps the full lockup, because it has the room', async ({ page }) => {
+  /* THE CONDITION IS HEIGHT AND NOT WIDTH, and this is what says so: a Pro Max is a phone, gets
+     the drawer, and has no reason to give up 6px of brand. Without the height arm this case
+     draws 34 and fails. */
+  await page.setViewportSize({ width: 430, height: 842 })
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  await expect(page.locator('.bn-drawer')).toBeVisible()
+  await page.waitForTimeout(400)
+
+  const lockup = await page.locator('.bn-drawer .bn-lockup').evaluate((el) => Number(el.getAttribute('width')))
+  expect(lockup, 'a tall phone draws the sidebar’s own kanji 40').toBeCloseTo((40 * BLOCK.w) / BLOCK.ref, 0)
 })
