@@ -1425,10 +1425,10 @@ COMPONENTS = [
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
-                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D49",
-                                "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69", "D70",
-                                "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87", "D90",
-                                "D92", "D94", "D96", "D101", "D102", "D104"],
+                                "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
+                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
+                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1727,7 +1727,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D122"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1748,6 +1748,30 @@ COMPONENTS = [
                         "list: every field is rendered by `make explain`, and the NEEDS "
                         "vocabulary is checked for a token no entry uses.",
             },
+            "suite-lock.py": {
+                "does": "`make design-check`'s doorman, and `make suite-lock-selftest`. ONE "
+                        "BROWSER FLEET AT A TIME ON THIS MACHINE: an advisory flock on "
+                        "`~/.pkmnscan/locks/browsers.lock`, taken before the suite runs and "
+                        "released when the process ends. It is the one guard here that may NOT "
+                        "live per-checkout — D43 gave every tree its own ports and its own "
+                        "store, and the CPU is what it could not copy. Two fleets at once "
+                        "starve each other into failures that are not in the code: measured "
+                        "2026-09-07 at 18 of them across two worktrees, all 52 green on a "
+                        "re-run alone. IT REFUSES RATHER THAN QUEUES and exits 75, not 1 — "
+                        "`playwright test` exits 1 when tests fail, and a guard against false "
+                        "failures must not produce one. `ARGS=--wait` queues instead and says "
+                        "so every thirty seconds, because a silent wait reads as a hang. NO "
+                        "STALE-LOCK PATH EXISTS because flock has none: the OS releases what a "
+                        "holder took however the holder died, which is the whole reason this is "
+                        "not scripts/serve.py's pid-and-argv dance. The record inside the file "
+                        "is read only to name the holder in the refusal. Stdlib only, and "
+                        "python3 rather than $(PYTHON): a guard that needs `make venv` before "
+                        "it can refuse is one a fresh worktree runs without.",
+                # D122 is the entry that argues all of it, D43 the one it finishes. D18 is why
+                # the self-test is in `make check` and never in the git hook: it writes a lock
+                # directory under mktemp and kills the processes it spawns.
+                "governed_by": ["D18", "D43", "D122"],
+                "status": "built"},
             "status.py": {
                 "does": "`make status`. Holds no fact about the project: the step and the "
                         "gate come from this file, the T1 score from harness/results/, the "
