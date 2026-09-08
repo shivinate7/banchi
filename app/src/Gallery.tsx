@@ -424,9 +424,9 @@ export function Gallery() {
               </div>
             </Spec>
             <Spec
-              label="At the sizes it is drawn"
+              label="Across its size range"
               wide
-              note={<>26 is the phone bar, 30 the drawer, 32 the sidebar&rsquo;s RAIL &mdash; the open sidebar draws the lockup now (section 16) &mdash; 40 both crash pages, 44 the puller&rsquo;s header. The mark is fixed dark in both themes on purpose &mdash; a light ground was derived and lost its silhouette (section 12).</>}
+              note={<>40 is both crash pages, 44 the puller&rsquo;s header, and 16 to 32 the favicon&rsquo;s range. The whole shell draws the LOCKUP now &mdash; the sidebar at kanji 40, its rail and the phone bar as the empty slot at 32, the drawer at kanji 40 (sections 16 and 19) &mdash; so the sizes below 40 are specimens here rather than call sites. The mark is fixed dark in both themes on purpose &mdash; a light ground was derived and lost its silhouette (section 12).</>}
             >
               <div className="kit-marks kit-marks-tight">
                 {[16, 26, 30, 32, 40, 44, 64].map((px) => (
