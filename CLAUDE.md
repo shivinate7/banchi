@@ -145,8 +145,11 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   from DIED — a file still saying that after the process has exited
                     #   means the run died between the two writes (a crashed worker, an OOM,
                     #   a kill). NO FILE AT ALL means the run never reached Playwright's
-                    #   config: an unloadable config, a missing toolchain, or the lock
-                    #   refusing it. All three are LOUD — a refusal prints and exits 75 — and
+                    #   config: an unloadable config, a missing toolchain, the lock refusing
+                    #   it, or — the one case where the process is still ALIVE — `ARGS=--wait`
+                    #   still queued behind another tree's fleet, which is why the rule is to
+                    #   read the file when the run EXITS and not before. The other three are
+                    #   LOUD — a refusal prints and exits 75 — and
                     #   the target deletes the file first so none of them can ever show you
                     #   the LAST run's pass, which is the only silent one of the four.
                     #   Measured: a dead `webServer` and an unparseable spec both land a real
