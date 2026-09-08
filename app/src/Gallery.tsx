@@ -124,6 +124,35 @@ const GROUP: SearchGroup = {
   ],
 }
 
+/* A SKU-LESS GROUP, WHICH IS TWO REAL SHAPES AT ONCE (D118): the bag `do_search` returns for
+   cards that matched a query and carry no SKU, and the one-copy group `Inventory.tsx:loneGroup`
+   builds locally for a card the search cannot reach at all. Both draw a header with no live
+   figure and no counts line, because `emit` has not written a listing record and every listing
+   number would be a structural zero. `listable` is 1 and stays 1 — the server's own answer —
+   which is why the SENTENCE is what the header drops rather than the figure.
+
+   DELIBERATELY NO `currentKey`: `app/tests/gallery.spec.ts` counts `is-nobar` and `is-current`
+   rows PAGE-WIDE, and its own comment argues that page-wide is the stronger claim. A located,
+   non-departed, non-pooled, non-current copy adds to none of those counters. */
+const LOOSE_GROUP: SearchGroup = {
+  sku: null,
+  names: [],
+  number: null,
+  printed_total: null,
+  number_display: null,
+  set_hint: null,
+  condition: null,
+  listed: { pushed: 0, staged: 0, live: 0 },
+  sold_here: 0,
+  live_as_of: null,
+  on_hand: 1,
+  cap: null,
+  listable: 1,
+  copies: [
+    { key: '5/9', state: 'captured', state_at: null, has_photo: true, capture_id: 'cap-5-9', place: OPEN_BOX },
+  ],
+}
+
 /* THE SPECIMEN PHOTOGRAPH, and it is a drawing rather than a photograph on purpose.
  *
  * WHY IT IS BUNDLED: a data URI is a closed system — no origin, no port, no store, no server
@@ -1047,18 +1076,27 @@ export function Gallery() {
             </div>
           </Section>
 
-          <Section id="locations" title="Card locations" lede="One card and every row shape it draws: six copies — four in a box, one of those sold; one departed, and so in no slot at all; one pooled, which is a count rather than a place. The owner's spec names a current copy too. Same group, same actions; the prop that differs is the persona.">
+          <Section id="locations" title="Card locations" lede="One card and every row shape it draws: six copies — four in a box, one of those sold; one departed, and so in no slot at all; one pooled, which is a count rather than a place. The owner's spec names a current copy too, and that row is identical in shape to every other. Same group, same actions; the prop that differs is the persona.">
             <div className="kit-stack">
               <Spec
                 name="locations-owner"
                 label="owner · a bar on every row that has one"
-                note="Three rows deliberately carry no bar, each for its own reason: the pooled copy has no coordinate to draw, the departed one is in no slot at all, and the copy the walk is standing on already has its lens drawn full size above the list."
+                note="Two rows deliberately carry no bar: the pooled copy has no coordinate to draw and the departed one is in no slot at all. The copy the walk is standing on draws a bar like every other row — it carries a Viewing marker and a neutral rail, and nothing else (D118)."
               >
                 {/* `.kit-copies` is a `copies` query container. Without it every
                     `@container copies` rule in CardLocations.css is dead here and this
                     specimen draws a layout no screen produces — see Gallery.css. */}
                 <div className="kit-copies">
                   <CardLocations group={GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} currentKey="7/12" />
+                </div>
+              </Spec>
+              <Spec
+                name="locations-owner-lone"
+                label="owner · one copy, no SKU"
+                note="A card the pipeline has never identified. The header drops the live figure and the Pushed / Staged / headroom line — with no SKU there is no listing record, every one of those numbers is a structural zero, and `Room for 1 more live` is a promise nothing can keep. `no SKU yet` in the meta line is the whole of what is left to say."
+              >
+                <div className="kit-copies">
+                  <CardLocations group={LOOSE_GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} />
                 </div>
               </Spec>
               <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="The photograph is this sheet's own specimen, not a stored capture: nothing here asks the capture server, so the page renders the same in every checkout. Two copies carry no image and draw the missing-photo sentence, which is a real state.">

@@ -1210,6 +1210,7 @@ D112 The labels are tracked, the images are not, and an unmoved measurement is a
 D113 A line closes three ways, and only one of them claims a copy went
 D114 The status requirement is answered by a remembered tick, not by an echo of the preview
 D115 The reading is what the export said, and what has sold since is counted beside it
+D118 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
 ```
 
 **D90 to D93 are MAIN's and arrived with the merge**, and three of the four are recorded here

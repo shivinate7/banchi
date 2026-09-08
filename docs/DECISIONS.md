@@ -7076,3 +7076,118 @@ reading `at` was defensible; after it, a sale touches `at` while observing nothi
 **What would reopen this**: an operator who wants a price or a quantity they assert here to
 outrank what TCGplayer reports. This entry keeps the export as the authority on the figure and
 this store as the authority only on what it has done since.
+
+## D118 — The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
+
+**Built 2026-09-07, on the owner's verdict about their own screen.** `#/inventory`'s card
+detail drew the copy the walk was standing on **twice**, about 150px apart, in two different
+registers: a `LOCATION` hero panel with a 40px address, its own position bar and a solid
+`Mark sold`; and again as the first row of *Every copy of this card*, where its bar was
+deliberately suppressed so the two lenses would not read as a rendering fault.
+
+Their words: *"I actually really hate this new setup where it highlights the current card in
+picture separately from the other copies. It's unintuitive. I want for Card 1 to have the exact
+same layout as cards 36 and 91 below it, frankly the entire top right blurb box can be
+deleted."*
+
+**The code had already conceded it.** `Inventory.tsx`'s own comment called the duplication "the
+trade", and what the trade bought was emphasis on a copy the UI elsewhere refuses to recommend
+— `CardLocations.css` says the current row's rail is neutral "deliberately not *take this
+one*". Emphasis nobody asked for, paid for in a second register.
+
+### What the deletion is, and what it is not
+
+`LocationCard` is gone. `noBar` drops its `current` term, so the copy the walk stands on draws
+its bar like every other row; **`goesTo` keeps its `current` term** (D45 — a walk-to on the row
+the walk already stands on goes nowhere). What marks that row is a `Viewing` pill in the cell
+every other row uses for its own pills, and a neutral rail. **The pill and the rail were put to the owner and kept**: with no hero, they are the only thing tying the ~450px photograph on the
+left to a row, and they change no part of the row's shape.
+
+**Nothing the hero drew is lost.** The `Wanted` claim, the pooled marker, `Mark sold` and
+`Retire` were already on every row; the box name moved from a separate element into the
+address itself, as `PositionLabel`'s `boxNote` — which is what every other row has always
+drawn. The missing-position-label `Notice` was **dropped rather than relocated**, and only
+after checking it could fire: `do_inventory` omits the flat label and the `place` block
+together, so that record arrives as `place === undefined`, which the lone-copy branch already
+names by key.
+
+### The card with no SKU and no name is a one-copy list, not a second panel
+
+`GET /search` matches on SKU or name and refuses an empty query, so a card the pipeline has
+never identified cannot be reached at all — that branch rendered the hero and a bare notice,
+and deleting the hero would have left it an explanation with no address, no bar and no doors.
+It builds the group instead: `Inventory.tsx:loneGroup`, shaped **field for field to be the answer `capture_server.py:do_search`'s own loose branch would have given** over a bag of one.
+`listable` stays what the server would send and is **not** rewritten to 0 — the client does not
+get to disagree with the store about a number the store computes. What changes is the
+**sentence**: a group with no SKU draws no live figure and no `Pushed · Staged · headroom`
+line, because `emit` has written no listing record and every one of those numbers is a
+structural zero under a `Room for 1 more live` nothing can keep. Derived from `sku` rather than
+passed as a prop, so it also reaches the 65 name-but-no-SKU cards already arriving through the
+search path's loose bag.
+
+**The measurement that decided the shape of this, and it corrects a stale one.**
+`app/tests/inventory.spec.ts` carried *"629 of 682 records are captured-and-never-identified —
+92% — … the branch 92% of the store draws through"*, and argued for coverage on it. Read out of
+`inventory/store.sqlite` on 2026-09-07: **1,625 cards, 1,553 carrying a SKU, 65 with a name and no SKU, and 7 with neither** — four tenths of one percent. The figure was true when written,
+against a store the pipeline had not yet run over. The branch is a real edge case and still
+worth its case; what it is not is the common screen, and the spec's title and comment now say
+the measured thing.
+
+### The receipt takes a grid row, and that is a measurement rather than a preference
+
+A sale's undo — the sentence, the draining twenty-second clock, the `Undo` — was the hero's
+alone; the row got a bare `Undo`. With the hero gone the row is where a sale is taken back, so
+the receipt came with it (the owner: *"it'd be a shame to lose that animation work"*). It does
+**not** go in the action cell. The receipt is ~268px intrinsic, and at the 756px container this
+pane reaches at 1920 an auto-sized action cell that wide leaves `.card-locations-place` ~314px
+— against D40's measured 231px wrap point, which `CardLocations.css` forbids by name. A layout
+that fits at the owner's 608px and squeezes the address at 1920 is that file's own dormant-branch
+defect with the sign flipped. So the **cell** is re-assigned to a `receipt` grid area under
+`:has(.bn-receipt)`: a grid item cannot leave its cell, but a cell can be moved, which is why
+this needs no new element and no prop threaded through `CardLocations`. **A row with no sale standing keeps its resting geometry exactly**, structurally rather than by tuning.
+
+`primary` survives as a **size**, not a shape. Its last caller is the phone's sticky action bar,
+so it is phone-only from here.
+
+### What was measured and refused
+
+The right column loses roughly 235px flat: the hero's ~300px and its gap come out, and the
+current row gains ~81px back from the bar it now draws. The photograph is unchanged. **No balance fix was taken.** Shrinking the photo column is what D32 and D38 spend the pixel budget
+against — D38 *raised* it on the owner's own ask — and padding the void is the defect D40
+measured at 41.99%. The visible consequence is a ragged bottom under a one-copy card at a pane
+of 560px or more, which is the honest cost of removing content rather than a thing to fill.
+
+### What D71 loses, and where it went instead
+
+`.inventory-location-label` was one of `PositionLabel`'s site rules and **the last renderer in the product of `lead='path'` with a `.position-void`** — the combination its re-rank fires
+under. The copies list, the order picker and the walk are all `lead='slot'`. Re-pointing that
+assertion at the row would have compared 11px against 11px and passed for the wrong reason, so
+it moved to `app/tests/gallery.spec.ts`, where the two specimens sit side by side and the kit
+sheet is now the rule's only renderer. **D71 itself is not edited**: its "five sites" is a
+2026-08-30 measurement, and measurements are not rewritten to match a later tree.
+
+**Moving it found the sheet had never drawn the rule.** `.kit-poslabel` set `--pos-slot` without
+the `font-size: var(--pos-slot)` every real site pairs with it, so the re-rank's `0.45em`
+resolved against an inherited 14px and clamped to exactly the 11px a live path gets — the
+departed specimen was drawn identically to the live one, on the page whose job is drawing the
+difference. Fixed in `Gallery.css`, and now asserted.
+
+### What is not weakened
+
+`the copies of a card cannot be positioned by the pipeline console` guarded "the answer is above
+the fold" against `.inventory-location`; the answer is the current ROW now, and it re-points.
+`a copy row draws how far into the box AND how far into the section` counted **two** position
+bars — one hero, one list — and the total is still two for a two-copy card, for an entirely
+different reason; a total cannot tell "one per row" from "two on one row", so the claim is now
+per row with the total asserted after it. Both were observed red under their mutations before
+being kept, along with the two new gallery claims, the relocated re-rank, and the no-SKU list.
+
+**One assertion was written and then removed for failing that test.** A `Walk to` count of zero
+on the lone-copy branch stayed green when `onGoTo` was threaded onto it, because `OwnerRows`
+suppresses the walk-to on the current row anyway and the lone copy is always the current one. It
+is replaced by a comment saying so and pointing at the case that can fail: D45's real claim needs
+a group with more than one copy in it.
+
+**What would reopen this**: an operator who wants the address readable at arm's length while
+standing at the boxes. That is the one thing the hero did that a 22px row does not, and it is
+named here as the cost of the deletion rather than as a reason to keep a split hierarchy.
