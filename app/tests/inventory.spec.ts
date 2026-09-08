@@ -1495,12 +1495,16 @@ test('the slot column is already as wide as the key the sale will write into it'
   const cards: Cards = { '12/133': wideKeyCard('identified') }
   const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
   await open(page, WIDE_KEY_BOXES, store)
+  /* THIS CASE IS A RULER OVER TYPE, so it waits for the faces — `fontsReady.ts` has the whole
+     argument, and the swap window is exactly the window in which the reservation and the label
+     it reserves for would be measured in two different typefaces. */
+  await settleFonts(page)
 
   const row = page.locator('.browse-row[aria-current="true"]')
   const slot = row.locator('.browse-row-position')
   const name = row.locator('.browse-row-name')
 
-  const press = page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' })
+  const press = copyRow(page, 'Box 12 · Section 1 · Card 1').getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
 
   const slotWas = (await slot.boundingBox())?.width ?? -1
@@ -1513,8 +1517,11 @@ test('the slot column is already as wide as the key the sale will write into it'
   cards['12/133'] = wideKeyCard('sold')
 
   await press.click()
-  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
-  await expect(page.locator('.card-locations-row.is-current .position-bar')).toHaveAttribute('data-gone', 'true')
+  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+  /* The re-read, waited for rather than assumed — the same sync point the case above uses, and
+     for the same reason: the receipt is optimistic and the lens turning departed is the answer
+     landing, which is the state this measurement is about. */
+  await expect(page.locator('.inventory-location .position-bar')).toHaveAttribute('data-gone', 'true')
 
   await expect(row.locator('.browse-row-slot')).toHaveText('B12 #133')
 

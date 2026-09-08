@@ -25,9 +25,9 @@
 # (D118, amended). It said "every browser assertion still comes from a person at the Mac", which
 # was true and was also the gap: `make design-check` holds the Fulfiller's contractual floors —
 # 20px body, 44px targets, 320px photograph, 7:1 contrast — plus D50's cursor, response and press
-# floors, D118's stability floor and D117's thumb floor, and NONE of it had a re-checker. It
-# fired when somebody typed it, on one Mac. That is the same shape as the defect at the top of
-# this file: a mechanism that is thorough, correct and never re-evaluated.
+# floors, D118's stability floor, D117's thumb floor and D123's wide-viewport caps, and NONE of
+# it had a re-checker. It fired when somebody typed it, on one Mac. That is the same shape as the
+# defect at the top of this file: a mechanism that is thorough, correct and never re-evaluated.
 #
 # AND THE ONE MAC WAS ANSWERING FOR THE FLOOR. The first run of the job below went red on arrival
 # over `inventory.spec.ts`'s D118 stability case, which passes on the rig every time: a departed
@@ -49,6 +49,10 @@
 # every other row: a merge can break what neither side broke alone, and two branches editing one
 # stylesheet is exactly the semantic conflict git merges cleanly. A browser floor is the kind of
 # claim that has no other reader.
+#
+# D122's MACHINE-WIDE LOCK IS NOT A HAZARD HERE AND IS NOT DISARMED FOR IT. A runner is one
+# checkout with one suite, so `browsers.lock` is uncontended and taken in the same breath it is
+# asked for; the refusal it exists to produce is about two worktrees on the owner's Mac.
 #
 # IT GATES AND NOTHING ELSE. No commit, no branch move, no publish — D42 keeps main moving by
 # pull request only, and a workflow that wrote would be a second way. It reads the repo.

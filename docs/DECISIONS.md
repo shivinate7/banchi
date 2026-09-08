@@ -7806,3 +7806,7 @@ recorded here so the next reader does not re-derive it.
 
 **What would reopen this** : a screen that genuinely needs more than 1536px of content, or an
 operator who wants the density lever after all.
+
+### Amended 2026-09-07: the caps get a re-checker, at the same moment every other browser floor does
+
+`wide.spec.ts` is in `make design-check`, which was in neither `make check` nor CI — so the caps this entry sets, like D50's three floors, D117's thumb floor, D118's stability floor and the Fulfiller's contractual constraints, could only ever be re-read by a person typing the command on one Mac. `.github/workflows/check.yml` runs the suite as a second job now; **D118's amendment carries the argument and what the second platform found**, which was a real movement in the walk that the rig's font metrics had been swallowing. Nothing here changed: the caps, their values and their derivation are untouched.
