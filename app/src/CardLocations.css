@@ -3,7 +3,7 @@
    in the Fulfillment constraints table (20px text, 32px position labels, 44px targets, a
    photo at least 320px on its short edge). */
 
-.card-locations { min-width: 0; }
+.card-locations { min-width: 0; display: flex; flex-direction: column; gap: var(--bn-3); }
 .card-locations-rows,
 .card-locations-copies { list-style: none; }
 
@@ -53,7 +53,7 @@
 }
 /* Says what the list beneath is. It used to carry a second job — the copy the walk is standing
    on appeared BOTH in the card above and as a row here, and this heading was what kept that
-   reading as hero-and-list rather than as an accident. D118 deleted the card, so the heading is
+   reading as hero-and-list rather than as an accident. D119 deleted the card, so the heading is
    back to naming one list. */
 .card-locations-owner .card-locations-title { grid-area: title; margin-bottom: calc(-1 * var(--bn-1)); }
 
@@ -130,6 +130,10 @@
 /* ---- the rows ---- */
 /* EVERY copy, drawn the same way. Nothing here folds a row away, reorders one, or dresses one
    up as the recommended stop: the owner picks the copy he reaches for. */
+/* THE LIST IS WHAT SCROLLS INSIDE THE FIXED BAND (D118). `#/inventory`'s hero holds one height
+   for the whole walk, and this is the part that gives: a list is the one thing in the panel a
+   person already expects to scroll, where a photograph or a location card is not. `overflow-y`
+   rather than `overflow`, so a wide row still clips to the panel's radius as it always did. */
 .card-locations-owner .card-locations-rows {
   display: flex;
   flex-direction: column;
@@ -137,6 +141,17 @@
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1 1 auto;
+  /* THE BOTTOM EDGE READS AS A FADE RATHER THAN AS A CUT ROW — `BoxBrowse.css`'s own scroller
+     makes the same argument in the same words, and the padding is what keeps the last row whole
+     once the list is scrolled to its end. Without it a card with more copies than the band holds
+     looks like a rendering fault rather than a list with more in it. */
+  padding-bottom: 18px;
+  mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
   /* ONE SLOT COLUMN FOR THE LIST, DECLARED WHERE THE LIST IS — which is the only place the
      decision can be made honestly. A row's slot holds `CARD 17`, or, for a copy that has left
      the box, a void where the figure would be (D58, D71); the two reserve different widths, and
@@ -227,7 +242,7 @@
 }
 /* The order number is 21 characters and a phone row is 110px. Below the width that can hold
    it the pill is the mark alone — `Wanted` — and the number is in the title and one press away
-   on the order screen. The location card was a third place until D118 deleted it. */
+   on the order screen. The location card was a third place until D119 deleted it. */
 .card-locations-owner .card-locations-claim-id {
   display: none;
   min-width: 0;
@@ -277,101 +292,57 @@
   min-width: 0;
   white-space: nowrap;
 }
+/* THE SLOT KEEPS ITS HEIGHT WHEN THE CONTROL BECOMES ITS OWN RESULT (D118). `Mark sold` is a
+   28px `sm` button and what stands here afterwards is a pill, an `Undo` or nothing at all — so
+   the row lost 6px on the press, and every row beneath it moved under a pointer that had just
+   clicked. A press changes what a slot holds; it may not change how big the slot is. */
 .card-locations-owner .card-locations-action {
   grid-area: action;
   justify-self: end;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: var(--bn-2);
+  min-height: var(--bn-control-h-sm);
+  /* AND ITS WIDTH, WHICH IS THE HALF THAT MOVED THE MOST. The pair this cell holds — `Mark sold`
+     beside an icon-only `Retire` — measures 137px at this density; a sold copy draws nothing here
+     at all, so the cell collapsed to 0 and the state pills beside it slid 137px right on the
+     press. The reservation is that measurement, taken on the real screen at 1440 with fonts
+     settled, and it is a `min-width` so a longer label in another language still fits. */
+  min-width: 137px;
+}
+
+/* --------------------------------------------------- the receipt, inside the slot (D119)
+   THE SALE'S UNDO LANDS WHERE THE SALE WAS PRESSED, AND IT FITS THE SLOT RATHER THAN MOVING
+   IT. `.card-locations-action` above reserves the button pair's own 137x28 precisely so a
+   press cannot resize the cell it lands in (D118), and the kit's `.bn-receipt` panel does not
+   fit that: it is ~268px intrinsic and 36px tall. Measured both ways it breaks the floor — in
+   the cell it grows the cell and shoves the address, and given a grid row of its own it grew
+   this row from 175px to 213px on the press, which is the screen shake D118 was built to end.
+
+   SO WHAT THE ROW DRAWS IS THE CLOCK AND THE BUTTON, at the size the buttons already were. The
+   sentence stays the phone bar's and the toast's — the state pill two cells left already reads
+   `Sold`, so a row saying `Marked sold.` beside it was the register rule's own duplication. */
+.card-locations-owner .card-locations-action > .inventory-receipt {
+  flex: 1 1 auto;
+  min-width: 0;
   gap: var(--bn-2);
 }
-
-/* ------------------------------------------------------ the receipt, inside the row (D118)
-   THE SALE'S UNDO LANDS WHERE THE SALE WAS PRESSED, and it takes a LINE OF ITS OWN rather
-   than the action cell. Measured: the receipt is ~268px intrinsic — sentence 78, gap, a 64px
-   drain, gap, an `sm` Undo 78, padding — and at the 756px container this pane reaches at 1920
-   (see the width note below) an auto-sized action cell that wide leaves
-   `.card-locations-place` ~314px. D40 measured 231px as where the position label WRAPS, and
-   this file forbids that by name further down. A cell that fits at the owner's 608px and
-   squeezes the address at 1920 is the dormant-branch defect this file already carries one
-   entry about, with the sign flipped.
-
-   DETECTED WITH `:has()` AND NOT WITH A FLAG. `.bn-receipt` is in the DOM exactly while a sale
-   is standing, so no prop has to be threaded through `CardLocations` to say what the DOM
-   already says — and a row with no sale standing keeps every pixel of its resting geometry,
-   which is the property this had to be designed against. `body:has(.browse-actionbar)` in
-   `BoxBrowse.css` is the precedent. */
-.card-locations-owner .card-locations-row:has(.bn-receipt) {
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'place state'
-    'bar bar'
-    'receipt receipt';
-}
-.card-locations-owner .card-locations-row.is-nobar:has(.bn-receipt) {
-  grid-template-areas:
-    'place state'
-    'receipt receipt';
-}
-/* The action CELL moves; the receipt inside it does not know it did. A grid item cannot leave
-   its cell, so re-assigning the cell is the whole mechanism — and it is why this needs no new
-   element and no new class in `CardLocations.tsx`. */
-.card-locations-owner .card-locations-row:has(.bn-receipt) .card-locations-action {
-  grid-area: receipt;
-  justify-self: stretch;
-  display: flex;
-  min-width: 0;
-}
-
-/* ROW SCALE, NOT HERO SCALE. `.bn-receipt`'s own padding and `--bn-r-lg` were drawn for a
-   panel; at these values the pill is ~36px tall and sits on one line of controls. */
-.card-locations-owner .card-locations-action > .bn-receipt {
+/* THE DRAIN TAKES THE SLACK AND THE BUTTON KEEPS ITS WIDTH. `.bn-receipt-bar` is `flex: 0 0
+   64px` for the panel, where the sentence is the elastic term; here there is no sentence, so
+   the bar is what absorbs whatever the reserved slot leaves after the `Undo`. */
+.card-locations-owner .card-locations-action > .inventory-receipt > .bn-receipt-bar {
   flex: 1 1 auto;
-  min-width: 0;
-  gap: var(--bn-3);
-  padding: var(--bn-1) var(--bn-1) var(--bn-1) var(--bn-3);
-  border-radius: var(--bn-r);
-  font-size: var(--bn-fs-sm);
-  box-shadow: var(--bn-shadow-1);
-}
-/* THE DRAIN ABSORBS THE SLACK, WHICH IS THE INVERSION THIS SITE NEEDS. `.bn-receipt-bar` is
-   `flex: 0 0 64px` and `.inventory-receipt-said` is `flex: 1 1 auto` — right for the panel the
-   receipt was drawn for, wrong here, where the sentence must not wrap and the Undo must not be
-   squeezed. Swap which one is elastic and both hold at every width this pane reaches: at the
-   ~358px container a 390px phone gives, the fixed terms cost ~192px and the drain still draws
-   ~134. */
-.card-locations-owner .card-locations-action > .bn-receipt > .inventory-receipt-said {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-.card-locations-owner .card-locations-action > .bn-receipt > .bn-receipt-bar {
-  flex: 1 1 auto;
-  min-width: 48px;
+  min-width: 40px;
+  /* THE TRACK IS A TOKEN HERE AND AN ALPHA THERE, and that is the whole difference between the
+     two sites. `kit.css` paints this on `--bn-ink`, so its track is white at 15% and its fill is
+     `currentColor` — correct on an inverted panel and INVISIBLE on this row, which sits on
+     `--bn-surface`. Both are named tokens; neither is a color. */
+  background: var(--bn-surface-3);
+  color: var(--bn-accent);
 }
 
-/* THE NARROW ARM IS DECLARED HERE AND NOT IN THE `@container` BLOCK ABOVE, AND THE ORDER IS THE
-   WHOLE REASON. Both arms are one class plus one `:has()`, so they carry EQUAL specificity and
-   source order decides — and the block above sits earlier in this file than the base rules just
-   overhead. Written there, the wide `'place state'` won at every width: measured at a 326px
-   container, the address was squeezed beside the state cell and `MEO1 commons` wrapped the
-   box's own name onto a third line, which is the one part of an address a hand navigates by and
-   which `.card-locations-place`'s rules forbid by name. A container query does not raise
-   specificity; it only narrows when a rule applies. */
-@container copies (max-width: 619px) {
-  /* The state takes the whole line once the action has left it for the receipt's own row. */
-  .card-locations-owner .card-locations-row:has(.bn-receipt) {
-    grid-template-areas:
-      'place place'
-      'state state'
-      'bar bar'
-      'receipt receipt';
-  }
-  .card-locations-owner .card-locations-row.is-nobar:has(.bn-receipt) {
-    grid-template-areas:
-      'place place'
-      'state state'
-      'receipt receipt';
-  }
-}
+
 
 /* The position label. `--pos-slot` is the one number this site chooses. */
 .card-locations-owner .card-locations-label {

@@ -206,7 +206,7 @@ function OwnerRows({
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
 
-  /* A GROUP WITH NO SKU HAS NO LISTING TO REPORT, AND THE HEADER MUST NOT INVENT ONE (D118).
+  /* A GROUP WITH NO SKU HAS NO LISTING TO REPORT, AND THE HEADER MUST NOT INVENT ONE (D119).
      `capture_server.py:do_search` sends the SKU-less bag `listed: {0,0,0}`, `sold_here: 0` and
      `live_as_of: null` — structurally, not because nothing has happened yet: `emit` is what
      creates a listing record and it cannot run for a card the pipeline has not identified.
@@ -321,15 +321,23 @@ function OwnerRows({
 
           /* The walk-to for THIS copy, or null when there is nowhere to send anyone. */
           const goesTo = onGoTo === undefined || pooled || current ? null : () => onGoTo(copy)
-          /* No bar for a pooled copy (a count has no place) or a departed one (a bar cannot
-             draw a card that is in no place). THE COPY THE WALK IS STANDING ON DRAWS ONE LIKE
-             EVERY OTHER ROW (D118). It was the third term here until the location card was
-             deleted: its lens was drawn full size ~150px above this list with the same
-             `#N of M` caption, and two identical bars a screen apart read as a rendering fault
-             rather than as hero-and-list. There is no card above the list now, so the
-             duplication is gone and the exception with it — which is what this list has
-             promised from the top of the file: every copy drawn, in full, the same way. */
-          const noBar = pooled || departed
+          /* No bar for a pooled copy, and for nothing else — BOTH of the other terms that
+             stood here were removed on 2026-09-07, by two branches, for two unrelated reasons,
+             and this is the merge of them.
+
+             THE COPY THE WALK IS STANDING ON (D119). Its lens used to be drawn full size in the
+             location card ~150px above this list with the same `#N of M` caption, and two
+             identical bars a screen apart read as a rendering fault rather than as hero-and-list.
+             That card is deleted, so the duplication is gone and the exception with it.
+
+             A DEPARTED COPY (D118). It was excluded on the reasoning that a bar cannot draw a
+             card that is in no place — true of the MARK and not of the lens, which draws the BOX.
+             Dropping the row cost this list a line's height at the moment a sale landed, so every
+             row beneath the sold one moved under a pointer that had just pressed. The bar stays
+             and the mark falls out of it instead.
+
+             What is left is the one copy that has no coordinate at all: a pool is a count. */
+          const noBar = pooled
 
           return (
             <li
@@ -405,7 +413,7 @@ function OwnerRows({
                     {/* The order number itself is 21 characters. It is drawn where the panel is
                         wide enough to hold it, and the mark alone where it is not — the number
                         is in the title and one press away. It used to be on the location card
-                        above as well, which D118 deleted. */}
+                        above as well, which D119 deleted. */}
                     <span className="card-locations-claim-id">{claim.order}</span>
                   </a>
                 )}
@@ -414,9 +422,9 @@ function OwnerRows({
 
               {/* The action, or what stands where one would. A sold copy's own state pill
                   already says so; an optimistic sale whose re-read is still in flight needs a
-                  word, and a sale whose undo window is still running draws the RECEIPT here —
-                  which since D118 takes a line of its own beneath the row rather than sitting
-                  in this cell. `CardLocations.css` moves the cell; this stays one slot. */}
+                  word, and a sale whose undo window is still running draws its draining clock
+                  and an `Undo` here since D119 — inside this cell, at the size the cell already
+                  reserves (D118), because a press may not resize the slot it lands in. */}
               <span className="card-locations-action">
                 {renderAction !== undefined ? (
                   renderAction(copy)

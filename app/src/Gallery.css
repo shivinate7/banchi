@@ -218,7 +218,7 @@
 .kit-keycap-blank { color: var(--bn-ink-4); border-style: dashed; border-bottom-width: 1px; }
 .kit-toasts { display: flex; flex-direction: column; gap: var(--bn-2); max-width: 380px; }
 .kit-menu-inline { width: 260px; }
-/* `--pos-slot` IS ONLY HALF OF WHAT A SITE SETS, AND THIS SPECIMEN SET ONLY THAT HALF (D118).
+/* `--pos-slot` IS ONLY HALF OF WHAT A SITE SETS, AND THIS SPECIMEN SET ONLY THAT HALF (D119).
    Every real site pairs the custom property with `font-size: var(--pos-slot)` —
    `CardLocations.css`, `Orders.css`, `CaptureScreen.css`, `ReviewQueue.css`, and the location
    card before it was deleted — because that font-size is what the component's own `em`-relative

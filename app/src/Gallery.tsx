@@ -124,7 +124,7 @@ const GROUP: SearchGroup = {
   ],
 }
 
-/* A SKU-LESS GROUP, WHICH IS TWO REAL SHAPES AT ONCE (D118): the bag `do_search` returns for
+/* A SKU-LESS GROUP, WHICH IS TWO REAL SHAPES AT ONCE (D119): the bag `do_search` returns for
    cards that matched a query and carry no SKU, and the one-copy group `Inventory.tsx:loneGroup`
    builds locally for a card the search cannot reach at all. Both draw a header with no live
    figure and no counts line, because `emit` has not written a listing record and every listing
@@ -1081,7 +1081,7 @@ export function Gallery() {
               <Spec
                 name="locations-owner"
                 label="owner · a bar on every row that has one"
-                note="Two rows deliberately carry no bar: the pooled copy has no coordinate to draw and the departed one is in no slot at all. The copy the walk is standing on draws a bar like every other row — it carries a Viewing marker and a neutral rail, and nothing else (D118)."
+                note="Two rows deliberately carry no bar: the pooled copy has no coordinate to draw and the departed one is in no slot at all. The copy the walk is standing on draws a bar like every other row — it carries a Viewing marker and a neutral rail, and nothing else (D119)."
               >
                 {/* `.kit-copies` is a `copies` query container. Without it every
                     `@container copies` rule in CardLocations.css is dead here and this

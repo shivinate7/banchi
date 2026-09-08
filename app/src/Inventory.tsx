@@ -43,7 +43,7 @@ import './Inventory.css'
  * receipts and their twenty-second undo — and draws the copies beside the photograph. Nothing
  * here holds a second copy of the inventory: every write is followed by a re-read.
  *
- * IT DREW A LOCATION CARD ABOVE THAT LIST UNTIL D118, and the copy the walk stands on is an
+ * IT DREW A LOCATION CARD ABOVE THAT LIST UNTIL D119, and the copy the walk stands on is an
  * ordinary row of the list now. What that deletion moved here rather than losing is the
  * receipt: a sale is taken back where it was pressed.
  */
@@ -257,7 +257,7 @@ export function Inventory() {
   const [retired, setRetired] = useState<string[]>([])
 
   /* The copy the walk is pointing at, as the search knows it — for the phone's action bar,
-   * which is its one reader since D118 deleted the location card. */
+   * which is its one reader since D119 deleted the location card. */
   const [currentCopy, setCurrentCopy] = useState<SearchCopy | null>(null)
 
   /* The toast standing for each receipt, by copy key, so an undo from the row can take it down. */
@@ -549,7 +549,7 @@ export function Inventory() {
 
 /* EVERY COPY OF THE SELECTED CARD, AND WHERE EACH ONE SITS — D7's SKU -> positions map, drawn
  * for the one card the walk is pointing at. THE COPY IT IS POINTING AT IS ONE OF THE ROWS and
- * not a card above them (D118): it carries a `Viewing` marker and a neutral rail, and nothing
+ * not a card above them (D119): it carries a `Viewing` marker and a neutral rail, and nothing
  * else separates it.
  *
  * `GET /search` stays the matcher and nothing here filters the inventory locally: the panel
@@ -699,7 +699,7 @@ function CopiesPanel({
           busyKey={busyKey}
           soldKeys={soldKeys}
           /* EVERY row draws its own controls, the copy the walk is standing on included —
-             and since D118 there is no second place they could be drawn. `false` is the row
+             and since D119 there is no second place they could be drawn. `false` is the row
              form: a quiet `Mark sold` and an icon-only `Retire`. The `true` form survives at
              one call site, the phone's sticky action bar, and is phone-only from here. */
           renderAction={(copy) => renderAction(copy, false)}
@@ -720,7 +720,7 @@ function skuOrName(card: InventoryCard): string | null {
 
 /** What one copy offers: the word for the door it left by, or the two writes.
  *
- *  `primary` IS A SIZE, NOT A SHAPE, AS OF D118. It used to mean "the location card's form —
+ *  `primary` IS A SIZE, NOT A SHAPE, AS OF D119. It used to mean "the location card's form —
  *  the one solid button on the screen"; that card is gone, and its last caller is the phone's
  *  sticky action bar (`actionBar` below → `BoxBrowse`, rendered only under `max-width: 767px`).
  *  So `primary` is phone-only from here, and what it decides is emphasis and control size —
@@ -750,7 +750,7 @@ function Action({
   if (copy.state === 'sold' || soldKeys.has(copy.key)) {
     const standing = undoableSales.get(copy.key)
     /* After the undo window the state is a pill, in the register of every other state on the
-       screen. UNCHANGED BY D118, AND DELIBERATELY: a copy row's own state pill already says
+       screen. UNCHANGED BY D119, AND DELIBERATELY: a copy row's own state pill already says
        `sold` once the re-read lands, so the row draws a second one ONLY for an optimistic sale
        still in flight. The phone bar has no state pill beside it and so always draws one. Two
        `Sold` markers on one row is what this condition exists to prevent. */
@@ -761,17 +761,24 @@ function Action({
         </Pill>
       ) : null
     ) : (
-      /* THE RECEIPT IS THE ROW'S TOO, SINCE D118. It was the location card's alone and the row
-         got a bare `Undo`; with that card gone the row is where a sale is taken back, so the
-         sentence and the clock come with it — a lone `Undo` in a list cell says what it does
-         and not what it is undoing, nor for how long. The toast keeps its own copy for the case
-         the walk moves and this row unmounts. `CardLocations.css` gives the cell a line of its
-         own; nothing here knows that. */
+      /* THE CLOCK IS THE ROW'S TOO, SINCE D119, AND THE SENTENCE IS NOT — which is D118 deciding
+         the shape rather than taste. The location card drew the whole receipt and the row got a
+         bare `Undo`; with that card gone the row is where a sale is taken back, and an `Undo`
+         with no clock says what it does but not for how long. What could NOT come with it is the
+         panel: `.card-locations-action` reserves the button pair's own 137x28 so a press cannot
+         resize the slot it lands in, and a `bn-receipt` pill is 268px wide and 36px tall — put
+         in the cell it shoves the address, given a grid row of its own it grows the row 38px,
+         and either one is the screen shake D118 was built to end. Measured both ways.
+         SO THE ROW GETS THE DRAIN AND THE BUTTON, inside the slot, at the slot's size. The
+         sentence is not lost: the state pill beside it already reads `Sold`, and the toast this
+         sale posted carries `Marked sold.` with the same clock and the same Undo. The phone's
+         action bar is unchanged — it has no state pill beside it, and it is what `primary` now
+         means. */
       <span
-        className="bn-receipt inventory-receipt"
+        className={primary ? 'bn-receipt inventory-receipt' : 'inventory-copy-actions inventory-receipt'}
         style={{ ['--receipt-ms' as string]: `${UNDO_WINDOW_MS}ms` }}
       >
-        <span className="inventory-receipt-said">Marked sold.</span>
+        {primary ? <span className="inventory-receipt-said">Marked sold.</span> : null}
         {/* The undo window draining, the same clock the toast for this sale shows. */}
         <span className="bn-receipt-bar" aria-hidden="true" />
         <Button

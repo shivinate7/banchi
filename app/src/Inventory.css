@@ -1,5 +1,5 @@
 /* The inventory view: the copies beside the photograph, the sale and its receipt, the
-   retirement and its dialog. THE LOCATION CARD IS GONE (D118) — the copy the walk stands on is
+   retirement and its dialog. THE LOCATION CARD IS GONE (D119) — the copy the walk stands on is
    a row of the copies list like every other, so this file no longer draws an address, a lens or
    a primary action of its own. What is left of the sale here is the receipt's sentence, which
    the copy row and the phone action bar both render. */
@@ -8,11 +8,16 @@
 
 /* The node beside the photograph. A query container, so the copy rows answer to the width they
    actually get. */
+/* `min-height: 0` and `height: 100%` on both of these are the chain that carries `.browse-band`'s
+   fixed height (D118) down to the list that scrolls in it. Without the zero minimum a flex item
+   refuses to shrink below its content and the band grows back to the card's own size, silently. */
 .inventory-detail {
   display: flex;
   flex-direction: column;
   gap: var(--bn-4);
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   container-type: inline-size;
   container-name: copies;
 }
@@ -21,7 +26,15 @@
   flex-direction: column;
   gap: var(--bn-4);
   min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
 }
+/* The list takes what the band leaves it, and it is the only thing in this column that does
+   — D118 fixed the band's height and made the list the part that gives. The location card was
+   `flex: none` beside it until D119 deleted the card. */
+.inventory-copies > .card-locations { flex: 1 1 auto; min-height: 0; }
+/* The lone card's notice sits under the list and is its own size, not the list's. */
+.inventory-copies > .inventory-lone { flex: none; }
 
 .inventory-receipt-said { font-weight: 600; flex: 1 1 auto; }
 

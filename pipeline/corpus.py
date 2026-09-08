@@ -151,12 +151,22 @@ class Corpus:
     #: asymmetric for a day — a defaulted cheap price beside a constant threshold — and the
     #: pair inverted. One figure, one fallback.
     threshold: object = DEFAULT_CUTOFF
-    #: How many copies of one SKU may be live at TCGplayer at once (D7). Store-wide, and
+    #: How many copies of one SKU may be live at TCGplayer at once, or `None` for NO CAP —
+    #: which is the ordinary value since D7 was rewritten (2026-09-07). Store-wide, and
     #: overridable per run through `policy.per_run` like the four keys above it — the run-level
     #: override D86 named as its own reopening condition, and this is its FIRST WRITER. A lot
     #: that genuinely wants a different exposure is exactly the case D7's "configurable" was
     #: about, and the store-wide figure is the one that answers for everything else.
-    live_cap: object = pricing.LIVE_QUANTITY_CAP
+    #:
+    #: THE DEFAULT WAS STILL `LIVE_QUANTITY_CAP` UNTIL 2026-09-08, WHICH LEFT D7's REWRITE
+    #: UNFINISHED. `Corpus.parse` reads an absent key as `None` correctly, so a store with a
+    #: file was answered right — but a DEFAULT-CONSTRUCTED corpus carried four, and
+    #: `to_payload` writes this key unconditionally, so the first save of a fresh store wrote
+    #: the retired bound into `policy` where every later read would find it. The one caller
+    #: that matters is `server/pipeline_routes.py`'s fallback for a corpus it could not read:
+    #: it invented a cap nobody had set, which is exactly what `live_cap_for`'s own except
+    #: arm was changed to stop doing.
+    live_cap: object = None
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the
     #: standing policy, which is expected to be almost all of them.

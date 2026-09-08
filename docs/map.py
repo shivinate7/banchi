@@ -2057,7 +2057,8 @@ COMPONENTS = [
                                 "D45", "D46", "D49", "D52", "D53", "D55", "D56", "D58", "D61",
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
-                                "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115"],
+                                "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
+                                "D116"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2665,7 +2666,7 @@ COMPONENTS = [
                                     "deliberately does not wear that class, because it is never "
                                     "armed.",
                             "governed_by": ["D5", "D10", "D13", "D31", "D41", "D49", "D50", "D51", "D94",
-                                             "D95", "D110"]},
+                                             "D95", "D110", "D118"]},
             # THE TWO `ServerReloaded` FILES ARE GONE AND THE NOTICE IS NOT (Banchi, 2026-09-03).
             # D53's rule is that the boot header is SUBSCRIBED to and never polled, and that the
             # notice demands nothing; neither needed a component of its own once the shell had a
@@ -2716,7 +2717,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113"]},
+                                              "D104", "D113", "D116"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -2774,7 +2775,8 @@ COMPONENTS = [
                                              "D53", "D54", "D56", "D58", "D59", "D61", "D62",
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
-                                             "D93", "D100", "D103", "D104", "D113", "D115"]},
+                                             "D93", "D100", "D103", "D104", "D113", "D115",
+                                             "D116"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, and which order statuses this "
                                             "device bothers fetching (D114) — and nothing else",
@@ -3002,8 +3004,12 @@ COMPONENTS = [
                         "a guess \u2014 for a pooled card, an older server, a degraded decoration, "
                         "or a box holding nothing else. THE FULFILLER NEVER IMPORTS IT: he keeps "
                         "the joined sentence at 20px body, and the firewall is the component "
-                        "graph rather than a selector.",
-                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92"]},
+                        "graph rather than a selector. A CARD NOBODY HAS NAMED IS NOT A "
+                        "LANDMARK (D116): the server walks past it to the nearest card it "
+                        "can name, so the bare `#270` the owner read as a sold card leaking "
+                        "into the ladder is gone \u2014 it never was one \u2014 and `Skipped` "
+                        "draws what the walk cost on the rows where it cost anything.",
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116"]},
             "src/PlaceNeighbors.css": {
                 "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
                         "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
@@ -3013,8 +3019,12 @@ COMPONENTS = [
                         "sentences a human reads) and undoes the borrow of "
                         "`.card-locations-boxname`, whose 10px uppercase tracked mono made the "
                         "only running English in the product a rectangle. A fixed key column so "
-                        "the two names cannot disagree about where they start.",
-                "governed_by": ["D30", "D31", "D41"]},
+                        "the two names cannot disagree about where they start. `.nb-name` is a "
+                        "COLUMN since D116, because the skip line sits under the name \u2014 and "
+                        "the truncation moved one element in with it, since `text-overflow` "
+                        "needs the nowrap on the box holding the text and a box holding two "
+                        "lines cannot be that box.",
+                "governed_by": ["D30", "D31", "D41", "D116"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -3068,7 +3078,7 @@ COMPONENTS = [
                                   "NO BANNER SLOT: `.browse-banner` came with main's envelope walk "
                                   "(D90) and went with it (D96 amended 2026-09-04), along with the "
                                   "only stylesheet that ever filled it.",
-                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118"]},
+                                  "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33", "D38", "D39", "D40", "D41", "D90", "D118", "D119"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -3185,7 +3195,7 @@ COMPONENTS = [
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90", "D93", "D118"],
+                                "D58", "D68", "D71", "D90", "D93", "D118", "D119"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -3197,7 +3207,7 @@ COMPONENTS = [
                         "because the retirement inherited them, and a choice between four "
                         "reasons has never been a screen with one thing to do. IT CARRIES ONE "
                         "OF `PositionLabel`'s SITE RULES (D71): `.inventory-confirm-place`, the "
-                        "retire dialog's 28px figure. It carried two until D118 deleted the "
+                        "retire dialog's 28px figure. It carried two until D119 deleted the "
                         "location card, and the clause naming them was wrong in three ways "
                         "before that \u2014 `.inventory-lone-place` had not existed since the "
                         "Banchi rebuild, neither rule was at 20px, and the total said seven "
@@ -3209,7 +3219,7 @@ COMPONENTS = [
                         "lens, the primary action pair and the `Wanted` line, all of which the "
                         "copies list already drew per row. What STAYED is the receipt's "
                         "sentence, which the copy row and the phone action bar both render.",
-                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118"],
+                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118", "D119"],
             },
             "src/InventoryOverlay.tsx": {"does": "ONE OVERLAY PRIMITIVE FOR THE INVENTORY "
                                                  "SCREEN, in four kinds: a right-side sheet, "
@@ -3309,12 +3319,12 @@ COMPONENTS = [
                                             "Reused as the capture button rather than copied.",
                                     "governed_by": ["D5", "D6"]},
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
-                                    "governed_by": ["D5"]},
+                                    "governed_by": ["D5", "D118"]},
             "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
-                                "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95", "D102", "D118"],
+                                "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68", "D71", "D93", "D94", "D95", "D102", "D118", "D119"],
                                 "note": "THE SHEET DREW FOUR REAL CARDS OUT OF THE OWNER'S STORE UNTIL 2026-09-06. Its `CardLocations` fixtures carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the Fulfiller skin sourced each `<img>` from `photoUrl(box, index)` — so the one page whose entire purpose is being compared against a reference was the one page whose contents depended on which capture server was up and what was in boxes 3, 4 and 7 that day, and `GET /photo/<box>/<index>` serves stored bytes without knowing a code card from a Thievul (D24). The one-line fix — `has_photo: false` on all four — was NOT taken: it buys a closed sheet by deleting the photo-bearing shell from the page whose job is drawing every shell, which is the trade `app/tests/gallery.spec.ts` exists to refuse. The image names its own colors, which is the same exception `src/kit/markPalettes.ts` argues at D102: an illustration's colors, on stage ground that is dark in both themes."},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
-                                "governed_by": ["D5", "D94", "D118"]},
+                                "governed_by": ["D5", "D94", "D118", "D119"]},
 
             # ---- the search-and-sell core: one set of components, two densities ----
             #
@@ -3326,7 +3336,7 @@ COMPONENTS = [
                                             "divider, a marker at this card. Says '#40 of 250 · 16% "
                                             "in' for a sealed box and '#12 of 62 so far' for an open "
                                             "one, because an open box's denominator still moves.",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68"]},
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D30", "D58", "D68", "D118"]},
             "src/position.ts": {"does": "the position ARITHMETIC with no component in it — `spansOf`, "
                                         "`sentenceOf`, `sectionDepthOf`, their types and the shared "
                                         "`clamp`. Split out of PositionBar.tsx 2026-09-06 so the "
@@ -3338,9 +3348,9 @@ COMPONENTS = [
                                         "no outside caller, because where a card sits said three ways "
                                         "is one concept. Nothing here decides where a divider is; every "
                                         "bound is a card COUNT and not a stored index (D58).",
-                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68"]},
+                                "governed_by": ["D5", "D10", "D20", "D24", "D30", "D58", "D68", "D118"]},
             "src/PositionBar.css": {"does": "the track at two densities, and the marker",
-                                    "governed_by": ["D5", "D20"]},
+                                    "governed_by": ["D5", "D20", "D118"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -3363,25 +3373,30 @@ COMPONENTS = [
                                               "browse to that copy. A transparent button around "
                                               "PositionLabel, not a second treatment; the label "
                                               "and not the row, because the row already holds an "
-                                              "action. EVERY ROW DRAWS ITS BAR SINCE D118, the copy "
-                                              "the walk stands on included \u2014 it is marked by a "
-                                              "`Viewing` pill and a neutral rail and by nothing else. "
+                                              "action. EVERY ROW DRAWS ITS BAR NOW \u2014 the copy the walk stands on since "
+                                              "D119 and a departed one since D118 \u2014 and the "
+                                              "copy the walk stands on is marked by a `Viewing` pill "
+                                              "and a neutral rail and by nothing else. "
                                               "A group with no SKU draws no live figure and no "
                                               "counts line: `emit` has written no listing record, so "
                                               "every one of those numbers would be a structural zero "
                                               "under a headroom promise nothing can keep.",
-                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118"]},
+                                      "governed_by": ["D4", "D5", "D6", "D7", "D10", "D20", "D24", "D26", "D30", "D31", "D38", "D41", "D45", "D58", "D67", "D68", "D71", "D92", "D115", "D118", "D119"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
                                               "its affordance on hover and focus only (D45). THE "
-                                              "SALE'S RECEIPT TAKES A GRID ROW OF ITS OWN (D118), "
-                                              "detected with `:has(.bn-receipt)` so a row with no "
-                                              "sale standing keeps its resting geometry exactly; the "
-                                              "narrow arm is declared AFTER the base rules because "
-                                              "both carry equal specificity and source order is what "
-                                              "decides between them.",
-                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71", "D115", "D118"]},
+                                              "SALE'S UNDO LANDS IN THE ROW (D119) AND FITS "
+                                              "THE SLOT: the drain and the button, inside the "
+                                              "137x28 `.card-locations-action` already reserves "
+                                              "(D118), because a press may not resize the cell it "
+                                              "lands in. The kit's `.bn-receipt` panel does not fit "
+                                              "\u2014 measured, it grew this row 175px to 213px \u2014 "
+                                              "so the sentence stays the toast's and the phone "
+                                              "bar's, and the drain's track is a token here where "
+                                              "`kit.css` paints it as a white alpha for an inverted "
+                                              "panel.",
+                                      "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45", "D58", "D71", "D115", "D118", "D119"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -4164,7 +4179,7 @@ COMPONENTS = [
                         "roster harvest already applies to itself, because a fixture regression "
                         "would leave every screen on its empty state and turn the richest sweep "
                         "in this suite into a loop over nothing, passing instantly and forever.",
-                "governed_by": ["D28", "D43", "D50", "D69", "D70", "D110"],
+                "governed_by": ["D28", "D43", "D50", "D69", "D70", "D110", "D118"],
                 "note": "IT WAS A PINNED ROSTER OF SEVEN HASHES FOR TWO DAYS, four lines under "
                         "its own header warning against exactly that. D69 added #/orders and "
                         "#/shipping and D70 added #/codes; none reached the list, three screens "
@@ -4211,13 +4226,13 @@ COMPONENTS = [
                         "nothing addressing `/photo/`. That assertion is the one that survives "
                         "`shell.ts:stubStore`, which answers the photo route — so the seal "
                         "alone could never have said the sheet had stopped asking. D71's RE-RANK IS ASSERTED "
-                        "HERE SINCE D118 and nowhere else, because after the location card was "
+                        "HERE SINCE D119 and nowhere else, because after the location card was "
                         "deleted no screen in the product renders a `lead='path'` label with a "
                         "void in it — the sheet is that rule's only renderer. Looking at it "
                         "found the specimens had never drawn the rule at all: `.kit-poslabel` set "
                         "`--pos-slot` without the `font-size` every real site pairs with it, so "
                         "the em-relative re-rank clamped to the same 11px a live path gets.",
-                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118"],
+                "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
                         "2026-09-05. `docs/DEBTS.md` section 5 recorded the departed row as "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "
@@ -4474,7 +4489,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D118"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D119"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

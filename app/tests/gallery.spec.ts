@@ -38,12 +38,18 @@ import { sealEveryTest } from './shell'
    renders HOME — a passing navigation to the wrong view. */
 const GALLERY = '/#/gallery'
 
-/** The departed shell, and BOTH CLASSES TOGETHER are the thing under test. `is-gone` alone is
- *  any sold copy and `is-nobar` alone is any copy with no bar to draw; their conjunction is the
- *  one row that has left its box, which is what `isDeparted` decides. */
-const DEPARTED_ROW = '.card-locations-row.is-gone.is-nobar'
+/** The departed shell. `is-gone` AND a lens that says so: `is-gone` alone is any sold copy —
+ *  including one sold out of a box it is still sitting in — and `data-gone` on the lens is the
+ *  row's own statement that this copy has left, which is what `isDeparted` decides.
+ *
+ *  IT WAS `.is-gone.is-nobar` UNTIL D118, and the pair meant the same thing for a reason that
+ *  has since been repealed: a departed row drew no bar at all (D68), so having none was how you
+ *  recognised one. That absence was 20px of row height arriving on the press that sold the copy,
+ *  which moved every row beneath it — so the lens stays now and its MARK is what leaves. The
+ *  conjunction is still what is under test; one half of it has a new spelling. */
+const DEPARTED_ROW = '.card-locations-row.is-gone:has(.position-bar[data-gone])'
 
-/** A row with no bar that has NOT left — the pooled copy, and only the pooled copy since D118. */
+/** A row with no bar that has NOT left — the pooled copy, and only the pooled copy since D119. */
 const NOBAR_PRESENT = '.card-locations-row.is-nobar:not(.is-gone)'
 
 /** Page-wide and not scoped to the owner specimen, deliberately. `CardLocations`'s Fulfiller
@@ -79,13 +85,20 @@ test('the departed row says one state and offers no action', async ({ page }) =>
 
   /* AND NOTHING WHERE AN ACTION WOULD BE. `Mark sold` on a copy that is already gone is the
      press this component refuses to offer, and the state pill beside it has already said so —
-     `CardLocations.tsx` renders null rather than a disabled control or a second word. */
+     `CardLocations.tsx` renders null rather than a disabled control or a second word.
+
+     THE SLOT IS STILL THERE, EMPTY, AND THAT IS D118 rather than a leak: the cell holds its
+     137x28 whether or not it has a control in it, because a slot that collapses when its button
+     becomes a result slides everything beside it. Empty TEXT is the claim; a zero-width box
+     never was. */
   await expect(row.locator('.card-locations-action')).toHaveText('')
+  const slot = await row.locator('.card-locations-action').boundingBox()
+  expect(slot?.width ?? 0, 'the action slot keeps its width with nothing in it').toBeGreaterThanOrEqual(137)
 })
 
 test('the pooled row is the only no-bar shell that has not left', async ({ page }) => {
   /* ONE, not two. The copy the walk stands on used to be the second — its lens was drawn in the
-     location card above the list — and D118 gave it a bar like every other row. A pooled copy is
+     location card above the list — and D119 gave it a bar like every other row. A pooled copy is
      now the only row that carries no bar without having left the box, and the count is asserted
      so a fixture that quietly loses it is caught. */
   await expect(page.locator(NOBAR_PRESENT)).toHaveCount(1)
@@ -112,7 +125,7 @@ test('the current row is drawn, and it is a row like every other', async ({ page
   await expect(current).toHaveAttribute('aria-current', 'true')
   await expect(current.locator('.card-locations-viewing')).toHaveText('Viewing')
 
-  /* AND IT DRAWS A BAR (D118). This is the assertion the retitle is for: `is-current` is a
+  /* AND IT DRAWS A BAR (D119). This is the assertion the retitle is for: `is-current` is a
      marker on an ORDINARY row now, not a third reason to carry no bar. The specimen's current
      copy sits in an open box and has a slot to draw. */
   await expect(current.locator('.position-bar')).toHaveCount(1)
@@ -124,7 +137,7 @@ const PATH_LED = ".kit-poslabel:has(.position-parts[data-lead='path'])"
 
 test('a label with no figure re-ranks its path, and a live one does not (D71)', async ({ page }) => {
   /* THE SITE THIS MOVED FROM IS GONE. It was asserted on `#/inventory`'s location card until
-     D118 deleted that card, and after the deletion NO screen in this product renders a
+     D119 deleted that card, and after the deletion NO screen in this product renders a
      `lead='path'` label with a void in it — the copies list, the order picker and the walk are
      all `lead='slot'`, and `PositionLabel.css`'s re-rank fires under `path` alone. The rule
      survives with this sheet as its only renderer, which is exactly the condition CLAUDE.md
