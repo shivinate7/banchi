@@ -787,8 +787,89 @@ expects `Card 10` and the newest is `Card 9`, a **dropped press** rather than a 
 only one a longer wait could never answer. **None of it is reachable from `make design-check`,
 which runs 7 workers here.**
 
-**One sighting is unexplained**: at 15 workers, before either fix, `app/tests/cursor.spec.ts`
-failed once in nine runs. Its message was not captured.
+~~**One sighting is unexplained**: at 15 workers, before either fix, `app/tests/cursor.spec.ts`
+failed once in nine runs. Its message was not captured.~~ **CLOSED 2026-09-08 — it was the
+select, and the rate at that width is 16%.** See the survey below, which reproduces it on demand.
+
+### The suite was surveyed rather than argued about, 2026-09-08
+
+**Ten clean runs of the whole suite, then the offenders hammered on their own.** The trigger was
+one red `press floor` case during PR #220's merge, called a flake and merged past. It was a real
+race, it is fixed, and a second one nothing had ever recorded was found beside it.
+
+| test | full runs | `--repeat-each=100` | parallelism |
+|---|---|---|---|
+| `cursor.spec.ts` — the press floor answers for every shape | 1 of 10 | **4%** at w7, **16%** at w14, **1%** at w1 | aggravates, does not cause |
+| `nav.spec.ts` — the armed leader is disarmed by arriving | 1 of 10 | **3%** at w14 | aggravates |
+| every other case (459) | 0 of 10 | — | — |
+
+**The run-level rate was 1 in 10 and the test-level rate 2 in 4,610.** Both reds landed in the
+same run. Duration does not predict them: the slowest run of the ten (154s) was green and the
+failing one was 121s against an 86s floor.
+
+**THE PRESS FLOOR CASE WAS A TEST TELLING A TRUE-LOOKING LIE, AND `base.css` WAS RIGHT EVERY
+TIME.** Every failure named the same shape — `a select did not move under the press` — and never
+one of the other eleven. `<select>` is the only shape here whose default action opens a NATIVE
+POPUP, and the popup takes the press: the dip lands on the frame the mouse goes down and
+`:active` is cleared again before a separate CDP round-trip can read it. Measured with a probe
+sampling both ways at once: **the dip was present at `mousedown` 80 times out of 80** while the
+round-trip read missed it. So what was intermittent was the OBSERVATION. Fixed by suppressing
+the popup with a capturing `preventDefault` for the length of the press; `preventDefault` does
+not stop the browser applying `:active`, which is what the case reads. **100 of 100 at fourteen
+workers afterwards, against 84 of 100 before.**
+
+**The obvious fix for it WEAKENS the case, which is why it is not the fix.** Sampling the dip
+inside the element's own `mousedown` listener is exact for the shapes that get one — and a
+genuinely disabled control dispatches NO mouse event while still matching `:active` in Chrome.
+Proved by mutation: with the disabled arm deleted from `base.css`, the listener version went
+silently green while the round-trip read named all three disabled shapes at `0px 1px`. That arm
+is 30 of D50's original 41 defects. **A guard that cannot see its subject is worse than no
+guard**, so the read stayed and only the popup was removed.
+
+**THE LEADER CASE IS A FRAME COUNT, WHICH IS A DURATION IN DISGUISE.** `nav.spec.ts` sampled
+`data-armed` exactly two animation frames after `hashchange`, reasoning that React would have
+committed the arrival by then. Under load it has not, and the case then reports a working disarm
+as broken. It could not simply poll, and its own comment says why: the arm expires on its own
+after `CHORD_MS`, so an auto-retrying assertion goes green with the disarm deleted. **Fixed by
+measuring WHEN the arm ended rather than whether it has ended yet** — a `MutationObserver` times
+the disarm from the hashchange, and the case asserts it landed inside half the window. A disarm
+on arrival lands in a frame or two; an expiry lands at `CHORD_MS`. With the disarm deleted the
+case fails naming the mechanism: *"the arm outlived the arrival by 951ms"*.
+
+**Both fixes are mutation-proved and neither weakens an assertion.** Three mutations against the
+press floor (`select` dropped, the disabled arm dropped, the aria-disabled arm dropped) and one
+against the leader all go red. Five full runs of the suite are green afterwards.
+
+### The suite fetches three typefaces from Google Fonts on every page load
+
+**Unfixed, and named here because nothing else names it.** `app/index.html` links Inter, Manrope
+and JetBrains Mono from `fonts.googleapis.com`, and `app/tests/fontsReady.ts` awaits
+`document.fonts.ready` in nearly every case. At 461 cases with a fresh context each, one run
+reaches the public internet on the order of a thousand times, and `sealEveryTest` does not cover
+it — it seals this checkout's CAPTURE port and nothing else.
+
+**No failure in this survey was traced to it**, and `&display=swap` means a fetch that fails
+degrades the measurement rather than hanging it. What it costs is that the suite has an outside
+dependency it does not declare: a DNS stall or a rate limit is indistinguishable from a slow
+render, and the cases that would feel it first are the ones measuring type. Self-hosting the
+faces would close it and is a product change, not a test change, which is why this is a note
+rather than a fix.
+
+### `make design-check` no longer reaches the capture server at all
+
+**Section 11 says it is "a known trigger" for the concurrency collapse. That has not been true
+since the specs were sealed.** All nineteen browser specs call `sealEveryTest`, which registers a
+catch-all `page.route` on this checkout's capture origin, ABORTS every request to it, and asserts
+in `afterEach` that none was attempted; `motion.spec.ts` is a pure unit test with no page at all.
+So a request to the capture port does not merely fail to arrive — it is never made, and a case
+that made one would fail by name.
+
+**§11's measurement — 969 threads under 80 Playwright browsers — predates that sealing** and
+describes a suite that no longer exists. The bounded pool it argued for is still right for the
+reasons §11 gives, which are about real clients rather than about this suite. What is no longer
+true is that `make design-check` is one of them. **The corollary is a gap rather than a
+reassurance**: `REQUEST_SLOTS` and `Connection: close` are exercised by nothing in the browser
+suite, so nothing here would notice them regressing.
 
 **Three non-retrying reads remain**, all in `app/tests/inventory.spec.ts`, of the eight
 originally counted. None has been observed failing, and `expect(await …innerText())` is a

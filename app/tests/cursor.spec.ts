@@ -687,6 +687,25 @@ test('the press floor answers for every shape a control can take', async ({ page
       el.style.width = '120px'
       el.style.height = '44px'
       document.body.appendChild(host)
+
+      /* AND THE BROWSER'S OWN DEFAULT IS SUPPRESSED FOR THE LENGTH OF THE PRESS, WHICH IS THIS
+         CASE'S SECOND RECORDED FLAKE AND THE ONE THE POLL ABOVE COULD NOT SEE. `<select>` is the
+         only shape here whose default action is to open a NATIVE POPUP, and that popup takes the
+         press: the dip lands on the frame the mouse goes down, and then `:active` is cleared
+         again before the round-trip below can read it. Measured on this tree — the dip sampled
+         inside the element's own `mousedown` was there 80 times out of 80, while the read below
+         missed it, so what was intermittent was the OBSERVATION and never `base.css`.
+         Left alone it fails ~4% of runs at seven workers and ~16% at fourteen, always naming the
+         select and always reporting the FLOOR as broken — a test telling a true-looking lie
+         about the product, which is the same fault the poll above was written for.
+         `preventDefault` stops the popup opening; it does not stop the browser applying
+         `:active`, which is what this case reads. IT IS NOT A SUBSTITUTE FOR THE READ: sampling
+         in a listener instead was tried and WEAKENS this case, because a genuinely disabled
+         control dispatches no mouse event at all while still matching `:active` — so the
+         disabled arm, which is 30 of D50's original 41 defects, went silently green. */
+      const w = window as unknown as { __pressProbeDefault?: (e: Event) => void }
+      w.__pressProbeDefault = (e: Event) => e.preventDefault()
+      document.addEventListener('mousedown', w.__pressProbeDefault, true)
     }, html)
 
     /* THE PRESS IS AIMED AT WHAT `elementFromPoint` ACTUALLY RETURNS, AND THAT IS THIS CASE'S
@@ -721,6 +740,10 @@ test('the press floor answers for every shape a control can take', async ({ page
       () => getComputedStyle(document.getElementById('press-probe')!.firstElementChild!).translate,
     )
     await page.mouse.up()
+    await page.evaluate(() => {
+      const w = window as unknown as { __pressProbeDefault?: (e: Event) => void }
+      if (w.__pressProbeDefault) document.removeEventListener('mousedown', w.__pressProbeDefault, true)
+    })
 
     const moved = translate !== 'none' && translate !== ''
     if (moved !== moves) {
