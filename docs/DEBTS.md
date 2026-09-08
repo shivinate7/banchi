@@ -1612,3 +1612,40 @@ fixed sheet), `ReviewQueue.tsx:1705`/`:1900` (scrim and dialog), `BoxBrowse.css:
 
 **Not a build-order step**, for §15's reason: there is no deliverable to schedule, and the row
 already says the same thing on every run in a form a person can act on one sheet at a time.
+
+## 18 — ~~The suite fetches three typefaces from Google Fonts on every page load~~ — CLOSED 2026-09-08
+
+**Found 2026-09-08 while surveying `make design-check`'s flake rate, and closed by D124 in the
+same change** — so it was never a standing debt, and it is written down here because the survey
+that found it is the kind of reading this file exists to preserve.
+
+**What it was.** `app/index.html` carried a `preconnect` pair and a `fonts.googleapis.com`
+stylesheet pulling Inter (400/500/600/700), Manrope (500/600/700/800) and JetBrains Mono
+(400/500/600). `app/tests/fontsReady.ts:settleFonts` awaits `document.fonts.ready` and is called
+by nearly every one of the 461 browser tests; every test gets a fresh browser context, so **one
+suite run reached the public internet on the order of a thousand times**.
+`app/tests/shell.ts:sealEveryTest` did not cover it and could not: its seal matches on
+`CAPTURE_ORIGIN`, this checkout's capture port, and a font request is a different origin.
+
+**What it cost, stated honestly, which is the reason it was recorded rather than merely fixed.**
+**No failure in the ten-run survey was traced to it.** `&display=swap` degrades a failed fetch
+into a paint in the fallback face, so this was never a hang and never a live fire. What it was is
+an undeclared outside dependency in the suite that decides whether the design floors hold — a DNS
+stall and a slow render are the same red — and the cases that would feel it first are the ones
+measuring type: `brand.spec.ts` measures lockup geometry, `inventory.spec.ts` prices a column
+against a mono advance.
+
+**What closed it.** Six `woff2` binaries under `app/src/fonts/`, declared by `app/src/fonts.css`,
+plus `sealOutside` in `app/tests/shell.ts` — an allow-list of this checkout's two ports, so a
+re-introduced remote face fails the suite by name instead of quietly undoing the fix. The bytes
+are the ones `fonts.gstatic.com` was serving, which is why nothing measured moved: 55 advance
+widths compared local against Google in one browser, 0 differing, and `brand.spec.ts` 20 of 20.
+D124 carries the argument and the three non-obvious properties of the CSS.
+
+**WHAT IS NOT CLOSED, AND IT IS SMALLER THAN IT LOOKS.** `docs/design-refs/*.html`,
+`docs/specs/logo/sheets/*.html` and `docs/specs/box-drawings/sheet.html` still fetch from Google
+Fonts. They are drawings a person opens by hand — not the product, not the suite, on no gate —
+and `docs/design-refs/README.md` already says they fall back to system faces offline. Vendoring
+for them would duplicate the binaries to buy nothing. **Neither the app nor `app/tests/` has any
+remaining outside dependency**, which is the claim section 16's second bullet and D43 both rest
+on.

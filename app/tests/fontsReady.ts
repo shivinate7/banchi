@@ -2,14 +2,24 @@ import type { Page } from '@playwright/test'
 
 /* WAIT FOR THE WEB FACES BEFORE MEASURING A LAYOUT.
  *
- * `app/index.html` fetches Atkinson Hyperlegible and Martian Mono from Google Fonts with
- * `&display=swap`. That is a deliberate instruction to the browser to PAINT IN THE FALLBACK
- * FACE FIRST and re-lay-out when the real one arrives, and it is right for the product — a
- * reader sees text immediately rather than a blank column. It is wrong for a ruler. Every
+ * `app/src/fonts.css` declares Inter, Manrope and JetBrains Mono with `font-display: swap`.
+ * That is a deliberate instruction to the browser to PAINT IN THE FALLBACK FACE FIRST and
+ * re-lay-out when the real one arrives, and it is right for the product — a reader sees text
+ * immediately rather than a blank column. It is wrong for a ruler. Every
  * `getBoundingClientRect` in this directory is measuring type, and a measurement taken inside
  * the swap window is measuring a DIFFERENT TYPEFACE than the one the assertion was computed
- * against: `app/tests/inventory.spec.ts` prices its own numbers at "Martian Mono's 0.70em
- * advance", which is not the advance of whatever fallback stood in for it.
+ * against: `app/tests/inventory.spec.ts` prices its own numbers against a mono advance, which
+ * is not the advance of whatever fallback stood in for it.
+ *
+ * THIS PARAGRAPH NAMED ATKINSON HYPERLEGIBLE AND MARTIAN MONO, FROM GOOGLE FONTS, UNTIL
+ * 2026-09-08. Both halves had gone false and neither had a reader: the palette moved to the
+ * `--bn-*` faces with the Banchi rebuild, and D124 vendored them into `app/src/fonts/`. WHAT
+ * VENDORING DID NOT CHANGE IS THIS FILE'S REASON TO EXIST — `swap` is kept, so the window is
+ * still there and still has to be waited out. What it removed is the round trip: this helper
+ * is awaited in nearly every one of the browser tests, each in a fresh context, so one
+ * `make design-check` used to reach the public internet on the order of a thousand times for
+ * type it now reads off the Vite server the page came from. `app/tests/shell.ts:sealOutside`
+ * is what stops that coming back.
  *
  * THIS IS NOT THE WHOLE OF THE DESIGN-CHECK FLAKE AND MUST NOT BE READ AS IT. `docs/DEBTS.md`
  * carries the full reading. The recorded red was a `toBeVisible()` timeout in a test's own

@@ -534,7 +534,10 @@ verified; a hard-coded color is invisible in light and wrong in dark, which is w
 **The stage tokens are dark in both themes** — `--bn-stage-*`, for viewfinders and photo
 heroes, where the ground is dark because the subject is a photograph.
 
-**Type has three roles.** `--bn-font-display` (Manrope) for headings and big figures,
+**Type has three roles, and all three are served from this checkout** (D124, 2026-09-08 —
+`app/src/fonts.css`, the one file in `app/` carrying an `@font-face`; nothing the app loads
+leaves the origin it came from, and `app/tests/shell.ts:sealOutside` is what keeps that true).
+`--bn-font-display` (Manrope) for headings and big figures,
 `--bn-font-ui` (Inter) for everything, `--bn-font-mono` (JetBrains Mono) for machine strings
 only — SKUs, run names, reason codes, key caps, card numbers. Numbers in tables are Inter with
 `font-variant-numeric: tabular-nums`, not mono. Body is 14px.
@@ -1287,6 +1290,7 @@ D120 The shell speaks one brand at every width, and the phone bar is a rail
 D121 The front page says what is owed, and the library is drawn as the work that made it
 D122 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
 D123 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
+D124 The faces are vendored, and the suite's allow-list is two ports
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

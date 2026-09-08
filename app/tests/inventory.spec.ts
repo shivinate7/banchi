@@ -4063,9 +4063,11 @@ test('the address holds one line at both widths, including the longest label the
      reading; this comment does not restate it.
 
      WHY THIS AWAIT IS STILL WORTH ITS LINE. Every number this case asserts is an advance width
-     — the comment above prices them at "Martian Mono's 0.70em advance" — and `app/index.html`
-     fetches that face from Google Fonts with `&display=swap`, which paints a fallback first and
-     re-lays-out when the real one arrives. That same swap is what the other investigation names
+     — the comment above prices them against the mono face of the day, which was Martian Mono
+     when the defect was measured and is JetBrains Mono now — and `app/src/fonts.css` declares
+     that face with `font-display: swap`, which paints a fallback first and re-lays-out when the
+     real one arrives. The face is served from this checkout since 2026-09-08 (D124) and the
+     swap window is unchanged: what vendoring removed is the round trip, not the repaint. That same swap is what the other investigation names
      as the thing that moves the grid under a split measurement. Here the whole assertion is a
      font metric, so waiting for the face is a precondition of measuring the right typeface at
      all rather than a timing guess. It weakens nothing: the same numbers, on the font they were
