@@ -7676,11 +7676,20 @@ to go through the lock — because the guard is one line of one recipe, which is
 line a new target gets written without. The row fails in both directions and refuses to go quiet
 if the runner is renamed past it.
 
-**`make screenshot` IS DELIBERATELY OUTSIDE IT.** `scripts/screenshot.sh` drives
-`playwright screenshot`, one page at a time in a shell loop — one browser, not a fleet, and it
-already needs a dev server somebody started by hand. Putting it behind the same lock would make a
-single render queue behind a ten-minute suite for no measured benefit. `playwright test` versus
-`playwright screenshot` is the line, and it is the line the audit row reads.
+**`make screenshot` IS OUTSIDE IT, ON ITS SHAPE RATHER THAN ITS COMMAND.**
+`scripts/screenshot.sh` loops the manifest serially and each render is one
+`chromium.launch()` and one `newPage()` in `scripts/screenshot.mjs` — one browser, one page, not
+a fleet, and it already needs a dev server somebody started by hand. Putting it behind the same
+lock would make a single render queue behind a ten-minute suite for no measured benefit.
+
+**THIS PARAGRAPH NAMED `playwright screenshot` FOR ONE DAY AND WAS WRONG WHEN IT MERGED.** D43's
+screenshot work (#223) replaced that CLI with `scripts/screenshot.mjs` on 2026-09-07, the same day
+this entry was written, and the two landed hours apart without either reading the other.
+**The reasoning was untouched by it** — the run is still one browser at a time — which is why
+the correction is to stop naming a command at all. What decides this is whether a runner draws
+pages in PARALLEL, and `playwright test` is the only thing here that does. That is what
+`scripts/docs-audit.py`'s `suite lock` row reads, and it reads it across the shell and node
+runners too, so a serial renderer growing workers is caught rather than argued about.
 
 **`make harness` AND `make check` DO NOT TAKE IT, AND EACH HAS ITS OWN REASON.** The harness runs
 at every turn end from the Stop hook: a refusal there is a false failure at exactly the moment a
