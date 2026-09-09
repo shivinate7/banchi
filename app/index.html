@@ -32,12 +32,14 @@
       })();
     </script>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <!-- The three typefaces, served from this checkout. There is no `preconnect` here and no
+         `fonts.googleapis.com` stylesheet any more: nothing this page loads leaves the origin
+         it came from, which is what makes `app/tests/` a closed system. `src/fonts.css` states
+         the whole argument, including why the weights are still discrete and which subsets
+         were dropped. Linked rather than imported from `main.tsx` so the faces begin
+         downloading with the document; the href is relative so `make demo-static`'s
+         `/<repo>/` base reaches it. -->
+    <link rel="stylesheet" href="./src/fonts.css" />
   </head>
   <body>
     <div id="root"></div>

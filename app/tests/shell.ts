@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
-import { CAPTURE_PORT } from '../devPort'
+import { CAPTURE_PORT, DEV_PORT } from '../devPort'
 
 /* NOTHING IN THIS DIRECTORY MAY REACH THE CAPTURE SERVER, AND UNTIL THIS FILE EXISTED TEN
  * SPECS DID — WHICH TURNED OUT TO BE THE SMALL HALF.
@@ -33,6 +33,17 @@ import { CAPTURE_PORT } from '../devPort'
  * defect D43 exists about, one level up. `docs/DEBTS.md` carried this as its section 13 until
  * this file discharged it; the measurements are here and in `docs/map.py`'s entry now, which is
  * where a claim with a reader belongs.
+ *
+ * AND NOTHING HERE MAY REACH THE PUBLIC INTERNET EITHER, WHICH IS THE SECOND SEAL AND ARRIVED
+ * THREE WEEKS LATER (D124, 2026-09-08). `sealCapture` matches on the capture PORT, so it was
+ * blind by construction to the largest outside dependency this directory had: `app/index.html`
+ * pulled Inter, Manrope and JetBrains Mono from `fonts.googleapis.com` on every page load, and
+ * every test opens a fresh context — order a thousand round trips to a third party per
+ * `make design-check` run, on the suite that decides whether the design floors hold. Nothing in
+ * a ten-run survey was ever traced to it, and that is the point: with `&display=swap` a stalled
+ * fetch DEGRADES a measurement instead of failing it, so a rate limit and a slow render are the
+ * same red. `sealOutside` below refuses everything that is not this checkout's two ports; the
+ * faces themselves are vendored into `app/src/fonts.css`.
  *
  * THE SEAL IS A CATCH-ALL THAT REFUSES, NOT A STUB THAT ANSWERS, and the difference is the
  * whole design. A shared handler that answered every route would make the traffic stop and
@@ -94,6 +105,9 @@ import { CAPTURE_PORT } from '../devPort'
 
 /** Everything that reached the capture port on this page, in order, as `GET /status`. */
 const leaked = new WeakMap<Page, string[]>()
+
+/** Everything that tried to leave this machine on this page, in order, as `GET https://…`. */
+const escaped = new WeakMap<Page, string[]>()
 
 /** This checkout's capture server, whatever hostname the page was opened at.
  *
@@ -192,6 +206,60 @@ const CARDS = {
 }
 
 /* ---------------------------------------------------------------------------- the seal */
+
+/** Is this request bound for somewhere that is not this machine's two servers?
+ *
+ *  AN ALLOW-LIST OF TWO PORTS, AND THE BLOCK-LIST IT REFUSES TO BE. The thing that prompted
+ *  this guard was three typefaces on `fonts.googleapis.com`, and a rule naming that host would
+ *  be satisfied by the next person reaching for jsdelivr. What the suite is entitled to talk
+ *  to is knowable and short — the Vite server the page came off, and the capture port
+ *  `sealCapture` already owns — so the rule is stated as those two and everything else is
+ *  refused. `docs/DEBTS.md` carries this repo's own receipt for the other shape: a dry-run
+ *  guard built as a block-list of guessed endpoint names let a real TCGplayer import through.
+ *
+ *  THE PORT IS THE WHOLE TEST, for the reason `CAPTURE_ORIGIN` above gives: `server.ts`
+ *  composes its base from `location.hostname`, so the same page opened at `pkmnscan.lan` asks
+ *  a different host on the same two ports, and both are still this Mac. A hostname allow-list
+ *  would have to guess at that set; the ports are derived from this checkout (D43).
+ *
+ *  ONLY `http:` AND `https:`. `data:` and `blob:` never leave the process — the capture
+ *  screen's encoder and every inline SVG fixture in this file are blobs and data URIs — and
+ *  Playwright does not route them anyway. */
+function isOutside(url: URL): boolean {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+  return url.port !== String(DEV_PORT) && url.port !== String(CAPTURE_PORT)
+}
+
+/** Refuse and record every request that would leave this machine.
+ *
+ *  REGISTERED BEFORE `sealCapture`, SO IT IS THE LAST RESORT UNDER EVERYTHING — Playwright
+ *  matches newest-first, and this one has to lose to every stub including the capture seal.
+ *  `isOutside` already excludes the capture port, so the two cannot both fire; the order is
+ *  what keeps that true if either predicate is ever widened.
+ *
+ *  WHY IT EXISTS WHEN NOTHING IS LEAKING TODAY. `app/index.html` fetched three typefaces from
+ *  Google Fonts until 2026-09-08, on every page load, in every one of the fresh contexts these
+ *  specs open — order a thousand round trips to the public internet per `make design-check`
+ *  run, none of it visible to `sealCapture`, which matches on the capture port alone. Vendoring
+ *  the faces (`app/src/fonts.css`) UNDID that; this is what stops it being re-done. A guard
+ *  against an outside dependency is worth more than the absence of one, because the absence is
+ *  a fact about today and the guard is a fact about every commit after it.
+ *
+ *  IT ABORTS AS `blockedbyclient` rather than `addressunreachable`. Nothing in `app/src` reads
+ *  the code, so this changes no rendering; what it changes is the sentence in a trace, which
+ *  for an escaped request is a policy refusal and not a dead server. */
+async function sealOutside(page: Page): Promise<void> {
+  const seen: string[] = []
+  escaped.set(page, seen)
+  await page.route(
+    (url) => isOutside(url),
+    async (route) => {
+      const request = route.request()
+      seen.push(`${request.method()} ${request.url()}`)
+      await route.abort('blockedbyclient')
+    },
+  )
+}
 
 /** Refuse and record every request to this checkout's capture port.
  *
@@ -509,6 +577,7 @@ async function stubStore(page: Page): Promise<void> {
  *  fixture fail by name. */
 export function sealEveryTest(opts?: { store?: boolean; cards?: number }): void {
   test.beforeEach(async ({ page }) => {
+    await sealOutside(page)
     await sealCapture(page)
     await stubShell(page, opts?.cards ?? 0)
     if (opts?.store === true) await stubStore(page)
@@ -521,6 +590,15 @@ export function sealEveryTest(opts?: { store?: boolean; cards?: number }): void 
       seen ?? [],
       'reads reached the capture server — in the main checkout that is the owner’s real store.\n' +
         'Stub them in this spec, or pass `{ store: true }` if this spec carries no fixtures.',
+    ).toEqual([])
+
+    const out = escaped.get(page)
+    expect(out, 'sealOutside never ran for this page — `sealEveryTest` is mis-wired').toBeDefined()
+    expect(
+      out ?? [],
+      'a request left this machine. The suite talks to this checkout’s Vite and capture ports\n' +
+        'and to nothing else — see `sealOutside`. If this is a web font, vendor it the way\n' +
+        '`app/src/fonts.css` vendors the three the app already uses.',
     ).toEqual([])
 
     /* TWO INVARIANTS OVER THE SHELL, because both of the failures they name were invisible at
