@@ -135,6 +135,53 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
                     #   refusal. `make harness` and `make check` deliberately do NOT take it;
                     #   docs/DEBTS.md §16 is why, and which half of that is measured.
+                    #   AND IT LEAVES A VERDICT, WHICH IS HOW A SESSION WAITS FOR IT. 89-175s
+                    #   measured across five runs, against a 120s tool timeout — so a session
+                    #   ALWAYS backgrounds it, and the answer is a file rather than the
+                    #   stream. `.serve/design-check.json` holds the verdict, the counts, and
+                    #   every failing title with its location and error, no ANSI and no NUL
+                    #   bytes. Read it ONCE when the run lands. It says `"verdict": "running"`
+                    #   from the moment the suite starts, so a reader can tell STILL GOING
+                    #   from DIED — a file still saying that after the process has exited
+                    #   means the run died between the two writes (a crashed worker, an OOM,
+                    #   a kill). NO FILE AT ALL means the run never reached Playwright's
+                    #   config: an unloadable config, a missing toolchain, the lock refusing
+                    #   it, or — the one case where the process is still ALIVE — `ARGS=--wait`
+                    #   still queued behind another tree's fleet, which is why the rule is to
+                    #   read the file when the run EXITS and not before. The other three are
+                    #   LOUD — a refusal prints and exits 75 — and
+                    #   the target deletes the file first so none of them can ever show you
+                    #   the LAST run's pass, which is the only silent one of the four.
+                    #   Measured: a dead `webServer` and an unparseable spec both land a real
+                    #   `fail` with 0/0 counts, their own recognisable signature.
+                    #   AND DO NOT POLL FOR IT. A backgrounded command re-invokes the session
+                    #   when it EXITS, so the sequence is: background it, do other work, read
+                    #   the file once when the notification lands. An `until` loop over this
+                    #   file buys nothing and produces one notification per poll, none of
+                    #   which carry the result.
+                    #   NEVER PIPE IT THROUGH `tail`: `... | tail -N > file` writes NOTHING
+                    #   until the process exits, because tail buffers its whole input — so
+                    #   the obvious "run it and read the tail" gives an empty file for the
+                    #   entire run and no way to tell it from a dead one. Those two traps
+                    #   together cost a session about a dozen turns on 2026-09-07, before the
+                    #   owner killed the background tasks by hand.
+                    #   IT IS GUARDED TWICE, BECAUSE THE NAMES AND THE BEHAVIOUR FAIL
+                    #   SEPARATELY. `make docs-audit`'s `verdict file` row reconciles the
+                    #   reporter's own RESULT_FILE against the config's reporter list, both
+                    #   recipes' `rm -f`, and the path named here — three of those four come
+                    #   apart SILENTLY, and the worst hands a session a STALE `pass`.
+                    #   `make verdict-selftest` RUNS the reporter, copied into a throwaway
+                    #   tree, over one passing and one failing spec: verdict, counts, failing
+                    #   title, and no ANSI or NUL in the error. That one catches a
+                    #   @playwright/test bump moving the Reporter API, where every name stays
+                    #   right and every count goes wrong. Both mutation-tested — five arms and
+                    #   four. It launches NO BROWSER and NO DEV SERVER, so it is in `check`
+                    #   and `ci-check` and takes no lock.
+make design-check-quiet  # the same run with the 450-line progress stream dropped. Same tests,
+                    #   same verdict file, and THE SAME MACHINE-WIDE LOCK — a quiet variant
+                    #   that skipped it would be D122's starvation reachable by typing a
+                    #   different target name. The progress is only useful to a human watching
+                    #   live and is what makes a captured log unreadable.
 make suite-lock-selftest # the lock, exercised by violating it — including a holder killed with
                     #   -9, which is the whole argument for `flock` over a pidfile. In `check`,
                     #   never in the git hook. `PKMNSCAN_LOCK_DIR` sends it at a throwaway
@@ -193,13 +240,22 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
                     #   merge-selftest + janitor-selftest + suite-lock-selftest +
-                    #   port-agreement + set-hint-agreement + screen-freshness +
-                    #   sigil-check + ignore-check + lint + vale + typecheck.
+                    #   verdict-selftest + port-agreement + set-hint-agreement +
+                    #   screen-freshness + sigil-check + ignore-check + lint +
+                    #   vale + typecheck.
                     #   THIS LIST IS CHECKED NOW —
                     #   `make docs-audit`'s `check census` row reconciles it and `make help`'s
                     #   against the recipe, and it earned the row: help said five of these
                     #   for months while this line said eleven, and nothing compared them.
                     #   `make explain` is the same list with what each row is worth.
+                    #   NEITHER THIS NOR `make harness` HAS design-check's WAITING PROBLEM,
+                    #   measured 2026-09-07 in a worktree: 17s and 13s, both well inside one
+                    #   tool call, so run them in the foreground and read the output. What
+                    #   `check` is is LONG — ~3,000 lines — and the two rows that matter are
+                    #   at the end, since it stops at the first failing target. For the
+                    #   docs-audit half alone, `python3 scripts/docs-audit.py --json` prints
+                    #   the rows and the exit code as one object instead of ~100 lines of
+                    #   render, which is what grepping `^  FAIL` was approximating.
 make explain        # what `make check` runs: gates, commit path, writes, toolchain.
                     #   ARGS=<target> for one entry in full. A parallel declaration in
                     #   `scripts/checks.py`, deliberately NOT the driver — a registry that

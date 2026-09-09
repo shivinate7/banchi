@@ -180,6 +180,33 @@ CHECKS = (
         "governed_by": ("D18", "D43", "D122"),
     },
     {
+        "target": "verdict-selftest",
+        "runs": "python3 scripts/verdict-selftest.py",
+        "asserts": "app/design-check-reporter.ts, run for real against one passing and one "
+                   "failing spec: the verdict, the counts, the failing title and its "
+                   "location, the in-flight `running` sentinel (observed by the passing test "
+                   "from inside the run, which is the only way to see it that is not a race), "
+                   "and that the error text carries no ANSI escapes and no NUL bytes. "
+                   "`make docs-audit`'s `verdict file` row is the static half — it reconciles "
+                   "the four files that NAME the verdict path and cannot say the reporter "
+                   "still works. The regression neither name-checking nor the design suite "
+                   "would catch is a @playwright/test bump moving the Reporter API under it: "
+                   "every name stays in place and every count goes wrong, and a session reads "
+                   "a green verdict off a reporter that stopped counting.",
+        "needs": ("python3", "node", "app deps"),
+        "writes": "a throwaway tree under `tempfile.TemporaryDirectory()` holding a COPY of the "
+                  "reporter, the real app/package.json, a symlink to app/node_modules and two "
+                  "generated specs. The copy is what keeps its verdict inside the temporary "
+                  "directory: RESULT_FILE is derived from the reporter's own location, so "
+                  "running the real file in place would overwrite `.serve/design-check.json` — "
+                  "a file a session may be about to read, which would make this check cause "
+                  "the false green it exists to prevent.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it shells out to node.",
+        "gates": True,
+        "governed_by": ("D16", "D18"),
+    },
+    {
         "target": "port-agreement",
         "runs": "python3 scripts/port-agreement.py",
         "asserts": "server/ports.py and app/devPort.ts answer the same port for the same "
