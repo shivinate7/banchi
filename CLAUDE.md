@@ -1367,6 +1367,7 @@ D122 The suite takes a machine-wide lock, because the CPU is the one thing a che
 D123 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 D124 The faces are vendored, and the suite's allow-list is two ports
 D125 The photograph is cropped to the card, the focus is derived from the reading, and a reading that cannot be believed is a refusal
+D126 The demo inflates its own history, and the present is left alone
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
