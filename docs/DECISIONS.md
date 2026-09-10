@@ -8065,6 +8065,31 @@ card, not a cropped one, **and it looked enough like a small card to pass a glan
 kit in the rebuild, `#/pricing`'s drawer was still losing it a week later, and this is the crop
 losing to the screens. **Specificity that has to be re-derived at each call site is the defect.**
 
+### AMENDED 2026-09-10, AT THE RIG: THE CROP LANDS INSTANTLY, AND THE EASE STAYS WHERE IT WAS WRITTEN
+
+**The owner walked a box with this and the word for it was motion sickness.** `.bn-crop`'s cropped
+state carried `transition: width, transform` over `--bn-t-slow`, inherited from the block as it
+shipped for the Home hero, and every screen this entry added picked it up.
+
+**The transition was right for exactly one case.** This entry did not notice it was leaving it on
+everything else. The hero is one photograph resolving once on load, and easing into its crop reads as the page
+arriving. Everything else here is a REPEAT: the reading is asynchronous, so a card draws under its
+own framing and adopts the crop about 115ms later — and eased, that is a zoom-and-pan fired again
+on every step of the `#/inventory` walk and on every thumbnail an observer pulls into the pricing
+worklist. Stepping a box became a succession of swoops, each one driven by network timing rather
+than by anything the operator did.
+
+**A crop that lands instantly reads as the photograph having always been framed that way**, which
+is what it is. `.browse-photo`'s existing fade is untouched and is doing the job of covering the
+swap — a fade is not movement, which is the distinction `docs/DESIGN.md` already draws.
+
+**The ease is scoped to `.home-deck-photo` rather than deleted**, so the case it was written for
+keeps it and the next screen to draw a cropped photograph inherits the instant behaviour and has
+to ask for motion deliberately. **That is the general lesson and it is not about this transition**:
+a value tuned for a screen that resolves ONCE becomes a different thing entirely on a screen that
+resolves PER ROW, and moving a rule into a shared kit block is exactly the move that makes the
+change invisible.
+
 ### What this does not do
 
 **It does not touch the review queue, the capture screen, or the sidecar.** §7 costed a server-side
