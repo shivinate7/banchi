@@ -812,74 +812,29 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    `overflow: hidden`, and NOT have a transform of its own. */
 .bn-crop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
-/* THE CROPPED STATE IS WRITTEN AT (0,2,1) ON PURPOSE, AND THE ELEMENT SELECTOR IS THE POINT
-   (D125). A screen owns its own window and reaches the <img> inside it through it — `.browse-photo-frame
-   .browse-photo`, `.card-locations-fulfiller .card-locations-photo`, `.ff .card-locations-photo`
-   — and every one of those is (0,2,0). Written as a bare `.bn-crop[data-cropped]` at (0,1,1) this
-   block LOSES to all of them on `height`, and the failure is silent and specific: the inline
-   `width` still applies because it is inline, `height: 100%` still applies because the screen won,
-   and `object-fit: fill` then STRETCHES the photograph across a box of the wrong shape. Measured
-   on `#/inventory` before this line was written — a 2160x3840 frame drawn into 360x452, which is
+/* THE CROPPED STATE IS WRITTEN AT (0,2,1) ON PURPOSE, AND THE ELEMENT SELECTOR IS THE POINT. A
+   screen owns its own window and reaches the <img> inside it through it, and those selectors are
+   (0,2,0) — so a bare `.bn-crop[data-cropped]` at (0,1,1) loses to them on `height`, silently and
+   specifically: the inline `width` still applies because it is inline, the screen's `height: 100%`
+   still applies because the screen won, and the photograph is then stretched across a box of the
+   wrong shape. Measured before this was written — a 2160x3840 frame drawn into 360x452, which is
    a squashed card, not a cropped one, and it looked enough like a small card to pass a glance.
 
-   This is the third time the same trap has been walked into in this file's history: `.browse-photo`
-   lost `cover` to `.bn-photo img` in the Banchi rebuild, `#/pricing`'s drawer was still losing it
-   a week later, and this is the crop losing to the screens. Specificity that has to be guessed at
-   each call site is the defect; the kit states it once, high enough, and no screen has to know. */
+   TWO CONSUMERS, BOTH OF THEM ONE PHOTOGRAPH RESOLVING ONCE: the Home hero and the pricing
+   worklist's row thumbnails. D125 briefly put this on four more screens — the box walk, the
+   pricing drawer, the sell-confirm and the Fulfiller's pull preview — and the owner reverted it
+   there on 2026-09-10, so the rules that existed only for those four (`aspect-ratio: auto` for an
+   <img> that was its own window, `min-height` for a published painted-size floor) are gone with
+   them rather than left behind citing measurements nothing runs any more. */
 img.bn-crop[data-cropped='true'] {
   inset: auto;
   left: 50%;
   top: 50%;
   width: auto;
   height: auto;
-  /* AND THE ASPECT GOES WITH THE HEIGHT. A cropped image is positioned by its own natural
-     proportions — that is what `height: auto` means here — so a screen that put `aspect-ratio`
-     on the <img> rather than on its window forces the box back to a card's shape while the
-     inline width says otherwise, and the photograph lands somewhere neither rule intended.
-     `.fulfillment-photo` and `.card-locations-photo` both do that, and both are right to: the
-     <img> WAS the window on those screens before the crop existed. */
-  aspect-ratio: auto;
   max-width: none;
-  /* THE WINDOW IS ALWAYS COVERED, WHICH `height: auto` ALONE DOES NOT GUARANTEE (D125). The
-     inline width is `frame / rect`, never below 100%, so the horizontal side is safe by
-     construction. The vertical side is not: `auto` derives the height from the PHOTOGRAPH's own
-     proportions, so an image that is not the rig's portrait frame — a re-shoot is a FILE, and D26
-     lets any file replace a photograph in place — paints SHORTER than its window and leaves
-     ground below it. `cover` could never do that, and one of the floors this product publishes is
-     a minimum painted short edge. Caught by `app/tests/fulfillment.spec.ts` at 375px: a 160x120
-     stub painted a 277px short edge against a 320px floor, where the box was 343px wide.
-     `cover` rather than `fill` for the same reason — when the two aspects agree, which is every
-     rig photograph, the box is already at the natural aspect and the two are identical; when they
-     disagree, this crops the surplus instead of stretching the card. */
-  min-width: 100%;
-  min-height: 100%;
   object-fit: cover;
-  /* NO TRANSITION HERE, AND THAT IS THE WHOLE POINT OF THIS PARAGRAPH (D125, amended
-     2026-09-10 by the owner at the rig). This block used to ease `width` and `transform` over
-     `--bn-t-slow`, which was right for the ONE thing it was written for: the Home hero, a single
-     photograph that resolves once on load and settles into its crop.
-
-     It is wrong for everything else, because the reading is ASYNCHRONOUS. A card draws under its
-     own framing first and adopts the crop about 115ms later, so an eased `width` and `transform`
-     is a zoom-and-pan on EVERY card — fired again on every step of the `#/inventory` walk and on
-     every thumbnail an observer brings into the pricing worklist. Stepping a box became a
-     succession of swoops. The owner's word for it was motion sickness, and that is a fair
-     description of a hundred consecutive zooms driven by network timing rather than by anything
-     the operator did.
-
-     A crop that lands INSTANTLY reads as the photograph having always been framed that way, which
-     is what it is. The fade `.browse-photo` already carries is untouched — a fade is not
-     movement, and it is doing the job of covering the swap. */
 }
-
-/* The UNCROPPED state inside a kit photo frame, and ONLY that state — scoped, because otherwise
-   this rule at (0,3,1) outranks the cropped block above at (0,2,1) and hands a cropped image
-   `cover`. That is harmless the day it is written, since a cropped image is at its natural aspect
-   and `cover` and `fill` agree there, and it would stop being harmless silently. The trap is the
-   same one twice over:
-   `.bn-photo img` is (0,1,1) and plain `.bn-crop` is (0,1,0), so an image waiting for its reading
-   — or one whose reading was refused — would letterbox rather than hold the framing it had. */
-.bn-photo img.bn-crop:not([data-cropped='true']) { object-fit: cover; }
 
 /* THE HERO KEEPS THE EASE, BECAUSE IT IS THE CASE THE EASE WAS WRITTEN FOR. One photograph, one
    reading, once per visit to `#/`, settling into its crop while the page is still arriving. It is

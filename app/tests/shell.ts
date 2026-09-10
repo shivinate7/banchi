@@ -319,20 +319,21 @@ async function stubShell(page: Page, cards: number): Promise<void> {
  *  EVERY ROUTE HERE IS A READ. Nothing in this module answers a write: a spec that means to
  *  write says so with its own handler, and one that writes by accident is named by the seal. */
 
-/* THE CROP WINDOW, WHICH IS A POST AND STILL A READ, AND IT IS EXPORTED BECAUSE THREE SPECS NOW
- * NEED IT (D125). It was one screen's route — `Pricing.tsx` fired one per row it drew — and it
- * was here rather than in that spec because the seal reported it, not because anybody remembered
- * the screen made it. `#/inventory`, the Fulfiller's pull preview and the sell-confirm ask for it
- * too now, and those two specs carry their own `stubServer` rather than calling `stubStore`. So
- * the answer lives once: a third hand-written copy is what the seal would be catching next.
+/* THE CROP WINDOW, WHICH IS A POST AND STILL A READ. The Home hero and `#/pricing`'s row
+ * thumbnails ask for a rectangle, and it is stubbed here rather than in their specs because the
+ * seal reported it, not because anybody remembered the screens made it.
+ *
+ * IT WAS EXPORTED FOR A WEEK. D125 put the crop on four more screens, `inventory.spec.ts` and
+ * `fulfillment.spec.ts` carry their own `stubServer` rather than calling `stubStore`, and both
+ * needed it; the owner reverted those four on 2026-09-10 and it has one caller again. Left
+ * exported it would be a seam nothing crosses, which is the shape this file's own header warns
+ * about elsewhere.
  *
  * THE RECTANGLE IS A BELIEVABLE ONE ON PURPOSE. `[216, 384, 1944, 3456]` sits inside its
- * 2160x3840 frame, so `kit:wholeCardFocus` accepts it and the specs measure the CROPPED render —
- * which is the one the product draws. A rectangle that overran the frame would be refused, every
- * screen would fall back, and the suite would go green over the fallback while believing it had
- * looked at the crop. That is the shape of the defect this file's own header describes: seventy-one
- * cases measuring the uncropped fallback a failure left behind. */
-export async function stubCropPreview(page: Page): Promise<void> {
+ * 2160x3840 frame, so the specs measure the CROPPED render — the one the product draws. A
+ * rectangle that overran the frame would be refused, the screens would fall back, and the suite
+ * would go green over the fallback while believing it had looked at the crop. */
+async function stubCropPreview(page: Page): Promise<void> {
   await page.route(/\/pipeline\/crop-preview$/, (route) =>
     json(route, {
       scope: { box: 2, whole_box: false, cards: [1] },
