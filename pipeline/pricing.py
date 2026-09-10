@@ -9,8 +9,22 @@ clears it. Both configurable; neither is a magic number to be nudged by feel.
              `pipeline/corpus.py`'s `policy.threshold`, set by the operator on
              `#/pricing`, validated by `check_threshold` and threaded to every partition
              through `SkuMatch.threshold`. A store that has never set one reads this.
-  floor      listed price = max(pricing-rule output, $0.40) — clamps undercut rules in a
-             collapsing market.
+  floor      listed price = max(pricing-rule output, the cut-off) — clamps undercut rules
+             in a collapsing market. IT IS THE SAME FIGURE AS THE THRESHOLD AND IS NOT A
+             SECOND SETTING (D9, amended 2026-09-09): the store's cut-off is the cheapest
+             price anything here ever lists at, so `SkuMatch.list_price` clamps at
+             `SkuMatch.threshold` and `pipeline/reprice.py` is handed the same figure.
+             `FLOOR` below is the module default, for a caller with no store behind it.
+
+             D9's *"both configurable"* was implemented for the threshold in September and
+             not for the floor, and the pair came apart the day an operator set the cut-off
+             below $0.40: a store at $0.29 hand-priced 293 live listings down and every one
+             of them was refused `below_floor` against this module's constant, so the
+             prices reached `prices.json` and never reached the upload. In the other
+             direction the same gap prices a card the operator's own cut-off calls listable
+             ABOVE its market — market $0.32, `match`, clamped to $0.40 — which is the
+             inversion `pipeline/corpus.py:DEFAULT_CUTOFF` was written to end, one register
+             along.
 
 Three rules: `match`, `undercut:PCT`, `markup:PCT`. Two bases: `market` (default) and
 `low`. Order of operations is fixed and is the reason `list_price` exists as a function
@@ -61,6 +75,12 @@ THRESHOLD = Decimal("0.40")
 # `server/pipeline_routes.py` read the module constant directly in three places.
 LIVE_QUANTITY_CAP = 4
 
+# D9's DERIVED FIGURE, AND THE DEFAULT FOR A CALLER WITH NO STORE. The floor in force is the
+# store's cut-off — `pipeline/corpus.py`'s `policy.threshold`, which `SkuMatch.list_price`
+# clamps at and `cli/cmd_reprice.py` hands to `plan` and `read_back`. Nothing in the pipeline
+# reads this constant while a `prices.json` is in front of it; what reads it is a `SkuMatch`
+# built with no threshold (every synthetic one in the harness) and `flat_price`'s own
+# deliberateness check, which is about the LABOR BAR rather than about the clamp.
 FLOOR = Decimal("0.40")
 
 CENT = Decimal("0.01")
@@ -279,7 +299,12 @@ class Disposition:
 
     Two kinds, both of which list the card:
 
-      flat_floor   every sub-threshold card at the floor, whatever its market price
+      flat_floor   every sub-threshold card at the floor, whatever its market price.
+                   THE FLOOR IS THE STORE'S CUT-OFF, so `resolve` takes it as an argument
+                   rather than reading the module constant — `pipeline/join.py:prices_for`
+                   passes each match's own `threshold`. Retired as an answer anybody may
+                   CHOOSE (D9 amended 2026-09-03, D98) and still reachable, because a
+                   corpus written before that day may hold `"floor"`.
       flat_price   a number chosen for this run
 
     Bulk Lots is not a kind here. Which cards go to a bulk lot is a decision made later,
@@ -299,8 +324,12 @@ class Disposition:
 
     @property
     def describe(self) -> str:
+        # NO FIGURE ON THE FLOOR ARM, BECAUSE THE FLOOR MOVES. It is the store's cut-off, and
+        # this property is reached from `Decisions.describe` — which has no store behind it —
+        # so naming a figure here could only name the module constant, which is the one thing
+        # the floor is not while a `prices.json` exists.
         if self.kind == FLAT_FLOOR:
-            return f"flat at the ${FLOOR} floor"
+            return "flat at the store's floor"
         return f"flat at ${self.price}"
 
 

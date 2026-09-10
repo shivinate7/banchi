@@ -10041,10 +10041,25 @@ def check_threshold_and_file_shape(checks: Checks) -> None:
         )
         checks.equal(
             merged[DUNSPARCE_SKU][tcgcsv.PRICE_COLUMN],
-            tcgcsv.format_price(pricing.FLOOR),
+            tcgcsv.format_price(Decimal("5.00")),
             "THE $2.06 CARD WAS PRICED BY THE SUB-THRESHOLD DISPOSITION, which is the proof "
-            "the stored $5.00 reached the partition: at the $0.40 default this row is "
+            "the stored $5.00 reached the partition: at the $0.49 default this row is "
             "listable and would carry its own market price instead",
+        )
+        # AND THE FIGURE IS THE STORE'S, NOT `pricing.FLOOR` (D9, amended 2026-09-09). This
+        # asserted `$0.40` until that amendment, which is the same defect one register along
+        # from the one it was written for: a stored `"floor"` answer resolved at the module
+        # constant while the store's own cut-off said something else, so a store set BELOW
+        # $0.40 listed its cheapest cards ABOVE the price its mid cards went out at. D98
+        # retired `"floor"` as an answer anybody may choose on the ground that a sub-threshold
+        # price must not track *"a figure that moves for a different reason"* — and the floor no
+        # longer moves for a different reason, because it is the cut-off. `"floor"` and the
+        # default `{"flat": <cut-off>}` are the same answer now, which is why this is coherent
+        # rather than a reopening.
+        checks.ok(
+            merged[DUNSPARCE_SKU][tcgcsv.PRICE_COLUMN] != tcgcsv.format_price(pricing.FLOOR),
+            "and it is NOT the module constant — a `\"floor\"` answer resolves at the store's "
+            "own cut-off, so the cheap half can never go out above the listed half's floor",
         )
         checks.ok(
             "import           2 row(s)" in said,
@@ -10943,6 +10958,163 @@ def check_markdown(checks: Checks) -> None:
             f"A COPY THAT SOLD INSIDE THE WINDOW IS `{reprice.SOLD_RECENTLY}`, read off the "
             f"CARD RECORDS and never the event log: one of the 193 `sold` events on the "
             f"owner's store carries no `sku` key, and a query over the log loses it silently",
+        )
+
+
+def check_markdown_floor(checks: Checks) -> None:
+    """The floor a markdown obeys is the STORE's cut-off (D9, amended 2026-09-09).
+
+    THE DEFECT, MEASURED ON THE OWNER'S REAL STORE ON 2026-09-09. `policy.threshold` was
+    $0.29; every clamp in `pipeline/reprice.py` read `pricing.FLOOR`. `reprice apply` over a
+    354-row worklist wrote 49 SKUs and refused 293 as `below_floor`, naming *"below the $0.40
+    floor"* — a figure the store had not used for a week — after writing all 342 answers into
+    `prices.json`. So the screen said the work was done, the corpus agreed, and the spreadsheet
+    that goes to TCGplayer carried a seventh of it.
+
+    BOTH DIRECTIONS ARE ASSERTED, because a fix that only widens is a fix that removed a guard.
+    A cut-off LOOSER than a price lets it through; a cut-off TIGHTER than it still refuses.
+
+    AND THE OFFER IS ASSERTED TOO, not just the apply. `plan` refuses a candidate already at or
+    under the floor as `at_floor`, so at $0.40 a $0.35 listing was never proposed either — the
+    two halves of one figure, and a fix to one of them would leave the other silently wrong.
+    """
+    checks.note("")
+    checks.note("MARKDOWN FLOOR — the store's cut-off, in both directions")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Articuno", "161", None),
+    ]
+
+    def live_export(path, *, asking):
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        by_sku = source.by_sku()
+        rows = []
+        for sku in SEAM_SKUS:
+            row = dict(by_sku[sku])
+            row[tcgcsv.LIVE_QUANTITY_COLUMN] = "1" if sku in asking else "0"
+            row[tcgcsv.PRICE_COLUMN] = f"{Decimal(asking.get(sku, '0')):.4f}"
+            rows.append(row)
+        tcgcsv.write_csv(path, source.header, rows)
+        return Path(path)
+
+    with isolated_home() as home:
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus.read()
+        # THE OWNER'S OWN FIGURE, WHICH IS WHAT MAKES THIS A REGRESSION TEST RATHER THAN A
+        # PARAMETER SWEEP: $0.29 is below D9's $0.40, so every constant-reading clamp in the
+        # pipeline disagrees with it and disagrees in the direction that costs an upload.
+        book.threshold = "0.29"
+        book.sub_threshold = {"flat": "0.29"}
+        book.write()
+        # `emit` IS WHAT PUTS THE SKU ON THE CARD RECORD, and without it every row here is
+        # `too_young` — dated by neither clock, because `owned_since` is keyed by SKU and the
+        # store does not know one until the pipeline chooses it. Not incidental setup: it is
+        # also the half of this amendment the join path owns, so the file it writes is the
+        # $0.29 store's own listed price.
+        command(checks, "emit", str(run_dir.directory))
+
+        old = "2026-08-01T00:00:00.000+00:00"
+        with Store().write() as writable:
+            for box, index, *_ in cards:
+                writable.inventory.cards[master.position_key(box, index)].captured_at = old
+
+        # $0.35 SITS BETWEEN THE TWO FIGURES, WHICH IS THE WHOLE POINT. At the store's $0.29 it
+        # is a live listing with room to fall; at `pricing.FLOOR` it is already under the floor.
+        export = live_export(home / "live.csv", asking={DUNSPARCE_SKU: "0.35"})
+        said = command(
+            checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write"
+        )
+        checks.ok(
+            "floored at $0.29" in said,
+            "THE REPORT NAMES THE STORE'S FIGURE. `below_floor`'s own sentence carries no "
+            "number on purpose, so this line is the only place the floor is printed and it can "
+            "only print the value actually used",
+            said,
+        )
+        checks.ok(
+            f"[{reprice.AT_FLOOR}]" not in said,
+            f"AND THE $0.35 LISTING IS OFFERED. At `pricing.FLOOR` it was refused "
+            f"`{reprice.AT_FLOOR}` — 'nowhere down to go' against a floor the operator had "
+            f"moved — so the rule never proposed the row the apply then never wrote",
+            said,
+        )
+        directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        offered = [row[tcgcsv.SKU_COLUMN] for row in tcgcsv.read_export(
+            directory / cmd_reprice.WORKLIST
+        ).rows]
+        checks.equal(
+            offered,
+            [DUNSPARCE_SKU],
+            "and the worklist holds it — the proposal is $0.32, which is `undercut:10` off "
+            "$0.35 rounded, clamped at $0.29 rather than lifted to $0.40",
+        )
+
+        def hand_priced(name, price, *, cut_off=None):
+            """Hand one price back, optionally after moving the store's cut-off under it."""
+            from cli import __main__ as entry
+
+            target = files.inventory_dir() / cmd_reprice.DIRNAME / name
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.copy(directory / cmd_reprice.MANIFEST, target / cmd_reprice.MANIFEST)
+            rows = [dict(row) for row in tcgcsv.read_export(
+                directory / cmd_reprice.WORKLIST
+            ).rows]
+            for row in rows:
+                row[tcgcsv.PRICE_COLUMN] = price
+            tcgcsv.write_csv(target / cmd_reprice.WORKLIST, tcgcsv.CANONICAL_HEADER, rows)
+            if cut_off is not None:
+                moved = corpus.Corpus.read()
+                moved.threshold = cut_off
+                moved.write()
+            with quiet() as out:
+                code = entry.main(
+                    ["reprice", "apply", str(target / cmd_reprice.WORKLIST), "--write"]
+                )
+            return target, code, out.getvalue()
+
+        target, code, said = hand_priced("20200101-000101", "0.29")
+        upload = target / cmd_reprice.IMPORT
+        checks.ok(
+            code == 0 and upload.is_file(),
+            "A PRICE AT THE STORE'S OWN CUT-OFF REACHES THE UPLOAD. This is the row that was "
+            "refused 293 times on the owner's store: the answer went into `prices.json` and "
+            "the spreadsheet TCGplayer reads did not carry it",
+            said,
+        )
+        # READ ONLY IF IT IS THERE, so a regression reports as a NAMED failure rather than as a
+        # `FileNotFoundError` out of the middle of the module. Measured while mutation-testing
+        # this block: three of the four arms make the upload not exist, and a traceback aborts
+        # T7 before a single one of these sentences is printed — so the guard fires and says
+        # nothing about which floor was wrong.
+        checks.equal(
+            {row[tcgcsv.SKU_COLUMN]: row[tcgcsv.PRICE_COLUMN]
+             for row in tcgcsv.read_export(upload).rows} if upload.is_file() else None,
+            {DUNSPARCE_SKU: "0.29"},
+            "and it is the operator's figure, unrounded and unlifted",
+        )
+        checks.ok(
+            f"[{reprice.BELOW_FLOOR}]" not in said,
+            f"with no `{reprice.BELOW_FLOOR}` anywhere in the report",
+            said,
+        )
+
+        # ---------------------------------------------------- and the guard still bites
+        target, code, said = hand_priced("20200101-000102", "0.29", cut_off="0.50")
+        checks.ok(
+            f"[{reprice.BELOW_FLOOR}]" in said and not (target / cmd_reprice.IMPORT).exists(),
+            f"TIGHTEN THE CUT-OFF ABOVE THE PRICE AND THE SAME FILE IS REFUSED "
+            f"`{reprice.BELOW_FLOOR}`. The floor FOLLOWS the store; it was not removed, and a "
+            f"widening that could not still refuse would have deleted the guard rather than "
+            f"corrected it",
+            said,
+        )
+        checks.ok(
+            "floored at $0.50" in said,
+            "AND THE FIGURE IS READ AT THE PRESS RATHER THAN OFF THE MANIFEST. The survey was "
+            "taken at $0.29; what a price may not go below is the cut-off in force when the "
+            "operator presses, which is the figure on the screen in front of them",
+            said,
         )
 
 
@@ -20820,6 +20992,7 @@ def run() -> Result:
     check_unsent_listing_sells_out(checks)
     check_pricing_reach(checks)
     check_markdown(checks)
+    check_markdown_floor(checks)
     check_markdown_lens(checks)
     check_markdown_push(checks)
     check_publish_lag(checks)

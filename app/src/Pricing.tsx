@@ -2181,7 +2181,14 @@ export function Pricing() {
      nothing about it rather than printing a plausible literal — this panel drew "$0.40" beside
      an answer of $0.24 and read as a rule when it was a fallback. The CUT-OFF is not read here
      at all: `cut`, above, is the live one, and `work.threshold` is the server's copy of the same
-     policy from whenever the table was fetched. */
+     policy from whenever the table was fetched.
+
+     AND `floor` IS NOW THAT SAME POLICY FIGURE ON THE WIRE (D9, amended 2026-09-09): the store's
+     cut-off IS the floor, so `pipeline/join.py` clamps at it and a markdown may not go below it.
+     Two keys because this sentence and the "Below $X" heading are two sentences; one source,
+     because the server reads `policy.threshold` for both. Until that amendment this cell carried
+     `pipeline/pricing.py`'s constant off the newest run's `pricing.json`, which is how the strip
+     said "clamped at the $0.40 floor" to a store set at $0.29. */
   const floor = work?.floor ?? null
 
   /* THE STANDING RULE READ BACK. A custom rule survives a reload because it is written where
@@ -3999,8 +4006,8 @@ function MarkdownPanel({
       </ul>
 
       <p className="pricing-verdict-fine">
-        Apply can still refuse for a reason this screen cannot see — the floor, a duplicate, or a
-        price that has not moved. A raise is no longer one of them.
+        Apply can still refuse for a reason this screen cannot see — a price under your cut-off,
+        a duplicate, or a price that has not moved. A raise is no longer one of them.
       </p>
     </section>
   )

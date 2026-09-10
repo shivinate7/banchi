@@ -323,7 +323,16 @@ class Decisions:
 
     @property
     def warnings(self) -> List[str]:
-        """Deliberate choices worth restating at the moment a file is written."""
+        """Deliberate choices worth restating at the moment a file is written.
+
+        THE TWO PRICE WARNINGS NAME D9's $0.40 AS A LABOR BAR AND NOT AS THE FLOOR (D9,
+        amended 2026-09-09). The clamp moved to the store's own cut-off and this figure did
+        not: it is the $60/hr derivation — ~20s a pull, 0.8675 x $0.40 clears it — which is a
+        fact about the operator's hour rather than about their policy, so a store that sets its
+        cut-off below it is told once and never refused. Calling it "the floor" here while the
+        floor was $0.29 would have made both sentences false, which is the drift the rename
+        closes; a `Decisions` has no store behind it and could not read the real floor anyway.
+        """
         out = []
         sub = self.sub_threshold
         if (
@@ -332,7 +341,7 @@ class Decisions:
             and sub.price < pricing.FLOOR
         ):
             out.append(
-                f"sub_threshold is ${sub.price}, below the ${pricing.FLOOR} floor — "
+                f"sub_threshold is ${sub.price}, below D9's ${pricing.FLOOR} labor bar — "
                 f"deliberate, since it is written in {POLICY_FILE}, but D9 says a sale there "
                 f"loses money including labor"
             )
@@ -347,7 +356,7 @@ class Decisions:
         )
         if below:
             out.append(
-                f"{len(below)} per-SKU override(s) below the ${pricing.FLOOR} floor: "
+                f"{len(below)} per-SKU override(s) below D9's ${pricing.FLOOR} labor bar: "
                 f"{', '.join(below[:6])}"
             )
         unlisted = sorted(

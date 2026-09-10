@@ -929,6 +929,25 @@ A screen is not finished because it compiles.
   D9 amended 2026-09-02), applied where the key is absent or null and written on the next
   save, so a fresh store's first emit is not refused for want of an answer already given once.
 
+  **`policy.threshold` IS THE FLOOR AS WELL, AND THERE IS NO `policy.floor`** (D9, amended
+  2026-09-09). Three roles, one figure: the market price at or above which a card earns a
+  listing, the price the cheap half goes out at, and **the price no rule and no markdown may go
+  below**. `pipeline/join.py:SkuMatch.list_price` clamps at `SkuMatch.threshold`, `prices_for`
+  resolves a legacy `"floor"` disposition at it, and `cli/cmd_reprice.py` hands it to
+  `reprice.plan` and `reprice.read_back`. **`pipeline/pricing.py:FLOOR` is now only two things**
+  — the default for a caller with no store behind it, and the **labor bar** the two
+  `Decisions.warnings` name, which is what D9's $60/hr derivation actually is.
+
+  **D9 said "both configurable" and only the threshold ever was.** What the gap cost, on the
+  owner's real store: the cut-off said $0.29, `reprice apply` refused **293 of 354 rows** as
+  `below_floor` against the constant, and `import.csv` carried **49 SKUs** — with all 342 answers
+  already written into `prices.json`, so the screen, the corpus and the receipt agreed the work
+  was done while the spreadsheet TCGplayer reads carried a seventh of it. Pointed the other way
+  the same gap priced a card the operator's own cut-off calls listable ABOVE its market —
+  market $0.32, `match`, clamped to $0.40. **A separate floor key is coherent only when it
+  equals the cut-off**, so it could only ever be set wrong; D99's ruling on the other pair is
+  the same ruling.
+
   **Why it moved: a run's `decisions.json` held two different kinds of fact.** `rule`, `basis`
   and `sub_threshold` are arguably properties of the lot (D48); `overrides` and
   `no_market_data` are properties of the CARD (D7 — *"price is per-SKU and shared across

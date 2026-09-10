@@ -371,7 +371,7 @@ that joins to a real row, so nothing downstream can catch it.
 | Confidence `low`, resolved market **< $0.40** | **Parked** in the low-value queue. Not listed, not dropped, never in the main queue. |
 | Ladder → review (D3 reasons) | Main queue if the cheapest candidate row is ≥ $0.40, parked if below. |
 | No catalog row, or identification failed | **Main queue, sorted last.** No price is not a low price — a misread secret rare is exactly this case. |
-| Matched row with blank or $0.00 market price | **`no_market_data` category. Never auto-priced, never swept into the sub-threshold flat price.** A missing price is an unknown price; handing away a $40 chase card at the $0.40 floor is the failure this prevents. |
+| Matched row with blank or $0.00 market price | **`no_market_data` category. Never auto-priced, never swept into the sub-threshold flat price.** A missing price is an unknown price; handing away a $40 chase card at the floor is the failure this prevents. |
 
 `--review-below-confidence=none|low|medium` (default `low`) tunes the confidence rule.
 `none` restores "confidence never routes on its own".
@@ -432,10 +432,21 @@ price = clamp_floor( round_2dp_half_up( rule(basis_price) ) )
 ```
 
 Round to two decimals, half up. Then clamp to the floor — in that order, so rounding can
-never sneak a price under it. Floor and threshold are both `$0.40` by default. The
-**threshold** is set by the operator and stored in `inventory/prices.json` as
-`policy.threshold` (D99) — `pipeline/pricing.py:THRESHOLD` is what a store that has never
-set one reads. The **floor** is still the constant; nobody has asked for that one.
+never sneak a price under it. Floor and threshold are both `$0.40` by default, and **they are
+one figure rather than two defaults that happen to agree** (D9, amended 2026-09-09): the
+operator's `policy.threshold` in `inventory/prices.json` is what earns a listing, what the
+cheap half goes out at, and what nothing may be priced below. `SkuMatch.list_price` clamps at
+`SkuMatch.threshold`; `pipeline/pricing.py:THRESHOLD` and `:FLOOR` are what a store that has
+never set one reads.
+
+This paragraph said *"the floor is still the constant; nobody has asked for that one"* until
+the ask arrived as a defect. On the owner's real store the cut-off was `$0.29` and every clamp
+read `$0.40`, so `reprice apply` refused **293 of 354** hand-priced rows as `below_floor`
+against a figure the store had not used for a week, and the join priced a card the same
+cut-off calls listable ABOVE its own market — market `$0.32`, `match`, clamped to `$0.40`.
+There is deliberately no `policy.floor`: a floor above the cut-off produces that inversion and
+one below it undercuts the price the cheap half is already going out at, so a second key could
+only ever be set wrong.
 
 ### 6.3 Sub-threshold disposition — `inventory/prices.json` `policy.sub_threshold`, default flat $0.49 (D86; D9 amended 2026-09-02)
 
@@ -632,7 +643,7 @@ report — catching an import that was staged and never moved live.
 | `--dry-run` (join) | off | preview both queues, write nothing |
 | `--basis` | `market` | `market` \| `low` |
 | `--rule` | `match` | `inventory/prices.json` `policy.rule`, seeded by the flag on the first join of an empty corpus (D86) |
-| threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py`. The threshold is the default for a store that has never set `policy.threshold` (D99) |
+| threshold / floor | `$0.40` / `$0.40` | D9, `pipeline/pricing.py`. ONE FIGURE, not two (D9 amended 2026-09-09): both are the default for a store that has never set `policy.threshold` (D99), and both follow it when it is set |
 | live cap | 4 | D7, `join.LIVE_QUANTITY_CAP` |
 | cards per section | *no default* | D10 — dividers are declared, never assumed |
 | staged-stale warning | 14 days | run report only |

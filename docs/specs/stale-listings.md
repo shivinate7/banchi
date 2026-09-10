@@ -167,9 +167,21 @@ only term here that says anything about *why* a card is not selling rather than 
 has not.
 
 **It has to be read against the floor.** On the owner's real export, 290 of 441 live rows are
-priced more than 50% above market — but 115 of the 441 are at or under D9's `$0.40` floor,
-where a $0.03 card is *correctly* listed at $0.40 and is 1,233% above market as an arithmetic
-consequence of the floor rather than as an overpricing.
+priced more than 50% above market — but 115 of the 441 are at or under the floor, which was
+`$0.40` when that reading was taken: a $0.03 card is *correctly* listed at the floor and is
+1,233% above market as an arithmetic consequence of the floor rather than as an overpricing.
+
+**THE FLOOR IS THE STORE'S OWN CUT-OFF, NOT `pipeline/pricing.py`'s CONSTANT** (D9, amended
+2026-09-09). `policy.threshold` — the figure the operator sets on `#/pricing` — is what earns a
+listing, what the cheap half goes out at, and what nothing here may be priced below.
+`cli/cmd_reprice.py` reads it and hands it to both `plan` and `read_back`; every figure in this
+document is a reading at `$0.40`, which is the constant a store that has set nothing still gets,
+and none of them is a bound this code enforces. **It was the constant on both, read by nobody,
+until the owner set the cut-off to `$0.29`**: `reprice apply` over a 354-row worklist wrote 49
+SKUs and refused **293 as `below_floor`** against a figure the store had not used for a week —
+after writing all 342 answers into `prices.json`, so the screen, the corpus and the receipt all
+agreed the work was done. Both halves of the figure had it: at `$0.40` `plan` refused a `$0.35`
+listing `at_floor`, so the rule never offered the row the apply then never wrote.
 
 ### What no amount of work here can know
 
@@ -419,7 +431,7 @@ mark down the entire store on a rounding artifact. Asserted in T7.
 | `no_asking_price` | live with a blank `TCG Marketplace Price` |
 | `no_basis` | the chosen basis column is blank or zero (`pricing.has_market_data`) |
 | `near_market` | not far enough above `TCG Market Price` for `--above-market` |
-| `at_floor` | already at `$0.40`, or the rule would land there |
+| `at_floor` | already at the store's cut-off, or the rule would land there |
 | `not_a_markdown` | the rule would raise the price or leave it |
 
 `reprice apply`, per row — except the two marked, which refuse the **whole file**:
@@ -427,7 +439,7 @@ mark down the entire store on a rounding artifact. Asserted in T7.
 | code | when |
 |---|---|
 | `unchanged` | the same price it is already listed at. Dropped: a no-op row is a press that did nothing and reads like a press that did something. |
-| `below_floor` | under `$0.40` |
+| `below_floor` | under the store's cut-off. The sentence carries no figure — the report's own `floored at` line prints it, from the value actually used |
 | `not_in_worklist` | a SKU this worklist was not written for, so there are no bytes to build a row from |
 | `raised` | RETIRED as a refusal by D107 — an operator's raise is sent and named. Kept in the vocabulary so older receipts still render. |
 | `duplicate` | **whole file.** Two rows, one SKU. Undefined behavior in a TCGplayer import (D7). |
@@ -437,8 +449,8 @@ report names how many were dropped that way.
 
 ### The ratchet
 
-`undercut:10` applied daily compounds to **−52% in a week**, floored only at `$0.40`, with every
-individual run justified because the card still has not sold and is still old.
+`undercut:10` applied daily compounds to **−52% in a week**, floored only at the store's cut-off,
+with every individual run justified because the card still has not sold and is still old.
 
 The guard is `corpus.Answer.at`: a SKU this store answered inside `--days` is refused as
 `priced_recently` unless `--again`. **It reads the corpus rather than the receipt directories**,

@@ -221,6 +221,46 @@ def run() -> Result:
         f"a collapsing market clamps to the ${pricing.FLOOR} floor, not to $0.21",
     )
 
+    # --- the floor in force is the STORE'S cut-off (D9, amended 2026-09-09) -----------------
+    #
+    # THE DEFECT THIS PINS, MEASURED ON THE OWNER'S REAL STORE. `policy.threshold` said $0.29
+    # for a week while every clamp in the pipeline read this module's $0.40: 293 live listings
+    # hand-priced down to the cut-off were refused `below_floor` on the way to the upload, and
+    # in the other direction a card the operator's own cut-off calls listable was priced ABOVE
+    # its market. D9 said "both configurable" and only the threshold ever was.
+    #
+    # THE DISCRIMINATING CASE IS A MARKET BETWEEN THE TWO FIGURES. At $0.32 the two answers are
+    # $0.32 and $0.40, so a `SkuMatch` that went back to reading the constant fails here rather
+    # than agreeing with itself.
+    between = dict(by_sku[ARTICUNO], **{tcgcsv.MARKET_PRICE_COLUMN: "0.32"})
+    cheap_store = join.SkuMatch(sku=ARTICUNO, row=between, threshold=Decimal("0.29"))
+    default_store = join.SkuMatch(sku=ARTICUNO, row=between)
+    c.ok(cheap_store.listable, "a $0.32 card is listable at a stored cut-off of $0.29")
+    c.equal(
+        cheap_store.list_price,
+        Decimal("0.32"),
+        "and it lists AT its own market — the clamp is the store's $0.29, so nothing raises it",
+    )
+    c.equal(
+        default_store.list_price,
+        pricing.FLOOR,
+        f"the same row at the ${pricing.THRESHOLD} default clamps to ${pricing.FLOOR}, which "
+        f"is what makes the assertion above discriminating rather than decorative",
+    )
+    c.ok(
+        not default_store.listable,
+        "and at that cut-off the row is not even listable — a floor ABOVE the cut-off prices a "
+        "card the partition already called listable above its own market, and no field can "
+        "express that arrangement any more",
+    )
+    c.equal(
+        pricing.flat_floor().resolve(cheap_store.threshold),
+        Decimal("0.29"),
+        "a legacy `floor` disposition resolves at the store's cut-off too — D98 retired it as "
+        "an answer anybody may CHOOSE, and while it resolved at the constant a store set below "
+        "$0.40 sent its cheapest cards out dearer than its mid ones",
+    )
+
     # --- basis picks the column; the threshold never does ----------------------------------
     articuno = by_sku[ARTICUNO]
     c.equal(

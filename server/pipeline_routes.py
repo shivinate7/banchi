@@ -1658,29 +1658,6 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
 # CAP is spent per run against a global limit whatever the answers do.
 
 
-def _pricing_constant(chosen: Sequence[str], field: str) -> Optional[str]:
-    """One run-wide figure off the newest readable table — `threshold` or `floor`.
-
-    NEWEST FIRST AND THE FIRST ANSWER WINS, because these are `pipeline/pricing.py` constants
-    rather than per-run choices: every table on this machine carries the same pair, and the
-    newest is simply the one most likely to still be right if that ever stops being true. A
-    run whose table cannot be read is skipped rather than answered `None`, which would blank
-    a figure on the screen because of a file nobody was looking at.
-    """
-    root = files.runs_dir()
-    for name in reversed(list(chosen)):
-        table = root / name / run_files.PRICING
-        if not table.is_file():
-            continue
-        try:
-            value = json.loads(table.read_text("utf-8")).get(field)
-        except (OSError, ValueError):
-            continue
-        if value is not None:
-            return str(value)
-    return None
-
-
 def _policy_threshold(book) -> str:
     """The store's stored D9 cut-off, as a string, for a screen to draw and compare against.
 
@@ -1904,16 +1881,20 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         # button; both are `pipeline/pricing.py` constants that every run on this machine
         # agrees about, and taking them off the newest table rather than restating them here
         # keeps the one place they are decided the one place they are read.
-        # THE THRESHOLD IS THE STORE'S STORED POLICY, AND THE FLOOR IS STILL THE NEWEST
-        # TABLE'S. They stopped being the same kind of fact the moment the cut-off became
-        # something the operator sets: `policy.threshold` is one figure for the whole store
-        # and is the figure `emit` will partition by NEXT, where a run's `pricing.json` says
-        # what the join that wrote it partitioned by — a record rather than an answer, and a
-        # stale one the hour after the threshold is changed. The floor is unchanged and is
-        # still `pipeline/pricing.py`'s constant, read off the newest table for
-        # `_pricing_constant`'s reason.
+        # BOTH ARE THE STORE'S STORED POLICY, AND THEY ARE ONE FIGURE (D9, amended
+        # 2026-09-09). `policy.threshold` is the market price at or above which a card earns a
+        # listing AND the cheapest price this store lists anything at, so `SkuMatch.list_price`
+        # clamps at it and a markdown may not go below it. Two keys on the wire because the
+        # screen draws them in two sentences, one source because a second one drifts.
+        #
+        # THE FLOOR CAME OFF THE NEWEST RUN'S `pricing.json` UNTIL THIS AMENDMENT, and while
+        # that cell held `pipeline/pricing.py`'s constant it was the reason the screen said
+        # "clamped at the $0.40 floor" to a store whose cut-off was $0.29. A run's table is a
+        # RECORD of what one join partitioned by — right for a history, stale the hour after
+        # the cut-off moves — which is the argument `threshold` already made on the line
+        # above; the floor simply had not been given it.
         "threshold": _policy_threshold(book),
-        "floor": (summaries and _pricing_constant(chosen, "floor")) or None,
+        "floor": _policy_threshold(book),
         # `remembered_sub_threshold` IS GONE, HERE AND FROM THE PER-RUN ROUTE (D86, amended
         # 2026-09-02). It walked up to five sibling run directories for the newest answer to a
         # question each run had to be asked separately, and offered it as a LABEL because D9
@@ -2421,6 +2402,21 @@ def _survey(directory: Path) -> Dict[str, dict]:
     }
 
 
+def _markdown_floor() -> str:
+    """The store's cut-off, which is the floor a markdown may not price below.
+
+    `_policy_threshold`'s body plus the read, and the read is what needs the guard: this is a
+    FREE table route over a survey on disk, and an unreadable `prices.json` must not be able
+    to stop a screen drawing 441 live listings. An unusable corpus falls back to the constant
+    for that function's stated reason — `cli/cmd_reprice.py` is what actually refuses a price,
+    it refuses rather than falls back, and a screen drawing a figure is not the enforcement.
+    """
+    try:
+        return _policy_threshold(corpus.Corpus.read())
+    except (OSError, ValueError):
+        return str(pricing_mod.THRESHOLD)
+
+
 def _survey_row(directory: Path, sku: str) -> dict:
     entry = _survey(directory).get(sku)
     if entry is None:
@@ -2467,7 +2463,13 @@ def do_markdown_table(stamp: str) -> dict:
         # operator type a price the apply will throw away. Server-side, because `read_back` is
         # what actually enforces it and two lists would drift.
         "unpriceable": list(reprice.UNPRICEABLE_CODES),
-        "floor": str(pricing_mod.FLOOR),
+        # THE STORE'S OWN CUT-OFF, WHICH IS THE FLOOR (D9, amended 2026-09-09). Read now
+        # rather than out of the survey, for `cli/cmd_reprice.py:_apply`'s reason: what a price
+        # may not go below is the figure in force at the moment of the press, and the press is
+        # what this screen is holding. The constant was here while the apply refused 293 rows
+        # against $0.40 on a store set to $0.29, so the sheet drew the wrong figure and the
+        # receipt named it.
+        "floor": _markdown_floor(),
     }
 
 
