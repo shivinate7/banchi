@@ -1886,8 +1886,16 @@ test('the sale is not one tap of overshoot from the pull', async ({ page }) => {
   await openList(page)
   await openCard(page, 'Charizard ex')
 
+  /* BOTH RECTS ARE READ AT REST. The panel enters on `bn-page-in` and the control that replaces
+     Pull pops in on a spring, so a rect read while either is running is a frame of an animation
+     and not a place a finger can land — measured on Playwright 1.58.0's Chromium: Pull's width
+     read 427px in one run and 403px in the next, on identical code, and the overlap this case
+     forbids appeared in two runs of five. `settleLayout` was built for this rule's own case
+     (its comment says so) and this test was one of the two that never called it. */
+  await settleLayout(page)
   const pull = await boxOf(page.getByRole('button', { name: 'Pull' }))
   await page.getByRole('button', { name: 'Pull' }).click()
+  await settleLayout(page)
   const sell = await boxOf(page.getByRole('button', { name: 'Mark it sold' }))
 
   /* Pull and Mark sold were one control in one place, one state apart. A finger that lands

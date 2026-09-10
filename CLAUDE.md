@@ -175,7 +175,11 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   title, and no ANSI or NUL in the error. That one catches a
                     #   @playwright/test bump moving the Reporter API, where every name stays
                     #   right and every count goes wrong. Both mutation-tested — five arms and
-                    #   four. It launches NO BROWSER and NO DEV SERVER, so it is in `check`
+                    #   four. AND IT ASSERTS THE FAILING LINE, NOT ONLY THE FILE (D129): under
+                    #   Node 25, 1.55.1 reported `test.location` short and a verdict pointed a
+                    #   session 35 lines into the wrong test. 1.58.0 is the floor that counts
+                    #   it right for an ESM spec and is the pin; this arm sees a bump bring it back.
+                    #   It launches NO BROWSER and NO DEV SERVER, so it is in `check`
                     #   and `ci-check` and takes no lock.
 make design-check-quiet  # the same run with the 450-line progress stream dropped. Same tests,
                     #   same verdict file, and THE SAME MACHINE-WIDE LOCK — a quiet variant
@@ -1392,6 +1396,8 @@ D124 The faces are vendored, and the suite's allow-list is two ports
 D125 The photograph is cropped to the card, the focus is derived from the reading, and a reading that cannot be believed is a refusal
 D126 The demo inflates its own history, and the present is left alone
 D127 A session may stop what it started, and the checkout is what decides which that is
+D128 The key listener is attached before the paint, because a press answers to what is on the screen and not to the render before it
+D129 The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
