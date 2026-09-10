@@ -1425,6 +1425,13 @@ class SkuMatch:
     # never set one. A FIELD BESIDE `rule` AND `basis` AND NOT A READ OF THE CONSTANT: a
     # match carries the policy it was built under, so a report cannot answer `listable` with
     # a figure that was changed after it was computed.
+    #
+    # IT IS THE FLOOR TOO, AND THERE IS DELIBERATELY NO SECOND FIELD (D9, amended
+    # 2026-09-09). The cut-off is the cheapest price this store lists anything at, so
+    # `list_price` clamps at it and `prices_for` resolves a `flat_floor` disposition at it. A
+    # `floor` field beside this one would be a figure `pipeline/merge.py` has to carry, a key
+    # `_agree_policy` has to compare and a control `#/pricing` has to offer, all so the
+    # operator could set two numbers that are incoherent in every arrangement but equal.
     threshold: Decimal = pricing.THRESHOLD
     # Copies TCGplayer already holds, plus the copies that have left inventory — see
     # `IdentifiedCard.committed`. Subset of `positions`; they take nothing from the import
@@ -1612,11 +1619,20 @@ class SkuMatch:
 
     @property
     def list_price(self) -> Optional[Decimal]:
-        """`clamp_floor(round(rule(basis)))`. None when the basis cell is blank."""
+        """`clamp_floor(round(rule(basis)))`. None when the basis cell is blank.
+
+        THE FLOOR IS THIS MATCH'S OWN CUT-OFF AND NOT `pricing.FLOOR` (D9, amended
+        2026-09-09). One figure, carried once: `threshold` above is the operator's stored
+        `policy.threshold`, it is the cheapest price this store lists anything at, and
+        clamping at it is what keeps the rule's output inside the partition the same figure
+        drew. Reading the module constant instead priced a card the operator's own cut-off
+        calls listable ABOVE its market — market $0.32 at a cut-off of $0.29, `match`,
+        clamped to $0.40 — while the sub-threshold half of the same box went out at $0.29.
+        """
         basis = self.basis_price
         if basis is None:
             return None
-        return pricing.list_price(basis, rule=self.rule)
+        return pricing.list_price(basis, rule=self.rule, floor=self.threshold)
 
     @property
     def listable(self) -> bool:
@@ -2180,7 +2196,11 @@ def prices_for(
             continue
         disposition = overrides.get(match.sku)
         if disposition is not None:
-            prices[match.sku] = disposition.resolve()
+            # `match.threshold` IS THE FLOOR A `flat_floor` DISPOSITION RESOLVES AT. See
+            # `SkuMatch.list_price` for why they are one figure; passing the match's own is
+            # what keeps a legacy `"floor"` answer resolving at the store's cut-off rather
+            # than at `pricing.FLOOR`, which the operator may have set the cut-off below.
+            prices[match.sku] = disposition.resolve(match.threshold)
             continue
         if not match.has_market_data:
             answer = unpriced.get(match.sku)
@@ -2197,7 +2217,7 @@ def prices_for(
         if sub_threshold is None:
             undecided.append(match)
             continue
-        prices[match.sku] = sub_threshold.resolve()
+        prices[match.sku] = sub_threshold.resolve(match.threshold)
 
     if undecided:
         raise Undecided(

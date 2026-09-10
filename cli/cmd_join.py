@@ -214,7 +214,12 @@ def _pricing_table(run_dir, resolved, choice, snapshot):
         # `#/pricing` prints "Below $X" over the sub-threshold section off this cell, and a
         # constant here would have drawn a heading over rows it did not sort.
         "threshold": str(resolved.threshold),
-        "floor": str(pricing.FLOOR),
+        # THE SAME FIGURE, BECAUSE THEY ARE THE SAME FIGURE (D9, amended 2026-09-09). Two
+        # cells rather than one because the screen draws them in two sentences — "Below $X"
+        # over the sub-threshold section, "clamped at the $Y floor" beside the rule — and
+        # `pipeline/join.py:SkuMatch.list_price` clamps at the cut-off, so writing
+        # `pricing.FLOOR` here recorded a floor this join did not use.
+        "floor": str(resolved.threshold),
         "rule": str(choice.rule),
         "basis": choice.basis,
         "presets": [name for name, _, _ in PRESETS],

@@ -133,7 +133,11 @@ async function open(
         skus,
         says: { too_young: 'owned for less than the window', sold_out: 'TCGplayer holds no copies' },
         unpriceable: ['not_this_store', 'sold_out'],
-        floor: '0.40',
+        /* THE SAME FIGURE AS `policy.threshold` BELOW, because the server cannot send anything
+           else (D9, amended 2026-09-09): the cut-off IS the floor, and `do_markdown_table` reads
+           one key for both. This said '0.40' beside a threshold of '0.49' — a wire shape that had
+           stopped being producible, which is the way a stub quietly stops testing the product. */
+        floor: '0.49',
       }),
     })
   })

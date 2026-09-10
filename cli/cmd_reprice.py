@@ -496,6 +496,18 @@ def _list(args, say) -> int:
     except decisions.MalformedDecisions as exc:
         say(f"{corpus.FILENAME} is unusable: {exc}")
         return 1
+    # THE FLOOR IS THE STORE'S CUT-OFF AND IS READ HERE (D9, amended 2026-09-09). One figure:
+    # `policy.threshold` is the market price at or above which a card earns a listing AND the
+    # cheapest price this store lists anything at, so it is what a markdown may not go below.
+    # `pipeline/reprice.py` defaults to D9's constant for a caller with no store; this is the
+    # caller that has one. Unparseable is a refusal rather than a fallback — `check_threshold`
+    # raises, `MalformedDecisions` is caught above it, and a bad figure silently reverting to
+    # $0.40 is precisely the substitution this amendment exists to end.
+    try:
+        floor = pricing.check_threshold(book.policy_for()["threshold"])
+    except pricing.InvalidThreshold as exc:
+        say(f"{corpus.FILENAME}: {exc}")
+        return 1
     held = [sku for sku, answer in book.answers.items() if answer.is_hold]
     priced_at = {
         sku: answer.at
@@ -530,6 +542,7 @@ def _list(args, say) -> int:
         basis=args.basis,
         above_market=above,
         limit=args.limit,
+        floor=floor,
     )
     live_rows = sum(
         1
@@ -667,6 +680,18 @@ def _apply(args, say) -> int:
     for sku, entry in survey.items():
         known.setdefault(sku, entry)
 
+    # THE STORE'S FLOOR, READ NOW RATHER THAN OFF THE MANIFEST (D9, amended 2026-09-09). The
+    # manifest records the figure the SURVEY was taken against; what a price may not go below
+    # is the store's cut-off as it stands at the moment of the press, which is the figure the
+    # operator has in front of them on `#/pricing`. Loosening the cut-off after a survey must
+    # let the looser prices through — that is the whole shape of the defect this closes — and
+    # tightening it must refuse them.
+    try:
+        floor = pricing.check_threshold(corpus.Corpus.read().policy_for()["threshold"])
+    except (decisions.MalformedDecisions, pricing.InvalidThreshold) as exc:
+        say(f"{corpus.FILENAME} is unusable: {exc}")
+        return 1
+
     edited = tcgcsv.read_export(path)
     application = reprice.read_back(
         edited.rows,
@@ -679,11 +704,17 @@ def _apply(args, say) -> int:
         names={sku: str(entry.get("name") or "") for sku, entry in known.items()},
         offered=list(entries),
         unpriceable=unpriceable,
+        floor=floor,
     )
 
     say("")
     say(f"worklist         {path}")
     say(f"                 {len(edited.rows)} row(s), judged against {manifest_path.name}")
+    # THE FIGURE, ON THE REPORT, BESIDE THE COUNT IT EXPLAINS. `below_floor`'s sentence names
+    # no number on purpose — see `pipeline/reprice.py:EDIT_SENTENCE` — so this line is the one
+    # place the floor is printed, and it can only print the value actually used.
+    say(f"                 floored at {_money(floor)} — the store's cut-off, "
+        f"{corpus.FILENAME}'s `policy.threshold`")
     say(f"would upload     {len(application.edits)} SKU(s), {application.copies} copy(ies)")
     if application.edits:
         say(f"                 giving up {_money(application.given_up)} of asking value")

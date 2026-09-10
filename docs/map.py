@@ -511,9 +511,18 @@ COMPONENTS = [
                                    "price or an InvalidThreshold naming the value — and "
                                    "carried to every partition on SkuMatch.threshold. A store "
                                    "that has never set one reads the constant, so D9's $0.40 "
-                                   "and its labor-bar derivation are untouched. The FLOOR is "
-                                   "still a constant; nobody has asked for that one.",
-                           "governed_by": ["D8", "D9", "D86", "D99", "D49"], "tested_by": ["T5"]},
+                                   "and its labor-bar derivation are untouched. THE FLOOR IS "
+                                   "THAT SAME CUT-OFF SINCE 2026-09-09 (D9 amended) and this "
+                                   "entry said it was 'still a constant; nobody has asked for "
+                                   "that one' — the ask arrived as a defect. One figure, three "
+                                   "roles: SkuMatch.list_price clamps at SkuMatch.threshold, "
+                                   "prices_for resolves a flat_floor disposition at it, and "
+                                   "cli/cmd_reprice.py hands it to reprice.plan and read_back. "
+                                   "FLOOR survives as the default for a caller with no store "
+                                   "and as the LABOR BAR the two Decisions.warnings name. There "
+                                   "is deliberately no policy.floor.",
+                           "governed_by": ["D8", "D9", "D86", "D98", "D99", "D49"],
+                           "tested_by": ["T5"]},
             "routing.py": {"does": "which queue a card lands in — batch script v2 section 5.4",
                            "governed_by": ["D3", "D4", "D9", "D29", "D35"], "tested_by": ["T4"]},
             # THE ONLY MODULE IN THIS PACKAGE THAT IMPORTS `store`, and the edge is one-way:
@@ -644,7 +653,12 @@ COMPONENTS = [
                                   "cut-off as a stored figure (D99) — a labor bar is a "
                                   "fact about the operator's hour rather than about any "
                                   "card, so it sits beside rule and basis and is "
-                                  "validated at parse time like both.",
+                                  "validated at parse time like both. IT IS THE FLOOR TOO "
+                                  "SINCE 2026-09-09 (D9 amended) and there is deliberately no "
+                                  "policy.floor: three roles, one figure — what earns a "
+                                  "listing, what the cheap half goes out at, and what nothing "
+                                  "may be priced below. A separate key is coherent only when "
+                                  "it equals this one, so it could only ever be set wrong.",
                           "governed_by": ["D7", "D8", "D9", "D43", "D48", "D49", "D62", "D86",
                                           "D99", "D100", "D103"],
                           "tested_by": ["T7"]},
@@ -680,7 +694,15 @@ COMPONENTS = [
                                    "deliberately not in pricing.BASES: the column is populated "
                                    "on 441 of 441 live My Pricing rows and blank on 7,787 of "
                                    "7,802 wide-export rows, so a listing run reading it would "
-                                   "write no price with nothing raising.",
+                                   "write no price with nothing raising. THE FLOOR IS A "
+                                   "PARAMETER ON BOTH plan AND read_back AND THE CALLER OWES IT "
+                                   "(D9 amended 2026-09-09): cli/cmd_reprice.py passes the "
+                                   "store's policy.threshold, the default is pricing.FLOOR for "
+                                   "a caller with no store, and it was the constant on both — "
+                                   "read by nobody — until a store set at $0.29 had 293 of 354 "
+                                   "hand-priced rows refused below_floor on the way to the "
+                                   "upload. EDIT_SENTENCE names no figure for that reason; the "
+                                   "report's own `floored at` line is the one place it prints.",
                            "governed_by": ["D7", "D8", "D9", "D11", "D49", "D86", "D87",
                                            "D100", "D103", "D107", "D109"],
                            "tested_by": ["T7"]},
@@ -709,7 +731,12 @@ COMPONENTS = [
                                      "holds a price OR a `Withheld`: "
                                      "the bare string \"unlisted\" or an object carrying a reason, "
                                      "an optional note and an optional `watch_above` that `join` "
-                                     "reports when a refreshed export clears it. Withholds are "
+                                     "reports when a refreshed export clears it. THE TWO PRICE "
+                                     "WARNINGS NAME D9's $0.40 AS A LABOR BAR AND NOT AS THE "
+                                     "FLOOR (D9 amended 2026-09-09): the clamp moved to the "
+                                     "store's own cut-off and this figure did not, and a "
+                                     "`Decisions` has no store behind it to read the real floor "
+                                     "from anyway. Withholds are "
                                      "deliberately absent from `dispositions()` so a held SKU "
                                      "falling out of a later run cannot refuse the whole emit.",
                              # D16 for the drift a second vocabulary would be; D26 and D37 are the

@@ -150,6 +150,18 @@ class Corpus:
     #: IT SHARES `sub_threshold`'s DEFAULT AND THE SYMMETRY IS THE POINT. The two were
     #: asymmetric for a day — a defaulted cheap price beside a constant threshold — and the
     #: pair inverted. One figure, one fallback.
+    #:
+    #: IT IS THE FLOOR AS WELL, AND THERE IS NO `policy.floor` (D9, amended 2026-09-09). Three
+    #: roles, one figure: the market price at or above which a card earns a listing, the price
+    #: the cheap half goes out at, and the price no rule and no markdown may go below.
+    #: `pipeline/join.py:SkuMatch.list_price` clamps at it and `cli/cmd_reprice.py` hands it to
+    #: `plan` and `read_back`. A separate floor key was considered and refused: it is coherent
+    #: only when it equals this figure — a floor ABOVE the cut-off prices a card the operator
+    #: called listable above its own market, and one BELOW it undercuts the price the cheap half
+    #: is already going out at — so it would be a second control that can only be set wrong.
+    #: What was actually wrong for a week was that nothing read it at all: the floor stayed
+    #: `pipeline/pricing.py`'s constant while this key said $0.29, and 293 hand-priced live
+    #: listings were refused `below_floor` on the way to the upload.
     threshold: object = DEFAULT_CUTOFF
     answers: Dict[str, Answer] = field(default_factory=dict)
     #: run name -> the policy keys that run overrides. Empty for every run that takes the

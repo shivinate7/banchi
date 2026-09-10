@@ -70,11 +70,21 @@ last-sold date, no view or watcher count, and TCGplayer publishes none of those 
 the `tcgplayer-csv` skill says so and D8 rests on it. There is no sales-velocity figure in
 this product and this module does not invent one.
 
-THE FLOOR IS D9's $0.40 AND IT BINDS HARD. Measured on the owner's real My Pricing export of
-2026-09-01: 115 of the 441 live rows are already at or under it, and an undercut of 20% would
-put 319 of them there. A row that cannot go lower is refused by name (`at_floor`) rather than
-written as a no-op, because a no-op row in an upload is a press that did nothing and reads
-like a press that did something.
+THE FLOOR BINDS HARD, AND IT IS THE STORE'S CUT-OFF RATHER THAN D9's CONSTANT (D9, amended
+2026-09-09). Measured on the owner's real My Pricing export of 2026-09-01, against $0.40: 115
+of the 441 live rows are already at or under it, and an undercut of 20% would put 319 of them
+there. A row that cannot go lower is refused by name (`at_floor`) rather than written as a
+no-op, because a no-op row in an upload is a press that did nothing and reads like a press
+that did something.
+
+WHICH FIGURE IT IS, THOUGH, IS NOT THIS MODULE'S TO DECIDE. `floor=` is a parameter on both
+`plan` and `read_back`, `cli/cmd_reprice.py` passes the store's `policy.threshold` to both,
+and the default below is for a caller with no store. It was the constant on both, read by
+nobody, until an operator set their cut-off to $0.29 and hand-priced 293 live listings down
+to it: every one was refused `below_floor`, the answers were written into `prices.json`, and
+`import.csv` carried 49 rows out of 354 with the reason for the other 293 named against a
+figure the store had not used for a week. Both halves matter — `plan` refuses a candidate
+already at the floor, so at $0.40 it would not have OFFERED those rows either.
 """
 
 from __future__ import annotations
@@ -115,7 +125,7 @@ PRICED_RECENTLY = "priced_recently"      # this store answered this SKU's price 
 NO_ASKING_PRICE = "no_asking_price"      # live with a blank `TCG Marketplace Price`
 NO_BASIS = "no_basis"                    # the chosen basis column is blank or zero
 NEAR_MARKET = "near_market"              # not far enough above `TCG Market Price`
-AT_FLOOR = "at_floor"                    # already at $0.40; there is nowhere down to go
+AT_FLOOR = "at_floor"                    # already at the store's floor; nowhere down to go
 NOT_A_MARKDOWN = "not_a_markdown"        # the rule would raise the price, or leave it
 
 SKIP_ORDER: Tuple[str, ...] = (
@@ -414,6 +424,11 @@ def plan(
     down.
 
     Nothing here reads a clock unless `now` is None, so a test drives its own window.
+
+    `floor` IS THE STORE'S CUT-OFF, and it decides two refusals rather than one: a candidate
+    already at or under it is `at_floor`, and a proposal the rule drives down to it is
+    `at_floor` too. The default is the module constant, for a caller with no store;
+    `cli/cmd_reprice.py` passes `policy.threshold`.
     """
     rule = pricing.Rule.parse(rule if rule is not None else pricing.MATCH)
     check_basis(basis)
@@ -533,7 +548,7 @@ def plan(
 NOT_IN_WORKLIST = "not_in_worklist"      # a SKU this markdown's survey never saw
 DUPLICATE = "duplicate"                  # the same SKU twice in one file (D7)
 UNREADABLE = "unreadable"                # the price cell is not a number
-BELOW_FLOOR = "below_floor"              # under $0.40, which TCGplayer will not take
+BELOW_FLOOR = "below_floor"              # under the store's own floor (`policy.threshold`)
 RAISED = "raised"                        # above the live price. RETIRED as a refusal by D107 —
                                          # `read_back` lets an operator's raise through — and
                                          # kept in the vocabulary because receipts written
@@ -559,7 +574,11 @@ EDIT_SENTENCE: Dict[str, str] = {
     NOT_IN_WORKLIST: "not a row this markdown's survey saw",
     DUPLICATE: "the same SKU appears twice",
     UNREADABLE: "the price cell is not a number",
-    BELOW_FLOOR: "below the $0.40 floor",
+    # NO FIGURE IN THE SENTENCE, BECAUSE THE FLOOR IS THE STORE'S AND MOVES WITH IT. This
+    # string named $0.40 while `cli/cmd_reprice.py` was refusing against $0.29, so the
+    # receipt for 293 rows blamed a number nobody had set. The figure is printed once, on the
+    # report's own `floored at` line, where it can only come from the value actually used.
+    BELOW_FLOOR: "below the store's floor",
     RAISED: "above the live price (a refusal until D107; kept for older receipts)",
     UNCHANGED: "the same price it is already listed at",
     # VERBATIM FROM `SKIP_SENTENCE`, not re-worded, so the survey and the apply cannot drift
@@ -668,6 +687,12 @@ def read_back(
     open and on save — it strips a trailing zero, it re-renders a date, it drops a leading
     zero from a set number — and none of that can reach TCGplayer through this path, because
     the edited file is an instruction sheet and never a source of bytes.
+
+    `floor` IS THE STORE'S CUT-OFF AND THE CALLER OWES IT. `cli/cmd_reprice.py` reads
+    `policy.threshold` off the corpus and passes it here; the default is `pricing.FLOOR` for a
+    caller with no store, and it is not the answer for any real one. A price at or above the
+    store's floor is the operator's to type, in either direction (D107) — what this refuses is
+    a price below the cheapest figure the store itself lists at.
 
     `was` maps SKU to the price the export reported, as a string. Compared as `Decimal` and
     never as text: a live export writes four decimal places ("0.6600") where this pipeline

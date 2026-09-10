@@ -238,7 +238,9 @@ async function stubTheLens(page: Page) {
         skus: [],
         says: {},
         unpriceable: [],
-        floor: '0.40',
+        /* The cut-off, which is the floor (D9, amended 2026-09-09) — the same figure this
+           fixture's `policy.threshold` carries, because the server sends one key for both. */
+        floor: '0.49',
       }),
     }),
   )
