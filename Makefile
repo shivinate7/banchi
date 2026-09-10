@@ -64,6 +64,7 @@ help:
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
 	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
+	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
 	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
@@ -73,12 +74,15 @@ help:
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
+	@echo "  make reap         stop what THIS session started, and nothing else. Previews;"
+	@echo "                    ARGS=--confirm presses. ARGS=\"port:5484 --confirm\" for one port."
 	@echo "  make ci-check     what a fresh clone can prove: everything in check but vale."
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
 	@echo "  make check        harness + docs-audit + audit-self-test + githooks-selftest +"
-	@echo "                    merge-selftest + janitor-selftest + suite-lock-selftest +"
+	@echo "                    merge-selftest + janitor-selftest + reap-selftest +"
+	@echo "                    suite-lock-selftest +"
 	@echo "                    verdict-selftest + port-agreement + set-hint-agreement +"
 	@echo "                    screen-freshness + sigil-check + ignore-check + lint +"
 	@echo "                    vale + typecheck"
@@ -371,6 +375,7 @@ check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
@@ -408,6 +413,7 @@ ci-check:
 	@$(MAKE) --no-print-directory githooks-selftest
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory verdict-selftest
 	@$(MAKE) --no-print-directory port-agreement
@@ -547,6 +553,32 @@ janitor:
 janitor-selftest:
 	@bash scripts/janitor-selftest.sh
 
+# WHAT THIS SESSION STARTED, AND NOTHING ELSE. `pkill -f` and `lsof -ti tcp:PORT` are both
+# machine-wide, and both were used to clean up a session's own dev servers on 2026-09-10: the
+# first also matched the owner's live capture server over their real store, the second also
+# matched the desktop app's network helper, which was merely a CLIENT of the port. This target
+# is the right thing to reach for instead — it signals only what is running under this checkout
+# and PRINTS what it refused, so the difference is visible rather than silent.
+#
+# IT PREVIEWS AND PRESSES NOTHING WITHOUT `--confirm`, and exit 1 there means work is waiting —
+# `make janitor`'s bargain, swallowed for the same reason: a preview finding something is the
+# ORDINARY answer, not a failure. A crash or a refusal above 1 still fails loudly.
+#
+# NOT IN `make check` and not in the git hook: it signals processes, which is D18's line. Its
+# self-test is in `check`, and touches only what it spawned under `mktemp -d`. D127.
+reap:
+	@python3 scripts/reap.py $(ARGS); s=$$?; [ $$s -le 1 ] || exit $$s
+
+# In `check`, never in the git hook: it writes a temp tree and signals the processes it started
+# there. Same standing as janitor-selftest. It cannot be run against this repo — the process the
+# guard exists to protect is the owner's live server, and "point it at that and see" is the
+# incident rather than the test — so every case runs against a throwaway checkout and a
+# throwaway sibling standing in for everywhere-else. Mutation-tested: seven arms, all caught.
+reap-selftest:
+	@bash scripts/reap-selftest.sh
+
+.PHONY: reap reap-selftest
+
 # THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
 # session in every project, but the command they name has to exist without this checkout in
 # sight — so the two files are COPIED, exactly as `make hooks` copies the git hooks out of the
@@ -555,15 +587,19 @@ janitor-selftest:
 # machine; run it again after this tree's copy changes.
 janitor-install:
 	@mkdir -p $$HOME/.claude/bin
-	@cp scripts/janitor.py scripts/session-teardown.sh $$HOME/.claude/bin/
-	@chmod +x $$HOME/.claude/bin/janitor.py $$HOME/.claude/bin/session-teardown.sh
-	@echo "installed to ~/.claude/bin: janitor.py, session-teardown.sh"
+	@cp scripts/janitor.py scripts/session-teardown.sh scripts/reap.py $$HOME/.claude/bin/
+	@chmod +x $$HOME/.claude/bin/janitor.py $$HOME/.claude/bin/session-teardown.sh $$HOME/.claude/bin/reap.py
+	@echo "installed to ~/.claude/bin: janitor.py, session-teardown.sh, reap.py"
 	@echo "  hook it up once, in ~/.claude/settings.json, so it covers every repo:"
 	@echo '    "SessionEnd":     [{"hooks": [{"type": "command", "timeout": 60,'
 	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
 	@echo '    "WorktreeRemove": [{"hooks": [{"type": "command", "timeout": 60,'
 	@echo '                        "command": "$$HOME/.claude/bin/session-teardown.sh"}]}]'
+	@echo '    "PreToolUse":     [{"matcher": "Bash", "hooks": [{"type": "command",'
+	@echo '                        "command": "$$HOME/.claude/bin/reap.py --hook"}]}]'
 	@echo '  then the sweep reaches any clone: ~/.claude/bin/janitor.py --root <path>'
+	@echo '  and the kill guard covers every project, not just this one. Both copies can go'
+	@echo '  stale; `make status` compares them and says so.'
 
 # IS THE LAN URL STILL GOOD? The owner reaches this product from a phone at
 # `http://pkmnscan.lan:5173`, and nothing in this repo knows that name — the DHCP reservation

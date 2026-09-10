@@ -50,6 +50,8 @@ NEEDS = {
     "app deps": "`npm --prefix app install` — gitignored, so it does not travel to a worktree.",
     "git": "git, and a repository.",
     "bash": "bash, not merely a POSIX sh.",
+    "lsof": "lsof, which macOS ships. It is how a pid's working directory and a port's "
+            "holders are read; absent, reap-selftest's port cases cannot be posed at all.",
     "sh": "any POSIX sh.",
     "vale": "the vale binary — `brew install vale`. Absent, the target reports and exits 0.",
     "ruff": "ruff, installed by `make venv` from requirements.txt (D82). RUFF_GUARD fails "
@@ -159,6 +161,26 @@ CHECKS = (
                                "tool here besides icloud-sweep that can delete a worktree.",
         "gates": True,
         "governed_by": ("D18", "D44", "D53"),
+    },
+    {
+        "target": "reap-selftest",
+        "runs": "bash scripts/reap-selftest.sh",
+        "asserts": "scripts/reap.py, against a throwaway checkout, a throwaway sibling "
+                   "directory standing in for everywhere-else, and real processes in their own "
+                   "process groups. BOTH INCIDENTS ARE CASES rather than prose: `pkill -f "
+                   "<name>` where a stranger also matches, and `for p in $(lsof -ti tcp:PORT); "
+                   "do kill $p; done` where a CLIENT holds the port. The cases that matter "
+                   "either way are the two edges — that a stranger's process is refused AND "
+                   "survives, and that the session's own is still killable, because a guard "
+                   "that breaks cleanup is one that gets switched off.",
+        "needs": ("python3", "bash", "git", "lsof"),
+        "writes": "a git repo, two scripts, a `.serve/` pidfile and four short-lived "
+                  "processes, all under `mktemp -d`. It signals only what it spawned.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes, and it signals processes. It drives the one "
+                               "guard here that can refuse a shell command outright.",
+        "gates": True,
+        "governed_by": ("D18", "D53", "D111", "D127"),
     },
     {
         "target": "suite-lock-selftest",

@@ -874,9 +874,12 @@ def leftovers() -> List[str]:
 
 INSTALLED_JANITOR = Path.home() / ".claude" / "bin"
 
-# The pair `make janitor-install` copies out of this tree, so a user-level hook can run them in
-# a repo that has never heard of this one.
-JANITOR_INSTALLED_FILES = ("janitor.py", "session-teardown.sh")
+# What `make janitor-install` copies out of this tree, so a user-level hook can run it in a repo
+# that has never heard of this one. IT WAS A PAIR UNTIL 2026-09-10 and `reap.py` joined it with
+# D127 — the kill guard has the same shape of problem the sweep does: it is worth having in every
+# project, and a hook in the user's own `~/.claude` cannot name a path inside this checkout. A
+# file added to the recipe and not to this tuple is a copy nothing would ever call stale.
+JANITOR_INSTALLED_FILES = ("janitor.py", "session-teardown.sh", "reap.py")
 
 
 def janitor_install() -> List[str]:
@@ -896,7 +899,7 @@ def janitor_install() -> List[str]:
     missing = [path.name for path in installed if not path.exists()]
     if missing:
         return [
-            field("Janitor copy", "INCOMPLETE — {0} missing".format(", ".join(missing))),
+            field("Hooks copy", "INCOMPLETE — {0} missing".format(", ".join(missing))),
             cont("Fix: make janitor-install"),
         ]
     stale = []
@@ -908,12 +911,12 @@ def janitor_install() -> List[str]:
             continue
     if stale:
         return [
-            field("Janitor copy", "differs from this tree: {0}".format(", ".join(stale))),
+            field("Hooks copy", "differs from this tree: {0}".format(", ".join(stale))),
             cont("Expected on a branch that changed them. Otherwise the copy your other"),
             cont("repos' hooks run is not the copy this tree tests."),
             cont("Fix: make janitor-install"),
         ]
-    return [field("Janitor copy", "~/.claude/bin matches this tree")]
+    return [field("Hooks copy", "~/.claude/bin matches this tree")]
 
 
 def store() -> List[str]:
