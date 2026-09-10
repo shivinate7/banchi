@@ -206,7 +206,10 @@ CHECKS = (
         "runs": "python3 scripts/verdict-selftest.py",
         "asserts": "app/design-check-reporter.ts, run for real against one passing and one "
                    "failing spec: the verdict, the counts, the failing title and its "
-                   "location, the in-flight `running` sentinel (observed by the passing test "
+                   "location — file AND line, the line asserted against the probe's own "
+                   "source, because Playwright 1.55.1 miscounted it under Node 23+ and the "
+                   "verdict named the wrong line (D129; 1.58.0 is the floor that counts it "
+                   "right, and this arm is what would see a bump bring it back) — the in-flight `running` sentinel (observed by the passing test "
                    "from inside the run, which is the only way to see it that is not a race), "
                    "and that the error text carries no ANSI escapes and no NUL bytes. "
                    "`make docs-audit`'s `verdict file` row is the static half — it reconciles "
@@ -226,7 +229,7 @@ CHECKS = (
         "commit_path": False,
         "why_off_commit_path": "D18 — it writes, and it shells out to node.",
         "gates": True,
-        "governed_by": ("D16", "D18"),
+        "governed_by": ("D16", "D18", "D129"),
     },
     {
         "target": "port-agreement",

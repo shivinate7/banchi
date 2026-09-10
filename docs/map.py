@@ -1427,7 +1427,7 @@ COMPONENTS = [
                                             "PLAYWRIGHT_BROWSERS_PATH pointed at an empty "
                                             "directory, because the runner installs no browser "
                                             "binaries. Never in the git hook: D18, it writes.",
-                                    "governed_by": ["D16", "D18"]},
+                                    "governed_by": ["D16", "D18", "D129"]},
             "port-agreement.py": {
                 "does": "proves `server/ports.py` and `app/devPort.ts` still answer the same "
                         "numbers. One algorithm in two languages that cannot import each "
@@ -1816,7 +1816,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -2027,7 +2027,7 @@ COMPONENTS = [
                 # the store, and this script had been the one caller that did not follow it.
                 # D18 is the rule that keeps it off `make check`: it writes, and nothing
                 # that writes may run on the path that decides whether work is done.
-                "governed_by": ["D5", "D13", "D18", "D43"],
+                "governed_by": ["D5", "D13", "D18", "D43", "D129"],
             },
             "screenshot.mjs": {
                 "does": "the browser half of `make screenshot`: one render, and the proof "
@@ -3169,7 +3169,7 @@ COMPONENTS = [
                     "times, because D10 lets undo reach the newest capture in a box and "
                     "nothing else. The count is drawn on the row, the list is capped and "
                     "scrolled, and a walk stops at the first refusal and says how far it got.",
-            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81", "D92"]},
+            "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D41", "D58", "D65", "D81", "D92", "D128"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -3777,7 +3777,7 @@ COMPONENTS = [
                                            "`InventoryOverlay` has, waiting to be promoted to a "
                                            "kit Dialog so the product has one of these rather "
                                            "than two.",
-                                   "governed_by": ["D5", "D33", "D87", "D94", "D100"]},
+                                   "governed_by": ["D5", "D33", "D87", "D94", "D100", "D128"]},
             # ---- the pricing screen (D49, 2026-08-30) ----
             #
             # The owner hand-prices and had never been asked what they wanted a listing price

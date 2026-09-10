@@ -6316,7 +6316,7 @@ photograph was taken in. What stayed coupled was every path that REACHED that an
 **Two refusals did the damage, and they are different mistakes.**
 
 `NOT_THIS_STORE` was **membership** — `if sku not in owned_since: refuse`, fired third, before
-asking, market, basis or rule were consulted at all. D103 characterised those rows as
+asking, market, basis or rule were consulted at all. D103 characterized those rows as
 *"Card Sleeves, Playmats, a YuGiOh row"*, and that reading was true when it was written and
 false by 2026-09-06: the set now holds a $7,000 Kai'Sa, a Surging Sparks Booster Box Case
 asking **$155 below market on a $2,000 item**, and a Bard, Mercurial asking **218% above**
@@ -8407,3 +8407,173 @@ installed copy byte for byte.
 for everywhere-else, a real socket with a real client on it, and a `.serve/` pidfile — both
 incidents reproduced rather than asserted about. **Mutation-tested: seven guards removed one at a time, all seven caught.** D18 keeps it out of the git hook and in `make check`, beside
 `janitor-selftest`, for the reason that entry gives — it writes, and it signals.
+
+## D128 — The key listener is attached before the paint, because a press answers to what is on the screen and not to the render before it
+
+**Settled 2026-09-10, on the owner's instruction to find the recurring one-test red on**
+**`make design-check` in CI and fix it only if the evidence supported one.** The hypothesis handed
+in was D122's: a starved runner reproducing the 2026-09-07 collapse with no lock to protect it.
+**It did not hold, on three counts**, and the measurement is what this entry exists to keep.
+
+### What was measured
+
+**Sixteen completed `design-check` jobs since the job landed on 2026-09-08; three failed, never**
+**more than one test each — about one run in five.** The runner reports `Running 462 tests using 1
+worker`: Playwright's default under `CI` is one worker, so the runner executes this suite in the
+LEAST parallel configuration it has ever run in. 803–1058 seconds is 462 tests in series on a
+four-core box, not contention. **Failure did not track wall-clock**: the fastest run (783s) passed,
+the slowest (1058s) passed, the three failures sat between at 827, 846 and 951. And the casualty
+was not random across the suite: **twenty of 462 tests go through `capture-claims.spec.ts`'s**
+**`open()` helper, and they took two of the three.**
+
+**Every recorded casualty was one defect.** The five instances — `capture-claims.spec.ts:314` and
+`:816`, `live-reconcile.spec.ts:236`, `markdown.spec.ts:539` twice (once on PR #230, rerun green,
+and once in the first run of the job) — each fail at the assertion immediately after a
+`keyboard.press('Escape')` that follows an assertion about the painted DOM. Two shapes, one cause:
+the capture screen's Finish track stays open under an Escape meant to close it (`toHaveCount(0)`
+polled 19 times at 3), and the reconcile and markdown sheets CLOSE under an Escape meant to be
+held while a request is in flight (`toBeVisible` on a dialog that is gone).
+
+### The mechanism
+
+`app/src/runsOverlay.ts:useOverlayFocus` and `app/src/CaptureScreen.tsx`'s field handler both
+registered a window `keydown` listener in a `useEffect` whose dependencies include the state the
+handler reads — `hold` in one, `openField` in the other, and `fieldPick` closes over `openField`
+too. **A passive effect runs after the browser paints.** So for one task, the screen shows the
+drop zone `disabled` (or the track open) while the listener still attached is the previous
+render's, whose closure says `hold === false` (or `openField === null`). A press dispatched into
+that task is not queued behind the re-registration; it is answered by the wrong render — the
+sheet closes mid-request, the Escape finds no field to close and returns. `capture-claims.spec.ts`
+had already met the first-mount version of this and retries its `F` for it, in a comment that
+names the exact phenomenon; its Escape was pressed once.
+
+**It is invisible on the rig because Playwright's round trip is longer than the effect flush there.**
+On the runner the flush is slower than the round trip often enough to show once a run.
+**Reproduced deterministically without loading anyone's machine**: `Emulation.setCPUThrottlingRate`
+at 10x, one worker, the four affected cases five times each — **3 of 20 failed** on the tree as
+merged, all three the held-sheet shape, at the same lines CI reported.
+
+### The ruling
+
+**Both listeners are registered in `useLayoutEffect`.** A layout effect runs inside the commit,
+after the DOM is mutated and before the browser paints, and the commit is synchronous — no
+evaluation from a test and no input from a person can interleave with it. So a state the screen
+shows is a state the listener already has. **The same four cases, same throttle, same repeats:**
+**20 of 20.**
+
+**It is a product fix and not a test fix, because the held sheet's window is real for a person.**
+`useOverlayFocus`'s hold exists so that a stray Escape cannot close a sheet whose request would
+then toast for a sheet that is gone (D87, D100), and the window where it failed opens at the
+exact moment the request starts — which is when somebody who just pressed the button is most
+likely to press Escape. A retry in the spec would have made the test true and left that. The
+capture screen's version is narrower for a human — a press within one frame of the previous one
+— but it is the same code shape, and the fix is the same word.
+
+### What was refused, and why each would have been read as weakening
+
+- **`retries: 1` on CI.** It would have reclassified these as `flaky` and kept the count, and the
+  count was the evidence: every one of the five would have been retried past the defect this
+  entry names. Playwright's standard answer is right for an environment fault and this was not
+  one.
+- **A longer `expect` timeout.** The Escape was lost, not slow: `toHaveCount(0)` resolved to 3
+  nineteen times over fifteen seconds. No wait answers a press that was answered wrongly.
+- **Fewer or more workers.** There is one. There was nothing to tune.
+- **A retry loop around the Escape in the spec**, symmetric with the `F` retry above it. It
+  weakens nothing and would have made both specs pass, and it leaves the held sheet closable by a
+  person. The `F` retry stays, because its cause — no listener on first mount before the first
+  passive effect — is a different window this ruling does not close, and the retry is over the
+  test's timing rather than the screen's behavior.
+
+### What this does not do
+
+**It does not touch D122.** That lock is about two fleets on one Mac and the measurement behind it
+is untouched; the runner is one fleet on one box, which the workflow already says. **It does not**
+**change what the suite asserts** — no floor moved, no timeout moved, no assertion was made
+conditional. **It does not promise a green CI**: the 1-in-462-on-CI flake rate in
+`app/playwright.config.ts`'s own first-visibility account is a different window and the memory of
+this repo records the runner's chromium as a separate platform for a reason (D118, amended).
+What it removes is the one class every recorded casualty belonged to.
+
+## D129 — The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
+
+**Settled 2026-09-10, the owner deferring to the session's recommendation after two rounds of**
+**evidence.** A peer session reading `.serve/design-check.json` after a local red was sent to
+`capture-claims.spec.ts:279` for a test declared at line 314 — thirty-five lines into the
+previous test — and the runner's own reporter had named 314 for the identical file. The verdict
+file carries that weight on purpose (`CLAUDE.md`'s `make design-check` paragraph), and it had
+just pointed a reader at the wrong code.
+
+### What was measured
+
+**Same file, same pinned `@playwright/test` 1.55.1, same transform cache bypassed to a fresh**
+**directory.** Under the rig's Homebrew **Node 25.9.0**, the suite reports the test declared at
+314 as `:279` and the one at 816 as `:799`; under **Node 22.23.2** it reports 314 and 816, which
+is what the runner printed. It is not one construct: three probes run for real under Node 25 —
+five lines with nothing in them, and two with a template literal — all reported their test short
+(`:2` for a declaration at 3), and the shortfall is not a constant (35 lines at 314, 17 at 816).
+A first reading blamed a template literal's newlines on the strength of `playwright test --list`,
+and a real run did not bear it out; the mechanism inside the transform was not characterized
+further, because the ruling does not need it. 1.55.1 declares support for Node 18, 20 and 22;
+nothing in this repo had ever said which Node it meant, and the runner's `setup-node` said 22 on
+its own.
+
+**Then the other direction was priced, and the first sweep measured the wrong shape.** A
+five-line probe in a scratch project, run for real under Node 25 against each release after the
+pin, reported the right line from 1.56.0 on — and the same probe inside `make verdict-selftest`,
+on 1.56.0, was still short by one. The difference was `"type": "module"`: `app/package.json` is
+ESM, `make verdict-selftest` copies that file, and the scratch project was CommonJS. Re-swept in the app's
+shape: **1.55.1 counts right as CommonJS and wrong as ESM; 1.56.0 and 1.57.0 are still wrong as**
+**ESM; 1.58.0 is the first release that counts an ESM spec right under Node 25, and every release**
+**through 1.63.0 agrees.** The floor is three minors, not one, and the sweep that said one was the
+kind of proof this entry exists to refuse.
+
+### The ruling
+
+**`@playwright/test` moves to 1.58.0 — the first version that fixes the named problem in this**
+**repo's own shape, and not the latest — and the Node on the rig is left alone.** `scripts/screenshot.sh`'s constant moves
+with it, by that file's own rule. It was proven before it was taken, which is the rule the memory
+of PR #202 keeps: `make verdict-selftest` green under Node 25 and under Node 22, and the full
+462-case `make design-check` green on the bumped suite.
+
+**And `scripts/verdict-selftest.py` asserts the failing LINE, not only the file.** The arm
+compares the verdict's `location` to the line the probe's own source declares the test on, and
+the five-line probe it already had is enough — 1.55.1 reported it short like every other spec
+tried. It is green on any Node now, and it is the guard: a future bump that brings the shortfall
+back, or a Node a future pin does not support, fails there with the number in hand rather than in
+a verdict somebody opens at the wrong line.
+
+**The proof found one more thing, which is what a proof is for.** The first full run on 1.58.0
+came back 461 of 462: `fulfillment.spec.ts`'s overshoot case — `Mark sold` may not occupy any of
+`Pull`'s footprint — read `Pull`'s rect at a width of 427px in one run and 403px in the next, on
+identical code, and the overlap it forbids appeared in two runs of five. A rect whose width
+differs between identical runs is a frame of an animation: the panel enters on `bn-page-in` and
+the replacing control pops on a spring, and 1.58.0's newer Chromium moved the timing enough to
+catch a read that had always been early. `settleLayout` was built for that rule's own case — its
+comment says so — and this was one of two tests that never called it. It does now, before each
+read; ten of ten, then 462 of 462. No assertion moved.
+
+### What was refused, and why
+
+**Pinning the rig's Node down to 22.** It was the first ruling here, chosen from a list that did
+not yet have the bump on it, and it was built: `.nvmrc`, `engines.node`, and the line arm red on
+this Mac by design until the owner installed a second Node. It matched the runner exactly, which
+was its whole virtue — and its whole cost was that it conscripted the owner's daily machine to fix
+a defect that lives in a dependency this repo pins. A three-minor bump fixes the same thing for
+anyone on any supported Node and leaves the laptop as it is. `.nvmrc` and `engines` are out
+again: an `engines` field would claim a requirement that no longer exists, and an `.nvmrc` with
+nothing to enforce it is a sentence in the wrong file.
+
+**A location derived some other way in the reporter.** The reporter is faithful, `test.location`
+is what Playwright gives every reporter, and a second source of truth for a line number is a
+second thing to drift.
+
+**The latest Playwright.** 1.63.0 also counts right, and taking it would have been the reflex
+this repo already argued against once; the rule is the first version that fixes the named
+problem, proven on a real run.
+
+### What this does not do
+
+**It does not change what D128 measured or fixed** — the flake's cause was in two effects and
+is closed; this is the second defect the same investigation surfaced. **It does not say the**
+**runner and the rig run the same Node.** They do not, and nothing here needs them to: what the
+suite asserts is the same on both, which is the property `check.yml` already stands on.

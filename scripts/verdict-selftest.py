@@ -67,12 +67,26 @@ test('the sentinel is on disk while the run is in flight', async () => {{
 }})
 """
 
+# THE PROBE IS THE SMALLEST FAILING SPEC THERE IS, AND THE LINE ARM BELOW IS WHAT CATCHES A
+# PLAYWRIGHT THAT COUNTS LINES WRONG (D129). @playwright/test 1.55.1 reported this test's
+# `location` one line short under Node 23+ — `:2` for a declaration at 3, and the real suite's
+# `capture-claims.spec.ts` at 314 as `:279` — which sent a session reading the wrong test, on
+# a Mac whose Homebrew Node is 25. It is the ESM path — `app/package.json` is `type: module`,
+# and this script copies that file so the probe loads the same way — and 1.58.0 is the first
+# release that counts it right there (1.56 already did for CommonJS, which is not this repo);
+# that is the pin now. The arm asserts the exact line against this string's own source, so a bump that
+# brings the shortfall back, or a Node the pinned Playwright does not support, fails HERE with
+# the number in hand rather than in a verdict somebody opens at the wrong line.
 FAILING_SPEC = """import { expect, test } from '@playwright/test'
 
 test('a failure this script expects to see reported', async () => {
   expect('alpha').toBe('beta')
 })
 """
+
+# The 1-based line the failing `test(` is declared on, read from the spec rather than typed,
+# so an edit to the probe cannot leave this arm asserting a stale number.
+FAILING_LINE = next(n for n, line in enumerate(FAILING_SPEC.splitlines(), 1) if line.startswith("test("))
 
 
 def build_tree(where: Path, spec: str) -> Path:
@@ -183,6 +197,19 @@ def main() -> int:
                     one.get("location", "").startswith("tests/probe.spec.ts:"),
                     "and its location, relative to app/, so the file is clickable",
                     str(one.get("location")),
+                )
+                # THE LINE TOO, NOT ONLY THE FILE (D129): the verdict's `location` is what a
+                # session opens, and a wrong line is worse than none. The message names the
+                # one cause this repo has met, so a red here is read as that before anything
+                # else.
+                node = subprocess.run(["node", "--version"], capture_output=True, text=True).stdout.strip()
+                ok(
+                    one.get("location") == f"tests/probe.spec.ts:{FAILING_LINE}",
+                    f"and the line is the one the test is declared on ({FAILING_LINE})",
+                    f"got {one.get('location')!r} under node {node}. @playwright/test below 1.58.0 reports "
+                    "`test.location` short under Node 23+ (D129); this repo pins 1.58.0 in app/package.json "
+                    "for exactly that. Check the installed version (`npm --prefix app ls @playwright/test`) "
+                    "before suspecting the reporter.",
                 )
                 message = one.get("error", "")
                 ok("beta" in message and "alpha" in message, "the error text survives", message)

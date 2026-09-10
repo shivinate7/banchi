@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
@@ -1425,7 +1425,15 @@ export function CaptureScreen() {
    * becomes a mouse-only trap. Modifier chords pass through untouched for App.tsx's
    * reason: Cmd-R is the browser's, and a shell that eats it broke something it does
    * not own. */
-  useEffect(() => {
+  /* A LAYOUT EFFECT, SO THE LISTENER IS NEVER A RENDER BEHIND THE SCREEN (D128). `openField` is a
+     dependency here and `fieldPick` closes over it, so every open or close re-registers this
+     handler — and a passive effect does that after paint. In the task between the two, the track
+     is drawn open while the attached closure still holds `openField === null`: Escape sees no
+     field to close and returns, a digit picks from nothing. A press dispatched there is not
+     queued, it is answered by the wrong render. `capture-claims.spec.ts` retries its `F` for the
+     first-mount version of this and lost its Escape to this one twice on the Ubuntu runner.
+     Inside the commit, before paint, the handler the screen shows is the handler that is on. */
+  useLayoutEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
 

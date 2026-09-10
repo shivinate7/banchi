@@ -23,14 +23,15 @@
 set -uo pipefail
 
 # Must match app/package.json's @playwright/test pin — two Playwright versions in one repo
-# is two browser downloads and two behaviours. 1.55.1 rather than 1.55.0: GHSA-7mvr-c777-76hp,
-# browsers downloaded without verifying the SSL certificate.
+# is two browser downloads and two behaviours. 1.58.0 is the floor for D129: through 1.57 an
+# ESM spec has its `test.location` reported short under Node 23+, and the verdict file named
+# the wrong line.
 #
 # IT IS THE SAME COPY NOW, NOT A MATCHING ONE. The render drives app/node_modules's
 # @playwright/test — what `make design-check` runs — so this constant no longer selects a
 # second download; it is the claim screenshot.mjs checks app/package.json against, and a
 # disagreement fails the render rather than waiting to be noticed in a diff.
-PLAYWRIGHT_VERSION="1.55.1"
+PLAYWRIGHT_VERSION="1.58.0"
 VIEWPORT="1280,900"
 WAIT_MS=600
 

@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, type RefObject } from 'react'
 
 /* DIALOG FOCUS FOR THE RUNS OVERLAYS — the composer and the store-wide reconcile sheet.
  *
@@ -53,7 +53,16 @@ export function useOverlayFocus(
     }
   }, [node, open])
 
-  useEffect(() => {
+  /* A LAYOUT EFFECT, NOT A PASSIVE ONE, BECAUSE THE HANDLER MUST MATCH WHAT IS PAINTED (D128).
+     `hold` is in this effect's dependencies, and a passive effect re-registers AFTER the browser
+     paints: for one task the screen shows the drop zone disabled while the listener still attached
+     is the previous render's, whose closure has `hold === false` — and an Escape landing in that
+     task closes a sheet with a request in flight, the one thing this argument says cannot happen.
+     Nothing sees that window on a fast machine; the Ubuntu runner saw it three times in sixteen
+     runs, the sheet gone under `toBeVisible` after an Escape pressed the moment `disabled` drew.
+     A layout effect runs inside the commit, before paint, so a state the screen shows is a state
+     the listener already has. */
+  useLayoutEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
