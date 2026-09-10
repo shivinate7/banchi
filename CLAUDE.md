@@ -239,7 +239,8 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + janitor-selftest + suite-lock-selftest +
+                    #   merge-selftest + janitor-selftest + reap-selftest +
+                    #   suite-lock-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + sigil-check + ignore-check + lint +
                     #   vale + typecheck.
@@ -268,6 +269,28 @@ make screen-freshness # every server write in app/src has a way back: a re-read,
 make audit-self-test # the checker checks itself. In `check`, never in the git hook (D16/D18).
 make icloud-sweep   # iCloud conflict copies (`foo 2.py`). ARGS=--delete removes the
                     #   byte-identical ones; a DIFFERING copy is only ever reported (D44).
+make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). Previews;
+                    #   `ARGS=--confirm` presses. `ARGS="port:5484 --confirm"` for one port,
+                    #   `match:vite` for a pattern, `pid:N` for one process.
+                    #   REACH FOR THIS INSTEAD OF `pkill -f` AND `lsof -ti tcp:N`, both of which
+                    #   are MACHINE-WIDE and both of which killed somebody else's process on
+                    #   2026-09-10: the first also matched the owner's live capture server over
+                    #   their real store, the second also matched the desktop app's network
+                    #   helper, which was merely a CLIENT of the port.
+                    #   IT SIGNALS ONLY WHAT IS RUNNING UNDER THIS CHECKOUT and PRINTS what it
+                    #   refused, which is the half a `pkill` that quietly does the right thing on
+                    #   a good day can never do.
+                    #   AND YOU DO NOT HAVE TO REMEMBER ANY OF THAT. `scripts/reap.py --hook` is
+                    #   a PreToolUse hook on Bash: it RESOLVES a kill's real targets — running
+                    #   pgrep and lsof itself, read-only — and refuses the command when one of
+                    #   them does not live here. So `pkill -f capture_server.py` is ALLOWED when
+                    #   the only match is yours. `PKMNSCAN_KILL=off` runs it anyway and is
+                    #   printed in every refusal.
+                    #   Not in `make check` and not in the git hook, for `janitor`'s reason.
+make reap-selftest  # the guard, proved by pointing it at what it must not kill: a throwaway
+                    #   checkout, a real socket with a real client on it, and both 2026-09-10
+                    #   incidents reproduced rather than asserted about. In `check`, never in the
+                    #   git hook. Mutation-tested — seven arms.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
@@ -1368,6 +1391,7 @@ D123 Above the desk a screen asks its column, and browser zoom is not the lever 
 D124 The faces are vendored, and the suite's allow-list is two ports
 D125 The photograph is cropped to the card, the focus is derived from the reading, and a reading that cannot be believed is a refusal
 D126 The demo inflates its own history, and the present is left alone
+D127 A session may stop what it started, and the checkout is what decides which that is
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

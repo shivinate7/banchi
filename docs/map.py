@@ -1310,6 +1310,37 @@ COMPONENTS = [
                         "guards removed one at a time, all five caught.",
                 "governed_by": ["D18", "D44"],
             },
+            "reap.py": {
+                "does": "the kill guard, and the tool it names. ONE FILE, TWO FACES, ONE "
+                        "PREDICATE: `--hook` is a PreToolUse hook on Bash that refuses a "
+                        "command whose targets do not live under this checkout, and a bare run "
+                        "is the reaper that stops what does and PRINTS what it refused. The "
+                        "rule is that every process an agent session may kill was started BY "
+                        "that session and lives under the tree it is working in, so the guard "
+                        "RESOLVES the command's real targets — running pgrep and lsof itself, "
+                        "read-only — rather than pattern-matching intent: `pkill -f "
+                        "capture_server.py` is allowed when the only match is yours and refused "
+                        "when it is not. Fails OPEN on its own bugs and CLOSED on a target it "
+                        "cannot place. Repo-agnostic and imports nothing from this tree, so "
+                        "`make janitor-install` can copy it out to cover every project.",
+                # D127 is the decision. D53 is the process it exists to protect — the main
+                # checkout's supervisor and its children are refused even from inside the main
+                # checkout, which is the one place this file overrules its own rule. D111 is
+                # the neighbouring notion it deliberately shares reasoning with rather than
+                # duplicating. D18 keeps its self-test off the commit path: it signals.
+                "governed_by": ["D18", "D53", "D88", "D111", "D127"],
+            },
+            "reap-selftest.sh": {
+                "does": "proves reap.py by pointing it at processes it must not kill. A "
+                        "throwaway checkout, a throwaway sibling standing in for "
+                        "everywhere-else, a real socket with a real client on it, and a "
+                        "`.serve/` pidfile for the D53 case. Both 2026-09-10 incidents are "
+                        "reproduced rather than asserted about, and the two edges are both "
+                        "cases: the stranger is refused AND survives, and the session's own "
+                        "process is still killable. Mutation-tested: seven guards removed one "
+                        "at a time, all seven caught.",
+                "governed_by": ["D18", "D53", "D127"],
+            },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
                         "started in a linked worktree and nothing else — the main checkout's "
@@ -1785,7 +1816,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D122"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -1849,7 +1880,7 @@ COMPONENTS = [
                 # kept now that the repo has left iCloud for that entry's amended reason: the
                 # hazard belongs to a synced directory, and a tree can be put inside one
                 # without telling this script.
-                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111"],
+                "governed_by": ["D16", "D17", "D42", "D43", "D44", "D80", "D86", "D88", "D111", "D127"],
                 "note": "IT READS `--json`, NOT THE RENDER, since 2026-08-13. This line "
                         "said the opposite until integration: the debt was closed and this "
                         "entry rewritten in the same run by different hands, and nothing "
