@@ -8392,6 +8392,41 @@ every worktree cut from it with no per-machine step at all — the two halves be
 bargain `make hooks` and `make janitor-install` already make, and `make status` compares the
 installed copy byte for byte.
 
+### Amended 2026-09-10, the same day: a root may not be a directory that contains everything
+
+**The user-level install exposed a hole the repo-level one structurally could not.** Inside a
+clone `git rev-parse --show-toplevel` always answers, so `checkout_root`'s fallback — the current
+directory, when there is no git top level — never ran. The moment `make janitor-install` put this
+hook in the owner's own `~/.claude/settings.json` it began firing in directories that are not
+repositories at all, and there the fallback **adopted the home directory as "this checkout"**.
+
+**Measured from `/Users/shivinate` on the owner's Mac, minutes after the install:** `pgrep -f
+capture_server.py` — the literal command of incident 1 — resolved their live `:8000` server to
+**OURS**, because `~/Developer/pkmnscan/server/capture_server.py` is under `~`. The guard would
+have cleared the exact kill it was built to refuse.
+
+**A root has to be a place work is DONE, not a place work is KEPT.** `_too_broad` rejects the home
+directory, every ancestor of it, `/`, and the system directories; with no honest root the answer is
+not a wider guess but that this file has nothing to reason with, and `_under` already reads an
+empty root as "nothing is under it" — so every target is refused and the hatch is printed, which is
+the direction every other unknown here resolves in. An ordinary non-repo directory is still a
+workspace, because a session outside a clone must still be able to clean up after itself.
+
+**THE FIRST TWO ATTEMPTS AT THE TEST FOR THIS PASSED WITHOUT SEEING ANYTHING**, and that is worth
+recording beside the fix. Both judged `$stranger`, which lives under the fixture's `mktemp -d` —
+on a Mac that is `$TMPDIR` in `/var/folders`, under neither `$HOME` nor `/tmp` — so a broad root
+would not have claimed it either and the cases were vacuous. Three mutation arms survived, which
+is the only reason anyone found out.
+**Every case now puts a process inside the directory it is testing**, and `$HOME` is faked into
+the fixture rather than used — the only way to have a subject under a home directory without
+starting one under the owner's real home.
+
+**A redundancy no test can distinguish is not defense in depth.** The first `_too_broad` had two
+arms — a fixed list, and a separate home-and-ancestors check — and on a standard Mac layout every
+case either could pose was caught by both, so removing one changed no verdict. They are one set
+now, and the cases separate the list (`/private/tmp`) from the walk (a home directory placed
+somewhere the list does not reach).
+
 ### What it does not cover, said out loud
 
 - **A kill inside a script.** The hook reads the Bash command it is handed; `bash cleanup.sh` is
@@ -8405,5 +8440,5 @@ installed copy byte for byte.
 
 `make reap-selftest` proves the rest against a throwaway checkout, a throwaway sibling standing in
 for everywhere-else, a real socket with a real client on it, and a `.serve/` pidfile — both
-incidents reproduced rather than asserted about. **Mutation-tested: seven guards removed one at a time, all seven caught.** D18 keeps it out of the git hook and in `make check`, beside
+incidents reproduced rather than asserted about. **Mutation-tested: thirteen guards removed one at a time, all thirteen caught.** D18 keeps it out of the git hook and in `make check`, beside
 `janitor-selftest`, for the reason that entry gives — it writes, and it signals.

@@ -290,7 +290,7 @@ make reap           # STOP WHAT THIS SESSION STARTED, AND NOTHING ELSE (D127). P
 make reap-selftest  # the guard, proved by pointing it at what it must not kill: a throwaway
                     #   checkout, a real socket with a real client on it, and both 2026-09-10
                     #   incidents reproduced rather than asserted about. In `check`, never in the
-                    #   git hook. Mutation-tested — seven arms.
+                    #   git hook. Mutation-tested — thirteen arms.
 make janitor        # WHAT A FINISHED SESSION LEFT BEHIND, and what is safe to reap (D111).
                     #   Previews; `ARGS=--confirm` presses. TIER 1 goes without asking because
                     #   it cannot be live — a process whose own script has been deleted, a
