@@ -131,6 +131,16 @@ esac
 echo
 echo "  -- incident 2: lsof -ti returns clients as well as listeners --"
 
+# `lsof` IS DECLARED IN scripts/checks.py:NEEDS AND IS NOT ASSUMED HERE. This suite runs on
+# `ubuntu-latest` as well as on the owner's Mac, and a runner image without it would fail every
+# case below for a reason that has nothing to do with the guard. The skip is LOUD and counts as
+# neither a pass nor a failure — the vale target's bargain, taken for the same reason. Note that
+# reap.py itself degrades correctly without lsof rather than opening a hole: with no working
+# directory to read, a process carrying no absolute path in its argv is UNKNOWN and refused.
+if ! command -v lsof >/dev/null 2>&1; then
+  say "SKIP" "lsof is absent — the port cases cannot be posed on this machine at all"
+  port=""
+else
 port=0
 for candidate in $(python3 -c 'print(" ".join(str(p) for p in range(53900, 53960)))'); do
   if ! (exec 3<>/dev/tcp/127.0.0.1/"$candidate") 2>/dev/null; then port="$candidate"; break; fi
@@ -173,6 +183,7 @@ case "$status:$out" in
        printf '%s\n' "$out" | sed 's/^/         /' ;;
   *) bad "the loop form walked straight past the guard" ;;
 esac
+fi
 
 # ------------------------------------------------------------- the hook: nothing to read
 echo
@@ -221,6 +232,7 @@ out="$(cd "$tmp/checkout" && printf '{"tool_input":{"command":"pkill -f stranger
 echo
 echo "  -- the reaper: it kills ours and reports theirs --"
 
+if [ -n "$port" ]; then
 out="$(cd "$tmp/checkout" && python3 "$REAP" "port:$port" 2>&1)"
 case "$out" in
   *would\ stop*pid\ $listener*) ok "the preview names ours and presses nothing" ;;
@@ -238,6 +250,7 @@ esac
 sleep 1
 kill -0 "$listener" 2>/dev/null && bad "our own listener survived --confirm; cleanup is now impossible" || ok "OURS WAS STOPPED — a session can still clean up after itself"
 kill -0 "$client" 2>/dev/null && ok "THE STRANGER SURVIVED --confirm" || bad "the reaper killed a process outside the checkout"
+fi
 
 out="$(cd "$tmp/checkout" && python3 "$REAP" 2>&1)"
 case "$out" in
