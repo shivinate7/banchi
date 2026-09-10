@@ -21,7 +21,6 @@ import {
   markdownHistory,
   markdownTrends,
   emitMerged,
-  cropPreview,
   getPricingCorpus,
   getPricingWorklist,
   putPricingCorpus,
@@ -64,7 +63,8 @@ import {
   type PricingSource,
   type SectionSpec,
 } from './pricingSource'
-import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented, type Crop } from './kit'
+import { useCardCrop, useCardCropWhenSeen } from './cardCrop'
+import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented, wholeCardFocus } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
 
@@ -680,82 +680,13 @@ function SkeletonRows({ count }: { count: number }) {
  *
  * A rig photograph is mostly stand — on box 6 the card sits at [240, 1051, 1649, 3020] inside a
  * 2160x3840 frame — and at 36x48 that left the card a smudge in the middle of a dark rectangle,
- * which is no help at all to an operator pricing a hundred cards by eye. `POST
- * /pipeline/crop-preview` is the SAME detector the batch reading uses, it is free, it calls no
- * model, and it returns the rectangle; `cropStyle` (kit) turns it into a picture of the card.
+ * which is no help at all to an operator pricing a hundred cards by eye.
  *
- * WHY THE FETCHING IS ITS OWN LITTLE MACHINE HERE, rather than a request per row:
- *
- *   - ONE CARD PER CALL, ALWAYS. `indices` is a scope, not a batch — the route answers with one
- *     `sample`, picked out of the scope by `offset`. So a row is a request, and the only levers
- *     left are how many rows ask and when.
- *   - STRICTLY SERIAL, and this one is not a preference. The route builds a scope directory named
- *     `box<n>-<count>-<unix seconds>` and deletes any directory already at that name; every
- *     single-index request for one box inside the same second therefore collides on the SAME
- *     name and rmtree's its neighbour mid-read. Measured against this server: 12 concurrent
- *     requests, 11 failed with a FileNotFoundError out of the symlink. One in flight at a time.
- *   - ONLY WHAT IS ON SCREEN. An IntersectionObserver asks when the row comes within 400px of
- *     the viewport, so an 11-row worklist costs 11 requests and a 109-row one costs the dozen
- *     that were actually looked at.
- *   - ANSWERED ONCE PER SESSION. The reading is a property of a photograph, and a photograph at
- *     `box/index` does not change under a pricing sitting, so the cache outlives the mount and a
- *     scroll back up costs nothing.
- *   - `max_edge: 256` because the response carries the prepared JPEG as a data URI and nothing
- *     here draws it: 523KB a row at the default, 20KB at the floor. The rectangle is computed
- *     against the ORIGINAL size and is identical either way.
- *
- * A refusal, a missing rect, or a server that is not there leaves `cover` in place. The row was
- * legible before this and must never be worse for it. */
-type CropRead = Crop | null
-
-/** Answered readings, `box/index` -> crop or null. Module scope: it survives the mount. */
-const CROPS = new Map<string, CropRead>()
-/** Asked for, not yet answered. Drained one at a time by `pumpCrops`. */
-const CROP_QUEUE: string[] = []
-const CROP_WATCH = new Map<string, Set<() => void>>()
-let cropPumping = false
-
-function cropKey(box: number, index: number): string {
-  return `${box}/${index}`
-}
-
-function wantCrop(key: string): void {
-  if (CROPS.has(key) || CROP_QUEUE.includes(key)) return
-  CROP_QUEUE.push(key)
-  void pumpCrops()
-}
-
-async function pumpCrops(): Promise<void> {
-  if (cropPumping) return
-  cropPumping = true
-  try {
-    for (;;) {
-      const key = CROP_QUEUE.shift()
-      if (key === undefined) return
-      if (CROPS.has(key)) continue
-      const [box, index] = key.split('/').map(Number)
-      let read: CropRead = null
-      try {
-        const { sample } = await cropPreview({ box: box!, indices: [index!], crop: true, maxEdge: 256 })
-        if (sample.rect != null && sample.frame != null && sample.crop_refused == null) {
-          read = { frame: sample.frame, rect: sample.rect }
-        }
-        /* A REFUSAL IS AN ANSWER and is remembered: `crop_refused`, no rectangle, an unreadable
-           frame. Asking again would get the same one out of the same photograph. */
-        CROPS.set(key, read)
-      } catch {
-        /* A FAILURE IS NOT AN ANSWER, so nothing is written down. The row stays uncropped for
-           this mount — its observer has already fired — and the next visit to the screen asks
-           again, which is what a capture server that was restarting deserves. */
-      }
-      const told = CROP_WATCH.get(key)
-      if (told !== undefined) for (const tell of told) tell()
-    }
-  } finally {
-    cropPumping = false
-  }
-}
-
+ * THE FETCHING MOVED TO `cardCrop.ts` (D125) AND THE POLICY IS UNCHANGED: one card per call,
+ * strictly serial, only what an observer has brought within 400px of the viewport, answered once
+ * per session. What changed is that the cache is now the whole app's, so a card answered here is
+ * already answered when the box walk reaches it — and the four findings that policy is made of
+ * are written down once instead of being copied to a fifth screen. */
 /** Where the window sits on the card, and it is the hero's figure for a different reason.
  *  36x48 over a detected rectangle averaging 0.55 wide-to-tall shows about three-quarters of
  *  the height, so a quarter goes; which quarter was decided by looking at eight real rows at
@@ -766,48 +697,44 @@ async function pumpCrops(): Promise<void> {
  *  next column is being checked against. */
 const THUMB_FOCUS = 0.34
 
+/* THE DRAWER'S PHOTOGRAPH, AND IT IS THE ONE THAT WAS DRAWING BARS (D125).
+ *
+ * `.pricing-photo-frame` sets an aspect and a cap and no `object-fit`, so the kit's `.bn-photo
+ * img { contain }` applied: a 0.5625 frame fitted by its height inside a 0.714 window, with
+ * `--bn-stage-bg` showing down each side. Nobody chose that — it arrived with `.bn-photo` in the
+ * Banchi rebuild, the same way and in the same week `#/inventory` lost D38's `cover`.
+ *
+ * WHY THE CROP RATHER THAN JUST PUTTING `cover` BACK: `cover` here is centred on the FRAME and
+ * the card is not, so it trades two bars for a clipped edge — measured at 48 of 48 box-3 frames,
+ * worst case 333px off the bottom, which is where the collector number and the set line print.
+ * This drawer is opened to check a card against a name in the next column, so the bottom of the
+ * card is the half that matters. */
+function PricingPhotoFrame({ at, name }: { at: { box: number; index: number } | null; name: string }) {
+  const crop = useCardCrop(at)
+  const focus = wholeCardFocus(crop)
+  return (
+    <div className="bn-photo pricing-photo-frame">
+      <img
+        className="bn-crop"
+        src={photoUrl(at?.box ?? 0, at?.index ?? 0)}
+        alt={name}
+        data-cropped={focus === null ? undefined : 'true'}
+        style={focus === null ? undefined : cropStyle(crop, focus)}
+        /* Undone, re-shot or reclaimed (D89): leave the frame, never a broken image glyph. */
+        onError={(event) => {
+          event.currentTarget.style.visibility = 'hidden'
+        }}
+      />
+    </div>
+  )
+}
+
 /** The row's photograph: a press that opens the drawer, and the crop that makes it worth
  *  looking at. Its own component so one answered reading redraws one thumbnail rather than a
  *  hundred priced rows. */
 function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number] | null; name: string; onOpen: () => void }) {
-  const key = at === null ? null : cropKey(at.box, at.index)
-  const [crop, setCrop] = useState<CropRead>(() => (key === null ? null : CROPS.get(key) ?? null))
   const host = useRef<HTMLButtonElement | null>(null)
-
-  useEffect(() => {
-    if (key === null) return
-    const answered = CROPS.get(key) ?? null
-    setCrop(answered)
-    if (CROPS.has(key)) return
-    const tell = () => setCrop(CROPS.get(key) ?? null)
-    let watching = CROP_WATCH.get(key)
-    if (watching === undefined) {
-      watching = new Set()
-      CROP_WATCH.set(key, watching)
-    }
-    watching.add(tell)
-    const node = host.current
-    let eye: IntersectionObserver | null = null
-    if (node !== null && typeof IntersectionObserver === 'function') {
-      eye = new IntersectionObserver(
-        (entries) => {
-          if (!entries.some((entry) => entry.isIntersecting)) return
-          eye?.disconnect()
-          eye = null
-          wantCrop(key)
-        },
-        { rootMargin: '400px 0px' },
-      )
-      eye.observe(node)
-    } else {
-      wantCrop(key)
-    }
-    return () => {
-      watching?.delete(tell)
-      if (watching?.size === 0) CROP_WATCH.delete(key)
-      eye?.disconnect()
-    }
-  }, [key])
+  const crop = useCardCropWhenSeen(at, host)
 
   return (
     <button
@@ -817,7 +744,7 @@ function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number
       aria-label={`Photograph of ${name}`}
       title="Photograph · P"
       onClick={onOpen}
-      data-cropped={crop !== null ? 'true' : undefined}
+      data-cropped={crop === null ? undefined : 'true'}
     >
       {at === null ? (
         <Icon name="image" size={14} />
@@ -827,7 +754,7 @@ function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number
           src={photoUrl(at.box, at.index)}
           alt=""
           loading="lazy"
-          data-cropped={crop !== null ? 'true' : undefined}
+          data-cropped={crop === null ? undefined : 'true'}
           style={cropStyle(crop, THUMB_FOCUS)}
           /* Undone, re-shot or reclaimed (D89): leave the frame, never a broken image glyph. */
           onError={(event) => {
@@ -3340,9 +3267,7 @@ export function Pricing() {
               <h3 title={photoSku.name}>{photoSku.name}</h3>
               <span className="pricing-machine">sku {photoSku.sku}</span>
             </div>
-            <div className="bn-photo pricing-photo-frame">
-              <img src={photoUrl(photoAt?.box ?? 0, photoAt?.index ?? 0)} alt={photoSku.name} />
-            </div>
+            <PricingPhotoFrame at={photoAt} name={photoSku.name} />
             <p className="pricing-photo-caption">
               <Icon name="pin" size={13} />
               {photoAt === null ? null : photoAt.label ?? `no label · ${photoAt.box}/${photoAt.index}`}

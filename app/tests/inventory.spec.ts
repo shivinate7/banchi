@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { settleFonts } from './fontsReady'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, stubCropPreview } from './shell'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
  *
@@ -679,6 +679,12 @@ async function open(
 
   const record = (method: string, url: string, body: unknown) =>
     wire.push({ method, path: new URL(url).pathname, body })
+
+  /* THE CROP WINDOW (D125). The box walk's preview is cropped to the card, so this screen POSTs
+     `/pipeline/crop-preview` for whichever card it is standing on — one per card, free, no model
+     call. Stubbed from the shell so the rectangle is the same believable one every spec measures
+     against; unstubbed, the seal reports it and every case here measures the uncropped fallback. */
+  await stubCropPreview(page)
 
   /* The writes first: the read regexes below are looser and a `/inventory` matcher would
      swallow `/inventory/2` if it were registered ahead of it. */

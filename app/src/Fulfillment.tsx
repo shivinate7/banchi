@@ -28,7 +28,8 @@ import { PullConfirm } from './PullConfirm'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
-import { Icon, Logo } from './kit'
+import { useCardCrop } from './cardCrop'
+import { cropStyle, Icon, Logo, wholeCardFocus } from './kit'
 import { useSearch } from './useSearch'
 import './Fulfillment.css'
 
@@ -534,6 +535,21 @@ export function Fulfillment() {
     if (chosenKey === null) return null
     return orderByKey.get(chosenKey) ?? cards?.find((card) => card.key === chosenKey) ?? null
   }, [chosenKey, orderByKey, cards])
+  /* THE PULL PREVIEW IS CROPPED TO THE CARD (D125), and it is the one screen here whose floor is
+   * published — `docs/DESIGN.md`'s 320px short edge, asserted by `app/tests/fulfillment.spec.ts`.
+   * The crop does not touch that floor: it makes the CARD larger inside a box whose size never
+   * changes. What it fixes is the thing a floor on SIZE cannot see, which that spec's own helper
+   * has a comment about — whether the card is inside what was drawn. Measured on this screen at
+   * the worst geometry `docs/DEBTS.md` §7 recorded, a card sitting with its bottom edge at 98% of
+   * the frame: `cover` cut 68px off the bottom of the card in a 440x615 box. That is the corner
+   * the collector number prints in, and the number is printed in the panel beside it — so the one
+   * comparison this screen exists to let a person make was the thing being clipped.
+   *
+   * D32 keeps the whole frame where a card is JUDGED and where a photograph is matched to a
+   * physical slot. This is neither: the slot is matched by the position label above it, in 32px
+   * type, and judging finish is the review queue's job on the owner's side. */
+  const pullCrop = useCardCrop(chosen === null ? null : { box: chosen.box, index: chosen.index })
+  const focus = wholeCardFocus(pullCrop)
   const soldSet = useMemo(() => new Set(soldHere), [soldHere])
   const boxes = useMemo(() => (cards === null ? [] : byBox(cards)), [cards])
 
@@ -909,8 +925,10 @@ export function Fulfillment() {
                   )}
                   <img
                     key={chosen.key}
-                    className="fulfillment-photo"
+                    className="fulfillment-photo bn-crop"
                     data-ready={photoReady === chosen.key ? 'true' : 'false'}
+                    data-cropped={focus === null ? undefined : 'true'}
+                    style={focus === null ? undefined : cropStyle(pullCrop, focus)}
                     src={src}
                     alt={`The card in ${chosen.place}`}
                     onLoad={() => setPhotoReady(chosen.key)}

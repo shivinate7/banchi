@@ -318,6 +318,43 @@ async function stubShell(page: Page, cards: number): Promise<void> {
  *
  *  EVERY ROUTE HERE IS A READ. Nothing in this module answers a write: a spec that means to
  *  write says so with its own handler, and one that writes by accident is named by the seal. */
+
+/* THE CROP WINDOW, WHICH IS A POST AND STILL A READ, AND IT IS EXPORTED BECAUSE THREE SPECS NOW
+ * NEED IT (D125). It was one screen's route — `Pricing.tsx` fired one per row it drew — and it
+ * was here rather than in that spec because the seal reported it, not because anybody remembered
+ * the screen made it. `#/inventory`, the Fulfiller's pull preview and the sell-confirm ask for it
+ * too now, and those two specs carry their own `stubServer` rather than calling `stubStore`. So
+ * the answer lives once: a third hand-written copy is what the seal would be catching next.
+ *
+ * THE RECTANGLE IS A BELIEVABLE ONE ON PURPOSE. `[216, 384, 1944, 3456]` sits inside its
+ * 2160x3840 frame, so `kit:wholeCardFocus` accepts it and the specs measure the CROPPED render —
+ * which is the one the product draws. A rectangle that overran the frame would be refused, every
+ * screen would fall back, and the suite would go green over the fallback while believing it had
+ * looked at the crop. That is the shape of the defect this file's own header describes: seventy-one
+ * cases measuring the uncropped fallback a failure left behind. */
+export async function stubCropPreview(page: Page): Promise<void> {
+  await page.route(/\/pipeline\/crop-preview$/, (route) =>
+    json(route, {
+      scope: { box: 2, whole_box: false, cards: [1] },
+      capture_dir: '/tmp/captures/cards/box2',
+      crop: true,
+      max_edge: 256,
+      total: 4,
+      offset: 0,
+      sample: {
+        box: 2,
+        index: 1,
+        game: 'pokemon',
+        frame: [2160, 3840],
+        sent: [144, 256],
+        rect: [216, 384, 1944, 3456],
+        method: 'edges',
+        crop_refused: null,
+      },
+    }),
+  )
+}
+
 async function stubStore(page: Page): Promise<void> {
   await page.route(/\/photo\/\d+\/\d+/, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
@@ -472,29 +509,7 @@ async function stubStore(page: Page): Promise<void> {
     }),
   )
 
-  /* THE CROP WINDOW, WHICH IS A POST AND STILL A READ. `Pricing.tsx:pumpCrops` fires one per
-     row it draws — free, no model call, no network past this server — and it is here because
-     the seal reported it rather than because anybody remembered the screen made it. */
-  await page.route(/\/pipeline\/crop-preview$/, (route) =>
-    json(route, {
-      scope: { box: 2, whole_box: false, cards: [1] },
-      capture_dir: '/tmp/captures/cards/box2',
-      crop: true,
-      max_edge: 256,
-      total: 4,
-      offset: 0,
-      sample: {
-        box: 2,
-        index: 1,
-        game: 'pokemon',
-        frame: [2160, 3840],
-        sent: [144, 256],
-        rect: [216, 384, 1944, 3456],
-        method: 'edges',
-        crop_refused: null,
-      },
-    }),
-  )
+  await stubCropPreview(page)
 
   /* D46's CATALOG LOOKUP, WHICH THE QUEUE ENTRY ABOVE IS WHAT ASKS FOR. A `no_catalog_row`
      card with zero candidates is offered rows out of the export on arrival, unasked — so

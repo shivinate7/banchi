@@ -535,40 +535,34 @@ is now written down beside them.
 
 ---
 
-## 6 — Measured against one rig, or not at all
+## 6 — ~~Measured against one rig, or not at all~~ — CLOSED 2026-09-09, on the owner's word
 
-**Blocked on the owner, not on code.**
+**The provenance argument is retired and the measurements under it are not.** This section was
+open on the ground that `detect_card`'s border search was scored against 53 photographs from one
+camera position, one lamp, one afternoon and one set, and that closing it needed a second physical
+run under deliberately different lighting plus a ruling on where rig photographs may live.
 
-### The border search is measured against one rig, on one day
+**The owner closed it directly, 2026-09-09**: the rig has been rebuilt and re-lit repeatedly since
+2026-08-22 and the capture path has kept passing across those changes, so the "one rig state" this
+section was written about has not existed for weeks. That is operator evidence rather than a
+scored run — no second corpus was committed the way T1's score is — and it is recorded as what it
+is. **The `--lighting` re-run this section asked for was never performed and is no longer wanted.**
 
-`geometry/detect.py`'s tone path scored **0 of 53** against the Gate B photographs on
-2026-08-22; a border search was added that finds 53/53, covered by T6's `_rig_scene`.
+**WHAT IS KEPT BELOW IS KEPT BECAUSE IT IS MEASURED AND BECAUSE A CHECK READS IT.** The 2026-09-05
+corpus run is the only published account of `detect_card` over the owner's whole store, and
+`make docs-audit`'s `detector standing` row reconciles five figures in it against
+`harness/results/detect.json` on every run. Deleting the section takes that row's subject with it
+and the check starts failing over a claim nobody removed on purpose — which is how the guard
+reported it when this was first deleted outright. The `server/` subsection at the foot was never
+about the rig at all and is untouched.
 
-**The synthetic case reproduces a mechanism, not a photograph.** `_rig_scene` is built from the
-measured numbers — border-ring sides 33 / 65 / 82 / 66, artwork spanning 88 to 231 — and does
-make the tone path refuse for the reason the rig makes it refuse. It is still a drawing. There
-is no rig photo in this repo and cannot be: `captures/` is gitignored twice, once under an
-opsec heading. **The harness can prove the mechanism and can never prove the lighting.**
+**The corpus figure this row reads is republished here rather than lost with the argument above**:
+`detect_card` has been run over 1,625 photographs across six boxes, returning a box for every one
+and refusing none, and the crop guard declined 59 — `harness/results/detect.json`.
 
-**The 53 are one sample of one rig state** — one camera position, one lamp, one afternoon, one
-set. A second lighting setup, a sleeved card, a foil under raking light or a black-bordered card
-on a dark mat are all untested. 53 is a great deal more than zero; it is not a detection rate.
-
-**What would close it**: a second physical run under deliberately different lighting, scored
-through `detect_card` and committed the way T1's score is. That needs a ruling on **where rig
-photographs may live**, given the opsec rule keeping `captures/` out of git.
-
-**~~Not blocking anything — `detect_card` was never reached in anger.~~ That was false when it
-was written and is much more false now.** `detect_card` has three production call sites —
-`cli/cmd_identify.py:267`, `cli/cmd_identify.py:488` and `server/pipeline_routes.py:933` — so
-every card that goes through `identify`, by command or by the route the runs screen presses, is
-cropped by it. The clause read as though the detector were a thing the harness exercises and
-the product does not. It is on the identify path, which is the path that costs money.
-
-**And it has now been run over the owner's whole corpus**: 1,625 photographs across six boxes,
-in the subsection below. What is still unmeasured is not whether it RUNS but whether what it
-returns is the card — see D75's own warning, and `harness/results/detect.json`'s
-`not_measured` field, which says in the file itself that no wrongness rate is in it.
+**AND THE 59 DECLINED FRAMES ARE STILL NOT LOOKED AT.** That is the one thing here that was never
+about lighting: a false ACCEPT is the dangerous direction and no statistic in that file can see
+one. It is an eye pass over 59 named photographs, and closing this section does not do it.
 
 ### The re-measurement, 2026-09-05, and the 59 frames nobody has looked at
 
@@ -608,113 +602,51 @@ Both cost more at every turn end than they can return.
 
 ---
 
-## 7 — The preview crops the card, and the one check that looks at a photo cannot see it
+## 7 — ~~The preview crops the card, and the one check that looks at a photo cannot see it~~ — CLOSED 2026-09-09 (D125)
 
-**Blocked on a ruling, not on code.** Found 2026-08-31 by the owner, on the screen, looking at
-cards photographed the night before.
+**Closed by cropping the photograph to the card rather than by choosing between `cover` and
+`contain`.** The argument this section was open on — that the two available fixes traded
+legibility against coverage in opposite directions, and that one of them moved a published floor —
+was true when it was written and had been overtaken by machinery built for another screen:
+`POST /pipeline/crop-preview`, `kit/index.tsx:cropStyle` and `.bn-crop` already shipped on `#/`
+and on `#/pricing`'s row thumbnails. A third fix existed and this section did not name it. D125
+carries the whole argument; what is kept here is what the section got WRONG, because the shape of
+that is the reusable part.
 
-### `object-fit: cover` is centred on the frame, and the card is not
+**IT DESCRIBED A TREE A WEEK OUT OF DATE, IN BOTH DIRECTIONS, AND ACTING ON IT WOULD HAVE PRODUCED
+THE WRONG CHANGE.**
 
-Five stylesheets draw a stored photograph into a `63 / 88` box under `object-fit: cover`:
-`app/src/BoxBrowse.css` (the `#/inventory` preview), `app/src/Inventory.css` (sell-confirm),
-`app/src/CardLocations.css`, `app/src/Fulfillment.css` and `app/src/Pricing.css`. The frames are
-2160x3840 — aspect 0.5625 — and the box is 0.7159, so `cover` scales to the width and keeps
-**10.71% to 89.29% of the frame height, 411px discarded at each end**. Default `object-position`
-is `50% 50%`, so the window is nailed to the centre of the FRAME whatever the card is doing.
+- It said `#/inventory` letterboxes. It had stopped: `53f5eff`, 2026-09-07, moved the rule to
+  `.browse-photo-frame .browse-photo` at (0,2,0), which beats `.bn-photo img`'s (0,1,1).
+- It did not say `#/pricing` letterboxes, and it did. `.pricing-photo-frame` sets an aspect and a
+  cap and no `object-fit`, so the kit's `contain` applied — **measured on the screen at 36.1px of
+  ground down each side of a 340px window**, 10.6% of the width twice over. The identical defect,
+  by the identical route, one screen over.
+- It listed `app/src/Pricing.css` among five stylesheets drawing `object-fit: cover`. That file
+  contains no `object-fit` at all; the leak there is the absence of one.
 
-**The slack was always about three points wide and D32 measured it without anyone reading it that
-way.** That entry records cards filling 61–72% of the frame height; against a 78.57% window a
-perfectly centred card has 3.3 to 8.8 points of frame height per side before an edge goes.
+**A DEBT ENTRY IS A MEASUREMENT WITH A DATE ON IT, AND THIS ONE READ AS A DESCRIPTION OF THE
+PRESENT.** Nothing reconciled its claims against the stylesheets it named — `raw color` reads
+those files for hex literals and no row reads them for the property this section is about. The
+measurements it took are unaffected and are carried into D125: 48 of 48 sampled box-3 frames
+clipped, 34 at the bottom, worst 333px.
 
-**Measured, 48 box-3 frames sampled evenly, `detect_card` at 48/48 with zero refusals:**
+**WHAT IT WAS RIGHT ABOUT, AND WHAT STILL IS NOT COVERED.** `make design-check` was green over all
+of it, and the reason it gave is exact and still stands: `docs/DESIGN.md`'s floor is `>= 320px` on
+the short edge of the pull-modal photo, `paintedPhoto` measures how large the photograph is DRAWN,
+and **a floor on size is not a floor on content**. Under `cover` the frame fills the box by
+construction, so the painted short edge IS the box and the row passes at exactly the moment the
+card is being cut. The crop does not close that gap — it pays it once, on the screens it reaches.
+Nothing in the suite asks whether the card is inside what was drawn, and closing it needs
+`detect_card` behind a Playwright row: slower than the suite it joins, and able to refuse. Still
+not costed.
 
-| | |
-|---|---|
-| card top | 2.0% .. 71.9% (window opens at 10.71%) |
-| card bottom | 73.2% .. 98.0% (window closes at 89.29%) |
-| clipped at the bottom | 34 of 48 |
-| clipped at the top | 16 of 48 |
-| worst bottom loss | 333px of cardboard |
-
-Bottom loss is what gets noticed because the collector number and the set line print there. The
-survey passed `card_rect`'s corrected box at the default 0.716; three frames were checked
-against the photographs by eye and the rest were not, so the per-frame rows are indicative and
-the counts are the claim.
-
-### The `#/inventory` preview does the OTHER thing, and the declaration saying otherwise is dead
-
-**`app/src/BoxBrowse.css`'s `object-fit: cover` has no effect, so that preview letterboxes
-today.** The frame is `className="bn-photo browse-photo-frame"` and `app/src/kit.css`'s
-`.bn-photo img { object-fit: contain }` has specificity (0,1,1) against `.browse-photo`'s
-(0,1,0). There is no `@layer` anywhere in `app/src` and no `!important` on `object-fit`, so
-nothing rescues it. Identical on main.
-
-**That silently reversed D38 on the owner's most-used preview** — an entry that argues in
-writing that "`object-fit: cover` stays" — and shrank the card to show the desk around it.
-Nobody chose it; the Banchi rebuild introduced `.bn-photo` and the older, less specific rule
-stopped applying without failing.
-
-**It is recorded here rather than fixed in the same breath** because the section above costs
-out both behaviours and the choice between them is D38's owner's, not a session's. What has
-changed is that the tree is no longer doing what D38 says it does, so the question is now
-which of the two to KEEP rather than whether to change anything.
-
-### Why `make design-check` is green over it
-
-`docs/DESIGN.md`'s floor is `>= 320px` on the short edge of the pull-modal photo, asserted at
-`app/tests/fulfillment.spec.ts`. Its `paintedPhoto` helper resolves `object-fit` properly —
-`cover`, `contain`, `scale-down`, `none` and `fill` each get their own scale — so it measures how
-large the photograph is **drawn**. It has no way to ask whether the CARD is inside what was
-drawn, and under `cover` it never can: the frame fills the box by construction, so the painted
-short edge IS the box and the row passes at exactly the moment the card is being cut. **A floor
-on size is not a floor on content**, and this is the second time that distinction has cost
-something here — the same helper's own comment draws it, about a broken image that still has a
-layout box.
-
-Closing it needs the thing the assertion does not have: where the card is. `detect_card` answers
-that, and putting a detector behind a Playwright row buys a check that is slower than the suite
-it joins and can refuse. Not costed.
-
-### Neither fix is a stylesheet edit, which is why this is recorded
-
-**`object-fit: contain` fails the floor it would have to clear.** `.fulfillment-photo` is
-`min(360px, 100%)` at `63 / 88`, so 360 x 503; `contain` scales by
-`min(360/2160, 503/3840)` = 0.131 and paints **283px** on the short edge, under the 320 floor.
-Computed from the helper's own formula rather than observed in a run. The box would have to reach
-407px to hold the floor and it is capped at 360, so `contain` is unavailable on the Fulfiller's
-screen without reopening that row of the constraints table — which D31 says is not his to
-reopen. On the owner's screens nothing checks it, and the cost there is size: the frame draws at
-78.6% of the box width and the card lands at 63–69% of it, against 80–88% today.
-
-**The server crop is mostly wiring and four open questions.** `identify/images.py:crop_rect` is
-already extracted so a second caller can draw the rectangle the pipeline cuts, and
-`POST /pipeline/crop-preview` already detects and serves for `#/runs`; a third caller of the same
-function is D32's own rule rather than an exception to it. What is not answered:
-
-- **Latency forces a cache.** D32 measured ~115ms per card for the crop preview. `GET /photo` is
-  hit on every arrow-key step of the browse walk and auto-repeat is faster than that; the runs
-  panel bought its way out with a 140ms debounce and a photo route cannot debounce.
-- **The rect has no home.** A capture sidecar is `{box, game, index, rarity_claim}` today. Adding
-  the rectangle makes this a capture-write change plus a backfill over every photograph already
-  on disk.
-- **D32 enumerated the consumers that keep the whole frame** — the review queue photograph a
-  human judges foil against, the pull preview matched to a physical slot, the re-shoot comparison
-  — and the browse preview is on that list. Per-request cropping honours *in memory, never on
-  disk*, and still needs an amendment saying why identifying a card differs from judging one.
-  `app/src/ReviewQueue.css` deliberately sets no `object-fit` and should keep the frame either
-  way.
-- **A refusal renders as today.** `detect_card` returning `None` means the whole frame, which is
-  the clipping. So the crop narrows the case `contain` answers and does not remove it.
-
-**Not blocked on the games registry.** `card_aspect` is 0.716 for `pokemon`, `pokemon_code`,
-`riftbound` and `one_piece`; only `misc` is `None`, which `detect_card` refuses by contract. Box
-3 is Riftbound, so the box this was found on is not the blocked case.
-
-**Why it stays open**: the two fixes trade legibility against coverage in opposite directions and
-one of them moves a published floor. That is a decision entry, not an edit, and the owner has not
-made it.
-
----
+**AND THE CROP IS ONLY EVER AS GOOD AS THE READING BEHIND IT.** D125's client-side refusal — a
+rectangle overrunning its frame by more than a sixth is not believed, and every caller falls back
+to what shipped — is a floor under a failure that was reproduced, not a tuned threshold. It rests
+on three good readings and one bad one. **The first real rig photograph that trips it is the
+measurement that should replace it**, and until one does, the honest reading of this is that the
+fallback is well tested and the threshold is not.
 
 ## 8 — Recorded and correctly unfixed
 

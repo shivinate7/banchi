@@ -436,6 +436,41 @@ export type Crop = {
  *  box, which is what a percentage `translate` resolves against, so no pixel size is needed.
  *  Returns `undefined` for no crop, which leaves the element's own framing alone: a refusal
  *  must never be worse than no request at all. Pair it with `.bn-crop` (kit.css). */
+/** WHERE THE WINDOW SITS WHEN THE WINDOW CAN HOLD A WHOLE CARD, DERIVED RATHER THAN GUESSED
+ *  (D125). A window at a card's own 63/88 — the browse preview, the pricing drawer, the
+ *  sell-confirm, the Fulfiller's pull preview — can show all of a card, and a fixed `focus` cannot
+ *  put it there: the detector's rectangle is not the card, and how much of it is stand varies per
+ *  photograph. Measured across real readings on this store, the rectangle runs 0.55 to 0.60
+ *  wide-to-tall against a card's 0.716, the surplus being the stand's TRADING CARD GAME strip
+ *  BELOW the card, and the rectangle's TOP tracks the card's top closely (721 against 741 on box
+ *  3). So the card is about `rw / cardAspect` tall from the rectangle's top down, and half of that
+ *  is where the window's centre belongs.
+ *
+ *  THE RECTANGLE IS CLAMPED TO THE FRAME FIRST, and that is not defensive tidying: real readings
+ *  overrun it. `[240, 1051, 1649, 3020]` on box 6 ends 231px below a 3840px frame. Left unclamped
+ *  the surplus is counted as stand that is there to be dropped, and the window rides up off the
+ *  card.
+ *
+ *  RETURNS `null` FOR A RECTANGLE THAT CANNOT BE BELIEVED, which the caller must treat exactly as
+ *  it treats a refusal — leaving the element's own framing alone. A reading that runs more than a
+ *  sixth of the frame past its edge is not describing a card in that frame: measured at 1,431px
+ *  of overrun on a 3840px frame, where the reading had also missed the card's top by 427px, and
+ *  cropping to it put the card further out of view than no crop at all. THE THRESHOLD IS THIN
+ *  EVIDENCE — three good readings and one bad one — and it is a floor under a failure mode, not a
+ *  tuned value. */
+export function wholeCardFocus(crop: Crop | null, cardAspect = 63 / 88): number | null {
+  if (crop === null) return null
+  const [, fh] = crop.frame
+  const [, y, rw, rh] = crop.rect
+  if (fh <= 0 || rw <= 0 || rh <= 0 || y < 0) return null
+  if (y + rh > fh + fh / 6) return null
+  const clamped = Math.min(rh, fh - y)
+  if (clamped <= 0) return null
+  const cardHeight = rw / cardAspect
+  if (cardHeight >= clamped) return 0.5
+  return Math.min(1, Math.max(0, cardHeight / 2 / clamped))
+}
+
 export function cropStyle(crop: Crop | null, focus = 0.34): CSSProperties | undefined {
   if (crop === null) return undefined
   const [fw, fh] = crop.frame

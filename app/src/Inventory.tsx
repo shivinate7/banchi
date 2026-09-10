@@ -31,7 +31,8 @@ import { PlaceNeighbors } from './PlaceNeighbors'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { useSearch } from './useSearch'
-import { Button, Icon, Notice, Pill } from './kit'
+import { useCardCrop } from './cardCrop'
+import { Button, cropStyle, Icon, Notice, Pill, wholeCardFocus } from './kit'
 import { dismissToast, toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
 import './Inventory.css'
@@ -824,6 +825,12 @@ function RetirePanel({
   const [broken, setBroken] = useState(false)
   const gone = !copy.has_photo || broken
 
+  /* CROPPED TO THE CARD (D125). This window is 84px wide, so `cover` — centred on a frame the
+   * card is not centred in — spent most of a very small picture on the stand, and the picture is
+   * the whole point of the panel: it is the last look before a copy is marked gone. */
+  const crop = useCardCrop(gone ? null : { box: copy.place.box, index: copy.place.index })
+  const focus = wholeCardFocus(crop)
+
   return (
     <Overlay kind="dialog" label={`Retire: ${copy.place.label ?? copy.key}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
@@ -837,12 +844,16 @@ function RetirePanel({
               <Icon name="image" size={20} />
             </div>
           ) : (
-            <img
-              className="inventory-confirm-photo"
-              src={photoUrl(copy.place.box, copy.place.index)}
-              alt={`The card stored at ${copy.place.label ?? copy.key}`}
-              onError={() => setBroken(true)}
-            />
+            <span className="inventory-confirm-photo">
+              <img
+                className="bn-crop"
+                src={photoUrl(copy.place.box, copy.place.index)}
+                alt={`The card stored at ${copy.place.label ?? copy.key}`}
+                data-cropped={focus === null ? undefined : 'true'}
+                style={focus === null ? undefined : cropStyle(crop, focus)}
+                onError={() => setBroken(true)}
+              />
+            </span>
           )}
           <div className="inventory-retire-where">
             <div className="inventory-confirm-place">

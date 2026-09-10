@@ -1347,6 +1347,7 @@ D121 The front page says what is owed, and the library is drawn as the work that
 D122 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
 D123 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 D124 The faces are vendored, and the suite's allow-list is two ports
+D125 The photograph is cropped to the card, the focus is derived from the reading, and a reading that cannot be believed is a refusal
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
