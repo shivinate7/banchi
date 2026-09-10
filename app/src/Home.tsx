@@ -19,7 +19,7 @@ import type {
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, type IconName } from './kit'
 import { standing, type Standing } from './standing'
-import { photographed, ribbon, sittings, type Ribbon } from './storeHistory'
+import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
 import { hubState } from './OrdersHubStore'
 import './Home.css'
@@ -266,10 +266,10 @@ function HistoryFoot({
   readonly shelf: Record<string, InventoryCard> | null
   readonly live: boolean
 }) {
-  const plot: Ribbon | null = useMemo(() => ribbon(sittings(shelf)), [shelf])
+  const plot: Ribbon | null = useMemo(() => ribbon(inflate(sittings(shelf))), [shelf])
   if (status === null) return <div className="home-foot" />
-  const total = photographed(status)
-  if (total === 0) {
+  const realTotal = photographed(status)
+  if (realTotal === 0) {
     return (
       <div className="home-foot">
         <p className="home-foot-sum home-foot-quiet">No cards yet. The library starts with the first box.</p>
@@ -281,8 +281,23 @@ function HistoryFoot({
      fallback this replaced (`cards - sold - retired - moved` per box) invented a figure in
      precisely the case where the server had refused to give one. And not `states.identified`
      either: a card photographed and not yet identified is still on the shelf. */
-  const onHand =
-    total - (status.states.sold ?? 0) - (status.states.retired ?? 0)
+  const retired = status.states.retired ?? 0
+  const onHand = realTotal - (status.states.sold ?? 0) - retired
+
+  /* THE DEMO INFLATES ITS OWN HISTORY, AND ONLY ITS HISTORY — `storeHistory.ts`'s
+     `DEMO_HISTORY_SCALE` carries the whole argument and the trade the owner took. Cards ever
+     photographed and cards ever sold move with the sittings so this sentence stays true to
+     ITSELF; `onHand` and the box count are deliberately left real, because the boxes panel a
+     few inches below draws those same two figures from the same store and they may not
+     disagree on one screen. The cards that have left are then whatever the sentence needs to
+     balance — derived rather than scaled, so `photographed − on hand − retired − sold` is
+     still zero at any multiplier. Folded away entirely in every non-demo build. */
+  let total = realTotal
+  let everSold = sold
+  if (__BN_DEMO__) {
+    total = realTotal * DEMO_HISTORY_SCALE
+    everSold = total - onHand - retired * DEMO_HISTORY_SCALE
+  }
   const since = plot?.from ? new Date(plot.from).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : null
   const newest = plot?.blocks[plot.blocks.length - 1]?.sitting ?? null
   return (
@@ -302,7 +317,7 @@ function HistoryFoot({
             not a sum, so the clause degrades and the sentence does not. */}
         <b>{onHand.toLocaleString()}</b> on hand
         {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
-        {sold === null || sold === 0 ? null : <><i>·</i><b>{sold.toLocaleString()}</b> sold</>}
+        {everSold === null || everSold === 0 ? null : <><i>·</i><b>{everSold.toLocaleString()}</b> sold</>}
       </p>
       {plot === null ? null : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
