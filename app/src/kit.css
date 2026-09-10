@@ -854,7 +854,22 @@ img.bn-crop[data-cropped='true'] {
   min-width: 100%;
   min-height: 100%;
   object-fit: cover;
-  transition: width var(--bn-t-slow) var(--bn-ease), transform var(--bn-t-slow) var(--bn-ease);
+  /* NO TRANSITION HERE, AND THAT IS THE WHOLE POINT OF THIS PARAGRAPH (D125, amended
+     2026-09-10 by the owner at the rig). This block used to ease `width` and `transform` over
+     `--bn-t-slow`, which was right for the ONE thing it was written for: the Home hero, a single
+     photograph that resolves once on load and settles into its crop.
+
+     It is wrong for everything else, because the reading is ASYNCHRONOUS. A card draws under its
+     own framing first and adopts the crop about 115ms later, so an eased `width` and `transform`
+     is a zoom-and-pan on EVERY card — fired again on every step of the `#/inventory` walk and on
+     every thumbnail an observer brings into the pricing worklist. Stepping a box became a
+     succession of swoops. The owner's word for it was motion sickness, and that is a fair
+     description of a hundred consecutive zooms driven by network timing rather than by anything
+     the operator did.
+
+     A crop that lands INSTANTLY reads as the photograph having always been framed that way, which
+     is what it is. The fade `.browse-photo` already carries is untouched — a fade is not
+     movement, and it is doing the job of covering the swap. */
 }
 
 /* The UNCROPPED state inside a kit photo frame, and ONLY that state — scoped, because otherwise
@@ -865,6 +880,15 @@ img.bn-crop[data-cropped='true'] {
    `.bn-photo img` is (0,1,1) and plain `.bn-crop` is (0,1,0), so an image waiting for its reading
    — or one whose reading was refused — would letterbox rather than hold the framing it had. */
 .bn-photo img.bn-crop:not([data-cropped='true']) { object-fit: cover; }
+
+/* THE HERO KEEPS THE EASE, BECAUSE IT IS THE CASE THE EASE WAS WRITTEN FOR. One photograph, one
+   reading, once per visit to `#/`, settling into its crop while the page is still arriving. It is
+   not on a walk and nothing repeats it, so none of the argument above applies. Scoped here rather
+   than left in the shared block so that the next screen to draw a cropped photograph inherits the
+   instant behaviour and has to ask for motion deliberately. */
+.home-deck-photo.bn-crop[data-cropped='true'] {
+  transition: width var(--bn-t-slow) var(--bn-ease), transform var(--bn-t-slow) var(--bn-ease);
+}
 
 /* ---- divider with a word ---------------------------------------------------------------------- */
 .bn-rule { display: flex; align-items: center; gap: var(--bn-3); color: var(--bn-ink-4); font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }
