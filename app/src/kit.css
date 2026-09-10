@@ -811,15 +811,60 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    an absolutely positioned image ignores it. The window must be `position: relative` with
    `overflow: hidden`, and NOT have a transform of its own. */
 .bn-crop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.bn-crop[data-cropped='true'] {
+
+/* THE CROPPED STATE IS WRITTEN AT (0,2,1) ON PURPOSE, AND THE ELEMENT SELECTOR IS THE POINT
+   (D125). A screen owns its own window and reaches the <img> inside it through it — `.browse-photo-frame
+   .browse-photo`, `.card-locations-fulfiller .card-locations-photo`, `.ff .card-locations-photo`
+   — and every one of those is (0,2,0). Written as a bare `.bn-crop[data-cropped]` at (0,1,1) this
+   block LOSES to all of them on `height`, and the failure is silent and specific: the inline
+   `width` still applies because it is inline, `height: 100%` still applies because the screen won,
+   and `object-fit: fill` then STRETCHES the photograph across a box of the wrong shape. Measured
+   on `#/inventory` before this line was written — a 2160x3840 frame drawn into 360x452, which is
+   a squashed card, not a cropped one, and it looked enough like a small card to pass a glance.
+
+   This is the third time the same trap has been walked into in this file's history: `.browse-photo`
+   lost `cover` to `.bn-photo img` in the Banchi rebuild, `#/pricing`'s drawer was still losing it
+   a week later, and this is the crop losing to the screens. Specificity that has to be guessed at
+   each call site is the defect; the kit states it once, high enough, and no screen has to know. */
+img.bn-crop[data-cropped='true'] {
   inset: auto;
   left: 50%;
   top: 50%;
+  width: auto;
   height: auto;
+  /* AND THE ASPECT GOES WITH THE HEIGHT. A cropped image is positioned by its own natural
+     proportions — that is what `height: auto` means here — so a screen that put `aspect-ratio`
+     on the <img> rather than on its window forces the box back to a card's shape while the
+     inline width says otherwise, and the photograph lands somewhere neither rule intended.
+     `.fulfillment-photo` and `.card-locations-photo` both do that, and both are right to: the
+     <img> WAS the window on those screens before the crop existed. */
+  aspect-ratio: auto;
   max-width: none;
-  object-fit: fill;
+  /* THE WINDOW IS ALWAYS COVERED, WHICH `height: auto` ALONE DOES NOT GUARANTEE (D125). The
+     inline width is `frame / rect`, never below 100%, so the horizontal side is safe by
+     construction. The vertical side is not: `auto` derives the height from the PHOTOGRAPH's own
+     proportions, so an image that is not the rig's portrait frame — a re-shoot is a FILE, and D26
+     lets any file replace a photograph in place — paints SHORTER than its window and leaves
+     ground below it. `cover` could never do that, and one of the floors this product publishes is
+     a minimum painted short edge. Caught by `app/tests/fulfillment.spec.ts` at 375px: a 160x120
+     stub painted a 277px short edge against a 320px floor, where the box was 343px wide.
+     `cover` rather than `fill` for the same reason — when the two aspects agree, which is every
+     rig photograph, the box is already at the natural aspect and the two are identical; when they
+     disagree, this crops the surplus instead of stretching the card. */
+  min-width: 100%;
+  min-height: 100%;
+  object-fit: cover;
   transition: width var(--bn-t-slow) var(--bn-ease), transform var(--bn-t-slow) var(--bn-ease);
 }
+
+/* The UNCROPPED state inside a kit photo frame, and ONLY that state — scoped, because otherwise
+   this rule at (0,3,1) outranks the cropped block above at (0,2,1) and hands a cropped image
+   `cover`. That is harmless the day it is written, since a cropped image is at its natural aspect
+   and `cover` and `fill` agree there, and it would stop being harmless silently. The trap is the
+   same one twice over:
+   `.bn-photo img` is (0,1,1) and plain `.bn-crop` is (0,1,0), so an image waiting for its reading
+   — or one whose reading was refused — would letterbox rather than hold the framing it had. */
+.bn-photo img.bn-crop:not([data-cropped='true']) { object-fit: cover; }
 
 /* ---- divider with a word ---------------------------------------------------------------------- */
 .bn-rule { display: flex; align-items: center; gap: var(--bn-3); color: var(--bn-ink-4); font-size: var(--bn-fs-xs); font-weight: 600; letter-spacing: var(--bn-tracking-caps); text-transform: uppercase; }

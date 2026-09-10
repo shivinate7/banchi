@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
-  cropPreview,
   getBoxes,
   getInventory,
   getOrders,
@@ -17,7 +16,8 @@ import type {
   RunSummary,
   ServerStatus,
 } from './types'
-import { Button, cropStyle, Icon, type Crop, type IconName } from './kit'
+import { useCardCrop } from './cardCrop'
+import { Button, cropStyle, Icon, type IconName } from './kit'
 import { standing, type Standing } from './standing'
 import { photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
@@ -389,28 +389,12 @@ export function Home() {
   const deckBox = fromBoxes.box
   const front = deck[0]
   const frontCard = front?.card ?? null
-  const [crop, setCrop] = useState<Crop | null>(null)
-  const frontKey = front === undefined ? null : `${front.box}/${front.index}`
-  useEffect(() => {
-    setCrop(null)
-    if (front === undefined) return
-    let alive = true
-    cropPreview({ box: front.box, indices: [front.index], crop: true })
-      .then((preview) => {
-        const sample = preview.sample
-        if (!alive || sample.rect == null || sample.frame == null) return
-        if (sample.crop_refused != null) return
-        setCrop({ frame: sample.frame, rect: sample.rect })
-      })
-      .catch(() => {
-        /* No crop is not a failure: the deck already draws correctly without one, and a
-           response this walk cannot read has to fail the same way a dead server does. */
-      })
-    return () => {
-      alive = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frontKey])
+  /* THE HERO'S READING COMES OFF THE SHARED MACHINE NOW (D125, `cardCrop.ts`). It was written
+     here first, as one fetch for one card, and the policy around it — serial, cached, a refusal
+     remembered, a failure not — was written a second time on `#/pricing` and then wanted by three
+     more screens. The behaviour here is unchanged except that the cache is the app's: a hero
+     answered on this screen is already answered when the box walk reaches that card. */
+  const crop = useCardCrop(front === undefined ? null : { box: front.box, index: front.index })
 
   const boxCount = boxes.state === 'ready' ? boxes.value.length : null
   const sold = boxes.state === 'ready' ? boxes.value.reduce((n, b) => n + b.sold, 0) : null

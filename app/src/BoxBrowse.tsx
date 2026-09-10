@@ -34,7 +34,8 @@ import { readingAgo, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { SearchField } from './SearchField'
 import { useSearch } from './useSearch'
-import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { useCardCrop } from './cardCrop'
+import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, wholeCardFocus } from './kit'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
 import './BoxBrowse.css'
@@ -1814,6 +1815,23 @@ type PhotoPanelProps = {
 function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot }: PhotoPanelProps) {
   const where = label ?? `store key ${row.key}`
 
+  /* THE PREVIEW IS CROPPED TO THE CARD (D125), and this is the screen the clipping was found on.
+   * The frame is 63/88 and `cover` is centred on the PHOTOGRAPH, which the card is not centred
+   * in: 48 of 48 sampled box-3 frames lost an edge, 34 of them at the bottom and the worst by
+   * 333px of cardboard — the corner the collector number and the set line print in, on the one
+   * screen whose whole question is *which card is this and where*.
+   *
+   * It asks URGENTLY (`useCardCrop`, not the observer form) because this is a walk: one card is
+   * on screen and it is the card being looked at. `cardCrop.ts` explains why that matters — an
+   * arrow key repeats faster than a reading takes, so a queue answered in order would answer the
+   * card the operator stopped on last. A refusal leaves `cover` exactly as it is today. */
+  const crop = useCardCrop(
+    row.card.photo === null || row.card.photo_reclaimed_at !== null || absent
+      ? null
+      : { box: row.card.box, index: row.card.index },
+  )
+  const focus = wholeCardFocus(crop)
+
   if (row.card.photo === null) {
     return (
       <div className="bn-photo browse-absent">
@@ -1856,9 +1874,11 @@ function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot }: Ph
       <img
         /* Remounted per card, per occupant and per replacement. */
         key={`${row.key}:${row.card.capture_id ?? 'no-id'}:${src}`}
-        className="browse-photo"
+        className="browse-photo bn-crop"
         src={src}
         alt={`The card photographed at ${where}`}
+        data-cropped={focus === null ? undefined : 'true'}
+        style={focus === null ? undefined : cropStyle(crop, focus)}
         onError={onAbsent}
       />
       <span className="browse-photo-zoom" aria-hidden="true">

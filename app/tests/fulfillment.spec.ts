@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, stubCropPreview } from './shell'
 import { settleFonts } from './fontsReady'
 
 /* docs/DESIGN.md's Fulfillment constraints table, every row of it, as assertions.
@@ -550,6 +550,12 @@ const NO_ORDERS = {
 }
 
 async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<Store> {
+  /* THE CROP WINDOW (D125). The pull preview is cropped to the card — `cover` was cutting 68px
+     off the bottom edge at the worst geometry this store has produced, which is where the number
+     printed beside the photograph is printed on the card. So this screen asks for a rectangle,
+     and the floors below are measured on the render the Fulfiller actually gets. */
+  await stubCropPreview(page)
+
   const states: Store = {}
   for (const [key, card] of Object.entries(CARDS)) {
     // `sold` is what empties the list, not `captured`. Under D7 as amended a captured card is
