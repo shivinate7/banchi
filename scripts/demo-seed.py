@@ -203,18 +203,21 @@ BOXES = (
         "sections": [1, 15, 29],
         "section_names": {"1": "Commons", "15": "Uncommons", "29": "Signatures"},
         "state": "open", "created": 24.0,
+        "sittings": ((24.0, 34, 2.9), (20.6, 8, 5.2)),
     },
     {
         "box": 2, "name": "MEG Bulk", "pool": "other", "count": 28,
         "sections": [1, 16],
         "section_names": {"1": "Commons", "16": "Holos"},
         "state": "open", "created": 17.0,
+        "sittings": ((17.0, 28, 6.5),),
     },
     {
         "box": 3, "name": "RB Epics", "pool": "priceable", "count": 34,
         "sections": [1, 12, 24],
         "section_names": {"1": "Origins", "12": "Legacy", "24": "Epics"},
         "state": "closed", "created": 31.0,
+        "sittings": ((31.0, 19, 3.4), (29.4, 15, 4.7)),
     },
     {
         # No dividers on purpose: D10 amended, an undeclared box renders as ONE section and
@@ -225,8 +228,54 @@ BOXES = (
         "box": 4, "name": "Mixed Singles", "pool": "mixed", "count": 18,
         "sections": [], "section_names": {},
         "state": "open", "created": 9.0,
+        "sittings": ((9.0, 18, 3.9),),
     },
 )
+
+# WHY EACH BOX CARRIES `sittings`, AND WHY A SPREAD ACROSS ITS AGE WAS NOT ONE.
+#
+# `app/src/storeHistory.ts` recovers a SITTING by clustering `captured_at` at a 30-minute gap,
+# and the foot of the Home hero draws one block per sitting — as wide as its minutes and as
+# tall as its cards an hour. This file used to stamp a box's cards evenly across the box's own
+# age, which puts box 1's 42 cards eleven HOURS apart: every card clustered alone, every
+# sitting spanned zero time, `rate` was null on all 122 of them, and the ribbon drew ticks and
+# no blocks at all. The drawing was not broken; it was correctly reporting a store that had
+# never sat down at a rig.
+#
+# So a box is captured in one or two sittings, minutes long, days apart — `(days_ago, cards,
+# seconds_per_card)`. The cadences are between the rig's own measured 0.6095 s a card
+# (`docs/specs/motion-trigger.md`, the physical floor and the ribbon's ceiling) and the ~4.2 s
+# a card the owner's real store averages across its six sittings. They VARY between sittings
+# on purpose: a ribbon whose blocks are all one height carries nothing the printed card count
+# does not already say.
+SITTING_JITTER_MS = 900
+
+
+def capture_stamps(spec: dict) -> List[str]:
+    """One ISO stamp per card in `spec`, oldest first, clustered into that box's sittings.
+
+    Deterministic, and on its OWN RNG rather than the caller's: `state_for` draws from the
+    shared stream, so borrowing it here would silently re-deal which cards are sold.
+    """
+    plan = spec.get("sittings")
+    if plan is None:
+        raise SystemExit("box %d has no `sittings`" % spec["box"])
+    if sum(cards for _, cards, _ in plan) != spec["count"]:
+        raise SystemExit(
+            "box %d: sittings hold %d cards, the box holds %d"
+            % (spec["box"], sum(cards for _, cards, _ in plan), spec["count"])
+        )
+    jitter = random.Random(SEED + spec["box"])
+    out: List[str] = []
+    for days_ago, cards, seconds in plan:
+        start = NOW - timedelta(days=days_ago)
+        elapsed = 0.0
+        for i in range(cards):
+            if i:
+                elapsed += seconds + jitter.uniform(-1, 1) * (SITTING_JITTER_MS / 1000.0)
+            out.append((start + timedelta(seconds=max(0.0, elapsed))).isoformat(timespec="seconds"))
+    return out
+
 
 CONDITIONS = ("Near Mint", "Lightly Played")
 
@@ -333,11 +382,11 @@ def build_store(force: bool) -> dict:
                 source = priceable if spec["pool"] == "priceable" else other
                 rows = pick_rows(source, spec["count"], taken)
 
-            age = spec["created"]
+            stamps = capture_stamps(spec)
             for offset, row in enumerate(rows):
                 index = offset + 1
                 state = state_for(offset, len(rows), rng)
-                captured_at = stamp(age - offset * (age / max(len(rows), 1)) * 0.8)
+                captured_at = stamps[offset]
 
                 card = Card(
                     box=number,

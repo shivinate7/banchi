@@ -188,6 +188,58 @@ export function ribbon(all: readonly Sitting[]): Ribbon | null {
   }
 }
 
+/* ─── THE DEMO'S HISTORY MULTIPLIER ─────────────────────────────────────────────────────────
+ *
+ * THIS IS THE ONE FIGURE IN THIS PRODUCT THAT IS NOT READ FROM THE STORE. It exists only in a
+ * `VITE_DEMO=1` build: everywhere else `__BN_DEMO__` folds to the literal `false` and Rollup
+ * deletes the branch, so an ordinary build cannot reach it and `inflate` is the identity.
+ *
+ * WHY IT EXISTS. The published demo store holds 122 cards. At any cadence the rig can actually
+ * run — between the 0.6095 s a card `docs/specs/motion-trigger.md` measures and the ~4.2 s a
+ * card the owner's real store averages — 122 cards is EIGHT MINUTES of work, and a front page
+ * whose headline figure is eight minutes undersells the product to a stranger who has never
+ * seen it. The honest fix is a bigger demo store, and it was costed: ~3.8 KB of recorded
+ * bundle and ~34 KB of photograph per card, because `scripts/demo-record.py:copy_photos`
+ * writes one file per card INDEX and D52 makes that URL name a photograph rather than a
+ * shareable image. Real-store scale is ~55 MB of published copies of 132 source pictures. The
+ * owner chose the fiction over the megabytes, on 2026-09-09 and with that trade stated.
+ *
+ * IT SCALES CARDS AND MINUTES BY THE SAME FACTOR, WHICH IS THE WHOLE TRICK. `rate` is
+ * cards ÷ minutes, so a common factor cancels out of it entirely: every block keeps the height
+ * it has today, the widths were always SHARES of the window's minutes and so never moved
+ * either, and `minutes × rate ÷ 60 = cards` still holds. The drawing is the one it draws now,
+ * relabelled. Scaling minutes ALONE is what this avoids — height IS the rate, so it flattens
+ * all six blocks from ~8px to under 1px and destroys the thing it was meant to dress up.
+ *
+ * WHAT IT DOES NOT TOUCH: the present. `onHand`, the box count and every panel below the foot
+ * are the store's own, because they are drawn twice on one screen and two figures from one
+ * store may not disagree with each other four inches apart. What is inflated is HISTORY —
+ * cards ever photographed, cards ever sold, and how long each sitting took — which is the
+ * clause a viewer cannot cross-check against anything else on the page.
+ *
+ * 13 puts the demo at ~1.8 hours over six sittings and ~1,573 cards, which is within a few
+ * percent of the owner's real store (1,625 cards, 113 minutes, six sittings). It is a
+ * multiplier rather than a target so the two halves of the sentence cannot drift apart when
+ * the seed's card counts next change.
+ */
+export const DEMO_HISTORY_SCALE = 13
+
+/** The sittings a demo build draws. The identity everywhere else. */
+export function inflate(all: readonly Sitting[]): readonly Sitting[] {
+  if (__BN_DEMO__) {
+    return all.map((s) => ({
+      ...s,
+      cards: s.cards * DEMO_HISTORY_SCALE,
+      sold: s.sold * DEMO_HISTORY_SCALE,
+      minutes: s.minutes * DEMO_HISTORY_SCALE,
+      /* Untouched on purpose, and not recomputed: a common factor cancels out of
+         cards ÷ minutes, so re-deriving it here could only introduce float drift. */
+      rate: s.rate,
+    }))
+  }
+  return all
+}
+
 /** Everything this store has ever photographed.
  *
  *  `status.cards` counts records and is already on Home's critical path; `states.moved` is

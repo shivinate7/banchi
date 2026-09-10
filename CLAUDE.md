@@ -1390,15 +1390,9 @@ D122 The suite takes a machine-wide lock, because the CPU is the one thing a che
 D123 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
 D124 The faces are vendored, and the suite's allow-list is two ports
 D125 The photograph is cropped to the card, the focus is derived from the reading, and a reading that cannot be believed is a refusal
+D126 The demo inflates its own history, and the present is left alone
 D127 A session may stop what it started, and the checkout is what decides which that is
 ```
-
-**THE NUMBER BELOW D127 IS ABSENT HERE AND THAT IS THE SAME RULE, NOT A MISS.** It is claimed
-by the open PR #235 on `claude/demo-home-activity-data-0858f1`, whose entry exists in no tree
-this file can be read from — so it cannot be indexed here without citing a heading
-`docs/DECISIONS.md` does not have, which `decision ids` fails a commit for. D127 is numbered
-above it rather than into it, and the index closes up when that branch lands. Renumber your
-own, never another's.
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
 WOULD.** D118 was numbered while three branches were in flight over the two numbers above D115:

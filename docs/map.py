@@ -4146,10 +4146,26 @@ COMPONENTS = [
                                             "figure printed above them. `photographed` is "
                                             "`status.cards - states.moved`, never the sum over "
                                             "`boxes[].cards`, which counts both halves of D83's "
-                                            "move.",
-                                    # D121 is the entry; D58 is the box closing up behind a
-                                    # departed card; D83 is the move that would be double-counted.
-                                    "governed_by": ["D58", "D83", "D121"]},
+                                            "move. ALSO HOLDS THE ONE FIGURE IN THIS PRODUCT NOT "
+                                            "READ FROM THE STORE: `DEMO_HISTORY_SCALE`, a "
+                                            "demo-build-only multiplier over the HISTORY clause of "
+                                            "Home's foot. It scales each sitting's cards and "
+                                            "minutes by the SAME factor, so `rate` cancels out and "
+                                            "the ribbon keeps the exact geometry it already drew — "
+                                            "the drawing relabelled, not redrawn. It exists because "
+                                            "the demo store's 122 cards are eight real minutes of "
+                                            "work, and a bigger demo store costs ~34 KB of "
+                                            "photograph per card: D52 makes `/photo/<box>/<index>` "
+                                            "name a photograph, so `demo-record.py:copy_photos` "
+                                            "writes one file per card index and cannot share them. "
+                                            "`__BN_DEMO__` folds to `false` everywhere else and "
+                                            "Rollup deletes it — measured: zero references in an "
+                                            "ordinary build.",
+                                    # D121 is the entry; D126 is the demo multiplier; D58 is the
+                                    # box closing up behind a departed card; D83 is the move that
+                                    # would be double-counted; D52 is why a demo photograph cannot
+                                    # be shared between two card indices, which prices the fiction.
+                                    "governed_by": ["D52", "D58", "D83", "D121", "D126"]},
             "src/readiness.ts": {"does": "what `emit` would refuse this run for, on this side of the "
                                         "wire — a second implementation of "
                                         "pipeline/decisions.py:blocking, chosen so the pricing "
