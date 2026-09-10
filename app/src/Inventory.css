@@ -158,17 +158,11 @@
   border-radius: var(--bn-r-lg);
   background: var(--bn-surface-2);
 }
-/* THE WINDOW, NOT THE PICTURE (D125). It held `object-fit` while it WAS the <img>; the crop needs
-   a positioned, clipping window with the photograph inside it, so the box moved out here and the
-   framing moved onto `.bn-crop`. Everything visible about it — the size, the radius, the ground —
-   is unchanged. */
 .inventory-confirm-photo {
-  position: relative;
-  overflow: hidden;
   display: block;
-  flex: none;
   width: 84px;
   aspect-ratio: 63 / 88;
+  object-fit: cover;
   border-radius: var(--bn-r);
   background: var(--bn-surface-2);
   box-shadow: var(--bn-shadow-1);

@@ -602,10 +602,28 @@ Both cost more at every turn end than they can return.
 
 ---
 
-## 7 — ~~The preview crops the card, and the one check that looks at a photo cannot see it~~ — CLOSED 2026-09-09 (D125)
+## 7 — The preview crops the card, and the one check that looks at a photo cannot see it
 
-**Closed by cropping the photograph to the card rather than by choosing between `cover` and
-`contain`.** The argument this section was open on — that the two available fixes traded
+**REOPENED 2026-09-10.** It was closed the day before by cropping the photograph to the card
+(D125), and the owner reverted that on four of the six screens after using it: a photograph that
+re-frames itself as a reading lands is worse, in use, than one that clips. **So the clipping is
+back on the `#/inventory` preview, the sell-confirm and the Fulfiller's pull preview**, at the
+figures this section already measured — 48 of 48 sampled box-3 frames, worst 333px off the bottom,
+and 68px off the card's bottom edge on the Fulfiller's screen at the worst geometry.
+
+**THE LETTERBOX HALF IS FIXED AND STAYS FIXED, AND IT IS A DIFFERENT DEFECT FROM THE CLIPPING.**
+`#/pricing`'s drawer was drawing 36.1px of ground down each side of a 340px window because
+`.pricing-photo-frame` set no `object-fit` and inherited the kit's `contain`. That is now stated
+as `cover` in `Pricing.css`. Nobody ever chose the bars; they arrived with `.bn-photo` in the
+Banchi rebuild. **Reverting a change is not restoring a bug that predated it.**
+
+**WHAT IS ACTUALLY OPEN HERE IS NARROWER THAN IT WAS**, and the crop is no longer a candidate fix
+without a way to make it land invisibly. D125 has the costed options and the two hazards found by
+building it; the reversal paragraph in that entry has the reason it is not the answer.
+
+
+
+**The argument this section was open on — that the two available fixes traded
 legibility against coverage in opposite directions, and that one of them moved a published floor —
 was true when it was written and had been overtaken by machinery built for another screen:
 `POST /pipeline/crop-preview`, `kit/index.tsx:cropStyle` and `.bn-crop` already shipped on `#/`

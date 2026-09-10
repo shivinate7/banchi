@@ -8090,6 +8090,39 @@ a value tuned for a screen that resolves ONCE becomes a different thing entirely
 resolves PER ROW, and moving a rule into a shared kit block is exactly the move that makes the
 change invisible.
 
+### REVERTED 2026-09-10 ON FOUR SCREENS, BY THE OWNER, AFTER USING IT
+
+**The owner walked a box with it and asked for it back out**, in those words: *"yeah i hate it,
+undo the crop on the screens that just added it"*. So the crop is gone from the four this entry added it to — the
+`#/inventory` preview, the `#/pricing` drawer, the sell-confirm and the Fulfiller's pull preview —
+and stays on the two that had it before, the Home hero and the pricing worklist's row thumbnails.
+
+**THE ENTRY IS KEPT RATHER THAN DELETED.** The measurements in it are still true, and the
+conclusion drawn from them was not this session's to reach. `cover` really does clip 48 of 48 sampled
+box-3 frames; it really did cut 68px off the card's bottom on the Fulfiller's screen. What this
+entry got wrong is the inference that removing the clipping was worth what it cost — a photograph
+that moves under you as a reading lands, on every card of a walk.
+**The clipping is a defect you can measure; the crop is a defect you can feel.**
+The second one is the one being used.
+`docs/DEBTS.md` §7 is reopened on exactly that basis.
+
+**ONE THING IS DELIBERATELY NOT REVERTED.** `#/pricing`'s drawer does not go back to what it was.
+Its original state was the kit's `contain` — 36.1px of ground down each side of a 340px window,
+which is the black-bars defect that started all of this and which nobody ever chose. It is set to
+`object-fit: cover` in `Pricing.css` explicitly, which is D38's answer stated rather than
+inherited. Reverting a change is not the same as restoring a bug that predated it.
+
+**What comes out with the four:** `kit:wholeCardFocus`, whose only callers they were, plus the
+kit rules that existed for them alone — `aspect-ratio: auto` for an `<img>` that was its own
+window, and the `min-height` floor for a published painted-size minimum. Rules kept past the thing
+that needed them are rules citing measurements nothing runs. `app/src/cardCrop.ts` STAYS: the two
+surviving screens are its callers, and it is where the fetch policy is written down once.
+
+**The refusal guard goes with them and its finding does not.** A rectangle that overruns its frame
+by a sixth is still a rectangle nothing should be framed on — measured at 1,431px of overrun on a
+3840px frame, having also missed the card's top by 427px. Nothing reads that today. Anyone who
+puts a crop back on a walk needs it before they need anything else in this entry.
+
 ### What this does not do
 
 **It does not touch the review queue, the capture screen, or the sidecar.** §7 costed a server-side

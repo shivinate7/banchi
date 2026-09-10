@@ -63,8 +63,8 @@ import {
   type PricingSource,
   type SectionSpec,
 } from './pricingSource'
-import { useCardCrop, useCardCropWhenSeen } from './cardCrop'
-import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented, wholeCardFocus } from './kit'
+import { useCardCropWhenSeen } from './cardCrop'
+import { Button, cropStyle, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
 
@@ -696,38 +696,6 @@ function SkeletonRows({ count }: { count: number }) {
  *  strip instead. The art, the name and the first lines of text, which is what a name in the
  *  next column is being checked against. */
 const THUMB_FOCUS = 0.34
-
-/* THE DRAWER'S PHOTOGRAPH, AND IT IS THE ONE THAT WAS DRAWING BARS (D125).
- *
- * `.pricing-photo-frame` sets an aspect and a cap and no `object-fit`, so the kit's `.bn-photo
- * img { contain }` applied: a 0.5625 frame fitted by its height inside a 0.714 window, with
- * `--bn-stage-bg` showing down each side. Nobody chose that — it arrived with `.bn-photo` in the
- * Banchi rebuild, the same way and in the same week `#/inventory` lost D38's `cover`.
- *
- * WHY THE CROP RATHER THAN JUST PUTTING `cover` BACK: `cover` here is centred on the FRAME and
- * the card is not, so it trades two bars for a clipped edge — measured at 48 of 48 box-3 frames,
- * worst case 333px off the bottom, which is where the collector number and the set line print.
- * This drawer is opened to check a card against a name in the next column, so the bottom of the
- * card is the half that matters. */
-function PricingPhotoFrame({ at, name }: { at: { box: number; index: number } | null; name: string }) {
-  const crop = useCardCrop(at)
-  const focus = wholeCardFocus(crop)
-  return (
-    <div className="bn-photo pricing-photo-frame">
-      <img
-        className="bn-crop"
-        src={photoUrl(at?.box ?? 0, at?.index ?? 0)}
-        alt={name}
-        data-cropped={focus === null ? undefined : 'true'}
-        style={focus === null ? undefined : cropStyle(crop, focus)}
-        /* Undone, re-shot or reclaimed (D89): leave the frame, never a broken image glyph. */
-        onError={(event) => {
-          event.currentTarget.style.visibility = 'hidden'
-        }}
-      />
-    </div>
-  )
-}
 
 /** The row's photograph: a press that opens the drawer, and the crop that makes it worth
  *  looking at. Its own component so one answered reading redraws one thumbnail rather than a
@@ -3267,7 +3235,9 @@ export function Pricing() {
               <h3 title={photoSku.name}>{photoSku.name}</h3>
               <span className="pricing-machine">sku {photoSku.sku}</span>
             </div>
-            <PricingPhotoFrame at={photoAt} name={photoSku.name} />
+            <div className="bn-photo pricing-photo-frame">
+              <img src={photoUrl(photoAt?.box ?? 0, photoAt?.index ?? 0)} alt={photoSku.name} />
+            </div>
             <p className="pricing-photo-caption">
               <Icon name="pin" size={13} />
               {photoAt === null ? null : photoAt.label ?? `no label · ${photoAt.box}/${photoAt.index}`}
