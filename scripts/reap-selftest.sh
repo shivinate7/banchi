@@ -218,6 +218,90 @@ case "$status:$out" in
 esac
 rm -f "$tmp/checkout/.serve/capture.pid"
 
+# ------------------------------------------------------- a directory that is not a workspace
+echo
+echo "  -- a root that would contain everything --"
+
+# THIS IS THE HOLE THE USER-LEVEL INSTALL EXPOSED, and it could not have been found from inside
+# a clone: `git rev-parse --show-toplevel` always answers there, so the fallback never ran. The
+# moment `make janitor-install` put the hook in the user's own `~/.claude/settings.json` it began
+# firing in directories that are not repositories, and the fallback adopted the HOME DIRECTORY as
+# "this checkout" — under which the owner's live capture server sits. Measured 2026-09-10: the
+# exact command of incident 1, judged from `$HOME`, resolved that server to OURS.
+#
+# EVERY CASE HERE NEEDS A SUBJECT INSIDE THE DIRECTORY IT IS TESTING, and the first build of this
+# block had none: it judged `$stranger`, which lives under the fixture's own `mktemp -d` — and on
+# a Mac that is under `$TMPDIR` in `/var/folders`, not under `$HOME` and not under `/tmp`. So a
+# broad root would not have claimed it either, three cases passed for the wrong reason, and three
+# mutation arms survived. The processes below sit inside the directories being tested.
+#
+# AND `$HOME` IS FAKED RATHER THAN USED. `Path.home()` reads the environment, so the home cases
+# run against a home directory inside the fixture — which is the only way to put a process under
+# one without starting a process under the owner's real home directory.
+
+mkdir -p "$tmp/home/deep"
+printf 'import time; time.sleep(300)\n' > "$tmp/home/deep/inner.py"
+inner="$(spawn "$tmp/home/deep/inner.py" "$tmp/home/deep")"
+kids="$kids $inner"
+sleep 1
+
+out="$(cd "$tmp/home/deep" && HOME="$tmp/home/deep" python3 "$REAP" --explain "pid:$inner" 2>&1)"
+case "$out" in
+  *OURS*) bad "the home directory was adopted as a checkout — everything under it is now ours" ;;
+  *) ok "A HOME DIRECTORY IS NOT A WORKSPACE, though a process sits right inside it" ;;
+esac
+
+out="$(cd "$tmp/home" && HOME="$tmp/home/deep" python3 "$REAP" --explain "pid:$inner" 2>&1)"
+case "$out" in
+  *OURS*) bad "an ancestor of \$HOME was adopted, and it is on no fixed list" ;;
+  *) ok "AN ANCESTOR OF \$HOME is refused wherever the home directory happens to sit" ;;
+esac
+
+# A broad directory that is on the list and is no ancestor of any home directory. `/private/tmp`
+# reaches it whatever `$TMPDIR` is set to, which is why this probe is made under `/tmp` by name
+# rather than beside the rest of the fixture.
+probe="$(mktemp -d /tmp/pkmnscan-reap-probe.XXXXXX)"
+printf 'import time; time.sleep(300)\n' > "$probe/probe.py"
+probe_pid="$(spawn "$probe/probe.py" "$probe")"
+kids="$kids $probe_pid"
+sleep 1
+out="$(cd /tmp && python3 "$REAP" --explain "pid:$probe_pid" 2>&1)"
+case "$out" in
+  *OURS*) bad "/tmp was adopted as a checkout, claiming everything anyone has left in it" ;;
+  *) ok "NOR IS /tmp, which is on the list and is no ancestor of a home directory" ;;
+esac
+rm -rf "$probe"
+
+# `/` needs no special subject: everything on the machine is under it, `$stranger` included.
+out="$(cd / && python3 "$REAP" --explain "pid:$stranger" 2>&1)"
+case "$out" in
+  *OURS*) bad "/ was adopted as a checkout, which claims the whole machine at once" ;;
+  *) ok "and neither is /" ;;
+esac
+
+# The hook itself over the same ground. `judge` cannot be used here: it does not fake `$HOME`,
+# and a home directory that is not the process's own home is an ORDINARY directory — which is
+# the correct answer to a different question and would have passed this case for free.
+out="$(cd "$tmp/home/deep" && printf '{"tool_input":{"command":"pkill -f inner.py"}}' \
+       | HOME="$tmp/home/deep" python3 "$REAP" --hook 2>&1)"
+status=$?
+[ $status -eq 2 ] && ok "a kill run from a home directory is refused, not guessed at" \
+                  || bad "a kill run from a home directory was cleared"
+case "$out" in
+  *not\ a\ workspace*) ok "and the refusal says WHY rather than naming an empty checkout" ;;
+  *) bad "the refusal quoted an empty root, which reads as a bug in the guard"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
+# The fallback still has to WORK where the directory is an ordinary one, or a session outside a
+# repository can never clean up after itself — which is the constraint this whole guard is under.
+out="$(cd "$tmp/elsewhere" && python3 "$REAP" --explain "pid:$stranger" 2>&1)"
+case "$out" in
+  *OURS*) ok "AN ORDINARY NON-REPO DIRECTORY IS STILL A WORKSPACE — cleanup survives" ;;
+  *) bad "a plain directory stopped being a root, so a session outside a repo cannot clean up"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+
 # --------------------------------------------------------------------- the escape hatch
 echo
 echo "  -- the escape hatch --"

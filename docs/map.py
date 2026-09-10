@@ -1337,8 +1337,8 @@ COMPONENTS = [
                         "`.serve/` pidfile for the D53 case. Both 2026-09-10 incidents are "
                         "reproduced rather than asserted about, and the two edges are both "
                         "cases: the stranger is refused AND survives, and the session's own "
-                        "process is still killable. Mutation-tested: seven guards removed one "
-                        "at a time, all seven caught.",
+                        "process is still killable. Mutation-tested: thirteen guards removed "
+                        "one at a time, all thirteen caught.",
                 "governed_by": ["D18", "D53", "D127"],
             },
             "session-teardown.sh": {

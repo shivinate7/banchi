@@ -134,16 +134,50 @@ def _under(path: str, root: str) -> bool:
 # ------------------------------------------------------------------------- the two checkouts
 
 
+# A directory that is not a WORKSPACE, and so may never be adopted as a root. Everything a
+# person owns lives under one of these, so treating one as "this checkout" clears the whole
+# machine in a single step — see `checkout_root` for the measurement that put this list here.
+def _too_broad(path: str) -> bool:
+    # ONE SET AND ONE TEST, deliberately. The first build had two arms — a fixed list, and a
+    # separate check for the home directory and its ancestors — and every case the self-test
+    # could pose was caught by EITHER, so removing one arm at a time changed nothing and two
+    # mutation arms survived. Redundancy that no test can distinguish is not defence in depth;
+    # it is code whose deletion nothing would notice.
+    home = _real(str(Path.home()))
+    broad = {home, "/", "/Users", "/home", "/tmp", "/private", "/private/tmp", "/private/var",
+             "/var", "/usr", "/opt", "/Applications", "/System", "/Library"}
+    broad.update(str(parent) for parent in Path(home).parents)   # `/Users`, `/home`, `/`
+    return path in broad
+
+
 def checkout_root(start: str) -> str:
-    """The checkout `start` sits in — its git toplevel, or `start` itself.
+    """The checkout `start` sits in — its git toplevel, or `start` itself when that is a
+    workspace. EMPTY when there is no honest answer, and empty means nothing is ours.
 
     NOT `$PWD` FLAT. A session that runs a command from `app/` is standing in the same checkout
     as one standing at the top, and a server launched from the root would read as OUTSIDE for
     the first and OURS for the second. A guard whose answer depends on which subdirectory you
     happen to be in is a guard that is wrong half the time.
+
+    AND THE FALLBACK MAY NOT BE A DIRECTORY THAT CONTAINS EVERYTHING, which is a hole this file
+    shipped with and which only the USER-LEVEL install could expose. Inside a clone
+    `git rev-parse` always answers, so the fallback never ran; the moment `make janitor-install`
+    put this hook in the user's own `~/.claude/settings.json` it began firing in directories that
+    are not repositories at all. **Measured from `/Users/shivinate` on 2026-09-10**: the fallback
+    adopted the home directory as "this checkout", and `pgrep -f capture_server.py` — the exact
+    command of incident 1 — resolved the owner's live `:8000` server to **OURS**, because
+    `~/Developer/pkmnscan/server/capture_server.py` is under `~`.
+
+    So a root has to be a place work is DONE, not a place work is KEPT. With no such root the
+    answer is not a wider guess, it is that this file has nothing to reason with, and `_under`
+    already reads an empty root as "nothing is under it" — every target is then refused and the
+    hatch is printed, which is the direction every other unknown here resolves in.
     """
     got = run(["git", "rev-parse", "--show-toplevel"], cwd=start)
-    return _real(got.out) if got.ok and got.out else _real(start)
+    if got.ok and got.out:
+        return _real(got.out)
+    here = _real(start)
+    return "" if _too_broad(here) else here
 
 
 def main_checkout(root: str) -> str:
@@ -604,9 +638,18 @@ def hook(payload: dict) -> int:
     for note in intent.how:
         lines.append("  resolved: {0}".format(note))
     lines.append("")
-    lines.append("  Everything an agent session may kill was started BY that session and lives "
-                 "under")
-    lines.append("  {0}. What is refused above does not.".format(root))
+    if root:
+        lines.append("  Everything an agent session may kill was started BY that session and "
+                     "lives under")
+        lines.append("  {0}. What is refused above does not.".format(root))
+    else:
+        # `checkout_root` returned nothing, so this is not a workspace — a home directory, `/`,
+        # or somewhere else that contains everything. There is no checkout to be inside of, so
+        # nothing here can be shown to be this session's.
+        lines.append("  {0} is not a workspace — it contains everything, so nothing in it can "
+                     "be".format(os.getcwd()))
+        lines.append("  shown to be this session's. Run this from the checkout whose process it "
+                     "is.")
     lines.append("")
     lines.append("  Use the reaper, which signals only what is under this checkout and says "
                  "what it")
@@ -665,7 +708,8 @@ def reap(specs: Sequence[str], root: str, main: str, confirm: bool) -> int:
     pids = [pid for pid in dict.fromkeys(pids) if pid != mine]
     targets = verdict_for(pids, root, main)
 
-    print("reap — this checkout is {0}".format(root))
+    print("reap — this checkout is {0}".format(
+        root or "NOWHERE: {0} is not a workspace, so nothing here is ours".format(os.getcwd())))
     for note in how:
         print("  resolved: {0}".format(note))
     print("")
