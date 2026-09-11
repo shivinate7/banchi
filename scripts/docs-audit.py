@@ -1398,25 +1398,31 @@ _ID_DIGITS = r"[1-9][0-9]{0,2}"
 
 # AND AN ID IS A SLUG WHILE THE BRANCH THAT WRITES IT IS OPEN (D72, rewritten 2026-09-11).
 # A number cannot be allocated on a branch, because the allocation's whole input — what main
-# has taken — is not knowable until the merge. So a branch writes `## D-merge-time-ids` and cites
-# `(D-merge-time-ids)`, `scripts/claim-ids.py` substitutes the number at merge time, and the
+# has taken — is not knowable until the merge. So a branch writes its heading as a slug and
+# cites it that way, `scripts/claim-ids.py` substitutes the number at merge time, and the
 # thirteen renumber events in this repo's history have no way to happen.
 #
+# NEVER NAME A LIVE SLUG IN A COMMENT OR A FIXTURE. The claim is exhaustive text replacement,
+# so an illustration that borrows a real slug is rewritten with it — this block named one and
+# came back reading "a branch writes `## D139`", and two self-test fixtures below became
+# assertions about the number. Compose a fixture's ids from pieces; describe a shape in prose
+# rather than spelling an id that exists.
+#
 # TWO SEGMENTS MINIMUM, AND THAT IS THE WHOLE OF WHAT KEEPS IT OUT OF PROSE. `D-pad` is one
-# segment and is not an id; `D-merge-time-ids` is two and is. Measured over every `.md`, `.py`,
+# segment and is not an id; anything with an interior hyphen is. Measured over every `.md`, `.py`,
 # `.ts`, `.tsx` and `.css` in this tree the day the vocabulary was chosen: ZERO tokens of
 # either shape existed, so nothing had to be renamed to make room for it.
 #
 # LOWERCASE, because the letter is what says which namespace it is and a mixed-case slug
-# would make `D-One-Process` and `D-merge-time-ids` two ids for one entry with nothing to say so.
+# would make two spellings of one slug into two ids for one entry with nothing to say so.
 _ID_SLUG = r"-[a-z][a-z0-9]*(?:-[a-z0-9]+)+"
 _ID_ANY = r"(?:" + _ID_DIGITS + r"|" + _ID_SLUG + r")"
 
 _DECISION_RE = re.compile(r"\bD(" + _ID_ANY + r")\b")
 _CODES_DECISION_RE = re.compile(r"\bC(" + _ID_ANY + r")\b")
 
-# The step namespace has no letter in front of it — `step 7` and `step merge-time-ids` — so the
-# slug alone is the token and it carries no leading hyphen. Same two-segment floor.
+# The step namespace has no letter in front of it — `step 7`, or the slug form while the
+# branch is open — so the slug alone is the token and it carries no leading hyphen. Same floor.
 _STEP_SLUG = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)+"
 
 
@@ -1579,7 +1585,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
 
 # ------------------------------------------------------------------ ids are claimed at merge
 
-# A BRANCH DOES NOT TAKE A NUMBER (D-merge-time-ids). The allocation's only input is what main
+# A BRANCH DOES NOT TAKE A NUMBER (D139). The allocation's only input is what main
 # has taken, and a branch cannot have that: every renumber in this repo's history is one
 # branch reading `origin/main`, taking the next free id, and being wrong the moment another
 # branch merged first. Thirteen of those are recorded in D72, and D16 carries three entries
@@ -1657,7 +1663,7 @@ def check_id_claims(report: Report) -> None:
                     f"`{loose.group(1)}` is not a claimable id, so this heading is not an "
                     f"entry: no row reports on it, no citation of it resolves, and "
                     f"`scripts/claim-ids.py` will not allocate it a number. A slug is two or "
-                    f"more lowercase segments — `D-merge-time-ids`, never `D-pad`.",
+                    f"more lowercase segments, never one — `D-pad` is prose.",
                 ))
                 continue
             unclaimed.append(loose.group(1))
@@ -1688,7 +1694,7 @@ def check_id_claims(report: Report) -> None:
             "docs/DECISIONS.md",
             "main carries {0} unclaimed id: {1}.\n"
             "  A slug is a branch's placeholder and `make merge` is what turns it into a "
-            "number (D-merge-time-ids). One on main means a claim half-landed — every "
+            "number (D139). One on main means a claim half-landed — every "
             "citation of it now resolves to nothing.\n"
             "  Repair: `python3 scripts/claim-ids.py --ref origin/main --write` on a branch, "
             "then a pull request.".format(
@@ -4368,7 +4374,7 @@ def check_map_sections(report: Report) -> None:
 # not allocated yet is written with a `0.` marker carrying its slug in backticks, and
 # `scripts/claim-ids.py` rewrites both the marker and the token at merge time:
 #
-#   0. `step merge-time-ids` **The number is claimed at the merge** — ...
+#   a `0.` marker, then the slug in backticks after the word `step`, then the title.
 #
 # D80's ruling that `n` is STABLE and never renumbered is untouched by this and is the reason
 # for it: what that entry fears is D72's citation drift over 218 references to `step <n>`, and
@@ -11446,22 +11452,29 @@ def self_test() -> int:
     ok("SET_AMBIGUOUS" in emitted,
        "while a reason with a real producer still counts")
 
+    # THE FIXTURE'S SLUGS ARE COMPOSED, AND THIS BLOCK IS WHY THE RULE IS WRITTEN DOWN. They
+    # were spelled out, borrowed from a real entry so the citations would resolve — and the
+    # bootstrap claim substituted them, turning two of these into assertions about a NUMBER.
+    # A claim is exhaustive text replacement; it cannot tell a fixture from prose. Composed
+    # ids are out of its reach, and out of `decision ids in code`'s reach at the same time.
     print("\nan id is a slug until the merge claims it, and a slug is two segments")
-    ok(re.match(r"^" + _ID_SLUG + r"$", "-merge-time-ids") is not None,
+    slug = "-" + "a-worked-example"
+    step = "a-worked-example"
+    ok(re.match(r"^" + _ID_SLUG + r"$", slug) is not None,
        "a two-segment slug is an id")
-    ok(re.match(r"^" + _ID_SLUG + r"$", "-pad") is None,
-       "and a one-segment one is ordinary prose — `D-pad` is not an entry")
-    ok(_DECISION_RE.findall("see (D-merge-time-ids) and D" + "72") == ["-merge-time-ids", "72"],
+    ok(re.match(r"^" + _ID_SLUG + r"$", "-" + "pad") is None,
+       "and a one-segment one is ordinary prose, not an entry")
+    ok(_DECISION_RE.findall(f"see (D{slug}) and D" + "72") == [slug, "72"],
        "the citation scanner reads both forms out of one line",
-       str(_DECISION_RE.findall("see (D-merge-time-ids) and D" + "72")))
-    ok(_DECISION_RE.findall("the D-pad on the controller") == [],
+       str(_DECISION_RE.findall(f"see (D{slug}) and D" + "72")))
+    ok(_DECISION_RE.findall("the D" + "-pad on the controller") == [],
        "and reads neither out of a hyphenated English word")
-    ok(is_slug("-merge-time-ids") and not is_slug("137"),
+    ok(is_slug(slug) and not is_slug("137"),
        "is_slug separates an unclaimed id from an allocated one")
-    ok(_GATES_STEP_SLUG.findall("0. `step merge-time-ids` **T** — x") == ["merge-time-ids"],
+    ok(_GATES_STEP_SLUG.findall(f"0. `step {step}` **T** — x") == [step],
        "a pending step is read out of its `0.` marker",
-       str(_GATES_STEP_SLUG.findall("0. `step merge-time-ids` **T** — x")))
-    ok(_GATES_STEP_SLUG.findall("7. `step merge-time-ids` **T** — x") == [],
+       str(_GATES_STEP_SLUG.findall(f"0. `step {step}` **T** — x")))
+    ok(_GATES_STEP_SLUG.findall(f"7. `step {step}` **T** — x") == [],
        "and a marker that is not `0.` is a claimed step, read as its number")
 
     # EVERY PATTERN THAT READS A DECISION ID, AT THE DIGIT THAT USED TO END THEM (D16).
@@ -11504,10 +11517,11 @@ def self_test() -> int:
            "and stops at three digits, and at a leading zero", str(found))
 
         slugged = Path(tmp) / "SLUGGED.md"
-        slugged.write_text("## D9 — One digit\n\n## D-merge-time-ids — An unclaimed entry\n",
+        unclaimed = "D" + "-an-unclaimed-entry"
+        slugged.write_text(f"## D9 — One digit\n\n## {unclaimed} — An unclaimed entry\n",
                            encoding="utf-8")
         both = [ident for ident, _ in decision_heading_lines(slugged, "D")]
-        ok(both == ["D9", "D-merge-time-ids"],
+        ok(both == ["D9", unclaimed],
            "the heading roster reads a number and a slug out of one file", str(both))
 
         # `check_decision_index` reconciles CLAUDE.md's fenced index against those headings,

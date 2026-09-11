@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Allocate the numbers a branch's slug ids will take, and substitute them (D-merge-time-ids).
+"""Allocate the numbers a branch's slug ids will take, and substitute them (D139).
 
 A branch cannot allocate a decision number, because the allocation's only input is what
 `main` has taken and that is not knowable until the merge. So a branch writes a SLUG —
@@ -214,6 +214,26 @@ def renumber_gates(text: str, claims: Sequence[Claim]) -> str:
     return text
 
 
+def renumber_map(text: str, claims: Sequence[Claim]) -> str:
+    """Turn each claimed step's `"n": "<slug>"` into the allocated INTEGER.
+
+    THE SECOND EDIT THAT IS NOT A TOKEN SUBSTITUTION, and it was missing until the bootstrap
+    PR tried to claim its own step. A step is cited in prose as `step <slug>`, so that is the
+    token — but `docs/map.py` stores the id BARE, as the `n` field, which the token cannot
+    reach. Left alone it keeps the slug while docs/GATES.md gets the number, and `build order
+    mirror` fails the commit: loud, but only because that row exists.
+
+    AN INTEGER AND NOT A STRING. `build order mirror` reads GATES.md's markers with `int()`
+    and compares them against `n` by equality, so `"23"` agrees with nothing.
+    """
+    for claim in claims:
+        if claim.kind != "step":
+            continue
+        text = re.sub(r'"n":\s*"' + re.escape(claim.slug) + r'"',
+                      '"n": ' + claim.number, text, count=1)
+    return text
+
+
 def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
     """Substitute every claim across the tree. Returns path -> replacements."""
     touched: Dict[str, int] = {}
@@ -222,6 +242,8 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
         after = before
         if path == root / GATES:
             after = renumber_gates(after, claims)
+        if path == root / MAP:
+            after = renumber_map(after, claims)
         after, _ = apply_to_text(after, claims)
         if after == before:
             continue
@@ -238,7 +260,7 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="claim the numbers this branch's slug ids will take (D-merge-time-ids)")
+        description="claim the numbers this branch's slug ids will take (D139)")
     parser.add_argument("--ref", default="origin/main",
                         help="allocate against this ref's ids (default: origin/main)")
     parser.add_argument("--write", action="store_true",

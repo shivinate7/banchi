@@ -404,7 +404,7 @@ make revert-guard   # DOES THIS BRANCH PUT A FILE BACK THE WAY MAIN HAD IT BEFOR
 make revert-selftest # the guard, proved by rebuilding #218 and #221 in a throwaway repo.
                     #   In `check`, never in the git hook.
 make claim-ids      # WHAT THE MERGE WILL ALLOCATE FOR THIS BRANCH'S SLUG IDS. A branch does
-                    #   NOT take a decision number (D-merge-time-ids): the allocation's only
+                    #   NOT take a decision number (D139): the allocation's only
                     #   input is what main has taken, and that is not knowable until the merge.
                     #   So a branch writes its entry's heading as a two-segment slug, cites it everywhere, and
                     #   `make merge` substitutes the number against main as it stands THEN.
@@ -420,7 +420,7 @@ make claim-ids      # WHAT THE MERGE WILL ALLOCATE FOR THIS BRANCH'S SLUG IDS. A
 make claim-selftest # the claimer, proved where it can be wrong: a throwaway repository in which
                     #   MAIN MOVES underneath the branch. In `check`, never in the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
-                    #   IT CLAIMS THIS BRANCH'S IDS FIRST, AND WAITS (D-merge-time-ids): it
+                    #   IT CLAIMS THIS BRANCH'S IDS FIRST, AND WAITS (D139): it
                     #   substitutes, commits to the PULL REQUEST's branch, pushes, and watches
                     #   that commit's checks to completion before merging — so nothing main has
                     #   never run CI over reaches main. It REFUSES if this checkout is not
@@ -1515,7 +1515,7 @@ D135 Codex reads the same rules a Claude Code session does, through three symlin
 D136 The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
 D137 The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
 D138 One process serves the product, Vite compiles and never serves, and the build is the server's job
-D-merge-time-ids The number is claimed at the merge, because what main has taken is not knowable before it
+D139 The number is claimed at the merge, because what main has taken is not knowable before it
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

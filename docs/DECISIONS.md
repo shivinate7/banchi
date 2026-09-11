@@ -3719,7 +3719,7 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 
 ### Retired 2026-09-11: a branch does not take a number, so nothing renumbers
 
-**`renumbered ids` and `vacated ids` are both DELETED, and this entry stops being a live mechanism.** Everything above repairs a renumber. The owner's ruling the same day is that a renumber should not happen: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch now writes a SLUG and `scripts/claim-ids.py` allocates the number inside `make merge`. D-merge-time-ids carries the design, the vocabulary and what it cost.
+**`renumbered ids` and `vacated ids` are both DELETED, and this entry stops being a live mechanism.** Everything above repairs a renumber. The owner's ruling the same day is that a renumber should not happen: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch now writes a SLUG and `scripts/claim-ids.py` allocates the number inside `make merge`. D139 carries the design, the vocabulary and what it cost.
 
 **The reason it could be retired rather than kept as a backstop.** Both rows guard a path that no longer exists: a branch that never takes a number never vacates one. Keeping them was argued and declined — a row that fires only when somebody works around the convention is a row nobody has read in a year, which is D16's own account of what an unread check is worth. What replaces them is `id claims`, whose load-bearing clause is that **main carries no slug**: that one is checkable, is checked on main after every merge, and cannot be satisfied by accident.
 
@@ -4334,7 +4334,7 @@ Unsorted scanning is **not** deferred: it works today via the optional hints, wi
 **Culling is affordable now, and it was not before.** `docs/GATES.md` carried a paragraph explaining that steps were appended rather than inserted because renumbering "would have to land in four files at once" and nothing watched them. `build order mirror` reconciles the ids in both files, per list, in both directions — so adding, moving or removing a step is a two-file edit a machine refuses to let you do halfway.
 
 
-**Amended 2026-09-11: a step whose number is not allocated yet wears a `0.` marker, and this strengthens the ruling above rather than reopening it.** The rule that `n` is stable and never renumbered is about an EXISTING step, and its named mechanism is D72's citation drift over 218 references. **A number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one** — the pressure that would force a renumber is what D-merge-time-ids deletes, and this entry's ruling is what made it worth deleting for the build order too.
+**Amended 2026-09-11: a step whose number is not allocated yet wears a `0.` marker, and this strengthens the ruling above rather than reopening it.** The rule that `n` is stable and never renumbered is about an EXISTING step, and its named mechanism is D72's citation drift over 218 references. **A number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one** — the pressure that would force a renumber is what D139 deletes, and this entry's ruling is what made it worth deleting for the build order too.
 
 **Markdown has no ordered-list marker that can hold a slug**, so an unclaimed step is written with a `0.` marker carrying its slug in backticks in `docs/GATES.md` and carries the slug as its `n` in this file. `0.` is never an id: `build order mirror` reads the marker as its slug and never as zero, and `scripts/claim-ids.py` rewrites the marker and the token together at the merge. **The allocator is `max + 1` and never lowest-free, and step 12 is why**: this entry culled it and rules the hole correct, and reusing 12 would resurrect every `step 12` in the tree onto a step that is not the one meant.
 
@@ -9745,7 +9745,7 @@ build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every 
 
 ---
 
-## D-merge-time-ids — The number is claimed at the merge, because what main has taken is not knowable before it
+## D139 — The number is claimed at the merge, because what main has taken is not knowable before it
 
 **Ruled by the owner 2026-09-11, the same day D72's repair half was built.** That work made the provable half of a renumber block the commit. This entry is the owner's answer to why a renumber happens at all: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch no longer takes a number. It writes a SLUG, and `scripts/claim-ids.py` substitutes the number at the moment the merge knows what main has taken.
 
@@ -9753,13 +9753,13 @@ build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every 
 
 ### The vocabulary is a slug, and two segments is what keeps it out of prose
 
-**`## D-merge-time-ids`, cited as `(D-merge-time-ids)`, in prose and in code comments and in `governed_by` alike.** `C-<slug>` for the code-card track, and `step <slug>` for the build order, which has no letter in front of it. The letter says which namespace; the slug says which entry, which is more than a number ever said while the branch was open.
+**`## D139`, cited as `(D139)`, in prose and in code comments and in `governed_by` alike.** `C-<slug>` for the code-card track, and `step <slug>` for the build order, which has no letter in front of it. The letter says which namespace; the slug says which entry, which is more than a number ever said while the branch was open.
 
-**Two segments minimum.** `D-pad` is one and is ordinary prose; `D-merge-time-ids` is three and is an id. Measured over every `.md`, `.py`, `.ts`, `.tsx` and `.css` in the tree the day the vocabulary was chosen: **zero tokens of either shape existed**, so nothing had to be renamed to make room and no existing sentence changed meaning.
+**Two segments minimum.** `D-pad` is one and is ordinary prose; `D139` is three and is an id. Measured over every `.md`, `.py`, `.ts`, `.tsx` and `.css` in the tree the day the vocabulary was chosen: **zero tokens of either shape existed**, so nothing had to be renamed to make room and no existing sentence changed meaning.
 
-**Lowercase, because the letter carries the namespace.** A mixed-case slug would make `D-Merge-Time-Ids` and `D-merge-time-ids` two ids for one entry with nothing to say so — the duplicate-heading problem D16 blocks, reintroduced through spelling.
+**Lowercase, because the letter carries the namespace.** A mixed-case slug would make `D-Merge-Time-Ids` and `D139` two ids for one entry with nothing to say so — the duplicate-heading problem D16 blocks, reintroduced through spelling.
 
-**A step's slug lives in its list marker's place, which markdown cannot hold.** There is no ordered-list marker that reads `merge-time-ids`, so an unclaimed step is written with a `0.` marker carrying its slug in backticks — ``0. `step merge-time-ids` **Title** — ...`` — and the claim rewrites the marker and the token together. `0.` is never an id, so the mirror row reads it as the slug and never as zero.
+**A step's slug lives in its list marker's place, which markdown cannot hold.** There is no ordered-list marker that reads `merge-time-ids`, so an unclaimed step is written with a `0.` marker carrying its slug in backticks — ``0. `step 23` **Title** — ...`` — and the claim rewrites the marker and the token together. `0.` is never an id, so the mirror row reads it as the slug and never as zero.
 
 ### It is claimed inside `make merge`, before the merge, and the wait is the point
 
@@ -9774,6 +9774,16 @@ build-order lists, and the D138 line in `CLAUDE.md`'s index. **NEITHER:** every 
 **`renumbered ids` and `vacated ids` are deleted, and D72's mechanism with them.** Both rows exist to repair a renumber; a branch that never takes a number never vacates one. D72 keeps its account of the incidents — those are evidence and are never rewritten to match a later tree — and stops being a live mechanism. The convention *renumber your own, never another's* is retired in the same breath, having been a rule about who loses a race that no longer runs.
 
 **What replaces them is one row that cannot be satisfied by accident.** `id claims` reads every slug in the tree: each resolves to a slug heading, each heading's slug is unique, each is well-formed — and **main carries none**, which is the invariant the whole design rests on and the only one that catches a claim that half-landed.
+
+### The first claim was made by hand, and that is the bootstrap rather than the workflow
+
+**The pull request that brought the claimer could not be claimed by it.** `make merge` does the claiming, and the `make merge` that merges this change is MAIN's — which knows nothing about slugs. Merging it unclaimed would have landed a heading with no number on main, which is the single outcome this entry exists to prevent. So its own ids were substituted on the branch with the branch's own script, by hand, and it was merged with `--no-claim`.
+
+**Every pull request after it claims automatically, because main has the tool by then.** A hand-claim anywhere in this history is the bootstrap and is not the intended workflow; the workflow is `make merge` and nothing else. This paragraph exists so a reader finding that commit does not copy it.
+
+**And it found a second one, in this file's own auditor.** `scripts/docs-audit.py` used a real, live slug as its self-test fixture — deliberately, so the citations would resolve — and the claim substituted it, turning two assertions about a SLUG into assertions about a NUMBER. **A claim is exhaustive text replacement and cannot tell a fixture from prose.** So: **never name a live slug in a comment or a fixture.** Compose a fixture's ids from pieces, the way this repo already composes numeric ones for the same reason one level down, and describe a shape in prose rather than spelling an id that exists. A comment block in that file came back reading *"a branch writes `## D139`"*, which is how the rule was found.
+
+**The bootstrap earned its keep by finding a bug the self-test could not see.** A step is cited in prose as `step <slug>`, so that is the token — but `docs/map.py` stores the id BARE, as the `n` field, which no token of that shape reaches. The fixture had no map, so sixteen green arms said nothing about it, and the first real claim would have left the map holding a slug while `docs/GATES.md` took the number. `build order mirror` would have failed the commit, so it was never going to reach main silently — but it would have failed it in a way nobody had predicted. `renumber_map` is the second edit here that is not a token substitution, it writes an INTEGER because that row compares by equality against `int()`, and two arms with a real map now cover it.
 
 ### What it does not decide
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`scripts/claim-ids.py` proved against a throwaway repository (D-merge-time-ids).
+"""`scripts/claim-ids.py` proved against a throwaway repository (D139).
 
 THE ALLOCATION IS THE PART THAT CANNOT BE ASSERTED ABOUT. Everything else in that script is
 text substitution, and the one thing it must get right — allocating against what MAIN has
@@ -84,6 +84,9 @@ def write(repo: Path, name: str, body: str) -> None:
 DECISIONS_MAIN = f"## {D(1)} — First\n\nbody\n\n## {D(2)} — Second\n\nbody\n"
 CODES_MAIN = f"## {C(1)} — A code entry\n\nbody\n"
 GATES_MAIN = "## What shipped\n\n1. ~~First step~~ — done.\n2. ~~Second step~~ — done.\n"
+# THE MAP STORES A STEP ID BARE, which no `step <slug>` token can reach — the gap the
+# bootstrap PR found by trying to claim its own step against a fixture that had no map.
+MAP_MAIN = 'SHIPPED = [\n    {"n": 1, "title": "First"},\n    {"n": 2, "title": "Second"},\n]\n'
 
 
 def build(tmp: Path) -> Path:
@@ -95,6 +98,7 @@ def build(tmp: Path) -> Path:
     write(seed, "docs/DECISIONS.md", DECISIONS_MAIN)
     write(seed, "docs/CODES-DECISIONS.md", CODES_MAIN)
     write(seed, "docs/GATES.md", GATES_MAIN)
+    write(seed, "docs/map.py", MAP_MAIN)
     write(seed, "CLAUDE.md", f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n")
     git(seed, "add", "-A")
     git(seed, "commit", "-qm", "seed")
@@ -120,6 +124,8 @@ def main() -> int:
               CODES_MAIN + f"\n## {SC} — Another\n\nbody\n")
         write(work, "docs/GATES.md",
               GATES_MAIN + f"0. `step {SS}` **Third step** — done.\n")
+        write(work, "docs/map.py",
+              MAP_MAIN.replace("]\n", '    {"n": "' + SS + '", "title": "Third"},\n]\n'))
         write(work, "CLAUDE.md",
               f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n"
               f"the branch cites {SD}, {SC} and step {SS}.\n"
@@ -180,6 +186,14 @@ def main() -> int:
            "and no pending marker is left behind", gates)
         ok((work / "docs/DECISIONS.md").read_text(encoding="utf-8").count("## " + D(5) + " — Third") == 1,
            "the heading itself carries the number now")
+
+        # THE MAP'S `n` IS THE SECOND NON-TOKEN EDIT, and it must land as an INTEGER:
+        # `build order mirror` reads GATES.md's markers with int() and compares by equality,
+        # so a quoted "4" agrees with nothing. Missing entirely until the bootstrap PR.
+        mapped = (work / "docs/map.py").read_text(encoding="utf-8")
+        ok('{"n": 4, "title": "Third"}' in mapped,
+           "the map's bare `n` field takes the number too, as an int and not a string", mapped)
+        ok(SS not in mapped, "and no slug is left in the map", mapped)
 
         print("\n  -- it is idempotent, because there is nothing left to find --")
         again = claim(work, "--porcelain")
