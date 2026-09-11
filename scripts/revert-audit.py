@@ -160,9 +160,8 @@ def hunks(old: str, new: str, path: str, cwd: Optional[str] = None) -> List[Hunk
     plus: List[str] = []
 
     def flush() -> None:
-        if minus or plus:
-            if any(s.strip() for s in minus) or any(s.strip() for s in plus):
-                result.append((tuple(minus), tuple(plus)))
+        if (minus or plus) and (any(s.strip() for s in minus) or any(s.strip() for s in plus)):
+            result.append((tuple(minus), tuple(plus)))
         minus.clear()
         plus.clear()
 
@@ -460,7 +459,7 @@ def guard(upstream: str, head: str, window: int, cwd: Optional[str] = None, out=
         print(f"  note    {h.path}: {len(h.reversed_hunks)} of {h.total_hunks} hunks reverse "
               f"{h.reverted.short} ({h.reverted.subject}) beside other edits — look at it.", file=out)
     if not refused:
-        print(f"  ok      no unexplained reversal.", file=out)
+        print("  ok      no unexplained reversal.", file=out)
         return 0
 
     print("", file=out)
@@ -490,9 +489,11 @@ def guard(upstream: str, head: str, window: int, cwd: Optional[str] = None, out=
 
 def cmd_branch(args: argparse.Namespace) -> int:
     upstream = args.upstream
-    if git_status(["rev-parse", "--verify", "-q", f"{upstream}^{{commit}}"])[0] != 0 and upstream == "origin/main":
-        if git_status(["rev-parse", "--verify", "-q", "main^{commit}"])[0] == 0:
-            upstream = "main"
+    # A clone with no remote at all still has a main to compare against.
+    if (upstream == "origin/main"
+            and git_status(["rev-parse", "--verify", "-q", f"{upstream}^{{commit}}"])[0] != 0
+            and git_status(["rev-parse", "--verify", "-q", "main^{commit}"])[0] == 0):
+        upstream = "main"
     return guard(upstream, args.head, args.window)
 
 
@@ -626,7 +627,7 @@ def cmd_selftest(_: argparse.Namespace) -> int:
         git(["checkout", "-q", "main"], work)
         write("app/Inventory.tsx", "\n".join(f"line {i}" for i in range(1, 21)) + "\n")
         write("docs/DECISIONS.md", f"## {dn} — a ruling\n\nThe card is deleted ({dn}), again.\n")
-        reapplied = commit(f"{dn} re-applied")
+        commit(f"{dn} re-applied")
         git(["push", "-q", "origin", "main"], work)
 
         # A clean branch off the moved main, editing something else, passes.
