@@ -1839,3 +1839,27 @@ Unaffected by D33's amendment either way — a terminal run has no handle *and* 
 is one line in `cli/cmd_identify.py`: write the marker there too, which would make the guard true
 and put every terminal run in the fallback case. Not taken here because it widens a change that
 is about a different defect, and because it wants its own T7 case.
+
+## 22. A control shrunk inside its own sticky bar is invisible to the thumb-floor sweep
+
+**Measured 2026-09-11, while answering the CI failure that PR #252 could not.**
+`app/tests/phone.spec.ts` decides whether a probe landed on the control with
+`owns = t.contains(n) || n.contains(t) || chrome(n)`. The middle clause — the probe landed on the
+control's own ANCESTOR — is what lets a 22px tick answer at 46px through a padded wrapper, and it
+is load-bearing for the whole hit-area method (D117): the alternative is the box-only assertion
+this file rejects, which needs a list of names to forgive every negative-inset pad.
+
+It also means a control cannot fail because of its own parent. Shrink `.browse-boxchip` from
+`--bn-control-h-lg` to 20px and its vertical probes land on `.browse-mobilebar`, the sticky bar it
+sits in, which contains it — so the sweep reports nothing and the suite stays green.
+
+**What was checked, because the obvious suspicion is wrong:** the arm is silent against the copy
+of the file that PREDATES 2026-09-11's `.browse-mobilebar` chrome entry as well as against the
+one that carries it. Naming that bar as chrome did not open this, and removing the name would not
+close it. The clause is older than both.
+
+**Why it is not repaired here.** Narrowing it — say, to ancestors that are not themselves
+scroll-independent furniture — is a change to the predicate every case in that file rests on, and
+it wants its own measurement across all twelve routes rather than a fix smuggled into a CI repair.
+The `mode === 'box'` sweep on `#/gallery` already asserts the box outright and would catch a
+shrunken kit component; what escapes is a screen-level control shrunk inside its own bar.
