@@ -1480,8 +1480,8 @@ was open** — the rule is renumber your own, never another's.
   real upload would measure.
 - `docs/specs/batch-script.md` — the four commands, storage, routing, pricing. Built.
 - `docs/specs/one-process.md` — D132's plan: the capture server serves `app/dist/` beside the
-  API, the supervisor runs `vite build` when the source is newer than the bundle, and the verbs
-  collapse to `up`, `down`, `status`. SPECIFIED 2026-09-11, NOT BUILT. Three PRs in its §9;
+  API, the supervisor runs `vite build` when the source is newer than the bundle, and `restart`
+  folds into `up`. SPECIFIED 2026-09-11, NOT BUILT. Three PRs in its §9;
   read its §5 before the reinstall, because the port change resets the camera grant and every
   `localStorage` key once.
 - `docs/specs/capture-app.md` — step 7. 7a (capture screen, undo, pull preview, one new

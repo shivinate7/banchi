@@ -1,6 +1,6 @@
 # One process serves the product
 
-**STATUS: SPECIFIED 2026-09-11, NOT BUILT.** D132 is the decision; this file is the plan. The
+**Status: specified 2026-09-11, not built.** D132 is the decision; this file is the plan. The
 three PRs in §9 are the whole of it, in order, and each names what proves it. Nothing in this
 file is running anywhere.
 
@@ -65,26 +65,26 @@ sleeping Mac drops it and it would be the only notification this product sends.
 because the other three were written before the launch agent was, and one exists to be typed
 by launchd and never by a person.
 
-**Ruling: three targets a person types — `up`, `down`, `status`.**
+**Ruling: `up`, `down`, `status`, and `launch-agent` for the login note.** The owner kept
+today's split on `down` after the plain-words version — off now, back at login — so the login
+agent stays its own verb in both directions, and `up` does not touch it.
 
-- **`make up` means "always there".** Start it if it is down. On the main checkout, also
-  install the login agent unless `ARGS=--no-login`, so "start it" and "keep it started" stop
-  being two commands. If it is already up and nothing is stale, say so and do nothing. If it
-  is up and the code is stale — a `git pull` while it ran — the watcher has already reloaded
-  what it watches, and `up` says what it found.
-- **`make down` means "gone", including at login.** On the main checkout it removes the agent
-  too, unless `ARGS=--keep-login`. Today `down` stops the process and prints a warning that
-  the agent will bring it back tomorrow, which is a command that does half of what it says.
+- **`make up`** starts it if it is down. If it is already up and nothing is stale, say so and
+  do nothing. If it is up and the code is stale — a `git pull` while it ran — the watcher has
+  already reloaded what it watches, and `up` says what it found.
+- **`make down`** stops the process and, as today, says the agent will start it again at the
+  next login when one is installed. That sentence is the whole reason this stays a split:
+  "off for now" is what the owner reaches for, and it says how to make it permanent.
 - **`make status`** is unchanged.
+- **`make launch-agent`** installs the login note; `ARGS=--remove` takes it down. Unchanged.
 - **`restart` becomes `make up ARGS=--restart`**, and keeps `--confirm` on the main checkout
   for exactly D53's reason: the thing on `:8000` there is the owner's, mid-capture, and a
   session bouncing it cut a write in flight once. Fewer words does not mean fewer guards.
-- **`launch-agent` stays as a target for `ARGS=--remove` and for regenerating the plist**
-  when `npm` moves, but leaves `make help`'s first screen. `run` stays because launchd execs
-  it; it was never for a person.
+  `run` stays because launchd execs it; it was never for a person.
 
-This amends D53's command surface and is the one part of this plan the owner should read
-before PR 2 lands, because it changes what `make down` does on their machine.
+What goes, then, is one target (`restart`) and one process. The verbs were asked about
+because there were many; the answer was that four of the five are each doing one thing, and
+this touches D53's command surface in one place.
 
 ## 2. The shape
 
@@ -126,12 +126,15 @@ opsec question; `GET /photo/<box>/<index>` is still the only way bytes from `cap
 **Headers.** Vite names every asset with a content hash, so `assets/*` is `Cache-Control:
 public, max-age=31536000, immutable`. `index.html` and `manifest.webmanifest` are `no-store`,
 because they are what changes on a rebuild and a cached one would load hashed assets that no
-longer exist. `Content-Type` by extension for the eight types Vite emits: html, js, css, svg,
-png, webmanifest, woff2, json. **The origin gate is untouched**: it runs on writes, and this
+longer exist. `Content-Type` by extension for the eight types Vite emits: `.html`, `.js`, `.css`,
+`.svg`, `.png`, `.webmanifest`, `.woff2`, `.json`. **The origin gate is untouched**: it runs on writes, and this
 is a read.
 
-**The port is the tree's own (D43).** A worktree serves its `dist/` on its own capture port,
-built from its own source. Nothing new is derived: `server/ports.py:capture_port` already
+**The port is the tree's own (D43), and so is the shape** (owner's answer, 2026-09-11: same
+shape everywhere). A worktree's `make up` is one process too, serving its own `dist/` on its
+own capture port, built from its own source; a session that wants hot reload runs `make dev`
+on its own dev port, which is what the Browser pane's `launch.json` already starts. One code
+path, one supervisor, nothing forked by tree. Nothing new is derived: `server/ports.py:capture_port` already
 answers, and the bundle bakes only the capture port and resolves the host from the address
 bar (D53), which under one origin is trivially right.
 
@@ -177,6 +180,14 @@ delete `dist.next/`, leave `dist/` alone, write `.serve/app-build.json` with
 `{"verdict": "fail", "at": ..., "error": "<first line>"}`, and log it. On success the same
 file says `pass` and the stamp.
 
+**The lockfile is watched, and `npm ci` is the supervisor's too** (owner's answer, 2026-09-11).
+`app/package-lock.json` newer than `app/node_modules/.package-lock.json` means `npm ci` runs
+before the build, so a pull that bumps a dependency is fully self-applying. It fires rarely and
+costs about thirty seconds when it does; the old bundle serves meanwhile. A failed install is
+reported exactly like a failed build, and the old `node_modules/` is left as it was because
+`npm ci` removes it first — so the verdict says `install failed` rather than `build failed`, and
+`make status` names the fix.
+
 **Node missing.** `npx` not on `PATH` is the one thing that can make the app half fail while
 the capture half is fine, and it is the failure D53's plist section already names. The
 supervisor treats it like a failed build: the API comes up, the log says `npx: not found —
@@ -193,9 +204,9 @@ by `make launch-agent` with the same `PATH` baking, because the build still need
 longer does. `make server` is still refused, because `:8000` is still the supervisor's.
 `make dev` runs beside it and talks to it, which is what a session editing screens wants.
 
-**The verbs collapse as §1.3 says.** `up` gains `--restart`, `--no-login`; `down` gains
-`--keep-login`; `restart` becomes an alias that prints the new spelling and runs it, for one
-release, then goes. `make help`'s first screen lists `up`, `down`, `status`.
+**The verbs change as §1.3 says.** `up` gains `--restart`; `restart` becomes an alias that
+prints the new spelling and runs it, for one release, then goes. `down` and `launch-agent` are
+untouched.
 
 **`make up` prints one link**, `http://localhost:8000`, and the LAN name beside it when
 `PKMNSCAN_LAN_NAME` is set.
@@ -256,7 +267,7 @@ home-screen bookmark, if one exists, is re-added.
 **The docs.** `CLAUDE.md`'s `make up` block and the front-end section's opening sentence
 ("Vite + React 19 + TypeScript over the capture server" stays true; "the Vite app on :5173"
 describes `make dev` only). `README.md`'s quick start. D53 gains an amendment paragraph
-pointing here for the reversal of its `dist` rejection and the collapsed verbs; D108 gains
+pointing here for the reversal of its `dist` rejection and `restart` folding into `up`; D108 gains
 one for the port and the two origin-keyed resets. `docs/map.py` entries for `serve.py`,
 `status.py`, `capture_server.py`, `lan-check.py`. `docs/DEBTS.md` names what §8 leaves
 unmeasured.
@@ -302,7 +313,7 @@ recorded here so it is not re-derived, and not planned further because no such p
 | PR | Lands | Proof | Owner sees |
 |---|---|---|---|
 | 1 | The static serve in `capture_server.py` | T7's nine assertions, `make harness` green | Nothing changes on their machine |
-| 2 | The supervisor's build, the verbs, `make status`'s line, the guard narrowed | the new `serve-selftest` target, the `app build files` audit row, `make check` green | `make up` prints one link; `make down` means gone; two processes become one |
+| 2 | The supervisor's build, the verbs, `make status`'s line, the guard narrowed | the new `serve-selftest` target, the `app build files` audit row, `make check` green | `make up` prints one link; two processes become one |
 | 3 | The dock app at `:8000`, `lan-check`, the docs and both amendments | `make docs-audit` green, `make lan-check` green from the phone | One reinstall, one camera prompt, one theme reset |
 
 PR 2 is the one to read before merging. PR 1 and PR 3 change nothing a person notices.
