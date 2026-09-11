@@ -372,7 +372,7 @@ def run(args, say) -> int:
                 f"quantities move. Warning only — this run is not blocked.")
         catalog = game_join.catalog
         # TWO DROPS, NAMED SEPARATELY, BECAUSE ONE SENTENCE COVERING BOTH WOULD BE FALSE
-        # (D135). Other product lines is D25's count and reads as a combined file working as
+        # (D137). Other product lines is D25's count and reads as a combined file working as
         # intended. Play grades is this game's OWN rows in a condition the product does not
         # list, and on the owner's fetched Riftbound export that is 8,077 of 10,191 — a figure
         # large enough that anyone reading it as "other product lines" would go looking for a

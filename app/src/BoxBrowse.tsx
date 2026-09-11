@@ -906,8 +906,8 @@ export function BoxBrowse({
   useEffect(() => {
     if (shelves.length === 0) return
     const askedFor = wanted.current
-    const honourable = askedFor !== null && shelves.includes(askedFor)
-    if (honourable || boxesAnswered) wanted.current = null
+    const honorable = askedFor !== null && shelves.includes(askedFor)
+    if (honorable || boxesAnswered) wanted.current = null
     /* A SEARCH LANDS ON A LIVE COPY, NEVER ON A SOLD ONE (D132, the owner's report of
        2026-09-11: "it pulled up a sold listing as the front runner"). Under a query a shelf
        counts as holding the answer only if one of its matches is still on hand — a box whose
@@ -927,7 +927,7 @@ export function BoxBrowse({
     const fresh = query !== null && query !== shelfAnswered.current
     shelfAnswered.current = query
     setShelf((prev) => {
-      if (honourable) return askedFor
+      if (honorable) return askedFor
       if (!fresh && prev !== null && pool.includes(prev)) return prev
       return pool[0] ?? null
     })

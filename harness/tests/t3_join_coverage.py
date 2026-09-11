@@ -1255,7 +1255,7 @@ def _check_game_partition(c, export) -> None:
 
 
 def _check_condition_scope(c) -> None:
-    """D135 — the catalog holds the conditions this product lists, and nothing else.
+    """D137 — the catalog holds the conditions this product lists, and nothing else.
 
     EVERY ASSERTION HERE RUNS AGAINST A WIDE FIXTURE, AND THAT IS THE WHOLE LESSON. T3's
     `SOURCE_FIXTURE` is `sv09_export_untouched.csv`, which is Near-Mint-only — so the

@@ -1198,7 +1198,7 @@ def _manifest(directory: Path) -> dict:
         return {}
 
 
-def _artefacts(directory: Path) -> List[dict]:
+def _artifacts(directory: Path) -> List[dict]:
     """Every file in the run a screen may offer for download, newest-relevant first.
 
     Listed off the DIRECTORY rather than off a table of names this file knows, because
@@ -1395,7 +1395,7 @@ def do_pipeline_run(name: str) -> dict:
     directory = _open_run(name)
     body = _summary(directory)
     body["console"] = _console_tail(directory)
-    body["files"] = _artefacts(directory)
+    body["files"] = _artifacts(directory)
     body["manifest"] = _manifest(directory)
     return body
 
@@ -1999,7 +1999,7 @@ def _markdown_summary(stamp: str) -> dict:
         "source": (payload.get("source") or {}).get("path"),
         "skus": len(payload.get("skus") or {}),
         "files": [
-            row["name"] for row in _artefacts(directory)
+            row["name"] for row in _artifacts(directory)
         ],
         # WHAT TCGPLAYER IS HOLDING FOR THIS MARKDOWN, so a reload has a way back to it. The
         # push receipt is a server write, and CLAUDE.md's rule is that every server write has
@@ -2533,7 +2533,7 @@ def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
             "file_name_invalid",
             f"{filename!r} is not a downloadable markdown artefact.",
         )
-    if filename not in {row["name"] for row in _artefacts(directory)}:
+    if filename not in {row["name"] for row in _artifacts(directory)}:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
@@ -2869,6 +2869,65 @@ def _cap_flag(payload: dict) -> list:
     return ["--cap", str(asked)]
 
 
+#: The most SKUs one send may name a quantity for. The worklist is hundreds of rows at most and
+#: every named pair is two argv entries; a request naming thousands is not a press.
+MAX_QUANTITIES = 2000
+
+
+def _quantity_flags(payload: dict) -> list:
+    """`--quantity SKU=N` per card this send named a figure for, or nothing (D7, amended
+    2026-09-11 on the operator's ruling).
+
+    A SEND QUANTITY, NOT A CEILING. `{"quantities": {"8608859": 2}}` puts two copies of that
+    card in the file whatever TCGplayer holds, bounded at emit time by the copies on hand that
+    are not already listed. `0` sends none of that card this press. Absent or empty is the
+    ordinary press: every copy that can go, goes.
+
+    VALIDATED HERE FOR `_cap_flag`'s REASON: every pair reaches a child process's argv. The SKU
+    must be a TCGplayer id — digits — and the figure a whole number in `decisions`' range,
+    refused by name rather than forwarded. ONE PARSER FOR BOTH EMIT ROUTES, also for the
+    reason that function gives.
+    """
+    asked = payload.get("quantities")
+    if asked is None:
+        return []
+    if not isinstance(asked, dict):
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "quantities_invalid",
+            "`quantities` must be an object of TCGplayer id -> whole number of copies.",
+        )
+    if len(asked) > MAX_QUANTITIES:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "quantities_invalid",
+            f"At most {MAX_QUANTITIES} SKUs may carry a quantity in one send.",
+        )
+    flags = []
+    for sku, count in asked.items():
+        if not isinstance(sku, str) or not sku.isdigit():
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "quantities_invalid",
+                f"`quantities` is keyed by TCGplayer id, got {sku!r}.",
+            )
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "quantities_invalid",
+                f"`quantities[{sku}]` must be a whole number of copies, got {count!r}.",
+            )
+        if count < 0 or count > decisions.MAX_SEND_QUANTITY:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "quantities_invalid",
+                f"`quantities[{sku}]` must be between 0 and {decisions.MAX_SEND_QUANTITY}, "
+                f"got {count}.",
+            )
+        flags += ["--quantity", f"{sku}={count}"]
+    return flags
+
+
 def do_pipeline_merged_emit(payload: dict) -> dict:
     """`POST /pipeline/emit` — one import file over several runs (D86).
 
@@ -2914,6 +2973,7 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
     if payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += _cap_flag(payload)
+    argv += _quantity_flags(payload)
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
     return {
         "ok": code == 0,
@@ -2924,7 +2984,7 @@ def do_pipeline_merged_emit(payload: dict) -> dict:
         # screen finds it — `GET /pipeline/runs/<name>/file` already serves it and needed no
         # widening. Answered here so the client does not have to re-derive which run that was.
         "run": newest,
-        "files": _artefacts(_open_run(newest)),
+        "files": _artifacts(_open_run(newest)),
         "summary": _summary(_open_run(newest)),
     }
 
@@ -3401,7 +3461,7 @@ def do_pipeline_file(name: str, filename: str) -> Tuple[bytes, str]:
             "file_name_invalid",
             f"{filename!r} is not a downloadable run artefact.",
         )
-    if filename not in {row["name"] for row in _artefacts(directory)}:
+    if filename not in {row["name"] for row in _artifacts(directory)}:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
@@ -4230,6 +4290,8 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         # send of three and withheld from a send of one would be exactly the question that
         # comment refuses to answer.
         argv += _cap_flag(payload)
+        # AND THE PER-CARD QUANTITIES, for the same reason (D7, amended 2026-09-11).
+        argv += _quantity_flags(payload)
     else:  # reconcile
         staged = payload.get("staged_export")
         if not isinstance(staged, dict):
@@ -4249,7 +4311,7 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         "run": directory.name,
         "console": text,
         "dry_run": bool(payload.get("dry_run")) and step == "join",
-        "files": _artefacts(directory),
+        "files": _artifacts(directory),
         "summary": _summary(directory),
     }
 

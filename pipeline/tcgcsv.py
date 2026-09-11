@@ -70,7 +70,7 @@ CONDITION_COLUMN = "Condition"
 
 # The condition a TCGplayer export gives SEALED PRODUCT — booster displays, bundles, blisters,
 # event kits. Named here because `pipeline/join.py:Catalog.from_export` keeps it through the
-# Near Mint narrowing D135 added, and a bare `"Unopened"` literal in that predicate would read
+# Near Mint narrowing D137 added, and a bare `"Unopened"` literal in that predicate would read
 # as one more grade rather than as the thing that is NOT a grade.
 #
 # A SEALED ROW IS NOT A GRADED ROW AND THAT IS WHY IT SURVIVES. Every play grade — Lightly
@@ -82,7 +82,7 @@ CONDITION_COLUMN = "Condition"
 # exact or folded, so keeping them cannot put a Booster Box on a card.
 SEALED_CONDITION = "Unopened"
 
-# The partition pair (D25), and a third axis beside it (D135). Both sat in CANONICAL_HEADER
+# The partition pair (D25), and a third axis beside it (D137). Both sat in CANONICAL_HEADER
 # unread until 2026-08-23; they are read now — `product_lines` below is the reader, and
 # `pipeline/join.py:Catalog.from_export` filters on the pair — but the reason they are named as
 # constants is unchanged and worth keeping.
