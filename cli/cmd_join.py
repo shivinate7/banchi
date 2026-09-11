@@ -371,11 +371,21 @@ def run(args, say) -> int:
             say(f"                 WARNING: {source['age_days']} days old. Prices and "
                 f"quantities move. Warning only — this run is not blocked.")
         catalog = game_join.catalog
-        dropped = (
-            f", {catalog.dropped_rows} row(s) of other product lines dropped"
-            if catalog.dropped_rows
-            else ""
-        )
+        # TWO DROPS, NAMED SEPARATELY, BECAUSE ONE SENTENCE COVERING BOTH WOULD BE FALSE
+        # (D135). Other product lines is D25's count and reads as a combined file working as
+        # intended. Play grades is this game's OWN rows in a condition the product does not
+        # list, and on the owner's fetched Riftbound export that is 8,077 of 10,191 — a figure
+        # large enough that anyone reading it as "other product lines" would go looking for a
+        # bug in the partition.
+        drops = []
+        if catalog.dropped_rows:
+            drops.append(f"{catalog.dropped_rows} row(s) of other product lines")
+        if catalog.dropped_off_condition:
+            drops.append(
+                f"{catalog.dropped_off_condition} play-grade row(s) "
+                f"(D12 — this lists Near Mint)"
+            )
+        dropped = f", {' and '.join(drops)} dropped" if drops else ""
         say(f"catalog          {prefix}{len(game_join.export.rows)} rows, "
             f"{len(catalog.set_names)} set(s), "
             f"{len(catalog.colliding_keys)} colliding key(s){dropped}")

@@ -1435,6 +1435,7 @@ D131 The ratchet gets an escape, a settle is one quiet frame of three, and the b
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
 D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
 D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+D135 The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT
