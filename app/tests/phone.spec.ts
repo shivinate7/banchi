@@ -249,6 +249,23 @@ async function sweep(page: Page, where: string, mode: Mode = 'probe'): Promise<s
   return found
 }
 
+/* THE `[DEBUG ...]` SUFFIX IS KEPT ON PURPOSE, AND #252 MEANT TO REVERT IT.
+ *
+ * It was added "diagnostic only, to be reverted once the CI log gives the answer", and the
+ * answer has been got — so the literal reading of that intent is that it goes now. It stays,
+ * and this comment is here so the next reader does not remove it citing the sentence above.
+ *
+ * IT IS WHAT MADE A THREE-SESSION DEFECT SOLVABLE. #252 changed a value on a font-metric
+ * hypothesis and could not tell whether it had worked, and said so in as many words: "the
+ * vertical-margin theory is wrong and the real cause is unknown." The next failing run named
+ * the intercepting element and the coordinates, and every session afterwards reasoned from
+ * that one string rather than from a fresh theory. Without it this line says a control failed
+ * and not what stood in its way, which on a geometric assertion is most of the answer.
+ *
+ * AND THE CLEARANCE RETRY ABOVE MAKES IT WORTH MORE, NOT LESS. A failure that survives the
+ * retry is rarer and therefore harder to reproduce — the runner's own metrics are part of the
+ * evidence and a rig cannot recreate them. The rarer the failure, the more the one log line
+ * has to carry. Intent stated before the value was known does not bind once it is measured. */
 async function audit(page: Page, where: string, mode: Mode): Promise<string[]> {
   const short = (await page.evaluate(auditSource(mode))) as Short[]
   const lines: string[] = []

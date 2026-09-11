@@ -7459,6 +7459,18 @@ pressable at the other 98 — the same non-defect, on a bar that is `position: f
 exactly what that list must not excuse. The 40-step sweep has simply never sampled it. A list of
 names is a list somebody adds to, and this is the entry that found out what that costs.
 
+**THE `[DEBUG ...]` SUFFIX ON THE FAILURE LINE IS KEPT, AGAINST ITS AUTHOR'S STATED INTENT.**
+#252 added it "diagnostic only, to be reverted once the CI log gives the answer" and the answer
+has been got, so the literal reading is that it goes. It stays. It is what made a defect three
+sessions had theories about solvable at all: #252 changed a value on a font-metric hypothesis,
+could not tell whether it had worked, and wrote "the vertical-margin theory is wrong and the real
+cause is unknown"; the next failing run named the intercepting element and the coordinates, and
+every session since reasoned from that one string. The clearance retry makes failures that reach
+this line RARER, and a rare failure on a runner whose metrics no rig can recreate is one the log
+has to carry by itself. Intent stated before the value was known does not bind once it is
+measured. The argument is written beside the code, because a PR body is not what the next reader
+opens.
+
 **THE SIZE FLOOR IS UNTOUCHED AND SO IS `#/gallery`'s BOX SWEEP.**
 Scrolling cannot make a 22px control 40px, so the retry is asked only of the probe.
 Mutation-tested, four arms, all red: the notice link's own pad deleted (a real 143x16 hit area),
