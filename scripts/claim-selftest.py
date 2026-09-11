@@ -382,6 +382,32 @@ def main() -> int:
            "while the CLAIM still refuses the same ref — allocating against nothing is the "
            "guess D140 exists to delete", out)
 
+        print("\n  -- mid-merge there is nothing to check yet --")
+        # THE DOCUMENTED PRE-MERGE STEP PRODUCES THIS: fetch, merge origin/main, resolve,
+        # push. The tree holds the other side's entries while the merge base has not moved,
+        # so every id that merge brought in reads as this branch's own.
+        eighth = tmp / "eighth"
+        eighth.mkdir()
+        mid = build(eighth)
+        git(mid, "checkout", "-q", "-b", "feature")
+        write(mid, "docs/DECISIONS.md", DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
+        git(mid, "add", "-A")
+        git(mid, "commit", "-qm", "the branch writes a slug")
+        other2 = eighth / "other"
+        subprocess.run(["git", "clone", "-q", str(eighth / "origin.git"), str(other2)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        write(other2, "docs/DECISIONS.md",
+              DECISIONS_MAIN + f"\n## {D(3)} — main's own third\n\nbody\n")
+        git(other2, "add", "-A")
+        git(other2, "commit", "-qm", "main takes three")
+        git(other2, "push", "-q", "origin", "main")
+        git(mid, "fetch", "-q", "origin", "main")
+        conflicted = git(mid, "merge", "origin/main")
+        out, code = claim_rc(mid, "--stale")
+        ok(code == 0 and "merge is in progress" in out,
+           "a tree mid-merge is ALLOWED rather than told to un-claim an id that belongs to "
+           "the work it is merging in", out + "\n" + conflicted)
+
         print("\n  -- with no shared commit there is no baseline, and it refuses --")
         git(hole, "checkout", "-q", "--orphan", "unrelated")
         write(hole, "docs/DECISIONS.md", DECISIONS_MAIN)

@@ -10188,6 +10188,8 @@ reader decides it.
 
 **D140's staleness half was blind in exactly the same way, and fixing the claim alone would have made that worse rather than better.** `stale_claim` reads the checked-out tree, so from `main` it computes what `main` adds over its own merge base — nothing — and reports `every id this branch adds is still free` while the branch's stale number sits untouched. Measured on a throwaway repository before this was written: standing on the branch, exit 3 and a refusal; standing on `main`, exit 0 and clean, with the stale number unmerged in both runs.
 
+**And the same reader had to learn what a merge in progress means.** Mid-merge the working tree already holds the other side's entries while the merge base has NOT moved, so every id that merge brought in reads as this branch's own and every one is on the ref by definition. The advice would be to un-claim an id belonging to somebody else's merged work. **The routine that produces it is the documented pre-merge step** — fetch, merge `origin/main`, resolve, push — and `make claim-stale` is in `make check`, so it is common rather than exotic: this entry's own branch hit it while resolving against D142, one refusal naming an id main had merged an hour earlier. A tree mid-merge is ALLOWED and says so, on the same reasoning as a missing ref: a question that cannot be asked is not a failure.
+
 **A green row asserting something nobody checked is worse than the silence it replaced**, and that is what patching the claim half alone would have shipped. One hoist fixes both, because both readers sit below it.
 
 ### Proved from the wrong tree, which is why it was invisible

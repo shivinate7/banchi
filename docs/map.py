@@ -1734,7 +1734,7 @@ COMPONENTS = [
                         "MAIN MOVES underneath the branch — the only condition that can tell "
                         "an allocation against the ref from one against the branch's own "
                         "copy, and therefore the only one worth building a repository for. "
-                        "THIRTY-TWO arms, twelve of them mutation-tested — fourteen arms and "
+                        "FORTY-TWO arms, twenty of them mutation-tested — fourteen arms and "
                         "seven mutants cover the staleness half (D140, amended 2026-09-11), "
                         "where a branch claims honestly and main takes the number underneath "
                         "it. The count in this sentence said sixteen over a file that held "
