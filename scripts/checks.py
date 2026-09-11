@@ -162,6 +162,24 @@ CHECKS = (
         "governed_by": ("D18", "D42", "D133"),
     },
     {
+        "target": "claim-selftest",
+        "runs": "python3 scripts/claim-selftest.py",
+        "asserts": "scripts/claim-ids.py against a throwaway repository in which MAIN MOVES "
+                   "underneath the branch, which is the only condition that can tell an "
+                   "allocation against the ref from an allocation against the branch's own "
+                   "copy. Sixteen arms; mutation-tested on five, and the boundary arm found a "
+                   "real bug in the unmutated code — `\\b` fires between a letter and a "
+                   "hyphen, so one slug was substituted inside another that extended it.",
+        "needs": ("python3", "git"),
+        "writes": "a temporary directory it makes and removes.",
+        "commit_path": False,
+        "why_off_commit_path": "D18: it writes, and nothing that writes may run on the path "
+                               "that decides whether a commit proceeds. It also builds three "
+                               "git repositories, which the hook has no business doing.",
+        "gates": True,
+        "governed_by": ("D16", "D18", "D140"),
+    },
+    {
         "target": "revert-guard",
         "runs": "python3 scripts/revert-audit.py branch",
         "asserts": "What this branch would land on origin/main — the clean merge's tree, or "

@@ -242,7 +242,7 @@ export function rememberHideSold(hide: boolean): void {
  * opened or captured into, and the two lists rebuild it from the same presses that built it
  * before.
  *
- * ONE FACT, NOT TWO, AND THAT IS A RULING RATHER THAN AN ECONOMY (D141).
+ * ONE FACT, NOT TWO, AND THAT IS A RULING RATHER THAN AN ECONOMY (D-capture-setup-memory).
  * Capture could have kept a recency store of its own, and the argument against is that there
  * is one operator with one hand: photographing into box 7 and then walking to `#/inventory`
  * is the same person still thinking about box 7, and a rail that opened on some other drawer
@@ -288,7 +288,7 @@ export function touchBox(box: number, at: Date = new Date()): ReadonlyMap<number
 /* ------------------------------------------------------- the capture screen's last setup */
 
 /**
- * WHAT THE OPERATOR HAD SET UP AT THE LENS THE LAST TIME THEY WERE HERE (D141).
+ * WHAT THE OPERATOR HAD SET UP AT THE LENS THE LAST TIME THEY WERE HERE (D-capture-setup-memory).
  *
  * THE OWNER ASKED FOR IT IN THESE WORDS: *"ideally let it save my last used on capture on all
  * settings ... so the game i picked, camera i picked, all stay saved in some sorta session

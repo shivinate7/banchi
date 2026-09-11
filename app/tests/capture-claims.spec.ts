@@ -120,7 +120,7 @@ const THIRTEEN = {
   ],
 }
 
-/** The six settings the capture screen now remembers on the DEVICE (D141),
+/** The six settings the capture screen now remembers on the DEVICE (D-capture-setup-memory),
  *  as `deviceMemory.ts` stores them. Partial, because a case seeds the one field it is about
  *  and the reader fills the rest from `NO_CAPTURE_SETUP`. */
 type SeedSetup = {
@@ -138,7 +138,7 @@ async function storedSetup(page: Page): Promise<Record<string, unknown> | null> 
   return page.evaluate(() => {
     /* eslint-disable-next-line no-restricted-syntax -- READING THE VERY KEY UNDER TEST.
        `banchi.capture.setup` lives in `app/src/deviceMemory.ts` where the argument for it is
-       (D141); a spec that asserts what the screen stored has to open the
+       (D-capture-setup-memory); a spec that asserts what the screen stored has to open the
        store. `inventory.spec.ts` carries the same disable over `banchi.box-recency` for the
        same reason, and the rule's own message asks for exactly this rather than a file
        exemption — a waiver over everything this file will ever store. */
@@ -157,7 +157,7 @@ async function open(
    *  NOT in a text field — `isEditableTarget` swallows letters typed into one, correctly and
    *  deliberately, or naming a set would photograph five cards.
    *
-   *  D141's restored-box check opens the Box field with focus in its entry, which is exactly
+   *  D-capture-setup-memory's restored-box check opens the Box field with focus in its entry, which is exactly
    *  that state, so the probe presses `F` into a search box forever and times out. The two
    *  cases about that check press no keys at all, so the probe is buying them nothing: it is
    *  insurance for a case whose first act is a letter. `probe: false` is for those, and for
@@ -197,7 +197,7 @@ async function open(
      initialiser — it reads once, on the first render, and a value written afterwards would
      never be seen.
 
-     `localStorage` SINCE 2026-09-11 (D141). These six were seven
+     `localStorage` SINCE 2026-09-11 (D-capture-setup-memory). These six were seven
      `sessionStorage` keys under D27; the owner overruled the session scope for the SETTINGS,
      and `banchi.session.captureId` is the one key left on the old clock. Seeding a whole
      document rather than a key per field is what the app now writes, so a case that seeds one
@@ -350,7 +350,7 @@ test('re-tapping the last claimed cell clears the claim, and stores nothing', as
   /* Toggling the last member off IS the clear — there is no "no claim" cell to return to
      (owner's ruling, 2026-08-23) and no separate reset to learn. Empty is now stored as `[]`
      rather than as an absent key, and that is a consequence of the move to one document
-     (D141): the old per-key store had to spell "cleared" as "absent" so a
+     (D-capture-setup-memory): the old per-key store had to spell "cleared" as "absent" so a
      cleared field and an unwritten one read alike, and a document that is present or absent
      as a whole has nothing left for that trick to buy. What the wire carries is unchanged —
      an empty claim is still NO claim (D3), and the screen omits the key from the capture. */
@@ -601,7 +601,7 @@ async function openWithBox(page: Page): Promise<string[]> {
   await expect(page.locator('.capture-opt').filter({ hasText: /S key/ })).toBeVisible()
   await page.keyboard.type('3')
   await page.keyboard.press('Enter')
-  /* THE ROW NAMES THE BOX AND NO LONGER NUMBERS IT (D141), so this asserts
+  /* THE ROW NAMES THE BOX AND NO LONGER NUMBERS IT (D-capture-setup-memory), so this asserts
      the NAME the fixture gives box 3. It read `toContainText('3')` against a row that opened
      `Box 3`; the owner's instruction was that the number comes off this screen, and the name
      is the stronger assertion anyway — `3` also matches a `next index 3`. */
@@ -979,7 +979,7 @@ test('a hint is never accused while there is no list to check it against', async
   await expect(hintNote(page)).toContainText('stored exactly as typed')
 })
 
-/* ---- THE SETUP THIS BROWSER REMEMBERS (D141) ------------------------
+/* ---- THE SETUP THIS BROWSER REMEMBERS (D-capture-setup-memory) ------------------------
  *
  * THREE THINGS THE OWNER ASKED FOR ON 2026-09-11, and each fails in a way nothing else here
  * would catch. The setup outliving the browser is a STORE change, so it is asserted against

@@ -3725,29 +3725,17 @@ is why a $40 bulk order carries no subsidy and the seller absorbs the postage.
 
 **This does not widen the advisory row and does not narrow it either.** Every site it named before, it still names, minus the ones now blocked and the duplicates a symlink was producing. What changed is that the provable ones stopped being a question.
 
-### Not decided here: whether a branch should be taking a number at all
+### Retired 2026-09-11: a branch does not take a number, so nothing renumbers
 
-**Raised by the owner 2026-09-11, the same day, and RECORDED RATHER THAN BUILT.** Everything above repairs a renumber. The owner's question is why a renumber happens: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch today writes a heading at the next free number against a base that does not know what main will take, cites it through its prose, its map rows and its code comments, and then discovers the collision at merge — thirteen times in this repo's history, and the reason this whole entry exists.
+**`renumbered ids` and `vacated ids` are both DELETED, and this entry stops being a live mechanism.** Everything above repairs a renumber. The owner's ruling the same day is that a renumber should not happen: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch now writes a SLUG and `scripts/claim-ids.py` allocates the number inside `make merge`. D140 carries the design, the vocabulary and what it cost.
 
-**The shape it would take, so the next session does not re-derive it**: a branch names its entry by a SLUG rather than a number, and `make merge` allocates the lowest free id at the moment it merges — reading main as it stands then, which is precisely when the answer is knowable. The substitution is textual, exhaustive and unique, which is what hand-renumbering is not. What it would retire is large: both rows above, the duplicate-heading collision class D16 records, and the *renumber your own, never another's* convention.
+**The reason it could be retired rather than kept as a backstop.** Both rows guard a path that no longer exists: a branch that never takes a number never vacates one. Keeping them was argued and declined — a row that fires only when somebody works around the convention is a row nobody has read in a year, which is D16's own account of what an unread check is worth. What replaces them is `id claims`, whose load-bearing clause is that **main carries no slug**: that one is checkable, is checked on main after every merge, and cannot be satisfied by accident.
 
-**What it would cost, measured against nothing yet.** Every reader of `D<digits>` would have to accept the slug form — the seven patterns in `scripts/docs-audit.py`, `scripts/prose-guard.py`, `scripts/decision-context.py`, `governed_by` in `docs/map.py` and the index in `CLAUDE.md`. And the assignment lands after CI ran on the slug form, so either main carries text no run has seen, or `make merge` pushes a claim commit to the PR branch and waits for green — which is the safer half and the slower one.
+**The convention *renumber your own, never another's* is retired with them.** It was a rule about who loses a race, and the race no longer runs.
 
-**It is not built, it is not a debt, and it is not this branch's to decide.** It reopens this entry and touches D16; the working agreement says an entry is settled until the owner says otherwise, and this paragraph is here so the argument is in the repo rather than in a conversation.
+**What stays is everything above this heading, and it stays because it is evidence.** The thirteen renumber events, the D67/D69 corruption in `docs/map.py` — 24 wrong and 9 right in one file — and the three `CLAUDE.md` citations that silently named main's inventory decision are what the new design is answerable to. `docs/GATES.md`'s rule applies here as it does to a measurement: what happened is not edited to match a later tree.
 
-### The app was never scanned, which is the second half
-
-**`decision ids in code` walked `python_files()` and reported "citations in `.py` all resolve" — accurately, and over half the citations.** `app/` holds hundreds more in `.ts`, `.tsx` and `.css` comments, and a dangling id in one of them resolved to nothing and was reported by nothing. The scan now covers those three suffixes at the same advisory severity and for the same reason the Python row is advisory: `D2` could plausibly be a variable one day.
-
-**Measured when it landed: zero dangling ids in the app.** So this is a floor rather than a repair — it found nothing because there was nothing, which is the only honest way to describe a check that goes green on its first run.
-
-### What this does not decide
-
-**Not whether two branches may take one number** — they will, and D16's duplicate-heading rule is what blocks the collision itself. This entry is about the repair afterwards. **Not whether a citation is semantically right**: an id that never moved and was wrong from the day it was typed is invisible here and to everything else, and the only reader that catches it is a human reading the entry. **And not the `governed_by` direction** — a curated entry that names a decision the file never mentions is legitimate by that field's own definition, and checking it would fire on every one. **Nor its mirror, which was prototyped and declined with the number that decided it**: the invariant *every file a decision entry names in backticks should be cited by that file's map row* catches the `D67`/`D69` corruption squarely — D69's entry names four of the mis-cited files by path — and measured against the tree of 2026-09-01 it produced **70 findings across 69 entries**, because naming a file in an argument is not the same as being governed by it. A rough re-derivation on 2026-09-05 lands in the same order of magnitude, which is the point rather than the figure: it is the permanent noise `pipeline/pirateship.py`'s own comment warns about, in the one check whose whole value is that its questions are worth reading. It is not in the tree, and this sentence is so a later session proposing it knows it was measured rather than overlooked.
-
-### What would reopen this
-
-**The three-digit ceiling, which fired and was discharged 2026-09-02.** `_DECISION_RE` was `\bD([1-9][0-9]?)\b` and the heading pattern matched two digits, so at the hundredth entry every citation check here went silently vacuous — recorded in `docs/DEBTS.md` at the time rather than fixed, on the grounds that a regex loosened against a tree holding no such id is loosened for nothing. **What made it testable was writing the entry first**: a three-digit heading appended to this file left `decision ids` reporting 92 D headings over 93, `decision structure` 92 over the same 93, and `decision index` "92 indexed, matching 92 headings" while that entry sat outside the index — four rows green over a file none of them could read. The bound is `_ID_DIGITS` now, spelled once and shared by all seven patterns in `scripts/docs-audit.py`, with a `--self-test` case behind each. **`scripts/prose-guard.py` and `scripts/decision-context.py` were widened with it**, because `decision structure` IS the first of those and a widen stopping at the audit would have left that row reporting an entry count that is not this file's. **A ceiling is written here as a word and never as an id** — spelling it the other way makes the sentence a citation of an entry that does not exist, and `decision ids` blocks the commit for it, which is exactly what the id this paragraph used to open with did the moment the patterns could see it. **Or a renumber done by rewriting history** rather than by a commit, which leaves no state pair to compare and is invisible to this.
+**Measured while the replacement was built, which is the strongest thing this entry can say for it**: `origin/main` took two decision numbers and two build steps during the session that wrote the claimer. The allocator, reading main, moved its answer accordingly. Under the old convention that session would have guessed at the start and been wrong by the end — and would have found out at the merge, which is where all thirteen were found.
 
 ---
 
@@ -4352,6 +4340,11 @@ Unsorted scanning is **not** deferred: it works today via the optional hints, wi
 **Steps 16 to 19 were added for work that had already landed** — hand pricing, the order pipeline, the code-card track, and the rig's guards — and each carries what it did NOT do in the same row, because that is the half a shipped-list is tempted to drop. **Step 12 was culled, the only row ever removed from this list.** It read *"Only then: scale, polish, deferred list"*, named no deliverable, and its *"only then"* pointed at the gating system retired on 2026-08-23; it then spent a week `blocked` on step 9, a dependency invented on its behalf so it would not have to claim a blocker that no longer existed.
 
 **Culling is affordable now, and it was not before.** `docs/GATES.md` carried a paragraph explaining that steps were appended rather than inserted because renumbering "would have to land in four files at once" and nothing watched them. `build order mirror` reconciles the ids in both files, per list, in both directions — so adding, moving or removing a step is a two-file edit a machine refuses to let you do halfway.
+
+
+**Amended 2026-09-11: a step whose number is not allocated yet wears a `0.` marker, and this strengthens the ruling above rather than reopening it.** The rule that `n` is stable and never renumbered is about an EXISTING step, and its named mechanism is D72's citation drift over 218 references. **A number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one** — the pressure that would force a renumber is what D140 deletes, and this entry's ruling is what made it worth deleting for the build order too.
+
+**Markdown has no ordered-list marker that can hold a slug**, so an unclaimed step is written with a `0.` marker carrying its slug in backticks in `docs/GATES.md` and carries the slug as its `n` in this file. `0.` is never an id: `build order mirror` reads the marker as its slug and never as zero, and `scripts/claim-ids.py` rewrites the marker and the token together at the merge. **The allocator is `max + 1` and never lowest-free, and step 12 is why**: this entry culled it and rules the hole correct, and reusing 12 would resurrect every `step 12` in the tree onto a step that is not the one meant.
 
 ## D81 — The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
 
@@ -9957,7 +9950,115 @@ warning also cannot distinguish a deliberate ten-minute switch from a tree aband
 for a day — `make status` prints the ahead/behind counts that answer that, and no automatic
 reader decides it.
 
-## D141 — The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
+
+---
+
+## D140 — The number is claimed at the merge, because what main has taken is not knowable before it
+
+**Ruled by the owner 2026-09-11, the same day D72's repair half was built.** That work made the provable half of a renumber block the commit. This entry is the owner's answer to why a renumber happens at all: *"rework the decision system so that branches claim decision numbers only at merge time"*. A branch no longer takes a number. It writes a SLUG, and `scripts/claim-ids.py` substitutes the number at the moment the merge knows what main has taken.
+
+**The allocation's only input is what main holds, and a branch cannot have that.** Every renumber in this repo's history is that one sentence: a branch reads `origin/main`, takes the next free id, and is wrong the moment another branch merges first. Thirteen renumber events are recorded in D72, and the collisions are structural rather than careless — D16 carries three entries numbered `## D50` at once, written by three sessions that each took the next free number against the same base and all merged. **A guess made at the wrong time cannot be made more carefully.**
+
+### The vocabulary is a slug, and two segments is what keeps it out of prose
+
+**`## D140`, cited as `(D140)`, in prose and in code comments and in `governed_by` alike.** `C-<slug>` for the code-card track, and `step <slug>` for the build order, which has no letter in front of it. The letter says which namespace; the slug says which entry, which is more than a number ever said while the branch was open.
+
+**Two segments minimum.** `D-pad` is one and is ordinary prose; `D140` is three and is an id. Measured over every `.md`, `.py`, `.ts`, `.tsx` and `.css` in the tree the day the vocabulary was chosen: **zero tokens of either shape existed**, so nothing had to be renamed to make room and no existing sentence changed meaning.
+
+**Lowercase, because the letter carries the namespace.** A mixed-case slug would make `D-Merge-Time-Ids` and `D140` two ids for one entry with nothing to say so — the duplicate-heading problem D16 blocks, reintroduced through spelling.
+
+**A step's slug lives in its list marker's place, which markdown cannot hold.** There is no ordered-list marker that can read a slug, so an unclaimed step is written with a `0.` marker carrying its slug in backticks ahead of the title, and the claim rewrites the marker and the token together. `0.` is never an id, so the mirror row reads it as the slug and never as zero.
+
+### It is claimed inside `make merge`, before the merge, and the wait is the point
+
+**The owner's ruling, chosen against two faster options.** `make merge` allocates, commits the substitution to the PR branch, pushes it, waits for that commit's checks to go green, and only then merges. Nothing that main has never run CI over reaches main.
+
+**The two it was chosen over are recorded because they will be proposed again.** Claiming by an explicit press before asking for the merge leaves a race — narrow, minutes rather than days, but a race — and claiming on main *after* merging puts a substitution nothing verified onto the protected branch, recoverable only by another pull request. The wait costs one CI run per merge. That is the whole price, and it is paid once per entry rather than once per collision.
+
+**The allocation is `max + 1` and never the lowest free id.** `store/master.py:next_box_number` allocates lowest-free and is right to, because a box number is a label on a drawer that has been emptied. An id here is CITED: D80 culled step 12 and says the hole is correct, and reusing 12 would resurrect every `step 12` in the tree onto a step that is not the one meant — D72's citation drift, arriving through the allocator instead of through a rename. **`max + 1` also keeps a sorted list sorted**, so a slug appended to the end of a `governed_by` list is in the right place before and after the claim.
+
+### What it retires
+
+**`renumbered ids` and `vacated ids` are deleted, and D72's mechanism with them.** Both rows exist to repair a renumber; a branch that never takes a number never vacates one. D72 keeps its account of the incidents — those are evidence and are never rewritten to match a later tree — and stops being a live mechanism. The convention *renumber your own, never another's* is retired in the same breath, having been a rule about who loses a race that no longer runs.
+
+**What replaces them is one row that cannot be satisfied by accident.** `id claims` reads every slug in the tree: each resolves to a slug heading, each heading's slug is unique, each is well-formed — and **main carries none**, which is the invariant the whole design rests on and the only one that catches a claim that half-landed.
+
+### The first claim was made by hand, and that is the bootstrap rather than the workflow
+
+**The pull request that brought the claimer could not be claimed by it.** `make merge` does the claiming, and the `make merge` that merges this change is MAIN's — which knows nothing about slugs. Merging it unclaimed would have landed a heading with no number on main, which is the single outcome this entry exists to prevent. So its own ids were substituted on the branch with the branch's own script, by hand, and it was merged with `--no-claim`.
+
+**Every pull request after it claims automatically, because main has the tool by then.** A hand-claim anywhere in this history is the bootstrap and is not the intended workflow; the workflow is `make merge` and nothing else. This paragraph exists so a reader finding that commit does not copy it.
+
+**And it found a second one, in this file's own auditor.** `scripts/docs-audit.py` used a real, live slug as its self-test fixture — deliberately, so the citations would resolve — and the claim substituted it, turning two assertions about a SLUG into assertions about a NUMBER. **A claim is exhaustive text replacement and cannot tell a fixture from prose.** So: **never name a live slug in a comment or a fixture.** Compose a fixture's ids from pieces, the way this repo already composes numeric ones for the same reason one level down, and describe a shape in prose rather than spelling an id that exists. A comment block in that file came back reading *"a branch writes `## D140`"*, which is how the rule was found.
+
+**The bootstrap earned its keep by finding a bug the self-test could not see.** A step is cited in prose as `step <slug>`, so that is the token — but `docs/map.py` stores the id BARE, as the `n` field, which no token of that shape reaches. The fixture had no map, so sixteen green arms said nothing about it, and the first real claim would have left the map holding a slug while `docs/GATES.md` took the number. `build order mirror` would have failed the commit, so it was never going to reach main silently — but it would have failed it in a way nobody had predicted. `renumber_map` is the second edit here that is not a token substitution, it writes an INTEGER because that row compares by equality against `int()`, and two arms with a real map now cover it.
+
+### The known limit: two OPEN pull requests can still pick the same number
+
+**This removes the treadmill, not the collision, and the distinction is the whole of what it is worth.** The claim reads main at claim time, so it cannot see a number held by a pull request that has not merged yet. Two open branches can still be allocated the same id, and whichever merges second is wrong.
+
+**Both halves were measured on one evening, 2026-09-11, which is why this paragraph can be exact.** A branch renumbered **three times in one session** — D132 to D135 to D137 to D138 — each one a hand-audited sweep across a dozen files where a stale citation still resolves and nothing mechanical separates it from a real reference to the number's new occupant; **three sites were missed on the first pass** and found afterwards by a separate audit. That same evening this entry's own branch was allocated D139, another open pull request merged first and took it, and the repair was **one command over ten files** with a row asserting that no slug survived it. Same class of event. Two very different costs.
+
+**The residual collision is deliberately not closed, and this is the reasoning rather than an oversight.** Reading open pull requests at claim time would put the network and `gh` on the path of `make merge`, for a failure that is already LOUD: `decision index` reconciles `CLAUDE.md`'s index against the headings IN ORDER, so the second merge fails its own commit rather than landing quietly. A guess that is caught is not the same defect as a guess that resolves, and it is the second kind this entry was written for. **Closing it would trade a loud, cheap, mechanical failure for a network dependency in the one command that moves main.**
+
+### What it does not decide
+
+**Not whether an id may ever be typed as a number again.** A session amending an existing entry cites it by its number, as it always has; the slug is for an entry that does not have a number YET. **Not the commit messages** — a message written on the branch names the slug and cannot be rewritten after a push, so the claim commit's own message is where the pair is recorded. **And not D80's stable-id ruling**, which this strengthens rather than reopens: that entry forbids renumbering an EXISTING step because 218 references would silently follow the number instead of the step, and a number claimed at the merge cannot collide, so nothing is ever renumbered to resolve one.
+## D141 — The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
+
+**Settled 2026-09-11, on the owner's instruction, the night the account ran out of GitHub Actions minutes.** `.github/workflows/check.yml`'s `design-check` job runs on a pull request only when what the branch would land touches a file the browser suite reads. Nothing about the suite changed — not a case, not an assertion, not a shard — and nothing about a push to main changed. What changed is which pull requests pay for it, and the list that decides has a mechanical reader before it has a filter.
+
+### What it cost, measured before anything moved
+
+**The `design-check` job is three shards of about nine minutes each, so one push costs about 27 billed minutes, and it ran on every push to every branch.** D136's own table puts a shard at 6.5-7.4 minutes of Playwright plus setup, which is the same figure from the other end. Seven pull requests plus re-runs landed on the evening of 2026-09-11 and most touched no screen code at all — a docs auditor (#260), a key-rotation fix (#261), a harness test (#267), a supervisor guard (#262). Each paid the full browser cost, three times over, to prove that stylesheets it never opened still render. `check`, `revert-guard` and `already-passed` are cheap by comparison and caught real things; the browser matrix caught one real thing all night, on a screen change.
+
+**Replayed over main's last 14 first-parent merges with `python3 scripts/browser-scope.py history 14`, the night this landed: 5 would run the matrix and 9 would skip it.** The five are #258, #259, #253, the thumb-floor fix under `app/src/BoxBrowse.css`, and D136's own commit, which touched the workflow. Two of the nine — #266 and D137's #255 — touched the `Makefile` and skip only because the Makefile entry is narrowed to the `design-check` recipe's own text; whole-file, they would have run, and every third merge here touches the Makefile.
+
+**The cost argument evaporated the same night, and the entry stands on what is left.** The owner made the repository public before this merged, and Actions minutes on a public repository are free. What survives: a docs-only pull request's whole verdict lands in about 100 seconds instead of eight and a half minutes; every needless matrix run is a draw against docs/DEBTS.md section 11's one-in-thirteen red — over the 14 merges replayed above, nine draws for changes that could not have caused one, each red costing a re-run and a session's attention; and three shards per push across seven open pull requests queue behind one another on the account's concurrent-job cap. The requirement that was load-bearing — that the list has a mechanical reader — was never about cost.
+
+### What already existed, and how the two gates compose
+
+**D136's gate answers one question: has this exact tree already passed?** A green PR run records an artifact named for `git rev-parse HEAD^{tree}`, and the push to main skips the matrix when that name is found. It is acted on for `push` only. What it cannot do is skip a suite for a branch that never touches the browser at all, because such a branch still has a new tree — a docs-only PR is a new tree on every push, and D136 tests it every time.
+
+**This entry is the complement, and the two never act on the same event.** `browser-scope` asks the other question — does what this branch LANDS touch a file the suite reads? — and is acted on for `pull_request` only. On a push to main the classifier still runs and PRINTS its answer, so the mechanism is exercised on every run rather than watched once a week (D136's own argument for its lookup), and the matrix runs unless D136's record says the tree passed. A dispatch always runs. `check`, `revert-guard`, `already-passed` and `demo.yml` are untouched.
+
+**Both gates now skip only on their own explicit answer, and that is a change to D136's fail direction, made on purpose.** `design-check`'s `if:` reads `!cancelled() && needs.already-passed.outputs.skip != 'true' && needs.browser-scope.outputs.run != 'false'`. Until this entry the implicit `success()` meant a FAILED `already-passed` job skipped the matrix; now it releases it. A broken lookup, a broken classifier, a job that never ran and an empty output all RUN — a gate that errors is not a reason to test less.
+
+**What the composition still pays, named.** A docs-only PR skips the matrix on the PR and, when it merges, its tree has never been tested, so `already-passed` finds no record and the matrix runs ONCE on main. Per docs-only PR that is 27 minutes rather than 54, not zero. Naming the pass record by the hash of the browser-relevant SUBTREE rather than the whole tree would close it — a tree whose `app/` files, traces and recipe are byte-identical to one that passed is the same claim to a browser — and it is NOT done here, because it means rewriting `already-passed` and `design-check-passed`, which the owner's instruction put out of scope. Flagged, not built.
+
+### The list is derived, not typed
+
+**Every entry in `scripts/browser-scope.py:SCOPE` names where it came from, and the audit reads the same sources.** `make design-check` is `scripts/suite-lock.py` around `npm --prefix app run design-check`, which is `playwright test` over `app/playwright.config.ts`; that config's `webServer` is `npm run dev`, which is Vite over `app/vite.config.ts`. So:
+
+- **`app/`, every tracked file under it** — Vite's root. `vite.config.ts` sets no `root`, so the dev server serves `app/index.html`, `app/src/` and `app/public/`, reads its own config and `tsconfig.json` (esbuild reads `jsx`, `target` and `verbatimModuleSyntax` from it), and `server.fs.allow` defaults to this directory, so nothing outside it can be served at all — there is no `package.json` above `app/` to widen the workspace. Playwright's `testDir` is `app/tests/`, its config imports `app/devPort.ts`, and its reporter is `app/design-check-reporter.ts`. The one tracked file under here neither tool reads is `app/eslint.config.js`, and it rides along on the side of running rather than earning an exclusion list.
+- **`harness/traces/`, every trace under it** — `app/tests/cadence.spec.ts` reads two rig recordings off disk with `readFileSync` and replays the cadence trigger over them. A trace is a suite input the browser never fetches, and it is exactly what a hand-typed list of `app/` paths — the one the instruction offered — would have missed. The directory rather than the two files, so a third corpus needs no list edit.
+- **`Makefile`, narrowed to the `design-check` recipe** — the recipe lines and the one-level expansion of every `$(VAR)` they use, compared as text between the two sides of the diff. A change to `make up` is not a change to what a browser sees; a change to `$(NPM_GUARD)` is.
+- **`scripts/suite-lock.py`** — named in that recipe; the suite starts through it.
+- **`.github/workflows/check.yml` and `scripts/browser-scope.py`** — the gate's own two files. A change to how the matrix is invoked, sharded, skipped or decided about is proven only by the run it decides about.
+
+**`server/` is deliberately not in the list, and the instruction's premise for it was checked and found not to hold.** It said `make design-check` starts a real server, so a route change can break a screen. It starts Vite. `app/tests/shell.ts:sealEveryTest` registers a catch-all `page.route` on this checkout's capture port, aborts every request to it and asserts in `afterEach` that none was attempted; docs/DEBTS.md section 8 records that the suite "no longer reaches the capture server at all". So the suite cannot observe a server change by construction, and running it on one proves nothing a docs change would not. A route change is caught where it can be seen — harness T7 in `make check`, and `app/src/types.ts`, the wire's only client-side declaration, which is inside `app/`. **The day a spec forwards a request to the real server, `server/` becomes a dependency**: the `spec seal` audit row is what refuses that, and the `browser scope` row's literal scan is what would then demand the path.
+
+### The reader, or the filter does not ship
+
+**A path filter that is too narrow silently stops testing something, and a gate that quietly stops running is worse than no gate, because the green is believed.** That sentence is `scripts/githooks/pre-commit`'s, about its armed copy — the same failure one level up — and the instruction made it the condition of shipping. `make docs-audit`'s `browser scope` row is MECHANICAL and reconciles both directions:
+
+- every derived dependency is covered by some entry — the workflow, the classifier, the Makefile, every `scripts/` file the `design-check` recipe names, Playwright's config with its `testDir`, its imports and its reporter, Vite's config with its root and any relative literal that leaves `app/`, `index.html` and the two package files, and every code string in `app/tests` or `app/src` that names a tracked file outside `app/` (comments blanked first);
+- every entry matches something tracked, so a pattern renamed away is reported rather than quietly covering nothing, and a `within` narrowing names a recipe the Makefile still has;
+- the wiring: some job runs the classifier, `design-check` needs it and reads `!= 'false'` under `!cancelled()`, the `on:` block carries no `paths` filter (that would gate every job), and `design-check-passed` cannot run on a skipped matrix, or a tree no browser saw would earn D136's record.
+
+**Mutation-tested, four arms, four reds, each naming the thing removed**: dropping the traces entry names both trace files and `cadence.spec.ts`; narrowing the `app/` entry to `app/src/` names `app/tests/` (25 of 25 files), both configs, `devPort.ts`, the reporter, `index.html` and the package files; a typo in the recipe name is refused against the Makefile; dropping `scripts/suite-lock.py` names the recipe that reaches it. The wiring reader is pure and `--self-test` mutates each silent failure into the real workflow text — the fail-closed `== 'true'`, a `paths` filter under `on:`, a workflow that never runs the classifier, and an `always()` on the pass record. The classifier's own `selftest` proves the globbing and the recipe narrowing on fixtures and finds the real recipe.
+
+**What the reader cannot see, by name.** A path a spec composes at runtime from pieces rather than writing as a literal; a Vite `server.fs.allow` widening written in a form the regexes do not read; a code string on the same line as a `//` inside a URL, which the comment blanker takes with it; a change in the runner image or in a dependency's bytes beyond what the lockfile pins. Each is a miss and never a false finding, and each is the same class of gap `route rosters` and `storage keys` carry.
+
+### What is verified, and what is not
+
+**Locally, everything.** `make check` green with the new row in it; the classifier replayed over 14 real merges as above; a docs-only merge (#260) classified SKIP and a screen merge (#259) classified RUN from their real diffs; the fail-open paths — a push with no payload, a dispatch, a base that does not exist — each printed RUN.
+
+**On the runner, both directions, the same night.** The account's minutes were exhausted when this was written and every run failed before its first step; the repository went public an hour later and runs scheduled again. Pull request #270 — this change — carries `.github/workflows/check.yml` in its own diff, so by its own rule its `browser-scope` job answered RUN and all three shards ran: the run-direction proof. The skip direction cannot be observed on a pull request that touches the workflow, so it was observed on #271, a probe whose BASE was this branch and whose only commit added one HTML comment to `README.md`: `browser-scope` passed in 8 seconds, `design-check` and `design-check-passed` showed as skipped, and `check`, `revert-guard` and `already-passed` ran as before. The probe was closed unmerged. After the merge, every docs-only pull request observes the skip for free.
+
+---
+
+## D-capture-setup-memory — The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
 
 **Settled 2026-09-11, on the owner's own words about the screen they spend the most hours in.** Four instructions in one message, three of them about memory and one about what a box is called:
 

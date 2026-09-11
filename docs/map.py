@@ -250,6 +250,23 @@ SHIPPED = [
               "(D108's amendment — a port is part of an origin, so the camera grant and the six "
               "device-local keys reset once), and `make lan-check` from the phone. "
               "docs/specs/one-process.md §10 is the list."},
+    # `n` IS A SLUG UNTIL THE MERGE CLAIMS IT (D140). A branch cannot allocate a
+    # step number any more than it can allocate a decision number — the input is what main has
+    # taken — so this carries the slug and `scripts/claim-ids.py` substitutes it inside
+    # `make merge`, here and in the `0.` marker docs/GATES.md wears for the same reason.
+    {"n": 23, "on": "2026-09-11",
+     "title": "The number is claimed at the merge, not guessed on the branch",
+     "note": "D140, amending D72 and D80. A branch writes its entry's heading as a slug "
+              "and cites it; "
+              "scripts/claim-ids.py allocates max+1 against main INSIDE make merge, commits the "
+              "substitution to the PR branch, waits for that commit's checks, and only then "
+              "merges. Covers all three id namespaces — decisions, the code-card track's C "
+              "entries, and this build order. WHAT IT RETIRED: docs-audit's `renumbered ids` and "
+              "`vacated ids` rows, both of which repaired a renumber, and the convention "
+              "`renumber your own, never another's`. The replacement is `id claims`, whose "
+              "load-bearing clause is that MAIN CARRIES NO SLUG. MEASURED while it was built: "
+              "origin/main took two decision numbers and two build steps mid-session, which is "
+              "the race, live."},
 ]
 
 OPEN = [
@@ -1273,7 +1290,7 @@ COMPONENTS = [
                 # amends. D18 governs its shape — the preview is the read-only mode, and the
                 # act is behind a flag rather than a default. D33 is the instrument the two-step
                 # is borrowed from, one register down from a route that can spend money.
-                "governed_by": ["D18", "D33", "D42", "D111"],
+                "governed_by": ["D18", "D33", "D42", "D72", "D111", "D140"],
                 "note": "IT NEVER SETS PKMNSCAN_MAIN AND NO REFUSAL IT PRINTS SUGGESTS IT. D42 "
                         "is explicit that a session reaching for that variable has left the "
                         "amendment behind; this needs no hatch because allow rule 3 already "
@@ -1307,6 +1324,31 @@ COMPONENTS = [
                         "branch is now one behind its upstream, the same mutation turns it red, "
                         "and the fixture asserts its own arming. Same lesson githooks-selftest "
                         "records about git's own refusals scoring as the hook's.",
+            },
+            "browser-scope.py": {
+                "does": "does a change reach what a browser draws? The list of every path "
+                        "`make design-check` loads, each with the reason it is there, and the "
+                        "classifier `.github/workflows/check.yml`'s `browser-scope` job runs "
+                        "on a pull request to decide whether the three-shard browser matrix "
+                        "runs at all (D141). `classify` diffs what the branch would LAND from "
+                        "the merge-base; `history N` replays main's last N merges, which is "
+                        "how D141's measurement was taken; `selftest` proves the matcher and "
+                        "the Makefile narrowing. Never acts on a push to main — there it "
+                        "prints its answer and the matrix runs unless D136's pass record says "
+                        "the tree was tested.",
+                # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
+                # why the list has a reader before it has a filter.
+                "governed_by": ["D16", "D18", "D136", "D141"],
+                "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
+                        "scope` row reconciles SCOPE against Playwright's config, Vite's "
+                        "config, every code string in app/tests and app/src naming a tracked "
+                        "file outside app/, and the `design-check` recipe, in both directions "
+                        "— and reads the workflow's wiring for the fail-open spelling. "
+                        "`server/` is deliberately outside it: app/tests/shell.ts seals the "
+                        "capture port, so the suite cannot observe a server change. The "
+                        "Makefile is narrowed to the `design-check` recipe's own text, "
+                        "because every third merge touches the Makefile and the browser "
+                        "reads four lines of it.",
             },
             "revert-audit.py": {
                 "does": "one question of a change, asked of every commit on main's first-parent "
@@ -1647,7 +1689,53 @@ COMPONENTS = [
                                 "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
-                                "D119", "D122", "D127", "D132", "D135", "D141"],
+                                "D119", "D122", "D127", "D132", "D135", "D136", "D140", "D141",
+                                "D-capture-setup-memory"],
+            },
+            "claim-ids.py": {
+                "does": "allocate the numbers this branch's SLUG ids will take, and "
+                        "substitute them (D140). A branch cannot allocate a "
+                        "decision number — the allocation's only input is what main has "
+                        "taken, which is not knowable until the merge — so a branch writes "
+                        "its heading as a two-segment slug, or a `0.` list marker carrying one, "
+                        "and this runs INSIDE `make merge` against main as it stands then. "
+                        "PREVIEWS BY DEFAULT; `--write` performs it. The substitution is "
+                        "exhaustive text replacement of a token that occurs nowhere else in "
+                        "the tree — measured zero collisions of either shape the day the "
+                        "vocabulary was chosen — so there is no judgement in it, which is the "
+                        "whole argument for doing it here rather than by hand. `max + 1` and "
+                        "never the lowest free id: D80 culled step 12 and rules the hole "
+                        "correct, and reusing it would resurrect every `step 12` in the tree "
+                        "onto a step that is not the one meant. IT WRITES, so it is not on "
+                        "the commit path (D18) and not in `make check`; `make claim-selftest` "
+                        "is, against a throwaway repository.",
+                # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
+                # D80 is cited for the allocator's direction — the culled step 12 is why this
+                # is max+1 rather than lowest-free — and D47/D135 for the symlink the walk
+                # skips, `AGENTS.md` being the same file as `CLAUDE.md` under another name.
+                # D18 is why it is not in `make check`: it writes.
+                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
+                                "D140"],
+            },
+            "claim-selftest.py": {
+                "does": "scripts/claim-ids.py proved against a throwaway repository in which "
+                        "MAIN MOVES underneath the branch — the only condition that can tell "
+                        "an allocation against the ref from one against the branch's own "
+                        "copy, and therefore the only one worth building a repository for. "
+                        "Sixteen arms, five of them mutation-tested. THE BOUNDARY ARM FOUND A "
+                        "REAL BUG IN THE UNMUTATED CODE: `\\b` fires between a letter and a "
+                        "hyphen, so a slug was being substituted inside a longer slug that "
+                        "extended it, leaving a number with a tail on it. In `make check`, "
+                        "never in the git hook — it writes (D18).",
+                # D140 is the ruling; D18 is why it is off the commit path; D16
+                # is the severity rule its subject's rows answer to; D80 is the allocator's
+                # direction, max+1 rather than lowest-free, because a culled id's citations
+                # would come back onto a step that is not the one meant.
+                # D1, D2 and D18 are cited by this file rather than governing it: the fixture's own
+                # entries are composed from integers for exactly this reason, and the two that
+                # survive are in the prose that explains why. The superset rule reads a citation
+                # literally, which is the trade docs-audit.py's own entry records.
+                "governed_by": ["D1", "D2", "D16", "D18", "D80", "D140"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -1751,7 +1839,7 @@ COMPONENTS = [
                 # pipeline/pricing.py by merging package lists into modules. Both are cited,
                 # and the superset rule takes a citation at face value — same trade as
                 # docs-audit.py above.
-                "governed_by": ["D2", "D3", "D17", "D80"],
+                "governed_by": ["D2", "D3", "D17", "D72", "D80", "D140"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
@@ -1777,7 +1865,8 @@ COMPONENTS = [
                 # the hook drops, and D10/D58 the pair whose facts would net to zero under
                 # a whole-file diff. Cited, so listed — the superset rule takes a citation
                 # at face value, the same trade decision-context.py's entry records.
-                "governed_by": ["D10", "D16", "D17", "D18", "D57", "D58", "D60"],
+                "governed_by": ["D10", "D16", "D17", "D18", "D57", "D58", "D60", "D72",
+                                "D140"],
             },
             "typecheck-hook.py": {
                 "does": "PostToolUse hook: runs app/'s own tsc --noEmit, and only after a "
@@ -1953,7 +2042,7 @@ COMPONENTS = [
                 # for vale. Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138"],
+                "governed_by": ["D16", "D17", "D18", "D43", "D44", "D47", "D53", "D58", "D60", "D65", "D68", "D74", "D76", "D80", "D82", "D92", "D111", "D122", "D127", "D129", "D133", "D138", "D140"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -3195,7 +3284,7 @@ COMPONENTS = [
                                             "finish, rarity and product, ONE document because "
                                             "it is one habit (D141) — and nothing else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
-                                                    "D141"],
+                                                    "D-capture-setup-memory"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -3393,7 +3482,7 @@ COMPONENTS = [
                     "no route, and the camera and rotation are `useCamera.ts`'s and stay.",
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D41", "D56", "D58", "D65", "D81", "D92", "D118", "D128",
-                            "D130", "D131", "D132", "D141"]},
+                            "D130", "D131", "D132", "D-capture-setup-memory"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -3404,7 +3493,7 @@ COMPONENTS = [
                                       # draws — accent's "the system is unsure" job at text
                                       # weight, because nothing there refuses anything.
                                       "governed_by": ["D3", "D5", "D27", "D41", "D50", "D65", "D117",
-                                                      "D130", "D141"]},
+                                                      "D130", "D-capture-setup-memory"]},
             "src/PositionLabel.tsx": {
                 "does": "ONE rendering of `pipeline/join.py:Position.label` for every OWNER site "
                         "(D41, amended 2026-08-29). Recomposes `Box N \u00b7 Section N \u00b7 Card N` into a "
@@ -4532,7 +4621,7 @@ COMPONENTS = [
                                         "with a differently-anchored regex.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D10", "D20", "D56", "D141"]},
+                                "governed_by": ["D10", "D20", "D56", "D-capture-setup-memory"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -4690,7 +4779,7 @@ COMPONENTS = [
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D141"],
+                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D-capture-setup-memory"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -4763,7 +4852,7 @@ COMPONENTS = [
                         "matters, which is negative — `c` stays the shutter and `b` stays "
                         "the Box field, because a literal a-z would have put Rainbow Rare on "
                         "the capture key. Run by `make design-check`.",
-                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101", "D118", "D141"],
+                "governed_by": ["D3", "D22", "D23", "D27", "D65", "D101", "D118", "D-capture-setup-memory"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -5197,7 +5286,7 @@ COMPONENTS = [
                         "and `product_game` outright — `undefined.find` inside `ClaimEditor`, "
                         "the screen behind its error boundary, and six cases here spending "
                         "thirty seconds each on a switch that had been detached. AND THE HASH'S OWN BOX SINCE 2026-09-05: `#/inventory?box=<n>` was honoured only for a box that already had ROWS, because the shelf list is built from the rows first and the registry second and the ref was consumed on the first list — so every box of code cards, which D24 pools and which therefore has none, was unreachable by the one link that aims at one. Two cases, with `GET /boxes` held back so the ordering is the defect's rather than a race.",
-                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D141"],
+                "governed_by": ["D5", "D7", "D8", "D9", "D10", "D13", "D20", "D22", "D23", "D24", "D26", "D28", "D30", "D31", "D33", "D34", "D37", "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58", "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115", "D116", "D118", "D124", "D125", "D119", "D132", "D27", "D134", "D-capture-setup-memory"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

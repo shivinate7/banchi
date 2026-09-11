@@ -219,6 +219,20 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   it right for an ESM spec and is the pin; this arm sees a bump bring it back.
                     #   It launches NO BROWSER and NO DEV SERVER, so it is in `check`
                     #   and `ci-check` and takes no lock.
+                    #   ON CI IT RUNS ONLY WHEN THE CHANGE REACHES WHAT A BROWSER DRAWS (D141).
+                    #   `.github/workflows/check.yml` gates its three-shard matrix on a pull
+                    #   request by `scripts/browser-scope.py`, whose list is DERIVED from what
+                    #   this target loads — `app/**`, the traces `cadence.spec.ts` reads off
+                    #   disk, this recipe's own text, the lock script, and the gate's two files.
+                    #   `server/` is deliberately out: `sealEveryTest` means this suite cannot
+                    #   see a server change. The list has a reader before it has a filter —
+                    #   `make docs-audit`'s `browser scope` row, both directions — because a
+                    #   filter that is too narrow silently stops testing something and the
+                    #   green is believed. A push to main is never skipped by it; D136's
+                    #   gate, on the tree, is the only one that acts there. Replayed over
+                    #   main's last 14 merges the night it landed: 9 skip, 5 run.
+                    #   `python3 scripts/browser-scope.py classify --base origin/main` says
+                    #   what CI will do with this branch; `history 20` replays main.
 make design-check-quiet  # the same run with the 450-line progress stream dropped. Same tests,
                     #   same verdict file, and THE SAME MACHINE-WIDE LOCK — a quiet variant
                     #   that skipped it would be D122's starvation reachable by typing a
@@ -281,8 +295,9 @@ make lint           # eslint over app/ (guards a bug earned, see app/eslint.conf
                     #   the Python packages, scoped to a slice measured against this tree (D82) —
                     #   never ruff's own defaults, never --fix. Config: ruff.toml.
 make check          # harness + docs-audit + audit-self-test + githooks-selftest +
-                    #   merge-selftest + revert-selftest + revert-guard + janitor-selftest +
-                    #   reap-selftest + suite-lock-selftest + serve-selftest +
+                    #   merge-selftest + revert-selftest + claim-selftest + revert-guard +
+                    #   janitor-selftest + reap-selftest + suite-lock-selftest +
+                    #   serve-selftest +
                     #   verdict-selftest + port-agreement + set-hint-agreement +
                     #   screen-freshness + sigil-check + ignore-check + lint +
                     #   vale + typecheck.
@@ -402,7 +417,30 @@ make revert-guard   # DOES THIS BRANCH PUT A FILE BACK THE WAY MAIN HAD IT BEFOR
                     #   whole first-parent line; the 2026-09-11 walk is in D133.
 make revert-selftest # the guard, proved by rebuilding #218 and #221 in a throwaway repo.
                     #   In `check`, never in the git hook.
+make claim-ids      # WHAT THE MERGE WILL ALLOCATE FOR THIS BRANCH'S SLUG IDS. A branch does
+                    #   NOT take a decision number (D140): the allocation's only
+                    #   input is what main has taken, and that is not knowable until the merge.
+                    #   So a branch writes its entry's heading as a two-segment slug, cites it everywhere, and
+                    #   `make merge` substitutes the number against main as it stands THEN.
+                    #   Same for the code-card track's `C-` entries and for the build order,
+                    #   whose unclaimed step wears a `0.` marker carrying its slug in backticks
+                    #   because markdown has no list marker that can hold one.
+                    #   `max + 1`, NEVER the lowest free id — D80 culled step 12 and rules the
+                    #   hole correct, and reusing it would resurrect every `step 12` in the tree
+                    #   onto a step that is not the one meant. It also keeps a sorted
+                    #   `governed_by` list sorted across the claim.
+                    #   Previews; `ARGS=--write` performs it. Reach for it by hand only to LOOK;
+                    #   the merge runs it for you.
+make claim-selftest # the claimer, proved where it can be wrong: a throwaway repository in which
+                    #   MAIN MOVES underneath the branch. In `check`, never in the git hook.
 make merge          # merge a PR and move main onto it — BOTH HALVES, on your word (D42).
+                    #   IT CLAIMS THIS BRANCH'S IDS FIRST, AND WAITS (D140): it
+                    #   substitutes, commits to the PULL REQUEST's branch, pushes, and watches
+                    #   that commit's checks to completion before merging — so nothing main has
+                    #   never run CI over reaches main. It REFUSES if this checkout is not
+                    #   standing on the PR's own head branch, or if the tree is dirty: the claim
+                    #   is a commit, and it would otherwise land on whatever is checked out.
+                    #   `--no-claim` skips it, for a claim already pushed by hand.
                     #   ARGS=<n> previews and presses nothing; ARGS="<n> --confirm" performs it.
                     #   A bare `make merge` refuses: there is no default PR and will not be one.
                     #   IT DELETES THE HEAD BRANCH AFTERWARDS (2026-09-05) — on origin always,
@@ -589,7 +627,7 @@ sentence**, and see "the census" below for what enforces that.
                               the same source, so Home can never be a step ahead of it.
 #/capture      Capture        live camera; box / game / set hint / finish / rarity; undo;
                               the motion trigger and its tuning. THE SETUP IS REMEMBERED ON
-                              THE DEVICE (D141) — all six survive a closed browser, the box
+                              THE DEVICE (D-capture-setup-memory) — all six survive a closed browser, the box
                               list is ordered the way the inventory rail is (most recently
                               reached for, then fullest, then the number), one press clears
                               the lot with an undo on the receipt, and the box is named
@@ -940,7 +978,7 @@ A screen is not finished because it compiles.
   owner ruled it belongs there on 2026-09-03). None of them is a card, a position or an order.
 
   **TWO OF THE NINE ARRIVED ON 2026-09-11 AND ONE OF THOSE IS A RENAME**
-  (D141). `banchi.capture.setup` is the box, game, set hint, finish, rarity
+  (D-capture-setup-memory). `banchi.capture.setup` is the box, game, set hint, finish, rarity
   and product the operator last chose — six values that were `sessionStorage` under D27 until
   the owner overruled the session scope, in ONE document because they are one habit, the
   argument `banchi.orders.fetch-filter` already makes for its own two fields.
@@ -967,7 +1005,7 @@ A screen is not finished because it compiles.
 
   **IT HELD EIGHT UNTIL 2026-09-11.** Six of the capture screen's seven — `banchi.session.box`,
   `.setHint`, `.finish`, `.game`, `.rarityClaim` and `.product` — moved to the device
-  (D141), on the owner's report that a shift ends when they stop feeding
+  (D-capture-setup-memory), on the owner's report that a shift ends when they stop feeding
   cards rather than when a tab closes. `captureId` did not, and it is the one the carve-out
   was always about: a stale SETTING is a claim on screen that is one press from being right,
   and a stale in-flight id is a request for a card nobody is holding.
@@ -1518,7 +1556,9 @@ D136 The suite is sharded and never widened, a sleep is a wait and not an assert
 D137 The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
 D138 One process serves the product, Vite compiles and never serves, and the build is the server's job
 D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
-D141 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
+D140 The number is claimed at the merge, because what main has taken is not knowable before it
+D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
+D-capture-setup-memory The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

@@ -157,7 +157,7 @@ const LOCAL_STORAGE =
   'the key, so a named file is the only exception it can express, and that is what puts a new ' +
   'key in front of a reviewer. ONE VALUE ON THE CAPTURE SCREEN IS STILL `sessionStorage` AND ' +
   'THIS MESSAGE USED TO SAY SIX MORE WERE: the owner overruled that on 2026-09-11 ' +
-  '(D141) — a shift ends when they stop feeding cards, not when a tab ' +
+  '(D-capture-setup-memory) — a shift ends when they stop feeding cards, not when a tab ' +
   'closes, so the box, the set hint, the finish, the rarity, the game and the product are ' +
   'remembered on the device. `banchi.session.captureId` is the exception and keeps the old ' +
   'clock: it is the in-flight id of a capture whose response was lost, and a stale one ' +
@@ -223,7 +223,7 @@ export default tseslint.config(
      * decision — the remembered deviceId and the photo rotation, both of which that file
      * justifies at length beside the keys themselves. `deviceMemory.ts` holds the shell's own —
      * the theme, the rail, D114's order status filter, D132's two inventory-walk habits, and
-     * the capture screen's last setup (D141), every one of which came here
+     * the capture screen's last setup (D-capture-setup-memory), every one of which came here
      * rather than to its call site precisely because this message asks for that. All of them are facts about the
      * machine this browser is running on: meaningless on the Fulfiller's laptop, actively wrong
      * if shared, and none about a card.
