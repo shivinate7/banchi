@@ -2032,7 +2032,19 @@ On surface / bg / hover it is 5.12 / 4.99 / 4.69:1, clearing 1.4.11's 3:1 on all
 
 **A screen wanting no dip writes `translate: none`** — one property and one comment, the same cheap exception the other two floors offer. `.fulfillment-row`, `.ff-row` and `.runs-box` each take it, and each needed the edit: they had opted out with `transform: none`, which stopped saying so the moment the dip moved to a different property. **That is the hazard this kind of floor carries and it is worth naming** — an opt-out written against one property is silently repealed when the mechanism moves to another.
 
-**What is STILL not done, and is not declined:** the 22 controls that give no hover response at all. Nine are the current page's own nav link and the rest are active tabs and segments, which have nowhere to move to; whether the current page should respond to a hover is a design question for the owner rather than a defect.
+**THE INERT CONTROLS WERE PUT TO THE OWNER AS IMAGES AND RULED ON, 2026-09-07.** (Restored 2026-09-11: PR #192 put the paragraph this replaces back the same day it was written, D133 has the account.) 22 controls gave no hover response at all. That was never one fact — it was two, failing for unrelated reasons, and rendering both at 3x beside their unhovered selves is what separated them.
+
+**The current page's nav link — 9 of the 22, one per route, and the largest inert group in the product — now responds.** It was never a missing rule: `.bn-nav-link:hover` is (0,2,0) and `.bn-nav-link[aria-current='page']` is (0,2,0) too, so the tie went to source order and selection silently outranked hover three lines further down. **A rule that loses a tie does not look broken in a stylesheet; it looks like a rule.** The fix layers D110's alpha over the selection tint — one step, in the colour the row already has, rather than a second colour competing with itself.
+
+**The selected tab stays inert, deliberately, and the owner chose it from the images.** It fails for a different reason and no specificity is involved: `:hover` sets `--bn-ink` and a selected tab is ALREADY `--bn-ink`, so there is nothing left to change. Any fix would have to introduce a NEW property, and the only one available is a background — which these tabs do not have. They are underline-styled and carry no ground, so a plate appearing under the pointer changes their character more than it fixes. The ruling is recorded beside the rule in `kit.css`, not only here.
+
+**AND THE FIRST FIX SNAPPED, WHICH IS THE PART WORTH CARRYING FORWARD.** The obvious spelling of "composite an alpha over a background" is a flat one-colour `linear-gradient` as a second background layer, and it was written that way, reviewed, and passed by this entry's own guard. **`background-image` is not animatable** — interpolation from `none` to a gradient is discrete — so it repainted correctly and landed in one frame: the exact defect the response floor exists to remove, reintroduced on the row that prompted the whole entry. It was caught by sampling mid-transition, not by reading.
+
+**The guard had a hole of precisely the shape it was built to refuse, and it is closed.** `eased()` maps the `background` shorthand to `background-color`, finds that transitioned and passes — blind to the fact that the property which actually changed was `background-image`. **A guard that cannot see the property that changed is the same class of hole as a roster that has stopped listing a route**, which is the failure this file's header spends three paragraphs on. A `:hover` rule painting a gradient, `url()` or `image-set` is now reported by name. The live fix is an inset `box-shadow` at a spread larger than the row: same alpha, same ground, and it interpolates.
+
+**A component's own `transition` REPLACES the floor's rather than adding to it**, so the shadow still snapped until `box-shadow` was named in `.bn-nav-link`'s own list. That is not a quirk of this rule; it is true of every screen that declares a transition, and it is why the floor is a floor rather than a guarantee.
+
+**Measured after: 15 controls inert, down from 22, and 310 of 325 respond.** What remains is the selected tab and segment (ruled above), four `.search-field-input`s whose WRAPPER carries the response, and single rows — none of them a case anybody has argued is wrong.
 
 **What would reopen this: a screen that wants a control to say something else.** The floor is overridden by a class, deliberately, so a genuine exception costs one rule and one comment saying why. What must not happen is a screen going back to saying nothing at all — that is what the guard is for, and a spec that starts skipping routes has repealed this entry without anyone arguing with it.
 
@@ -9107,17 +9119,18 @@ retiring comments whose code fixes survive — `Pricing.tsx` still reads the has
 commit, all of whose reversals were later re-applied or were D31's own deletions.
 
 **One is real and unrecorded.** `5b79982` (PR #192, "t1-fingerprints", D112) put back the
-paragraph of D110 that PR #191 (`efc2444`, the same day) had replaced: eight paragraphs
+paragraph of D50 that PR #191 (`efc2444`, the same day) had replaced — this entry said D110
+until the restoration, because the lost text cites D110: eight paragraphs
 recording the owner's 2026-09-07 ruling on the 22 inert controls — the current page's nav link
 now responds, the selected tab stays inert by their choice from the images, the first fix
 snapped because `background-image` does not animate, and `cursor.spec.ts`'s guard gained a
 reader for gradients by name. The code survived in full: `App.css`'s
 `.bn-nav-link[aria-current='page']:hover`, the gradient test in `cursor.spec.ts`, and the
-ruling's comment in `kit.css`. **The decision does not.** D110 at HEAD says the current page's
+ruling's comment in `kit.css`. **The decision does not.** D50 at HEAD says the current page's
 hover is "a design question for the owner rather than a defect" — a question the owner
 answered four days ago, whose answer is now recorded only in a stylesheet comment. What the
 screen does is right; what the record says about it is a day old. Not fixed here: the owner's
-call, one branch, restoring the text of `efc2444` into D110 as an amendment dated to both
+call, one branch, restoring the text of `efc2444` into D50 as an amendment dated to both
 days.
 
 The seven files D119's own re-application (`521dbfd`) put back in `Inventory.tsx`,
@@ -9142,6 +9155,45 @@ other side.
   seventy-nine additional hits, every one a coincidence of code moved within a rewrite, and the
   map rows still not among them. It was not kept. The whole-file detector is the answer to the
   common form of this: a keep-ours merge restores the whole blob, and a blob is compared by id.
+
+### Amended 2026-09-11, the same day: the walk was put to the owner, one reversal at a time
+
+**Every reversal above was read to the owner in plain English and ruled on**, so none of it is
+re-litigated. Their standing instruction from that interview binds every future pass:
+*"I need you to tell me these in english, the terminology of codes is for your ease."* A PR
+number, a decision number or a file name is not an answer they can rule on.
+
+**Restored, on their word: D50's lost paragraphs.** `efc2444`'s eight paragraphs are back in
+D50, dated to both days, on `claude/d50-amendment-restored`. The commit names the file, which is
+this entry's own declaration rule, and the guard passed it.
+
+**Kept, on their word, each one presented and not overturned:** the location panel stays
+deleted and each row names its box once (#246); the crop stays off the four screens (#233); the
+separate rail icon stays gone and the logo morphs into the bracket as the sidebar collapses
+(#176); the four allow-list placeholders stay deleted (#164); the Review screen's per-file
+`/status` stub stays folded into the shared seal — they asked what keeping it costs, and the
+answer recorded is *nothing*, against a weaker second copy (#145); the Codes screen's box load
+stays as the redesign wrote it (#136); the "Fetch anyway" buttons stay as rebuilt (#110); the
+iCloud-era `node_modules` shortcut stays untracked (#9); the six pre-PR self-reworks stand.
+
+**Kept, with the owner correcting this record's framing of it (#114, D96).** This entry and
+D96 describe the retired order walk as "the walk picking for me" and its replacement as one
+copy at a time. Their words on 2026-09-11: *"It's still a guided walk, it's just I get to pick
+from all the copies rather than just spoonfed one specific copy to go find."* The walk through
+the boxes on `#/orders` IS guided; what changed is who chooses the copy. Read D96 with that
+sentence beside it.
+
+**Kept, and it surfaced a loss the walk did not find (#222, D7).** The standing cap's removal
+stands. But their words: *"I actually found I can no longer select quantities to sell at all,
+which wasn't the goal. Yes I wanted caps eliminated at the store level, but I still wanted to be
+able to select quantities to list if on a case-by-case basis I want to, and I've somehow lost
+that functionality."* D7 says `--cap` and a field on `#/pricing`'s ship bar are that control;
+the owner cannot find or use it. Out of this walk's scope and handed to its own task rather than
+guessed at here — it is a D7 question, and the first step is to look at the screen with them.
+
+**Two spellings of one word, ruled on rather than kept (#110, D60).** `_artefacts` flipped
+between spellings in this file across two PRs and the owner ruled: standardise repo-wide. Its own
+task, under D60, which already rules American for the loaded docs.
 
 ## D134 — A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
 
