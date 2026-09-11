@@ -8814,9 +8814,12 @@ slid for 1.7 s, seven gaps that were the operator pausing. About 87%, with worse
 and locked by `make docs-audit`'s `motion params` row; the dual in `src/cadence.ts`; an
 `escape` counter on the HUD; the four sessions banked and pinned in T9's third corpus and
 `app/tests/cadence.spec.ts`. **RECORDED:** here, in `docs/specs/motion-trigger.md` §2 and §7.
-**NEITHER:** the first rig run under this rule. The replay says the settle trigger alone
-covers the bright-lamp feeder; the photographs are what say whether a fire on a d 5-8 frame is a
-usable image, and that is the run this entry is waiting on.
+**VALIDATED THE SAME NIGHT, AT THE RIG.** Two boxes under the bright lamp on the settle trigger
+alone: 70 fires over ~75 cards and 51 over ~54, two stalls each, no double, every fire under
+d 10 with `tLo` reaching 9-11.5 — about 97% where the shipped rule managed 17%. Banked in T9.
+**NEITHER still:** the photographs themselves (whether a d 5-8 frame reads clean is a fact about
+the JPEGs), and a rig run of the dual, whose case is exactly the two or three sliding cards each
+run stalled on.
 
 ### What D130 said that this corrects
 

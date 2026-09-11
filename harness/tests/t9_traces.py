@@ -10,7 +10,7 @@ the motion machine in front of a photograph.
 The traces in `harness/traces/` are the only real-rig evidence this subsystem has: twelve
 armed sessions saved from the HUD by the owner — FIVE recorded under the brightness floor
 D81 replaced, THREE recorded on 2026-09-01 under the distance gate that replaced it,
-which is what convicted the stillness rule and the presence floor in D84, and FOUR recorded
+which is what convicted the stillness rule and the presence floor in D84, and SIX recorded
 on 2026-09-11 over a re-arranged feeder under a bright lamp, where a resting card reads
 d 5-8 and the ratchet never learned it — the sessions that convicted the noise tracker
 (D131) and on which the cadence trigger (D130) and the dual were built. Each carries every
@@ -39,7 +39,7 @@ WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
                      fired" would pass on a stall in the wrong place.
 
 WHAT A GREEN T9 DOES NOT MEAN. It does not mean the trigger works at the rig today. These
-are twelve recordings of a handful of rig states, and the next rig can differ from all of
+are fourteen recordings of a handful of rig states, and the next rig can differ from all of
 them — the same honest limit T6 and T8 carry, in the same words. What it does mean is that the machine
 still tells a card from an empty stand on every session anybody has ever recorded.
 
@@ -60,7 +60,7 @@ from pathlib import Path
 from harness.tests import Checks, Result
 
 NAME = "T9"
-DESCRIPTION = "Motion trigger against twelve recorded rig sessions"
+DESCRIPTION = "Motion trigger against fourteen recorded rig sessions"
 PASS_CRITERIA = (
     "on every saved trace an empty stand sits within 2 of its own baseline and every card "
     "sits 17 or more away; the dimmest card on one rig is dimmer than the empty stand on "
@@ -70,7 +70,8 @@ PASS_CRITERIA = (
     "photographed the bare stand while a card that never settles is reported as a stall; "
     "and on the four 2026-09-11 sessions the settle rule as shipped fired five times each "
     "on the two the ratchet lost, while D131's rule replays 31, 21, 45 and 85 verdicts "
-    "across the four"
+    "across the four; and the two 04:07 and 04:09 sessions run LIVE under D131 fired 70 and "
+    "51 times with 2 stalls each and no double, the rule's own rig receipt"
 )
 
 # NAMED LITERALLY, resolved against the repo root, rather than composed out of `parent`
@@ -203,6 +204,13 @@ CADENCE = {
     "harness/traces/motion-trace-2026-09-11T01-51-27-783Z.json": {"fires": 5, "cycles": 34, "cards": 21, "feeding": 13500, "adaptive": 21},
     "harness/traces/motion-trace-2026-09-11T03-20-03-144Z.json": {"fires": None, "cycles": None, "feeding": 89100, "adaptive": 45},
     "harness/traces/motion-trace-2026-09-11T03-25-00-875Z.json": {"fires": 65, "cycles": None, "feeding": 20000, "adaptive": 85},
+    # D131'S OWN RIG RECEIPT, bright lamp, the settle trigger LIVE under the escape and the
+    # one-of-three window: ~75 and ~54 cards, 70 and 51 fires, two stalls each (cards that
+    # slid past maxMoveMs — the beat backstop's case), no double, every fire under d 10.
+    # `live` is what the rule did at the rig; `adaptive` is the scorer's mirror of the same
+    # rule, one verdict apart from it on each, which is the mirror agreeing.
+    "harness/traces/motion-trace-2026-09-11T04-07-53-988Z.json": {"fires": 70, "cycles": None, "feeding": 4900, "adaptive": 71},
+    "harness/traces/motion-trace-2026-09-11T04-09-03-654Z.json": {"fires": 51, "cycles": None, "feeding": 5000, "adaptive": 52},
 }
 
 
@@ -237,7 +245,7 @@ def run() -> Result:
         for path in sorted(TRACES.glob("*.json"))
     }
     checks.equal(sorted(traces), sorted(set(EXPECTED) | set(CADENCE)),
-                 "all twelve recorded sessions are present")
+                 "all fourteen recorded sessions are present")
     checks.equal(sorted(PRE_D81 | set(D84) | set(CADENCE)), sorted(set(EXPECTED) | set(CADENCE)),
                  "and every one is in exactly one corpus — the brightness floor's, D84's, or D130's")
     if sorted(traces) != sorted(set(EXPECTED) | set(CADENCE)):
