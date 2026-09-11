@@ -56,10 +56,16 @@ function quantize(cells: Float32Array): Uint8Array {
   return out
 }
 
-/** Which machine recorded this — the settle trigger or the cadence (D130). Two machines, one
- *  file shape: `frames`, `events` and `keyframes` mean the same thing under both, and the
- *  scorer reads this field to know whose verdicts it is looking at. */
-export type TraceTrigger = 'motion' | 'cadence'
+/** Which machine recorded this. ONE VALUE AGAIN AS OF 2026-09-11: the cadence trigger D130
+ *  added is deleted and nothing writes `'cadence'` any more.
+ *
+ *  THE FIELD STAYS, AND SO DOES THE OTHER VALUE IN THE FILES. `harness/traces/` banks one
+ *  session recorded under that machine and it is evidence about a rig, not about a trigger —
+ *  `scripts/score-trace.py` still reads the field and still prints what it says, so a trace
+ *  saved in September can never be silently re-attributed to a machine that did not record
+ *  it. Narrowing the WRITER's type is what is correct here; narrowing the file format would
+ *  be rewriting history. */
+export type TraceTrigger = 'motion'
 
 type TraceEvent = { t: number; event: string; frame: string }
 type TraceKeyframe = { t: number; frame: string }

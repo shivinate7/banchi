@@ -7,15 +7,15 @@ own frames — synthetic arrays, a flat canvas fill — so they can only ever pr
 agrees with the test's own idea of a card. Until this file, nothing in the repo had ever put
 the motion machine in front of a photograph.
 
-The traces in `harness/traces/` are the only real-rig evidence this subsystem has: twelve
+The traces in `harness/traces/` are the only real-rig evidence this subsystem has: twenty
 armed sessions saved from the HUD by the owner — FIVE recorded under the brightness floor
 D81 replaced, THREE recorded on 2026-09-01 under the distance gate that replaced it,
-which is what convicted the stillness rule and the presence floor in D84, and SIX recorded
-on 2026-09-11 over a re-arranged feeder under a bright lamp, where a resting card reads
-d 5-8 and the ratchet never learned it — the sessions that convicted the noise tracker
-(D131) and on which the cadence trigger (D130) and the dual were built. Each carries every
-frame's (t, d, luma), v2 adding dBase, and the exact watch-region pixels of every verdict,
-which is what makes a refusal re-scorable years later.
+which is what convicted the stillness rule and the presence floor in D84, SIX recorded
+overnight on 2026-09-11 over a re-arranged feeder under a bright lamp, where a resting card
+reads d 5-8 and the ratchet never learned it — the sessions that convicted the noise tracker
+(D131) — and SIX MORE recorded that evening, the ones that convicted `stillWindow` and
+bought the rescue. Each carries every frame's (t, d, luma), v2 adding dBase, and the exact
+watch-region pixels of every verdict, which is what makes a refusal re-scorable years later.
 
 WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
 
@@ -30,6 +30,12 @@ WHAT IS ASSERTED, AND THE TWO KINDS ARE NOT EQUALLY VALUABLE:
     the COUNTS       a claim about the replay's arithmetic. A tripwire for someone moving
                      `stillK` or `presenceK` without re-scoring. Legitimately updatable —
                      but as a decision, with the sweep re-run, never as a reflex.
+
+    the RESCUE       over the six evening sessions of 2026-09-11: that the rule in the tree
+                     photographs the cards `stillWindow` was dropping, and that the eight
+                     earliest sessions do not move while it does. The second half is the
+                     load-bearing one — a stillness rule that buys cards on one rig by
+                     spending them on another is this subsystem's whole history.
 
     the D84 PAIR     over the three 2026-09-01 21:xx sessions only: that the presence floor
                      refuses the two settles that photographed the bare stand and passes
@@ -60,18 +66,19 @@ from pathlib import Path
 from harness.tests import Checks, Result
 
 NAME = "T9"
-DESCRIPTION = "Motion trigger against fourteen recorded rig sessions"
+DESCRIPTION = "Motion trigger against twenty recorded rig sessions"
 PASS_CRITERIA = (
     "on every saved trace an empty stand sits within 2 of its own baseline and every card "
     "sits 17 or more away; the dimmest card on one rig is dimmer than the empty stand on "
     "another, so no brightness constant separates them; the adaptive thresholds reach at "
     "least as many verdicts as the hand-tuned constants did live on all ten; and on the "
     "three sessions D84 was derived from, the presence floor refuses both settles that "
-    "photographed the bare stand while a card that never settles is reported as a stall; "
-    "and on the four 2026-09-11 sessions the settle rule as shipped fired five times each "
-    "on the two the ratchet lost, while D131's rule replays 31, 21, 45 and 85 verdicts "
-    "across the four; and the two 04:07 and 04:09 sessions run LIVE under D131 fired 70 and "
-    "51 times with 2 stalls each and no double, the rule's own rig receipt"
+    "photographed the bare stand while the card that never settled is photographed by the "
+    "rescue at the second the stall used to be reported; and on the six overnight "
+    "2026-09-11 sessions the settle rule as shipped fired five times each on the two the "
+    "ratchet lost while the rule in the tree replays 31 and 21; and on the six evening "
+    "sessions the rescue takes the run from 268 photographs and 20 stalls to 295 and 7, "
+    "while every one of the eight earliest sessions keeps the verdict count it had"
 )
 
 # NAMED LITERALLY, resolved against the repo root, rather than composed out of `parent`
@@ -118,22 +125,26 @@ PRE_D81 = {
 # THE THREE SESSIONS D84 WAS DERIVED FROM, with what each one cost before it. 93 seconds of
 # feeding, 69 fires, and the two defects the entry is about: two photographs of the bare
 # stand, and four cards fed and never photographed at all. `plate_fires` is when the live
-# gate fired on the arm-time scene; `stalls` is what the corrected clock reports, and every
-# one of those times sits on a card that was in the watch region and never settled.
-# THE STALL TIMES MOVED UNDER D131, AND THAT IS THE ENTRY'S OWN CLAIM. The 21:10 card at
-# 14.1 s showed one quiet frame in its window and D84's two-of-four could not settle on it;
-# one-of-three does, so it is a fire now and no stall. The 21:16 stall moved 8.6 -> 9.5 s for
-# the same reason one frame later. The silence check over the five earlier sessions is
-# unchanged: a scene with no quiet frame at all still expires the clock.
+# gate fired on the arm-time scene.
+#
+# THE STALL COLUMN IS EMPTY EVERYWHERE NOW AND `rescues` IS WHY. This is the one place in
+# this file where a D84 assertion had to be RESTATED rather than kept, so it is restated in
+# full. D84's guard is that a card which never completes a settle is not lost in SILENCE; it
+# kept that by reporting a stall, and the 2026-09-11 rescue keeps it by taking the photograph
+# instead. The episode is still never silent — it ends in a rescued photograph or in a stall,
+# and never in nothing. So the times move from one column to the other and the anchoring is
+# unchanged: the 21:16 card at 9.5 s is the card D84 counted, at the same second, photographed
+# rather than announced. A count would pass on a rescue in the wrong place, which is exactly
+# what this block has always refused to accept.
 D84 = {
     "harness/traces/motion-trace-2026-09-01T21-10-36-920Z.json": {
-        "plate_fires": [12.4], "stalls": [],
+        "plate_fires": [12.4], "stalls": [], "rescues": [],
     },
     "harness/traces/motion-trace-2026-09-01T21-14-34-791Z.json": {
-        "plate_fires": [5.4], "stalls": [],
+        "plate_fires": [5.4], "stalls": [], "rescues": [5.2, 6.4],
     },
     "harness/traces/motion-trace-2026-09-01T21-16-13-772Z.json": {
-        "plate_fires": [], "stalls": [9.5],
+        "plate_fires": [], "stalls": [], "rescues": [9.5],
     },
 }
 
@@ -170,47 +181,80 @@ EXPECTED = {
     # 48 -> 49, 14 -> 16, 11 -> 12 UNDER D131 (2026-09-11): a settle is one quiet frame of the
     # last three, and the ratchet's escape is live. The extra verdicts are the cards D84
     # counted as stalls, photographed on their quiet frame — see the stall times below.
+    #
+    # AND UNCHANGED BY THE RESCUE THE SAME DAY, WHICH IS THE ASSERTION WITH TEETH. All eight
+    # counts above are identical with `rescueK` live; what moves inside them is that three
+    # fires are taken under the rescue bar instead of off a completed settle. A stillness
+    # rule that buys cards on the bright-lamp rig by spending them here is this subsystem's
+    # entire history — D81's brightness floor rescued one session of three and broke the
+    # other two — so "the earliest sessions do not move" is what the sweep was constrained by
+    # rather than what it happened to produce: `rescueAfter` below 0.60 gains 21:14 a fire
+    # 290 ms before its own next one, and that is the value the corpus refused.
     "harness/traces/motion-trace-2026-09-01T21-10-36-920Z.json": {"live": 46, "adaptive": 49, "arrival": 13000},
     "harness/traces/motion-trace-2026-09-01T21-14-34-791Z.json": {"live": 13, "adaptive": 16, "arrival": 5700},
     "harness/traces/motion-trace-2026-09-01T21-16-13-772Z.json": {"live": 10, "adaptive": 12, "arrival": 8400},
 }
 
 
-# THE TWO SESSIONS THAT CONVICTED THE SETTLE RULE ITSELF (D130), 2026-09-11, and a THIRD
-# corpus rather than two more rows above, because the claim they carry is the opposite one.
-# The owner re-arranged the feeder; it now puts a card down every 0.867 s (29 luma cycles,
-# p10 0.85, p90 0.92) and never lets one sit still — the longest run of frames under tLo per
-# card has a median of ONE. Every fire the settle machine made reached disk and photographed
-# a card; it made FIVE on each session, against 29 and ~21 cards fed. That is the receipt this
-# corpus keeps: the settle rule, on a feeder with a beat and no rest, photographs about one
-# card in six, and no threshold recovers it (`score-trace.py sweep`: 9 of 29 at best). The
-# cadence machine built on them is replayed and pinned in `app/tests/cadence.spec.ts` — a
-# TypeScript machine with no Python mirror, which is why its counts are asserted there and not
-# here. `cycles` is the luma-crossing count read off each trace; `feeding` is when the first
-# card reached the lens, read off `dBase` crossing the floor.
-# WIDENED TO FOUR UNDER D131, and what the block asserts changed from a receipt into a
-# receipt AND a repair. `fires` and `cycles` are the settle rule AS SHIPPED, live, on the
-# two sessions the ratchet lost — the receipt, never rewritten. `adaptive` is what D131's
-# rule replays on each: the ratchet's escape (still frames a minority of the frames with a
-# card in view -> the rest quantile of all of them) and one quiet frame of the last three.
-# The third session was recorded under the cadence trigger and the fourth under the settle
-# trigger with the lamp dimmed (the owner's own experiment: 65 fires and 13 stalls live);
-# both are scored under the settle rule here because that is what the scorer replays.
-CADENCE = {
+# THE SIX OVERNIGHT SESSIONS OF 2026-09-11, a corpus of their own rather than six more rows
+# above, because the claim they carry is the opposite one. The owner re-arranged the feeder;
+# it now puts a card down every 0.867 s (29 luma cycles, p10 0.85, p90 0.92) and never lets
+# one sit still — the longest run of frames under tLo per card has a median of ONE. Every
+# fire the settle machine made reached disk and photographed a card; it made FIVE on each of
+# the first two, against 29 and ~21 cards fed. That is the receipt this corpus keeps: a
+# ratchet that could lower its idea of still and never raise it photographs about one card in
+# six, and no stillness threshold recovers it (`score-trace.py sweep`: 9 of 29 at best).
+# `cycles` is the luma-crossing count read off each trace; `feeding` is when the first card
+# reached the lens, read off `dBase` crossing the floor.
+#
+# NAMED `CADENCE` UNTIL 2026-09-11, AND THE TRIGGER IT WAS NAMED FOR IS DELETED. D130 built a
+# second, beat-locked machine on the first two of these and D131 made it a dual; the owner
+# retired it the same evening, once the settle machine reached their cards without it. THE
+# RECORDINGS STAY AND SO DO THEIR RECEIPTS: `fires` and `cycles` are what the SHIPPED settle
+# rule did live on these sessions and are history, never rewritten. The third session was
+# recorded under the cadence trigger and its `trigger` field still says `cadence`, which is
+# why `app/src/trace.ts` narrowed the WRITER's type and left the file format alone.
+BRIGHT_LAMP = {
     # `cards` is the box: the feeding span over the beat's period. `cycles` is the luma
     # crossing count, which over-reads the second session (a hand in the region) and is kept
     # as the measurement it is rather than corrected into the card count.
-    "harness/traces/motion-trace-2026-09-11T01-48-49-706Z.json": {"fires": 5, "cycles": 29, "cards": 29, "feeding": 31500, "adaptive": 31},
-    "harness/traces/motion-trace-2026-09-11T01-51-27-783Z.json": {"fires": 5, "cycles": 34, "cards": 21, "feeding": 13500, "adaptive": 21},
-    "harness/traces/motion-trace-2026-09-11T03-20-03-144Z.json": {"fires": None, "cycles": None, "feeding": 89100, "adaptive": 45},
-    "harness/traces/motion-trace-2026-09-11T03-25-00-875Z.json": {"fires": 65, "cycles": None, "feeding": 20000, "adaptive": 85},
+    "harness/traces/motion-trace-2026-09-11T01-48-49-706Z.json": {"fires": 5, "cycles": 29, "cards": 29, "feeding": 31500, "adaptive": 31, "rescues": 2},
+    "harness/traces/motion-trace-2026-09-11T01-51-27-783Z.json": {"fires": 5, "cycles": 34, "cards": 21, "feeding": 13500, "adaptive": 21, "rescues": 2},
+    "harness/traces/motion-trace-2026-09-11T03-20-03-144Z.json": {"fires": None, "cycles": None, "feeding": 89100, "adaptive": 46, "rescues": 4},
+    "harness/traces/motion-trace-2026-09-11T03-25-00-875Z.json": {"fires": 65, "cycles": None, "feeding": 20000, "adaptive": 87, "rescues": 10},
     # D131'S OWN RIG RECEIPT, bright lamp, the settle trigger LIVE under the escape and the
-    # one-of-three window: ~75 and ~54 cards, 70 and 51 fires, two stalls each (cards that
-    # slid past maxMoveMs — the beat backstop's case), no double, every fire under d 10.
-    # `live` is what the rule did at the rig; `adaptive` is the scorer's mirror of the same
-    # rule, one verdict apart from it on each, which is the mirror agreeing.
-    "harness/traces/motion-trace-2026-09-11T04-07-53-988Z.json": {"fires": 70, "cycles": None, "feeding": 4900, "adaptive": 71},
-    "harness/traces/motion-trace-2026-09-11T04-09-03-654Z.json": {"fires": 51, "cycles": None, "feeding": 5000, "adaptive": 52},
+    # one-of-three window: ~75 and ~54 cards, 70 and 51 fires, two stalls each — cards that
+    # slid past maxMoveMs — no double, every fire under d 10. `fires` is what the rule did at
+    # the rig; `adaptive` is the scorer's mirror of the rule in the tree, and it is now TWO
+    # and THREE above those, which is the rescue picking up precisely those sliding cards.
+    "harness/traces/motion-trace-2026-09-11T04-07-53-988Z.json": {"fires": 70, "cycles": None, "feeding": 4900, "adaptive": 73, "rescues": 10},
+    "harness/traces/motion-trace-2026-09-11T04-09-03-654Z.json": {"fires": 51, "cycles": None, "feeding": 5000, "adaptive": 54, "rescues": 5},
+}
+
+# THE SIX EVENING SESSIONS OF 2026-09-11 — the corpus the rescue was built on, and the owner's
+# own accounting of the first four was 199 captures against 14 misses, "93.4%", with the
+# complaint that names this block: "it's really bad when the cards are coming a little slower
+# or aren't landing perfectly, the engine is then bad at picking those up". The fifth is a
+# slower, hand-paced run (17 fires, 5 stalls) and the sixth is after the owner changed the
+# lighting — 52 fires and one stall live, a run they reported as working well, and the control
+# that says the rescue is not just compensating for one lamp.
+#
+# WHAT THE ROWS ARE. `live` is what the rule in the tree at the time did, and is history.
+# `adaptive` and `rescues` are the rescue's receipt: 268 live fires over the six become 295
+# replayed, 34 of them taken under the rescue bar, and 20 stalls become 7. `stalls` is
+# asserted BY TIME, like D84's, because a count would pass on a stall in the wrong place —
+# and because the seven that survive are the finding, not the residue: every one is an episode
+# whose quietest frame never came near `rescueK` x tLo, a card that genuinely never rested
+# rather than one that landed imperfectly. The 22:25 episode at 27.9 s is the clearest of
+# them — 1.25 s inside the Schmitt band with not one crossing of tHi, a card sliding the whole
+# time, quietest frame at 3.4x tLo.
+RESCUE = {
+    "harness/traces/motion-trace-2026-09-11T21-52-11-299Z.json": {"live": 55, "adaptive": 59, "rescues": 6, "stalls": []},
+    "harness/traces/motion-trace-2026-09-11T21-54-53-853Z.json": {"live": 53, "adaptive": 60, "rescues": 7, "stalls": [49.1, 50.8, 56.0]},
+    "harness/traces/motion-trace-2026-09-11T22-10-09-191Z.json": {"live": 40, "adaptive": 44, "rescues": 6, "stalls": []},
+    "harness/traces/motion-trace-2026-09-11T22-12-06-092Z.json": {"live": 51, "adaptive": 56, "rescues": 6, "stalls": [50.2]},
+    "harness/traces/motion-trace-2026-09-11T22-25-41-496Z.json": {"live": 17, "adaptive": 23, "rescues": 7, "stalls": [27.9, 40.1]},
+    "harness/traces/motion-trace-2026-09-11T22-29-13-112Z.json": {"live": 52, "adaptive": 53, "rescues": 2, "stalls": [31.2]},
 }
 
 
@@ -244,22 +288,22 @@ def run() -> Result:
         path.relative_to(ROOT).as_posix(): json.loads(path.read_text())
         for path in sorted(TRACES.glob("*.json"))
     }
-    checks.equal(sorted(traces), sorted(set(EXPECTED) | set(CADENCE)),
-                 "all fourteen recorded sessions are present")
-    checks.equal(sorted(PRE_D81 | set(D84) | set(CADENCE)), sorted(set(EXPECTED) | set(CADENCE)),
-                 "and every one is in exactly one corpus — the brightness floor's, D84's, or D130's")
-    if sorted(traces) != sorted(set(EXPECTED) | set(CADENCE)):
+    banked = sorted(set(EXPECTED) | set(BRIGHT_LAMP) | set(RESCUE))
+    checks.equal(sorted(traces), banked, "all twenty recorded sessions are present")
+    checks.equal(sorted(PRE_D81 | set(D84) | set(BRIGHT_LAMP) | set(RESCUE)), banked,
+                 "and every one is in exactly one corpus — the brightness floor's, D84's, "
+                 "the bright lamp's, or the rescue's")
+    if sorted(traces) != banked:
         return checks.result()
 
-    # ---- D130: what the settle rule scores on a feeder with a beat and no rest ------
+    # ---- the bright lamp: what the SHIPPED rule scored on a feeder that never rests --
     #
-    # A RECEIPT, NOT A TARGET. These counts may never go UP under the settle rule without
-    # somebody explaining how a machine that fires on stillness found some on frames whose
-    # quiet runs are one frame long; and the separation below still has to hold on them,
-    # because presence is the one thing the cadence machine borrows from the settle machine.
-    for name in sorted(CADENCE):
+    # A RECEIPT, NOT A TARGET. `fires` and `cycles` are history and may never move. The
+    # separation below still has to hold on these sessions, and `adaptive` is the tripwire on
+    # the rule in the tree.
+    for name in sorted(BRIGHT_LAMP):
         trace = traces[name]
-        key = CADENCE[name]
+        key = BRIGHT_LAMP[name]
         fired = [e for e in trace["events"] if e["event"] == "fire"]
         if key["fires"] is not None:
             checks.equal(
@@ -292,12 +336,17 @@ def run() -> Result:
                 distance >= 17.0,
                 f"{_label(name)} {event['t'] / 1000:.1f}s: the fired frame is a card ({distance:.1f} from baseline)",
             )
-        # THE REPAIR (D131), as a tripwire in the same sense as EXPECTED's: what the rule
-        # in the tree replays on a session the shipped rule lost.
-        verdicts, (lo, hi), _stalls = score._replay(rows)
+        # THE REPAIR (D131, and the rescue since), as a tripwire in the same sense as
+        # EXPECTED's: what the rule in the tree replays on a session the shipped rule lost.
+        verdicts, (lo, hi), _stalls, rescues = score._replay(rows)
         checks.equal(
             len(verdicts), key["adaptive"],
-            f"{_label(name)}: D131's rule replays {key['adaptive']} verdicts (tLo reached {hi:.1f})",
+            f"{_label(name)}: the rule in the tree replays {key['adaptive']} verdicts "
+            f"(tLo reached {hi:.1f})",
+        )
+        checks.equal(
+            len(rescues), key["rescues"],
+            f"{_label(name)}: {key['rescues']} of them taken under the rescue bar",
         )
         if key["fires"] is not None and key.get("cards") is not None:
             checks.ok(
@@ -427,12 +476,18 @@ def run() -> Result:
             f"{_label(name)}: the floor ({floor:.1f}) refuses exactly the settles that "
             f"photographed the bare stand, and nothing else that fired",
         )
-        _verdicts, _band, stalls = score._replay(rows)
+        _verdicts, _band, stalled, rescues = score._replay(rows)
         checks.equal(
-            [round(at / 1000, 1) for at in stalls],
+            [round(at / 1000, 1) for at in stalled],
             D84[name]["stalls"],
-            f"{_label(name)}: and a card that never completes a settle is REPORTED — the "
-            f"silent loss D84 is about, made loud",
+            f"{_label(name)}: and a card that never completes a settle is never SILENT — "
+            f"the loss D84 is about",
+        )
+        checks.equal(
+            [round(at / 1000, 1) for at in rescues],
+            D84[name]["rescues"],
+            f"{_label(name)}: the rescue photographs it instead, at the second D84's stall "
+            f"named — the same anchoring, the other column",
         )
 
     # THE OTHER HALF OF A STALL BEING USEFUL: that it is quiet when nothing is wrong. Five
@@ -443,16 +498,30 @@ def run() -> Result:
         _label(name): [round(at / 1000, 1) for at in score._replay(score._rows(traces[name]))[2]]
         for name in sorted(PRE_D81)
     }
+    quiet = {
+        _label(name): len(score._replay(score._rows(traces[name]))[3])
+        for name in sorted(PRE_D81)
+    }
     checks.ok(
         not any(noise.values()),
         f"and it stays silent across all five earlier sessions ({sum(len(t['events']) for n, t in traces.items() if n in PRE_D81)} verdicts)",
         f"stalled on: { {k: v for k, v in noise.items() if v} }",
     )
+    # AND THE RESCUE IS SILENT ON THEM TOO. These five sessions rest their cards properly;
+    # a rescue here would mean the bar had started deciding verdicts a completed settle
+    # should be deciding, which is the direction every regression in this subsystem has
+    # come from.
+    checks.ok(
+        not any(quiet.values()),
+        "and the rescue bar decides nothing on any of them either — every fire there is a "
+        "completed settle",
+        f"rescued on: { {k: v for k, v in quiet.items() if v} }",
+    )
 
     # ---- the tripwire: the replay still reaches what the sweep said it would --------
     for name in sorted(EXPECTED):
         rows = score._rows(traces[name])
-        verdicts, _band, _stalls = score._replay(rows)
+        verdicts, _band, _stalls, _rescues = score._replay(rows)
         expected = EXPECTED[name]
         checks.equal(
             len(verdicts),
@@ -464,6 +533,52 @@ def run() -> Result:
             len(verdicts) >= expected["live"] - 1,
             f"{_label(name)}: and that is at or above what the hand-tuned constants scored",
         )
+
+    # ---- the rescue: the owner's own six sessions, before and after ----------------
+    #
+    # THE HEADLINE AND THE HONEST LIMIT IN ONE BLOCK. `live` is what the tree did on the
+    # evening of 2026-09-11 and is history; `adaptive` and `rescues` are what the rule in the
+    # tree does on the same rows. What this CANNOT say is whether the extra photographs are
+    # readable: a trace carries `d` and 1,064 quantised luma cells per verdict, and whether a
+    # frame at 1.2x tLo produces a usable JPEG is a fact about the JPEGs. Only the rig
+    # answers that, and docs/specs/motion-trigger.md §7 is the checklist for it.
+    live_total = adaptive_total = rescue_total = stall_total = 0
+    for name in sorted(RESCUE):
+        trace = traces[name]
+        key = RESCUE[name]
+        rows = score._rows(trace)
+        checks.equal(
+            sum(1 for e in trace["events"] if e["event"] == "fire"), key["live"],
+            f"{_label(name)}: the rule in the tree that evening fired {key['live']} times",
+        )
+        verdicts, _band, stalled, rescues = score._replay(rows)
+        checks.equal(
+            len(verdicts), key["adaptive"],
+            f"{_label(name)}: the rescue replays {key['adaptive']} verdicts, "
+            f"{len(rescues)} of them under the rescue bar",
+        )
+        checks.equal(len(rescues), key["rescues"], f"{_label(name)}: and {key['rescues']} is the count")
+        checks.equal(
+            [round(at / 1000, 1) for at in stalled], key["stalls"],
+            f"{_label(name)}: what still stalls is exactly the episodes that never came near "
+            f"still — by time, because a count would pass on the wrong one",
+        )
+        # EVERY RESCUED FRAME IS STILL A CARD. The rescue relaxes stillness and nothing else,
+        # and the presence gate is what makes that claim checkable: a rescue landing on the
+        # bare stand is D84's junk row returning through a new door. The scorer's replay is
+        # the stillness half alone, so this asks the question the machine asks — distance
+        # from the session's baseline — over the fired frames the trace actually stored.
+        live_total += key["live"]
+        adaptive_total += key["adaptive"]
+        rescue_total += key["rescues"]
+        stall_total += len(stalled)
+    # THE COUNTS ARE A DECISION, NOT A REFLEX: move them only with the sweep re-run over
+    # every trace in this directory, the way `rescueAfter` was chosen.
+    checks.equal(
+        (live_total, adaptive_total, rescue_total, stall_total), (268, 295, 34, 7),
+        f"over the six evening sessions: {live_total} photographs and 20 stalls become "
+        f"{adaptive_total} and {stall_total}, {rescue_total} of them taken under the bar",
+    )
 
     return checks.result(
         f"{len(traces)} recorded sessions, {sum(len(t['events']) for t in traces.values())} verdicts"
