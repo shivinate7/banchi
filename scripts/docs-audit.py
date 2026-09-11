@@ -1575,12 +1575,20 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # comments, and a dangling id in one of them resolved to nothing and was reported by
     # nothing. Same severity as the Python row and for the same reason: `D2` could plausibly
     # be a variable, and a false positive that blocks a commit is worse than a printed line.
-    scan(_walk(ROOT, (".ts", ".tsx", ".css")), in_code)
+    # `.js` JOINED THEM ON 2026-09-11, the same way `.ts` did on 2026-08-30 and for the same
+    # reason: it was the one real extension in this tree that cites decisions and nothing
+    # opened it. `app/eslint.config.js` alone carries six of them, every one valid — so this
+    # widen reports nothing today, which is the point. What it would have caught is what a
+    # branch found by hand the day `scripts/claim-ids.py` landed: that file was outside the
+    # CLAIMER's suffix set too, so a SLUG written there survived the merge and became a
+    # citation of an entry that had just been given a number. Both sets gained `.js` together.
+    scan(_walk(ROOT, (".ts", ".tsx", ".css", ".js")), in_code)
 
     report.add("decision ids", MECHANICAL, in_docs, f"{len(singles)} D + {len(codes)} C headings")
     # Code is advisory: `C1` or `D2` could plausibly be a variable one day, and a false
     # positive that blocks a commit is worse than one that prints a line.
-    report.add("decision ids in code", ADVISORY, in_code, "citations in .py, .ts, .tsx and .css all resolve")
+    report.add("decision ids in code", ADVISORY, in_code,
+               "citations in .py, .ts, .tsx, .css and .js all resolve")
 
 
 # ------------------------------------------------------------------ ids are claimed at merge
@@ -12700,8 +12708,14 @@ def self_test() -> int:
         "no file in app/src touches both stores, so the file is a sound binding",
         str(site_findings),
     )
+    # `banchi.session.box` STOOD HERE UNTIL 2026-09-11 and is gone (D141): six of D27's seven
+    # session keys moved to the device, and `banchi.session.captureId` is the one left — which
+    # is the same shape (declared as a const in `SESSION_KEYS` and read through `readSession`'s
+    # parameter) and so still exercises both halves this case is named for. A live key has to
+    # be named because the point is that the READER resolves it, not that a string appears.
     ok(
-        "banchi.capture.deviceId" in sites["local"] and "banchi.session.box" in sites["session"],
+        "banchi.capture.deviceId" in sites["local"]
+        and "banchi.session.captureId" in sites["session"],
         "keys resolve to the right store through a const and through a helper's parameter",
         str(sorted(sites["local"]) + sorted(sites["session"])),
     )

@@ -79,8 +79,19 @@ KINDS = (
 SKIP = {".git", "node_modules", "dist", "dist-demo", "captures", "inventory", "runs",
         "__pycache__", ".venv", "venv", "test-results", "playwright-report", ".serve",
         "worktrees", "demo-assets", "harness/images"}
+# `.js` JOINED THE SET ON THE FIRST BRANCH TO NEED IT, which is this mechanism working rather
+# than failing. `app/eslint.config.js` cites decisions in its own comments — six of them today,
+# and `docs/map.py` lists them under its `governed_by` — so a branch writing a SLUG there had it
+# survive the claim silently, and main would carry a citation of an id that does not exist.
+# `.mjs` was already here and `.js` was not, which is an omission rather than a rule: nothing
+# about a config file makes its citations less real than a script's.
+#
+# THE GUARD COULD NOT SEE IT EITHER, which is why both moved together. `docs-audit.py`'s
+# `id claims` row walks its own set and gained `.js` in the same change — the invariant this
+# whole design rests on is MAIN CARRIES NO SLUG, and a file neither the claimer nor the guard
+# opens is a file that invariant is not actually asserted over.
 TEXT_SUFFIXES = {".md", ".py", ".ts", ".tsx", ".css", ".html", ".json", ".txt", ".yml",
-                 ".yaml", ".sh", ".mjs", ".toml"}
+                 ".yaml", ".sh", ".js", ".mjs", ".toml"}
 
 
 class Claim(NamedTuple):
