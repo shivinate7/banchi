@@ -176,10 +176,9 @@ type Hud = {
   same: number
   empty: number
   stall: number
+  /** Fires taken under the rescue bar rather than off a completed settle (`rescueK`). */
+  rescue: number
   dropped: number
-  /** The cadence machine's spans (D130); absent under the settle machine and read as 0. */
-  period: number
-  blind: number
 }
 
 /** ONE read of the HUD, parsed. Read as SPANS rather than as a substring of the element's
@@ -209,9 +208,8 @@ async function hudSnapshot(page: Page): Promise<Hud> {
     same: read.same ?? NaN,
     empty: read.empty ?? NaN,
     stall: read.stall ?? NaN,
+    rescue: read.rescue ?? NaN,
     dropped: read.dropped ?? 0,
-    period: read.period ?? 0,
-    blind: read.blind ?? 0,
   }
   for (const [key, value] of Object.entries(snapshot)) {
     if (key !== 'phase' && !Number.isFinite(value as number)) {
@@ -428,62 +426,3 @@ test('arming motion is visible, and the machine fires on a settled card', async 
   await expect(hud(page)).toHaveCount(0)
 })
 
-test('arming cadence is visible, the first card fires it, and the same card puts it to sleep', async ({ page }) => {
-  /* TRIGGER 2 (D130) THROUGH THE SAME DOOR. The third cell of the Trigger track arms the
-     cadence machine; the machine string, the summary and the HUD all say so, and the HUD
-     carries the beat's own instruments beside the settle machine's. */
-  await page.goto('/#/capture')
-  await page.getByRole('button', { name: /Trigger/ }).click()
-  await page.getByRole('button', { name: 'cadence', exact: true }).click()
-  await expect(page.locator('.capture-trigger')).toHaveText('cadence')
-  await expect(tuningSummary(page)).toContainText('armed · no frames yet')
-
-  /* THE PIN IS THE ONE CONTROL THE SETTLE MACHINE DOES NOT HAVE, and it lives inside the open
-     field. Blank reads as the seed until the beat is measured; a number pins it. */
-  const pin = page.getByLabel('Beat period in milliseconds')
-  await expect(pin).toBeVisible()
-  await expect(page.locator('.capture-period .capture-entrymeta')).toContainText('seed 870 ms')
-  await pin.fill('1200')
-  await expect(page.locator('.capture-period .capture-entrymeta')).toHaveText('ms · pinned')
-  // Selecting the cell does not close the field (the pin sits under it); the row does.
-  await page.getByRole('button', { name: /Trigger/ }).first().click()
-
-  await openTuning(page)
-  await injectScene(page)
-  await expect(hud(page)).toBeVisible({ timeout: 5_000 })
-
-  /* The empty stand is the baseline, exactly as under the settle machine, and the beat is
-     WAITING for a first card. The pinned period shows on the readout. */
-  await expect
-    .poll(() => hudSnapshot(page), { timeout: 5_000 })
-    .toMatchObject({ fires: 0, same: 0, stall: 0, period: 1200 })
-  await expect(hud(page).locator('span', { hasText: /^beat waiting$/ })).toHaveCount(1)
-  /* AND THE BASELINE MUST EXIST BEFORE THE CARD ARRIVES — the same rule the rig protocol
-     gives the operator. The cadence machine reaches no `empty` verdict on the arm-time scene
-     (it fires on nothing until a card is present), so this waits on the readout's own word
-     rather than on a counter; a card put down inside the baseline window BECOMES the
-     baseline, and the first run of this test did exactly that and saw no card at all. */
-  await expect(hud(page).locator('span', { hasText: 'baseline pending' })).toHaveCount(0)
-
-  /* A card arrives and sits: the first quiet frame fires it — ONE fire, declined for want of a
-     box and COUNTED, nothing written — and it is not blind, because a flat synthetic scene is
-     still from its first frame. */
-  await setScene(page, CARD_A)
-  await expect
-    .poll(() => settledAt(page, CARD_A), { timeout: 5_000 })
-    .toMatchObject({ atBase: true, fires: 1, dropped: 1, blind: 0 })
-
-  /* The card keeps sitting: the next two beats find the same picture, the novelty gate says
-     `same` twice, and the beat goes IDLE rather than photographing it every 1.2 s until
-     somebody notices. */
-  await expect
-    .poll(() => hudSnapshot(page), { timeout: 8_000 })
-    .toMatchObject({ fires: 1, same: 2, dropped: 1 })
-  await expect(hud(page).locator('span', { hasText: /^beat idle$/ })).toHaveCount(1)
-
-  // Back to the key, and the readout is gone.
-  await page.getByRole('button', { name: /Trigger/ }).click()
-  await page.getByRole('button', { name: 'key', exact: true }).click()
-  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
-  await expect(hud(page)).toHaveCount(0)
-})

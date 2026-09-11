@@ -281,6 +281,39 @@ export type MotionParams = {
    *  fire needs a settle EPISODE, an episode needs motion above tHi, and drift is slower
    *  than the still threshold by two orders of magnitude. */
   presenceMin: number
+  /** THE RESCUE BAR, 2026-09-11 — how far above `tLo` a frame may sit and still settle an
+   *  episode that has gone on too long, as a multiple of `tLo`.
+   *
+   *  4/3, AND IT IS NOT A NEW NUMBER: it is `sqrt(moveK / stillK)`, the GEOMETRIC CENTRE of
+   *  the Schmitt band this session already measures. `moveK / stillK` is 16/9 by moveK's own
+   *  definition, so its root is exactly 4/3 and the bar sits where a frame is equally far —
+   *  in ratio — from "still" and "moving". Nothing above `tHi` can ever be rescued, because
+   *  a frame above `tHi` ends the episode rather than settling it.
+   *
+   *  THE MEASUREMENT. Across the fourteen stall episodes of the four 21:xx/22:xx sessions,
+   *  the quietest frame of every one sits between 1.02x and 1.25x `tLo` — nine of them are
+   *  UNDER `tLo` and were refused by the window rule alone. 4/3 covers all fourteen with
+   *  margin and is the largest value the corpus tolerates: swept at 1.40 the 21:16 session
+   *  gains a fire it did not have, which is a change to a session nobody re-measured. */
+  rescueK: number
+  /** How long an episode must have run without a settle before `rescueK` applies, as a
+   *  FRACTION of `maxMoveMs`. 0.60 — so the rescue bar is in force over the last two fifths
+   *  of the stall clock, and the ordinary rule is untouched before that.
+   *
+   *  IT IS A STEP AND NOT A RAMP, AND THE RAMP WAS MEASURED. A bar rising smoothly from
+   *  `tLo` at the episode's start to 4/3 at the deadline reaches `tLo` immediately, which
+   *  retires `stillWindow` from the first frame — and `stillWindow` is what stops a dip
+   *  during a card's transit from firing. Scored over the whole corpus the ramp takes the
+   *  double count from 2 to between 20 and 55. The window rule has to stay in force until
+   *  the transit can no longer be happening, and the episode's own age is the machine's
+   *  only word for that.
+   *
+   *  0.60 IS WHERE TWO PLATEAUX MEET. Swept from 0.50 to 0.80 at 0.02: yield is FLAT at 295
+   *  fires and 7 stalls over the six new sessions from 0.50 to 0.60 and falls away above it
+   *  (280 and 21 by 0.80); the eight earlier sessions are untouched from 0.60 up and gain a
+   *  fire and a double at 0.58 and below — 21:14's 6.21 s rescue lands 290 ms before its own
+   *  6.50 s fire. Below 0.60 costs a session nobody re-measured; above it costs cards. */
+  rescueAfter: number
   /** This long without a COMPLETED settle is a jam or a hand — surfaced as `stalled`, and
    *  the machine does NOT fire. Firing anyway was argued (never silently drop a card, §5.5)
    *  and rejected for v1: a hand in frame would capture-spam, and the stall is loud on
@@ -313,6 +346,8 @@ export const DEFAULT_PARAMS: MotionParams = {
   tNovel: 4.0,
   presenceK: 3.0,
   presenceMin: 16.0,
+  rescueK: 4 / 3,
+  rescueAfter: 0.6,
   maxMoveMs: 1250,
 }
 
@@ -322,6 +357,14 @@ export type MotionPhase = 'watching' | 'moving' | 'settling'
 
 export type MotionEvent =
   | 'fire'
+  /** A fire taken off a frame that never completed an ordinary settle — `rescueK` above.
+   *  A SEPARATE VERDICT RATHER THAN A FLAG, because the photograph is different in kind:
+   *  the frame is inside the Schmitt band rather than under `tLo`, so it may be softer than
+   *  a card the machine waited out. The screen captures on it exactly as it does on `fire`;
+   *  what the distinct string buys is that a trace, and the HUD, can say how many of a run's
+   *  photographs were taken that way — which is the one question the first rig run under
+   *  this rule has to answer, and it cannot be answered from a count of fires. */
+  | 'fire:rescued'
   | 'suppressed:unchanged'
   | 'suppressed:no-card'
   | 'stalled'
@@ -372,6 +415,11 @@ export type MotionDiagnostics = {
    *  screen renders it as the sentence it means rather than as a number that goes up. */
   noCardRun: number
   stalled: number
+  /** Fires taken under the rescue bar rather than off a completed settle. On the HUD beside
+   *  `stall`, because the two are the two halves of one accounting: an episode that outlasts
+   *  `rescueAfter` x `maxMoveMs` ends EITHER in a rescued photograph or in a stall, and a
+   *  session reads them together to know how much of its run rested properly. */
+  rescued: number
   /** Refreshes on which the ratchet was overruled by the quantile path (D131). */
   escapes: number
 }
@@ -471,6 +519,7 @@ export class MotionMachine {
     suppressedNoCard: 0,
     noCardRun: 0,
     stalled: 0,
+    rescued: 0,
     escapes: 0,
   }
 
@@ -680,8 +729,32 @@ export class MotionMachine {
      * Measured over the three D84 traces: requiring it costs nothing — both cards the
      * window recovers land on a quiet frame anyway — and without it a capture could be
      * taken from a frame the machine had just called not-confidently-still. */
-    const settled =
+    const ordinary =
       quiet && this.stillSeen >= this.p.stillWindow && this.stillCount >= this.p.stillFrames
+
+    /* THE RESCUE, 2026-09-11. An episode that has run `rescueAfter` x `maxMoveMs` without a
+     * settle takes `rescueK` x tLo as its bar and drops the window requirement with it —
+     * because the window is what refused nine of the fourteen misses measured, on frames the
+     * machine had ALREADY called quiet. A card that lands two frames after a transit ends has
+     * one quiet frame and then the next card's motion; `stillSeen` never reaches
+     * `stillWindow` and the card is dropped in silence.
+     *
+     * IT OPENS LATE ON PURPOSE AND THE AGE IS THE WHOLE SAFETY ARGUMENT. `stillWindow` is
+     * what stops a dip DURING a transit from firing, and retiring it from the first frame of
+     * an episode takes the corpus's double count from 2 to 21. The episode's own age is the
+     * machine's only statement that the transit cannot still be happening; `rescueAfter`
+     * carries where that line was swept to.
+     *
+     * WHAT IS NOT RELAXED: presence, novelty and the refractory, all below and all unchanged.
+     * A rescue is a statement about STILLNESS ONLY — it can photograph a card a little sooner
+     * than the machine would like, and it can never photograph an empty stand or the same
+     * card twice. */
+    const rescued =
+      !ordinary &&
+      this.movingSince !== null &&
+      nowMs - this.movingSince >= this.p.rescueAfter * this.p.maxMoveMs &&
+      d < this.tLo * this.p.rescueK
+    const settled = ordinary || rescued
     this.diag.phase = settled ? 'watching' : 'settling'
 
     if (!settled) {
@@ -762,7 +835,9 @@ export class MotionMachine {
     this.lastFired.set(cells)
     this.refractoryUntil = nowMs + this.p.refractoryMs
     this.diag.fires += 1
-    return 'fire'
+    if (!rescued) return 'fire'
+    this.diag.rescued += 1
+    return 'fire:rescued'
   }
 }
 
@@ -968,7 +1043,12 @@ export function motionTrigger(
 
       const stop = startWatchSampler(video, (nowMs, roi) => {
         const event = machine.step(nowMs, roi)
-        if (event === 'fire') onFire()
+        /* BOTH FIRING VERDICTS REACH THE SCREEN. `fire:rescued` differs from `fire` in what
+         * it says about the frame, never in what the screen must do with it — a card that is
+         * about to be replaced needs its photograph now. The distinction is for the trace and
+         * the HUD; a `=== 'fire'` here would drop every rescued card in silence, which is the
+         * failure the rescue exists to end. */
+        if (event === 'fire' || event === 'fire:rescued') onFire()
         if (onFrame !== undefined) {
           onFrame(nowMs, machine.diag.d, machine.diag.dBase, machine.diag.luma, event, roi)
         }

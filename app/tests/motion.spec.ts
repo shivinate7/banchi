@@ -286,9 +286,80 @@ test('motion dwelling in the Schmitt band still stalls — the band cannot hide 
   }
   feed(170, 0)
   feed(60, 1) // violent: MOVING starts
-  for (let i = 0; i < 50; i += 1) feed(i % 2 === 0 ? 60 : 66, i + 2) // band hover
+  /* THE HOVER IS ABOVE THE RESCUE BAR, AND THAT IS NOW THE POINT OF THE NUMBER. The bar is
+     `rescueK` x tLo — 6.0 at the seeded tLo of 4.5 — and an alternation of ±6 would sit ON
+     it, which is a test decided by a float. ±10 gives d ~ 10, clear of the bar and clear of
+     tHi 8.0, so this stays what it was written to be: a jam the machine must report rather
+     than a landing it must rescue. */
+  for (let i = 0; i < 50; i += 1) feed(i % 2 === 0 ? 60 : 70, i + 2) // band... and above it
   expect(events).toEqual(['stalled'])
   expect(machine.diag.fires).toBe(0)
+  expect(machine.diag.rescued).toBe(0)
+})
+
+test('a card that never quite settles is RESCUED once the episode has run long enough', () => {
+  /* THE OWNER'S COMPLAINT, IN CODE: "it's really bad when the cards are coming a little
+     slower or aren't landing perfectly". Six sessions on 2026-09-11 carried 19 stall
+     episodes between them and the quietest frame of EVERY ONE sat between 1.02x and 1.25x
+     tLo — nine of the first fourteen were UNDER tLo and were refused by `stillWindow` alone,
+     because the card landed one or two frames after a transit ended and the next card's
+     motion threw the window away before it could fill.
+
+     The fixture is the second, harder kind: a scene that comes to rest just ABOVE tLo and
+     stays there. It must NOT fire while the episode is young — `stillWindow` is what stops a
+     dip mid-transit from firing, and retiring it from the first frame takes the trace
+     corpus's double count from 2 to 21 — and it MUST fire once the episode has outlasted
+     `rescueAfter` x `maxMoveMs`. Both halves are asserted, because a rescue that fired
+     immediately would pass a test that only checked the fire. */
+  const machine = new MotionMachine()
+  const events: Array<{ ms: number; event: MotionEvent }> = []
+  let at = 0
+  const feed = (base: number) => {
+    const event = machine.step(at * F, still(base, at))
+    if (event !== null) events.push({ ms: at * F, event })
+    at += 1
+  }
+  for (let i = 0; i < ARM_FRAMES; i += 1) feed(EMPTY)
+  const opened = at * F
+  feed(170) // the card arrives: MOVING
+  /* A rest in the band: ±5 against tLo 4.5 and the bar at 6.0, so every frame is "not still"
+     by the ordinary rule and inside the rescue's reach. */
+  const deadline = opened + DEFAULT_PARAMS.rescueAfter * DEFAULT_PARAMS.maxMoveMs
+  for (let i = 0; i < 60; i += 1) feed(i % 2 === 0 ? 170 : 175)
+  const fires = events.filter((e) => e.event === 'fire:rescued')
+  expect(fires).toHaveLength(1)
+  expect(events.map((e) => e.event)).toEqual(['suppressed:no-card', 'fire:rescued'])
+  const rescue = fires[0]
+  expect(rescue).toBeDefined()
+  if (rescue !== undefined) expect(rescue.ms).toBeGreaterThanOrEqual(deadline)
+  expect(machine.diag.fires).toBe(1)
+  expect(machine.diag.rescued).toBe(1)
+  // And it is a real settle, so the stall clock was cleared by it: no stall, ever.
+  expect(machine.diag.stalled).toBe(0)
+})
+
+test('a rescue is a statement about stillness only — presence still refuses an empty stand', () => {
+  /* WHAT THE RESCUE RELAXES AND WHAT IT DOES NOT. The bar and the window are stillness; the
+     presence gate, the novelty gate and the refractory are untouched, and this is the one
+     that matters most — a rescue that could photograph the bare stand would put D84's two
+     junk rows back at the top of a box for the sake of a card that was never there. The
+     scene here never leaves the arm-time stand: it jitters in the band around EMPTY, which
+     the ordinary rule cannot settle and the rescue can, and every verdict is `no-card`
+     because `dBase` never reaches the floor. */
+  const machine = new MotionMachine()
+  const events: MotionEvent[] = []
+  let at = 0
+  const feed = (base: number) => {
+    const event = machine.step(at * F, still(base, at))
+    if (event !== null) events.push(event)
+    at += 1
+  }
+  for (let i = 0; i < ARM_FRAMES; i += 1) feed(EMPTY)
+  feed(EMPTY + 60) // something crosses the region and leaves
+  for (let i = 0; i < 60; i += 1) feed(i % 2 === 0 ? EMPTY : EMPTY + 5)
+  expect(machine.diag.fires).toBe(0)
+  expect(machine.diag.rescued).toBe(0)
+  expect(new Set(events)).toEqual(new Set(['suppressed:no-card']))
 })
 
 test('a card whose every other frame lands in the band still settles and fires', () => {
