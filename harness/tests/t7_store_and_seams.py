@@ -7666,11 +7666,12 @@ def check_origin_gate(checks: Checks) -> None:
     )
     checks.equal(
         sorted(capture_server.DEFAULT_ALLOWED_ORIGINS),
-        [
-            f"http://127.0.0.1:{ports.dev_port()}",
-            f"http://localhost:{ports.dev_port()}",
-        ],
-        "BOTH spellings of this machine are allowed by default — a browser's Origin is the "
+        sorted(
+            f"http://{host}:{port}"
+            for port in (ports.capture_port(), ports.dev_port())
+            for host in ("localhost", "127.0.0.1")
+        ),
+        "BOTH PORTS AND BOTH spellings of this machine are allowed by default — a browser's Origin is the "
         "literal string in the address bar, so localhost and 127.0.0.1 are the same host "
         "and not the same origin, and the owner types both — AT THE PORT THIS CHECKOUT'S "
         "APP IS ACTUALLY SERVED ON, which is the whole of D43's amendment: the list was the "
@@ -8375,6 +8376,22 @@ def check_cli_seams(checks: Checks) -> None:
         resolve.cheapest_of(rows),
         Decimal("0.75"),
         "cheapest_of reads TCG Market Price — not Marketplace, not Low (D9)",
+    )
+    checks.ok(
+        f"http://localhost:{ports.capture_port()}" in capture_server.DEFAULT_ALLOWED_ORIGINS,
+        "AND THE CAPTURE PORT IS IN IT, which D138 made necessary and this list did not "
+        "follow. The app is served from THIS process now, so the product's own page is "
+        "same-origin with the server it writes to — and a browser sends `Origin` on a "
+        "same-origin write. Naming only the dev port refused the owner's first real write "
+        "from the built app: a box delete, 403 `origin_not_allowed`, 2026-09-11. Reads are "
+        "ungated, so every screen drew correctly and only writing was broken, which is D43's "
+        "own failure shape arriving at this control for the third time",
+    )
+    checks.ok(
+        f"http://localhost:{ports.dev_port()}" in capture_server.DEFAULT_ALLOWED_ORIGINS,
+        "and the DEV port stays beside it — `make dev` runs there against this server "
+        "(D138), so dropping it would refuse every write from the development app while "
+        "looking like a tidy-up",
     )
 
     blank = [{tcgcsv.MARKET_PRICE_COLUMN: "", tcgcsv.LOW_PRICE_COLUMN: "1.00"}]
