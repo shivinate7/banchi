@@ -4993,14 +4993,18 @@ test('D132 — unticked, departed rows sink under the live ones in their own sec
       '2/6': card({ index: 6, at: 3, state: 'identified', name: 'Inteleon', sku: '8937373', section: 2, sectionStart: 3, sectionEnd: 4 }),
     }),
   }
-  await page.reload()
-  await open(page, BOXES, store, () => PRICING, SALE, { hideSold: null })
-  await expandAll(page)
+  /* A FRESH PAGE IN THE SAME CONTEXT, not a reload: a reload fires the first store's requests
+     before the second `open()` has registered its routes, and under the full suite's load
+     that answer sometimes landed last — 1 in 483 on 2026-09-11, then 2 in 5 alone. The
+     context is what holds `localStorage`, so the remembered choice still carries over. */
+  const again = await page.context().newPage()
+  await open(again, BOXES, store, () => PRICING, SALE, { hideSold: null })
+  await expandAll(again)
   /* REMEMBERED: the press above wrote `show`, and this open wrote nothing over it. */
-  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
-  await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', 'B2 #1', '#1'])
+  await expect(again.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+  await expect(again.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', 'B2 #1', '#1'])
   /* The section header the sold card led is still ONE section, folded open, not two. */
-  await expect(page.locator('.browse-sectfold')).toHaveCount(2)
+  await expect(again.locator('.browse-sectfold')).toHaveCount(2)
 })
 
 test('D132 — the row the walk stands on survives its own sale while sold is hidden, and goes when the walk moves', async ({ page }) => {
