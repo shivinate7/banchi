@@ -515,7 +515,7 @@ test('nothing the loupe did survives the pointer leaving', async ({ page }) => {
 /* ---------------------------------------------------------------- answering, and undo */
 
 test('a digit answers the card and the answer stays reversible', async ({ page }) => {
-  await page.clock.install()   // D135: the two seconds below are jumped, not slept
+  await page.clock.install()   // D136: the two seconds below are jumped, not slept
   const sent = await open(page)
 
   await page.locator('.review-candidate').first().click()

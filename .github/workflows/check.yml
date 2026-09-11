@@ -46,20 +46,20 @@
 # registry` fails on an entry for a target `make check` does not run.
 #
 # THE "TWELVE TO FIFTEEN MINUTES" ABOVE IS WHAT IT COST FROM 2026-09-07 TO 2026-09-11, AND IT
-# IS LEFT AS WRITTEN (D135). Measured over 56 jobs: 940-1,020s wall-clock per run, 913 of 954s
+# IS LEFT AS WRITTEN (D136). Measured over 56 jobs: 940-1,020s wall-clock per run, 913 of 954s
 # in the `make design-check` step, `481 passed (15.2m)` on ONE worker — the runner has two
 # vCPUs and Playwright's default of half of them floors to one. Three things changed it, each
-# argued at the job below and in D135: the suite runs as three shards of one worker each; the
+# argued at the job below and in D136: the suite runs as three shards of one worker each; the
 # seven sleeps on a real clock (2.3 minutes of the serial run) became a fake clock advanced
 # by the same numbers; and the post-merge run below is skipped when the tree it would test
-# already passed on the PR. The new figures are in D135, from a dispatch of this file.
+# already passed on the PR. The new figures are in D136, from a dispatch of this file.
 #
 # ON `push: main` TOO, AT THAT PRICE, for the reason the `on:` block below already gives about
 # every other row: a merge can break what neither side broke alone, and two branches editing one
 # stylesheet is exactly the semantic conflict git merges cleanly. A browser floor is the kind of
 # claim that has no other reader.
 #
-# BUT NOT WHEN THE TREE ALREADY PASSED (D135). A PR run checks out GitHub's own merge of the
+# BUT NOT WHEN THE TREE ALREADY PASSED (D136). A PR run checks out GitHub's own merge of the
 # branch into main, so its TREE — `git rev-parse HEAD^{tree}` — is exactly the tree the merge
 # commit or the squash will carry, for as long as main has not moved. `design-check-passed`
 # below records a green PR run as an artifact named for that tree, `already-passed` looks the
@@ -161,7 +161,7 @@ jobs:
         run: python3 scripts/revert-audit.py branch --upstream "origin/${{ github.base_ref || 'main' }}"
 
   # HAS THIS TREE ALREADY PASSED? Asked on every event and ACTED ON only for a push to main
-  # (D135). It runs the lookup on a PR and a dispatch too, and prints the answer, so the
+  # (D136). It runs the lookup on a PR and a dispatch too, and prints the answer, so the
   # mechanism is exercised on every run rather than only at the moment it matters — a gate
   # that fires once a day is a gate nobody has watched work. `actions: read` is what listing
   # artifacts through the API needs; nothing here writes.
@@ -194,7 +194,7 @@ jobs:
 
   # The browser half. Same tree, different question: what a person actually sees.
   #
-  # THREE SHARDS, ONE WORKER EACH, AND THE WORKER COUNT IS THE DELIBERATE HALF (D135). One
+  # THREE SHARDS, ONE WORKER EACH, AND THE WORKER COUNT IS THE DELIBERATE HALF (D136). One
   # runner ran every case on ONE worker — `ubuntu-latest` is 2 vCPU on a private repo and
   # Playwright's default of half the cores floors to one — in 15.2 minutes, measured across
   # 56 jobs since this job landed. `--shard=N/3` splits the CASES three ways and each shard

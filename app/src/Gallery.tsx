@@ -219,7 +219,7 @@ const SECTIONS: readonly { id: string; label: string; group: string }[] = [
   { id: 'locations', label: 'Card locations', group: 'Screen pieces' },
 ]
 
-const COLOURS: readonly { name: string; token: string; ink?: boolean }[] = [
+const COLORS: readonly { name: string; token: string; ink?: boolean }[] = [
   { name: 'Page', token: '--bn-bg' },
   { name: 'Surface', token: '--bn-surface' },
   { name: 'Surface 2 · sunken', token: '--bn-surface-2' },
@@ -475,7 +475,7 @@ export function Gallery() {
 
           <Section id="color" title="Color" lede="Three registers: ink is what you read, line is what separates, brand is where to look. Indigo for action, vermilion for what is live.">
             <div className="kit-swatches">
-              {COLOURS.map((c) => (
+              {COLORS.map((c) => (
                 <div key={c.token} className="kit-swatch">
                   <span className="kit-swatch-chip" style={{ background: `var(${c.token})` }}>
                     {c.ink ? <span className="kit-swatch-sample" style={{ color: 'var(--bn-surface)' }}>Aa</span> : null}

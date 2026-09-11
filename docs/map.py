@@ -392,7 +392,15 @@ COMPONENTS = [
                                     "one voice since 2026-09-08 — the standing policy key is "
                                     "deleted and a store still holding it is refused by name; "
                                     "the flag applies to every leg of a merged send "
-                                    "because that send is ONE file. The cut-off that decides "
+                                    "because that send is ONE file. `--quantity SKU=N` (D7 "
+                                    "amended 2026-09-11, on the owner's report) is the per-card "
+                                    "SEND quantity — this press puts exactly N copies of that "
+                                    "card in the file, bounded by the copies on hand not already "
+                                    "listed and never by what TCGplayer holds; `0` sends none "
+                                    "without a hold. Parsed beside the cap before the store is "
+                                    "read, and `_say_quantities` names every card given a "
+                                    "figure, the shortfall (`asked 9, only 3 can go`) and any "
+                                    "SKU the send does not hold. The cut-off that decides "
                                     "the buckets is the corpus's stored `policy.threshold`. Prices "
                                     "from inventory/prices.json (D86) rather than from the run manifest (D49); "
                                     "refuses a run still carrying a legacy "
@@ -717,7 +725,10 @@ COMPONENTS = [
                                  "emitted each believe the whole cap is theirs. Measured at the "
                                  "old standing cap of 4: three separate emits over three real "
                                  "runs wrote two SKUs past it; one merged emit wrote "
-                                 "none. Writes nothing — cli/cmd_emit.py owns the file and the "
+                                 "none. A per-card quantity the send named (D7 amended "
+                                 "2026-09-11) is spent the same way, once over the union — "
+                                 "`_merged_asked` takes the tightest any leg carries, as "
+                                 "`_merged_cap` does. Writes nothing — cli/cmd_emit.py owns the file and the "
                                  "store. `_agree_policy` refuses a send whose runs override "
                                  "`threshold` differently, for the reason it already refused "
                                  "two `sub_threshold`s: one file needs one answer (D99).",
@@ -1556,11 +1567,25 @@ COMPONENTS = [
                 # and `pkmnscan.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
+                # D111 AND D127 JOIN AS CITED FAILURES, the same shape D70 and D101 already
+                # carry above: `check_codex_hooks`'s docstring names the two incidents its
+                # missing hooks would have reopened had the row not backfilled them —
+                # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
+                # `WorktreeRemove` (D111's sweep) — because a reader who does not know why
+                # those two hooks matter reads a bare roster diff as pedantry. D135 is the
+                # ruling the row enforces: Codex reads the same guards a Claude Code session
+                # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
+                # D47 IS CITED IN `branch_files`, NOT IN THE CODEX ROW: a tracked directory
+                # symlink (D47's own subject) is a changed path with no text to scan, and that
+                # function's `is_dir()` guard is what keeps `check_renumbered_decisions` from
+                # crashing on one — found the moment `.agents/skills` became the first such
+                # link this repo's own history ever produced.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
                                 "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
-                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
+                                "D119", "D122", "D127", "D132", "D135"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -3945,7 +3970,15 @@ COMPONENTS = [
                                         "keeps every copy of a SKU out of this run's import file "
                                         "with a reason, a note and an optional watch price. "
                                         "NOTHING HERE SPENDS: the box, the cart and the money "
-                                        "gate stay on #/runs.",
+                                        "gate stay on #/runs. THE QTY CELL IS A FIELD (D7 amended "
+                                        "2026-09-11, on the owner's report): a per-card SEND "
+                                        "quantity for this press — blank sends every copy that "
+                                        "can go and the placeholder is that figure, a number "
+                                        "sends that many, 0 sends none without a hold — held in "
+                                        "the screen as typed, clamped on blur to what can go, "
+                                        "counted on the deck, cleared per row by Escape or for "
+                                        "the send by the ship bar's chip, and SPENT by a "
+                                        "successful write.",
                                 # D9 is the threshold, the floor and the rule that nothing is
                                 # defaulted on the operator's behalf; D7 is why this is SKU-scoped
                                 # and never card-scoped; D28 is the list-must-not-move rule its
@@ -4708,7 +4741,7 @@ COMPONENTS = [
                         "64px carrying no filter and no cap discs, the DISPLAY cut is what "
                         "`#/gallery` shows at 64 and above, all six locked palettes are drawn "
                         "and differ, and the mark does not invert with the theme.",
-                "governed_by": ["D94", "D102", "D134", "D135"],
+                "governed_by": ["D94", "D102", "D134", "D136"],
                 "note": "IT EXISTS BECAUSE NOTHING IN app/tests MENTIONED THE MARK AT ALL. No "
                         "snapshot, no brand assertion, no reference to `Logo` — the mark could "
                         "have stopped rendering in all six of its call sites with `make check` "
@@ -5053,7 +5086,7 @@ COMPONENTS = [
                 # constant case argues from D32's measured 39-81% card fill, and the reason the
                 # old fixed centre was wrong is that it magnified the Pokedex strip — D35's
                 # misread-as-collector-number string exactly.
-                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77", "D135"],
+                "governed_by": ["D4", "D13", "D24", "D28", "D29", "D32", "D35", "D16", "D41", "D37", "D46", "D77", "D136"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
@@ -5068,7 +5101,7 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41", "D115", "D125", "D135"],
+                "governed_by": ["D5", "D10", "D13", "D24", "D31", "D41", "D115", "D125", "D136"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

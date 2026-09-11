@@ -92,6 +92,43 @@ def _cap_for(args):
     return decisions.parse_live_cap(getattr(args, "cap", None))
 
 
+def _quantities_for(args) -> dict:
+    """SKU -> the copies THIS SEND asked to list, from `--quantity SKU=N` (D7, amended
+    2026-09-11 on the operator's ruling). Empty is the ordinary answer: every copy that can
+    go, goes. A send quantity and not a ceiling — `_cap_for` is the ceiling — and it reaches
+    every leg of a merged send through this one function for `_cap_for`'s reason."""
+    return decisions.parse_send_quantities(getattr(args, "quantity", None))
+
+
+def _say_quantities(quantities, matches, say) -> None:
+    """Name what the send's own quantities did, per card, and what they could not.
+
+    NAMED AND NOT COUNTED (D59's rule, applied to the operator's own figures): a card asked at
+    5 that goes at 3 is the one line the operator is waiting for, and a SKU named that no run
+    in the send holds is a typo that would otherwise vanish — the flag would be accepted, the
+    file written, and nothing anywhere would say the figure reached no card.
+    """
+    if not quantities:
+        return
+    named = [m for sku, m in matches.items() if sku in quantities]
+    say("")
+    say(f"{'quantities':<16} {len(named)} SKU(s) at the figure this send asked for")
+    for match in named:
+        asked = quantities[match.sku]
+        if match.asked_short:
+            say(f"{'':<16} {match.sku} {match.name} — asked {asked}, only "
+                f"{match.add_to_quantity} can go")
+        elif asked == 0:
+            say(f"{'':<16} {match.sku} {match.name} — asked 0, none sent")
+        else:
+            say(f"{'':<16} {match.sku} {match.name} — {match.add_to_quantity} of "
+                f"{match.copies} on hand")
+    missing = sorted(sku for sku in quantities if sku not in matches)
+    if missing:
+        say(f"{'':<16} {len(missing)} SKU(s) named that this send does not hold: "
+            f"{', '.join(missing[:8])}{' ...' if len(missing) > 8 else ''}")
+
+
 def _warn_stale(run_dir, say) -> None:
     """Name any import file left by an EARLIER emit, at the moment this one refuses.
 
@@ -320,6 +357,9 @@ def run(args, say) -> int:
     # first: a refusal after the store has been read is a refusal that already cost something.
     try:
         _cap_for(args)
+        # AND THE QUANTITIES, for the same reason and at the same moment: a malformed pair is
+        # a sentence before the store is read, not a traceback after it.
+        _quantities_for(args)
     except decisions.MalformedDecisions as refusal:
         say(str(refusal))
         return 1
@@ -401,6 +441,8 @@ def run(args, say) -> int:
             # `--cap N` or nothing; the standing policy key that used to sit between them is
             # deleted, and a store still holding one is refused when the corpus is opened.
             live_cap=_cap_for(args),
+            # AND THE PER-CARD QUANTITIES THIS SEND ASKED FOR (D7, amended 2026-09-11).
+            quantities=_quantities_for(args),
             review_below=run_dir.manifest.get(
                 "review_below_confidence", args.review_below_confidence
             ),
@@ -556,6 +598,7 @@ def run(args, say) -> int:
         say(f"{'no room':<16} {len(at_cap)} SKU(s) matched and added nothing")
         for match in at_cap[:8]:
             say(f"{'':<16} {match.sku} — {match.nothing_to_add}")
+    _say_quantities(_quantities_for(args), resolved.matches, say)
 
     # ---------------------------------------------------------- pushed, and the audit trail
     #
@@ -792,6 +835,7 @@ def _resolve_one(run_dir, book, say, args):
             # `--cap N` or nothing; the standing policy key that used to sit between them is
             # deleted, and a store still holding one is refused when the corpus is opened.
             live_cap=_cap_for(args),
+            quantities=_quantities_for(args),
             review_below=run_dir.manifest.get("review_below_confidence", routing.CONFIDENCE_LOW),
         )
     except join.EmptyCatalog as refusal:
@@ -923,6 +967,11 @@ def run_merged(args, say) -> int:
         for row in corrected[:8]:
             say(f"  {row.sku} {row.match.name} — runs claim {row.claimed}, "
                 f"{row.match.add_to_quantity} can go")
+    # THE SEND'S OWN QUANTITIES, READ OFF THE MERGED MATCH so the figure named is the one
+    # spent across the union and not any one leg's (D7, amended 2026-09-11).
+    _say_quantities(
+        _quantities_for(args), {row.sku: row.match for row in merged_plan.skus}, say
+    )
 
     by_game = {None: rows}
     if args.split_games:

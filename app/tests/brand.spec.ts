@@ -377,7 +377,7 @@ async function screens(page: import('@playwright/test').Page) {
 }
 
 /* THE CLOCK IS FAKED AND ONLY EVER ADVANCED, WHICH IS A CHANGE TO THE WAIT AND NOT TO THE
- * ASSERTION (D135). These three cases were the suite's longest by a distance — 46.5s, 17.5s and
+ * ASSERTION (D136). These three cases were the suite's longest by a distance — 46.5s, 17.5s and
  * 17.0s on the runner, all of it `waitForTimeout` on a 6s + 4s cadence — and the owner ruled on
  * 2026-09-11 that a sleep on a real clock may become a fake one. `page.clock.install()` goes in
  * BEFORE the first navigation, with no fixed time: the page's clock starts at the real time and
@@ -513,7 +513,7 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   await page.goto('/')
   await page.setViewportSize({ width: 1440, height: 900 })
 
-  const centres = () =>
+  const centers = () =>
     page.evaluate(() => {
       const box = (sel: string) => {
         const el = document.querySelector(sel)
@@ -531,7 +531,7 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
       }
     })
 
-  const open = await centres()
+  const open = await centers()
   expect(open.mark, 'the brand is drawn').not.toBeNull()
   expect(open.foot, 'the footer is drawn').not.toBeNull()
 
@@ -543,10 +543,10 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
   const during: Array<Record<'mark' | 'nav' | 'foot', number | null>> = []
   for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(40)
-    during.push(await centres())
+    during.push(await centers())
   }
   await page.waitForTimeout(400)
-  const rail = await centres()
+  const rail = await centers()
 
   // the corridor: every mid-flight sample sits between the two resting positions, with 2px of
   // slack for subpixel layout. Before the fix these read ~114 against a corridor of 31.5 to 36.

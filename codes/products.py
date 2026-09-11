@@ -183,7 +183,7 @@ def classify(product_name: str) -> str:
 UNCLAIMED = "unclaimed"
 
 
-def summarise(entries) -> List[Dict[str, object]]:
+def summarize(entries) -> List[Dict[str, object]]:
     """Ledger entries grouped by product, premium first. What a screen draws.
 
     `lane` IS ON EVERY ROW so the table cannot disagree with the lane that would actually

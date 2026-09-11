@@ -111,7 +111,7 @@ help:
 	@echo "                    Leaves the verdict in .serve/design-check.json — read that,"
 	@echo "                    never a \`tail\` pipe, which buffers the whole run."
 	@echo "                    PW_ARGS=<flags> reaches Playwright itself (--shard, one spec);"
-	@echo "                    ARGS never does. CI shards it three ways this way (D135)."
+	@echo "                    ARGS never does. CI shards it three ways this way (D136)."
 	@echo "  make design-check-quiet  the same run without the per-test progress stream."
 	@echo
 	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
@@ -771,7 +771,7 @@ screenshot:
 # three. app/design-check-reporter.ts carries the rest of the argument.
 #
 # `ARGS` REACHES THE LOCK AND `PW_ARGS` REACHES PLAYWRIGHT, and the two are kept apart by the
-# `--` on each side (D135). Until 2026-09-11 nothing here could hand Playwright a flag at all,
+# `--` on each side (D136). Until 2026-09-11 nothing here could hand Playwright a flag at all,
 # and the one that mattered was `--shard`: `.github/workflows/check.yml` runs this suite as
 # three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
 # runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.

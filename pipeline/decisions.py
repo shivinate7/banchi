@@ -114,6 +114,52 @@ def parse_live_cap(value) -> Optional[int]:
     return cap
 
 
+#: The most copies one `--quantity` may name. Nothing physical bounds it — the shelf does, at
+#: emit time — but the figure reaches a child process's argv from a request, and an unbounded
+#: integer there is an argv a request controls. Three digits is what the screen's field takes.
+MAX_SEND_QUANTITY = 999
+
+
+def parse_send_quantities(pairs) -> Dict[str, int]:
+    """`--quantity SKU=N`, repeated, as SKU -> N (D7, amended 2026-09-11).
+
+    A SEND QUANTITY, NOT A CEILING. `N` is how many copies of that card THIS press puts in the
+    file, bounded at emit time by the copies on hand that are not already listed — never by
+    what TCGplayer holds. `0` is allowed and means none of this card this press; it is not a
+    hold and is remembered nowhere.
+
+    REFUSED RATHER THAN CLAMPED where a pair is unusable, `parse_live_cap`'s rule: a SKU that
+    is not a TCGplayer id, a figure that is not a whole number, a negative one, or the same SKU
+    named twice with two answers is somebody who meant something this cannot do. An empty or
+    absent list is the ordinary answer — every copy that can go, goes.
+    """
+    asked: Dict[str, int] = {}
+    for pair in pairs or ():
+        text = str(pair).strip()
+        sku, sep, figure = text.partition("=")
+        sku = sku.strip()
+        if not sep or not sku.isdigit():
+            raise MalformedDecisions(
+                f"--quantity takes SKU=N with a numeric TCGplayer id, got {text!r}"
+            )
+        try:
+            count = int(figure.strip())
+        except ValueError:
+            raise MalformedDecisions(
+                f"--quantity {sku}: N must be a whole number of copies, got {figure.strip()!r}"
+            ) from None
+        if count < 0 or count > MAX_SEND_QUANTITY:
+            raise MalformedDecisions(
+                f"--quantity {sku}: N must be between 0 and {MAX_SEND_QUANTITY}, got {count}"
+            )
+        if sku in asked and asked[sku] != count:
+            raise MalformedDecisions(
+                f"--quantity names {sku} twice, as {asked[sku]} and {count} — say it once"
+            )
+        asked[sku] = count
+    return asked
+
+
 def parse_sub_threshold(value) -> Optional[pricing.Disposition]:
     """`None` means unset, which is not an error here — it is what `blocking` refuses on.
 

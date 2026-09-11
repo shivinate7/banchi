@@ -131,6 +131,10 @@ The capture server serves stored photos at `GET /photo/<box>/<position>`. The re
 
 **The operator was asked which control they wanted and chose the ceiling**, having first picked the send-quantity reading on an estimate of implementation cost that was wrong: the ceiling needed four label edits and no test changes, while the send quantity needed one arithmetic line and **19 harness assertions rewritten**, because D59's tests encode the ceiling throughout. The estimate was corrected and the choice retaken; the wording is the fix and the arithmetic was never in question.
 
+**A NUMBER ON EACH CARD'S ROW, AND IT IS A SEND QUANTITY (amended 2026-09-11, on the operator's report).** *"I actually found I can no longer select quantities to sell at all, which wasn't the goal. Yes I wanted caps eliminated at the store level, but I still wanted to be able to select quantities to list if on a case-by-case basis I want to."* Established before anything was built: the ship-bar field was present on both bars, labelled *hold to N live per card*, and doing exactly what the paragraph above says — a ceiling on copies live, counting what is already out. It could not say "two of THIS card", and on a SKU with copies already out it said nothing at all, which is the shape the owner read as the control being gone. The Qty column beside it was a read-only *N of M*. Nothing had been removed; the control that existed was the one the owner had been asked to choose on 2026-09-08, and the one they were now asking for was the OTHER reading, per card.
+
+**Asked in plain words which control they meant — a number on each row, one ceiling for the send, or both — and what a typed number should mean, they ruled for a number on each row meaning COPIES TO SEND IN THIS FILE**: type 2 and two copies go, whatever TCGplayer already holds, bounded by the copies on hand that are not already listed. The ceiling stays as it is, in the ship bar, for the send that wants one; the two compose to the tighter. So this entry now names two per-send controls and still no standing one: `--cap N` and the field beside the emit options hold every card to a ceiling; `--quantity SKU=N`, repeatable, and the Qty field on every `#/pricing` row send that many of that card. **Neither is written anywhere.** A quantity is not a fact about the card — D49's hold is, and lives in the corpus — it is a fact about one press, held in the screen as typed and SPENT by the write: the map clears on a successful emit, because a figure that survived it would send the same copies again on the next press, on top of what went. `0` is a real answer — none of this card this press — and is not a hold. `pipeline/join.py:SkuMatch.asked` carries it; `add_to_quantity` is `min(asked, room)` where `room` is what the ceiling and the shelf allow; `nothing_to_add` names a zero in its own words. A figure past what can go is clamped on the way out of the field and NAMED in the report — *asked 9, only 3 can go* — and a SKU named that the send does not hold is named back, because a typo behind an accepted flag and a written file would otherwise vanish. Every leg of a merged send carries the same map and `pipeline/merge.py` spends it once across the union, the way it spends the cap. Covered by `harness/tests/t7_store_and_seams.py:check_emit_send_quantity` and four cases in `app/tests/pricing.spec.ts`. The ship-bar cap field's placeholder was also found clipped to *no ca* at 56px on the same look and widened.
+
 **`min` WAS HIDING THE ONE FIGURE THAT EXPLAINS A REFUSAL.** `nothing_to_add` printed `min(copies_out, live_cap)`, so five copies out against a cap of two read as *"2 of the 2 this SKU may have out"* — true about the cap, false about the store, on the row whose entire question is why nothing is going out. The original argument was that *"6 of the 4 is not a sentence"*; that is a reason to WORD an overrun, not to suppress it. Both arms now name it: *"5 live, over the 2 this send asked for"*, and *"5 already out against the 2 this send asked for"*.
 
 **A merged send names what it dropped, which it did only in the total case.** `MergedSku.rows()` filters `add_to_quantity == 0` out of the file, and `cli/cmd_emit.py` printed the dropped list only inside `if not rows:` — so a partial capped send wrote the file, reported `import  10 row(s)` and named the other forty nowhere. The single-run path had a `no room` block doing exactly this and the two had simply diverged. That was the silent drop `CLAUDE.md` forbids by name, reachable from the ordinary press.
@@ -2666,6 +2670,20 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 
 **What would reopen this: a session that reasons from the index alone.** The index names 60 entries and argues none of them. If decisions start being cited from their titles — or worse, re-litigated because nobody opened the entry — the honest answer is not a longer index but a louder instruction, and `CLAUDE.md` is where it would go.
 
+### Amended 2026-09-11 — every identifier is American, and prose outside these four docs is not governed
+
+**Every identifier in the repository is spelled American; comments, docstrings, string literals and markdown outside the four docs this entry already governs are left as they are.** Ruled by the owner on 2026-09-11 during the D133 reversal interview, after `server/pipeline_routes.py:_artefacts` was found beside docs this entry rules American, and after the walk found `docs/DECISIONS.md` itself flipping the word between the two spellings across PRs #65 and #110.
+
+**Measured before the ruling, over 291 tracked source and markdown files.** 1,580 British spellings in 198 files: 869 in comments and docstrings across 169 files, 289 in markdown across 23, 119 in identifiers across 24, and the rest in string literals. The American side already held wherever the language itself has a say — 1,405 `color` and 463 `center` in CSS, 951 `fulfill`, 868 `catalog`.
+
+**Why the ruling stopped at identifiers.** The owner's question was whether standardizing had value at all, the worry being that mixed spelling might one day confuse a model reading the code. It does not: a model reads `artefact` and `artifact` as one word, so mixed prose costs nothing at read time. A grep does not. A search for `artifact` never found `_artefacts`, and a session reading `Fulfillment.tsx` and then searching the store for `fulfillment` never found the `fulfilment` table — a search that returns half the sites and looks complete. That hazard exists only for names, so names are what the ruling covers. The full sweep was declined by name: 198 files against five open PRs and sixteen live worktrees, and a rewrite of text in this file and in `docs/GATES.md` whose only job is to be a record.
+
+**Two names are out of scope, by name, with the reason recorded.** `fulfilment` is a table in `inventory/store.sqlite` and the ledger payload key the legacy-JSON migration reads (D88). `catalogued` is the game registry key in `pipeline/games.py`, a field on the wire in `GET /games`, and the stem of the `not_catalogued` reason code. A rename of either is a migration, not a spelling. Their relatives — `is_catalogued`, `NotCatalogued`, `_parse_fulfilment` — stay with them so no file is split between spellings. `aria-labelledby` is the platform's own name and is allow-listed for the same reason.
+
+**The reader is `identifier spelling`, a blocking row in `scripts/docs-audit.py`.** It reads every tracked `.py`, `.ts`, `.tsx`, `.mjs`, `.sh` and `.css`; blanks comments, docstrings, strings, template literals, regex literals and JSX text byte for byte before a token is read; and names the American form in every finding. Its -ise stems are a closed list, because an open pattern flags `raise`, `Promise` and `otherwise`, and a miss is the cheaper error on a row that blocks. `SPELLING_ALLOWED` is the allow-list, each entry a name with its reason. Vale's `AmericanSpelling` rule keeps its advisory watch over markdown and is unchanged. Mutation-tested under `--self-test`, in both directions per language: a British name is found in each of the six file kinds, the same word in a comment, a string, a regex, JSX text and a docstring is not, a template literal's `${}` is read, a generic parameter list is not mistaken for a tag, an allow-listed stem passes, and the tree is clean.
+
+**What landed with it.** The 119 identifiers renamed in place across 24 files — `_artefacts` to `_artifacts`, `summarise` to `summarize`, `humanise` to `humanize`, `_normalise_origin`, the `cancelled` flags, the test locals — and the three documents that named `_artefacts` following it.
+
 ---
 
 ## D61 — The shipping lane is three lanes, and the third answer is "I cannot tell"
@@ -3122,7 +3140,7 @@ This is cookie-session auth, not the order-management API, which is another host
 
 **The cookie is a bearer instrument and `.env` is the only place it lives.** Never logged, never in a refusal message, never written into a run directory; T7 asserts the last over every file the run holds. `PKMNSCAN_TCG_EXPORT_URL` refuses to carry it anywhere but https or loopback, because a knob that redirects a session cookie is an exfiltration channel wearing a test seam. One redirect hop is followed, and the cookie is not re-sent across a host change.
 
-**What was fetched is downloadable.** `_artefacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
+**What was fetched is downloadable.** `_artifacts` lists off the run directory, so the operator can open the file this route summarizes rather than trust the summary.
 
 **The WAF does not block an authenticated stdlib client, measured 2026-08-30.** The owner placed a session cookie and the fetch returned 68,363 bytes over 394 rows. This was the one thing the entry recorded as owed, and it is the reason `PKMNSCAN_TCG_USER_AGENT` exists: the earlier unauthenticated measurement said nothing about a request carrying a session, so a block was a plausible outcome the build had to survive. It did not occur. `tcg_blocked` stays, because one measurement on one day is not a guarantee about a rule somebody else maintains.
 
@@ -5675,7 +5693,7 @@ screen.
 
 **D54's empty guard is per file and was widened, not weakened.** `emit` still never opens an import file until it has at least one row for it, and merging gives that failure one more way to happen — a file can now be empty for every game at once, and under `--split-threshold` a send whose every row is above the cut-off would otherwise write a header-only `import-subthreshold.csv` over a good one. `_warn_stale` globs `import*.csv` now: it named the two bucket files and would have said nothing about the one the default press leaves behind, which is exactly the stale file it exists to name.
 
-**`_artefacts`' `is_import` was wrong from the day the merged file was added** — it tested `startswith("import-")` and `IMPORT_MERGED` is `import.csv` with no hyphen, so the run panel's import affordance never appeared over it. Fixed here because the default now lands on it.
+**`_artifacts`' `is_import` was wrong from the day the merged file was added** — it tested `startswith("import-")` and `IMPORT_MERGED` is `import.csv` with no hyphen, so the run panel's import affordance never appeared over it. Fixed here because the default now lands on it.
 
 ### What is NOT built, named rather than left to be discovered
 
@@ -7429,7 +7447,7 @@ The copies list is what absorbs the difference because it is the only part of th
 
 **`make design-check` is a job in `.github/workflows/check.yml` now.** It was in neither `make check` nor CI, so every floor above — and D50's three, and D117's thumb floor, and the Fulfiller's contractual constraints — fired only when a person typed the command, on one Mac. That is the defect the top of that file already describes: a mechanism that is thorough, correct and never re-evaluated. It is a separate job rather than a step in `check` (a chromium install is a real cost, and a red `check` and a red `design-check` are claims about different things), it runs on `pull_request` and on `push: main`, and it costs twelve to fifteen minutes against ninety seconds — parallel, so it is the last word rather than the first. It gets no `scripts/checks.py` entry, because `check registry` refuses an entry for a target `make check` does not run.
 
-**The "twelve to fifteen minutes" above is what it cost from 2026-09-07 to 2026-09-11 and is left as written; D135 is what it costs now.** Measured over 56 jobs before that entry: 940-1,020s wall-clock per run, `481 passed (15.2m)` on one worker, because a private repo's `ubuntu-latest` has two vCPUs and Playwright's default of half of them floors to one. The job is three shards of one worker each now, the seven real-clock sleeps are a fake clock, and the post-merge run is skipped when the tree already passed on the PR — the new figures, from a dispatch, are in D135.
+**The "twelve to fifteen minutes" above is what it cost from 2026-09-07 to 2026-09-11 and is left as written; D136 is what it costs now.** Measured over 56 jobs before that entry: 940-1,020s wall-clock per run, `481 passed (15.2m)` on one worker, because a private repo's `ubuntu-latest` has two vCPUs and Playwright's default of half of them floors to one. The job is three shards of one worker each now, the seven real-clock sleeps are a fake clock, and the post-merge run is skipped when the tree already passed on the PR — the new figures, from a dispatch, are in D136.
 
 **Its first run went red on the sale case, on a tree the rig had passed 166 times.** The walk row's slot cell is `minmax(34px, max-content)`; selling the copy rewrites that cell from `#1` to the store key `B2 #1` in the mono face (D68), which is wider — so the column grows and the name and the badges slide right ON THE PRESS. `B2 #1` sets at **33.0px in macOS's monospace fallback and over 34px in Linux's**, either side of the column's own 34px floor. One platform swallowed the movement; the other reported it as one pixel.
 
@@ -9228,7 +9246,90 @@ box therefore sits inert beneath a live one rather than being cleaned up — the
 D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
 silently repairing.
 
-## D135 — The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
+## D135 — Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
+
+**Settled 2026-09-11.** OpenAI Codex was installed in this repository on 2026-09-09 and left
+three untracked paths in the main checkout: a 117 KB `AGENTS.md` that is `sed
+'s/AGENTS\.md/CLAUDE.md/g' AGENTS.md | diff - CLAUDE.md` away from `CLAUDE.md` — 139 lines of
+drift, missing `make reap`, D129, the eight-key storage roster and D132 — a byte-identical copy
+of `.claude/skills/tcgplayer-csv/SKILL.md` at the equivalent path under a separate,
+untracked `.agents/skills/` directory, and
+`.codex/` holding `config.toml` (a shell-environment policy, machine-local) and `hooks.json`
+(the same six-then-eight hooks `.claude/settings.json` runs, by the same scripts). None of the
+three was tracked, so none of it reached a clone, a worktree, or a PR — every Codex session
+anywhere but that one Mac read stale prose, a stale skill, or no hooks at all.
+
+**A copy is a fork with a diff nobody watches. A symlink has no diff to drift.** The fix is not
+a sync script — this repo already argued that case for the eval-image mirror and lost it (D47)
+— it is to point Codex at the files Claude Code already reads, so one edit reaches both readers
+by construction:
+
+- **`AGENTS.md -> CLAUDE.md`**, at the root. A relative link, same directory, committed.
+- **`code-card-fork/AGENTS.md -> CLAUDE.md`**, inside that directory — because the codex-track
+  auto-load `CLAUDE.md` itself documents (`code-card-fork/CLAUDE.md`, "auto-loaded in that
+  directory") needs the same door for Codex that the root file gets, or a session working the
+  code-card track reads the singles rules and nothing about codes.
+- **`.agents/skills -> ../.claude/skills`**, a directory link. Every skill added under
+  `.claude/skills/` from now on is a skill Codex can load too, with no second copy and no
+  second place to remember it.
+
+**Both are D47's allowed shape and neither is its refused one.** All three are relative and
+resolve inside the repository — `python3 -c "os.path.realpath(...)"` was run against each
+before committing, the check this entry's own mechanism performs at every commit thereafter.
+The pre-commit hook that reads mode `120000` out of the index (D47) is what makes that
+durable rather than a one-time check: a future session cannot silently turn one of these into
+an absolute path or a copy without the hook refusing it.
+
+**This retires the allowlist line that predicted it.** `scripts/docs-audit-allow.txt` carried
+`code-card-fork/AGENTS.md` from 2026-09-09, on the owner's instruction, with its own reason
+stating the condition for its removal: *"Delete this line if a tracked AGENTS.md is ever
+adopted here, at which point the pointer should be fixed rather than excused."* That day is
+this one. The line is deleted, not edited — the entry it named now exists and the audit
+confirms it rather than excusing its absence.
+
+### The hook roster is reconciled, mechanically, in both directions
+
+**`.codex/hooks.json` and `.claude/settings.json`'s `hooks` block disagreed on arrival.**
+Codex's file was written 2026-09-09; `.claude/settings.json` gained a `Bash`-matched
+`scripts/reap.py --hook` PreToolUse entry the next day (D127, for the pkill/lsof incidents)
+and has always carried `scripts/session-teardown.sh` on `WorktreeRemove` (D111's sweep),
+neither of which `.codex/hooks.json` had. A Codex session could have run an unrestricted
+`pkill` a Claude Code session in this repo cannot, and a worktree it removed would never
+notify a supervisor to stop. Both are added to `.codex/hooks.json` in the same change that
+adds the guard below, so the row starts green rather than starts by reporting the gap.
+
+**`scripts/docs-audit.py:check_codex_hooks` reads both files as `(event, matcher, command)` triples and reports whichever side is missing what the other runs**, plus any command that
+names a script no longer in the tree. It is MECHANICAL — a hook roster is a literal, checkable
+the same way `check_hook_roster` already checks `scripts/githooks/` against `docs/map.py` — and
+it is registered in `audit()` and covered by `--self-test`, which drives the extractor on
+synthetic dicts (so the mutation this row exists to catch — one hook removed from one file —
+is provable without touching either real file) and then asserts the two real files agree.
+
+**What this is not.** `.codex/config.toml` stays untracked, gitignored beside
+`.claude/settings.local.json` with a comment saying why: a shell-environment policy is
+machine-local the same way a local Claude Code settings override is, and neither belongs in
+the tree that ships to every checkout. Nothing about `PKMNSCAN_GATE` or any other value in it
+is asserted here.
+
+### What is BUILT, RECORDED, NEITHER
+
+**BUILT**: the three symlinks, committed and verified to resolve inside the repository;
+`.codex/hooks.json` tracked and brought to parity with `.claude/settings.json`'s hook roster;
+the `codex hooks` mechanical row in `scripts/docs-audit.py`, registered in `audit()` and
+covered by `--self-test`; the stale allowlist line removed; the `.gitignore` line for
+`.codex/config.toml`; `docs/map.py`'s `governed_by` for `docs-audit.py` extended with D111,
+D127 and this entry.
+
+**RECORDED**: this entry, and the CLAUDE.md paragraph naming it.
+
+**NEITHER, left for the owner**: the three untracked copies in the main checkout
+(`~/Developer/pkmnscan/AGENTS.md`, its `.agents/skills/` mirror, and `.codex/`) are deleted
+only after this change is merged and pulled there — deleting them from a worktree
+would not remove the main checkout's own untracked files, and doing it before the merge would
+leave that Mac's Codex session with nothing to read in between. `.codex/config.toml` is kept
+regardless; it was never one of the three copies.
+
+## D136 — The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
 
 **Settled 2026-09-11, on the owner's interview.** Wall-clock per PR and flake exposure are what matter; sharding is fine now that it is known not to multiply runner minutes; a test that sleeps on a real clock may be rewritten to Playwright's fake clock; and the post-merge run on main is skipped only when the tree it would test already passed on the PR. Not one assertion or asserted value changed under this entry — D16 is the test it is held to, and every change here is to how long a true statement is given to become true, or to which machine says it.
 
