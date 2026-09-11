@@ -776,6 +776,14 @@ it is written down because it is the only regularity in the set.
 - 240 of 240: the same sequence on `ubuntu-latest`, three shards, one worker, traces armed.
 - 315 of 315: the whole of `capture-claims.spec.ts` on the runner, `--repeat-each=5`, three shards.
 
+- 0 of 5: the WHOLE suite on the runner with tracing armed — four shards on this branch and the
+  PR's own job — produced no Escape-shaped failure at all. What those five runs did produce, each
+  with a trace, was that afternoon's main: the location card PR #244's merge had brought back
+  (4 of 4 on `inventory.spec.ts`'s D118 case, gone once D119 was re-applied) and PR #246's
+  `Open the review queue` link under the thumb floor at 390 (`phone.spec.ts:206`, which main's
+  own untraced run fails identically). The instrument's first catch was somebody else's defect,
+  which is what an instrument is for.
+
 So the case that fails one run in thirteen inside the suite passes 555 times outside it, on the
 box it fails on. **The suite around it is part of the mechanism** and nothing measured says which
 part. The candidates read and ruled out by evidence rather than by argument: a Vite dependency
