@@ -33,30 +33,23 @@ from typing import Dict, List, Optional
 
 import geometry
 from cli import runs
-from identify import batch, images, prompt, sidecar
+from identify import batch, cost, images, prompt, sidecar
 from pipeline import games
 from store import files as store_files
 from store import master
 from store.session import Store
 
-# Claude Haiku 4.5, halved for the Batch API's 50% discount (confirmed 2026-08-03):
-#
-#     base input  $1 / MTok  ->  $0.50
-#     output      $5 / MTok  ->  $2.50
-#
-# The arithmetic is written out because the halving is the part that looks like a typo. Two
-# columns of the price sheet are deliberately unused: prompt caching is not wired here, so
-# no request pays a cache-write rate and none gets a cache-hit rate. The system prompt IS
-# identical across every request in a batch and could in principle be cached — but images
-# dominate the input (a 1568px card is several times the system prompt), so the saving is
-# small and the complexity is not free. Recorded so a later session sees a decision rather
-# than an oversight.
+# THE RATES MOVED TO `identify/cost.py` ON 2026-09-11, and nothing about them changed. They
+# went because `server/pipeline_routes.py` needed them to report what a finished run cost and
+# could not import this module for them: its own rule is stdlib-only at module scope, and this
+# file reaches geometry, PIL and sqlite. `identify/cost.py` is dependency-free and is now the
+# only place in this repo that multiplies a token count by a rate.
 #
 # An ESTIMATE, printed before you spend: it exists so that a mistyped directory of 40,000
 # photos is visibly a different number from a box of 400. Not an invoice, and nothing
-# reconciles against it.
-INPUT_PER_MTOK = Decimal("0.50")
-OUTPUT_PER_MTOK = Decimal("2.50")
+# reconciles against it. That is what the three constants below are for — the rates above it
+# are what the run is BILLED at, which is a different number and is recorded rather than
+# guessed.
 PIXELS_PER_TOKEN = Decimal("750")
 # MEASURED, NOT ASSUMED, as of 2026-08-23. This read 500 and was wrong by about half: box 2's
 # 544-card run billed 1,315,698 input tokens — 2,419 per card — against roughly 1,416 of image
@@ -158,12 +151,10 @@ def _estimate(items: List[Item]) -> Decimal:
             continue
         width, height = item.prepared.sent_size
         total_input += int(Decimal(width * height) / PIXELS_PER_TOKEN) + SYSTEM_TOKENS
-    million = Decimal(1_000_000)
-    cost = (
-        Decimal(total_input) / million * INPUT_PER_MTOK
-        + Decimal(OUTPUT_TOKENS * len(items)) / million * OUTPUT_PER_MTOK
-    )
-    return cost.quantize(Decimal("0.01"))
+    # QUANTIZED HERE AND NOT IN `cost.usd`, so the printed line is unchanged to the byte:
+    # `server/pipeline_routes.py:_ESTIMATE` is a regex over `^estimated cost\s+\$([0-9.]+)$`
+    # and `app/tests/run-panel.spec.ts`'s fixture is that exact layout.
+    return cost.usd(total_input, OUTPUT_TOKENS * len(items)).quantize(Decimal("0.01"))
 
 
 def _custom_id(key: str) -> str:
@@ -792,7 +783,18 @@ def run(args, say) -> int:
 
     run_dir.set(
         collected=True,
-        usage={"input_tokens": usage_in, "output_tokens": usage_out},
+        usage={
+            "input_tokens": usage_in,
+            "output_tokens": usage_out,
+            # WHAT IT COST, AT THE RATES IN FORCE THE DAY IT RAN. `cli/runs.py`'s header has
+            # said since it was written that this manifest records "what it cost", and
+            # docs/specs/batch-script.md's file map says the same — both were true of the
+            # TOKENS and of nothing else, so a screen could report 290,470 tokens and no
+            # figure. `server/pipeline_routes.py:_usage` fills this in for a run that
+            # predates the field, and never over one that carries it: a recorded figure is
+            # evidence and a computed one is an opinion about evidence.
+            "cost_usd": cost.recorded(usage_in, usage_out),
+        },
     )
 
     # --------------------------------------------------------------------------- record
@@ -945,6 +947,11 @@ def run(args, say) -> int:
     say("")
     say(f"identified      {len(answered)}/{len(items)}")
     say(f"tokens          in {usage_in}, out {usage_out}")
+    # THE RATES ARE NAMED ON THE LINE so the figure explains itself and nobody reads it as an
+    # invoice. It cannot collide with the preflight's own line, which `_ESTIMATE` anchors at
+    # `^estimated cost`.
+    say(f"cost            ${cost.usd(usage_in, usage_out).quantize(Decimal('0.01'))} "
+        f"at ${cost.INPUT_PER_MTOK}/${cost.OUTPUT_PER_MTOK} per MTok")
     if ledger_lines:
         say(
             f"code ledger     {len(ledger_lines)} line(s) -> "

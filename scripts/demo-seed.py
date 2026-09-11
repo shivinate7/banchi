@@ -48,6 +48,7 @@ from typing import Dict, List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from identify import cost  # noqa: E402
 from store import Box, Card, Listing, Store  # noqa: E402
 from store import files as store_files  # noqa: E402
 from store import orders as orders_mod  # noqa: E402
@@ -807,7 +808,19 @@ def write_run(
                 "collected": True,
                 "joined": False,
                 "counts": {"cards": len(rows)},
-                "usage": {},
+                # WHAT THE RUN COST, BECAUSE A DEMO THAT SHOWS `Already paid` SHOWS NOTHING.
+                # `#/runs` reports the figure on the Identify step, and a manifest with an
+                # empty `usage` is the one shape that has none to report — which is what the
+                # published demo would have drawn. Scaled off the card count from the owner's
+                # own 2026-09-11 run (290,470 in / 3,761 out over 464 photographs) so the
+                # arithmetic a viewer checks against `identify/cost.py` comes out right.
+                # Deterministic, like everything else here: no RNG, so an unchanged tree
+                # rebuilds byte-identically.
+                "usage": {
+                    "input_tokens": 626 * len(rows),
+                    "output_tokens": 8 * len(rows),
+                    "cost_usd": cost.recorded(626 * len(rows), 8 * len(rows)),
+                },
             },
             indent=1,
         )

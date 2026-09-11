@@ -8,6 +8,7 @@ import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
 import { boxLabel } from './runScope'
+import { money } from './money'
 import { storeKeyText } from './storeKey'
 import './Runs.css'
 
@@ -72,10 +73,6 @@ const TITLES: Record<StageKey, string> = {
   read: 'How they are read',
   quote: 'What it costs',
   started: 'Started',
-}
-
-function money(value: number | null | undefined): string {
-  return typeof value === 'number' ? `$${value.toFixed(2)}` : '—'
 }
 
 function count(value: number | null | undefined): string {
