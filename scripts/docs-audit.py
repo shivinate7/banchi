@@ -9142,6 +9142,65 @@ def check_route_rosters(report: Report) -> None:
         f"{len(expected.get('all', []))} registered routes",
     )
 
+# ------------------------------------------------------ deletions a decision records
+#
+# A DELETION IS THE ONE KIND OF RULING A MERGE CAN UNDO WITHOUT ANYBODY WRITING A LINE. D119
+# deleted `LocationCard` on 2026-09-07 (PR #218, `4bf5a44`) and the very next PR to land put it
+# back: `9439765` (PR #221, a cap-wording change) was committed from a tree that still held the
+# pre-deletion copy of every file #218 had touched — the component, its stylesheet, the specs
+# that asserted its absence and the map rows that recorded it — and the merge carried all of it
+# onto main in one commit whose message was about something else. Every guard the deletion had
+# was IN the files that came back, so every guard came back with the thing it guarded against,
+# and `make check` was green on both sides. Three days later D132's session found the component,
+# read the owner's screenshot of it as evidence they wanted it, and wrote that down.
+#
+# So the guard lives HERE, in a file no screen change touches, and it is the smallest possible
+# claim: a decision that records a symbol as deleted is contradicted by that symbol existing
+# under app/src. The table is hand-written on purpose — reading DECISIONS.md for the word
+# "deleted" would fire on every entry that deletes a sentence — and adding a row to it is how a
+# session says a deletion is meant to stay one. A symbol that is meant to come back is removed
+# from the table in the same commit that restores it, with the entry amended to say so.
+
+RECORDED_DELETIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
+    # (decision, what it deleted, the strings whose presence under app/src contradicts it)
+    ("D119", "the `#/inventory` location card", ("LocationCard", "inventory-location")),
+)
+
+
+def check_recorded_deletions(report: Report) -> None:
+    """A symbol a decision records as deleted does not exist under app/src.
+
+    MECHANICAL: the entry says the thing is gone, and a grep says whether it is. See the banner
+    above for the merge that made this row necessary — and for why the guard cannot live in
+    the files the deletion touched.
+    """
+    findings: List[Finding] = []
+    for decision, what, needles in RECORDED_DELETIONS:
+        for path in sorted(_walk(APP_SRC, (".ts", ".tsx", ".css")), key=rel):
+            text = read(path)
+            for needle in needles:
+                if needle not in text:
+                    continue
+                line = text.count("\n", 0, text.index(needle)) + 1
+                findings.append(
+                    Finding(
+                        f"{rel(path)}:{line}",
+                        f"names `{needle}`, and {decision} records {what} as deleted.\n"
+                        "Either the deletion is being undone — amend the entry and remove the "
+                        "row from RECORDED_DELETIONS in the same commit — or a merge has "
+                        "carried the pre-deletion file back onto this branch, which is how it "
+                        "happened the first time.",
+                    )
+                )
+    report.add(
+        "recorded deletions",
+        MECHANICAL,
+        findings,
+        f"{len(RECORDED_DELETIONS)} recorded deletion{'' if len(RECORDED_DELETIONS) == 1 else 's'} "
+        "still absent from app/src",
+    )
+
+
 # ------------------------------------------------------------- the capture-port seal
 #
 # `app/src/server.ts` talks to a DIFFERENT ORIGIN from the one the page came off —
@@ -12060,6 +12119,7 @@ def audit(staged_only: bool) -> Report:
     check_views_opsec(report)
     check_doc_hygiene(report, docs)
     check_route_rosters(report)
+    check_recorded_deletions(report)
     check_spec_seal(report)
     check_design_check_verdict(report)
     check_route_census(report)
