@@ -163,3 +163,13 @@ class Store:
             return db.history(conn)
         finally:
             conn.close()
+
+    def buried(self):
+        """Every `buried` event, newest first (D133). `history()`'s narrower sibling, for
+        `#/graveyard`'s read: a whole box's departed records, without loading every other
+        event this store has ever written to filter them in Python."""
+        conn = db.connect(self.directory)
+        try:
+            return db.events_named(conn, "buried")
+        finally:
+            conn.close()

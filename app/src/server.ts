@@ -31,6 +31,7 @@ import type {
   MoveResult,
   MoveCardsResult,
   BoxDeleteResult,
+  GraveyardPayload,
   BoxListingPlan,
   BoxPhotoPlan,
   ListingReleaseResult,
@@ -1681,22 +1682,38 @@ export async function moveCards(
 
 /**
  * Delete a whole box — records, photos, sidecars, queue entries, cache, registry entry
- * (D10 ruling 3).
+ * (D10 ruling 3, amended D133).
  *
  * THE MOST DESTRUCTIVE ACTION IN THE PRODUCT, and the one place `docs/DESIGN.md`'s
  * "genuinely destructive actions may still gate" clause is meant to bite. There is no undo:
  * unlike capture-undo, the cards are not in your hand.
  *
- * It refuses `box_not_empty_of_commitments` while the box holds anything sold, retired or
- * listing-held, naming up to eight of them. That refusal is the guard rail — those records
- * are history and commitments, not clutter — so a screen should show what it says rather
- * than reducing it to "cannot delete".
+ * It refuses `box_not_empty_of_commitments` only while the box holds an on-hand card with an
+ * active listing hold, naming up to eight. A sold, retired or moved record no longer blocks
+ * this (D133) — it is buried instead, readable afterward from `graveyard()`, so a screen
+ * should show the refusal as naming only what still stands in the way.
  *
- * The result is a per-kind receipt and should be drawn as one. `directory_removed: false`
- * is not a failure; see `BoxDeleteResult`.
+ * The result is a per-kind receipt and should be drawn as one. `buried` is the subset of
+ * `cards` that left through a departure door rather than as ordinary on-hand junk.
+ * `directory_removed: false` is not a failure; see `BoxDeleteResult`.
  */
 export async function deleteBox(box: number): Promise<BoxDeleteResult> {
   return (await request(`/boxes/${box}`, { method: 'DELETE' })) as BoxDeleteResult
+}
+
+/**
+ * Every departed card the store still knows about, newest departure first (D133).
+ *
+ * TWO SOURCES, ONE SHAPE. A sold, retired or moved record can be standing in a box nobody
+ * has deleted — the same records `#/inventory` already draws as departed — or it can be the
+ * retained half of a record whose box WAS deleted, read back from the `buried` history line.
+ * `DepartedCard.buried` is which one a row came from; nothing else about the shape differs,
+ * and a record is never counted from both sources at once.
+ *
+ * Free and read-only. `#/graveyard` is the one screen that calls this.
+ */
+export async function getGraveyard(): Promise<GraveyardPayload> {
+  return (await request('/graveyard')) as GraveyardPayload
 }
 
 /**

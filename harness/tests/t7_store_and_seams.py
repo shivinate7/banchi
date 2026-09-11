@@ -2183,13 +2183,32 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             "box_not_found",
             "deleting a box nothing has heard of refuses",
         )
+
+        # D133: box 3 holds 3/1 (never identified, on hand), 3/2 (N3), 3/3 (N4), 3/4 (N5).
+        # One of each terminal door, plus an on-hand card carrying a listing hold, so the
+        # refusal and the burial are both exercised in one setup.
+        blob_3 = base64.b64decode(blob(3))
+        blob_5 = base64.b64decode(blob(5))
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("3/3", master.SOLD)
+            # 3/2 is r3 (originally 3/3), which the remove test above assigned SKU
+            # "8608859" to and then released — that leftover claim is cleared here so
+            # this sold card's burial line is asserted against a clean sku=None.
+            snapshot.inventory.cards["3/2"].sku = None
+            snapshot.inventory.set_state("3/2", master.SOLD)
+            snapshot.inventory.retire("3/4", "damaged")
+        move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9})
+        moved_to = move_result["to"]
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED, sku="8608859")
+            snapshot.inventory.listing("8608859", condition="Near Mint").set(
+                master.PUSHED, 1
+            )
+
         caught = checks.raises(
             capture_server.BadRequest,
             lambda: capture_server.do_delete_box(3),
-            "a box holding a sold card refuses deletion — those records are history and "
-            "commitments, not clutter (D10, ruling 3)",
+            "an on-hand card holding a listing still refuses deletion — that copy is a "
+            "commitment TCGplayer already knows about (D10, ruling 3)",
         )
         if caught is not None:
             checks.equal(
@@ -2198,24 +2217,36 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 "in its own code",
             )
             checks.ok(
-                "card 3 is sold" in str(caught),
-                "and the refusal names what stands in the way",
+                "8608859" in str(caught) and "1 pushed" in str(caught)
+                and "is sold" not in str(caught) and "is retired" not in str(caught)
+                and "was moved" not in str(caught),
+                "and the refusal names only the listed copy — the sold, retired and "
+                "moved records no longer stand in the way (D133)",
                 f"message was: {caught}",
             )
         checks.equal(
-            len(Store().read().inventory.cards), 4, "and the refusal deleted nothing"
+            len(Store().read().inventory.cards), 5,
+            "and the refusal deleted nothing — not the departed records it did not name "
+            "either, box 3 plus the moved card's fresh home in box 9",
         )
-        capture_server.do_mark_sold(3, 3, {"undo": True})
+        with Store().write() as snapshot:
+            snapshot.inventory.listing("8608859").set(master.PUSHED, 0)
 
         body = capture_server.do_delete_box(3)
         checks.equal(
-            (body["cards"], body["photos"], body["sidecars"]),
-            (4, 4, 4),
-            "the delete reports what it removed, counted per kind",
+            (body["cards"], body["buried"], body["photos"], body["sidecars"]),
+            (4, 3, 3, 3),
+            "the delete reports what it removed — 4 records, 3 of them departed and "
+            "buried rather than counted as ordinary deletions. The moved tombstone's "
+            "photo and sidecar already relocated with the transplant, so only 3 of the "
+            "4 records still had files at this box for the delete to unlink",
         )
         checks.ok(
             body["review_deleted"] == 1 and body["cache_deleted"] == 1,
-            "including the queue entry and the paid answer",
+            "the queue entry and the paid answer that were re-keyed onto 3/4 by the "
+            "earlier remove are dropped along with the RETIRED record they now belong "
+            "to — a buried record is cleared from every other store exactly as an "
+            "ordinary deletion is",
             f"body was: {body}",
         )
         checks.ok(
@@ -2224,26 +2255,156 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         )
         after = Store().read()
         checks.ok(
-            not after.inventory.cards
+            not after.inventory.records_in(3)
             and after.inventory.boxes.get("3") is None
             and not capture_server.photo_path(3, 1).parent.exists(),
-            "a deleted box is a box the store has never heard of",
+            "a deleted box is a box the store has never heard of — box 9, holding the "
+            "card that moved out before the delete, is untouched",
         )
         checks.ok(
             any(
                 e.get("event") == "box_deleted" and e.get("cards") == 4
-                and "position" not in e
+                and e.get("buried") == 3 and "position" not in e
                 for e in Store().history()
             ),
-            "one `box_deleted` line carries the box and the card count, with no "
-            "`position` key — a box is not at a position",
+            "one `box_deleted` line carries the box, the card count and the buried "
+            "count, with no `position` key — a box is not at a position",
         )
+
+        buried = Store().buried()
+        by_key = {e.get("position"): e for e in buried}
+        checks.equal(
+            sorted(by_key), ["3/2", "3/3", "3/4"],
+            "one `buried` line per departed record, keyed like every other position line",
+        )
+        checks.ok(
+            by_key["3/2"].get("state") == master.SOLD
+            and by_key["3/2"].get("name") == "N3"
+            and by_key["3/2"].get("sku") is None
+            and by_key["3/2"].get("box") == 3
+            and by_key["3/2"].get("index") == 2
+            and by_key["3/2"].get("box_name") is None
+            and by_key["3/2"].get("capture_id") == "r3"
+            and by_key["3/2"].get("order") is None
+            and by_key["3/2"].get("photo_sha256")
+            == hashlib.sha256(blob_3).hexdigest(),
+            "the sold line carries the record whole, including a photograph digest "
+            "computed from the bytes in the moment before they were deleted — this "
+            "card's photo_sha256 was never set by a reclaim",
+            f"line was: {by_key['3/2']!r}",
+        )
+        checks.ok(
+            by_key["3/3"].get("state") == master.MOVED
+            and by_key["3/3"].get("moved_to") == moved_to
+            and by_key["3/3"].get("capture_id") is None
+            and by_key["3/3"].get("photo_sha256") is None,
+            "the moved tombstone's line names where the card went, and carries no "
+            "capture_id or digest — `move_card` clears the first and the file the "
+            "second would be computed from already relocated with the transplant",
+            f"line was: {by_key['3/3']!r}",
+        )
+        checks.ok(
+            by_key["3/4"].get("state") == master.RETIRED
+            and by_key["3/4"].get("retire_reason") == "damaged"
+            and by_key["3/4"].get("name") == "N5"
+            and by_key["3/4"].get("capture_id") == "r5"
+            and by_key["3/4"].get("photo_sha256")
+            == hashlib.sha256(blob_5).hexdigest(),
+            "the retired line names why it left, alongside the same digest and record "
+            "detail the sold line carries",
+            f"line was: {by_key['3/4']!r}",
+        )
+
         _, fresh = capture_server.do_capture(
             {"box": 3, "capture_id": "fresh", "image": blob(9)}
         )
         checks.equal(
             fresh["index"], 1,
             "and recreating the number starts from nothing, like a box never used",
+        )
+
+
+def check_graveyard(checks: Checks) -> None:
+    """GET /graveyard — D133's merge of two sources into one screen.
+
+    A DEPARTED CARD READS THE SAME WAY WHETHER ITS BOX STILL EXISTS OR NOT, which is the
+    whole reason this route is a merge rather than a pass-through of `do_boxes` or
+    `Store().buried()` alone. This walks a card through both: sold and standing, then
+    sold and buried once its box is deleted — the same record, the same shape, and the
+    count never doubles or drops it along the way.
+    """
+    checks.note("")
+    checks.note("GRAVEYARD — D133's two-source merge")
+
+    def blob(i: int) -> str:
+        return base64.b64encode(b"\xff\xd8\xff" + bytes([i]) * 64).decode("ascii")
+
+    with isolated_home():
+        checks.equal(
+            capture_server.do_graveyard(), {"departed": []},
+            "an empty store has nothing departed",
+        )
+
+        # ---------------------------------------------- source 1: standing in a box
+        capture_server.do_capture({"box": 1, "capture_id": "g1", "image": blob(1)})
+        capture_server.do_capture({"box": 1, "capture_id": "g2", "image": blob(2)})
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                "1/1", name="Alpha", number="001", printed_total="100", confidence="high",
+            )
+        capture_server.do_mark_sold(1, 1, {})
+
+        body = capture_server.do_graveyard()
+        checks.equal(
+            len(body["departed"]), 1,
+            "the sold card is the one departed row — the on-hand card beside it in the "
+            "same box is not",
+        )
+        row = body["departed"][0]
+        checks.ok(
+            row["how"] == "sold" and row["buried"] is False and row["buried_at"] is None
+            and row["box"] == 1 and row["index"] == 1 and row["name"] == "Alpha",
+            "read straight off the standing record — no burial needed for a card whose "
+            "box still exists",
+            f"row was: {row!r}",
+        )
+
+        # A second box, a second departure, standing too — proves the merge is not
+        # scoped to one box, and gives the ordering assertion below something real to
+        # order.
+        capture_server.do_capture({"box": 2, "capture_id": "g3", "image": blob(3)})
+        with Store().write() as snapshot:
+            snapshot.inventory.record_identification(
+                "2/1", name="Beta", number="002", printed_total="100", confidence="high",
+            )
+        capture_server.do_retire(2, 1, {"reason": "lost"})
+
+        rows = capture_server.do_graveyard()["departed"]
+        checks.equal(len(rows), 2, "two standing departures, from two different boxes")
+        checks.ok(
+            [r["how"] for r in rows] == ["retired", "sold"],
+            "newest departure first — the retirement happened after the sale",
+            f"rows were: {rows!r}",
+        )
+
+        # ---------------------------------------------------- source 2: buried
+        capture_server.do_delete_box(1)
+        rows = capture_server.do_graveyard()["departed"]
+        checks.equal(
+            len(rows), 2,
+            "still two — the sold card moved from one source to the other, never "
+            "doubled and never dropped",
+        )
+        by_how = {r["how"]: r for r in rows}
+        checks.ok(
+            by_how["sold"]["buried"] is True
+            and by_how["sold"]["buried_at"] is not None
+            and by_how["sold"]["box"] == 1
+            and by_how["sold"]["name"] == "Alpha"
+            and by_how["retired"]["buried"] is False,
+            "the deleted box's departure now reads `buried: true` with a `buried_at` "
+            "stamp; the standing one still reads `buried: false`",
+            f"rows were: {rows!r}",
         )
 
 
@@ -2481,24 +2642,30 @@ def check_listing_release(checks: Checks) -> None:
         with Store().write() as snapshot:
             for sku in ("SHARED", "SOLDCOPY"):
                 snapshot.inventory.listings[sku].release(99)
-        caught = checks.raises(
-            capture_server.BadRequest,
-            lambda: capture_server.do_delete_box(4),
-            "a box held open by a SOLD card still refuses once every listing in it is clear "
-            "— the release answers one of the three grounds and must not reach the others",
-        )
-        if caught is not None:
-            checks.ok(
-                "is sold" in str(caught),
-                "and it refuses for the sale, naming it",
-                f"message was: {caught}",
-            )
         refusal(
             checks,
             lambda: capture_server.do_release_box_listings(4, {"confirm": True}),
             "nothing_to_release",
             "and with every stage at zero a replay refuses rather than answering a cheerful "
             "200 — what keeps a stale screen distinguishable from a release that worked",
+        )
+
+        # D133: every listing hold on box 4 is now clear, and the SOLD card at 4/6 no
+        # longer stands on its own — it is buried rather than blocking. The delete D34
+        # was built to unblock (`_listing_hold` is what remains of the gate) succeeds.
+        body = capture_server.do_delete_box(4)
+        checks.equal(
+            (body["cards"], body["buried"]),
+            (6, 1),
+            "all 6 records go — the 5 on-hand cards as ordinary deletions, the one SOLD "
+            "record buried rather than counted among the blockers a listing hold answers",
+        )
+        buried = {e.get("position"): e for e in Store().buried() if e.get("box") == 4}
+        checks.ok(
+            "4/6" in buried and buried["4/6"].get("state") == master.SOLD,
+            "the sold card's departure survives the box as a `buried` line rather than "
+            "as the box's own permanent refusal",
+            f"buried lines were: {buried!r}",
         )
 
 
@@ -21084,6 +21251,7 @@ def run() -> Result:
     check_supervisor_recovery(checks)
     check_undo(checks)
     check_remove_and_box_delete(checks)
+    check_graveyard(checks)
     check_queues(checks)
     check_queue_starvation(checks)
     check_listing_release(checks)

@@ -981,8 +981,10 @@ COMPONENTS = [
             # are what a kill still tears.
             "session.py": {"does": "lock-free read, or locked read-modify-write, over one SQLite "
                                    "transaction — `Snapshot` is the API and every field of it "
-                                   "loads only the rows a caller names",
-                           "governed_by": ["D13", "D53", "D63", "D88"], "tested_by": ["T7"]},
+                                   "loads only the rows a caller names. `buried()` (D133) is "
+                                   "`history()`'s narrower sibling: the `buried` events alone, "
+                                   "for `#/graveyard`'s read.",
+                           "governed_by": ["D13", "D53", "D63", "D88", "D133"], "tested_by": ["T7"]},
             "rows.py": {"does": "`Rows`: a keyed mapping of records that is a dict to every "
                                 "caller and, bound to a `Source`, loads one row, one indexed "
                                 "column's matches, or column values with no object built at all. "
@@ -993,8 +995,11 @@ COMPONENTS = [
                               "indexed columns derived beside it), `SqliteSource` behind every "
                               "`Rows`, the per-session flush, the events table that is the "
                               "history, and the one-time lossless import of a legacy JSON store "
-                              "into it — under the lock, files moved to legacy-json/ with a receipt",
-                      "governed_by": ["D86", "D88"], "tested_by": ["T7"]},
+                              "into it — under the lock, files moved to legacy-json/ with a receipt. "
+                              "`events_named` (D133) is an unindexed `WHERE event = ?` scan over "
+                              "that same table — no new index, because this repo has no schema "
+                              "migration to add one to a store already on disk.",
+                      "governed_by": ["D86", "D88", "D133"], "tested_by": ["T7"]},
         },
     },
     {
@@ -2186,6 +2191,12 @@ COMPONENTS = [
                         "together or neither does. NOT ONE OF THEM is a member of "
                         "master.STATES, which is what keeps _state_before_sale from "
                         "restoring a reversed sale to one of them. "
+                        "DELETE /boxes/<box> BURIES A DEPARTED RECORD RATHER THAN "
+                        "REFUSING ON IT (D133): a sold, retired or moved record no longer "
+                        "blocks the delete — one `buried` event per record, carrying it "
+                        "whole, before the record and its photograph go. `GET /graveyard` "
+                        "reads those lines merged with every departed record still "
+                        "standing in an un-deleted box, one shape either way. "
                         "THERE IS ONE ORDER-PULL DOOR AND THERE WERE BRIEFLY TWO. `do_order_fill` "
                         "— D90's envelope, every line of one order in one write — arrived with "
                         "main's merge, was reachable from no screen here for a day and a half, "
@@ -2231,7 +2242,7 @@ COMPONENTS = [
                                 "D62", "D63", "D64", "D65", "D66", "D67", "D69", "D70", "D76",
                                 "D77", "D79", "D83", "D86", "D87", "D88", "D89", "D90", "D91",
                                 "D92", "D93", "D96", "D100", "D103", "D104", "D113", "D115",
-                                "D116", "D132"],
+                                "D116", "D132", "D133"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -2456,18 +2467,20 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
-                "themes, and every screen redrawn against it. ELEVEN routes behind a "
-                "hand-written hash router, TEN of them the owner's — home, which took the root "
-                "hash and is where the six-stage spine is drawn; the capture screen that Gate B "
-                "runs on, now at `#/capture`; the runs screen the pipeline lives on; the review "
-                "queue; the pricing worklist; the order screen and the shipping lane (D69 gave "
-                "each its own route rather than making one a mode of the other); the one "
-                "inventory view (D31 folded the box walk and the pull preview into it); the "
-                "code-card screen D70 gave its own route; and `#/gallery`, which is the KIT — "
-                "step 6's component page grown into every primitive the product is built from. "
-                "One is the Fulfiller's, and the shell deliberately draws no chrome over it. "
-                "The count here is RECOUNTED off src/App.tsx's ROUTES table and never "
-                "incremented: it has been wrong more often than right — it said "
+                "themes, and every screen redrawn against it. TWELVE routes behind a "
+                "hand-written hash router, ELEVEN of them the owner's — home, which took the "
+                "root hash and is where the six-stage spine is drawn; the capture screen that "
+                "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
+                "review queue; the pricing worklist; the order screen and the shipping lane "
+                "(D69 gave each its own route rather than making one a mode of the other); the "
+                "one inventory view (D31 folded the box walk and the pull preview into it); "
+                "`#/graveyard`, where a departed card is read whether its box still stands or "
+                "was deleted out from under it (D133); the code-card screen D70 gave its own "
+                "route; and `#/gallery`, which is the KIT — step 6's component page grown into "
+                "every primitive the product is built from. One is the Fulfiller's, and the "
+                "shell deliberately draws no chrome over it. The count here is RECOUNTED off "
+                "src/App.tsx's ROUTES table and never incremented: it has been wrong more "
+                "often than right — it said "
                 "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
                 "outright. TWO ROWS RECONCILE IT NOW and neither existed when the sentence "
                 "here ended `and nothing reconciles it`: scripts/docs-audit.py's "
@@ -2797,11 +2810,12 @@ COMPONENTS = [
             # and its render off a single ROUTES table rather than a table plus a switch, and
             # cites D16 for why two lists of the same strings are the drift to avoid.
             "src/App.tsx": {"does": "THE BANCHI SHELL, and the ROUTES table it is all driven "
-                                    "off. ELEVEN hash routes, TEN the owner's and one the "
+                                    "off. TWELVE hash routes, ELEVEN the owner's and one the "
                                     "Fulfiller's: `#/` is Home, which took the root hash in the "
                                     "2026-09 rebuild and moved capture to `#/capture`; then "
                                     "capture, runs, review, pricing, orders, shipping, "
-                                    "inventory, codes, the Fulfiller's `#/fulfillment`, and "
+                                    "inventory, `#/graveyard` (D133), codes, the Fulfiller's "
+                                    "`#/fulfillment`, and "
                                     "`#/gallery`, which is the KIT now rather than step 6's "
                                     "component page. RECOUNT FROM THE TABLE, NEVER INCREMENT — "
                                     "`route census` fails a commit where this file, CLAUDE.md or "
@@ -2863,7 +2877,7 @@ COMPONENTS = [
                             "governed_by": ["D5", "D10", "D13", "D14", "D16", "D20", "D27",
                                             "D28", "D31", "D33", "D39", "D49", "D51", "D53",
                                             "D57", "D61", "D63", "D66", "D69", "D70", "D94",
-                                            "D95", "D100", "D105", "D120"]},
+                                            "D95", "D100", "D105", "D120", "D133"]},
             "src/Codes.tsx": {"does": "the code-card screen: read a box's QRs into the ledger, "
                                       "see the two lanes C11 tiers the pile into, and hand a "
                                       "lane's codes to a buyer against a named order. The "
@@ -2962,7 +2976,7 @@ COMPONENTS = [
                                               "D61", "D62", "D63", "D64", "D65", "D68", "D69",
                                               "D70", "D73", "D76", "D79", "D83", "D86", "D87",
                                               "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113", "D116", "D132"]},
+                                              "D104", "D113", "D116", "D132", "D133"]},
             "src/demoFlag.d.ts": {"does": "declares `__BN_DEMO__`, the build-time demo flag "
                                           "`vite.config.ts` substitutes with a boolean "
                                           "literal. It exists because three other forms of "
@@ -3021,7 +3035,7 @@ COMPONENTS = [
                                              "D63", "D64", "D65", "D67", "D69", "D73", "D76",
                                              "D79", "D83", "D86", "D87", "D89", "D91", "D92",
                                              "D93", "D100", "D103", "D104", "D113", "D115",
-                                             "D116", "D132"]},
+                                             "D116", "D132", "D133"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -3526,7 +3540,9 @@ COMPONENTS = [
                         "Two destructive-adjacent controls sit "
                         "beneath them: D34's listing release, drawn over a free plan and "
                         "budgeted by this box's own copies, and D10 ruling 3's whole-box "
-                        "delete behind a typed box number.",
+                        "delete behind a typed box number — which no longer refuses on a "
+                        "sold, retired or moved record (D133): those are buried, and only a "
+                        "listing hold still stands in the way.",
                 "note": "TWO CONTROLS SAY WHAT THEY WILL DO BEFORE THEY DO IT, and both "
                         "sentences are the decision rather than a nicety. Sealing reads 'Seal "
                         "box — freezes capacity at 59', because from that press every fraction "
@@ -3548,7 +3564,7 @@ COMPONENTS = [
                         "pipeline/join.py:Position is the only label formula in the repo; the "
                         "spans, the rendered divider list and the denominator are all read back "
                         "off the wire.",
-                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132"],
+                "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33", "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115", "D132", "D133"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -3564,6 +3580,30 @@ COMPONENTS = [
                         "styled — the walk beside it drew the same rows, foldable and tickable, "
                         "while this drew them as inert text.",
                 "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50", "D83", "D132"],
+            },
+            "src/Graveyard.tsx": {
+                "does": "`#/graveyard` (D133): every departed card the store still knows "
+                        "about, newest departure first. TWO SOURCES, ONE TABLE — a "
+                        "sold/retired/moved record still standing in a box nobody has "
+                        "deleted, the same records `#/inventory` already draws as departed, "
+                        "and a `buried` history line for one whose box WAS deleted by "
+                        "`do_delete_box`. `GET /graveyard` merges both server-side; this "
+                        "screen reads one shape and a `buried` pill says which door a row "
+                        "came from. A Segmented filter (All/Sold/Retired/Moved/Buried) and a "
+                        "text search over name, number, SKU and box name; no photograph, no "
+                        "price, no control that writes anything — a ledger for looking, not "
+                        "a screen that spends. ITS `#` IS ALWAYS A KEY, NEVER A COUNT (D92): "
+                        "a departed record has no slot to count to, so `positionOf` and the "
+                        "Where column both go through `storeKey.ts:storeKeyText` — `B9 #3`, "
+                        "D68's own spelling — rather than composing `#{index}` by hand.",
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D133"],
+            },
+            "src/Graveyard.css": {
+                "does": "a smaller sheet than a working screen's, because this one has no "
+                        "form and no write: a toolbar, a `.bn-table` that becomes a stacked "
+                        "card at 639px on the same idiom `Codes.css` established, and a "
+                        "loading skeleton. Every color is a `--bn-*` token.",
+                "governed_by": ["D50", "D94", "D133"],
             },
             "src/Fulfillment.tsx": {
                 "does": "D5's second persona's entire product: cards to pull in box-walk "

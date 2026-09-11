@@ -360,6 +360,33 @@ def history(conn: sqlite3.Connection) -> List[dict]:
     return out
 
 
+def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
+    """Every event of one name, newest first. `history`'s narrower sibling (D133).
+
+    `#/graveyard` wants only `buried` lines, not a full-table load and filter in Python —
+    `history()` stays the reversal readers' full scan (`_state_before_sale` and its twin
+    need the whole ordered sequence to find the line just before the one they are asked
+    about), and this is the read a screen makes instead. The `event` column already exists
+    for `append_events`' own denormalised copy of the payload's `event` key; no new column,
+    no new index — the events table has none of its own and this repo has no schema
+    migration to add one to a store already on disk, so a `WHERE event = ?` here is an
+    unindexed scan, the same shape `history()` already is over the whole table. Same
+    one-bad-row refusal as `history()`, for the same reason.
+    """
+    out = []
+    rows = conn.execute(
+        "SELECT id, payload FROM events WHERE event = ? ORDER BY id DESC", (event,)
+    ).fetchall()
+    for row_id, text in rows:
+        try:
+            out.append(json.loads(text))
+        except ValueError as exc:
+            raise files.StoreError(
+                f"history event {row_id} in {DB_NAME} is not valid JSON: {exc}"
+            ) from exc
+    return out
+
+
 def dump_tables(conn: sqlite3.Connection) -> Dict[str, List[tuple]]:
     """Every table's rows, ordered. What T7 compares where it used to compare file bytes."""
     out: Dict[str, List[tuple]] = {}

@@ -67,6 +67,7 @@ const RING = [
   '#/orders',
   '#/shipping',
   '#/inventory',
+  '#/graveyard',
   '#/codes',
 ] as const
 
@@ -87,6 +88,7 @@ const VIEW: Record<(typeof RING)[number], string> = {
   '#/orders': 'main.orders-hub.orders',
   '#/shipping': 'main.orders-hub.shipping',
   '#/inventory': 'main.inventory',
+  '#/graveyard': 'main.graveyard',
   '#/codes': 'main.codes',
 }
 
