@@ -81,7 +81,19 @@ run directory. Both facts matter for the same reason: **a run outlives this serv
 Mac sleeps, `make server` gets restarted, a terminal closes — and the batch keeps running,
 the log keeps filling, and `GET /pipeline/runs/<name>` reads the run directory rather than
 any state held in this process. `cli/runs.py` already says a run is an immutable input
-rather than state; this file leans on that entirely and holds nothing between requests.
+rather than state, and this file leans on that entirely.
+
+WHAT IT DOES HOLD BETWEEN REQUESTS IS A HANDLE ON ITS OWN CHILDREN, AND NOTHING ELSE. That
+sentence read "and holds nothing between requests" until 2026-09-11, and it was paid for: a
+detached child is still a CHILD (`start_new_session` is `setsid`, a new session and not a new
+parent), nothing here ever waited on one, and an unwaited child that exits is a ZOMBIE holding
+its pid — which `os.kill(pid, 0)` accepts. A finished run therefore read `Running 8m` on
+`#/runs` for as long as this server stayed up. `_CHILDREN` below is the fix, and it is
+deliberately not an answer about a run: what a run has DONE is still read from its directory
+every time, and an absent handle means *ask the files* rather than *not running*, so a
+restarted server reads every run exactly as it did before. The promise above is intact — a run
+still outlives this server — and it is rewritten rather than leaned on, which is what this
+file already did to `capture_server.py`'s money promise one paragraph up.
 
 STDLIB ONLY, like the rest of the server. `make server` runs `python3` and not the venv
 (the Makefile says so and gives the reason), so this module may not import anything that
@@ -101,6 +113,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -109,7 +122,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, FrozenSet, List, Optional, Sequence, Tuple
+from typing import Dict, FrozenSet, List, NamedTuple, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -131,6 +144,11 @@ from server import tcg_import  # noqa: E402
 # the handler for exactly that reason: D32 puts the imports inside `crop-preview`
 # because Pillow may genuinely be absent, and there is no equivalent risk here.
 from pipeline import pricehistory  # noqa: E402
+# THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
+# reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
+# in it, so this costs one stdlib module. The command module could not be imported for them:
+# it reaches geometry, PIL and sqlite.
+from identify import cost  # noqa: E402
 from store import Store, files, master  # noqa: E402
 
 PKMNSCAN = REPO_ROOT / "pkmnscan"
@@ -164,6 +182,102 @@ MAX_LEGS = 16
 # four take while making the machine unusable. Bounded rather than unbounded for the same
 # reason `MAX_LEGS` exists one constant up.
 PREFLIGHT_WORKERS = 4
+
+# ------------------------------------------------------------ the children we started
+#
+# THE `Popen` OF EVERY CHILD THIS PROCESS STARTED, KEYED BY RUN DIRECTORY.
+#
+# WHY A HANDLE AND NOT A PID. `_spawn` used to drop its `Popen` on the floor: the object was a
+# local, nothing ever called `.wait()` or `.poll()`, and this server installs no SIGCHLD
+# handler. `start_new_session=True` is `setsid` — a new SESSION, not a new parent — so the
+# child is STILL OUR CHILD, and a child nobody waits on becomes a ZOMBIE when it exits. A
+# zombie holds its pid, and `os.kill(<zombie>, 0)` SUCCEEDS. `_live_pid` therefore went on
+# reporting a finished run as live: `Running 8m` on `#/runs` with the batch collected, the
+# console finished and the child long gone. Measured 2026-09-11 on a run that took 3m52s. It
+# corrected itself only when something else in this process happened to construct a `Popen` —
+# CPython calls `subprocess._cleanup()` in `Popen.__init__`, which reaps whatever `__del__`
+# filed in `subprocess._active` — or when the server restarted. A run nobody else touched said
+# Running indefinitely, and `_busy_run` refused its box for just as long.
+#
+# HOLDING THE HANDLE AND POLLING IT IS THE FIX, AND THE POLL IS THE REAP: `Popen.poll()` is
+# `waitpid(pid, WNOHANG)`, so the zombie goes at the first read that looks at it.
+#
+# ONE LOCK, BECAUSE THIS SERVER IS THREADED. `CaptureServer.process_request` submits every
+# request to a `ThreadPoolExecutor(REQUEST_SLOTS)`, so `GET /pipeline/runs` and
+# `POST /pipeline/identify` can be inside this table at the same instant.
+#
+# AND IT IS NOT STATE ABOUT THE RUN, which is the promise this module's header makes. Nothing
+# here is consulted to answer WHAT a run has done — the run directory is still the only source
+# of that. What is held is a handle on a process of OURS: a fact about this process, not about
+# the run. Its ABSENCE is defined to mean "ask the files", never "not running", so a restarted
+# server holds no handles and reads every run exactly as it does today.
+_CHILDREN: "OrderedDict[str, subprocess.Popen]" = OrderedDict()
+_CHILDREN_LOCK = threading.Lock()
+
+# How many handles to keep. A dead child's handle is a TOMBSTONE and is deliberately NOT
+# dropped the moment it is found dead: pids are reused, and a table that forgot the pid it had
+# just buried would fall through to the marker file — whose pid may now belong to something
+# else entirely — and report Running again. Bounded anyway, because every table in this server
+# is; and a RUNNING child is never evicted whatever the count, because evicting one is the bug
+# this section exists to fix.
+CHILD_MEMORY = 64
+
+
+class _Child(NamedTuple):
+    """What the table can say about a run: the pid we started, and whether it is still up."""
+
+    pid: int
+    running: bool
+
+
+def _child_key(run_dir: Path) -> str:
+    """THE RESOLVED PATH, NEVER THE RUN NAME.
+
+    `store/files.py:home()` reads the environment on every call, so two stores can hold runs
+    with the same `<date>-<slug>-<nn>` name — and T7 moves `PKMNSCAN_HOME` between sections
+    inside one process, which is exactly that case in the one place it would be found late.
+    """
+    try:
+        return str(run_dir.resolve())
+    except OSError:
+        return str(run_dir)
+
+
+def _remember_child(run_dir: Path, child: subprocess.Popen) -> None:
+    """Hold the handle for a child this server just started."""
+    with _CHILDREN_LOCK:
+        _CHILDREN[_child_key(run_dir)] = child
+        while len(_CHILDREN) > CHILD_MEMORY:
+            for key, held in _CHILDREN.items():
+                if held.returncode is not None:  # a tombstone, already reaped: droppable
+                    del _CHILDREN[key]
+                    break
+            else:
+                break  # every handle is a live child. Keep them all.
+
+
+def _child_of(run_dir: Path) -> Optional[_Child]:
+    """What this server knows about the child driving this run, or None if it started none.
+
+    `poll()` IS CALLED UNDER OUR OWN LOCK, and both halves of that are deliberate.
+
+    It is called because `poll()` is the reap — `waitpid(WNOHANG)` — so the zombie goes at the
+    first read that looks, and the answer is a fact rather than a guess.
+
+    It is serialised because CPython takes `Popen._waitpid_lock` NON-BLOCKING:
+    `_internal_poll` returns None — documented in the stdlib as *"Something else is busy
+    calling waitpid. Don't allow two at once. We know nothing yet"* — when another thread is
+    already inside waitpid for this child. Two request threads polling one child at once could
+    therefore answer STILL RUNNING about a child that had exited, which is the one direction
+    that matters here. Holding this lock removes that answer and costs nothing: a WNOHANG
+    waitpid does not block, and nothing else happens inside the lock. It is a leaf lock —
+    nothing in here calls back into route code, reads a file, or takes the store lock.
+    """
+    with _CHILDREN_LOCK:
+        child = _CHILDREN.get(_child_key(run_dir))
+        if child is None:
+            return None
+        return _Child(child.pid, child.poll() is None)
 
 # Downloadable run artefacts are matched by SHAPE, never by a name from the request. The
 # request names a file, this decides whether that name is one this route is willing to
@@ -482,24 +596,66 @@ def _run_sync(argv: Sequence[str], timeout: int) -> Tuple[int, str]:
     return finished.returncode, finished.stdout.decode("utf-8", "replace")
 
 
+def _record_written(run_dir: Path) -> bool:
+    """Has this run written the record the NEXT step reads?
+
+    `Run.write_identifications` goes through `store/files.py:write_atomic`, so this file is
+    never observable half-written: it is absent, or it is whole. That is what makes it safe to
+    hang a liveness answer on, and it is why this is one `stat` rather than a manifest parse.
+    """
+    return (run_dir / run_files.IDENTIFICATIONS).is_file()
+
+
 def _live_pid(run_dir: Path) -> Optional[int]:
     """The pid of a child still driving this run, or None.
 
-    Checked with signal 0 rather than trusted from the file, because the file outlives the
-    process it names — a Mac that slept through a batch leaves a pid that belongs to nobody,
-    or worse to something else entirely. A stale marker that blocked every later run would
-    make the double-click guard below into a permanent lock.
+    THREE ANSWERS IN THIS ORDER, AND THE ORDER IS THE FIX.
+
+      1. a child of OURS still running   -> its pid. Nothing overrules this.
+      2. a child of ours that has EXITED -> None. Not the marker file, not signal 0.
+      3. no child of ours                -> the marker file, and a floor.
+
+    (2) IS WHY THIS FUNCTION CHANGED. `start_new_session` is a new SESSION, not a new parent:
+    the child stays ours, nothing waited on it, and an unwaited child that exits is a ZOMBIE
+    holding its pid. `os.kill(<zombie>, 0)` SUCCEEDS — measured — so signal 0 alone said
+    `identifying` for as long as this server stayed up. See `_CHILDREN` for the whole account.
+
+    (1) TAKES NO MANIFEST INTO ACCOUNT, AND THAT IS WHAT CLOSES THE RACE. `cli/cmd_identify.py`
+    writes `collected=True` at line 794, `identifications.json` at 840, and then records every
+    card into the store under the store lock — seconds, on a 544-card run, in which the
+    manifest says collected and the run is still going. A rule letting the manifest demote a
+    RUNNING child would put `Needs join` on the screen inside that window, and `join` pressed
+    there reads a file that is not there yet.
+
+    (3) IS THE ORPHAN, AND IT IS THE ONLY CASE THE FILES DECIDE. A run started before this
+    server was last restarted was reparented to launchd, which reaps it, so signal 0 is honest
+    there — right up until the pid is REUSED. The floor is the run's own record rather than
+    `collected`, for (1)'s reason one register over: `collected` is a claim about money spent
+    and stays true through the whole tail above, while `identifications.json` is what the next
+    step READS, is written atomically, and cannot be seen before it is complete.
+
+    A NON-POSITIVE PID IS NOT A PID. `os.kill(0, 0)` probes the CALLER'S OWN process group and
+    always succeeds, so a marker holding `0` read as live forever.
     """
+    child = _child_of(run_dir)
+    if child is not None:
+        # The handle, not the marker: `_spawn` registers before it writes the file, so a poll
+        # landing between the two still reads a just-started run as live.
+        return child.pid if child.running else None
+
     marker = run_dir / PID_FILE
     try:
         pid = int(marker.read_text().strip())
     except (OSError, ValueError):
         return None
-    try:
-        os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
+    if pid <= 0:
         return None
-    return pid
+    try:
+        # `ProcessLookupError` is an `OSError`; naming both was redundant.
+        os.kill(pid, 0)
+    except OSError:
+        return None
+    return None if _record_written(run_dir) else pid
 
 
 def _run_box(manifest: dict) -> Optional[int]:
@@ -1089,6 +1245,17 @@ def _spawn(leg: Leg) -> dict:
             "spawn_failed",
             f"Could not start `pkmnscan identify` for box {leg.scope['box']}: {exc}",
         ) from None
+    # THE HANDLE FIRST, THE MARKER SECOND. `_live_pid` reads the handle for a run this server
+    # owns, so a poll landing between the two still reads the run as live; the reverse order
+    # leaves a window in which the marker names a pid the table has never heard of and the run
+    # reads as somebody else's orphan.
+    #
+    # THE MARKER IS STILL WRITTEN AND STILL NEVER DELETED. It is the only thing about this
+    # child that survives this process — a restart, a `make up` reload, a crash — and it is
+    # what `scripts/reap.py` and a person reading a run directory have to go on. Deleting it
+    # from `_live_pid` was considered and declined: `scripts/serve.py` documents that function
+    # as one that "only ever READS", it is the 4s-polled path, and cases 1 and 2 never open it.
+    _remember_child(run.directory, child)
     (run.directory / PID_FILE).write_text(f"{child.pid}\n")
     return {
         "run": run.directory.name,
@@ -1103,8 +1270,13 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
     """`POST /pipeline/identify` — THE ROUTE THAT SPENDS MONEY. Spawns, does not wait.
 
     Answers as soon as the children are running, with one run name per box. Everything after
-    that is read from the run directories by `do_pipeline_run` — this process keeps nothing,
-    which is what lets a run outlive the server that started it.
+    that is READ FROM THE RUN DIRECTORIES by `do_pipeline_run`, which is what lets a run
+    outlive the server that started it: this process keeps no answer about a run.
+
+    It does keep a HANDLE on each child it spawned (`_CHILDREN`), and that is not the same
+    thing — it is a fact about this process, not about the run, and its absence means "ask the
+    files" rather than "not running". Without one, nothing ever reaped a detached child and a
+    finished run read as still identifying.
 
     IT IS STILL EXACTLY ONE ROUTE THAT SPENDS, AND THAT IS WHY THE CART LANDED HERE RATHER
     THAN BESIDE IT. A send of several boxes could have been a second route, or N calls from
@@ -1366,8 +1538,44 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "collected": bool(manifest.get("collected")),
         "joined": bool(manifest.get("joined")),
         "counts": manifest.get("counts") or {},
-        "usage": manifest.get("usage") or {},
+        "usage": _usage(manifest),
     }
+
+
+def _usage(manifest: dict) -> dict:
+    """What this run spent, and what that cost.
+
+    THE ARITHMETIC IS NOT REIMPLEMENTED HERE, which is the rule `_parse_preflight` keeps one
+    register up. `identify/cost.py` is the only place in this repo that multiplies a token
+    count by a rate; the run that records the figure and this read call the same function, so
+    a filled-in figure is byte-identical to what that run would have written for itself.
+
+    RECORDED BEATS COMPUTED, ALWAYS, AND THE ORDER OF THESE BRANCHES IS THAT RULE. A run is an
+    immutable input (`cli/runs.py`) and `cost_usd` is the rate sheet as it stood on the day the
+    money was spent. A read that recomputed it would restate history the first time a rate
+    moves — and one already has: `PIXELS_PER_TOKEN` "read 500 and was wrong by about half".
+
+    THE BACKFILL IS WHY THIS IS A FIX AND NOT A PROMISE. Every run on this machine predates the
+    field, including the one this was reported against, and D21's `game` backfill is the same
+    shape: fill at the READ for records written before the field existed. It SAYS SO — a screen
+    that cannot tell a recorded figure from today's rates applied to an old run has no way to
+    show the difference on the day the two stop agreeing.
+
+    A MISSING TOKEN COUNT ANSWERS NOTHING RATHER THAN ZERO, for `_total`'s own reason: a
+    confident $0.00 is worse than a blank, because a blank is visibly a blank. `bool` is
+    excluded by name because `isinstance(True, int)` is True, and a hand-edited manifest is
+    exactly what `_phase`'s own comment already braces against.
+    """
+    usage = dict(manifest.get("usage") or {})
+    if usage.get("cost_usd") is not None:
+        return usage
+    tokens_in = usage.get("input_tokens")
+    tokens_out = usage.get("output_tokens")
+    if any(not isinstance(n, int) or isinstance(n, bool) for n in (tokens_in, tokens_out)):
+        return usage
+    usage["cost_usd"] = cost.recorded(tokens_in, tokens_out)
+    usage["cost_backfilled"] = True
+    return usage
 
 
 def do_pipeline_runs() -> dict:

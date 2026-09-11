@@ -89,7 +89,13 @@ inventory/
 
 runs/<YYYY-MM-DD>-<label>-<nn>/
   manifest.json         Inputs: capture dir, export path + mtime + sha256, prompt
-                        fingerprint, flags, batch ids, cost.
+                        fingerprint, flags, batch ids, cost. The last of those was
+                        a claim this line and cli/runs.py's header both made from
+                        the day they were written and neither kept: `usage` held
+                        the TOKEN counts and nothing priced them, so `#/runs` drew
+                        `290,470 tokens in` and no figure. Since 2026-09-11 the
+                        collect writes `usage.cost_usd` from identify/cost.py, at
+                        the rates in force the day it ran.
   identifications.json  What this run read, before caching.
   decisions.json.adopted  A pre-D86 answer file, folded by `prices adopt` and retired.
                         Nothing reads it; the live answers are `inventory/prices.json`.

@@ -1926,8 +1926,15 @@ export type RunSummary = {
    *  where the registry no longer holds it (D10 ruling 3). */
   box_name?: string | null
   started_by?: string | null
-  /** A child process is still driving this run. Checked with signal 0 rather than trusted
-   *  from a pid file, because the file outlives the process it names. */
+  /** A child process is still driving this run.
+   *
+   *  THE SERVER HOLDS THE HANDLE FOR CHILDREN IT STARTED and asks the process itself; signal 0
+   *  over the pid file is the FALLBACK, for a run it did not start — one orphaned across a
+   *  restart. This said "checked with signal 0 rather than trusted from a pid file" until
+   *  2026-09-11, and signal 0 was the whole rule then: a detached child is still a child,
+   *  nothing waited on it, and an unwaited child that exits is a ZOMBIE whose pid signal 0
+   *  accepts. A finished run read `live` for as long as the server stayed up. In the fallback
+   *  the run's own `identifications.json` is the floor, because the pid may have been reused. */
   live: boolean
   pid: number | null
   phase: RunPhase
@@ -1935,7 +1942,23 @@ export type RunSummary = {
   collected: boolean
   joined: boolean
   counts: Record<string, number>
-  usage: { input_tokens?: number; output_tokens?: number }
+  /** What the model read, and what that cost.
+   *
+   *  `cost_usd` IS THE SERVER'S AND IS NEVER DERIVED HERE. `identify/cost.py` holds the only
+   *  rate sheet in this repo; a `tokens * rate` in TypeScript would be the second cost model
+   *  `RunPreflightTotal` below forbids for the number the confirm is gated on, and there is no
+   *  reason it is safer for the number the receipt reports. Absent where the run recorded no
+   *  usable token counts at all — a confident $0.00 is worse than a blank.
+   *
+   *  `cost_backfilled` MEANS THE FIGURE IS TODAY'S RATES APPLIED TO AN OLD RUN'S TOKENS, not
+   *  what the run itself recorded (D21's backfill-at-the-read, one field over). The two agree
+   *  until the price sheet moves, and this is the only thing that will say so when it does. */
+  usage: {
+    input_tokens?: number
+    output_tokens?: number
+    cost_usd?: number
+    cost_backfilled?: boolean
+  }
 }
 
 export type RunDetail = RunSummary & {
