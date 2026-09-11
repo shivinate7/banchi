@@ -1195,20 +1195,52 @@ test('a copy sold here since the reading is drawn beside it, and headroom follow
 test('a card with no name and no SKU still offers both doors', async ({ page }) => {
   await open(page)
 
-  // Card 2 — captured, never identified. `GET /search` cannot reach it, so no group is invented
-  // and no group numbers are drawn; one copy and its two controls.
+  // Card 2 — captured, never identified. `GET /search` cannot reach it, so the screen SYNTHESISES
+  // a one-copy group rather than drawing a second kind of panel (D119); one copy and its two
+  // controls, in the row shape every other copy on this screen draws.
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
-  /* No group, and the screen says why rather than drawing an empty one. */
+  /* The list is drawn, and the screen still says why there is only one row in it. */
   await expect(page.locator('.inventory-lone')).toBeVisible()
-  await expect(page.locator('.card-locations-owner')).toHaveCount(0)
+  await expect(page.locator('.card-locations-owner')).toHaveCount(1)
 
-  /* AND BOTH DOORS ARE STILL OFFERED — from the location card, which is where this screen puts
-     the copy it is standing on. A card the search cannot group is still one copy at one
-     position, and the whole of this case is that it may still be sold and still be retired. */
-  const doors = page.locator('.inventory-location .inventory-location-actions')
+  /* AND BOTH DOORS ARE STILL OFFERED — from the row itself, which is where this screen puts the
+     copy it is standing on. A card the search cannot group is still one copy at one position,
+     and the whole of this case is that it may still be sold and still be retired. */
+  const doors = page.locator('.card-locations-row.is-current .card-locations-action')
   await expect(doors.getByRole('button', { name: 'Mark sold' })).toBeVisible()
   await expect(doors.getByRole('button', { name: 'Retire' })).toBeVisible()
+})
+
+test('a card with no name and no SKU is a one-copy list, not a special case', async ({ page }) => {
+  /* THE BRANCH THAT USED TO BE A SECOND PANEL (D119). `GET /search` cannot reach a card with no
+   * SKU and no name — it refuses an empty query, and such a card has none — so this screen builds
+   * the one-copy group the server's own loose branch would have returned, and draws it through
+   * the same component every identified card uses. */
+  await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
+
+  const rows = page.locator('.card-locations-row')
+  await expect(rows).toHaveCount(1)
+  await expect(rows).toHaveClass(/is-current/)
+
+  /* No SKU, said as a sentence in the meta line — and the listing figures are NOT drawn at all,
+     because `emit` has written no listing record and every one of them would be a structural
+     zero under a `Room for 1 more live` nothing can keep. */
+  await expect(page.locator('.card-locations-meta')).toContainText('no SKU yet')
+  await expect(page.locator('.card-locations-live')).toHaveCount(0)
+  await expect(page.locator('.card-locations-counts')).toHaveCount(0)
+
+  /* AND NO WALK-TO ON IT (D45): the lone copy IS the copy the walk is standing on, so there is
+     nowhere to be sent — the branch threads no `onGoTo` at all, which makes a walk-to structurally
+     impossible rather than merely absent.
+     ASSERTED NOWHERE, AND THAT IS THE HONEST ANSWER RATHER THAN A LINE THAT CANNOT GO RED. A
+     `toHaveCount(0)` here was written first and then mutation-tested: threading `onGoTo` onto this
+     branch left it GREEN, because `OwnerRows` suppresses the walk-to on the current row anyway and
+     the lone copy is always the current one. D45's real claim — the current row offers no walk-to
+     while the others do — needs a group with more than one copy in it, and it is asserted where
+     such a group exists: `a copy in another box is reached by pressing its position, and the walk goes there` below. */
 })
 
 
@@ -1294,7 +1326,8 @@ function sellableStore(): {
 const CARD_1 = 'Box 2 · Section 1 · Card 1'
 
 /** THE WAY BACK THAT OUTLIVES THE WALK. A write now leaves two things: the slot in the copy
- *  row (and the location card) turns into `Undo` for the window, and a receipt is posted to the
+ *  row turns into a RECEIPT for the window — its sentence, its draining clock and its `Undo`,
+ *  which is where the location card's used to be until D119 — and a receipt is posted to the
  *  product's toast stack carrying the same window and the same Undo. The second is the one the
  *  owner's ruling keeps — receipts are toasts and expire — and it is the one that survives the
  *  walk moving on, which is what the old in-flow receipt panel was for. */
@@ -1323,8 +1356,13 @@ test('one press marks a copy sold, with no panel in between', async ({ page }) =
   await row.getByRole('button', { name: 'Mark sold' }).click()
   sell('2/1')
 
-  /* THE PRESS IS THE WRITE. Red against the two-step, where this press only set `pending`. */
-  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+  /* THE PRESS IS THE WRITE. Red against the two-step, where this press only set `pending`.
+     READ AS `Undo` AND NOT AS `Marked sold.` SINCE D119. The row's receipt is the draining clock
+     and the button, at the size the button pair already reserved — a `bn-receipt` panel in that
+     slot resizes it, which is the shake D118 ended. The SENTENCE is still asserted, on the two
+     surfaces that draw it: the toast (below, and in `the sale posts a receipt to the toast
+     stack`) and the phone's action bar. */
+  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
   const sales = wire.filter((call) => call.path.endsWith('/sold'))
   expect(sales.map((call) => [call.method, call.path, call.body])).toEqual([
     ['POST', '/inventory/2/1/sold', {}],
@@ -1416,7 +1454,12 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
   await open(page, BOXES, store)
 
   /* Bring the press into view BEFORE the sweep, so the click itself does not scroll. */
-  const row = copyRow(page, CARD_1)
+  /* THE ROW IS NAMED BY WHERE THE WALK STANDS AND NOT BY ITS LABEL (D119). `copyRow` filters on
+     the server's position label, and the sale rewrites that label to the departed form — so a
+     locator built from it stops matching the very row whose height this case is about, and
+     `boundingBox()` returns null on the side of the comparison that matters. `is-current` is the
+     one handle on this row that the write does not touch. */
+  const row = page.locator('.card-locations-row.is-current')
   const press = row.getByRole('button', { name: 'Mark sold' })
   await press.scrollIntoViewIfNeeded()
 
@@ -1424,27 +1467,27 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   const at = await page.evaluate(() => window.scrollY)
 
-  /* AND THE TWO BOXES INSIDE THE PANEL THAT THE WRITE ITSELF REDRAWS. The sweep above cannot see
-     these — the panel holds one height (D118), so anything that changes inside it moves nothing
-     outside it — and they are where the defect actually was: the location card lost its position
-     lens (85px) and its button pair became a 22px pill (18px), and the copy row lost its lens and
-     its action slot. Mutating either fix passes the sweep and fails here, which is the whole
-     reason both are asserted. */
-  const location = page.locator('.inventory-location')
-  const locationBox = await location.boundingBox()
+  /* AND THE BOX INSIDE THE PANEL THAT THE WRITE ITSELF REDRAWS. The sweep above cannot see it —
+     the panel holds one height (D118), so anything that changes inside it moves nothing outside
+     it — and it is where the defect actually was: the row lost its position lens (85px) and its
+     button pair became a 22px pill (18px). Mutating either fix passes the sweep and fails here,
+     which is the whole reason it is asserted.
+     ONE BOX AND NOT TWO SINCE D119. This measured the location card as well, and that card is
+     deleted; the copy the walk stands on is this row. The claim is unchanged and now has one
+     subject rather than the same subject twice. */
   const rowBox = await row.boundingBox()
 
   await press.click()
   sell('2/1')
   depart('2/1')
-  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
 
   /* AND THE RE-READ, WAITED FOR RATHER THAN ASSUMED. The receipt is optimistic — it is drawn from
      `soldKeys` in the same continuation as the write — so measuring on it alone measures a frame
      in which the store has not answered yet and the copy is still placed. The lens turning
      departed is the re-read landing, and it is the state whose height the case is actually about:
      without this wait, deleting the departed lens outright leaves this case green. */
-  await expect(page.locator('.inventory-location .position-bar')).toHaveAttribute('data-gone', 'true')
+  await expect(row.locator('.position-bar')).toHaveAttribute('data-gone', 'true')
 
   /* The panel itself keeps its height, which is what everything below it is standing on. */
   const band = page.locator('.browse-band')
@@ -1458,8 +1501,6 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
     'the page scrolled under the press').toBe(at)
   await expect(band).toBeVisible()
 
-  expect(Math.round((await location.boundingBox())?.height ?? -1),
-    'the location card changed height on the press').toBe(Math.round(locationBox?.height ?? -2))
   expect(Math.round((await row.boundingBox())?.height ?? -1),
     'the copy row changed height on the press').toBe(Math.round(rowBox?.height ?? -2))
 })
@@ -1541,11 +1582,13 @@ test('the slot column is already as wide as the key the sale will write into it'
   cards['12/133'] = wideKeyCard('sold')
 
   await press.click()
-  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+  /* `Undo` and not `Marked sold.`: the row's receipt is the clock and the button since D119, and
+     the sentence is the toast's — the case at the top of this file says why. */
+  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
   /* The re-read, waited for rather than assumed — the same sync point the case above uses, and
      for the same reason: the receipt is optimistic and the lens turning departed is the answer
      landing, which is the state this measurement is about. */
-  await expect(page.locator('.inventory-location .position-bar')).toHaveAttribute('data-gone', 'true')
+  await expect(page.locator('.card-locations-row.is-current .position-bar')).toHaveAttribute('data-gone', 'true')
 
   await expect(row.locator('.browse-row-slot')).toHaveText('B12 #133')
 
@@ -1627,7 +1670,7 @@ test('the receipt is the undo that survives the rows being replaced', async ({ p
 
   await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
   sell('2/1')
-  await expect(page.locator('.inventory-receipt')).toContainText('Marked sold.')
+  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
 
   /* STEP THE WALK. The copies panel is drawn for whichever card the walk points at, so this
      unmounts the row and its `Undo` with it — and the clock does not stop for that. This is the
@@ -1636,7 +1679,10 @@ test('the receipt is the undo that survives the rows being replaced', async ({ p
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
   await expect(page.locator('.inventory-lone')).toBeVisible()
-  await expect(page.locator('.card-locations-owner')).toHaveCount(0)
+  /* THE ROW IS WHAT WENT, NOT THE PANEL. Since D119 the lone card draws a one-copy group of its
+     own, so a count of `.card-locations-owner` no longer says the rows were replaced — the claim
+     this case is making is that THIS card's row is gone, which is what it now asserts. */
+  await expect(copyRow(page, CARD_1)).toHaveCount(0)
 
   /* The slot's Undo went with the row it was drawn in; the receipt's did not. */
   await expect(page.locator('.inventory-receipt')).toHaveCount(0)
@@ -1817,7 +1863,7 @@ test('a copy in another box is reached by pressing its position, and the walk go
      one of them is drawn for whatever the walk points at, so moving the mark is the only thing
      the press has to do. */
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/7\/40(\?|$)/)
 
   /* THE LANDING'S SECTION IS OPEN AND THE MARK IS WHERE IT CAN BE SEEN, in a box that arrived
@@ -1876,7 +1922,7 @@ test('a walk-to scrolls the walk and never the page — the top bars stay put', 
      landed nowhere would pass the first; the old code passed the second. */
   expect(await at()).toBe(0)
   expect(await navTop()).toBe(0)
-  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-row[aria-current="true"]')).toBeInViewport()
 })
 
@@ -1924,7 +1970,7 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
      this is the claim that matters and the wrong-card landing is what fails it: unguarded, the
      mark falls to the first row the filter still holds and this reads `Box 2 · Section 1 ·
      Card 1` under box 2's photograph. */
-  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
 
   // And the query goes, because it was a way of finding the card and the card has been found.
@@ -2123,11 +2169,16 @@ test('a copy row draws how far into the box AND how far into the section', async
    *
    * Both captions are asserted on the same row, in order, which is what pins them as two scales
    * rather than one replaced by the other. */
-  /* THE COPY THE WALK IS STANDING ON DRAWS ITS LENS IN THE LOCATION CARD and the other copies
-     draw theirs in the list, so the two bars are on two surfaces rather than in one column. What
-     is asserted is unchanged and is the whole of the owner's ask: every copy on screen says how
-     far into the box AND how far into its section, on the same row, in that order. */
-  const bars = page.locator('.inventory-location .position-bar, .card-locations-owner .position-bar')
+  /* THE LENS IS ON EVERY ROW, WHICH IS WHAT D119 BOUGHT. This case used to count two bars — one
+     in the location card, one in the list — and the TOTAL is still two for a two-copy card, for
+     an entirely different reason. A total cannot tell those apart: two bars on one row and none
+     on the other is the same number. So the claim is per row, and the total is asserted after
+     it rather than instead of it. */
+  const rows = page.locator('.card-locations-owner .card-locations-row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0).locator('.position-bar')).toHaveCount(1)
+  await expect(rows.nth(1).locator('.position-bar')).toHaveCount(1)
+  const bars = page.locator('.card-locations-owner .position-bar')
   await expect(bars).toHaveCount(2)
 
   const first = bars.nth(0).locator('.position-bar-text')
@@ -2158,7 +2209,7 @@ test('the last section of an open box counts what is in it, and says so far', as
    *
    * The pair also shows why both scales are wanted: the box line puts this card at the very
    * back of the box and the section line puts it at the back of a two-card section. */
-  const bar = page.locator('.inventory-location .position-bar')
+  const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#5 of 5 so far')
   await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2 · card 2 of 2 so far')
 
@@ -2167,31 +2218,37 @@ test('the last section of an open box counts what is in it, and says so far', as
   await expect(bar).toHaveAttribute('aria-label', '#5 of 5 so far · Section 2 · card 2 of 2 so far')
 })
 
-test('the card with no group gets both depths too — it is most of the store', async ({ page }) => {
+test('the card with no group gets both depths too', async ({ page }) => {
   await open(page)
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Not identified yet' }).first().click()
 
-  /* THE BRANCH THAT NEARLY MISSED OUT, and the numbers are why it must not. On the Mac this was
-   * built against, 629 of 682 records are captured-and-never-identified — 92% — so `GET /search`
-   * cannot reach them and every one of them draws through the lone-copy fallback rather than
-   * through a group. Both bars only in `CardLocations` would have answered "how far into the
-   * section" for the 8% of the store that has been through the pipeline, and for none of the
-   * boxes actually sitting on the desk. */
-  const bar = page.locator('.inventory-location .position-bar')
+  /* THE BRANCH THAT NEARLY MISSED OUT — a card with no SKU and no name, which `GET /search`
+   * cannot reach at all, so it draws through the lone-copy fallback rather than through a group.
+   *
+   * ITS TITLE SAID `it is most of the store` UNTIL 2026-09-07, AND THAT HAD STOPPED BEING TRUE.
+   * The figure this case was written against — 629 of 682 records captured and never identified,
+   * 92% — was measured on the owner's Mac when the pipeline had not yet run over the boxes. Read
+   * from `inventory/store.sqlite` on 2026-09-07: 1,625 cards, 1,553 carrying a SKU, 65 with a
+   * name and no SKU (which the search reaches BY the name), and **7** with neither. Four tenths
+   * of one percent. The branch is a real edge case and is still worth a case; what it is not is
+   * the common screen, and a stale measurement arguing for coverage is worth less than the
+   * coverage itself. Since D119 it draws a synthesised one-copy group through `CardLocations`,
+   * so the bars below are the ROW's, in the same shape every identified card gets. */
+  const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('#2 of 5 so far')
   await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1 · card 2 of 3 slots')
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
-   * the branch 92% of the store draws through and asserted only the two bars, so the label beside
-   * them went on being the raw server string in the utility face — D41's treatment shipped to five
-   * sites and this was not one of them. Nothing failed, because nothing here read it. */
-  const lone = page.locator('.inventory-location-label .position-parts')
+   * the lone-copy branch and asserted only the two bars, so the label beside them went on being
+   * the raw server string in the utility face — D41's treatment shipped to five sites and this
+   * was not one of them. Nothing failed, because nothing here read it. */
+  const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(lone).toHaveCount(1)
   await expect(lone).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 2')
-  await expect(page.locator('.inventory-location-label .position-num')).toHaveText('2')
-  await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('2')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
 })
 
 test('a sold card with no group is ranked too, and its lens keeps the box but loses the mark', async ({ page }) => {
@@ -2227,12 +2284,17 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      copies list, the same one the case above walks, with the card sold. */
   await expect(page.locator('.inventory-lone')).toHaveCount(1)
 
-  const lone = page.locator('.inventory-location-label .position-parts')
+  const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(lone).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
-  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsDEPARTED B2 #4')
-  await expect(page.locator('.inventory-location-label .position-num')).toHaveCount(0)
-  await expect(page.locator('.inventory-location-label .position-void')).toHaveCount(1)
-  await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
+  /* THE BOX'S NAME RIDES THE FIRST PATH LINE, which is the copies list's own `boxNote` and is
+     what every other row on this screen has always drawn (see the departed rows asserted near the
+     end of this file, same string). The location card drew it as a separate element beside the
+     `LOCATION` label; D119 did not lose it, it moved into the address — and since D132 the name
+     LEADS and the index is the note beside it, on every row alike. */
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-path')).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-void')).toHaveCount(1)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
 
   /* AND THE LENS, DRAWN AS A COPY THAT HAS LEFT (D118, amending D68). This assertion read
      `toHaveCount(0)` until the owner reported the screen shaking under the sale, and what was
@@ -2242,8 +2304,9 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      section the copy left is drawn, the caption says `no longer in the box`, the second scale
      says the copy is in none of the section's slots, and the mark that would lie about a
      position is the one thing removed. D68's ruling was about drawing a card where it is not;
-     this draws the box, which is still there. */
-  const lens = page.locator('.inventory-location .position-bar')
+     this draws the box, which is still there.
+     READ OFF THE ROW SINCE D119, which deleted the location card this used to name. */
+  const lens = page.locator('.card-locations-row.is-current .position-bar')
   await expect(lens).toHaveCount(1)
   await expect(lens).toHaveAttribute('data-gone', 'true')
   /* Both scales, both unmarked — the box track and the section track it zooms into. */
@@ -2289,7 +2352,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * `Card 1` of section 2 and its photograph is still `/photo/2/6`. Nothing was renamed. */
   await page.locator('.browse-row').nth(5).click()
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?card=cap-6$/)
-  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute(
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute(
     'aria-label',
     'Box 2 · Section 2 · Card 1',
   )
@@ -2309,45 +2372,36 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * WHAT THOSE ASSERTIONS WERE PROTECTING IS THE FIGURE, and it is asserted below unweakened:
    * the guard that refused the label was aimed at the word `departed` being promoted to 44px,
    * and refusing the whole treatment was never the only way to stop that. */
-  const panel = page.locator('.inventory-location-label .position-parts')
+  const panel = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(panel).toHaveCount(1)
   await expect(panel).toHaveAttribute('aria-label', 'Box 2 · departed · B2 #4')
-  await expect(page.locator('.inventory-location-label .position-plain')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
   /* The lens stays and its mark leaves (D118, amending D68) — see the case above for the whole
      argument. What this case is about is the LABEL, and the lens is asserted here only so a
      later change cannot take it away again without one of these two saying so. */
-  await expect(page.locator('.inventory-location .position-bar[data-gone]')).toHaveCount(1)
+  await expect(page.locator('.card-locations-row.is-current .position-bar[data-gone]')).toHaveCount(1)
 
   /* NO FIGURE AT ALL, WHICH IS D58 AND D68 IN ONE ASSERTION. D58 refuses the slot number for a
    * card that has left; D68 adds that the store key must not take that number's place. Both are
    * the same statement about this panel — nothing is drawn at `--pos-slot`'s 44px — and the void
    * is what holds the column open in its stead. */
-  await expect(page.locator('.inventory-location-label .position-num')).toHaveCount(0)
-  await expect(page.locator('.inventory-location-label .position-void')).toHaveCount(1)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-void')).toHaveCount(1)
 
   /* AND THE STATE AND THE KEY ARE RANKED RATHER THAN LEFT AS A STRING WITH A NOTE UNDER IT.
    * `DEPARTED B2 #4` is the same key/value pair as the `BOX 2` above it and as the `SECTION 1` it
    * stands in for, which is what makes a departed row cost the same two path lines a live one
-   * costs. 19.8px because a block with no figure re-ranks its path — `clamp(11px, 0.45em, 20px)`
-   * against this site's 44px, the derivation `PositionLabel.css` states beside `.position-key`'s.
-   * At the shipped 11px the whole answer sat in the metadata register and the panel read as one
-   * that had failed to load, which is the second half of what selling a card did to this screen. */
-  const path = page.locator('.inventory-location-label .position-path')
-  /* THE NAME LEADS (D132), and the index is the CORNER's, not a note here — the owner asked
-     for it once (2026-09-11). */
-  await expect(path).toHaveText('BOX ME01 commonsDEPARTED B2 #4')
-  const departed = await path.evaluate((node) => Number.parseFloat(window.getComputedStyle(node).fontSize))
+   * costs. */
+  const path = page.locator('.card-locations-row.is-current .card-locations-label .position-path')
+  await expect(path).toHaveText('BOX ME01 commonsBox 2DEPARTED B2 #4')
 
-  /* MEASURED AGAINST A LIVE CARD'S OWN PATH RATHER THAN AGAINST A NUMBER. The literal 19.8px was
-     an em of the site's 44px figure, and the site is drawn at another size now — but the
-     property it stood for is the one that matters and is unchanged: a block with NO figure
-     re-ranks its path, so a departed card is read at the size of a position rather than at the
-     size of the metadata line under a live one. */
-  await page.locator('.browse-row').nth(0).click()
-  const live = await page
-    .locator('.inventory-location-label .position-path')
-    .evaluate((node) => Number.parseFloat(window.getComputedStyle(node).fontSize))
-  expect(departed, `a departed path at ${departed}px is drawn in the live card's metadata register`).toBeGreaterThan(live)
+  /* THE RE-RANK ITSELF IS ASSERTED ON `#/gallery` AND NOT HERE, AND THE MOVE IS D119's (see
+   * `gallery.spec.ts`, `a label with no figure re-ranks its path`). `PositionLabel.css`'s rule
+   * fires under `lead='path'` alone, and the location card that used to draw this label that way
+   * is deleted: the copies list, the order picker and the walk are all `lead='slot'`, so no
+   * screen in the product renders the combination any more and a comparison here would measure
+   * 11px against 11px and pass for the wrong reason. The kit sheet is the only renderer left,
+   * which is where a rule with one renderer has to be asserted. */
 })
 
 test('the census greps to the store, and the identity line says what the box holds', async ({
@@ -3459,10 +3513,11 @@ test('the copies of a card cannot be positioned by the pipeline console', async 
 
   /* AND THE ANSWER IS ABOVE THE FOLD. What the operator opened this screen to learn is where the
      card they are standing on IS — its position, how far into the box it sits, and the two doors
-     out of inventory — and that whole card is on screen without scrolling at the width and height
-     this suite runs at. The copies BELOW it are a list and are scrolled to like any other;
-     what may never come back is the answer itself starting below the fold. */
-  await expect(page.locator('.inventory-location')).toBeInViewport({ ratio: 1 })
+     out of inventory — and that whole thing is on screen without scrolling at the width and
+     height this suite runs at. THE ANSWER IS THE ROW ITSELF SINCE D119, rather than a card above
+     the list, which is what that entry deleted. The copies below it are a list and are scrolled
+     to like any other; what may never come back is the answer itself starting below the fold. */
+  await expect(page.locator('.card-locations-row.is-current')).toBeInViewport({ ratio: 1 })
   await expect(page.locator('.card-locations-rows')).toBeVisible()
 })
 
@@ -3571,7 +3626,7 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
     search: (query) => searchAnswer(query, NEIGHBOURLY),
   })
 
-  const band = page.locator('.inventory-location .nb')
+  const band = page.locator('.card-locations-row.is-current .nb')
   await expect(band).toBeVisible()
 
   /* THE KEYS ARE THE COMPOSER'S OWN TWO WORDS. `in front` / `behind` was built first and reads
@@ -4045,7 +4100,7 @@ test('the address is drawn without a separator, and the server string survives o
 
      An absence is the right shape for this case. A positive assertion about the new markup goes
      green on a treatment that also reintroduces the dots somewhere else in the block. */
-  const position = page.locator('.inventory-location-label')
+  const position = page.locator('.card-locations-row.is-current .card-locations-label')
   await expect(position).toBeVisible()
   expect(await position.innerText()).not.toContain('·')
   await expect(page.locator('.position-joint')).toHaveCount(0)
@@ -4054,10 +4109,11 @@ test('the address is drawn without a separator, and the server string survives o
      label client-side legitimate rather than a quiet edit of what the store said: the visual
      rendering is a view, and `pipeline/join.py:Position.label` is still what is announced.
      `PositionParts`' own comment scopes the split to this screen for exactly this reason. */
-  /* SCOPED TO THE LOCATION CARD. Several ranked labels are on this screen at once — one per
-     copy in the list beside it — and they all carry the same treatment; what this case is about
-     is the address of the card the walk is standing on. */
-  const parts = page.locator('.inventory-location-label .position-parts')
+  /* SCOPED TO THE ROW THE WALK IS STANDING ON. Several ranked labels are on this screen at once
+     — one per copy in the list — and they all carry the same treatment; what this case is about
+     is the address of the card the walk is standing on, which since D119 is one of those rows
+     rather than a card above them. */
+  const parts = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
   await expect(parts).toHaveAttribute('role', 'group')
   const label = await parts.getAttribute('aria-label')
   expect(label).toMatch(/^Box \d+ · Section \d+ · Card \d+$/)
@@ -4065,7 +4121,7 @@ test('the address is drawn without a separator, and the server string survives o
   /* THE SLOT IS THE LAST PART AND IT IS THE ONE DRAWN AT SIZE. Anchored to the END of the
      address rather than to index 2, so a formula with a different number of parts still puts the
      finest thing said on the biggest step. */
-  const num = page.locator('.inventory-location-label .position-num')
+  const num = page.locator('.card-locations-row.is-current .card-locations-label .position-num')
   await expect(num).toHaveText(String(label).split(' · ').pop()!.replace('Card ', ''))
 })
 
@@ -4081,7 +4137,15 @@ test('the address holds one line at both widths, including the longest label the
 
      FORCED RATHER THAN FIXTURED, because no box in the store is numbered 100. What is being
      checked is the RENDERING's tolerance, not the data — so the label is set to the worst case
-     and the block is measured for a second line. */
+     and the block is measured for a second line.
+
+     THE NUMBERS ABOVE ARE THE SITE THIS CASE WAS WRITTEN AGAINST, AND THAT SITE IS GONE (D119).
+     They were a 44px figure in the location card's 448.8px track; the address is a row of the
+     copies list now, at a 22px figure, so what is re-derived is the TOLERANCE and not the
+     question. The block there is a two-line 11px path beside the figure — 33.9px, the same
+     derivation `a narrow copies column shortens the bar, never the position label` states below
+     and asserts at the same 36px — so a third line is what a wrap looks like here. The FORCED
+     worst case is what this case still owns and that one does not. */
 
   /* WAIT FOR THE WEB FONT BEFORE MEASURING, AS HARDENING AND NOT AS A FIX FOR THE RECORDED
      FLAKE — that one was diagnosed properly on the branch that landed as `6c70d55`, by loading
@@ -4107,22 +4171,21 @@ test('the address holds one line at both widths, including the longest label the
 
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })
-    await page.locator('.inventory-location-label .position-parts').waitFor()
+    await page.locator('.card-locations-row.is-current .card-locations-label .position-parts').waitFor()
 
-    const oneLine = await page.locator('.inventory-location-label').evaluate((el) => {
+    const unwrapped = await page.locator('.card-locations-row.is-current .card-locations-label').evaluate((el) => {
       const shape = el.querySelector('.position-parts') as HTMLElement
-      const slot = el.querySelector('.position-slot') as HTMLElement
-      return shape.getBoundingClientRect().height <= slot.getBoundingClientRect().height + 4
+      return shape.getBoundingClientRect().height <= 36
     })
-    expect(oneLine).toBe(true)
+    expect(unwrapped).toBe(true)
 
     /* The shape fits its track with the worst label in it. Measured on the SHAPE rather than on
        `.browse-position`, which is a full-width block and would always "fit". */
     const fits = await page.evaluate(() => {
-      const label = document.querySelector('.inventory-location-label') as HTMLElement
+      const label = document.querySelector('.card-locations-row.is-current .card-locations-label') as HTMLElement
       const path = label.querySelector('.position-path') as HTMLElement
       const slot = label.querySelector('.position-slot') as HTMLElement
-      const track = document.querySelector('.inventory-location') as HTMLElement
+      const track = document.querySelector('.card-locations-rows') as HTMLElement
       path.innerHTML = '<span>BOX <b>100</b></span><span>SECTION <b>12</b></span>'
       const numEl = slot.querySelector('.position-num') as HTMLElement
       numEl.textContent = '543'
@@ -4202,9 +4265,9 @@ test('a narrow copies column shortens the bar, never the position label', async 
      viewport passes against the very mutation it is written to catch. Observed — this case was
      kept only after it was seen to go red at 1440 and green at 1280 against that change. */
   await page.setViewportSize({ width: 1440, height: 900 })
-  /* A ROW THAT DRAWS A BAR, which is not the first one any more: the copy the walk is standing
-     on has its lens in the location card instead, so the list's own first row is the one without
-     the widget this case measures. */
+  /* A ROW THAT DRAWS A BAR, which since D119 is the first one again — the copy the walk is
+     standing on draws its lens in the list like every other row. The filter stays: a pooled or
+     departed copy still carries no bar, and this case measures a row that has one. */
   const row = page.locator('.card-locations-row').filter({ has: page.locator('.position-bar') }).first()
   await expect(row).toBeVisible()
   await page.waitForTimeout(150)
@@ -5018,13 +5081,13 @@ test('D132 — the row the walk stands on survives its own sale while sold is hi
   await expandAll(page)
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', '#2', '#3'])
   await page.locator('.browse-row').nth(1).click()
-  await page.locator('.inventory-location').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
   cards['2/3'] = card({ index: 3, state: 'sold', name: 'Bashful Bloom', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 6 })
   cards['2/5'] = live(5, 2)
 
   /* The receipt lands where the sale was pressed (D119) — which needs the row to still exist,
      and to still be where it was (D118): the re-read draws it departed, in its place. */
-  await expect(page.locator('.inventory-location').getByRole('button', { name: /Undo/ })).toBeVisible()
+  await expect(page.locator('.card-locations-row.is-current').getByRole('button', { name: /Undo/ })).toBeVisible()
   await expect(page.locator('.browse-row .browse-row-position')).toHaveText(['#1', 'B2 #3', '#2'])
   await expect(page.locator('.browse-row[aria-current="true"] .browse-row-position')).toHaveText('B2 #3')
 
@@ -5072,23 +5135,23 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   expect((stored['6'] ?? '') > (stored['7'] ?? '')).toBe(true)
 })
 
-test('D132 — the address leads with the name, the corner says the index, and the copies rows agree', async ({ page }) => {
+test('D132 — the address leads with the name and the index is its note, on the row the walk stands on and on every other', async ({ page }) => {
   await open(page)
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
 
-  const label = page.locator('.inventory-location-label .position-parts')
-  /* ONCE, IN THE CORNER: the address itself carries no `Box 2` note on this card. */
-  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsSECTION 1')
+  /* THE ROW THE WALK STANDS ON IS THE ADDRESS (D119): there is no location card above the list
+     to lead with anything, so the name leads on `.is-current` exactly as it leads on its siblings. */
+  const label = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
+  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1')
   /* The server's string is untouched: this is a rendering, not an edit (D41's invariant). */
   await expect(label).toHaveAttribute('aria-label', 'Box 2 · Section 1 · Card 1')
-  await expect(page.locator('.inventory-location-boxname')).toHaveText('Box 2')
 
   const rows = page.locator('.card-locations-row .position-path')
   await expect(rows.nth(0)).toHaveText('BOX ME01 commonsBox 2SECTION 1')
 })
 
-test('D132 — an unnamed box keeps the index in the address and draws no corner note', async ({ page }) => {
+test('D132 — an unnamed box keeps the index in the address and draws no note beside it', async ({ page }) => {
   const store: Store = {
     cards: { '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, boxName: '' }) },
     search: (query) => searchAnswer(query, { '2/1': card({ index: 1, state: 'identified', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 3, boxName: '' }) }),
@@ -5096,8 +5159,8 @@ test('D132 — an unnamed box keeps the index in the address and draws no corner
   await open(page, { boxes: [{ ...BOXES.boxes[0], name: null }] }, store)
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX 2SECTION 1')
-  await expect(page.locator('.inventory-location-boxname')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX 2SECTION 1')
+  await expect(page.locator('.card-locations-row.is-current .position-note')).toHaveCount(0)
 })
 
 test('D132 — a named section is said in the walk header, in the bar\'s sentence and on the label', async ({ page }) => {
@@ -5123,8 +5186,8 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
   await expandAll(page)
   await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1 · Rares · #1–#3')
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.inventory-location .position-bar-text').nth(1)).toHaveText('Section 1 · Rares · card 1 of 3 slots')
-  await expect(page.locator('.inventory-location-label .position-path')).toHaveText('BOX ME01 commonsSECTION 1Rares')
+  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1 · Rares · card 1 of 3 slots')
+  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsBox 2SECTION 1Rares')
 
   /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */
   await page.route(/\/boxes\/2$/, async (route) => {
@@ -5161,7 +5224,7 @@ test('D132 — a search lands on a box with a LIVE copy, never on the sold one t
 
   await page.getByRole('searchbox').fill('Eiscue')
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 40')
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 40')
   /* And the copy the walk stands on is the live one, not the departed one. */
   await expect(page.locator('.card-locations-row.is-current')).not.toHaveClass(/is-gone/)
 })
@@ -5202,9 +5265,9 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^Box 7/)
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^Box 7/)
-  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7 · Section 1 · Card 38')
 
   /* And pressing box 2 under the same search lands in ITS fullest section, section 2. */
   await page.locator('.browse-boxcell[aria-label^="Box 2"]').click()
-  await expect(page.locator('.inventory-location-label .position-parts')).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
+  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 2 · Section 2 · Card 1')
 })

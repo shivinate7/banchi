@@ -7549,6 +7549,46 @@ a group with more than one copy in it.
 standing at the boxes. That is the one thing the hero did that a 22px row does not, and it is
 named here as the cost of the deletion rather than as a reason to keep a split hierarchy.
 
+### Amended 2026-09-11 — the deletion was undone by a merge nobody read, and it is re-applied with a guard that lives outside the files it touched
+
+**The hero came back three commits after it left, and stayed for four days.** `4bf5a44` (PR #218)
+deleted it on 2026-09-07. `9439765` — PR #221, *"The cap is a ceiling on copies live"*, merged
+2026-09-08 — was committed from a tree that still held the PRE-deletion copy of every file #218
+had touched, and its single commit carried all of them back onto main under a message about
+`--cap` wording: `Inventory.tsx` with `LocationCard`, `Inventory.css` with its rules,
+`CardLocations.tsx` with the `current` term back in `noBar`, `Gallery.tsx` without the re-rank
+specimen, both specs with the pre-deletion assertions, `docs/DEBTS.md`'s section 5 note, and
+`docs/map.py`'s prose about all of it. `docs/DECISIONS.md` alone was not reverted — this entry
+survived, and CLAUDE.md's index line for it — so for four days the record said deleted and the
+tree said otherwise, which is the exact shape D16 is written against.
+
+**Every guard the deletion had came back with the thing it guarded.** That is why nothing on the
+commit path could catch it: `inventory.spec.ts`'s re-pointed cases and `gallery.spec.ts`'s
+relocated re-rank were inside the revert that commit carried, so the suite that went green on 2026-09-08
+was the pre-deletion suite asserting the pre-deletion screen. **And a session then ratified it.**
+D132 (2026-09-11) found `LocationCard`, traced it to `9439765`, read the owner's screenshot of
+the restored hero as evidence they were using it, and recorded *"it stays"*. The owner's next
+question — *"didn't we have one that stopped making the first landing spot of a card be the main
+header?"* — is what reopened it.
+
+**Re-applied 2026-09-11, on the owner's word, as a three-way merge rather than a cherry-pick**:
+base `9439765`, theirs `42e6d5a` (main as #218 left it), ours today's main — so D132's own work
+on the same files (the sold fold, the name leading the address, the section name on the label)
+is kept and the hero is not. Two fields the restored fixtures carried had left the wire in
+between (`SearchGroup.cap`, D7 rewritten), and D132's seven cases that aimed at
+`.inventory-location` now aim at `.card-locations-row.is-current`, which is where D132's own
+address rendering already was for every other row.
+
+**The guard is `make docs-audit`'s `recorded deletions` row, and it is deliberately not a Playwright case.**
+A test that lives beside the component is reverted with it — measured above. The row is a
+hand-written table in `scripts/docs-audit.py` (`RECORDED_DELETIONS`) of symbols a decision
+records as deleted, checked against `app/src` on every commit; a merge that carries
+`LocationCard` back fails the commit that carries it, in a file no screen change edits. Adding a
+row to that table is how a deletion is declared meant to last; removing one, with the entry
+amended, is how a deletion is deliberately undone.
+**What it cannot see is a re-implementation under another name** — that is a design question,
+and D16 leaves those to a reader.
+
 ## D120 — The shell speaks one brand at every width, and the phone bar is a rail
 
 **Built 2026-09-07, on the owner's instruction, after they asked what the mobile build gets wrong.**
@@ -8910,11 +8950,15 @@ boxes rather than to the store's own keys.
 
 ### What is recorded rather than re-litigated
 
-**`LocationCard` in `Inventory.tsx` exists, and D119 says it was deleted.** It was — in
-`4bf5a44` — and came back in `9439765`, a commit about cap wording that carried an unrelated
-merge resolution. The owner's screenshot of 2026-09-10 shows it, and the ask is to change what it
-says, not to remove it. It stays, as the owner is using it; D119's deletion is history and its
-other half — the copy the walk stands on drawn as a row like every other — is untouched.
+**`LocationCard` existed in `Inventory.tsx` while this was built, and D119 says it was deleted.**
+This paragraph said, until 2026-09-11, that it *"stays, as the owner is using it"* — reading their
+screenshot of 2026-09-10 as a wish to keep it. That was wrong on the evidence: the screenshot
+showed it because `9439765` had put it back by accident, not because anybody had asked for it
+back, and the owner's ruling in D119 stood the whole time.
+**The deletion is re-applied and D119 is amended with the account** (its final section).
+What this entry changed on the card — the
+corner saying `Box 3` and the address leading with the name — survives on the copies row the walk
+stands on, which is where D119 says the address is drawn.
 
 ### Amended 2026-09-11: a search lands on the fullest section, and the index is said once
 
@@ -8938,6 +8982,9 @@ moves no row (D118). With nothing live anywhere the older rules stand.
 **The index is said once on the location card.** `BOX WB1 R2  Box 4` beside a corner also
 saying `Box 4` was the same fact twice; `PositionLabel`'s `indexNote` is off there. The copies
 rows have no corner and keep the note.
+**Overtaken the same day by D119's re-application**: the location card is deleted again, so
+there is no corner and no second saying of it; every row keeps the note and `indexNote` is
+gone with its only caller.
 
 ### What is not built
 
