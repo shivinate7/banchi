@@ -4,6 +4,16 @@ Bulk-list pre-sorted TCG singles on TCGplayer with zero attention per card, and 
 every card physically is. Two tracks share one rig: singles (this file) and code cards
 (`code-card-fork/CLAUDE.md`, auto-loaded in that directory).
 
+**Codex reads this same file, not a copy of it (D135).** `AGENTS.md` at the root and
+`code-card-fork/AGENTS.md` are relative symlinks to the `CLAUDE.md` beside each, and
+`.agents/skills` is a directory symlink to `.claude/skills` — one edit reaches both tools'
+readers, because a copy is a fork with a diff nobody watches and a symlink has no diff to
+drift. `.codex/hooks.json` is tracked beside `.claude/settings.json` and names the same
+hooks by the same scripts; `make docs-audit`'s `codex hooks` row reconciles the two rosters
+in both directions and fails a commit that adds a hook to one tool and not the other.
+`.codex/config.toml` is the one file of the three Codex left that stays untracked — a
+shell-environment policy, machine-local the same way `.claude/settings.local.json` is.
+
 ## The name is the app's, and nothing beneath it
 
 **Banchi** — 番地, a lot number, the address of a thing — is the name of the PRODUCT a person
@@ -1449,6 +1459,7 @@ D131 The ratchet gets an escape, a settle is one quiet frame of three, and the b
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
 D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
 D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+D135 Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

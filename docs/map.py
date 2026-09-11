@@ -1567,11 +1567,25 @@ COMPONENTS = [
                 # and `pkmnscan.*` both stand and a row demanding one of them would be
                 # demanding a rename that silently discards what a browser holds under the
                 # old spelling.
+                # D111 AND D127 JOIN AS CITED FAILURES, the same shape D70 and D101 already
+                # carry above: `check_codex_hooks`'s docstring names the two incidents its
+                # missing hooks would have reopened had the row not backfilled them —
+                # `reap.py --hook` on every `Bash` call (D127) and `session-teardown.sh` on
+                # `WorktreeRemove` (D111's sweep) — because a reader who does not know why
+                # those two hooks matter reads a bare roster diff as pedantry. D135 is the
+                # ruling the row enforces: Codex reads the same guards a Claude Code session
+                # does, through `.codex/hooks.json` reconciled against `.claude/settings.json`.
+                # D47 IS CITED IN `branch_files`, NOT IN THE CODEX ROW: a tracked directory
+                # symlink (D47's own subject) is a changed path with no text to scan, and that
+                # function's `is_dir()` guard is what keeps `check_renumbered_decisions` from
+                # crashing on one — found the moment `.agents/skills` became the first such
+                # link this repo's own history ever produced.
                 "governed_by": ["D2", "D3", "D6", "D7", "D8", "D9", "D10", "D12", "D16", "D17",
                                 "D18", "D22", "D23", "D24", "D26", "D27", "D31", "D39", "D43",
-                                "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
+                                "D47", "D49", "D50", "D51", "D53", "D60", "D64", "D65", "D67", "D69",
                                 "D70", "D72", "D75", "D76", "D80", "D81", "D83", "D84", "D87",
-                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D122", "D119", "D132"],
+                                "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D111",
+                                "D119", "D122", "D127", "D132", "D135"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
