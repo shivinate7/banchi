@@ -1632,23 +1632,43 @@ _STRICT_SLUG_HEADING = re.compile(r"^##\s+[DC]" + _ID_SLUG + r"\b")
 _STEP_CITATION = re.compile(r"(?<![-\w])step (" + _STEP_SLUG + r")\b")
 
 
-def on_main() -> bool:
-    """Whether this checkout IS main, by any of the three things that can say so.
+def is_main(ref_name: str, named: str, head: str, origin_main: str) -> bool:
+    """Whether a checkout described by these four readings IS main.
 
-    Three, because the answer has to be right in a CI runner as well as on the rig, and they
-    fail in different ways: a runner checks out a DETACHED head so the branch name is empty,
+    PURE, SO `--self-test` CAN DRIVE IT, and that is the point rather than a convenience: this
+    decision needs a repository in three different states to be wrong in, so for as long as it
+    was welded to `git` nothing could ask it anything and it was wrong for exactly that long.
+
+    Three readings, because the answer has to be right in a CI runner as well as on the rig
+    and they fail differently: a runner checks out a DETACHED head so there is no branch name,
     a worktree commonly has no local `main` at all (D42's merge discipline keeps it checked
-    out elsewhere), and `GITHUB_REF_NAME` exists only in Actions. Any one saying main is
-    enough; the check this gates is silent everywhere else, so a false NO costs a check that
-    was going to be vacuous on a branch anyway, and a false YES cannot happen — none of the
-    three says main about a branch.
+    out elsewhere), and `GITHUB_REF_NAME` exists only in Actions.
+
+    COMMIT EQUALITY IS THE DETACHED-HEAD RULE AND NOTHING ELSE (D143). A NAMED
+    branch is not main however recently it was cut, and this is where a false YES came from: a
+    branch cut from main and not yet committed to sits AT origin/main, so equality called it
+    main. `id claims` then refused its FIRST commit — the one commit that introduces the slug —
+    telling a session that main carried an unclaimed id and sending it to repair main. D140's
+    workflow was unusable on a fresh branch, and it was found by doing exactly that.
+    `--abbrev-ref` prints the literal `HEAD` when detached, so that is the test.
     """
-    if os.environ.get("GITHUB_REF_NAME") == "main":
+    if ref_name == "main":
         return True
-    if git("rev-parse", "--abbrev-ref", "HEAD").strip() == "main":
+    if named == "main":
         return True
-    head = git("rev-parse", "HEAD").strip()
-    return bool(head) and head == git("rev-parse", "origin/main").strip()
+    if named and named != "HEAD":
+        return False
+    return bool(head) and head == origin_main
+
+
+def on_main() -> bool:
+    """`is_main` over this checkout's own four readings."""
+    return is_main(
+        os.environ.get("GITHUB_REF_NAME") or "",
+        git("rev-parse", "--abbrev-ref", "HEAD").strip(),
+        git("rev-parse", "HEAD").strip(),
+        git("rev-parse", "origin/main").strip(),
+    )
 
 
 def check_id_claims(report: Report) -> None:
@@ -11633,6 +11653,23 @@ def self_test() -> int:
     # A RENUMBER IS A TITLE THAT KEPT ITS NAME AND CHANGED ITS ID, and this is the reader of
     # that. The git walk around it needs a repository; this does not, and it is where the
     # logic that could be wrong lives (D72).
+    # WHICH TREE AM I, asked without a repository (D143). The case that was
+    # wrong is the third: a NAMED branch sitting at origin/main, which is every branch between
+    # `git checkout -b` and its first commit.
+    print("\nwhich checkout is main, over the four readings that can say so")
+    for ref_name, named, head, origin_main, want, label in [
+        ("", "main", "aaa", "aaa", True, "the branch is named main"),
+        ("main", "HEAD", "aaa", "bbb", True, "GITHUB_REF_NAME says main, head detached"),
+        ("", "HEAD", "aaa", "aaa", True, "detached AT origin/main — the CI runner this rule is for"),
+        ("", "HEAD", "aaa", "bbb", False, "detached somewhere else"),
+        ("", "", "aaa", "aaa", True, "no name at all, sitting at origin/main"),
+        ("", "claude/a-branch", "aaa", "aaa", False,
+         "A NAMED BRANCH AT origin/main IS NOT MAIN — every branch before its first commit"),
+        ("", "claude/a-branch", "aaa", "bbb", False, "a named branch that has committed"),
+    ]:
+        got = is_main(ref_name, named, head, origin_main)
+        ok(got == want, label, f"wanted {want}, got {got}")
+
     # THE EQUALITY THAT REPLACED TWO SUBSTRING TESTS. Both legs of check_pass_criteria used
     # to ask whether the criterion appeared SOMEWHERE in the section, which `0.9` satisfies
     # inside `0.95`. These cases are the arithmetic of that, with no filesystem in the way.

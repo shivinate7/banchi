@@ -247,6 +247,26 @@ class Stale(NamedTuple):
     where: str     # the file whose headings were read
 
 
+def merging(cwd: Optional[str] = None) -> bool:
+    """Whether a merge is in progress and uncommitted.
+
+    WHAT THE BRANCH ADDS IS NOT ANSWERABLE HERE, and answering anyway reports a collision the
+    reader cannot act on. Mid-merge the working tree already holds the other side's entries
+    while the merge base has NOT moved, so every id the other side added reads as this
+    branch's own and every one of them is on the ref by definition. The advice would be to
+    un-claim an id that belongs to somebody else's merged work.
+
+    IT IS THE DOCUMENTED PRE-MERGE STEP THAT PRODUCES IT, which is what makes this worth a
+    guard rather than a footnote: fetch, merge `origin/main`, resolve, push is the routine
+    every branch runs before it is merged, and `make claim-stale` is in `make check`. Measured
+    on this entry's own branch while it resolved a merge: one refusal naming an id that main
+    had merged an hour earlier. The number is not spelled here on purpose — an id in a comment
+    is a CITATION, and this one is somebody else's entry passing through. Committing the merge
+    moves the base and clears it.
+    """
+    return bool(git("rev-parse", "--verify", "--quiet", "MERGE_HEAD", cwd=cwd).strip())
+
+
 def merge_base(ref: str, cwd: Optional[str] = None) -> str:
     """The commit `ref` and HEAD share — what `git diff <ref>...HEAD` measures from.
 
@@ -446,6 +466,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # cannot be split by a caller. scripts/merge-pr.py is that caller.
         for claim in plan(root, args.ref, cwd=str(root)):
             say(f"{claim.token}\t{claim.becomes}")
+        return 0
+
+    if args.stale and merging(cwd=str(root)):
+        say(f"PKMNSCAN — ids this branch adds, checked against {args.ref}")
+        say("=" * 72, "")
+        say("  a merge is in progress and not yet committed — there is nothing to check yet.",
+            "  ALLOWED, and not a failure: this tree already holds the other side's entries",
+            "  while the merge base has not moved, so every id that merge brought in would",
+            "  read as this branch's own. Commit the merge and run it again.")
         return 0
 
     base = merge_base(args.ref, cwd=str(root))
