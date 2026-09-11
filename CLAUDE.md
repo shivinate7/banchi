@@ -135,6 +135,13 @@ make design-check   # DESIGN.md's Fulfillment floors, asserted in a browser. IT 
                     #   `PKMNSCAN_SUITE_LOCK=off` runs it anyway, and is printed in every
                     #   refusal. `make harness` and `make check` deliberately do NOT take it;
                     #   docs/DEBTS.md §16 is why, and which half of that is measured.
+                    #   `PW_ARGS=<flags>` REACHES PLAYWRIGHT AND `ARGS` NEVER DOES (D135): the
+                    #   `--` on each side keeps them apart. CI runs this as three shards of one
+                    #   worker each — `PW_ARGS="--shard=1/3 --workers=1"` — because one runner
+                    #   ran all 481 cases on one worker in 15 minutes; on the rig it is for one
+                    #   spec (`PW_ARGS=tests/brand.spec.ts`). NEVER RAISE THE WORKER COUNT TO GO
+                    #   FASTER: docs/DEBTS.md §11's one-in-thirteen red has "the suite around
+                    #   it" as its only known mechanism.
                     #   AND IT LEAVES A VERDICT, WHICH IS HOW A SESSION WAITS FOR IT. 89-175s
                     #   measured across five runs, against a 120s tool timeout — so a session
                     #   ALWAYS backgrounds it, and the answer is a file rather than the
@@ -1435,6 +1442,7 @@ D131 The ratchet gets an escape, a settle is one quiet frame of three, and the b
 D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
 D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
 D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
+D135 The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
 ```
 
 **THE GAP THIS LIST CARRIED BETWEEN D116 AND D118 IS CLOSED, AND IT CLOSED THE WAY IT SAID IT

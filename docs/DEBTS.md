@@ -792,7 +792,9 @@ it is written down because it is the only regularity in the set.
 
 So the case that fails one run in thirteen inside the suite passes 555 times outside it, on the
 box it fails on. **The suite around it is part of the mechanism** and nothing measured says which
-part. The candidates read and ruled out by evidence rather than by argument: a Vite dependency
+part. **Which is why D135 shards the job three ways and does not widen it**: the shape those 240
+and 315 passes were measured in — three shards, one worker — is the shape CI runs now, and the
+worker count stays at one because more workers on one box is more suite around the case. The candidates read and ruled out by evidence rather than by argument: a Vite dependency
 re-optimisation forcing a reload (the app's only runtime dependencies are React's, all bundled at
 scan, and a reload would EMPTY the track rather than hold it at 3); a second listener eating the
 press (the leader's capture-phase `stopPropagation` fires only while armed, and nothing arms it);
