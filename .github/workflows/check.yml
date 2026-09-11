@@ -76,7 +76,10 @@
 # one question — has this exact TREE passed? — and a docs-only branch is always a new tree, so
 # it paid the full matrix on every push: measured 2026-09-11, seven PRs plus re-runs in one
 # evening, most touching no screen code, at about 27 billed minutes each, until the account's
-# Actions minutes ran out. Replayed over main's last 14 merges, 9 would have skipped. The
+# Actions minutes ran out. The repository went public the same night and minutes are free since;
+# what the gate still buys is the wait — a docs PR's verdict in ~100s rather than 8.5 minutes —
+# and one fewer draw per push against docs/DEBTS.md section 11's one-in-thirteen red for a change
+# that cannot have caused it. Replayed over main's last 14 merges, 9 would have skipped. The
 # `browser-scope` job below asks the other question — does what this branch LANDS touch a file
 # the suite reads? — and `scripts/browser-scope.py` holds that list, DERIVED from what the run
 # loads rather than typed: Vite's root, Playwright's `testDir`, the traces a spec reads off
