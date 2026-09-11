@@ -47,7 +47,7 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-function quantise(cells: Float32Array): Uint8Array {
+function quantize(cells: Float32Array): Uint8Array {
   const out = new Uint8Array(cells.length)
   for (let i = 0; i < cells.length; i += 1) {
     const v = cells[i] as number
@@ -108,10 +108,10 @@ export class MotionTrace {
       Math.round(luma * 10) / 10,
     ])
     if (event !== null) {
-      this.events.push({ t, event, frame: toBase64(quantise(cells)) })
+      this.events.push({ t, event, frame: toBase64(quantize(cells)) })
     } else if (t - this.lastKeyframeAt >= 1000) {
       this.lastKeyframeAt = t
-      this.keyframes.push({ t, frame: toBase64(quantise(cells)) })
+      this.keyframes.push({ t, frame: toBase64(quantize(cells)) })
     }
   }
 

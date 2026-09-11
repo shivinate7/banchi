@@ -311,7 +311,7 @@ so the list said *that* four surveys had run and nothing about which was which. 
 the row's hover.
 
 **`report.txt` was written and never offered.** Every `--write` since D100 has produced it, it
-matched `_DOWNLOADABLE`, and `_artefacts` listed it — the history's own filter dropped it. It is
+matched `_DOWNLOADABLE`, and `_artifacts` listed it — the history's own filter dropped it. It is
 the one artefact that says *why* a row is in the worklist and states the ownership-age
 substitution, which D100 names as the cost of the CSV having no reason column.
 

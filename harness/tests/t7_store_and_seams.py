@@ -19453,7 +19453,7 @@ def check_shipping_routes(checks: Checks) -> None:
 
       no PII on the list wire   the union of every row's keys is asserted as a set, and the
                                 fixture's own first buyer name and street are asserted absent
-                                from the whole serialised answer. A later field is then
+                                from the whole serialized answer. A later field is then
                                 argued for here rather than slipped in.
       the abstention is not in  none of the 39 unjudged order ids appears in the rendered
       the file                  import. Being swept into the parcel lane to be safe is a
@@ -19564,11 +19564,11 @@ def check_shipping_routes(checks: Checks) -> None:
             "is argued for HERE rather than slipped in behind a lookup that still passes",
         )
         cells = list(csv.reader(io.StringIO(fixture)))[1]
-        serialised = json.dumps(answer)
+        serialized = json.dumps(answer)
         checks.ok(
-            cells[1] not in serialised and cells[3] not in serialised,
+            cells[1] not in serialized and cells[3] not in serialized,
             "and the fixture's own first buyer name and first street address appear NOWHERE "
-            "in the serialised answer. Asserted against the file's real cells rather than "
+            "in the serialized answer. Asserted against the file's real cells rather than "
             "against a literal, so the case cannot go stale against a re-exported fixture",
             f"name {cells[1]!r} / street {cells[3]!r}",
         )
@@ -19608,10 +19608,10 @@ def check_shipping_routes(checks: Checks) -> None:
             "parcel weighs, so writing it buys postage for less than the package weighs and "
             "the bill arrives at the far end weeks later",
         )
-        signalled = next(row for row in rows if row["reason"] == "non_card_signal")
-        signalled_line = [row for row in parsed[1:] if row[8] == signalled["order"]]
+        signaled = next(row for row in rows if row["reason"] == "non_card_signal")
+        signaled_line = [row for row in parsed[1:] if row[8] == signaled["order"]]
         checks.equal(
-            [row[7] for row in signalled_line],
+            [row[7] for row in signaled_line],
             [""],
             "AND IT IS STILL EMPTY ON A `non_card_signal` ORDER, which is the case where "
             "carrying it across would look most reasonable: that order was routed BY its "

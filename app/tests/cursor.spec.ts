@@ -218,7 +218,7 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
 /* THE RESPONSE ITSELF, ASSERTED AS A RULE OVER EVERY `:hover` RULE THE APP LOADED — which is
  * the half of D50 this file did not have. Everything above is about `cursor`, and the one case
  * below it about hover reaches exactly ONE element, `.search-field-box` on `#/gallery`. D50 is
- * titled for an interactive element's FEEDBACK; a guard that checks one control's border colour
+ * titled for an interactive element's FEEDBACK; a guard that checks one control's border color
  * is not holding that entry to its own name, and the owner's report of 2026-09-06 landed in the
  * gap: `.bn-brand`, the sidebar's rail toggle, painted a 109px hover slab in a single frame on
  * all ten routes while the nav links under it faded over 120ms. Every assertion in this file
@@ -537,7 +537,7 @@ test('a pointer state repaints a control and never re-lays it out', async ({ pag
           if (want === '' || want === now) continue
           bad.push(`${sel}  changes \`${prop}\` from \`${now}\` to \`${want}\` under the pointer — ` +
             `that re-flows everything beside it. Composite the same movement with \`translate\`, ` +
-            `or paint it with a colour, a shadow or an inset ring.`)
+            `or paint it with a color, a shadow or an inset ring.`)
         }
       }
       return { bad, seen }
@@ -768,7 +768,7 @@ test('a typed-into field darkens its edge under the pointer, and nothing moves',
   /* ON `#/gallery`, AND THE ROUTE WAS CHOSEN BY MEASUREMENT AFTER TWO GUESSES MISSED. The
      screens draw their typed-into controls only once there is something to type against, so
      against this worktree's own empty store (D43) `#/inventory` renders no search field and
-     `#/` renders no Box field — both first attempts failed on ABSENCE rather than on colour,
+     `#/` renders no Box field — both first attempts failed on ABSENCE rather than on color,
      which is a test reporting a defect that is not there. The gallery is what a route for this
      is: it renders components against the tokens without needing a store behind them, and it is
      already what `make screenshot` and step 6's own spec point at.
@@ -797,17 +797,17 @@ test('a typed-into field darkens its edge under the pointer, and nothing moves',
   const before = await field.evaluate((el) => {
     const cs = getComputedStyle(el)
     const b = el.getBoundingClientRect()
-    return { colour: cs.borderTopColor, w: cs.borderTopWidth, box: [b.width, b.height].join('x') }
+    return { color: cs.borderTopColor, w: cs.borderTopWidth, box: [b.width, b.height].join('x') }
   })
 
   await field.hover()
   const after = await field.evaluate((el) => {
     const cs = getComputedStyle(el)
     const b = el.getBoundingClientRect()
-    return { colour: cs.borderTopColor, w: cs.borderTopWidth, box: [b.width, b.height].join('x') }
+    return { color: cs.borderTopColor, w: cs.borderTopWidth, box: [b.width, b.height].join('x') }
   })
 
-  expect(after.colour, 'the edge must respond to the pointer').not.toBe(before.colour)
+  expect(after.color, 'the edge must respond to the pointer').not.toBe(before.color)
 
   /* NO REFLOW, WHICH IS THE HALF THAT COULD ACTUALLY HURT SOMEBODY. A hover that changes border
      width, padding or type size moves a target under a finger already travelling toward it —
