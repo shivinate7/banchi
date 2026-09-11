@@ -48,6 +48,7 @@ from typing import Dict, List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+from pipeline import games  # noqa: E402
 from store import Box, Card, Listing, Store  # noqa: E402
 from store import files as store_files  # noqa: E402
 from store import orders as orders_mod  # noqa: E402
@@ -112,27 +113,56 @@ class Row:
             return 0.0
 
 
+# Each vendored export and the game whose vocabulary its rows answer to. A pair rather than a
+# bare list, because D137's narrowing is PER GAME — `Near Mint Holofoil` is a Pokemon string
+# and `Near Mint Foil` a Riftbound one, and a union of all three would offer a Pokemon card a
+# condition its own game does not stock.
+VARIANT_FIXTURES = (
+    ("sv09_export_untouched.csv", "pokemon"),
+    ("onepiece_export_untouched.csv", "one_piece"),
+    ("riftbound_export_untouched.csv", "riftbound"),
+)
+
+
 def export_variants() -> Dict[str, List[dict]]:
-    """Every vendored export row, grouped by Product Name.
+    """Every vendored export row this product could list, grouped by Product Name.
 
     WHAT THE REVIEW QUEUE OFFERS AS CANDIDATES. A queued card is one the ladder could not
     settle, and what it is choosing BETWEEN is a set of export rows — the same card at
-    different conditions and finishes, which is where D3's ambiguity actually lives
-    (`Near Mint`, `Near Mint Holofoil`, `Near Mint Reverse Holofoil`). Read here rather than
-    from the curated manifest because that holds ONE row per card by construction, so it has
-    no siblings to offer and the queue would draw a single-candidate question.
+    different FINISHES, which is where D3's ambiguity actually lives (`Near Mint`,
+    `Near Mint Holofoil`, `Near Mint Reverse Holofoil`). Read here rather than from the
+    curated manifest because that holds ONE row per card by construction, so it has no
+    siblings to offer and the queue would draw a single-candidate question.
+
+    NARROWED TO THE CONDITIONS THIS PRODUCT LISTS (D137), AND THE SENTENCE ABOVE HAD SAID SO
+    SINCE IT WAS WRITTEN. It named those three strings and then handed over every row the
+    fixture held: measured across all three files, **10,452 of the rows this could offer were
+    play grades**, so the published demo's review screen asked a stranger to choose between
+    `Near Mint`, `Lightly Played` and `Moderately Played` — a question D12 says this product
+    never asks. The comment was right and the code did not match it.
+
+    THE REST OF THE DEMO INHERITED THAT FIX ON ITS OWN AND THIS DID NOT, which is the whole
+    reason it needed one. `#/pricing`'s worklist is recorded off a live capture server
+    (`scripts/demo-record.py`), so it goes through `resolve.load` -> `Catalog.from_export` and
+    is narrowed by the real rule. This queue is seeded by hand, reaches no catalog, and would
+    have gone on contradicting the product it exists to demonstrate.
 
     Grouped by name and NEVER JOINED ON IT. CLAUDE.md forbids the name as a join key because
     the column inconsistently embeds numbers; this is not a join, it is "which rows would a
     human be shown", and the number is checked below before any of them is offered.
     """
     grouped: Dict[str, List[dict]] = {}
-    for name in ("sv09_export_untouched.csv", "onepiece_export_untouched.csv",
-                 "riftbound_export_untouched.csv"):
+    for name, game in VARIANT_FIXTURES:
+        listable = {str(v) for v in dict(games.require(game)["condition_by_finish"]).values()}
         path = FIXTURES / name
         with path.open(newline="", encoding="utf-8-sig") as handle:
             for record in csv.DictReader(handle):
                 if not (record.get("Number") or "").strip():
+                    continue
+                # Sealed product never reaches this filter — it carries no `Number` and the
+                # line above has already dropped it — so `SEALED_CONDITION` is deliberately
+                # not in `listable` here, where `Catalog.from_export` does carry it.
+                if record.get("Condition") not in listable:
                     continue
                 grouped.setdefault(record["Product Name"], []).append(record)
     return grouped
@@ -277,7 +307,10 @@ def capture_stamps(spec: dict) -> List[str]:
     return out
 
 
-CONDITIONS = ("Near Mint", "Lightly Played")
+# `CONDITIONS = ("Near Mint", "Lightly Played")` sat here, read by nothing, until D137 deleted
+# it. Dead on the day it was written and actively wrong by the end: it named a play grade as
+# something this seed deals in, in the one file whose review queue had just stopped offering
+# them. A constant with no reader cannot be contradicted by anything.
 
 # The queue's reasons, spread across several real codes rather than repeating one. Every
 # member is a key of `app/src/reasons.ts:REASON_LABELS` — a code that map lacks renders on
@@ -288,8 +321,20 @@ REASONS = (
     "low_confidence",
     "duplicate_condition",
     "ambiguous_no_signal",
-    "number_unread_name_matched",
 )
+
+# THE ONE-ROW REASON, AND IT IS SEPARATE BECAUSE A ONE-ROW QUESTION IS A DIFFERENT QUESTION.
+# D35's rung: the number could not be read, the name found exactly one row, and the card still
+# faces a human. Every entry carrying it offers ONE candidate under ONE reason of ONE
+# condition — which is D29's group-answer eligibility exactly, so the demo's review screen
+# draws the `G` press rather than only describing it.
+#
+# IT WAS IN `REASONS` AND UNREACHABLE, which D137 exposed rather than caused. The line below
+# fell back to `no_catalog_row` for anything under two candidates, so a card with one real row
+# was labelled as having none — wrong before, and invisible while every card had three rows to
+# offer because two of them were play grades. With those gone it would have put 10 of 13
+# entries under one code and left D78 with nothing to group.
+SINGLE_ROW_REASON = "number_unread_name_matched"
 
 
 def pick_rows(pool: List[Row], count: int, taken: set) -> List[Row]:
@@ -492,18 +537,22 @@ def build_store(force: bool) -> dict:
         # Real ambiguity, not filler. Every entry here is a card the pipeline could not
         # settle on its own, carrying the candidates it was choosing between — which is
         # what the review screen exists to draw (D4, D46).
-        review_pool = [
-            (card, row) for card, row in placed if card.state == "captured"
-        ][:9]
         variants = export_variants()
-        for offset, (card, row) in enumerate(review_pool):
-            # The export's own rows for this card — its real conditions and finishes, at
-            # their real prices. Matched on the printed number as well as the name, so a
-            # shared name across sets cannot put another card's row in front of a human.
-            siblings = [
+
+        def siblings_for(row) -> List[dict]:
+            """This card's own listable rows — matched on the printed number as well as the
+            name, so a shared name across sets cannot put another card's row in front of a
+            human."""
+            return [
                 record for record in variants.get(row.name or "", [])
                 if (record.get("Number") or "").strip() == row.printed
             ][:3]
+
+        review_pool = [
+            (card, row) for card, row in placed if card.state == "captured"
+        ][:9]
+        for offset, (card, row) in enumerate(review_pool):
+            siblings = siblings_for(row)
             candidates = [
                 {
                     "sku": record["TCGplayer Id"],
@@ -519,7 +568,12 @@ def build_store(force: bool) -> dict:
             # entry for renders as a raw enum on screen — which is what an invented
             # `variant_ambiguous` did — and D78 makes a reason a HEADING the queue groups
             # under, so the spread across several is the thing worth demonstrating.
-            reason = REASONS[offset % len(REASONS)] if len(candidates) > 1 else "no_catalog_row"
+            if not candidates:
+                reason = "no_catalog_row"
+            elif len(candidates) == 1:
+                reason = SINGLE_ROW_REASON
+            else:
+                reason = REASONS[offset % len(REASONS)]
             snapshot.review.upsert(
                 QueueEntry(
                     position=card.key,

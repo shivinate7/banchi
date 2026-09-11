@@ -9577,6 +9577,32 @@ belongs, so the next join of a run rewrites its entries and the stale ones self-
 `_answer_target`'s new `condition_not_listed` refusal is the floor under the entries written
 before this landed — unreachable from the screen once a run is re-joined, which is the point.
 
-**`scripts/demo-seed.py:export_variants` has the same defect, left alone on the owner's word.**
-It groups the raw fixtures by `Product Name`, so the published demo can offer
-10,452 played rows as review candidates. Recorded, not fixed.
+**`scripts/demo-seed.py:export_variants` had the same defect, and it was fixed.**
+The owner's second look is why — they pointed out the premise the first decision rested on.
+
+*"i thought demo automatically resolves as our main project resolves"* — and for two of the
+demo's three halves it does. The app is the same `app/` source under `VITE_DEMO=1`, so every
+screen and the group press itself inherit. `#/pricing`'s worklist is recorded off a live
+capture server (`scripts/demo-record.py`), so it runs `resolve.load` -> `Catalog.from_export`
+and is narrowed by the real rule with no action at all.
+
+**The review queue is the exception, because it is seeded by hand and reaches no catalog.**
+`snapshot.review.upsert` is handed candidates sliced straight off the raw fixtures, so it
+offered 10,452 play-grade rows. Left alone, the published demo would have gone on asking a
+stranger to choose `Damaged` on a screen the product had just stopped offering it on — a demo
+contradicting the thing it exists to demonstrate, which is worse than the defect it inherited.
+Narrowed per game, because `Near Mint Holofoil` is a Pokemon string and `Near Mint Foil` a
+Riftbound one: 10,452 -> 0.
+
+**And that exposed a second bug the play grades had been hiding.** `reason` fell back to
+`no_catalog_row` for any entry under two candidates, so a card with one real row was labelled
+as having none. It was invisible while every card carried three rows — two of them grades —
+and with those gone it put 10 of 13 entries under one code, leaving D78 nothing to group.
+A one-row entry is D35's rung and takes `number_unread_name_matched`; `no_catalog_row` now
+means what it says. Measured across the rebuilt demo store: 6 reasons before, 5 after, and
+`no_catalog_row` back to its original 6 of 13.
+
+**The demo now draws the control this entry restores.** Four entries share one reason, one
+candidate each, one condition — D29's group-answer eligibility exactly — so the review screen
+offers *"Answer all 4 as Near Mint Foil"* to anyone who opens it. It could not have before:
+every entry carried three rows, and no queue of three-row entries can ever qualify.

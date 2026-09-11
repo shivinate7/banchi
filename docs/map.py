@@ -2039,9 +2039,13 @@ COMPONENTS = [
                 # a first version wrote a top-level `answers` map that `Corpus.parse` kept as
                 # `unknown` and no reader ever saw. D25 is the per-game number split, which
                 # the export carries whole and a card record carries in halves.
-                "governed_by": ["D3", "D4", "D7", "D10", "D13", "D21", "D25", "D26", "D39",
-                                "D43", "D46", "D49", "D67", "D70", "D78", "D83", "D86",
-                                "D87"],
+                # D12/D29/D35/D137 arrived together: the seeded review queue is narrowed to
+                # the conditions this product lists, and a one-row entry stopped being
+                # labelled `no_catalog_row` — which is what lets the demo draw D29's group
+                # press instead of only describing it.
+                "governed_by": ["D3", "D4", "D7", "D10", "D12", "D13", "D21", "D25", "D26",
+                                "D29", "D35", "D39", "D43", "D46", "D49", "D67", "D70", "D78",
+                                "D83", "D86", "D87", "D137"],
             },
             "demo-record.py": {
                 "does": "spawns its own capture server over the demo store on its own port, "
