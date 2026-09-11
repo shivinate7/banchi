@@ -1161,7 +1161,7 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
             if isinstance(record, dict) and record.get("box") is not None
         }
     )
-    # THE RUN'S OWN RECORD OF WHICH DRAWER IT WAS OVER, WHERE IT HAS ONE (D-box-true-index).
+    # THE RUN'S OWN RECORD OF WHICH DRAWER IT WAS OVER, WHERE IT HAS ONE (D145).
     # A run started after that landed carries its box's true index in its scope block, which
     # settles this case rather than inferring it. Every run on the owner's machine predates
     # the field and takes the rule below unchanged — so this narrows nothing and can only

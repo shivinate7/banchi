@@ -648,7 +648,7 @@ class Box:
 
     box: int
     # THE TRUE INDEX: an identity this box keeps for as long as the store remembers it, and
-    # that no later box is ever given (D-box-true-index). `box` above is a LABEL on a physical
+    # that no later box is ever given (D145). `box` above is a LABEL on a physical
     # drawer and `next_box_number` hands out the lowest free one on purpose (D20) — so the
     # moment a drawer is emptied and deleted, the next drawer is called `Box 1` too, and every
     # record that outlives a box loses the ability to say which of them it meant.
@@ -1231,7 +1231,7 @@ class Inventory:
     listings: "Rows" = field(default_factory=lambda: Rows(Inventory.LISTINGS))
     events: List[dict] = field(default_factory=list)
     # THE HIGH-WATER MARK FOR `Box.bid`, AND THE ONLY PART OF IT A DELETION MUST NOT LOWER
-    # (D-box-true-index). It is a scalar rather than a row because it is a fact about the
+    # (D145). It is a scalar rather than a row because it is a fact about the
     # STORE and not about any box: the boxes table cannot hold it, since the whole point is
     # that the row whose id it remembers has been deleted.
     #
@@ -1760,7 +1760,7 @@ class Inventory:
 
         `bid` IS THE RUN'S OWN RECORD OF WHICH DRAWER IT WAS OVER, and where it is present and
         the box has one too, it is the whole answer — the module-level rule is not consulted
-        at all. Absent (every run written before D-box-true-index, and every caller that has
+        at all. Absent (every run written before D145, and every caller that has
         not learned to pass one) this behaves exactly as it always did.
 
         `box_disowns_run` (module-level) is the rule; this reads its inputs off the store —
@@ -1774,7 +1774,7 @@ class Inventory:
         if entry is None:
             return None
         number = int(entry.box)
-        # THE TRUE INDEX DECIDES OUTRIGHT WHERE THE CALLER HAS ONE (D-box-true-index). The
+        # THE TRUE INDEX DECIDES OUTRIGHT WHERE THE CALLER HAS ONE (D145). The
         # rule below reasons from the shape of the evidence and has to abstain when it cannot
         # tell; an id is a fact about which drawer this is, so there is nothing to weigh. The
         # sentence names both drawers, because the operator has to be able to check it — and

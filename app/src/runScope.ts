@@ -86,7 +86,7 @@ export function boxLabel(
  *  box — which no run on this machine does, and which a manifest with neither a scope block nor
  *  a box-shaped capture directory would.
  *
- *  A RUN OVER A DRAWER THAT HAS SINCE BEEN DELETED SAYS SO, IN THAT WORD (D-box-true-index).
+ *  A RUN OVER A DRAWER THAT HAS SINCE BEEN DELETED SAYS SO, IN THAT WORD (D145).
  *  The owner's report: *"i deleted an old box 1, started writing into a new box (now new box 1)
  *  and if i go on say my runs tab it shows that i'd run a 'Box 1' run a long time ago etc. it's
  *  confusing."* Every run over both drawers drew `Box 1`, because the number is all a run had

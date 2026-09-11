@@ -72,7 +72,7 @@ LEGACY_DIRNAME = "legacy-json"
 RECEIPT_NAME = "MIGRATED.json"
 MIGRATIONS_DIRNAME = "migrations"
 BOX_ID_RECEIPT = "box-ids.json"
-# The `meta` key holding `Inventory.box_ids_issued` (D-box-true-index).
+# The `meta` key holding `Inventory.box_ids_issued` (D145).
 BOX_IDS_ISSUED = "box_ids_issued"
 SCHEMA_VERSION = 2
 
@@ -258,7 +258,7 @@ def _upgrade(
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:
-    """Schema 1 -> 2: give every box in an existing store its true index (D-box-true-index).
+    """Schema 1 -> 2: give every box in an existing store its true index (D145).
 
     IN ASCENDING BOX NUMBER, which is the only stable order available. The rows carry a
     `created_at` and it would be the more meaningful sequence, but it is optional — the v1
@@ -381,7 +381,7 @@ def _write_migration_receipt(directory: Path, name: str, receipt: dict) -> None:
 
 
 def box_ids_issued(conn: sqlite3.Connection) -> int:
-    """The high-water mark for `Box.bid` (D-box-true-index). 0 where none has been issued."""
+    """The high-water mark for `Box.bid` (D145). 0 where none has been issued."""
     row = conn.execute("SELECT value FROM meta WHERE key = ?", (BOX_IDS_ISSUED,)).fetchone()
     if row is None:
         return 0
@@ -675,7 +675,7 @@ def _import_legacy(directory: Path, *, locked: bool = False) -> None:
             return files.read_json(sources[name]) if name in sources else None
 
         inventory = Inventory.parse(document(LEGACY_INVENTORY))
-        # THE LEGACY STORE'S BOXES GET THEIR TRUE INDEX HERE (D-box-true-index), because the
+        # THE LEGACY STORE'S BOXES GET THEIR TRUE INDEX HERE (D145), because the
         # staging database is created fresh at the CURRENT schema version and so never passes
         # through `_add_box_ids`. Same rule and same order as that step: ascending box number,
         # additive, and a box that somehow already has an id keeps it.

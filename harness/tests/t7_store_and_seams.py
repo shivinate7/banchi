@@ -1008,7 +1008,7 @@ def check_store_of_record(checks: Checks) -> None:
         expected = master.Inventory.parse(legacy_inventory).to_payload()
 
         imported = Store().read()
-        # THE IMPORT IS LOSSLESS AND IT IS NO LONGER IDENTICAL (D-box-true-index). It ADDS a
+        # THE IMPORT IS LOSSLESS AND IT IS NO LONGER IDENTICAL (D145). It ADDS a
         # `bid` to every box and records the mark it issued them against, which is a migration
         # rather than a loss — so the assertion is stated as "everything the file said, plus
         # exactly this", and the two added facts are asserted BY NAME below rather than
@@ -1019,7 +1019,7 @@ def check_store_of_record(checks: Checks) -> None:
             added["box_ids_issued"],
             1,
             "the legacy import issues a true index to the one box the file declared, and "
-            "records the high-water mark it issued it against (D-box-true-index)",
+            "records the high-water mark it issued it against (D145)",
         )
         checks.equal(
             added["boxes"]["2"]["bid"],
@@ -9707,7 +9707,7 @@ def check_box_true_index(checks: Checks) -> None:
     — so the reuse is asserted as a REQUIREMENT below rather than guarded against.
     """
     checks.note("")
-    checks.note("BOX TRUE INDEX — the drawer's identity outlives its number (D-box-true-index)")
+    checks.note("BOX TRUE INDEX — the drawer's identity outlives its number (D145)")
 
     OLD_RUN, NEW_RUN = "2026-08-22-box1-03", "2026-08-29-box1-01"
 
@@ -15584,7 +15584,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             answer = json.loads(body)
             checks.equal(
                 (status, answer["scopes"][0]["scope"]),
-                # `bid` IS THE FOURTH FACT AND IT IS `None` HERE (D-box-true-index): this
+                # `bid` IS THE FOURTH FACT AND IT IS `None` HERE (D145): this
                 # fixture's box 3 has no registry entry, and `_box_bid` answers None for a box
                 # the registry has never seen rather than inventing an identity for it. A
                 # preflight is a preview, so it reports the id the run WOULD record — which is

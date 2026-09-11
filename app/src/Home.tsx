@@ -689,7 +689,7 @@ export function Home() {
               <p className="home-empty">No runs yet. Identify a box from the Runs screen.</p>
             ) : (
               runs.value.slice(0, 6).map((run) => {
-                // `runBoxLabel` AND NOT A SECOND SPELLING OF IT (D-box-true-index). This line
+                // `runBoxLabel` AND NOT A SECOND SPELLING OF IT (D145). This line
                 // composed the label itself, so `Box 1 (deleted)` reached `#/runs` and `#/pricing`
                 // and this panel went on drawing `Box 1` for a drawer that is not on the shelf —
                 // which is `runScope.ts`'s own founding defect (D56), repeated one screen over.

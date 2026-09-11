@@ -110,7 +110,7 @@ class Store:
                 cards=bound(Inventory.CARDS, "cards"),
                 boxes=bound(Inventory.BOXES, "boxes"),
                 listings=bound(Inventory.LISTINGS, "listings"),
-                # READ INSIDE THE SAME TRANSACTION AS THE TABLES (D-box-true-index), so the
+                # READ INSIDE THE SAME TRANSACTION AS THE TABLES (D145), so the
                 # mark a session allocates against is the mark as of the moment its rows were
                 # read. Read outside it, a box could be created between the two and this
                 # session would hand its id out a second time.
@@ -175,7 +175,7 @@ class Store:
     def named_events(self, event: str):
         """Every event of one kind, newest first. `buried()`'s general form.
 
-        IT EXISTS BECAUSE A SECOND READER ARRIVED (D-box-true-index): `box_deleted` is the
+        IT EXISTS BECAUSE A SECOND READER ARRIVED (D145): `box_deleted` is the
         only record of what a departed drawer was called, and `server/pipeline_routes.py`
         joins it onto a run that outlived its box. Copying `buried()` for it would have been
         two methods differing by a string literal.

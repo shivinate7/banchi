@@ -10407,7 +10407,7 @@ question that matters. §7's last block is the first armed run's checklist, and 
 summary until that run is that the machine takes 27 more photographs per 295 and five of them
 have been looked at through a keyhole.
 
-## D-box-true-index — A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
+## D145 — A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
 
 **Settled 2026-09-11, on the owner's report and their ruling in the same message.** A box gains a `bid`: an integer allocated once at the drawer's creation, never reused, never displayed. The box NUMBER is unchanged in every respect, including that `next_box_number` goes on handing out the lowest free one. Records that outlive a box — a run, a buried card — bind to the id; every screen still says `Box 1`.
 

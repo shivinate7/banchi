@@ -1240,7 +1240,7 @@ A screen is not finished because it compiles.
   spec unweakened, so the name travels as `box_name` beside it instead.
 
   **AND A BOX NOW HAS AN INDEX THAT IS A HIGH-WATER MARK, WHICH IS NOT THIS ONE**
-  (D-box-true-index, 2026-09-11). The sentence above is still exactly right about the NUMBER
+  (D145, 2026-09-11). The sentence above is still exactly right about the NUMBER
   and it needed one more beside it rather than a correction: `Box.bid` is the drawer's TRUE
   INDEX — allocated by `Inventory.next_box_id` against a counter a deletion cannot lower,
   **never reused, and drawn on no screen** — while `next_box_number` goes on handing out the
@@ -1614,7 +1614,7 @@ D141 The browser matrix runs when the change reaches what a browser draws, and t
 D142 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
 D143 The claim reads the checked-out tree, so which tree that is must be established before anything reads it
 D144  A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
-D-box-true-index A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
+D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
 
 ```
 

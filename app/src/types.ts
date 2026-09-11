@@ -1926,7 +1926,7 @@ export type RunSummary = {
    *  where the registry no longer holds it (D10 ruling 3). */
   box_name?: string | null
   /** The TRUE INDEX of the drawer this run was over — never displayed, and the owner said so
-   *  twice (D-box-true-index). It is on the wire so the SERVER can tell two drawers wearing
+   *  twice (D145). It is on the wire so the SERVER can tell two drawers wearing
    *  one number apart; `box_former` below is the answer it produces, and that is what a screen
    *  draws. `null` for a run written before the field existed.
    *

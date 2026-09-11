@@ -1227,7 +1227,7 @@ test('a run row names the drawer, and takes the name from the server', async ({ 
 test('a run over a deleted drawer says so, and the drawer on the shelf does not', async ({
   page,
 }) => {
-  /* D-box-true-index. THE OWNER'S REPORT: *"i deleted an old box 1, started writing into a new
+  /* D145. THE OWNER'S REPORT: *"i deleted an old box 1, started writing into a new
      box (now new box 1) and if i go on say my runs tab it shows that i'd run a 'Box 1' run a
      long time ago etc. it's confusing."*
 

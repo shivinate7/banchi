@@ -4843,7 +4843,7 @@ def do_delete_box(box: int) -> dict:
                     card_key,
                     box=int(box),
                     # THE DRAWER'S TRUE INDEX, FROZEN ONTO THE RECORD THAT OUTLIVES IT
-                    # (D-box-true-index). `box_name` beside it is already frozen for this
+                    # (D145). `box_name` beside it is already frozen for this
                     # reason; the number is the one field here that is handed straight back
                     # out to the next drawer (D20), so on its own it cannot say which `Box 1`
                     # this card was buried out of. Nothing draws it — `#/graveyard` reads the
@@ -4885,7 +4885,7 @@ def do_delete_box(box: int) -> dict:
 
         registry_entry = inventory.boxes.pop(str(int(box)), None)
         registry_deleted = registry_entry is not None
-        # WHAT THE DRAWER WAS, CAPTURED BEFORE ITS ROW GOES (D-box-true-index). The number is
+        # WHAT THE DRAWER WAS, CAPTURED BEFORE ITS ROW GOES (D145). The number is
         # handed straight back out by `next_box_number` (D20), so after this line nothing in
         # the store can say which drawer `Box 1` meant — except this history line. The id is
         # what a run joins against; the name is what a screen draws for a run that outlived

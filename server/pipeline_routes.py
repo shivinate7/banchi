@@ -392,7 +392,7 @@ def _sweep_scopes(keep_hours: int = 48) -> None:
 
 
 def _run_box_id(manifest: dict) -> Optional[int]:
-    """The TRUE INDEX this run recorded for its box, or None (D-box-true-index).
+    """The TRUE INDEX this run recorded for its box, or None (D145).
 
     `_run_box`'s sibling, and deliberately WITHOUT its path fallback. A box number can be
     recovered from a capture directory's name because the directory is named after it; an id
@@ -410,7 +410,7 @@ def _run_box_id(manifest: dict) -> Optional[int]:
 
 
 def _box_bid(box: int) -> Optional[int]:
-    """The TRUE INDEX of the drawer this run is about to read (D-box-true-index).
+    """The TRUE INDEX of the drawer this run is about to read (D145).
 
     THIS IS THE ONE THING A RUN DIRECTORY MAY RECORD ABOUT ITS BOX BESIDES THE NUMBER, and it
     does not contradict D56's rule that a name is never written into a manifest. The two are
@@ -730,7 +730,7 @@ def _run_box(manifest: dict) -> Optional[int]:
 class BoxFacts:
     """What the registry knows about the drawer wearing one box number, right now.
 
-    A NAMED TUPLE GREW A FOURTH MEMBER AND STOPPED BEING READABLE (D-box-true-index). This was
+    A NAMED TUPLE GREW A FOURTH MEMBER AND STOPPED BEING READABLE (D145). This was
     `(name, created_at, runs)` and every reader unpacked it positionally; `bid` made it four,
     and a fourth anonymous slot in a tuple that is built in one place and read in two is how
     `_box_name_for`'s two conditions get passed in the wrong order by somebody in a hurry.
@@ -744,7 +744,7 @@ class BoxFacts:
 
 @dataclass(frozen=True)
 class RunDrawer:
-    """Which drawer a run was over, and what to call it on a screen (D-box-true-index).
+    """Which drawer a run was over, and what to call it on a screen (D145).
 
     `former` IS THE FIELD THE OWNER ASKED FOR, and `name` changes meaning with it: for a
     current drawer the name is the registry's LIVE one, joined at read time exactly as D56
@@ -766,7 +766,7 @@ def _run_drawer(
 ) -> RunDrawer:
     """Is the box wearing this number today the drawer this run was over, and what is it called?
 
-    TWO WAYS TO ANSWER, AND THE FIRST ONE IS NOT A HEURISTIC (D-box-true-index).
+    TWO WAYS TO ANSWER, AND THE FIRST ONE IS NOT A HEURISTIC (D145).
 
       THE ID, where the run recorded one. `bid` is fixed at the drawer's creation and can
       never be edited or reissued, so comparing it against the id the current box wears is a
@@ -867,7 +867,7 @@ def _box_names() -> Dict[int, "BoxFacts"]:
             # A registry key that will not coerce names no box, exactly as `_box_row`'s walk
             # treats a card whose box will not: skipped, never fatal.
             continue
-        # AN UNNAMED BOX IS IN THE MAP NOW, WITH `name=None` (D-box-true-index). It was
+        # AN UNNAMED BOX IS IN THE MAP NOW, WITH `name=None` (D145). It was
         # skipped for as long as this answered one question, because a box with no name has
         # no name to hand back. It answers two questions now — what is this drawer called,
         # and IS IT THE RUN'S DRAWER — and the second one has a real answer for an unnamed
@@ -882,7 +882,7 @@ def _box_names() -> Dict[int, "BoxFacts"]:
 
 
 def _deleted_box_names() -> Dict[int, str]:
-    """`bid -> the name that drawer had when it was deleted` (D-box-true-index).
+    """`bid -> the name that drawer had when it was deleted` (D145).
 
     THE HISTORY IS THE ONLY PLACE THIS CAN COME FROM, and that is the point rather than a
     limitation. D56 forbids writing a name into a run directory because a live name is
@@ -1653,7 +1653,7 @@ def _summary(directory: Path, names: Optional[Dict[int, str]] = None) -> dict:
         "box": box,
         "box_name": drawer.name,
         # THE TRUE INDEX OF THE DRAWER THIS RUN WAS OVER, and the only field here a run
-        # directory stores for itself (D-box-true-index). `null` for every run written
+        # directory stores for itself (D145). `null` for every run written
         # before the field existed, which `_run_drawer` reads as "decide by the older rule"
         # rather than as "no drawer".
         "box_bid": bid,
